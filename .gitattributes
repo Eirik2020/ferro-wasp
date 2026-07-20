@@ -1,0 +1,18 @@
+# Keep source and documentation deterministic across Windows, WSL, and CI.
+* text=auto eol=lf
+
+# Binary assets and hardware captures must not undergo line-ending conversion.
+*.bin binary
+*.elf binary
+*.gif binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.logicdata binary
+*.pdf binary
+*.png binary
+*.sal binary
+*.wasm binary
+*.woff binary
+*.woff2 binary
+*.zip binary

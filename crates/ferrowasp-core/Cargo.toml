@@ -1,0 +1,25 @@
+[package]
+name = "ferrowasp-core"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+critical-section = { workspace = true }
+heapless = { workspace = true }
+
+[features]
+default = []
+bench_motor1_only = []
+bench_motor2_only = []
+bench_motor3_only = []
+bench_motor4_only = []
+bench_logical_motor1_only = []
+bench_logical_motor2_only = []
+bench_logical_motor3_only = []
+bench_logical_motor4_only = []
+bench_dshot_unequal_motors = []

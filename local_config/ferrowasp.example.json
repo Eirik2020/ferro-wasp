@@ -1,0 +1,11 @@
+{
+  "mobile_ssid": "your-mobile-router-ssid",
+  "probe_token": "set-with-FERROWASP_PROBE_TOKEN-or-local-config",
+  "probe_hosts": {
+    "auto": "ws://your-probe-host.local:3000",
+    "cable": "ws://your-cabled-pi.local:3000",
+    "mobile": "ws://your-mobile-pi-host:3000",
+    "zero": "ws://your-zero-pi.local:3000",
+    "zeromobile": "ws://your-zero-mobile-pi.local:3000"
+  }
+}

@@ -1,0 +1,259 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  FIRMWARE_TARGET: thumbv7em-none-eabihf
+  RUST_TOOLCHAIN: nightly-2026-07-13
+
+jobs:
+  firmware:
+    name: Firmware check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ env.FIRMWARE_TARGET }}
+          components: clippy,rustfmt
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check reusable-crate formatting
+        run: cargo fmt --all --check
+
+      - name: Check STM32F405 flight-app formatting
+        working-directory: apps/stm32f405-flight
+        run: cargo fmt --manifest-path Cargo.toml --check
+
+      - name: Check STM32F401 bring-up formatting
+        working-directory: apps/stm32f401-bringup
+        run: cargo fmt --manifest-path Cargo.toml --check
+
+      - name: Check Foxeer F405 V2 formatting
+        working-directory: apps/foxeer-f405-v2
+        run: cargo fmt --manifest-path Cargo.toml --check
+
+      - name: Check embedded workspace
+        run: cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Lint embedded workspace
+        run: cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+
+      - name: Check standard STM32F405 DShot flight firmware
+        working-directory: apps/stm32f405-flight
+        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Lint standard STM32F405 DShot flight firmware
+        working-directory: apps/stm32f405-flight
+        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+
+      - name: Check explicit STM32F405 PWM fallback
+        working-directory: apps/stm32f405-flight
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --no-default-features --features board-ferrowasp-fcu3
+
+      - name: Check firmware with USB serial
+        working-directory: apps/stm32f405-flight
+        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features usb_serial
+
+      - name: Check FCU3 fault-injection images
+        working-directory: apps/stm32f405-flight
+        run: |
+          for feature in \
+            bench_dshot_idle_output1_not_running \
+            bench_motor_cmd_stale_rejection \
+            bench_spi_timeout_recovery; do
+            cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
+              --features "${feature}"
+          done
+
+      - name: Check FCU3 four-motor DShot bench image
+        working-directory: apps/stm32f405-flight
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "dshot bench_equal_motors"
+
+      - name: Check FCU3 logical-motor DShot bench images
+        working-directory: apps/stm32f405-flight
+        run: |
+          for motor in 1 2 3 4; do
+            cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
+              --features "dshot bench_equal_motors bench_logical_motor${motor}_only"
+          done
+
+      - name: Check FCU3 unequal-vector DShot bench image
+        working-directory: apps/stm32f405-flight
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+
+      - name: Check legacy DShot mixed-control feature alias
+        working-directory: apps/stm32f405-flight
+        run: |
+          cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
+            --features dshot_mixed_control
+          cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
+            --features "dshot_mixed_control blackbox_defmt"
+
+      - name: Reject invalid FCU3 DShot feature combinations
+        working-directory: apps/stm32f405-flight
+        shell: bash
+        run: |
+          for conflict in \
+            bench_equal_motors \
+            bench_motor1_only \
+            bench_logical_motor1_only \
+            bench_dshot_unequal_motors \
+            bench_dshot_idle_output1_not_running \
+            bench_motor_cmd_stale_rejection \
+            bench_spi_timeout_recovery \
+            pwm_cal; do
+            if cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
+              --features "dshot_mixed_control ${conflict}"; then
+              echo "dshot_mixed_control unexpectedly accepted ${conflict}"
+              exit 1
+            fi
+          done
+
+      - name: Check STM32F401 bring-up firmware
+        working-directory: apps/stm32f401-bringup
+        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Lint STM32F401 bring-up firmware
+        working-directory: apps/stm32f401-bringup
+        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+
+      - name: Check Foxeer F405 V2 firmware
+        working-directory: apps/foxeer-f405-v2
+        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Lint Foxeer F405 V2 firmware
+        working-directory: apps/foxeer-f405-v2
+        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+
+      - name: Check Foxeer diagnostic features
+        working-directory: apps/foxeer-f405-v2
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "blackbox_defmt bench_spi_timeout_recovery pwm_cal dshot usb_serial"
+
+      - name: Check Foxeer selected-motor bench path
+        working-directory: apps/foxeer-f405-v2
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_motor_cmd_stale_rejection bench_motor4_only"
+
+      - name: Build standard DShot release firmware
+        working-directory: apps/stm32f405-flight
+        run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Build Foxeer F405 V2 release firmware
+        working-directory: apps/foxeer-f405-v2
+        run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Upload firmware ELF
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrowasp-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
+          path: apps/stm32f405-flight/target/${{ env.FIRMWARE_TARGET }}/release/FerroWasp
+          if-no-files-found: error
+
+      - name: Upload Foxeer F405 V2 firmware ELF
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrowasp-foxeer-f405-v2-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
+          path: apps/foxeer-f405-v2/target/${{ env.FIRMWARE_TARGET }}/release/FerroWaspFoxeerF405V2
+          if-no-files-found: error
+
+  host-tests:
+    name: Host workspace tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test reusable crates
+        run: >
+          cargo test --workspace
+          --locked
+          --target x86_64-unknown-linux-gnu
+
+      - name: Lint reusable crate targets
+        run: >
+          cargo clippy --workspace --all-targets
+          --locked
+          --target x86_64-unknown-linux-gnu
+          -- -D warnings
+
+      - name: Report embedded duplicate dependency versions
+        run: cargo tree --workspace --duplicates --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Enforce isolated DShot unsafe boundary
+        shell: bash
+        run: |
+          unsafe_matches="$(
+            rg --line-number \
+              '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)|expect\(unsafe_code\)' \
+              crates apps --glob '*.rs' --glob '!apps/**/target/**' || true
+          )"
+          unexpected="$(
+            printf '%s\n' "$unsafe_matches" |
+              rg --invert-match \
+                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]+unsafe impl (PeriAddress|DMASet))' ||
+              true
+          )"
+
+          if [[ -n "$unexpected" ]]; then
+            printf '%s\n' "$unexpected"
+            echo "unexpected workspace-owned unsafe source requires explicit review"
+            exit 1
+          fi
+
+          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 3 ]]; then
+            printf '%s\n' "$unsafe_matches"
+            echo "the reviewed DShot unsafe boundary changed"
+            exit 1
+          fi
+
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
+          rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4/src/dshot.rs
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' apps/stm32f405-flight/src/main.rs
+
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mdBook
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook@0.5.2,mdbook-mermaid@0.17.0
+
+      - name: Build book
+        run: mdbook build mdbook

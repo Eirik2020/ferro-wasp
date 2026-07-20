@@ -1,0 +1,142 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558 
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            /*
+             * This is the default cargo build task,
+             * but we need to provide a label for it,
+             * so we can invoke it from the debug launcher.
+             */
+            "label": "cargo_build_release",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+                "--release",
+                "--features",
+                "${config:rust-analyzer.cargo.features}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/apps/stm32f405-flight"
+            },
+            "problemMatcher": [
+                "$rustc",
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            /*
+             * This is the default cargo build task,
+             * but we need to provide a label for it,
+             * so we can invoke it from the debug launcher.
+             */
+            "label": "cargo_build_debug",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+                "--features",
+                "${config:rust-analyzer.cargo.features}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/apps/stm32f405-flight"
+            },
+            "problemMatcher": [
+                "$rustc",
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "foxeer_f405_v2_build_release",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+                "--release",
+                "--locked"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/apps/foxeer-f405-v2"
+            },
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "foxeer_f405_v2_build_dfu_image",
+            "type": "process",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/apps/foxeer-f405-v2/flash-dfu.ps1",
+                "-BuildOnly"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "foxeer_f405_v2_list_dfu",
+            "type": "process",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/apps/foxeer-f405-v2/tools/dfu-runner.ps1",
+                "-ListOnly"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "foxeer_f405_v2_FLASH_release",
+            "detail": "Builds and flashes the normal Foxeer image through STM32 ROM DFU.",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--release",
+                "--locked"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/apps/foxeer-f405-v2"
+            },
+            "problemMatcher": [
+                "$rustc"
+            ]
+        },
+        {
+            "label": "foxeer_f405_v2_FLASH_usb_debug",
+            "detail": "Builds and flashes the Foxeer image with read-only USB CDC diagnostics.",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--release",
+                "--locked",
+                "--features",
+                "usb_serial"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/apps/foxeer-f405-v2"
+            },
+            "problemMatcher": [
+                "$rustc"
+            ]
+        }
+    ]
+}

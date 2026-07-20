@@ -1,0 +1,50 @@
+/target
+/target-*
+/src/**/target
+/apps/**/target
+/diagnostic_*.jpg
+/logs
+/local_archive/
+/local_config/*
+!/local_config/*.example.json
+/python_sandbox/
+/captures/
+
+# Local presentation/session notes, not part of the public source snapshot.
+/CHATGPT_REPO_OVERVIEW.md
+
+# Local environments, caches, and credentials
+.env
+.env.*
+!.env.example
+.envrc
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyc
+*.pyo
+*.tmp
+*.bak
+*.swp
+*~
+*.log
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Generated documentation output
+/mdbook/book
+
+# Large capture/artifact files should be reviewed before being tracked.
+*.sal
+*.logicdata
+*.elf
+*.bin
+*.hex
+*.uf2
+*.map
+*.dmp

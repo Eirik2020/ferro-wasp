@@ -1,0 +1,17 @@
+[default.probe]
+protocol = "Swd"
+
+[default.flashing]
+enabled = true
+
+[default.reset]
+enabled = true
+
+[default.general]
+chip = "STM32F401RE"
+
+[default.rtt]
+enabled = true
+timeout = 7000
+log_enabled = false
+log_path = "../../logs"

@@ -1,0 +1,18 @@
+[target.thumbv7em-none-eabihf]
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
+]
+runner = [
+  "powershell",
+  "-NoProfile",
+  "-ExecutionPolicy", "Bypass",
+  "-File", "tools/dfu-runner.ps1",
+]
+
+[build]
+target = "thumbv7em-none-eabihf"
+
+[env]
+DEFMT_LOG = "info"
+CHIPSERIE = "stm32f405"

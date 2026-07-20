@@ -1,0 +1,13 @@
+[package]
+name = "ferrowasp-actuator"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+ferrowasp-waveform = { path = "../ferrowasp-waveform" }

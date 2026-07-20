@@ -1,0 +1,14 @@
+[book]
+authors = ["Kaldstrand"]
+language = "en"
+src = "src"
+title = "FerroWasp"
+
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+
+
+[output.html]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]

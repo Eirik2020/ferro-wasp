@@ -1,0 +1,21 @@
+[package]
+name = "rc-pwm"
+version = "0.1.0"
+authors = ["Kaldstrand <63415376+Eirik2020@users.noreply.github.com>"]
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[features]
+default = ["std"]
+std = []
+const-config = []
+
+
+[dependencies]# Probe and global debugger
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"
+
+# Other crates
+embedded-hal = "1.0.0" 
+nb = "1.1"

@@ -1,0 +1,20 @@
+[package]
+name = "ferrowasp-io-core"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+critical-section = { workspace = true }
+embedded-hal = { workspace = true }
+embedded-hal-async = { workspace = true }
+embedded-io = { workspace = true }
+embedded-io-async = { workspace = true }
+heapless = { workspace = true }
+
+[dev-dependencies]
+critical-section = { workspace = true, features = ["std"] }

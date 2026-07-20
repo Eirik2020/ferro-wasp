@@ -1,0 +1,10 @@
+{
+  "rust-analyzer.check.allTargets": false,
+  "rust-analyzer.check.targets": "thumbv7em-none-eabihf",
+  "rust-analyzer.linkedProjects": [
+    "Cargo.toml",
+    "apps/stm32f405-flight/Cargo.toml",
+    "apps/stm32f401-bringup/Cargo.toml",
+    "apps/foxeer-f405-v2/Cargo.toml"
+  ],
+}
