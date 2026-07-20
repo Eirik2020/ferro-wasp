@@ -1,0 +1,516 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RTT Debug Tools - FerroWasp</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-c9fd09d5.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-b4e0e1f2.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">FerroWasp</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="rtt-debug-tools"><a class="header" href="#rtt-debug-tools">RTT Debug Tools</a></h1>
+<p>The current bench workflow includes Python tools for flashing the STM32F405
+target, decoding <code>defmt-rtt</code> output through <code>probe-rs</code>, logging terminal output,
+and live-viewing IMU data.</p>
+<p>These tools are for bring-up and bench analysis. They are not safety authority,
+and they do not command motors.</p>
+<h2 id="terminal-embed"><a class="header" href="#terminal-embed">Terminal Embed</a></h2>
+<p>Run from the repository root:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py
+</code></pre>
+<p>Release and feature-selected images use the same logger:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+</code></pre>
+<p>The script performs a quiet firmware build, runs:</p>
+<pre><code class="language-text">probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps
+</code></pre>
+<p>and prints decoded <code>defmt</code> RTT lines in the terminal.</p>
+<p>Successful build warnings are hidden to keep the terminal readable. If the build
+fails, compiler output is shown.</p>
+<p>Every line printed by the tool is also written to:</p>
+<pre><code class="language-text">logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log
+</code></pre>
+<p>Each line is flushed immediately, so an interrupted run retains all output
+received up to that point. Prefer this wrapper over piping cargo-embed through
+<code>Tee-Object</code>; cargo-embed’s interactive terminal stream may include cursor and
+ANSI control sequences rather than a clean line-oriented log. Default
+build-and-run mode records the firmware ELF path and SHA-256 before flashing,
+so a retained target log identifies its exact artifact.</p>
+<p>Use <code>--log-file</code> to choose a specific output path:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --log-file logs\bench_rtt.log
+</code></pre>
+<h2 id="remote-pi-probe"><a class="header" href="#remote-pi-probe">Remote Pi Probe</a></h2>
+<p>The bench setup can also use a Raspberry Pi as a network-connected SWD/RTT
+gateway. In the current workshop setup:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Role</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td>Pi host</td><td>configured in FerroDebugger or local config</td></tr>
+<tr><td>probe-rs server</td><td>configured in FerroDebugger or local config</td></tr>
+<tr><td>probe selector</td><td><code>0:0:/dev/spidev0.0</code></td></tr>
+<tr><td>target chip</td><td><code>STM32F405RG</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Most helper scripts also accept a named link:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Link</th><th>Use When</th><th>Host Choice</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Cable</code></td><td>Laptop stays on normal internet Wi-Fi and is cabled to the Pi</td><td>link details live in FerroDebugger/local config</td></tr>
+<tr><td><code>Mobile</code></td><td>Laptop and Pi are both on the configured mobile router</td><td>SSH alias from FerroDebugger config</td></tr>
+<tr><td><code>Zero</code></td><td>Raspberry Pi Zero 2 W gateway on bench Wi-Fi</td><td>link details live in FerroDebugger/local config</td></tr>
+<tr><td><code>ZeroMobile</code></td><td>Zero 2 W gateway on the mobile router</td><td>link details live in FerroDebugger/local config</td></tr>
+</tbody>
+</table>
+</div>
+<p>Examples:</p>
+<pre><code class="language-powershell">.\tools\remote_info.ps1 -Link Cable
+.\tools\remote_info.ps1 -Link Mobile
+.\tools\remote_info.ps1 -Link Zero
+.\tools\remote_info.ps1 -Link ZeroMobile
+.\tools\pi_log_fetch.ps1 -Link Cable
+.\tools\pi_log_fetch.ps1 -Link Mobile
+python tools\imu_live_view.py --remote --link cable
+python tools\imu_live_view.py --remote --link mobile
+python tools\imu_live_view.py --remote --link zero
+python tools\imu_live_view.py --remote --link zeromobile
+</code></pre>
+<p>Start <code>probe-rs serve</code> on the Pi before using the Windows-side helpers. The
+server must have at least one configured user/token; otherwise remote clients
+connect and then fail authentication.</p>
+<p>From the repository root on Windows:</p>
+<pre><code class="language-powershell">.\tools\remote_info.ps1 -Link Cable
+.\tools\remote_run.ps1 -Link Cable -Build
+.\tools\remote_attach.ps1 -Link Cable
+.\tools\remote_attach_log.ps1 -Link Cable
+.\tools\pi_log_start.ps1 -Link Cable
+.\tools\pi_log_stop.ps1 -Link Cable
+.\tools\pi_log_fetch.ps1 -Link Cable
+</code></pre>
+<p>Command meaning:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>remote_info.ps1</code></td><td>Checks the remote SWD connection through the Pi. It does not flash or reset the FCU.</td></tr>
+<tr><td><code>remote_run.ps1</code></td><td>Optionally builds, flashes the ELF, resets/runs the STM32, and streams RTT/defmt output. Pass <code>-Features blackbox_defmt</code> to build the 400 Hz compact blackbox frames.</td></tr>
+<tr><td><code>remote_attach.ps1</code></td><td>Attaches to already-running firmware and streams RTT/defmt output without reflashing.</td></tr>
+<tr><td><code>remote_attach_log.ps1</code></td><td>Attach-only RTT/defmt session that also writes full terminal output to a log file.</td></tr>
+<tr><td><code>pi_log_start.ps1</code></td><td>Starts a detached attach logger on the Pi so logging survives SSH disconnects.</td></tr>
+<tr><td><code>pi_log_stop.ps1</code></td><td>Stops the detached Pi-side logger.</td></tr>
+<tr><td><code>pi_log_fetch.ps1</code></td><td>Copies the latest Pi-side log into this repository under <code>logs\remote_probe</code>.</td></tr>
+<tr><td><code>pi_elf_sync.ps1</code></td><td>Copies the current local ELF to the Pi path used by <code>pi_log_start.ps1</code> for <code>defmt</code> decoding.</td></tr>
+</tbody>
+</table>
+</div>
+<p>The helpers default to the current bench host, token, probe path, and chip. Use
+environment variables to avoid putting a shared token in command history:</p>
+<pre><code class="language-powershell">$env:FERROWASP_PROBE_HOST = "ws://your-probe-host.local:3000"
+$env:FERROWASP_PROBE_TOKEN = "your-token"
+</code></pre>
+<p>For onboard use, install <code>probe-rs serve</code> as a boot-starting <code>systemd</code> service
+on the Pi:</p>
+<pre><code class="language-powershell">.\tools\install_probe_rs_service.ps1 -Token "your-token"
+</code></pre>
+<p>The service starts after network-online and restarts if it exits. Useful Pi-side
+checks:</p>
+<pre><code class="language-powershell">ssh your-pi-host 'systemctl status probe-rs-serve --no-pager'
+ssh your-pi-host 'ss -ltnp | grep probe-rs'
+ssh your-pi-host 'sudo systemctl stop probe-rs-serve'
+</code></pre>
+<p><code>remote_attach.ps1</code> needs a local ELF matching the firmware running on the FCU
+so <code>defmt</code> decoding uses the correct metadata.</p>
+<p>By default, <code>remote_attach_log.ps1</code> writes logs under:</p>
+<pre><code class="language-text">logs\remote_probe\YYYYMMDD_HHMMSS_attach.log
+</code></pre>
+<p>Choose a specific log path with:</p>
+<pre><code class="language-powershell">.\tools\remote_attach_log.ps1 -Link Cable -LogFile logs\bench_attach.log
+</code></pre>
+<p>For onboard or disconnected logging, start the logger on the Pi, disconnect as
+needed, then reconnect later to stop and fetch the log:</p>
+<pre><code class="language-powershell">.\tools\pi_log_start.ps1 -Link Cable
+# disconnect/reconnect later
+.\tools\pi_log_stop.ps1 -Link Cable
+.\tools\pi_log_fetch.ps1 -Link Cable
+</code></pre>
+<p>The Pi-side logger writes under:</p>
+<pre><code class="language-text">/home/pi/logs/ferrowasp-rtt
+</code></pre>
+<p>Fetched logs are copied into:</p>
+<pre><code class="language-text">logs\remote_probe
+</code></pre>
+<h2 id="400-hz-blackbox-frames"><a class="header" href="#400-hz-blackbox-frames">400 Hz Blackbox Frames</a></h2>
+<p>The current firmware uses <code>defmt-rtt</code> 1.2. That backend owns the SEGGER RTT
+control block and one RTT up-channel, so the MVP logger does not link
+<code>rtt-target</code> beside it. Instead, blackbox data is emitted as compact fixed-point
+<code>defmt</code> frames over the existing RTT stream.</p>
+<p>Build and flash the blackbox-enabled firmware:</p>
+<pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
+</code></pre>
+<p>For a clean motor-vibration check that disables the PID/mixer and commands all
+four motors equally through the normal actuator-output task, build with:</p>
+<pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features "blackbox_defmt bench_equal_motors"
+</code></pre>
+<p>The craft must still be armed normally. This mode caps requested throttle to
+<code>250</code> PWM-style units, emits <code>BB2</code> frames with PID set to zero, and logs motors
+as <code>[throttle; 4]</code>. Use propellers removed only. If any motor or ESC smokes,
+smells hot, jitters abnormally, or heats rapidly, stop the test and inspect the
+hardware before running again.</p>
+<p>The 400 Hz control loop emits <code>BB2</code> frames. Disarmed frames still include raw
+gyro, filtered gyro, command, throttle, and freshness flags; PID and motor
+fields are zeroed until the craft is armed.</p>
+<pre><code class="language-text">BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>seq</code></td><td>Control-rate sample sequence</td></tr>
+<tr><td><code>imu</code></td><td>IMU sample sequence used by this control update</td></tr>
+<tr><td><code>flags</code></td><td>Bit 0 armed, bit 1 IMU fresh</td></tr>
+<tr><td><code>raw10</code></td><td>Unfiltered roll, pitch, yaw gyro rates in 0.1 deg/s</td></tr>
+<tr><td><code>gyro10</code></td><td>Filtered roll, pitch, yaw gyro rates in 0.1 deg/s</td></tr>
+<tr><td><code>cmd10</code></td><td>Commanded roll, pitch, yaw rates in 0.1 deg/s</td></tr>
+<tr><td><code>pid</code></td><td>Total PID output per axis in controller output units</td></tr>
+<tr><td><code>thr</code></td><td>Throttle setpoint in PWM-style command units</td></tr>
+<tr><td><code>motors</code></td><td>Mixed motor commands in PWM-style command units</td></tr>
+</tbody>
+</table>
+</div>
+<p>Future work: replace the RTT backend deliberately so channel 0 can carry
+<code>defmt</code> and channel 1 can carry raw binary blackbox samples.</p>
+<p>The live viewer auto-detects <code>BB1</code> and <code>BB2</code> frames:</p>
+<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable
+</code></pre>
+<p>When blackbox frames appear, it shows control-loop plots for gyro-vs-command
+rates, PID output, throttle, and motors.
+The viewer suppresses raw RTT echo by default to avoid lag with 400 Hz frames.
+Use <code>--echo-rtt</code> only when raw terminal output is more important than smooth
+plotting. If the PC still struggles, lower the UI refresh rate:</p>
+<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable --ui-hz 15
+</code></pre>
+<p>For offline analysis after a Pi-side recording:</p>
+<p>If you rebuilt/flashed from the PC and plan to log on the Pi, sync the matching
+ELF first so <code>defmt</code> decoding uses the right metadata:</p>
+<pre><code class="language-powershell">.\tools\pi_elf_sync.ps1 -Link Cable
+</code></pre>
+<pre><code class="language-powershell">.\tools\pi_log_start.ps1 -Link Cable -Restart
+# run the bench test
+.\tools\pi_log_stop.ps1 -Link Cable
+.\tools\pi_log_fetch.ps1 -Link Cable
+python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
+</code></pre>
+<p>For deliberate hand-motion/swing tests, the default <code>--mode auto</code> should classify
+large low-frequency gyro movement as motion. Use <code>--mode rest</code> for stationary
+noise-floor or motor-vibration checks where large filtered gyro standard
+deviation should be treated as noise:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest
+</code></pre>
+<p>For a hand-swing recording, trim the pickup and place-down sections by time:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode swing --trim-start 6 --trim-end 6 --csv logs\remote_probe\swing_trimmed.csv
+</code></pre>
+<p>With no log argument, the analyzer uses the newest <code>.log</code> in <code>logs\remote_probe</code>
+or <code>logs\terminal_embed</code>. You can also pass a specific fetched log:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\remote_probe\pi_20260710_193000_attach.log --csv logs\remote_probe\swing_test.csv
+</code></pre>
+<h2 id="heartbeat"><a class="header" href="#heartbeat">Heartbeat</a></h2>
+<p>The default firmware heartbeat logs once at startup and then alternates the
+red/green debug LEDs about once per second as a visible liveness indicator.
+High-rate IMU and control-loop observation is handled by BB2 frames when the
+<code>blackbox_defmt</code> feature is enabled.</p>
+<h2 id="imu-live-view"><a class="header" href="#imu-live-view">IMU Live View</a></h2>
+<p>Run:</p>
+<pre><code class="language-powershell">python tools\imu_live_view.py
+</code></pre>
+<p>The viewer launches <code>terminal_embed.py</code> or attaches through the remote probe
+helpers. With <code>blackbox_defmt</code> firmware it parses BB2 frames and shows:</p>
+<ul>
+<li>measured roll/pitch/yaw gyro-rate history,</li>
+<li>commanded roll/pitch/yaw rates,</li>
+<li>PID output, throttle, and motor commands.</li>
+</ul>
+<p>Older heartbeat-IMU firmware can still use the attitude-view options. The
+default attitude mode seeds roll and pitch once from accelerometer gravity, then
+integrates gyro rates only:</p>
+<pre><code class="language-powershell">python tools\imu_live_view.py --attitude gyro
+</code></pre>
+<p>For a bench view that continuously nudges roll and pitch back toward gravity:</p>
+<pre><code class="language-powershell">python tools\imu_live_view.py --attitude accel
+</code></pre>
+<p>To attach through the remote Pi probe-rs server and live-view already-running
+firmware:</p>
+<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable
+</code></pre>
+<p>The remote viewer defaults to the cable link, <code>0:0:/dev/spidev0.0</code>, and
+<code>STM32F405RG</code>. It honors the same <code>FERROWASP_PROBE_HOST</code> and
+<code>FERROWASP_PROBE_TOKEN</code> environment variables as the PowerShell helpers when
+<code>--link auto</code> is used. Pass <code>--link mobile</code> on the mobile-router network.</p>
+<p>Yaw remains gyro-only in both modes and will drift.</p>
+<h2 id="imu-noise-analyzer"><a class="header" href="#imu-noise-analyzer">IMU Noise Analyzer</a></h2>
+<p>The noise analyzer gives a quick bench answer to:</p>
+<pre><code class="language-text">Is the filtered gyro signal quiet enough for the PID to use?
+</code></pre>
+<p>Analyze the newest RTT log:</p>
+<pre><code class="language-powershell">python tools\imu_noise_analyzer.py --latest
+</code></pre>
+<p>Or capture a still FCU/IMU run directly:</p>
+<pre><code class="language-powershell">python tools\imu_noise_analyzer.py --capture 30
+</code></pre>
+<p>The analyzer:</p>
+<ul>
+<li>parses BB2 or older heartbeat IMU lines,</li>
+<li>remaps raw gyro sensor axes into the current PID roll/pitch/yaw convention,</li>
+<li>compares raw gyro noise against filtered control-axis rates,</li>
+<li>reports standard deviation, peak-to-peak noise, attenuation, drift, and a
+rough quiet/watch/noisy verdict.</li>
+</ul>
+<p>Use this as a rest-noise screen only. It does not replace props-off motor output
+checks, motor-temperature checks, or later vibration/frequency analysis.</p>
+<h2 id="safety-notes"><a class="header" href="#safety-notes">Safety Notes</a></h2>
+<ul>
+<li>Run motor/axis checks with props removed.</li>
+<li><code>remote_run.ps1</code> flashes, resets, and starts firmware. Keep ESC power in the
+intended bench-safe state before using it.</li>
+<li>Do not leave <code>probe-rs serve</code> exposed on an untrusted network; the remote
+server provides debug-level control of the FCU.</li>
+<li>Treat BB2 <code>raw10</code> as unfiltered control-axis gyro data and <code>gyro10</code> as
+PID-convention measured data.</li>
+<li>The Python tools are observation tools only; motor authority must remain in
+the firmware safety/actuator-output path.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="imu.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="uart_rx.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="imu.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="uart_rx.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="mermaid-eefea253.min.js"></script>
+        <script src="mermaid-init-ccf746f1.js"></script>
+
+
+
+    </div>
+    </body>
+</html>
