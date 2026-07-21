@@ -15,6 +15,16 @@ Run from the repository root:
 python tools\terminal_embed.py
 ```
 
+FCU3 is the default. Select the isolated Foxeer app after fitting its SWD
+connection:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
+```
+
+The Foxeer BSP leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
+must be unpowered at the ESC side; USB DFU remains the recovery path.
+
 Release and feature-selected images use the same logger:
 
 ```powershell
@@ -190,6 +200,19 @@ Build and flash the blackbox-enabled firmware:
 .\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
 ```
 
+For the Foxeer F405 V2 over its retrofitted local SWD connection:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features blackbox_defmt
+```
+
+Begin with ESC power disconnected and hold the board stationary for at least
+ten seconds. The offline analyzer's `Sequence/timing` section should estimate
+about `1000 Hz` for the EXTI-driven Foxeer IMU, with contiguous IMU sequence
+deltas normally alternating between `2` and `3` at the unchanged 400 Hz control
+rate. Repeated IMU samples should be zero. Missing BB2 frames indicate RTT
+transport loss and are reported independently from IMU progress.
+
 For a clean motor-vibration check that disables the PID/mixer and commands all
 four motors equally through the normal actuator-output task, build with:
 
@@ -257,6 +280,13 @@ ELF first so `defmt` decoding uses the right metadata:
 .\tools\pi_log_stop.ps1 -Link Cable
 .\tools\pi_log_fetch.ps1 -Link Cable
 python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
+```
+
+After a local `terminal_embed.py` capture, the analyzer selects the newest RTT
+log automatically:
+
+```powershell
+python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
 ```
 
 For deliberate hand-motion/swing tests, the default `--mode auto` should classify

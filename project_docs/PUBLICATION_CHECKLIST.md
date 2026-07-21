@@ -6,21 +6,21 @@ firmware release, airworthiness statement, or recommendation to fly.
 
 ## Publication blockers
 
-- [ ] Rotate the probe/debug credential that appeared in reachable private Git
+- [x] Rotate the probe/debug credential that appeared in reachable private Git
   history. Removing it from the current tree is not sufficient.
-- [ ] Publish from sanitized history. The preferred route is a fresh
-  squashed/orphan `main` containing only the reviewed current tree.
-- [ ] If any old history is retained instead, explicitly confirm that all
-  project-owned historical revisions are being offered under Apache-2.0; early
-  repository revisions carried different publication terms.
-- [ ] Ensure obsolete refs containing raw `python_sandbox` CSV and Saleae
+- [x] Prepare the publication repository from sanitized history: a parentless
+  `main` containing only the reviewed current tree.
+- [x] Keep the old history out of the publication repository. The separate
+  historical archive remains private, so historical revisions with earlier
+  publication terms are not being offered as part of the public repository.
+- [x] Ensure obsolete refs containing raw `python_sandbox` CSV and Saleae
   captures are not present in the public repository.
-- [ ] Consolidate the intended source files into an intentional publication
+- [x] Consolidate the intended source files into an intentional publication
   commit and require a clean worktree.
-- [ ] Publish through Git from the reviewed index, not by uploading a workspace
+- [x] Publish through Git from the reviewed index, not by uploading a workspace
   archive containing ignored local logs, captures, or configuration.
-- [ ] Run a history-aware secret scanner such as `gitleaks` or `trufflehog` on
-  the proposed public history.
+- [x] Run a history-aware secret scan on the proposed public `main`. Gitleaks
+  scanned the single reachable commit with no findings.
 
 History rewriting, remote-ref deletion, and credential rotation are explicit
 maintainer operations. Do not perform them as an incidental cleanup step.
@@ -34,7 +34,7 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 - [x] Foxeer F405 V2 and NUCLEO-F401RE release checks pass.
 - [x] Every isolated firmware package passes its own rustfmt check.
 - [x] mdBook is included in pull-request CI and builds locally.
-- [ ] Workflow push/deploy branches match the final default branch (`main`).
+- [x] Workflow push/deploy branches match the final default branch (`main`).
 - [x] The Rust toolchain and safety-critical HAL revision are pinned.
 
 ## Public documentation
@@ -55,12 +55,13 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 - [x] Historical PWM-era plans are archived or clearly labeled as historical.
 - [x] Publicly cited evidence is either included in a small sanitized evidence
   set or labeled as privately retained and unavailable in the repository.
-- [ ] Setup prerequisites and known-good build commands work from a fresh
+- [x] Setup prerequisites and known-good build commands work from a fresh
   clone.
 
 ## Security, licensing, and repository hygiene
 
-- [ ] A concrete private vulnerability-reporting path is enabled and linked.
+- [ ] Enable GitHub private vulnerability reporting after the repository is
+  public. `SECURITY.md` already links the intended private reporting path.
 - [x] Apache-2.0 project licensing and third-party Mermaid notices are clear.
 - [x] The maintainer selected `Kaldstrand` as the public copyright/author
   identity used by LICENSE, NOTICE, Cargo metadata, and documentation.
@@ -72,11 +73,15 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 
 ## Final clean-room check
 
-- [ ] Clone the proposed public repository into a new directory.
-- [ ] Follow only the published prerequisites and build instructions.
-- [ ] Run formatting, tests, strict Clippy, all supported firmware checks, and
+- [x] Clone the proposed public repository into a new directory.
+- [x] Follow only the published prerequisites and build instructions.
+- [x] Run formatting, tests, strict Clippy, all supported firmware checks, and
   mdBook.
 - [ ] Re-run secret and large-object scans against all public refs.
-- [ ] Confirm the default branch, repository description, topics, license,
-  security reporting, Pages deployment, and branch protection in the hosting
-  service.
+- [x] Confirm `main` as the default branch and configure the repository
+  description, topics, and recognized Apache-2.0 license.
+- [x] Protect `main` with pull requests, required CI checks, conversation
+  resolution, linear history, and deletion/force-push protection. Only squash
+  and rebase merge methods are allowed.
+- [ ] After changing visibility, enable private vulnerability reporting and
+  Pages deployment from `gh-pages`, then verify both public surfaces.

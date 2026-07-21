@@ -30,11 +30,11 @@ FerroWasp is in rapid prototyping.
 | Runtime | `no_std`, `no_main`, RTIC 2 |
 | RC input | SBUS over USART2 RX DMA |
 | IMU | MPU6500 on FCU3; runtime-selected MPU6500/ICM42688-P on Foxeer |
-| Control | 800 Hz IMU polling, 400 Hz control update, prototype rate loop |
+| Control | FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling, 400 Hz control update, prototype rate loop |
 | Motor output | Safety-gated four-lane DShot600 on FCU3 by default; explicit RC PWM fallback |
 | ESC telemetry | Default FCU3 DShot image only: BLHeli/KISS legacy UART telemetry on PA10/USART1 RX; eRPM validated on all four ESCs |
-| Logging/debug | `defmt`/RTT, compact BB2 control-loop frames, Python bench tools |
-| OSD/telemetry | DJI O4 MSPv1 OSD on UART4, early read-only Foxeer USB CDC status |
+| Logging/debug | `defmt`/RTT, compact BB2 frames, and opt-in Foxeer SPI-NOR blackbox/config storage with USB CLI |
+| OSD/telemetry | DJI O4 MSPv1 OSD on UART4 and Foxeer USB CDC status/storage access |
 
 More detail lives in the current support matrix:
 [mdbook/src/current_support.md](mdbook/src/current_support.md).
@@ -76,6 +76,7 @@ Current firmware capabilities:
 - ADC DMA observation for voltage, current, and internal temperature
 - DJI O4 MSPv1 DisplayPort OSD output
 - Compact BB2 control-loop logging over `defmt-rtt`
+- Opt-in Foxeer onboard SPI-NOR logging and dual-slot persistent tuning storage
 - Python RTT logger, analyzer, and IMU live-view tools
 - Isolated firmware app packages for FCU3, Foxeer F405 V2, and F401 bring-up
 
@@ -107,8 +108,9 @@ cargo install mdbook-mermaid --version 0.17.0 --locked
 mdbook build mdbook
 ```
 
-The intended public default branch is `main`; CI and documentation deployment
-are configured against it. Complete the branch/default switch before launch.
+The default branch is `main`. CI and documentation deployment are configured
+against it, and repository rules require pull requests, passing checks, linear
+history, and protection from deletion and force-pushes.
 
 ## Documentation
 
@@ -150,9 +152,10 @@ cd apps/foxeer-f405-v2
 .\flash-dfu.ps1 -BuildOnly
 ```
 
-With the Foxeer board in STM32 ROM DFU mode, `cargo run --release --locked`
-builds, programs, verifies, and resets it through STM32CubeProgrammer. Add
-`--features usb_serial` for the opt-in read-only USB CDC diagnostics.
+With an SWD retrofit connected, `cargo run --release --locked` uses `probe-rs`
+to program and run the Foxeer target. ROM-DFU recovery remains available
+through `flash-dfu.ps1`; add `-UsbDebug` there for the opt-in read-only USB CDC
+diagnostics.
 
 ## Configuration And Tools
 
@@ -164,6 +167,7 @@ Current bring-up and debug workflows are repository-local:
 - `project_docs/FLIGHT_TEST_QUICK_COMMANDS.md` for current FCU3 bench/field
   commands
 - `tools/blackbox_analyzer.py` for compact BB2 log analysis
+- `tools/ferrowasp_storage.py` for Foxeer onboard logs and whitelisted settings
 - `tools/imu_live_view.py` for live IMU/control observation
 
 Telemetry and configuration interfaces are intentionally limited at this stage.
@@ -199,7 +203,8 @@ closing this gap as required safety work, not as completed flight readiness.
 
 Near-term FCU work:
 
-- finish the publication cleanup and publish a sanitized `main` history
+- complete the remaining visibility-dependent launch checks and publish the
+  prepared sanitized `main` baseline
 - increment pitch P cautiously while checking commanded-rate tracking and
   mixer headroom
 - target-validate the Foxeer F405 V2 before removing its arming inhibit
@@ -220,7 +225,7 @@ Longer-term direction:
 - cleaner board profiles and generated task/resource policy checks
 - STM32H7 reference target
 - BMI088 support and deeper ICM42688-P validation
-- persistent blackbox transport and a small configurator
+- target-validate and harden the new Foxeer persistent blackbox/config path
 - SIL/HIL tests, fault-injection tests, timing reports, and traceability
 
 ## Support

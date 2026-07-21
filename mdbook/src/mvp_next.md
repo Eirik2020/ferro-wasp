@@ -70,11 +70,22 @@ Next checks:
 
 1. Build, flash, and retain a clean boot/status log.
 2. Verify IMU orientation and physical response on the actual board.
-3. Calibrate ADC voltage and current.
-4. Measure the four PWM outputs, especially the TIM1_CH3N M4 polarity.
-5. With propellers removed, identify motor order/direction and verify every
+3. Target-verify the implemented PC4/EXTI4 data-ready trigger: interrupt
+   polarity, rate, timestamps, rejected-event accounting, and stale-sample
+   behavior on the fitted IMU.
+4. Calibrate ADC voltage and current.
+5. Measure the four PWM outputs, especially the TIM1_CH3N M4 polarity.
+6. With propellers removed, identify motor order/direction and verify every
    stick and hand-motion correction sign.
-6. Review the collected evidence before changing the arming inhibit.
+7. Review the collected evidence before changing the arming inhibit.
+
+The Foxeer app provides an explicit `bench_actuator_validation` commissioning
+gate for steps 4 and 5. It only compiles with a capped equal-motor, physical
+motor, or logical motor bench mode; the ordinary image remains inhibited and
+normal PID/mixer flight output cannot be enabled by this gate. RC qualification,
+arming guards, command freshness, failsafe/disarm handling, and actuator
+ownership remain active. The arming sequence briefly applies PWM idle to all
+four outputs, so the mode is props-off only even when one motor is selected.
 
 ## Priority 3: Add a WSL/Docker Development Environment
 

@@ -24,6 +24,10 @@ foxeer-f405-v2 = [
     "dep:ferrowasp-mspv1",
     "dep:ferrowasp-stm32f4",
 ]
+foxeer-f405-v2-dshot-four = [
+    "foxeer-f405-v2",
+    "ferrowasp-stm32f4/dshot",
+]
 nucleo-f401re = ["dep:stm32f4xx-hal"]
 
 [dependencies]

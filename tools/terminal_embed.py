@@ -24,8 +24,28 @@ FIRMWARE_MARKERS = (
     "Running heartbeat",
 )
 REPO_ROOT = Path(__file__).resolve().parents[1]
-F405_APP_ROOT = REPO_ROOT / "apps/stm32f405-flight"
 DEFAULT_LOG_DIR = REPO_ROOT / "logs" / "terminal_embed"
+
+
+@dataclass(frozen=True)
+class FirmwareTarget:
+    app_root: Path
+    binary_name: str
+    chip: str
+
+
+FIRMWARE_TARGETS = {
+    "fcu3": FirmwareTarget(
+        app_root=REPO_ROOT / "apps/stm32f405-flight",
+        binary_name="FerroWasp",
+        chip="STM32F405RG",
+    ),
+    "foxeer-f405-v2": FirmwareTarget(
+        app_root=REPO_ROOT / "apps/foxeer-f405-v2",
+        binary_name="FerroWaspFoxeerF405V2",
+        chip="STM32F405RG",
+    ),
+}
 
 
 @dataclass
@@ -51,6 +71,12 @@ def parse_args() -> argparse.Namespace:
             "Build firmware, launch probe-rs run, read decoded defmt RTT output, and print "
             "firmware lines with a DRONE prefix."
         )
+    )
+    parser.add_argument(
+        "--board",
+        choices=tuple(FIRMWARE_TARGETS),
+        default="fcu3",
+        help="Firmware board/app to build and run over SWD. Defaults to fcu3.",
     )
     parser.add_argument(
         "--release",
@@ -87,9 +113,9 @@ def default_log_file() -> Path:
     return DEFAULT_LOG_DIR / f"{timestamp}_rtt.log"
 
 
-def default_elf(*, release: bool) -> Path:
+def default_elf(target: FirmwareTarget, *, release: bool) -> Path:
     profile = "release" if release else "debug"
-    return F405_APP_ROOT / f"target/thumbv7em-none-eabihf/{profile}/FerroWasp"
+    return target.app_root / f"target/thumbv7em-none-eabihf/{profile}/{target.binary_name}"
 
 
 def firmware_sha256(path: Path) -> str:
@@ -103,6 +129,7 @@ def firmware_sha256(path: Path) -> str:
 def commands_from_args(
     raw_command: Sequence[str],
     *,
+    target: FirmwareTarget,
     release: bool,
     locked: bool,
     features: str,
@@ -123,12 +150,12 @@ def commands_from_args(
                     "probe-rs",
                     "run",
                     "--chip",
-                    "STM32F405RG",
+                    target.chip,
                     "--protocol",
                     "swd",
                     "--no-location",
                     "--no-timestamps",
-                    str(default_elf(release=release)),
+                    str(default_elf(target, release=release)),
                 ]
             ],
         )
@@ -188,12 +215,12 @@ def run_and_prefix(command: Sequence[str], logger: Logger) -> int:
         return 0
 
 
-def run_quiet_build(command: Sequence[str], logger: Logger) -> int:
+def run_quiet_build(command: Sequence[str], target: FirmwareTarget, logger: Logger) -> int:
     logger.line(f"HOST: building firmware with {' '.join(command)}")
     try:
         result = subprocess.run(
             command,
-            cwd=F405_APP_ROOT,
+            cwd=target.app_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -217,8 +244,10 @@ def run_quiet_build(command: Sequence[str], logger: Logger) -> int:
 
 def main() -> int:
     args = parse_args()
+    target = FIRMWARE_TARGETS[args.board]
     build_command, commands = commands_from_args(
         args.command,
+        target=target,
         release=args.release,
         locked=args.locked,
         features=args.features,
@@ -229,10 +258,10 @@ def main() -> int:
         logger.line(f"HOST: logging to {logger.log_file}")
         logger.line("Press Ctrl+C to stop.")
         if build_command is not None:
-            exit_code = run_quiet_build(build_command, logger)
+            exit_code = run_quiet_build(build_command, target, logger)
             if exit_code != 0:
                 return exit_code
-            firmware = default_elf(release=args.release)
+            firmware = default_elf(target, release=args.release)
             try:
                 logger.line(f"HOST: firmware ELF {firmware}")
                 logger.line(f"HOST: firmware SHA-256 {firmware_sha256(firmware)}")

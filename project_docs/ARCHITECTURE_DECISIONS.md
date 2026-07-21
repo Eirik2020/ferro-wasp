@@ -872,3 +872,79 @@ the arming guard. A stale IMU may therefore pass this ESC qualification and
 briefly reach `SYSTEM ARMED` before the first post-arm stale-IMU control check
 requests disarm. Adding an IMU pre-arm prerequisite remains separate safety
 work.
+
+## ADR-0032: Foxeer Uses A Separate Capped Actuator-Validation Gate
+
+Status: accepted
+
+The Foxeer F405 V2 flight-readiness gate remains false until its physical IMU
+orientation, ADC calibration, motor order, and M4 complementary-output
+polarity are target-verified. Those motor checks cannot be completed while
+every actuator output is blocked, so the app provides a distinct compile-time
+`bench_actuator_validation` commissioning gate.
+
+The gate must be combined with `bench_equal_motors` or exactly one physical or
+logical selected-motor feature. A gate-only image and a selected-motor image
+without the gate are compile-time errors. The mode keeps the 250-command cap,
+RC qualification, low-throttle arming guard, recovery latch, safety-owned
+actuator task, bounded fresh-command path, and RC-loss/disarm behavior. It does
+not make the BSP verification flags true and cannot compile a normal
+PID/mixer-output flight image.
+
+The existing PWM arming sequence briefly applies idle to all four outputs
+before selected/capped commands begin. The commissioning image is therefore
+props-off only even with one selected motor. Its purpose is to collect the
+evidence required to close the normal board gate, not to bypass that gate for
+flight.
+
+## ADR-0033: Foxeer IMU Sampling Is Triggered By PC4/EXTI4
+
+Status: accepted, pending target validation
+
+Foxeer replaces its temporary timer-originated IMU request with the board's
+dedicated PC4/EXTI4 data-ready signal. MPU6500 initialization retains its
+active-high, push-pull raw-data-ready configuration. ICM42688-P initialization
+configures pulsed active-high push-pull INT1, clears `INT_ASYNC_RESET`, routes
+UI data ready to INT1, and verifies all three register writes.
+
+EXTI4 runs as a short priority-14 hardware task. It verifies and clears the
+pending edge, captures the existing TIM2 microsecond timebase, and attempts to
+spawn one instance of the existing bounded asynchronous SPI request. It does
+not access SPI registers, wait, allocate, or command actuators. RTIC's
+single-instance task capacity remains the backpressure boundary: a data-ready
+edge arriving while the request task is occupied is counted as rejected rather
+than queued without bound.
+
+The SPI owner, DMA completion path, 250 us transaction deadline, timeout
+recovery, parser, stale-sample detection, 800 Hz control scheduler tick, and
+400 Hz control/output cadence are unchanged. FCU3 retains timer-triggered IMU
+polling. Foxeer heartbeat diagnostics report total and two-second-delta EXTI4
+and rejected-trigger counts. Flight arming remains inhibited until target
+evidence confirms PC4 polarity and cadence, acceptable rejection behavior,
+sample progress, deadline recovery, and stale-data handling.
+
+## ADR-0034: Foxeer Onboard Flash Uses A Low-Priority CPU-Driven SPI2 Owner
+
+Status: accepted, pending target validation
+
+Foxeer routes its onboard NOR to SPI2 on PB13/PC2/PC3 with CS on PB12. The
+STM32F405 fixes SPI2 TX to DMA1 Stream 4, which is already owned by the
+validated UART4 OSD TX path. Rather than displacing working OSD or SBUS routes,
+the flash manager performs short mode-0, 10 MHz CPU-driven transactions at
+RTIC priority 1. Page programming and sector erasure are started quickly and
+their busy state is polled asynchronously; the task never spins through the
+device's internal write time.
+
+One task exclusively owns the flash and accepts bounded record and USB-command
+queues. The layout reserves two copy-on-write configuration sectors, one
+destructive-test scratch sector, and an append-only CRC-protected log region.
+Configuration keys and ranges are constrained by the existing tuning policy.
+Destructive commands require explicit confirmation, are disarmed-only, and
+abort when arming begins. The task owns no actuator peripheral or safety-state
+write handle, preserving the central authority boundary.
+
+Feature stages separate discovery from mutation: `flash_storage` is
+read-only, `flash_writes` enables maintenance and configuration persistence,
+and `flash_blackbox` enables control-record programming. Hardware validation
+must establish JEDEC identity, write/readback behavior, torn-write recovery,
+and acceptable control-loop jitter before the logger is used in flight.

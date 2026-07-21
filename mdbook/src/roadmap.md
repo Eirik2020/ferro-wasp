@@ -19,7 +19,8 @@ The FCU3 prototype now provides:
 
 - SBUS input over owned USART2 RX DMA;
 - MPU6500 sampling over the bounded SPI1 DMA transport;
-- 800 Hz IMU polling and a 400 Hz rate-control/mixer update;
+- FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling and a 400 Hz
+  rate-control/mixer update;
 - default, safety-owned four-lane DShot600 at 500 frame sets per second;
 - PA10 / USART1 RX BLHeli legacy telemetry managed outside actuator authority;
 - idle arming qualification using fresh eRPM evidence from all four ESCs;
@@ -59,19 +60,22 @@ Source publication does not imply that a firmware binary is flight-qualified.
 
 ## Phase 2: Foxeer F405 V2 Target Validation
 
-The Foxeer app already has ROM-DFU, USB enumeration, read-only status, and
-ICM42688-P runtime evidence. Flight arming remains compile-time inhibited.
+The Foxeer app already has ROM-DFU, USB enumeration, status, ICM42688-P
+runtime evidence, and staged onboard-flash support. Flight arming remains
+compile-time inhibited; the flash path is implemented but lacks target evidence.
 
 The next hardware sequence is:
 
 1. Re-establish a clean build and boot checkpoint on the intended Foxeer board.
 2. Validate the fitted IMU identity, body-axis mapping, sample freshness, and
    startup behavior.
-3. Calibrate ADC voltage/current scaling.
-4. Measure all four PWM outputs, including TIM1_CH3N polarity on M4.
-5. With propellers removed, verify logical motor order, rotation direction,
+3. Identify the SPI2 NOR, pass the isolated scratch-sector self-test, and
+   validate persistent config/log recovery plus control-loop timing.
+4. Calibrate ADC voltage/current scaling.
+5. Measure all four PWM outputs, including TIM1_CH3N polarity on M4.
+6. With propellers removed, verify logical motor order, rotation direction,
    stick response, and motion-opposing correction.
-6. Review the evidence before removing the board-specific arming inhibit.
+7. Review the evidence before removing the board-specific arming inhibit.
 
 FCU3 timer, DMA, motor-map, and DShot assumptions must not be copied to Foxeer
 without target evidence.

@@ -22,7 +22,8 @@ Supported today:
 
 - SBUS RC input over owned USART2 DMA buffers
 - MPU6500 and ICM42688-P drivers with a bounded SPI1 DMA sample path
-- 800 Hz IMU polling with a 400 Hz control update
+- FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling with a
+  400 Hz control update
 - simple rate controller and quad mixer
 - default four-lane DShot600 output on FCU3, with explicit RC PWM fallback
 - safety-owned DShot output, command freshness checks, leases, and fault
@@ -34,7 +35,7 @@ Supported today:
   fallback
 - ADC DMA for temperature/voltage measurement
 - DJI O4 MSPv1 OSD over UART4
-- optional read-only Foxeer USB CDC status
+- optional Foxeer USB CDC status and staged onboard flash log/config access
 - `defmt`/RTT and compact BB2 control-loop logging
 
 FCU3 has completed the recorded DShot bench gates and an operator-reported

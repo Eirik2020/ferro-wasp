@@ -27,7 +27,8 @@ use ferrowasp_waveform::dshot::{
 };
 use stm32f4xx_hal::{
     dma::{
-        ChannelX, DMAError, MemoryToPeripheral, Stream1, Stream4, Stream6, Stream7, Transfer,
+        ChannelX, DMAError, MemoryToPeripheral, Stream1, Stream2, Stream4, Stream6, Stream7,
+        Transfer,
         config::{DmaConfig, Priority},
         traits::{Channel, DMASet, PeriAddress, StreamISR},
     },
@@ -46,7 +47,10 @@ pub type DshotDmaBuffer = [u16; COMPARE_DMA_SLOTS];
 type DshotBuffer = &'static mut DshotDmaBuffer;
 type Motor1Transfer = Transfer<Stream1<DMA2>, 6, Tim1Ch1Dma, MemoryToPeripheral, DshotBuffer>;
 type Motor2Transfer = Transfer<Stream7<DMA2>, 7, Tim8Ch4Dma, MemoryToPeripheral, DshotBuffer>;
-type Motor3Transfer = Transfer<Stream4<DMA2>, 7, Tim8Ch3Dma, MemoryToPeripheral, DshotBuffer>;
+type Fcu3Motor3Transfer =
+    Transfer<Stream4<DMA2>, 7, Tim8Ch3DmaFcu3, MemoryToPeripheral, DshotBuffer>;
+type FoxeerMotor3Transfer =
+    Transfer<Stream2<DMA2>, 0, Tim8Ch3DmaFoxeer, MemoryToPeripheral, DshotBuffer>;
 type Motor4Transfer = Transfer<Stream6<DMA2>, 6, Tim1Ch3Dma, MemoryToPeripheral, DshotBuffer>;
 
 /// Physical four-lane DShot bank output, before any airframe motor remap.
@@ -224,10 +228,16 @@ dma_endpoint!(
     7
 );
 dma_endpoint!(
-    /// TIM8_CH3 compare endpoint for physical motor output 3.
-    Tim8Ch3Dma,
+    /// FCU3 TIM8_CH3 compare endpoint for physical motor output 3.
+    Tim8Ch3DmaFcu3,
     Stream4<DMA2>,
     7
+);
+dma_endpoint!(
+    /// Foxeer F405 V2 TIM8_CH3 compare endpoint for physical motor output 3.
+    Tim8Ch3DmaFoxeer,
+    Stream2<DMA2>,
+    0
 );
 dma_endpoint!(
     /// TIM1_CH3 compare endpoint for physical TIM1_CH3N motor output 4.
@@ -241,7 +251,15 @@ dma_endpoint!(
 pub fn assert_four_motor_dma_routes_compile() {
     assert_dma_route::<Stream1<DMA2>, 6, Tim1Ch1Dma>();
     assert_dma_route::<Stream7<DMA2>, 7, Tim8Ch4Dma>();
-    assert_dma_route::<Stream4<DMA2>, 7, Tim8Ch3Dma>();
+    assert_dma_route::<Stream4<DMA2>, 7, Tim8Ch3DmaFcu3>();
+    assert_dma_route::<Stream6<DMA2>, 6, Tim1Ch3Dma>();
+}
+
+/// Compile-time proof for the Foxeer F405 V2 motor DMA allocation.
+pub fn assert_foxeer_four_motor_dma_routes_compile() {
+    assert_dma_route::<Stream1<DMA2>, 6, Tim1Ch1Dma>();
+    assert_dma_route::<Stream7<DMA2>, 7, Tim8Ch4Dma>();
+    assert_dma_route::<Stream2<DMA2>, 0, Tim8Ch3DmaFoxeer>();
     assert_dma_route::<Stream6<DMA2>, 6, Tim1Ch3Dma>();
 }
 
@@ -380,6 +398,72 @@ impl DshotTimerBank {
     }
 }
 
+enum Motor3DmaRoute {
+    Fcu3(Stream4<DMA2>),
+    Foxeer(Stream2<DMA2>),
+}
+
+enum Motor3Transfer {
+    Fcu3(Fcu3Motor3Transfer),
+    Foxeer(FoxeerMotor3Transfer),
+}
+
+impl Motor3Transfer {
+    fn new(route: Motor3DmaRoute, address: u32, buffer: DshotBuffer) -> Self {
+        match route {
+            Motor3DmaRoute::Fcu3(stream) => {
+                Self::Fcu3(init_transfer(stream, Tim8Ch3DmaFcu3::new(address), buffer))
+            }
+            Motor3DmaRoute::Foxeer(stream) => Self::Foxeer(init_transfer(
+                stream,
+                Tim8Ch3DmaFoxeer::new(address),
+                buffer,
+            )),
+        }
+    }
+
+    fn exchange_buffer(
+        &mut self,
+        spare: &mut Option<DshotBuffer>,
+        next: DshotBuffer,
+    ) -> Result<(), ()> {
+        match self {
+            Self::Fcu3(transfer) => exchange_buffer(transfer, spare, next),
+            Self::Foxeer(transfer) => exchange_buffer(transfer, spare, next),
+        }
+    }
+
+    fn start(&mut self) {
+        match self {
+            Self::Fcu3(transfer) => transfer.start(|_| {}),
+            Self::Foxeer(transfer) => transfer.start(|_| {}),
+        }
+    }
+
+    fn is_transfer_complete(&self) -> bool {
+        match self {
+            Self::Fcu3(transfer) => transfer.is_transfer_complete(),
+            Self::Foxeer(transfer) => transfer.is_transfer_complete(),
+        }
+    }
+
+    fn is_error(&self) -> bool {
+        match self {
+            Self::Fcu3(transfer) => transfer.is_transfer_error() || transfer.is_direct_mode_error(),
+            Self::Foxeer(transfer) => {
+                transfer.is_transfer_error() || transfer.is_direct_mode_error()
+            }
+        }
+    }
+
+    fn pause_and_clear(&mut self) {
+        match self {
+            Self::Fcu3(transfer) => pause_and_clear(transfer),
+            Self::Foxeer(transfer) => pause_and_clear(transfer),
+        }
+    }
+}
+
 pub struct DshotMotorBank {
     timers: DshotTimerBank,
     _motor1_pin: PA8<Alternate<1>>,
@@ -423,6 +507,71 @@ impl DshotMotorBank {
         clocks: &Clocks,
         storage: &'static mut DshotDmaStorage,
     ) -> Result<Self, DshotInitError> {
+        Self::new_with_motor3_route(
+            motor1_pin,
+            motor2_pin,
+            motor3_pin,
+            motor4_pin,
+            tim1,
+            tim8,
+            motor1_dma,
+            motor2_dma,
+            Motor3DmaRoute::Fcu3(motor3_dma),
+            motor4_dma,
+            clocks,
+            storage,
+        )
+    }
+
+    /// Constructs the Foxeer F405 V2 bank with TIM8_CH3 on DMA2 Stream2
+    /// Channel0. All other timer, pin, and containment behavior is shared with
+    /// the flight-tested FCU3 implementation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_foxeer(
+        motor1_pin: PA8<Input>,
+        motor2_pin: PC9<Input>,
+        motor3_pin: PC8<Input>,
+        motor4_pin: PB15<Input>,
+        tim1: Timer<TIM1>,
+        tim8: Timer<TIM8>,
+        motor1_dma: Stream1<DMA2>,
+        motor2_dma: Stream7<DMA2>,
+        motor3_dma: Stream2<DMA2>,
+        motor4_dma: Stream6<DMA2>,
+        clocks: &Clocks,
+        storage: &'static mut DshotDmaStorage,
+    ) -> Result<Self, DshotInitError> {
+        Self::new_with_motor3_route(
+            motor1_pin,
+            motor2_pin,
+            motor3_pin,
+            motor4_pin,
+            tim1,
+            tim8,
+            motor1_dma,
+            motor2_dma,
+            Motor3DmaRoute::Foxeer(motor3_dma),
+            motor4_dma,
+            clocks,
+            storage,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_motor3_route(
+        motor1_pin: PA8<Input>,
+        motor2_pin: PC9<Input>,
+        motor3_pin: PC8<Input>,
+        motor4_pin: PB15<Input>,
+        tim1: Timer<TIM1>,
+        tim8: Timer<TIM8>,
+        motor1_dma: Stream1<DMA2>,
+        motor2_dma: Stream7<DMA2>,
+        motor3_dma: Motor3DmaRoute,
+        motor4_dma: Stream6<DMA2>,
+        clocks: &Clocks,
+        storage: &'static mut DshotDmaStorage,
+    ) -> Result<Self, DshotInitError> {
         let timing = DshotTiming::from_clocks(clocks.timclk2().raw(), DSHOT600_BITRATE_HZ)
             .map_err(DshotInitError::InvalidTiming)?;
 
@@ -441,8 +590,8 @@ impl DshotMotorBank {
         let tim8 = tim8.release();
         let motor1_endpoint = Tim1Ch1Dma::new(tim1.ccr(0).as_ptr() as u32);
         let motor2_endpoint = Tim8Ch4Dma::new(tim8.ccr(3).as_ptr() as u32);
-        let motor3_endpoint = Tim8Ch3Dma::new(tim8.ccr(2).as_ptr() as u32);
         let motor4_endpoint = Tim1Ch3Dma::new(tim1.ccr(2).as_ptr() as u32);
+        let motor3_endpoint_address = tim8.ccr(2).as_ptr() as u32;
         let timers = DshotTimerBank::new(tim1, tim8, timing);
 
         let motor1_pin = motor1_pin.into_alternate::<1>().speed(Speed::VeryHigh);
@@ -453,7 +602,8 @@ impl DshotMotorBank {
         let buffers = storage.split();
         let motor1_transfer = init_transfer(motor1_dma, motor1_endpoint, buffers.motor1_active);
         let motor2_transfer = init_transfer(motor2_dma, motor2_endpoint, buffers.motor2_active);
-        let motor3_transfer = init_transfer(motor3_dma, motor3_endpoint, buffers.motor3_active);
+        let motor3_transfer =
+            Motor3Transfer::new(motor3_dma, motor3_endpoint_address, buffers.motor3_active);
         let motor4_transfer = init_transfer(motor4_dma, motor4_endpoint, buffers.motor4_active);
 
         Ok(Self {
@@ -695,12 +845,10 @@ impl DshotMotorBank {
             self.latch_fault(false);
             return Err(DshotCommandError::Faulted);
         }
-        if exchange_buffer(
-            &mut self.motor3_transfer,
-            &mut self.motor3_spare,
-            motor3_next,
-        )
-        .is_err()
+        if self
+            .motor3_transfer
+            .exchange_buffer(&mut self.motor3_spare, motor3_next)
+            .is_err()
         {
             self.motor4_spare = Some(motor4_next);
             self.latch_fault(false);
@@ -725,7 +873,7 @@ impl DshotMotorBank {
         // Enable all four DMA streams before opening any timer DMA request.
         self.motor1_transfer.start(|_| {});
         self.motor2_transfer.start(|_| {});
-        self.motor3_transfer.start(|_| {});
+        self.motor3_transfer.start();
         self.motor4_transfer.start(|_| {});
         self.timers.start_frame(first_duties);
         self.telemetry_request_sent = telemetry_request;
@@ -754,8 +902,7 @@ impl DshotMotorBank {
             ),
             DshotMotor::Motor3 => (
                 self.motor3_transfer.is_transfer_complete(),
-                self.motor3_transfer.is_transfer_error()
-                    || self.motor3_transfer.is_direct_mode_error(),
+                self.motor3_transfer.is_error(),
             ),
             DshotMotor::Motor4 => (
                 self.motor4_transfer.is_transfer_complete(),
@@ -769,7 +916,7 @@ impl DshotMotorBank {
         match motor {
             DshotMotor::Motor1 => pause_and_clear(&mut self.motor1_transfer),
             DshotMotor::Motor2 => pause_and_clear(&mut self.motor2_transfer),
-            DshotMotor::Motor3 => pause_and_clear(&mut self.motor3_transfer),
+            DshotMotor::Motor3 => self.motor3_transfer.pause_and_clear(),
             DshotMotor::Motor4 => pause_and_clear(&mut self.motor4_transfer),
         }
     }
@@ -790,7 +937,7 @@ impl DshotMotorBank {
         self.timers.force_outputs_low();
         pause_and_clear(&mut self.motor1_transfer);
         pause_and_clear(&mut self.motor2_transfer);
-        pause_and_clear(&mut self.motor3_transfer);
+        self.motor3_transfer.pause_and_clear();
         pause_and_clear(&mut self.motor4_transfer);
     }
 }

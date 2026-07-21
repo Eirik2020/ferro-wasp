@@ -18,6 +18,7 @@ pub struct SerialCapabilities {
     pub crsf: bool,
     pub mavlink: bool,
     pub msp: bool,
+    pub esc_telemetry: bool,
     pub tx: bool,
 }
 
@@ -29,7 +30,7 @@ impl SerialCapabilities {
             SerialProtocol::Crsf => self.crsf,
             SerialProtocol::Mavlink => self.mavlink,
             SerialProtocol::Msp => self.msp,
-            SerialProtocol::EscTelemetry => false,
+            SerialProtocol::EscTelemetry => self.esc_telemetry,
         }
     }
 }
@@ -47,6 +48,7 @@ pub const USART2_SBUS: SerialRoute = SerialRoute {
         crsf: false,
         mavlink: false,
         msp: false,
+        esc_telemetry: false,
         tx: false,
     },
 };
@@ -64,7 +66,26 @@ pub const UART4_MSP: SerialRoute = SerialRoute {
         crsf: false,
         mavlink: false,
         msp: true,
+        esc_telemetry: false,
         tx: true,
+    },
+};
+
+pub const USART1_ESC_TELEMETRY: SerialRoute = SerialRoute {
+    logical: LogicalSerialPort::Uart1,
+    peripheral: "USART1",
+    tx_pin: "unused",
+    rx_pin: "PA10 AF7",
+    profile: SerialProfile::esc_telemetry(),
+    rx_dma: "DMA2 Stream 5 Channel 4",
+    tx_dma: None,
+    capabilities: SerialCapabilities {
+        sbus: false,
+        crsf: false,
+        mavlink: false,
+        msp: false,
+        esc_telemetry: true,
+        tx: false,
     },
 };
 
@@ -100,6 +121,10 @@ mod tests {
     fn active_profiles_match_the_supported_ferrowasp_protocols() {
         assert_eq!(USART2_SBUS.validate_profile(SerialProfile::sbus()), Ok(()));
         assert_eq!(UART4_MSP.validate_profile(SerialProfile::msp()), Ok(()));
+        assert_eq!(
+            USART1_ESC_TELEMETRY.validate_profile(SerialProfile::esc_telemetry()),
+            Ok(())
+        );
         assert_eq!(
             USART2_SBUS.validate_profile(SerialProfile::msp()),
             Err(SerialRouteError::UnsupportedProtocol)

@@ -52,7 +52,8 @@ The active bench target is an STM32F405-class RTIC firmware prototype with:
 - SBUS RC input over USART2 RX DMA;
 - MPU6500 IMU over SPI1 on FCU3, plus runtime-selected MPU6500 or ICM42688-P
   over the same bounded DMA transport on Foxeer;
-- 800 Hz IMU polling and 400 Hz control/output update;
+- FCU3 800 Hz IMU polling, Foxeer PC4/EXTI4 data-ready sampling, and 400 Hz
+  control/output update;
 - prototype complementary roll/pitch estimate;
 - rate controller and Quad-X mixer;
 - safety-gated four-lane DShot600 ESC output by default, with an explicit
@@ -62,7 +63,7 @@ The active bench target is an STM32F405-class RTIC firmware prototype with:
 - DJI O4 MSPv1 OSD over UART4;
 - ADC DMA observation for voltage/current/temperature;
 - `defmt`/RTT logging and compact BB2 control-loop frames;
-- optional read-only Foxeer USB CDC status snapshots;
+- optional Foxeer USB CDC status plus staged onboard SPI-NOR log/config access;
 - capped FCU3 DShot600 bench modes separate from the default mixed-control
   DShot output.
 
@@ -70,8 +71,9 @@ FerroWasp FCU3 is the validated flight baseline. Foxeer F405 V2 has a separate
 RTIC app and BSP with the same supported flight-service subset, ICM42688-P
 support, and conventional four-channel RC PWM. Its flight arming is
 intentionally inhibited until board-specific target measurements are complete.
-Its optional `usb_serial` path reports bounded status only; USB input is
-discarded and cannot request arming, alter safety state, or command actuators.
+Its base `usb_serial` path reports bounded status only. Flash-enabled variants
+accept a bounded, whitelisted storage/config command set while disarmed; USB
+cannot request arming, alter safety state, or command actuators.
 
 The detailed support matrix lives in:
 

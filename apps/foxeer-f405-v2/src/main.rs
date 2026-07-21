@@ -4,6 +4,125 @@
 #![no_main]
 #![no_std]
 
+#[cfg(all(feature = "dshot", not(feature = "bench_actuator_validation")))]
+compile_error!("Foxeer DShot requires the props-off `bench_actuator_validation` gate.");
+#[cfg(all(feature = "dshot", not(feature = "bench_equal_motors")))]
+compile_error!("Foxeer DShot commissioning requires the capped `bench_equal_motors` gate.");
+#[cfg(all(feature = "dshot", feature = "pwm_cal"))]
+compile_error!("Foxeer DShot cannot be combined with PWM calibration.");
+#[cfg(all(feature = "esc_telemetry", not(feature = "dshot")))]
+compile_error!("Foxeer ESC telemetry requires the DShot actuator service.");
+#[cfg(all(
+    feature = "dshot",
+    any(
+        feature = "bench_motor1_only",
+        feature = "bench_motor2_only",
+        feature = "bench_motor3_only",
+        feature = "bench_motor4_only"
+    )
+))]
+compile_error!(
+    "Foxeer DShot uses logical-motor selection; physical PWM selectors are not supported."
+);
+#[cfg(all(
+    feature = "bench_actuator_validation",
+    not(any(
+        feature = "bench_equal_motors",
+        feature = "bench_motor1_only",
+        feature = "bench_motor2_only",
+        feature = "bench_motor3_only",
+        feature = "bench_motor4_only",
+        feature = "bench_logical_motor1_only",
+        feature = "bench_logical_motor2_only",
+        feature = "bench_logical_motor3_only",
+        feature = "bench_logical_motor4_only"
+    ))
+))]
+compile_error!(
+    "Feature `bench_actuator_validation` requires a capped equal-motor, physical-motor, or logical-motor bench feature."
+);
+#[cfg(all(
+    not(feature = "bench_actuator_validation"),
+    any(
+        feature = "bench_equal_motors",
+        feature = "bench_motor1_only",
+        feature = "bench_motor2_only",
+        feature = "bench_motor3_only",
+        feature = "bench_motor4_only",
+        feature = "bench_logical_motor1_only",
+        feature = "bench_logical_motor2_only",
+        feature = "bench_logical_motor3_only",
+        feature = "bench_logical_motor4_only"
+    )
+))]
+compile_error!(
+    "Foxeer motor bench features require the explicit props-off `bench_actuator_validation` gate."
+);
+#[cfg(any(
+    all(
+        feature = "bench_motor1_only",
+        any(
+            feature = "bench_motor2_only",
+            feature = "bench_motor3_only",
+            feature = "bench_motor4_only",
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        )
+    ),
+    all(
+        feature = "bench_motor2_only",
+        any(
+            feature = "bench_motor3_only",
+            feature = "bench_motor4_only",
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        )
+    ),
+    all(
+        feature = "bench_motor3_only",
+        any(
+            feature = "bench_motor4_only",
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        )
+    ),
+    all(
+        feature = "bench_motor4_only",
+        any(
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        )
+    ),
+    all(
+        feature = "bench_logical_motor1_only",
+        any(
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        )
+    ),
+    all(
+        feature = "bench_logical_motor2_only",
+        any(
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        )
+    ),
+    all(
+        feature = "bench_logical_motor3_only",
+        feature = "bench_logical_motor4_only"
+    )
+))]
+compile_error!("Select at most one physical or logical Foxeer motor bench feature.");
+
 use core::cell::RefCell;
 use core::sync::atomic::Ordering;
 use critical_section::Mutex;
@@ -33,6 +152,8 @@ use ferrowasp_stm32f4::timebase as stm32_timebase;
 use ferrowasp_stm32f4::uart_dma as stm32_uart;
 use ferrowasp_stm32f4::watchdog as stm32_watchdog;
 use ferrowasp_tasks::drone_toolbox as dt;
+use ferrowasp_tasks::esc_manager as esc;
+use ferrowasp_tasks::flash_storage as flash_task;
 use ferrowasp_tasks::osd;
 use ferrowasp_tasks::usb_debug;
 use fugit::Rate;
@@ -49,6 +170,45 @@ use usb_device::{
     device::{StringDescriptors, UsbDeviceBuilder, UsbVidPid},
 };
 use usbd_serial::SerialPort;
+
+#[cfg(not(feature = "dshot"))]
+type MotorOutputs = board::pwm::EscPwmBank;
+#[cfg(feature = "dshot")]
+struct MotorOutputs;
+
+#[cfg(feature = "dshot")]
+type DshotShared = board::init::DshotMotorBank;
+#[cfg(not(feature = "dshot"))]
+pub struct DshotShared;
+
+#[cfg(feature = "esc_telemetry")]
+type EscTelemetryUartIrq = stm32_uart::Uart1RxIrq;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscTelemetryUartIrq = ();
+#[cfg(feature = "esc_telemetry")]
+type EscTelemetryUartParser = stm32_uart::UartRxParserSide;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscTelemetryUartParser = ();
+#[cfg(feature = "esc_telemetry")]
+type EscManagerState = esc::EscManager;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscManagerState = ();
+#[cfg(feature = "esc_telemetry")]
+type EscRequestProducer = esc::EscRequestProducer;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscRequestProducer = ();
+#[cfg(feature = "esc_telemetry")]
+type EscRequestConsumer = esc::EscRequestConsumer;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscRequestConsumer = ();
+#[cfg(feature = "esc_telemetry")]
+type EscAckProducer = esc::EscAckProducer;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscAckProducer = ();
+#[cfg(feature = "esc_telemetry")]
+type EscAckConsumer = esc::EscAckConsumer;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscAckConsumer = ();
 
 type AdcTransfer = board::aliases::Adc1ObservationTransfer;
 type ControlScheduler = board::aliases::ControlScheduler;
@@ -71,11 +231,41 @@ type Uart4OwnedWriter = stm32_memory::UartOwnedWriter<'static>;
 type Uart4OwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
 type Uart4OwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
 type UsbDebugSerial = SerialPort<'static, UsbBusType, [u8; 64], [u8; 256]>;
+#[cfg(feature = "flash_storage")]
+type FlashDevice = board::aliases::Spi2Flash;
+#[cfg(not(feature = "flash_storage"))]
+type FlashDevice = ();
+#[cfg(feature = "flash_blackbox")]
+type FlashRecordProducer = flash_task::RecordProducer;
+#[cfg(not(feature = "flash_blackbox"))]
+type FlashRecordProducer = ();
+#[cfg(feature = "flash_blackbox")]
+type FlashRecordConsumer = flash_task::RecordConsumer;
+#[cfg(not(feature = "flash_blackbox"))]
+type FlashRecordConsumer = ();
+#[cfg(feature = "flash_storage")]
+type FlashCommandProducer = flash_task::CommandProducer;
+#[cfg(not(feature = "flash_storage"))]
+type FlashCommandProducer = ();
+#[cfg(feature = "flash_storage")]
+type FlashCommandConsumer = flash_task::CommandConsumer;
+#[cfg(not(feature = "flash_storage"))]
+type FlashCommandConsumer = ();
+#[cfg(feature = "flash_storage")]
+type FlashResponseProducer = flash_task::ResponseProducer;
+#[cfg(not(feature = "flash_storage"))]
+type FlashResponseProducer = ();
+#[cfg(feature = "flash_storage")]
+type FlashResponseConsumer = flash_task::ResponseConsumer;
+#[cfg(not(feature = "flash_storage"))]
+type FlashResponseConsumer = ();
 
 use board::Spi1ImuKind;
 use board::profiles::{
     ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE,
 };
+const BENCH_ACTUATOR_VALIDATION_ENABLED: bool = cfg!(feature = "bench_actuator_validation");
+const ACTUATOR_OUTPUT_ENABLED: bool = FLIGHT_ARMING_ENABLED || BENCH_ACTUATOR_VALIDATION_ENABLED;
 #[rtic::app(device = pac, peripherals = true, dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN])]
 mod app {
     use super::*; // Import everything from parent module
@@ -106,13 +296,41 @@ mod app {
     static IMU_LATEST_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
     static IMU_LATEST_YAW_RAW: AtomicI32 = AtomicI32::new(0);
     static IMU_TRANSPORT_READY: AtomicBool = AtomicBool::new(false);
+    static IMU_DRDY_IRQ_COUNT: AtomicU32 = AtomicU32::new(0);
+    static IMU_DRDY_REJECTED_COUNT: AtomicU32 = AtomicU32::new(0);
+    static IMU_DRDY_LAST_US: AtomicU32 = AtomicU32::new(0);
+    #[cfg(feature = "esc_telemetry")]
+    static ESC_TELEMETRY_DISCONTINUITY: AtomicBool = AtomicBool::new(false);
     static ACTIVE_IMU_KIND: AtomicU8 = AtomicU8::new(0);
     static BATTERY_VOLTAGE_V10_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
     static BATTERY_CURRENT_CA_SNAPSHOT: AtomicI32 = AtomicI32::new(0);
+    static ADC_VOLTAGE_MV_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
+    static ADC_CURRENT_MV_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
     static USB_DEBUG_DUE: AtomicBool = AtomicBool::new(false);
     static USB_RC_VALID_SNAPSHOT: AtomicBool = AtomicBool::new(false);
     static USB_RC_ARMABLE_SNAPSHOT: AtomicBool = AtomicBool::new(false);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_READY: AtomicBool = AtomicBool::new(false);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_JEDEC_MANUFACTURER: AtomicU8 = AtomicU8::new(0);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_JEDEC_MEMORY_TYPE: AtomicU8 = AtomicU8::new(0);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_JEDEC_CAPACITY_CODE: AtomicU8 = AtomicU8::new(0);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_CAPACITY_BYTES: AtomicU32 = AtomicU32::new(0);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_LOG_RATE_DIVISOR: AtomicU32 = AtomicU32::new(1);
+    #[cfg(feature = "flash_blackbox")]
+    static FLASH_RECORDS_DROPPED: AtomicU32 = AtomicU32::new(0);
+    #[cfg(feature = "flash_blackbox")]
+    static FLASH_PAGES_WRITTEN: AtomicU32 = AtomicU32::new(0);
+    #[cfg(feature = "flash_storage")]
+    static FLASH_WRITE_FAULTS: AtomicU32 = AtomicU32::new(0);
+    #[cfg(not(feature = "flash_storage"))]
     const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 USB debug v1 (read-only)\r\n";
+    #[cfg(feature = "flash_storage")]
+    const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 storage CLI v1; type help\r\n";
     type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
     type Spi1Executor =
         CriticalSectionSpiExecutor<'static, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
@@ -131,6 +349,7 @@ mod app {
     const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
     const ADC_CURRENT_BETAFLIGHT_SCALE: u32 = ADC_OBSERVATION_PROFILE.current_betaflight_scale;
     const BATTERY_CELL_COUNT: u8 = ADC_OBSERVATION_PROFILE.battery_cell_count;
+    const FOXEER_DSHOT_IDLE_COMMAND: f32 = 65.0;
     #[cfg(any(
         feature = "bench_equal_motors",
         feature = "bench_motor1_only",
@@ -187,6 +406,8 @@ mod app {
     #[shared]
     struct Shared {
         #[lock_free]
+        uart1_rx: EscTelemetryUartIrq,
+        #[lock_free]
         uart2_rx: stm32_uart::Uart2RxIrq,
         uart2_bridge: Uart2OwnedRxBridge,
         #[lock_free]
@@ -210,6 +431,7 @@ mod app {
         // SPI1
         spi1_owner: board::aliases::Spi1ImuOwner,
         io_timebase: IoTimebase,
+        dshot_motors: DshotShared,
     }
     #[local]
     struct Local {
@@ -217,14 +439,30 @@ mod app {
         arm_qualifier: safety::ArmQualifier,
 
         // ESC PWM Control
-        motors: board::pwm::EscPwmBank,
+        motors: MotorOutputs,
 
         // UART
         sbus: StreamingParser,
+        esc_telemetry_uart: EscTelemetryUartParser,
+        esc_manager_state: EscManagerState,
+        esc_request_producer: EscRequestProducer,
+        esc_request_consumer: EscRequestConsumer,
+        esc_ack_producer: EscAckProducer,
+        esc_ack_consumer: EscAckConsumer,
 
         // SPI1
         spi1_parser: SpiRxParserSide,
         spi1_device: Spi1Device,
+        imu_data_ready: board::aliases::ImuDataReadyPin,
+
+        // SPI2 storage. Only the priority-1 flash manager owns this device.
+        flash_device: FlashDevice,
+        flash_record_producer: FlashRecordProducer,
+        flash_record_consumer: FlashRecordConsumer,
+        flash_command_producer: FlashCommandProducer,
+        flash_command_consumer: FlashCommandConsumer,
+        flash_response_producer: FlashResponseProducer,
+        flash_response_consumer: FlashResponseConsumer,
 
         // ADC
         adc1_buffer: Option<&'static mut [u16; 3]>,
@@ -309,6 +547,12 @@ mod app {
         usb_header_sent: bool,
     }
     #[init(local = [
+        uart1_rx_buffers: board::storage::UartRxBufferBank =
+            board::storage::new_uart_rx_buffer_bank(),
+        uart1_free_queue: board::storage::UartRxFreeQueue =
+            board::storage::UartRxFreeQueue::new(),
+        uart1_filled_queue: board::storage::UartRxFilledQueue =
+            board::storage::UartRxFilledQueue::new(),
         uart2_rx_buffers: board::storage::UartRxBufferBank =
             board::storage::new_uart_rx_buffer_bank(),
         uart2_free_queue: board::storage::UartRxFreeQueue =
@@ -330,6 +574,9 @@ mod app {
             board::storage::SpiFilledQueue::new(),
         adc1_buffers: board::storage::AdcBufferBank =
             board::storage::new_adc_buffer_bank(),
+        #[cfg(feature = "dshot")]
+        dshot_dma_storage: board::init::DshotDmaStorage =
+            board::init::DshotDmaStorage::new(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         info!("Begin system init..");
@@ -344,10 +591,11 @@ mod app {
         let gpiob = dp.GPIOB.split(&mut rcc);
         let gpioc = dp.GPIOC.split(&mut rcc);
 
-        // Poll the IMU at 800 Hz and run the PID/motor update at 400 Hz.
-        let sampling_rate = dt::IMU_POLL_RATE_HZ.Hz();
+        // Keep the existing 800 Hz scheduler and 400 Hz PID/motor cadence.
+        // IMU sampling itself is independently triggered by PC4/EXTI4.
+        let scheduler_rate = dt::IMU_POLL_RATE_HZ.Hz();
         let control_loop_rate: Rate<u32, 1, 1> = dt::CONTROL_LOOP_RATE_HZ.Hz();
-        let samples_per_control_loop = sampling_rate.to_Hz() / control_loop_rate.to_Hz();
+        let samples_per_control_loop = scheduler_rate.to_Hz() / control_loop_rate.to_Hz();
 
         let adc1_battery = board::init::init_adc1_battery(
             board::init::Adc1BatteryResourcesFoxeer {
@@ -385,7 +633,7 @@ mod app {
         //let mut syscfg = dp.SYSCFG.constrain(&mut clocks);
 
         let control_loop_scheduler =
-            stm32_scheduler::init_control_scheduler(dp.TIM4, &mut clocks, sampling_rate).unwrap();
+            stm32_scheduler::init_control_scheduler(dp.TIM4, &mut clocks, scheduler_rate).unwrap();
         let io_timebase = stm32_timebase::MicrosecondTimebase::new(dp.TIM2, &mut clocks).unwrap();
         let io_watchdog = stm32_watchdog::init_io_watchdog(dp.TIM6, &mut clocks).unwrap();
 
@@ -423,6 +671,29 @@ mod app {
         let mut osd_uart = None;
         let mut tele_uart = None;
         let mut gps_uart = None;
+
+        // ------------  USART1 / BLHeli legacy ESC telemetry  ------------
+        // Optional observational bring-up path: ESC TLM -> PA10 USART1_RX.
+        #[cfg(feature = "esc_telemetry")]
+        let (uart1_rx, esc_telemetry_uart) = {
+            board::aliases::assert_usart1_esc_telemetry_route_compile();
+            let uart1 = board::init::init_usart1_esc_telemetry(
+                board::init::Usart1EscTelemetryResources {
+                    rx_pin: gpioa.pa10,
+                    usart: dp.USART1,
+                    rx_dma: dma2.5,
+                },
+                &mut clocks,
+                board::storage::UartRxStorageResources {
+                    buffers: cx.local.uart1_rx_buffers,
+                    free_queue: cx.local.uart1_free_queue,
+                    filled_queue: cx.local.uart1_filled_queue,
+                },
+            );
+            (uart1.irq, uart1.parser)
+        };
+        #[cfg(not(feature = "esc_telemetry"))]
+        let (uart1_rx, esc_telemetry_uart) = ((), ());
 
         // ------------  USART2 / SBUS RC  ------------
         let uart2 = board::init::init_usart2_sbus(
@@ -488,18 +759,78 @@ mod app {
             cortex_m::singleton!(: Uart4OwnedTxChannel = Uart4OwnedTxChannel::new()).unwrap();
         let (osd_tx_writer, uart4_tx_owner, uart4_tx_completion) = uart4_owned_tx.split();
 
-        let motors = board::pwm::init_esc_pwm(
-            board::pwm::EscPwmResources {
-                tim1: dp.TIM1,
-                tim8: dp.TIM8,
-                motor1_pin: gpioa.pa8,
-                motor2_pin: gpioc.pc9,
-                motor3_pin: gpioc.pc8,
-                motor4_pin: gpiob.pb15,
-            },
-            &mut clocks,
-        )
-        .expect("Foxeer TIM1/TIM8 RC PWM configuration must be valid");
+        #[cfg(feature = "esc_telemetry")]
+        let (
+            esc_manager_state,
+            esc_request_producer,
+            esc_request_consumer,
+            esc_ack_producer,
+            esc_ack_consumer,
+        ) = {
+            let requests =
+                cortex_m::singleton!(: esc::EscRequestQueue = esc::EscRequestQueue::new()).unwrap();
+            let acknowledgements =
+                cortex_m::singleton!(: esc::EscAckQueue = esc::EscAckQueue::new()).unwrap();
+            let (request_producer, request_consumer) = requests.split();
+            let (ack_producer, ack_consumer) = acknowledgements.split();
+            (
+                esc::EscManager::new(esc::EscManagerConfig::legacy_uart(), 0),
+                request_producer,
+                request_consumer,
+                ack_producer,
+                ack_consumer,
+            )
+        };
+        #[cfg(not(feature = "esc_telemetry"))]
+        let (
+            esc_manager_state,
+            esc_request_producer,
+            esc_request_consumer,
+            esc_ack_producer,
+            esc_ack_consumer,
+        ) = ((), (), (), (), ());
+
+        #[cfg(not(feature = "dshot"))]
+        let (motors, dshot_motors) = (
+            board::pwm::init_esc_pwm(
+                board::pwm::EscPwmResources {
+                    tim1: dp.TIM1,
+                    tim8: dp.TIM8,
+                    motor1_pin: gpioa.pa8,
+                    motor2_pin: gpioc.pc9,
+                    motor3_pin: gpioc.pc8,
+                    motor4_pin: gpiob.pb15,
+                },
+                &mut clocks,
+            )
+            .expect("Foxeer TIM1/TIM8 RC PWM configuration must be valid"),
+            DshotShared,
+        );
+
+        #[cfg(feature = "dshot")]
+        let (motors, dshot_motors) = {
+            board::aliases::assert_four_motor_dshot_routes_compile();
+            let tim1 = Timer::new(dp.TIM1, &mut clocks);
+            let tim8 = Timer::new(dp.TIM8, &mut clocks);
+            let bank = board::init::init_dshot_motor_bank(
+                board::init::DshotMotorBankResources {
+                    tim1,
+                    tim8,
+                    motor1_pin: gpioa.pa8,
+                    motor2_pin: gpioc.pc9,
+                    motor3_pin: gpioc.pc8,
+                    motor4_pin: gpiob.pb15,
+                    motor1_dma: dma2.1,
+                    motor2_dma: dma2.7,
+                    motor3_dma: dma2.2,
+                    motor4_dma: dma2.6,
+                },
+                &clocks.clocks,
+                cx.local.dshot_dma_storage,
+            )
+            .expect("Foxeer DShot600 timing must be valid");
+            (MotorOutputs, bank)
+        };
 
         // Minimum Throttle
         // SBUS 1175
@@ -522,6 +853,9 @@ mod app {
                 filled_queue: cx.local.spi1_filled_queue,
             },
         );
+        let mut syscfg = dp.SYSCFG.constrain(&mut clocks);
+        let mut exti = dp.EXTI;
+        let imu_data_ready = board::init::init_imu_data_ready(gpioc.pc4, &mut syscfg, &mut exti);
         let spi1_device = AsyncSpiDevice::new(CriticalSectionSpiExecutor::new(
             &SPI1_MAILBOX,
             SpiDeadlineUs(SPI1_IMU_DEADLINE_US),
@@ -531,6 +865,84 @@ mod app {
             ACTIVE_IMU_KIND.store(kind as u8, Ordering::Relaxed);
         }
         IMU_TRANSPORT_READY.store(spi1_imu.bringup.is_ready(), Ordering::Relaxed);
+
+        #[cfg(feature = "flash_storage")]
+        let (
+            flash_device,
+            flash_record_producer,
+            flash_record_consumer,
+            flash_command_producer,
+            flash_command_consumer,
+            flash_response_producer,
+            flash_response_consumer,
+        ) = {
+            let mut flash = board::init::init_spi2_flash(
+                board::init::Spi2FlashResources {
+                    cs_pin: gpiob.pb12,
+                    sck_pin: gpiob.pb13,
+                    miso_pin: gpioc.pc2,
+                    mosi_pin: gpioc.pc3,
+                    spi: dp.SPI2,
+                },
+                &mut clocks,
+            );
+            match flash.read_jedec_id() {
+                Ok(id) => {
+                    FLASH_JEDEC_MANUFACTURER.store(id.manufacturer, Ordering::Relaxed);
+                    FLASH_JEDEC_MEMORY_TYPE.store(id.memory_type, Ordering::Relaxed);
+                    FLASH_JEDEC_CAPACITY_CODE.store(id.capacity_code, Ordering::Relaxed);
+                    let capacity = id.capacity_bytes().unwrap_or(0);
+                    FLASH_CAPACITY_BYTES.store(capacity, Ordering::Relaxed);
+                    let supported =
+                        id.plausible() && flash_task::StorageLayout::new(capacity).is_some();
+                    FLASH_READY.store(supported, Ordering::Release);
+                    info!(
+                        "SPI2 flash JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes, supported {}",
+                        id.manufacturer, id.memory_type, id.capacity_code, capacity, supported
+                    );
+                }
+                Err(_) => warn!("SPI2 flash JEDEC probe failed; storage remains disabled"),
+            }
+            #[cfg(feature = "flash_blackbox")]
+            let (producer, consumer) = {
+                let queue = cortex_m::singleton!(
+                    : flash_task::RecordQueue = flash_task::RecordQueue::new()
+                )
+                .unwrap();
+                queue.split()
+            };
+            #[cfg(not(feature = "flash_blackbox"))]
+            let (producer, consumer) = ((), ());
+            let commands = cortex_m::singleton!(
+                : flash_task::CommandQueue = flash_task::CommandQueue::new()
+            )
+            .unwrap();
+            let responses = cortex_m::singleton!(
+                : flash_task::ResponseQueue = flash_task::ResponseQueue::new()
+            )
+            .unwrap();
+            let (command_producer, command_consumer) = commands.split();
+            let (response_producer, response_consumer) = responses.split();
+            (
+                flash,
+                producer,
+                consumer,
+                command_producer,
+                command_consumer,
+                response_producer,
+                response_consumer,
+            )
+        };
+        #[cfg(not(feature = "flash_storage"))]
+        let (
+            flash_device,
+            flash_record_producer,
+            flash_record_consumer,
+            flash_command_producer,
+            flash_command_consumer,
+            flash_response_producer,
+            flash_response_consumer,
+        ) = ((), (), (), (), (), (), ());
 
         // Init rate controller
         let tuning_profile = dt::TuningProfile::default_first_hop();
@@ -594,19 +1006,33 @@ mod app {
                 }
             },
         }
-        if !FLIGHT_ARMING_ENABLED {
+        if BENCH_ACTUATOR_VALIDATION_ENABLED {
+            warn!("PROPS OFF: capped Foxeer actuator-validation mode enabled");
+            warn!("Normal Foxeer flight arming remains inhibited");
+        } else if !FLIGHT_ARMING_ENABLED {
             warn!("Flight arming inhibited: {}", ARMING_INHIBIT_REASON);
         }
+        #[cfg(feature = "esc_telemetry")]
+        info!(
+            "Foxeer observational BLHeli telemetry active on PA10 USART1 RX; arming does not depend on telemetry"
+        );
         heartbeat::spawn().unwrap();
         adc1_polling::spawn().ok();
         uart4_tx_worker::spawn().unwrap();
         rc_input::spawn().unwrap();
         osd_refresh::spawn().ok();
-        #[cfg(feature = "pwm_cal")]
+        #[cfg(feature = "dshot")]
+        dshot_service::spawn().unwrap();
+        #[cfg(feature = "esc_telemetry")]
+        esc_manager_task::spawn().unwrap();
+        #[cfg(feature = "flash_storage")]
+        flash_manager_task::spawn().unwrap();
+        #[cfg(all(feature = "pwm_cal", not(feature = "dshot")))]
         actuator_output::spawn(safety::ActuatorCmd::Calibrate).ok();
 
         (
             Shared {
+                uart1_rx,
                 uart2_rx: uart2.irq,
                 uart2_bridge,
                 uart4_rx: uart4.rx_irq,
@@ -615,6 +1041,7 @@ mod app {
                 // SPI1
                 spi1_owner: spi1_imu.owner,
                 io_timebase,
+                dshot_motors,
 
                 // IMU
                 imu_data: imu::ImuData::default(), // all values are zero
@@ -640,10 +1067,24 @@ mod app {
 
                 // UART
                 sbus: StreamingParser::new(),
+                esc_telemetry_uart,
+                esc_manager_state,
+                esc_request_producer,
+                esc_request_consumer,
+                esc_ack_producer,
+                esc_ack_consumer,
 
                 // SPI1
                 spi1_parser: spi1_imu.parser,
                 spi1_device,
+                imu_data_ready,
+                flash_device,
+                flash_record_producer,
+                flash_record_consumer,
+                flash_command_producer,
+                flash_command_consumer,
+                flash_response_producer,
+                flash_response_consumer,
 
                 // ADC
                 adc1_buffer: Some(adc1_battery.spare_buffer),
@@ -792,7 +1233,7 @@ mod app {
             safety::SafetyEvent::ArmRequested => {
                 system_arm.disarm();
 
-                if !FLIGHT_ARMING_ENABLED {
+                if !ACTUATOR_OUTPUT_ENABLED {
                     arm_permit.revoke();
                     warn!("Arming inhibited: {}", ARMING_INHIBIT_REASON);
                     return;
@@ -819,7 +1260,7 @@ mod app {
             }
 
             safety::SafetyEvent::ActuatorIdling => {
-                if FLIGHT_ARMING_ENABLED
+                if ACTUATOR_OUTPUT_ENABLED
                     && safety::validate_arming_guard(
                         arm_permit.is_allowed(),
                         rc_link.is_armable(now_us),
@@ -831,7 +1272,11 @@ mod app {
                 {
                     arm_permit.revoke();
                     system_arm.arm();
-                    info!("SYSTEM ARMED");
+                    if BENCH_ACTUATOR_VALIDATION_ENABLED {
+                        warn!("SYSTEM ARMED FOR CAPPED FOXEER ACTUATOR VALIDATION");
+                    } else {
+                        info!("SYSTEM ARMED");
+                    }
                 } else {
                     arm_permit.revoke();
                     system_arm.disarm();
@@ -938,7 +1383,15 @@ mod app {
     #[task(
         binds = OTG_FS,
         priority = 5,
-        local = [usb_dev, usb_serial, usb_header_sent]
+        local = [
+            usb_dev,
+            usb_serial,
+            usb_header_sent,
+            flash_command_producer,
+            flash_response_consumer,
+            flash_command_parser: flash_task::CommandParser = flash_task::CommandParser::new(),
+            flash_pending_response: Option<flash_task::ResponseFrame> = None
+        ]
     )]
     fn usb_fs(cx: usb_fs::Context) {
         let Some(usb_dev) = cx.local.usb_dev.as_mut() else {
@@ -950,10 +1403,27 @@ mod app {
 
         let _ = usb_dev.poll(&mut [serial]);
 
-        // USB diagnostics are deliberately read-only. Draining one bounded
-        // packet prevents endpoint backpressure without creating a command path.
         let mut rx_buf = [0u8; 64];
-        let _ = serial.read(&mut rx_buf);
+        let read_len = serial.read(&mut rx_buf).unwrap_or(0);
+        #[cfg(not(feature = "flash_storage"))]
+        let _ = read_len;
+
+        #[cfg(feature = "flash_storage")]
+        for byte in &rx_buf[..read_len] {
+            let Some(parsed) = cx.local.flash_command_parser.ingest(*byte) else {
+                continue;
+            };
+            match parsed {
+                Ok(command) => {
+                    if cx.local.flash_command_producer.enqueue(command).is_err() {
+                        let _ = serial.write(b"ERR command queue full\r\n");
+                    }
+                }
+                Err(_) => {
+                    let _ = serial.write(b"ERR invalid command; type help\r\n");
+                }
+            }
+        }
 
         if usb_dev.state() != UsbDeviceState::Configured {
             *cx.local.usb_header_sent = false;
@@ -972,6 +1442,23 @@ mod app {
                 *cx.local.usb_header_sent = true;
             }
             return;
+        }
+
+        #[cfg(feature = "flash_storage")]
+        {
+            if cx.local.flash_pending_response.is_none() {
+                *cx.local.flash_pending_response = cx.local.flash_response_consumer.dequeue();
+            }
+            if let Some(response) = cx.local.flash_pending_response.as_ref() {
+                if matches!(
+                    serial.write(response.as_bytes()),
+                    Ok(written) if written == response.as_bytes().len()
+                ) {
+                    *cx.local.flash_pending_response = None;
+                    cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+                }
+                return;
+            }
         }
 
         if !USB_DEBUG_DUE.swap(false, Ordering::AcqRel) {
@@ -997,6 +1484,8 @@ mod app {
             system_armed: SAFETY_ARMED.load(Ordering::Relaxed),
             battery_voltage_decivolts: BATTERY_VOLTAGE_V10_SNAPSHOT.load(Ordering::Relaxed),
             battery_current_centiamps: BATTERY_CURRENT_CA_SNAPSHOT.load(Ordering::Relaxed),
+            adc_voltage_mv: ADC_VOLTAGE_MV_SNAPSHOT.load(Ordering::Relaxed),
+            adc_current_mv: ADC_CURRENT_MV_SNAPSHOT.load(Ordering::Relaxed),
         };
         let Ok(line) = usb_debug::format_status(snapshot) else {
             USB_DEBUG_DUE.store(true, Ordering::Release);
@@ -1013,7 +1502,14 @@ mod app {
 
     // IDLE TASK
 
-    #[task(priority = 1, local = [usb_rc_link_reader])]
+    #[task(
+        priority = 1,
+        local = [
+            usb_rc_link_reader,
+            previous_drdy_count: u32 = 0,
+            previous_drdy_rejected: u32 = 0
+        ]
+    )]
     async fn heartbeat(cx: heartbeat::Context) {
         info!("Running heartbeat!");
 
@@ -1035,6 +1531,35 @@ mod app {
                 IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
                 IMU_LATEST_SEQ.load(Ordering::Relaxed)
             );
+            let drdy_count = IMU_DRDY_IRQ_COUNT.load(Ordering::Relaxed);
+            let drdy_rejected = IMU_DRDY_REJECTED_COUNT.load(Ordering::Relaxed);
+            info!(
+                "IMU DRDY IRQ {}, delta {}, rejected {}, delta {}, last {} us",
+                drdy_count,
+                drdy_count.wrapping_sub(*cx.local.previous_drdy_count),
+                drdy_rejected,
+                drdy_rejected.wrapping_sub(*cx.local.previous_drdy_rejected),
+                IMU_DRDY_LAST_US.load(Ordering::Relaxed)
+            );
+            #[cfg(feature = "flash_storage")]
+            info!(
+                "SPI2 flash ready {}, JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes",
+                FLASH_READY.load(Ordering::Relaxed),
+                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
+                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
+                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                FLASH_CAPACITY_BYTES.load(Ordering::Relaxed)
+            );
+            #[cfg(feature = "flash_blackbox")]
+            info!(
+                "SPI2 blackbox pages {}, dropped records {}, write faults {}, divisor {}",
+                FLASH_PAGES_WRITTEN.load(Ordering::Relaxed),
+                FLASH_RECORDS_DROPPED.load(Ordering::Relaxed),
+                FLASH_WRITE_FAULTS.load(Ordering::Relaxed),
+                FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed)
+            );
+            *cx.local.previous_drdy_count = drdy_count;
+            *cx.local.previous_drdy_rejected = drdy_rejected;
             Mono::delay(2000.millis()).await;
         }
     }
@@ -1081,6 +1606,674 @@ mod app {
         }
     }
 
+    #[cfg(feature = "flash_blackbox")]
+    fn enqueue_flash_record(
+        producer: &mut flash_task::RecordProducer,
+        sample: dt::CompactRateBlackboxSample,
+    ) {
+        let divisor = FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed).clamp(1, 16);
+        if !sample.seq.is_multiple_of(divisor) {
+            return;
+        }
+        let record = ferrowasp_core::blackbox::FlightRecord {
+            timestamp_us: Mono::now().duration_since_epoch().to_micros(),
+            control_sequence: sample.seq,
+            imu_sequence: sample.imu_seq,
+            flags: u16::from(sample.flags),
+            raw_gyro_dps10: sample.raw_gyro_dps10,
+            filtered_gyro_dps10: sample.gyro_dps10,
+            command_dps10: sample.command_dps10,
+            pid: sample.pid,
+            throttle: sample.throttle,
+            motors: sample.motors,
+        };
+        if producer.enqueue(record).is_err() {
+            FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[cfg(feature = "flash_storage")]
+    fn scan_flash_log(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+    ) -> Result<(u32, u32, bool), ()> {
+        use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, decode_page};
+
+        let mut low = 0u32;
+        let mut high = layout.log_page_count;
+        let mut page = [0xff; FLASH_PAGE_LEN];
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let address = layout.log_page_address(middle).ok_or(())?;
+            flash.read(address, &mut page).map_err(|_| ())?;
+            if decode_page(&page).is_ok() {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+
+        let last_valid_page = low.checked_sub(1);
+        let mut next_page = low;
+        let mut writable = false;
+        if next_page < layout.log_page_count {
+            let address = layout.log_page_address(next_page).ok_or(())?;
+            flash.read(address, &mut page).map_err(|_| ())?;
+            if page.iter().all(|byte| *byte == 0xff) {
+                writable = true;
+            } else if last_valid_page.is_some() {
+                // Preserve a torn final page. A later valid page cannot exist
+                // in the append-only layout. Only skip it when the following
+                // page is erased; foreign/Betaflight data remains read-only.
+                let following = next_page.saturating_add(1);
+                if let Some(address) = layout.log_page_address(following) {
+                    flash.read(address, &mut page).map_err(|_| ())?;
+                    if page.iter().all(|byte| *byte == 0xff) {
+                        next_page = following;
+                        writable = true;
+                    }
+                }
+            }
+        }
+
+        let next_flight_id = if let Some(previous) = last_valid_page {
+            let address = layout.log_page_address(previous).ok_or(())?;
+            flash.read(address, &mut page).map_err(|_| ())?;
+            decode_page(&page)
+                .map(|metadata| metadata.flight_id.wrapping_add(1).max(1))
+                .unwrap_or(1)
+        } else {
+            1
+        };
+        Ok((next_page, next_flight_id, writable))
+    }
+
+    #[cfg(feature = "flash_storage")]
+    fn load_flash_config(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+    ) -> Result<(flash_task::StoredConfig, u32, u8), ()> {
+        use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, decode_config_page};
+
+        let mut selected: Option<(flash_task::StoredConfig, u32, u8)> = None;
+        for slot in 0..2u8 {
+            let mut page = [0xff; FLASH_PAGE_LEN];
+            flash
+                .read(layout.config_slot_addresses[slot as usize], &mut page)
+                .map_err(|_| ())?;
+            let Ok((sequence, payload)) = decode_config_page(&page) else {
+                continue;
+            };
+            let Some(config) = flash_task::StoredConfig::decode(payload) else {
+                continue;
+            };
+            if selected
+                .as_ref()
+                .is_none_or(|(_, current, _)| flash_task::sequence_is_newer(sequence, *current))
+            {
+                selected = Some((config, sequence, slot));
+            }
+        }
+        Ok(selected.unwrap_or((flash_task::StoredConfig::first_hop_default(), 0, 1)))
+    }
+
+    #[cfg(feature = "flash_storage")]
+    fn queue_storage_response(producer: &mut flash_task::ResponseProducer, text: &str) -> bool {
+        let Some(frame) = flash_task::ResponseFrame::from_text(text) else {
+            return false;
+        };
+        if producer.enqueue(frame).is_err() {
+            return false;
+        }
+        cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+        true
+    }
+
+    #[cfg(feature = "flash_storage")]
+    fn queue_page_hex(
+        producer: &mut flash_task::ResponseProducer,
+        page_index: u32,
+        page: &[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
+    ) -> bool {
+        use core::fmt::Write;
+
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        for chunk_index in 0..16 {
+            let offset = chunk_index * 16;
+            let mut line = heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
+            if write!(line, "PAGE {} {:03} ", page_index, offset).is_err() {
+                return false;
+            }
+            for byte in &page[offset..offset + 16] {
+                if line.push(HEX[(byte >> 4) as usize] as char).is_err()
+                    || line.push(HEX[(byte & 0x0f) as usize] as char).is_err()
+                {
+                    return false;
+                }
+            }
+            if line.push_str("\r\n").is_err() || !queue_storage_response(producer, line.as_str()) {
+                return false;
+            }
+        }
+        true
+    }
+
+    #[cfg(feature = "flash_storage")]
+    fn flash_scratch_test_page() -> [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] {
+        let mut page = [0u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+        for (index, byte) in page.iter_mut().enumerate() {
+            *byte = (index as u8).rotate_left(1) ^ 0xa5;
+        }
+        page[..8].copy_from_slice(b"FWTEST01");
+        page
+    }
+
+    #[task(
+        priority = 1,
+        local = [
+            flash_device,
+            flash_record_consumer,
+            flash_command_consumer,
+            flash_response_producer,
+            assembler: flash_task::PageAssembler = flash_task::PageAssembler::new(),
+            pending_page: Option<[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN]> = None,
+            initialized: bool = false,
+            next_page_index: u32 = 0,
+            next_flight_id: u32 = 1,
+            log_region_writable: bool = false,
+            stored_config: flash_task::StoredConfig = flash_task::StoredConfig::first_hop_default(),
+            config_sequence: u32 = 0,
+            config_active_slot: u8 = 1,
+            erase_sector_index: Option<u32> = None,
+            flash_test_phase: u8 = 0,
+            config_save_phase: u8 = 0,
+            config_save_slot: u8 = 0,
+            config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
+                [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN]
+        ],
+        shared = [tuning_profile, tuning_request_seq]
+    )]
+    async fn flash_manager_task(mut cx: flash_manager_task::Context) {
+        #[cfg(feature = "flash_storage")]
+        let flash_manager_task::LocalResources {
+            flash_device,
+            flash_record_consumer,
+            flash_command_consumer,
+            flash_response_producer,
+            assembler,
+            pending_page,
+            initialized,
+            next_page_index,
+            next_flight_id,
+            log_region_writable,
+            stored_config,
+            config_sequence,
+            config_active_slot,
+            erase_sector_index,
+            flash_test_phase,
+            config_save_phase,
+            config_save_slot,
+            config_save_page,
+            ..
+        } = cx.local;
+
+        #[cfg(all(feature = "flash_storage", not(feature = "flash_blackbox")))]
+        let _ = (flash_record_consumer, assembler, pending_page);
+
+        #[cfg(not(feature = "flash_storage"))]
+        let _ = &mut cx;
+
+        loop {
+            #[cfg(feature = "flash_storage")]
+            {
+                if !FLASH_READY.load(Ordering::Acquire) {
+                    Mono::delay(100.millis()).await;
+                    continue;
+                }
+                let Some(layout) =
+                    flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
+                else {
+                    FLASH_READY.store(false, Ordering::Release);
+                    continue;
+                };
+
+                if !*initialized {
+                    let Ok((page, flight, writable)) = scan_flash_log(flash_device, layout) else {
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SPI2 flash log recovery failed; storage disabled");
+                        continue;
+                    };
+                    let Ok((config, sequence, slot)) = load_flash_config(flash_device, layout)
+                    else {
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SPI2 flash configuration read failed; storage disabled");
+                        continue;
+                    };
+                    *next_page_index = page;
+                    *next_flight_id = flight;
+                    *log_region_writable = writable;
+                    *stored_config = config;
+                    *config_sequence = sequence;
+                    *config_active_slot = slot;
+                    FLASH_LOG_RATE_DIVISOR
+                        .store(u32::from(config.log_rate_divisor), Ordering::Relaxed);
+                    cx.shared
+                        .tuning_profile
+                        .lock(|profile| *profile = config.tuning);
+                    cx.shared.tuning_request_seq.lock(|request_sequence| {
+                        *request_sequence = request_sequence.wrapping_add(1)
+                    });
+                    *initialized = true;
+                    info!(
+                        "SPI2 flash recovered at log page {}, next flight {}, writable {}, config seq {}",
+                        page, flight, writable, sequence
+                    );
+                }
+
+                let status = match flash_device.read_status() {
+                    Ok(status) => status,
+                    Err(_) => {
+                        #[cfg(feature = "flash_writes")]
+                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SPI2 flash status read failed; storage disabled");
+                        continue;
+                    }
+                };
+                if status.busy() {
+                    Mono::delay(1.millis()).await;
+                    continue;
+                }
+
+                if SAFETY_ARMED.load(Ordering::Acquire)
+                    && (erase_sector_index.is_some()
+                        || *flash_test_phase != 0
+                        || *config_save_phase != 0)
+                {
+                    *erase_sector_index = None;
+                    *flash_test_phase = 0;
+                    *config_save_phase = 0;
+                    queue_storage_response(
+                        flash_response_producer,
+                        "ERR maintenance aborted because system armed\r\n",
+                    );
+                }
+
+                if let Some(sector) = *erase_sector_index {
+                    if sector >= layout.log_sector_count() {
+                        *erase_sector_index = None;
+                        *next_page_index = 0;
+                        *next_flight_id = 1;
+                        *log_region_writable = true;
+                        queue_storage_response(flash_response_producer, "OK logs erased\r\n");
+                    } else {
+                        let address =
+                            layout.log_start_address + sector * flash_task::CONFIG_SECTOR_SIZE;
+                        if flash_device.erase_sector_4k(address).is_err() {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            *erase_sector_index = None;
+                            queue_storage_response(
+                                flash_response_producer,
+                                "ERR log sector erase failed\r\n",
+                            );
+                        } else {
+                            *erase_sector_index = Some(sector + 1);
+                        }
+                    }
+                    Mono::delay(1.millis()).await;
+                    continue;
+                }
+
+                match *flash_test_phase {
+                    1 => {
+                        if flash_device
+                            .erase_sector_4k(flash_task::SCRATCH_SECTOR_ADDRESS)
+                            .is_err()
+                        {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            *flash_test_phase = 0;
+                            queue_storage_response(
+                                flash_response_producer,
+                                "ERR flash test scratch erase failed\r\n",
+                            );
+                        } else {
+                            *flash_test_phase = 2;
+                        }
+                        continue;
+                    }
+                    2 => {
+                        let page = flash_scratch_test_page();
+                        if flash_device
+                            .page_program(flash_task::SCRATCH_SECTOR_ADDRESS, &page)
+                            .is_err()
+                        {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            *flash_test_phase = 0;
+                            queue_storage_response(
+                                flash_response_producer,
+                                "ERR flash test scratch program failed\r\n",
+                            );
+                        } else {
+                            *flash_test_phase = 3;
+                        }
+                        continue;
+                    }
+                    3 => {
+                        let expected = flash_scratch_test_page();
+                        let mut actual = [0u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+                        *flash_test_phase = 0;
+                        if flash_device
+                            .read(flash_task::SCRATCH_SECTOR_ADDRESS, &mut actual)
+                            .is_ok()
+                            && actual == expected
+                        {
+                            queue_storage_response(
+                                flash_response_producer,
+                                "OK flash scratch erase/program/read verified\r\n",
+                            );
+                        } else {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            queue_storage_response(
+                                flash_response_producer,
+                                "ERR flash test readback mismatch\r\n",
+                            );
+                        }
+                        continue;
+                    }
+                    _ => {}
+                }
+
+                match *config_save_phase {
+                    1 => {
+                        let address = layout.config_slot_addresses[*config_save_slot as usize];
+                        if flash_device.erase_sector_4k(address).is_err() {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            *config_save_phase = 0;
+                            queue_storage_response(
+                                flash_response_producer,
+                                "ERR config slot erase failed\r\n",
+                            );
+                        } else {
+                            *config_save_phase = 2;
+                        }
+                        continue;
+                    }
+                    2 => {
+                        let address = layout.config_slot_addresses[*config_save_slot as usize];
+                        if flash_device
+                            .page_program(address, config_save_page)
+                            .is_err()
+                        {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            *config_save_phase = 0;
+                            queue_storage_response(
+                                flash_response_producer,
+                                "ERR config page program failed\r\n",
+                            );
+                        } else {
+                            *config_save_phase = 3;
+                        }
+                        continue;
+                    }
+                    3 => {
+                        *config_active_slot = *config_save_slot;
+                        *config_sequence = config_sequence.wrapping_add(1);
+                        *config_save_phase = 0;
+                        FLASH_LOG_RATE_DIVISOR
+                            .store(u32::from(stored_config.log_rate_divisor), Ordering::Relaxed);
+                        cx.shared
+                            .tuning_profile
+                            .lock(|profile| *profile = stored_config.tuning);
+                        cx.shared
+                            .tuning_request_seq
+                            .lock(|sequence| *sequence = sequence.wrapping_add(1));
+                        queue_storage_response(flash_response_producer, "OK config saved\r\n");
+                    }
+                    _ => {}
+                }
+
+                if let Some(command) = flash_command_consumer.dequeue() {
+                    use core::fmt::Write;
+                    let mut response =
+                        heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
+                    match command {
+                        flash_task::StorageCommand::Help => {
+                            queue_storage_response(
+                                flash_response_producer,
+                                "OK flash info | flash test CONFIRM | logs list\r\n",
+                            );
+                            queue_storage_response(
+                                flash_response_producer,
+                                "OK logs erase CONFIRM | config get/set KEY | config save\r\n",
+                            );
+                        }
+                        flash_task::StorageCommand::FlashInfo => {
+                            let _ = write!(
+                                response,
+                                "OK jedec={:02x}:{:02x}:{:02x} bytes={} ready=1\r\n",
+                                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
+                                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
+                                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                                layout.capacity_bytes
+                            );
+                            queue_storage_response(flash_response_producer, response.as_str());
+                        }
+                        flash_task::StorageCommand::FlashTestConfirmed => {
+                            if !cfg!(feature = "flash_writes") {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR rebuild with flash_writes\r\n",
+                                );
+                            } else if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR flash test disabled while armed\r\n",
+                                );
+                            } else if erase_sector_index.is_some()
+                                || *flash_test_phase != 0
+                                || *config_save_phase != 0
+                            {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR flash maintenance already active\r\n",
+                                );
+                            } else {
+                                *flash_test_phase = 1;
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "OK flash scratch test started\r\n",
+                                );
+                            }
+                        }
+                        flash_task::StorageCommand::LogsList => {
+                            let _ = write!(
+                                response,
+                                "OK used_pages={} next_flight={} total_pages={} writable={}\r\n",
+                                *next_page_index,
+                                *next_flight_id,
+                                layout.log_page_count,
+                                u8::from(*log_region_writable)
+                            );
+                            queue_storage_response(flash_response_producer, response.as_str());
+                        }
+                        flash_task::StorageCommand::LogsReadPage(page_index) => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR log reads disabled while armed\r\n",
+                                );
+                            } else if page_index >= *next_page_index {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR log page is not present\r\n",
+                                );
+                            } else if let Some(address) = layout.log_page_address(page_index) {
+                                let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+                                if flash_device.read(address, &mut page).is_err()
+                                    || !queue_page_hex(flash_response_producer, page_index, &page)
+                                {
+                                    queue_storage_response(
+                                        flash_response_producer,
+                                        "ERR log page read/response failed\r\n",
+                                    );
+                                }
+                            }
+                        }
+                        flash_task::StorageCommand::LogsEraseConfirmed => {
+                            if !cfg!(feature = "flash_writes") {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR rebuild with flash_writes\r\n",
+                                );
+                            } else if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR log erase disabled while armed\r\n",
+                                );
+                            } else if erase_sector_index.is_some()
+                                || *flash_test_phase != 0
+                                || *config_save_phase != 0
+                            {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR flash maintenance already active\r\n",
+                                );
+                            } else {
+                                *erase_sector_index = Some(0);
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "OK log erase started\r\n",
+                                );
+                            }
+                        }
+                        flash_task::StorageCommand::ConfigGet(key) => {
+                            let _ = write!(
+                                response,
+                                "OK {}={:.4}\r\n",
+                                key.name(),
+                                stored_config.get(key)
+                            );
+                            queue_storage_response(flash_response_producer, response.as_str());
+                        }
+                        flash_task::StorageCommand::ConfigSet(key, value) => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR config changes disabled while armed\r\n",
+                                );
+                            } else if stored_config.set(key, value) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "OK staged; use config save\r\n",
+                                );
+                            } else {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR value outside allowed range\r\n",
+                                );
+                            }
+                        }
+                        flash_task::StorageCommand::ConfigSave => {
+                            if !cfg!(feature = "flash_writes") {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR rebuild with flash_writes\r\n",
+                                );
+                            } else if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR config save disabled while armed\r\n",
+                                );
+                            } else if erase_sector_index.is_some()
+                                || *flash_test_phase != 0
+                                || *config_save_phase != 0
+                            {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR flash maintenance already active\r\n",
+                                );
+                            } else {
+                                let next_sequence = config_sequence.wrapping_add(1);
+                                match ferrowasp_core::blackbox::encode_config_page(
+                                    next_sequence,
+                                    &stored_config.encode(),
+                                ) {
+                                    Ok(page) => {
+                                        *config_save_page = page;
+                                        *config_save_slot = 1 - *config_active_slot;
+                                        *config_save_phase = 1;
+                                        queue_storage_response(
+                                            flash_response_producer,
+                                            "OK config save started\r\n",
+                                        );
+                                    }
+                                    Err(_) => {
+                                        queue_storage_response(
+                                            flash_response_producer,
+                                            "ERR config encoding failed\r\n",
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                #[cfg(feature = "flash_blackbox")]
+                if *log_region_writable && pending_page.is_none() {
+                    *pending_page = assembler.take_ready_page();
+                }
+
+                #[cfg(feature = "flash_blackbox")]
+                if let Some(page) = pending_page.as_ref() {
+                    let Some(address) = layout.log_page_address(*next_page_index) else {
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SPI2 flash blackbox region full; recording stopped");
+                        continue;
+                    };
+                    if flash_device.page_program(address, page).is_err() {
+                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SPI2 flash page program failed; recording stopped");
+                        continue;
+                    }
+                    *pending_page = None;
+                    *next_page_index = next_page_index.saturating_add(1);
+                    FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
+                    Mono::delay(1.millis()).await;
+                    continue;
+                }
+
+                #[cfg(feature = "flash_blackbox")]
+                if !*log_region_writable {
+                    if flash_record_consumer.dequeue().is_some() {
+                        FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
+                    }
+                } else if let Some(record) = flash_record_consumer.dequeue() {
+                    let armed = record.flags & 1 != 0;
+                    if armed && !assembler.recording() {
+                        assembler.start(*next_flight_id);
+                        *next_flight_id = next_flight_id.wrapping_add(1).max(1);
+                    }
+                    if armed {
+                        if assembler.push(record).is_err() {
+                            FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
+                        }
+                    } else if assembler.recording() && assembler.stop().is_err() {
+                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                    }
+                } else if !SAFETY_ARMED.load(Ordering::Acquire)
+                    && assembler.recording()
+                    && assembler.stop().is_err()
+                {
+                    FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            Mono::delay(1.millis()).await;
+        }
+    }
+
     // ---- MAIN CONTROL LOOP ----
     #[task(binds = TIM4, priority=14,
         local = [
@@ -1091,6 +2284,7 @@ mod app {
             rc_rates_reader, control_throttle_reader, control_safety_arm_reader,
             control_rc_link_reader, control_arm_permit_reader,
             motor_cmd_writer, motor_cmd_seq,
+            flash_record_producer,
             rc_link_was_valid: bool = false,
             ],
             shared = [imu_data, imu_angles, imu_rates, tuning_profile, tuning_request_seq])]
@@ -1111,9 +2305,6 @@ mod app {
             IMU_STALE.store(true, Ordering::Relaxed);
             return;
         }
-
-        // ---- SAMPLE IMU ----
-        let _ = spi1_poll::spawn();
 
         // ---- CONTROL LOOP ----
         // Check if required samples per control loop is reached
@@ -1568,6 +2759,33 @@ mod app {
                         motor_commands,
                     );
 
+                    #[cfg(feature = "flash_blackbox")]
+                    enqueue_flash_record(
+                        cx.local.flash_record_producer,
+                        dt::CompactRateBlackboxSample::from_fields(
+                            dt::CompactRateBlackboxFields {
+                                seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                                imu_seq: imu_sequence,
+                                armed: control_armed,
+                                imu_fresh,
+                                raw_gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
+                                filtered_gyro_dps: [
+                                    imu_roll_filtered,
+                                    imu_pitch_filtered,
+                                    imu_yaw_filtered,
+                                ],
+                                command_dps: [
+                                    rc_raw.roll as f32,
+                                    rc_raw.pitch as f32,
+                                    rc_raw.yaw as f32,
+                                ],
+                                pid: [0.0; 3],
+                                throttle: bench_throttle,
+                                motors: motor_commands,
+                            },
+                        ),
+                    );
+
                     #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
@@ -1611,19 +2829,23 @@ mod app {
                     let motor_commands =
                         board::profiles::remap_motor_outputs(fc.get_logical_motor_commands());
 
-                    #[cfg(feature = "blackbox_defmt")]
+                    #[cfg(any(feature = "blackbox_defmt", feature = "flash_blackbox"))]
                     {
                         let mut sample = fc.blackbox_sample();
                         sample.motors =
                             board::profiles::remap_motor_outputs(fc.get_logical_motor_commands());
-                        dt::emit_rate_blackbox(dt::CompactRateBlackboxSample::from_rate_sample(
+                        let compact = dt::CompactRateBlackboxSample::from_rate_sample(
                             CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                             imu_sequence,
                             control_armed,
                             imu_fresh,
                             [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
                             sample,
-                        ));
+                        );
+                        #[cfg(feature = "blackbox_defmt")]
+                        dt::emit_rate_blackbox(compact);
+                        #[cfg(feature = "flash_blackbox")]
+                        enqueue_flash_record(cx.local.flash_record_producer, compact);
                     }
 
                     // Apply throttle
@@ -1691,6 +2913,346 @@ mod app {
         }
     }
 
+    #[task(
+        priority = 13,
+        shared = [dshot_motors],
+        local = [
+            fault_reported: bool = false,
+            disarm_pending: bool = false,
+            report_ticks: u16 = 0,
+            esc_request_consumer,
+            esc_ack_producer,
+            esc_actuator_request: Option<esc::EscActuatorRequest> = None,
+            esc_actuator_request_submitted: bool = false
+        ]
+    )]
+    async fn dshot_service(mut cx: dshot_service::Context) {
+        #[cfg(feature = "dshot")]
+        loop {
+            let release = Mono::now();
+            let next_release = release + board::init::DSHOT_SERVICE_PERIOD_MS.millis();
+            let now_ms = release.duration_since_epoch().to_millis();
+            #[cfg(feature = "esc_telemetry")]
+            if cx.local.esc_actuator_request.is_none() {
+                *cx.local.esc_actuator_request = cx.local.esc_request_consumer.dequeue();
+                *cx.local.esc_actuator_request_submitted = false;
+            }
+
+            let (event, telemetry_sent) = cx.shared.dshot_motors.lock(|dshot| {
+                #[cfg(feature = "esc_telemetry")]
+                if let Some(request) = *cx.local.esc_actuator_request
+                    && !*cx.local.esc_actuator_request_submitted
+                {
+                    let result = match request.operation {
+                        esc::EscOperation::RequestTelemetry => {
+                            dshot.request_telemetry(dshot_motor_for_output(request.output))
+                        }
+                    };
+                    match result {
+                        Ok(()) => *cx.local.esc_actuator_request_submitted = true,
+                        Err(board::init::DshotTelemetryRequestError::Busy) => {}
+                        Err(board::init::DshotTelemetryRequestError::Faulted) => {
+                            *cx.local.esc_actuator_request = None;
+                        }
+                    }
+                }
+
+                let event = dshot.service(now_ms);
+                #[cfg(feature = "esc_telemetry")]
+                let telemetry_sent = dshot.take_telemetry_request_sent();
+                #[cfg(not(feature = "esc_telemetry"))]
+                let telemetry_sent: Option<board::init::DshotMotor> = None;
+                (event, telemetry_sent)
+            });
+
+            #[cfg(feature = "esc_telemetry")]
+            if let (Some(request), Some(sent_motor)) =
+                (*cx.local.esc_actuator_request, telemetry_sent)
+            {
+                if sent_motor == dshot_motor_for_output(request.output) {
+                    let ack = esc::EscActuatorAck {
+                        request,
+                        started_at_ms: now_ms,
+                    };
+                    if cx.local.esc_ack_producer.enqueue(ack).is_err() {
+                        warn!("Foxeer ESC actuator acknowledgement queue full");
+                    }
+                } else {
+                    warn!("Foxeer ESC telemetry acknowledgement output mismatch");
+                }
+                *cx.local.esc_actuator_request = None;
+                *cx.local.esc_actuator_request_submitted = false;
+            }
+            #[cfg(not(feature = "esc_telemetry"))]
+            let _ = telemetry_sent;
+
+            match event {
+                board::init::DshotServiceEvent::LeaseExpired => {
+                    warn!("Foxeer DShot command lease expired; stop frames selected");
+                    *cx.local.disarm_pending = true;
+                }
+                board::init::DshotServiceEvent::Faulted if !*cx.local.fault_reported => {
+                    warn!("Foxeer DShot bank faulted; all outputs forced low");
+                    *cx.local.fault_reported = true;
+                    *cx.local.disarm_pending = true;
+                }
+                _ => {}
+            }
+
+            if *cx.local.disarm_pending
+                && safety_master::spawn(safety::SafetyEvent::DisarmRequested).is_ok()
+            {
+                *cx.local.disarm_pending = false;
+            }
+
+            *cx.local.report_ticks = cx.local.report_ticks.wrapping_add(1);
+            if *cx.local.report_ticks >= 1_000 {
+                *cx.local.report_ticks = 0;
+                let (requested, stats) = cx
+                    .shared
+                    .dshot_motors
+                    .lock(|dshot| (dshot.requested_values(), dshot.stats()));
+                info!(
+                    "Foxeer DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
+                    requested[0],
+                    requested[1],
+                    requested[2],
+                    requested[3],
+                    stats.frames_completed,
+                    stats.frames_started,
+                    stats.lane_completions[0],
+                    stats.lane_completions[1],
+                    stats.lane_completions[2],
+                    stats.lane_completions[3],
+                    stats.busy_skips,
+                    stats.lease_expiries,
+                    stats.frame_timeouts,
+                    stats.dma_faults,
+                    now_ms
+                );
+            }
+            Mono::delay_until(next_release).await;
+        }
+
+        #[cfg(not(feature = "dshot"))]
+        let _ = &mut cx;
+    }
+
+    #[cfg(feature = "esc_telemetry")]
+    const fn dshot_motor_for_output(output: esc::EscOutput) -> board::init::DshotMotor {
+        match output {
+            esc::EscOutput::Output1 => board::init::DshotMotor::Motor1,
+            esc::EscOutput::Output2 => board::init::DshotMotor::Motor2,
+            esc::EscOutput::Output3 => board::init::DshotMotor::Motor3,
+            esc::EscOutput::Output4 => board::init::DshotMotor::Motor4,
+        }
+    }
+
+    #[task(binds = DMA2_STREAM1, priority = 16, shared = [dshot_motors])]
+    fn dshot_motor1_dma_complete(mut cx: dshot_motor1_dma_complete::Context) {
+        #[cfg(feature = "dshot")]
+        service_dshot_dma_irq(
+            &mut cx.shared.dshot_motors,
+            board::init::DshotMotor::Motor1,
+            1,
+        );
+        #[cfg(not(feature = "dshot"))]
+        let _ = &mut cx;
+    }
+
+    #[task(binds = DMA2_STREAM7, priority = 16, shared = [dshot_motors])]
+    fn dshot_motor2_dma_complete(mut cx: dshot_motor2_dma_complete::Context) {
+        #[cfg(feature = "dshot")]
+        service_dshot_dma_irq(
+            &mut cx.shared.dshot_motors,
+            board::init::DshotMotor::Motor2,
+            7,
+        );
+        #[cfg(not(feature = "dshot"))]
+        let _ = &mut cx;
+    }
+
+    #[task(binds = DMA2_STREAM2, priority = 16, shared = [dshot_motors])]
+    fn dshot_motor3_dma_complete(mut cx: dshot_motor3_dma_complete::Context) {
+        #[cfg(feature = "dshot")]
+        service_dshot_dma_irq(
+            &mut cx.shared.dshot_motors,
+            board::init::DshotMotor::Motor3,
+            2,
+        );
+        #[cfg(not(feature = "dshot"))]
+        let _ = &mut cx;
+    }
+
+    #[task(binds = DMA2_STREAM6, priority = 16, shared = [dshot_motors])]
+    fn dshot_motor4_dma_complete(mut cx: dshot_motor4_dma_complete::Context) {
+        #[cfg(feature = "dshot")]
+        service_dshot_dma_irq(
+            &mut cx.shared.dshot_motors,
+            board::init::DshotMotor::Motor4,
+            6,
+        );
+        #[cfg(not(feature = "dshot"))]
+        let _ = &mut cx;
+    }
+
+    // ########### USART1 / BLHeli legacy ESC telemetry #####################
+    #[task(binds = DMA2_STREAM5, priority = 5, shared = [uart1_rx])]
+    fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context) {
+        #[cfg(feature = "esc_telemetry")]
+        match cx.shared.uart1_rx.service_dma_irq() {
+            stm32_uart::UartRxIrqOutcome::Delivered
+            | stm32_uart::UartRxIrqOutcome::Ignored
+            | stm32_uart::UartRxIrqOutcome::NoChunk => {}
+            stm32_uart::UartRxIrqOutcome::DmaError
+            | stm32_uart::UartRxIrqOutcome::DeliveryError(_) => {
+                ESC_TELEMETRY_DISCONTINUITY.store(true, Ordering::Relaxed);
+                warn!("Foxeer USART1 ESC telemetry RX DMA discontinuity");
+            }
+        }
+        #[cfg(not(feature = "esc_telemetry"))]
+        let _ = cx;
+    }
+
+    #[task(binds = USART1, priority = 5, shared = [uart1_rx])]
+    fn usart1_rx_peripheral(cx: usart1_rx_peripheral::Context) {
+        #[cfg(feature = "esc_telemetry")]
+        match cx.shared.uart1_rx.service_idle_irq() {
+            stm32_uart::UartRxIrqOutcome::Delivered
+            | stm32_uart::UartRxIrqOutcome::Ignored
+            | stm32_uart::UartRxIrqOutcome::NoChunk => {}
+            stm32_uart::UartRxIrqOutcome::DmaError
+            | stm32_uart::UartRxIrqOutcome::DeliveryError(_) => {
+                ESC_TELEMETRY_DISCONTINUITY.store(true, Ordering::Relaxed);
+                warn!("Foxeer USART1 ESC telemetry RX IDLE discontinuity");
+            }
+        }
+        #[cfg(not(feature = "esc_telemetry"))]
+        let _ = cx;
+    }
+
+    #[task(
+        priority = 4,
+        local = [
+            esc_telemetry_uart,
+            esc_manager_state,
+            esc_request_producer,
+            esc_ack_consumer,
+            report_ticks: u16 = 0
+        ]
+    )]
+    async fn esc_manager_task(cx: esc_manager_task::Context) {
+        #[cfg(feature = "esc_telemetry")]
+        loop {
+            let release = Mono::now();
+            let next_release = release + 2.millis();
+            let now_ms = release.duration_since_epoch().to_millis();
+
+            if ESC_TELEMETRY_DISCONTINUITY.swap(false, Ordering::Relaxed) {
+                cx.local.esc_manager_state.record_wire_discontinuity();
+            }
+            while let Some(ack) = cx.local.esc_ack_consumer.dequeue() {
+                let _ = cx.local.esc_manager_state.on_actuator_ack(ack);
+            }
+            while let Some(filled) = cx.local.esc_telemetry_uart.filled_consumer.dequeue() {
+                if filled.uart_error_seen {
+                    cx.local.esc_manager_state.record_wire_discontinuity();
+                }
+                let len = filled.len.min(filled.buf.len());
+                for byte in &filled.buf[..len] {
+                    let _ = cx.local.esc_manager_state.push_wire_byte(*byte, now_ms);
+                }
+                if cx
+                    .local
+                    .esc_telemetry_uart
+                    .free_producer
+                    .enqueue(filled.buf)
+                    .is_err()
+                {
+                    warn!("Foxeer USART1 ESC telemetry DMA buffer recycle failed");
+                }
+            }
+
+            cx.local.esc_manager_state.refresh_wire_stats();
+            if let Some(timeout) = cx.local.esc_manager_state.poll_timeout(now_ms) {
+                match timeout {
+                    esc::EscManagerTimeout::ActuatorAck(request) => warn!(
+                        "Foxeer ESC telemetry fault: actuator acknowledgement timeout for M{}, request {}",
+                        request.output.index() + 1,
+                        request.sequence
+                    ),
+                    esc::EscManagerTimeout::TelemetryResponse(request) => warn!(
+                        "Foxeer ESC telemetry fault: response timeout for M{}, request {}",
+                        request.output.index() + 1,
+                        request.sequence
+                    ),
+                }
+            }
+
+            if let Some(request) = cx.local.esc_manager_state.next_request(now_ms)
+                && cx.local.esc_request_producer.enqueue(request).is_ok()
+            {
+                debug_assert!(
+                    cx.local
+                        .esc_manager_state
+                        .mark_request_queued(request, now_ms)
+                );
+            }
+
+            *cx.local.report_ticks = cx.local.report_ticks.wrapping_add(1);
+            if *cx.local.report_ticks >= 1_000 {
+                *cx.local.report_ticks = 0;
+                let stats = cx.local.esc_manager_state.stats();
+                for (index, observation) in cx.local.esc_manager_state.samples().iter().enumerate()
+                {
+                    if let Some(observation) = observation {
+                        info!(
+                            "Foxeer ESC M{} telemetry: {}00eRPM {}.{}V {}.{}A {}mAh {}C",
+                            index + 1,
+                            observation.sample.erpm_div100,
+                            observation.sample.voltage_cv / 100,
+                            observation.sample.voltage_cv % 100,
+                            observation.sample.current_ca / 100,
+                            observation.sample.current_ca % 100,
+                            observation.sample.consumption_mah,
+                            observation.sample.temperature_c
+                        );
+                    }
+                }
+                info!(
+                    "Foxeer ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, valid {}, CRC failures {}, discarded {}",
+                    stats.requests_queued,
+                    stats.requests_started,
+                    cx.local.esc_manager_state.is_faulted(),
+                    stats.actuator_ack_timeouts,
+                    stats.telemetry_response_timeouts,
+                    stats.wire.valid_frames,
+                    stats.wire.crc_failures,
+                    stats.wire.discarded_bytes
+                );
+            }
+
+            Mono::delay_until(next_release).await;
+        }
+        #[cfg(not(feature = "esc_telemetry"))]
+        let _ = cx;
+    }
+
+    #[cfg(feature = "dshot")]
+    fn service_dshot_dma_irq(
+        bank: &mut impl rtic::Mutex<T = DshotShared>,
+        motor: board::init::DshotMotor,
+        stream: u8,
+    ) {
+        let event = bank.lock(|dshot| dshot.on_dma_interrupt(motor));
+        if event == board::init::DshotInterruptEvent::Spurious {
+            warn!(
+                "Foxeer DShot received spurious DMA2 Stream{} interrupt",
+                stream
+            );
+        }
+    }
+
     fn take_fresh_motor_outputs(reader: &mut safety::signals::MotorCmdReader) -> Option<[f32; 4]> {
         let now_ms = Mono::now().duration_since_epoch().to_millis();
 
@@ -1712,6 +3274,7 @@ mod app {
 
     #[task(
     priority = 15,
+    shared = [dshot_motors],
     local = [
         motors,
         actuator_safety_arm_reader,
@@ -1725,15 +3288,38 @@ mod app {
 
     ]
     )]
-    async fn actuator_output(cx: actuator_output::Context, cmd: safety::ActuatorCmd) {
-        if !FLIGHT_ARMING_ENABLED {
-            cx.local.motors.force_fully_off();
+    #[allow(unused_mut)]
+    async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::ActuatorCmd) {
+        #[cfg(feature = "dshot")]
+        const fn idle_motor_outputs() -> [f32; 4] {
+            [FOXEER_DSHOT_IDLE_COMMAND; 4]
+        }
+        #[cfg(not(feature = "dshot"))]
+        const fn idle_motor_outputs() -> [f32; 4] {
+            [safety::ESC_IDLE_THROTTLE; 4]
+        }
+        #[cfg(not(feature = "dshot"))]
+        macro_rules! force_off {
+            () => {
+                cx.local.motors.force_fully_off()
+            };
+        }
+        #[cfg(feature = "dshot")]
+        macro_rules! force_off {
+            () => {
+                cx.shared.dshot_motors.lock(|dshot| dshot.command_stop())
+            };
+        }
+
+        if !ACTUATOR_OUTPUT_ENABLED {
+            force_off!();
             if !matches!(cmd, safety::ActuatorCmd::Disarm) {
                 warn!("Actuator command inhibited: {}", ARMING_INHIBIT_REASON);
             }
             return;
         }
 
+        #[cfg(not(feature = "dshot"))]
         macro_rules! apply_all {
             ($values:expr) => {{
                 let values = $values;
@@ -1745,13 +3331,51 @@ mod app {
                 ];
                 if cx.local.motors.set_throttles(commands).is_err() {
                     warn!("Motor output batch rejected");
-                    cx.local.motors.force_fully_off();
+                    force_off!();
                     return;
                 }
             }};
         }
 
-        #[cfg(feature = "pwm_cal")]
+        #[cfg(feature = "dshot")]
+        macro_rules! apply_all_with_lease {
+            ($values:expr, $lease_ms:expr) => {{
+                let commands = $values.map(throttle_to_u16);
+                let now_ms = Mono::now().duration_since_epoch().to_millis();
+                let result = cx
+                    .shared
+                    .dshot_motors
+                    .lock(|dshot| dshot.command_throttles(commands, now_ms, $lease_ms));
+                if result.is_err() {
+                    warn!("Foxeer DShot command rejected");
+                    force_off!();
+                    return;
+                }
+            }};
+        }
+        #[cfg(feature = "dshot")]
+        macro_rules! apply_all {
+            ($values:expr) => {
+                apply_all_with_lease!($values, safety::MOTOR_CMD_MAX_AGE_MS)
+            };
+        }
+        #[cfg(feature = "dshot")]
+        macro_rules! apply_idle_for_arming {
+            () => {
+                apply_all_with_lease!(
+                    idle_motor_outputs(),
+                    safety::BLHELI_ARM_IDLE_HOLD_MS + safety::MOTOR_CMD_MAX_AGE_MS
+                )
+            };
+        }
+        #[cfg(not(feature = "dshot"))]
+        macro_rules! apply_idle_for_arming {
+            () => {
+                apply_all!(idle_motor_outputs())
+            };
+        }
+
+        #[cfg(all(feature = "pwm_cal", not(feature = "dshot")))]
         macro_rules! selected_motor_pulse_width_us {
             () => {
                 match safety::PWM_CAL_MOTOR {
@@ -1777,7 +3401,7 @@ mod app {
             safety::ActuatorCmd::Disarm => {
                 cx.local.motor_cmd_reader.discard_all();
                 cx.local.actuator_arm_done_writer.clear();
-                cx.local.motors.force_fully_off();
+                force_off!();
                 return;
             }
 
@@ -1790,7 +3414,7 @@ mod app {
                     cx.local.actuator_rc_throttle_reader,
                 ) {
                     cx.local.actuator_arm_done_writer.clear();
-                    cx.local.motors.force_fully_off();
+                    force_off!();
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
                         warn!("Failed to report rejected BLHeli arming sequence");
                     }
@@ -1812,7 +3436,7 @@ mod app {
                 .await
                 {
                     cx.local.actuator_arm_done_writer.clear();
-                    cx.local.motors.force_fully_off();
+                    force_off!();
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
                         warn!("Failed to report aborted BLHeli low-throttle hold");
                     }
@@ -1820,7 +3444,7 @@ mod app {
                 }
 
                 info!("Applying idle throttle");
-                apply_all!([safety::ESC_IDLE_THROTTLE; 4]);
+                apply_idle_for_arming!();
                 if let Err(reason) = wait_arming_hold(
                     cx.local.actuator_arm_permit_reader,
                     cx.local.actuator_rc_link_reader,
@@ -1831,7 +3455,7 @@ mod app {
                 .await
                 {
                     cx.local.actuator_arm_done_writer.clear();
-                    cx.local.motors.force_fully_off();
+                    force_off!();
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
                         warn!("Failed to report aborted BLHeli idle hold");
                     }
@@ -1843,7 +3467,7 @@ mod app {
 
                 if actuator_idle_notify::spawn().is_err() {
                     cx.local.actuator_arm_done_writer.clear();
-                    cx.local.motors.force_fully_off();
+                    force_off!();
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(
                         safety::ArmingAbortReason::CompletionDeliveryFailed,
                     ))
@@ -1854,12 +3478,19 @@ mod app {
                     return;
                 }
 
-                [safety::ESC_IDLE_THROTTLE; 4]
+                idle_motor_outputs()
             }
 
             safety::ActuatorCmd::ApplyLatestThrottle if safety_armed => {
                 match take_fresh_motor_outputs(cx.local.motor_cmd_reader) {
-                    Some(throttles) => match safety::validate_active_motor_outputs(throttles) {
+                    Some(throttles) => match safety::validate_active_motor_outputs_with_idle(
+                        throttles,
+                        if cfg!(feature = "dshot") {
+                            FOXEER_DSHOT_IDLE_COMMAND
+                        } else {
+                            safety::ESC_IDLE_THROTTLE
+                        },
+                    ) {
                         Ok(outputs) => outputs,
                         Err(_) => {
                             warn!("Actuator command refused: invalid motor output");
@@ -1892,8 +3523,12 @@ mod app {
                         }
 
                         if throttles[index] > 0.0 {
-                            outputs[index] = throttles[index]
-                                .clamp(safety::ESC_IDLE_THROTTLE, safety::ESC_MAX_THROTTLE);
+                            let idle = if cfg!(feature = "dshot") {
+                                FOXEER_DSHOT_IDLE_COMMAND
+                            } else {
+                                safety::ESC_IDLE_THROTTLE
+                            };
+                            outputs[index] = throttles[index].clamp(idle, safety::ESC_MAX_THROTTLE);
                         }
                     }
                 }
@@ -1901,7 +3536,7 @@ mod app {
                 outputs
             }
 
-            #[cfg(feature = "pwm_cal")]
+            #[cfg(all(feature = "pwm_cal", not(feature = "dshot")))]
             safety::ActuatorCmd::Calibrate => {
                 if !*cx.local.calibrated {
                     info!("PWM ESC calibration mode");
@@ -1965,7 +3600,7 @@ mod app {
 
             _ => {
                 warn!("Actuator command refused");
-                cx.local.motors.force_fully_off();
+                force_off!();
                 return;
             }
         };
@@ -1975,18 +3610,40 @@ mod app {
 
     // ########### SPI 1 ###################################
     #[task(
+        binds = EXTI4,
+        priority = 14,
+        local = [imu_data_ready],
+        shared = [io_timebase]
+    )]
+    fn imu_data_ready(mut cx: imu_data_ready::Context) {
+        if !cx.local.imu_data_ready.check_interrupt() {
+            return;
+        }
+        cx.local.imu_data_ready.clear_interrupt_pending_bit();
+
+        let observed_at = cx.shared.io_timebase.lock(|timebase| timebase.now());
+        IMU_DRDY_IRQ_COUNT.fetch_add(1, Ordering::Relaxed);
+        IMU_DRDY_LAST_US.store(observed_at.0 as u32, Ordering::Relaxed);
+
+        if IMU_TRANSPORT_READY.load(Ordering::Relaxed) && spi1_poll::spawn(observed_at.0).is_err() {
+            IMU_DRDY_REJECTED_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[task(
     priority = 12,
-    shared = [io_timebase],
     local = [spi1_device, unavailable_logged: bool = false]
     )]
-    async fn spi1_poll(mut cx: spi1_poll::Context) {
+    async fn spi1_poll(cx: spi1_poll::Context, observed_at_us: u64) {
         let Some(kind) = Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Relaxed))
         else {
             return;
         };
         let request = kind.dma_burst_register();
-        let now = cx.shared.io_timebase.lock(|timebase| timebase.now());
-        cx.local.spi1_device.executor_mut().set_start(now);
+        cx.local
+            .spi1_device
+            .executor_mut()
+            .set_start(TimestampMicros(observed_at_us));
 
         let mut read = [0; SPI_BUFFER_SIZE];
         let mut write = [0; SPI_BUFFER_SIZE];
@@ -2969,6 +4626,8 @@ mod app {
         let battery_voltage_v10 = ((pack_mv + 50) / 100).min(u8::MAX as u32) as u8;
         BATTERY_VOLTAGE_V10_SNAPSHOT.store(u32::from(battery_voltage_v10), Ordering::Relaxed);
         BATTERY_CURRENT_CA_SNAPSHOT.store(i32::from(current_ca), Ordering::Relaxed);
+        ADC_VOLTAGE_MV_SNAPSHOT.store(sample.voltage_mv as u32, Ordering::Relaxed);
+        ADC_CURRENT_MV_SNAPSHOT.store(sample.current_mv as u32, Ordering::Relaxed);
         cx.shared
             .battery_voltage_v10
             .lock(|value| *value = battery_voltage_v10);

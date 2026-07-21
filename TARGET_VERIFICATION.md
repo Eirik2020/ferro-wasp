@@ -55,7 +55,8 @@ control check requests disarm. Closing this pre-arm gap is still required.
 
 - [ ] Confirm MPU6500 `WHO_AM_I` response and init sequence on the target board.
 - [ ] Confirm SPI1 pin map, chip select, clock mode, and DMA stream behavior with a logic analyzer.
-- [ ] Confirm IMU sample sequence increments at the intended 800 Hz poll rate.
+- [ ] Confirm FCU3 IMU sequence increments at its intended 800 Hz poll rate;
+  confirm Foxeer follows its approximately 1 kHz PC4/EXTI4 data-ready rate.
 - [ ] Confirm raw gyro and accel axes match physical board movement.
 - [ ] Confirm the standard drone body frame is forward/right/down for the board:
   +X forward, +Y right, and +Z down.
@@ -504,10 +505,51 @@ measured on the physical board. Props and motor power must remain disconnected.
   300.584 seconds: IMU 799.996 Hz, control 400.001 Hz, maximum report gap
   2001 ms, and zero stale frames, readiness failures, timestamp regressions,
   IMU/control sequence regressions, serial errors, or safety-state changes.
+- [ ] Build `flash_storage`, run `tools/ferrowasp_storage.py --port COMn info`,
+  and record the fitted SPI2 NOR JEDEC ID. Confirm capacity code `0x18` and
+  `16777216` bytes for the advertised 16 MiB part; do not infer the other ID
+  bytes from board documentation.
+- [ ] In the read-only image, run `list` and confirm existing foreign flash
+  contents produce `writable: False` rather than being overwritten. Confirm
+  `info`, `list`, and rejected out-of-range reads do not disturb IMU, RC, OSD,
+  USB status, or actuator-inhibit behavior.
+- [ ] Build `flash_writes` and run `test --confirm` while disarmed. Capture
+  `OK flash scratch erase/program/read verified`; repeat after a cold reset.
+  This test may alter only the reserved sector at `0x2000`.
+- [ ] Stage an allowed configuration value, save it, reboot, and confirm it is
+  restored from the newer CRC-valid copy-on-write slot. Interrupt power during
+  a later save and confirm either the old or new complete slot is selected,
+  never a torn value. Restore the intended default before actuator work.
+- [ ] While armed only under an appropriate props-off commissioning gate,
+  confirm configuration changes, log reads/erase, and the scratch self-test
+  are rejected. Start maintenance while disarmed, initiate arming, and confirm
+  maintenance aborts without granting USB any safety or motor authority.
+- [ ] Build `flash_blackbox bench_actuator_validation bench_equal_motors`,
+  perform one props-off disarmed/armed/throttle/disarmed run, download the
+  `.fwbb`, and verify it with
+  `tools/blackbox_analyzer.py`. Confirm CRC-valid records, a final partial page,
+  plausible IMU/control sequences, motor values, and zero reported storage
+  write faults or unexplained record drops.
+- [ ] Measure control-loop/IMU timing and UART4 OSD behavior with onboard
+  logging enabled. Confirm the low-priority 10 MHz CPU-driven SPI2 transfers
+  do not create unacceptable control jitter or regress the DMA-based OSD and
+  SBUS paths before using onboard logging in flight.
 - [ ] Confirm cold boot, reset, RTT heartbeat, and a sustained run without panic.
 - [x] Read and record the fitted SPI1 IMU identity using mode 3. `FWDBG1`
   reported `imu=icm42688p ready=1`; this state is published only after the
   mode-3 probe matches `WHO_AM_I=0x47` and ICM42688-P configuration succeeds.
+- [ ] Validate the new PC4/EXTI4 path. Each two-second RTT heartbeat should
+  report an IRQ delta near 2,000 for the 1 kHz ICM42688-P, advancing IMU
+  sequence, and zero or explainably bounded rejected triggers. Scope PC4 to
+  confirm an active-high data-ready pulse and record pulse width and cadence.
+  The earlier five-minute USB soak used timer polling and does not close this
+  checkpoint.
+- [ ] Capture at least ten stationary seconds with `blackbox_defmt` and run
+  `tools/blackbox_analyzer.py --mode rest`. Record the estimated IMU rate,
+  repeated-sample count, missing-BB2 count, and contiguous IMU-delta histogram.
+  At 1 kHz IMU / 400 Hz control, expect about 1,000 Hz, no repeated samples,
+  and primarily sequence deltas 2 and 3. Missing BB2 text frames are RTT
+  transport loss and do not by themselves indicate lost sensor samples.
 - [ ] Confirm the selected IMU produces advancing sequence numbers and
   plausible stationary accel/gyro/temperature values for at least five
   minutes without SPI timeout, invalid-frame, or stale-IMU warnings. The

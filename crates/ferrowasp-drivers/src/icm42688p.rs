@@ -24,11 +24,15 @@ const ACCEL_GYRO_LOW_NOISE: u8 = 0x0f;
 const RESET_SETTLE_MS: u32 = 2;
 const POWER_MODE_SETTLE_US: u32 = 1_000;
 const GYRO_STARTUP_REMAINDER_MS: u32 = 49;
+const INT1_ACTIVE_HIGH_PUSH_PULL_PULSED: u8 = (1 << 1) | (1 << 0);
+const INT_CONFIG1_PROPER_PIN_OPERATION: u8 = 0;
+const UI_DATA_READY_INT1_ENABLE: u8 = 1 << 3;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Register {
     DeviceConfig = 0x11,
+    IntConfig = 0x14,
     TempData1 = 0x1d,
     IntStatus = 0x2d,
     IntfConfig0 = 0x4c,
@@ -36,6 +40,8 @@ pub enum Register {
     GyroConfig0 = 0x4f,
     AccelConfig0 = 0x50,
     GyroAccelConfig0 = 0x52,
+    IntConfig1 = 0x64,
+    IntSource0 = 0x65,
     WhoAmI = 0x75,
     RegBankSel = 0x76,
 }
@@ -322,6 +328,36 @@ where
     delay.delay_us(POWER_MODE_SETTLE_US);
     verify_register(spi, cs, Register::PwrMgmt0, ACCEL_GYRO_LOW_NOISE)?;
 
+    // Emit the 1 kHz UI data-ready event on INT1 as an active-high, push-pull,
+    // 100 us pulse. INT_ASYNC_RESET must be cleared from its reset value for
+    // proper INT1 operation.
+    write_reg(
+        spi,
+        cs,
+        Register::IntConfig,
+        INT1_ACTIVE_HIGH_PUSH_PULL_PULSED,
+    )?;
+    write_reg(
+        spi,
+        cs,
+        Register::IntConfig1,
+        INT_CONFIG1_PROPER_PIN_OPERATION,
+    )?;
+    write_reg(spi, cs, Register::IntSource0, UI_DATA_READY_INT1_ENABLE)?;
+    verify_register(
+        spi,
+        cs,
+        Register::IntConfig,
+        INT1_ACTIVE_HIGH_PUSH_PULL_PULSED,
+    )?;
+    verify_register(
+        spi,
+        cs,
+        Register::IntConfig1,
+        INT_CONFIG1_PROPER_PIN_OPERATION,
+    )?;
+    verify_register(spi, cs, Register::IntSource0, UI_DATA_READY_INT1_ENABLE)?;
+
     // Gyroscope output is not considered usable until its 45 ms startup time
     // has elapsed. A conservative 50 ms total power-mode wait is used.
     delay.delay_ms(GYRO_STARTUP_REMAINDER_MS);
@@ -443,6 +479,8 @@ mod tests {
             registers[Register::WhoAmI as usize] = who_am_i;
             registers[Register::IntfConfig0 as usize] = 0x30;
             registers[Register::GyroAccelConfig0 as usize] = 0x11;
+            registers[Register::IntConfig1 as usize] = 0x10;
+            registers[Register::IntSource0 as usize] = 0x10;
             Self {
                 registers,
                 writes: Vec::new(),
@@ -459,6 +497,8 @@ mod tests {
             self.registers[Register::WhoAmI as usize] = who_am_i;
             self.registers[Register::IntfConfig0 as usize] = 0x30;
             self.registers[Register::GyroAccelConfig0 as usize] = 0x11;
+            self.registers[Register::IntConfig1 as usize] = 0x10;
+            self.registers[Register::IntSource0 as usize] = 0x10;
             if !self.suppress_reset_done {
                 self.registers[Register::IntStatus as usize] = RESET_DONE;
             }
@@ -548,6 +588,9 @@ mod tests {
                 [Register::AccelConfig0 as u8, 0x06],
                 [Register::GyroAccelConfig0 as u8, UI_FILTER_ODR_DIV_4],
                 [Register::PwrMgmt0 as u8, ACCEL_GYRO_LOW_NOISE],
+                [Register::IntConfig as u8, INT1_ACTIVE_HIGH_PUSH_PULL_PULSED],
+                [Register::IntConfig1 as u8, INT_CONFIG1_PROPER_PIN_OPERATION],
+                [Register::IntSource0 as u8, UI_DATA_READY_INT1_ENABLE],
             ]
         );
         assert!(delay.elapsed_ns >= 52_000_000);
@@ -593,6 +636,23 @@ mod tests {
             !spi.writes
                 .iter()
                 .any(|write| write[0] == Register::PwrMgmt0 as u8)
+        );
+    }
+
+    #[test]
+    fn init_rejects_data_ready_interrupt_configuration_that_does_not_read_back() {
+        let mut spi = MockSpi::new(WHO_AM_I_EXPECTED);
+        spi.stuck_register = Some(Register::IntConfig1 as u8);
+        let mut cs = MockPin::default();
+        let mut delay = MockDelay::default();
+
+        assert_eq!(
+            init(&mut spi, &mut cs, &mut delay),
+            Err(Error::RegisterVerification {
+                register: Register::IntConfig1,
+                expected: INT_CONFIG1_PROPER_PIN_OPERATION,
+                observed: 0x10,
+            })
         );
     }
 

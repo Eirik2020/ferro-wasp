@@ -2,8 +2,8 @@
 
 This is the smallest host path for seeing drone firmware text in a Python terminal.
 
-The firmware already uses `defmt-rtt`, so RTT bytes are not plain UTF-8. The Python
-script runs a quiet build from `apps/stm32f405-flight`, then launches
+The firmware already uses `defmt-rtt`, so RTT bytes are not plain UTF-8. The
+Python script runs a quiet build from the selected firmware app, then launches
 `probe-rs run` so probe-rs decodes
 the defmt RTT stream and keeps printing live firmware lines. Build warnings are
 hidden on successful builds, but shown if the build fails.
@@ -16,9 +16,20 @@ Connect the probe and target, then run from the repository root:
 python tools\terminal_embed.py
 ```
 
+The default board is FerroWasp FCU3. After an SWD connection has been fitted to
+the Foxeer F405 V2, select its isolated app explicitly:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
+```
+
+This builds `apps/foxeer-f405-v2`, flashes its own
+`FerroWaspFoxeerF405V2` ELF through `probe-rs`, and decodes RTT. PA13/SWDIO and
+PA14/SWCLK are reserved by the Foxeer BSP and are not configured as LEDs.
+
 You can also run `python terminal_embed.py` from inside the `tools` directory.
 
-Use `--release`, `--locked`, and `--features` to build and run a specific
+Use `--board`, `--release`, `--locked`, and `--features` to build and run a specific
 bench image. For example:
 
 ```powershell
@@ -309,6 +320,19 @@ Build and flash the blackbox-enabled firmware:
 .\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
 ```
 
+For the Foxeer F405 V2 over the retrofitted local SWD connection:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features blackbox_defmt
+```
+
+Start with the ESC unpowered and leave the craft stationary for at least ten
+seconds. The Foxeer EXTI-driven IMU should produce about `1000 Hz` in the
+analyzer's `Sequence/timing` report, normally with contiguous IMU deltas `2`
+and `3` at the unchanged 400 Hz control rate. Repeated IMU samples should be
+zero. `missing BB2 frames` measures RTT transport loss, not sensor loss, and
+may be nonzero if the terminal cannot drain the human-readable stream quickly.
+
 For a clean motor-vibration check that disables the PID/mixer and commands all
 four motors equally through the normal actuator-output task, build with the
 bench equal-motor feature:
@@ -439,6 +463,14 @@ ELF first so `defmt` decoding uses the right metadata:
 python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
 ```
 
+For a local SWD capture, stop `terminal_embed.py` after the test and run the
+same analyzer without a path; it automatically selects the newest local or
+remote RTT log:
+
+```powershell
+python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
+```
+
 For deliberate hand-motion/swing tests, the default `--mode auto` should classify
 large low-frequency gyro movement as motion. Use `--mode rest` for stationary
 noise-floor or motor-vibration checks where large filtered gyro standard
@@ -460,6 +492,43 @@ or `logs\terminal_embed`. You can also pass a specific fetched log:
 ```powershell
 python tools\blackbox_analyzer.py logs\remote_probe\pi_20260710_193000_attach.log --csv logs\remote_probe\swing_test.csv
 ```
+
+## Foxeer Onboard Flash CLI
+
+`ferrowasp_storage.py` talks to the Foxeer USB CDC storage endpoint. Install
+its only optional host dependency with `python -m pip install pyserial`.
+Start with the read-only `flash_storage` image and identify the actual JEDEC
+device before enabling writes:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_storage
+python tools\ferrowasp_storage.py --port COM7 info
+python tools\ferrowasp_storage.py --port COM7 list
+```
+
+The expected capacity code for 16 MiB is `18`. Do not assume the manufacturer
+or memory-type bytes; record what the fitted device reports. For the first
+destructive verification, build `flash_writes` and test only the permanently
+reserved scratch sector:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_writes
+python tools\ferrowasp_storage.py --port COM7 test --confirm
+```
+
+After `flash_blackbox` has recorded a props-off armed/disarmed session,
+download its CRC-protected raw pages and analyze them with the existing tool:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "flash_blackbox bench_actuator_validation bench_equal_motors"
+python tools\ferrowasp_storage.py --port COM7 read --output logs\foxeer-props-off.fwbb
+python tools\blackbox_analyzer.py logs\foxeer-props-off.fwbb --mode rest --csv logs\foxeer-props-off.csv
+```
+
+`erase --confirm` erases every sector in the log partition, not the
+configuration slots or scratch sector. Storage reads and all writes are
+rejected while armed; in-progress erase/config/self-test maintenance is
+aborted if arming begins. The CLI has no actuator or safety authority.
 
 ## Flight Reports
 

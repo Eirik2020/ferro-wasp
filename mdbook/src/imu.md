@@ -36,6 +36,8 @@ ICM42688-P support includes:
 - 1 kHz low-noise gyro and accelerometer output
 - +/-2000 dps gyro and +/-16 g accelerometer ranges
 - the required power transition and gyro startup delays
+- active-high, push-pull, pulsed INT1 data-ready routing, including the required
+  `INT_ASYNC_RESET` clearing
 - the 14-byte temperature/accel/gyro burst beginning at `0x1d`
 - temperature and physical-unit conversion helpers
 
@@ -49,14 +51,16 @@ transaction: one read-command byte plus 14 response bytes.
 
 ```mermaid
 flowchart LR
-    timer[TIM4<br/>800 Hz poll]
-    poll[SPI1 poll task<br/>sensor-specific start register]
+    fcu[FCU3 TIM4<br/>800 Hz poll]
+    fox[Foxeer PC4/EXTI4<br/>1 kHz data ready]
+    poll[SPI1 request task<br/>sensor-specific start register]
     dma[SPI1 RX DMA]
     parser[Sensor-specific parser]
     data[Latest ImuData]
     control[400 Hz control loop]
 
-    timer --> poll
+    fcu --> poll
+    fox --> poll
     poll --> dma
     dma --> parser
     parser --> data
@@ -67,9 +71,11 @@ flowchart LR
 recovery, and static receive buffers. The parser returns each receive buffer
 after valid and invalid frames.
 
-Foxeer currently polls the 1 kHz sensor output at 800 Hz. PC4/EXTI4
-data-ready triggering is mapped by the BSP but remains deferred until target
-timing can be measured.
+Foxeer configures both supported sensors for active-high, push-pull data-ready
+pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
+edge before deferring the bounded SPI request; it performs no blocking bus
+work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
+their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.
 
 ## Axis And Rate Convention
 
@@ -92,18 +98,20 @@ IMU viewer.
 1. Flash with motor power and props disconnected.
 2. Record the supported identity log: decimal `112` for MPU6500 or `71` for
    ICM42688-P.
-3. Confirm sequence numbers advance without SPI timeout or invalid-frame
-   warnings.
+3. Confirm the PC4/EXTI4 delta is approximately 2,000 per two-second heartbeat,
+   sequence numbers advance, rejected-trigger counts remain zero or explainably
+   bounded, and no SPI timeout or invalid-frame warning appears.
 4. Check stationary acceleration magnitude, gyro noise, and temperature.
 5. Move one physical axis at a time and record raw signs.
 6. Run a five-minute sample/heartbeat soak.
-7. Measure PC4 data-ready timing before replacing timer polling.
+7. Measure PC4 data-ready polarity, pulse width, cadence, and edge-to-DMA-start
+   latency with a logic analyzer.
 8. Keep the board arming inhibit in place until orientation and motor waveform
    evidence is reviewed.
 
 ## Roadmap
 
-- timestamp samples at the hardware data-ready edge
+- propagate the captured hardware-edge timestamp into estimator sample metadata
 - validate ICM42688-P filter delay and sample timing on Foxeer
 - add fault reporting for invalid or out-of-range samples
 - add BMI088 support

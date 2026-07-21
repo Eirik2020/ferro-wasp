@@ -874,6 +874,7 @@ Defer initially:
 - [ ] PA5/PA6/PA7 operate as SPI1
 - [ ] PC4 generates EXTI4
 - [ ] PB13/PC2/PC3 operate as SPI2
+- [ ] PB12 remains high when idle and selects only the onboard flash
 - [ ] PB3/PB4/PB5 operate as SPI3
 - [ ] PB8/PB9 operate as I2C1
 - [ ] PA11/PA12 operate as USB FS

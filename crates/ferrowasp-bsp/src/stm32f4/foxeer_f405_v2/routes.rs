@@ -91,6 +91,14 @@ pub const DEFERRED_MOTOR_DMA_ROUTES: &[DmaRoute] = &[
     },
 ];
 
+pub const OPTIONAL_ESC_TELEMETRY_DMA_ROUTE: DmaRoute = DmaRoute {
+    controller: 2,
+    stream: 5,
+    channel: 4,
+    direction: DmaDirection::PeripheralToMemory,
+    owner: "Optional USART1 BLHeli ESC telemetry RX",
+};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SpiRoute {
     pub peripheral: &'static str,
@@ -114,6 +122,18 @@ pub const SPI1_IMU: SpiRoute = SpiRoute {
     rx_dma: "DMA2 Stream 0 Channel 3",
     tx_dma: "DMA2 Stream 3 Channel 3",
     device: "WHO_AM_I probe; MPU6500 0x70 or ICM42688-P 0x47 data path",
+};
+
+pub const OPTIONAL_SPI2_FLASH: SpiRoute = SpiRoute {
+    peripheral: "SPI2",
+    sck_pin: "PB13 AF5",
+    miso_pin: "PC2 AF5",
+    mosi_pin: "PC3 AF5",
+    cs_pin: "PB12 GPIO output",
+    mode: 0,
+    rx_dma: "none; bounded priority-1 CPU transaction",
+    tx_dma: "none; DMA1 Stream4 remains owned by UART4 TX",
+    device: "optional JEDEC SPI NOR flight log and configuration storage",
 };
 
 pub const ACTIVE_SPI_ROUTES: &[SpiRoute] = &[SPI1_IMU];
@@ -187,6 +207,35 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn optional_esc_telemetry_dma_does_not_conflict_with_active_or_dshot_routes() {
+        for route in ACTIVE_DMA_ROUTES.iter().chain(DEFERRED_MOTOR_DMA_ROUTES) {
+            assert_ne!(
+                (route.controller, route.stream),
+                (
+                    OPTIONAL_ESC_TELEMETRY_DMA_ROUTE.controller,
+                    OPTIONAL_ESC_TELEMETRY_DMA_ROUTE.stream
+                )
+            );
+        }
+        assert_eq!(
+            (
+                OPTIONAL_ESC_TELEMETRY_DMA_ROUTE.controller,
+                OPTIONAL_ESC_TELEMETRY_DMA_ROUTE.stream,
+                OPTIONAL_ESC_TELEMETRY_DMA_ROUTE.channel,
+            ),
+            (2, 5, 4)
+        );
+    }
+
+    #[test]
+    fn optional_flash_route_preserves_validated_serial_dma() {
+        assert_eq!(OPTIONAL_SPI2_FLASH.peripheral, "SPI2");
+        assert_eq!(OPTIONAL_SPI2_FLASH.cs_pin, "PB12 GPIO output");
+        assert!(OPTIONAL_SPI2_FLASH.rx_dma.starts_with("none"));
+        assert!(OPTIONAL_SPI2_FLASH.tx_dma.contains("UART4 TX"));
     }
 
     #[test]

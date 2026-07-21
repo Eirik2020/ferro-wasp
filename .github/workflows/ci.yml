@@ -150,13 +150,55 @@ jobs:
         working-directory: apps/foxeer-f405-v2
         run: >
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "blackbox_defmt bench_spi_timeout_recovery pwm_cal dshot usb_serial"
+          --features "blackbox_defmt bench_spi_timeout_recovery pwm_cal usb_serial"
+
+      - name: Check Foxeer onboard flash feature stack
+        working-directory: apps/foxeer-f405-v2
+        run: |
+          cargo check --release --locked --target "${{ env.FIRMWARE_TARGET }}" \
+            --features flash_storage
+          cargo check --release --locked --target "${{ env.FIRMWARE_TARGET }}" \
+            --features "flash_blackbox bench_actuator_validation bench_equal_motors"
+
+      - name: Reject ungated Foxeer DShot feature
+        working-directory: apps/foxeer-f405-v2
+        run: |
+          if cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features dshot; then
+            echo "Ungated Foxeer DShot unexpectedly compiled"
+            exit 1
+          fi
+
+      - name: Reject Foxeer ESC telemetry without DShot
+        working-directory: apps/foxeer-f405-v2
+        run: |
+          if cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features esc_telemetry; then
+            echo "Foxeer ESC telemetry without DShot unexpectedly compiled"
+            exit 1
+          fi
 
       - name: Check Foxeer selected-motor bench path
         working-directory: apps/foxeer-f405-v2
         run: >
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "bench_motor_cmd_stale_rejection bench_motor4_only"
+          --features "bench_actuator_validation bench_motor_cmd_stale_rejection bench_motor4_only"
+
+      - name: Check Foxeer equal-motor bench path
+        working-directory: apps/foxeer-f405-v2
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
+
+      - name: Check Foxeer DShot commissioning path
+        working-directory: apps/foxeer-f405-v2
+        run: >
+          cargo check --release --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "dshot bench_actuator_validation blackbox_defmt bench_equal_motors"
+
+      - name: Check Foxeer DShot and ESC telemetry commissioning path
+        working-directory: apps/foxeer-f405-v2
+        run: >
+          cargo check --release --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "dshot esc_telemetry bench_actuator_validation bench_equal_motors"
 
       - name: Build standard DShot release firmware
         working-directory: apps/stm32f405-flight
@@ -209,6 +251,9 @@ jobs:
           --locked
           --target x86_64-unknown-linux-gnu
           -- -D warnings
+
+      - name: Test Python analysis tools
+        run: python -m unittest discover -s tools/tests -v
 
       - name: Report embedded duplicate dependency versions
         run: cargo tree --workspace --duplicates --locked --target ${{ env.FIRMWARE_TARGET }}

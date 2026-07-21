@@ -29,7 +29,11 @@ airworthy or production-ready.
   idle eRPM observations from each ESC in the configured 3,000-10,000 eRPM
   window before the safety master can declare the system armed.
 - Compact `BB2` rate-control logging and host-side analysis tools.
-- Optional, read-only Foxeer USB CDC status snapshots.
+- Optional Foxeer USB CDC status snapshots plus staged onboard SPI-NOR
+  discovery, dual-slot whitelisted configuration storage, CRC-protected flight
+  logging, download/analyzer tooling, and a reserved-sector write self-test.
+- Foxeer PC4/EXTI4 IMU data-ready sampling with bounded deferred SPI DMA
+  requests and rejected-trigger diagnostics.
 
 ### Changed
 

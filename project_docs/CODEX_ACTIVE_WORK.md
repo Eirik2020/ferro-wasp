@@ -838,33 +838,49 @@ compares.
 Flight arming is compile-time inhibited until the fitted IMU identity and
 axis orientation, ADC scales, logical motor order, and M4 physical pulse
 polarity are verified.
+An explicit `bench_actuator_validation` feature now breaks only the circular
+motor-verification dependency. It requires a capped equal-motor or one
+physical/logical selected-motor feature and retains RC qualification, guarded
+arming, fresh commands, the safety-owned actuator path, and disarm/failsafe
+behavior. It cannot enable normal PID/mixer flight output. Because the PWM
+arming sequence briefly applies idle to all four outputs, this commissioning
+mode is props-off only even for a selected-motor build.
 `WHO_AM_I=0x70` selects the MPU6500 driver and burst beginning at `0x3b`;
 `WHO_AM_I=0x47` selects the ICM42688-P driver and burst beginning at `0x1d`.
 An unsupported or failed IMU identity/configuration is nonfatal and disables
 periodic sampling, allowing the remaining bring-up services and heartbeat to
 continue. The ICM42688-P starts at 1 MHz SPI, 1 kHz ODR, +/-2000 dps, and
-+/-16 g. PC4 data-ready/EXTI remains deferred; the current app polls at 800 Hz.
++/-16 g. PC4 data-ready/EXTI4 now replaces Foxeer's temporary 800 Hz IMU poll
+trigger. The EXTI handler timestamps and clears each edge, then defers one
+bounded SPI DMA request rather than performing blocking SPI work. Total and
+rejected trigger counts are reported through RTT. Target evidence must still
+establish interrupt polarity/rate, rejected-event behavior, deadline recovery,
+and stale-sample behavior for the fitted IMU before flight arming is enabled.
 The provisional logical-to-physical map is `[1, 2, 3, 4]` under the shared
 Betaflight Quad X convention; unlike FCU3's measured physical output order and
 current `[3, 4, 2, 1]` remap, it is not treated as target evidence.
 PA13/PA14 remain untouched for SWD because the board status LEDs share those
-pins. The active motor protocol is 400 Hz, 1000..2000 us RC PWM under the
-safety-owned actuator task. PWM DMA/DShot, M5-M8, SPI flash, analog OSD, I2C,
-buzzer, camera control, and LED strip support remain deferred.
+pins. The default motor protocol is 400 Hz, 1000..2000 us RC PWM under the
+safety-owned actuator task; gated four-lane DShot commissioning is also
+implemented. M5-M8, analog OSD, I2C, buzzer, camera control, and LED strip
+support remain deferred. SPI2 flash is now implemented behind staged storage
+features and awaits the target checks recorded below.
 
-An opt-in `usb_serial` image now provides read-only Foxeer CDC diagnostics on
+An opt-in `usb_serial` image provides read-only Foxeer CDC diagnostics on
 PA11/PA12. The existing two-second heartbeat requests a bounded `FWDBG1`
 snapshot containing IMU/control sequences, raw gyro, RC state, throttle,
 arming state, voltage, and current. OTG_FS runs below the safety, control,
 IMU, and RC paths. Host bytes are drained and ignored; USB has no command,
-safety, or actuator authority. Build or flash it with
+safety, or actuator authority. Storage-enabled builds replace discarded input
+with the bounded storage/config parser described below. Build the base image with
 `apps/foxeer-f405-v2/flash-dfu.ps1 -UsbDebug`.
 
-Foxeer's app-local Cargo runner now programs its ELF through
-STM32CubeProgrammer, so `cargo run --release --locked` is the normal ROM-DFU
-command. The runner validates the ELF origin at `0x08000000`, detects the
+Foxeer's app-local Cargo runner now uses `probe-rs run` over the retrofitted
+SWD connection. The explicit `flash-dfu.ps1` recovery workflow still programs
+its ELF through STM32CubeProgrammer. The DFU runner validates the ELF origin at
+`0x08000000`, detects the
 available `USBn` port, verifies after programming, and starts execution at
-`0x08000000`. Use
+`0x08000000`. Use the helper with
 `FERROWASP_DFU_DRY_RUN=1` for a guaranteed no-flash integration check.
 
 Physical ROM-DFU programming was verified on 2026-07-18 with
@@ -890,6 +906,33 @@ and embedded Clippy, all three app release builds, the Foxeer feature matrix,
 DFU image generation, mdBook, diff checks, and the unsafe-source scan pass.
 Physical target validation is the current checkpoint. Do not flash this image
 to FCU3 or enable Foxeer arming by assumption.
+
+### Foxeer onboard SPI-NOR storage candidate
+
+The Foxeer app now has staged support for the advertised 16 MiB onboard SPI2
+flash on PB13/PC2/PC3 with active-low CS on PB12. Exact silicon remains a
+target question: `flash_storage` first reads JEDEC identity and accepts only a
+plausible sector-aligned capacity no larger than the STM32F4 three-byte-address
+limit. SPI2 runs mode 0 at 10 MHz with bounded CPU transfers because its fixed
+TX DMA1 Stream 4 conflicts with the validated UART4 OSD TX route. SBUS retains
+DMA1 Stream 5 and is not displaced.
+
+The low-priority flash manager exclusively owns the NOR driver. The first two
+4 KiB sectors are CRC-protected copy-on-write tuning slots; sector `0x2000` is
+permanently reserved for an explicit scratch erase/program/readback test; and
+append-only flight pages begin at `0x3000`. Each 256-byte flight page contains
+up to five fixed 48-byte records plus flight/page identity and a whole-page
+CRC. A torn or foreign log region is never silently erased. Raw log-page reads
+and all mutations are rejected while armed, maintenance aborts if arming
+begins, and the manager has no motor or safety authority.
+
+Feature staging is deliberate: `flash_storage` is read-only, `flash_writes`
+adds confirmed maintenance and dual-slot saves, and `flash_blackbox` adds
+armed-flight recording. `tools/ferrowasp_storage.py` downloads `.fwbb` pages;
+`tools/blackbox_analyzer.py` validates and reads that binary format. Host tests,
+workspace Clippy, and optimized feature builds pass. Physical JEDEC, scratch
+write/readback, power-interrupted config recovery, log capture, and control-
+timing/OSD coexistence evidence remain required before flight use.
 
 ## Isolated Firmware App Packages
 
@@ -1376,3 +1419,22 @@ state before a later high transition can qualify. This behavior was previously
 target-validated during the USART2 RC-loss checkpoint.
 
 This closes the arming-idle abort bug.
+
+## Foxeer F405 V2 staged actuator commissioning
+
+The Foxeer app now has three intentionally separate props-off checkpoints:
+
+1. default TIM1/TIM8 400 Hz RC PWM under `bench_actuator_validation` plus a
+   capped physical/logical motor selector;
+2. four-lane DShot600 under `dshot bench_actuator_validation
+   bench_equal_motors` using DMA2 Streams 1, 7, 2, and 6;
+3. observational BLHeli legacy telemetry under the same DShot gates plus
+   `esc_telemetry`, received on PA10 / USART1 RX through DMA2 Stream 5 Channel
+   4.
+
+The ESC manager owns bounded request scheduling, wire parsing, sample identity,
+and timeout latching. The safety-owned DShot service remains the sole consumer
+of actuator requests and acknowledges only after the selected telemetry bit is
+emitted. Foxeer arming does not yet depend on telemetry: eRPM is logged for
+motor identity and wiring validation only. Promoting it into idle qualification
+requires successful DShot and telemetry bench evidence first.

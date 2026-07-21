@@ -18,6 +18,8 @@ pub const BOARD_IDENTITY: BoardIdentity = BoardIdentity {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BoardCapabilities {
     pub spi1_imu: bool,
+    pub spi2_flash: bool,
+    pub imu_data_ready_exti: bool,
     pub sbus_receiver: bool,
     pub uart4_msp_displayport: bool,
     pub battery_current_adc: bool,
@@ -29,13 +31,15 @@ pub struct BoardCapabilities {
 
 pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     spi1_imu: true,
+    spi2_flash: true,
+    imu_data_ready_exti: true,
     sbus_receiver: true,
     uart4_msp_displayport: true,
     battery_current_adc: true,
     usb_cdc_debug: true,
     static_pwm_motor_count: 4,
     onboard_debug_leds_usable_with_swd: false,
-    timer_dma_motor_output: false,
+    timer_dma_motor_output: true,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -158,6 +162,11 @@ pub const PIN_MAP: &[PinAssignment] = &[
         alternate: Some(1),
     },
     PinAssignment {
+        signal: "USART1_RX_ESC_TELEMETRY_OPTIONAL",
+        pin: "PA10",
+        alternate: Some(7),
+    },
+    PinAssignment {
         signal: "MOTOR2_PWM",
         pin: "PC9",
         alternate: Some(3),
@@ -183,9 +192,29 @@ pub const PIN_MAP: &[PinAssignment] = &[
         alternate: None,
     },
     PinAssignment {
-        signal: "IMU_DATA_READY_DEFERRED",
+        signal: "IMU_DATA_READY_EXTI4",
         pin: IMU_DATA_READY_PIN,
         alternate: None,
+    },
+    PinAssignment {
+        signal: "SPI2_FLASH_CS_OPTIONAL",
+        pin: "PB12",
+        alternate: None,
+    },
+    PinAssignment {
+        signal: "SPI2_FLASH_SCK_OPTIONAL",
+        pin: "PB13",
+        alternate: Some(5),
+    },
+    PinAssignment {
+        signal: "SPI2_FLASH_MISO_OPTIONAL",
+        pin: "PC2",
+        alternate: Some(5),
+    },
+    PinAssignment {
+        signal: "SPI2_FLASH_MOSI_OPTIONAL",
+        pin: "PC3",
+        alternate: Some(5),
     },
 ];
 
@@ -208,6 +237,7 @@ pub const HARDWARE_IRQS: &[&str] = &[
     "DMA1_STREAM2",
     "DMA1_STREAM4",
     "DMA2_STREAM0",
+    "EXTI4",
     "DMA2_STREAM4",
     "TIM4",
     "TIM6_DAC",
@@ -273,6 +303,8 @@ pub const CLAIMS: &[ResourceClaim] = &[
     claim(ResourceKind::DmaStream, "DMA2_STREAM0_CH3", "SPI1 RX"),
     claim(ResourceKind::DmaStream, "DMA2_STREAM3_CH3", "SPI1 TX"),
     claim(ResourceKind::Irq, "DMA2_STREAM0", "SPI1 RX DMA"),
+    claim(ResourceKind::Pin, IMU_DATA_READY_PIN, "IMU data ready"),
+    claim(ResourceKind::Irq, "EXTI4", "IMU data ready"),
     claim(
         ResourceKind::Peripheral,
         "ADC1",
@@ -351,6 +383,34 @@ pub const OPTIONAL_USB_CDC_CLAIMS: &[ResourceClaim] = &[
     claim(ResourceKind::Irq, "OTG_FS", "Optional USB CDC diagnostics"),
 ];
 
+pub const OPTIONAL_ESC_TELEMETRY_CLAIMS: &[ResourceClaim] = &[
+    claim(
+        ResourceKind::Peripheral,
+        "USART1",
+        "Optional BLHeli legacy ESC telemetry",
+    ),
+    claim(
+        ResourceKind::Pin,
+        "PA10",
+        "Optional USART1 RX ESC telemetry",
+    ),
+    claim(
+        ResourceKind::DmaStream,
+        "DMA2_STREAM5_CH4",
+        "Optional USART1 RX ESC telemetry",
+    ),
+    claim(ResourceKind::Irq, "USART1", "Optional USART1 RX IDLE"),
+    claim(ResourceKind::Irq, "DMA2_STREAM5", "Optional USART1 RX DMA"),
+];
+
+pub const OPTIONAL_SPI_FLASH_CLAIMS: &[ResourceClaim] = &[
+    claim(ResourceKind::Peripheral, "SPI2", "Onboard SPI NOR storage"),
+    claim(ResourceKind::Pin, "PB12", "SPI2 flash chip select"),
+    claim(ResourceKind::Pin, "PB13", "SPI2 flash clock"),
+    claim(ResourceKind::Pin, "PC2", "SPI2 flash MISO"),
+    claim(ResourceKind::Pin, "PC3", "SPI2 flash MOSI"),
+];
+
 const fn claim(kind: ResourceKind, resource: &'static str, owner: &'static str) -> ResourceClaim {
     ResourceClaim {
         kind,
@@ -390,18 +450,18 @@ mod tests {
     fn active_capabilities_are_limited_to_the_ferrowasp_subset() {
         let enabled = [
             BOARD_CAPABILITIES.spi1_imu,
+            BOARD_CAPABILITIES.spi2_flash,
+            BOARD_CAPABILITIES.imu_data_ready_exti,
             BOARD_CAPABILITIES.sbus_receiver,
             BOARD_CAPABILITIES.uart4_msp_displayport,
             BOARD_CAPABILITIES.battery_current_adc,
             BOARD_CAPABILITIES.usb_cdc_debug,
-        ];
-        let disabled = [
-            BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd,
             BOARD_CAPABILITIES.timer_dma_motor_output,
         ];
+        let disabled = [BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd];
 
-        assert_eq!(enabled, [true; 5]);
-        assert_eq!(disabled, [false; 2]);
+        assert_eq!(enabled, [true; 8]);
+        assert_eq!(disabled, [false; 1]);
         assert_eq!(BOARD_CAPABILITIES.static_pwm_motor_count, 4);
     }
 
@@ -409,7 +469,19 @@ mod tests {
     fn manifest_has_no_duplicate_exclusive_claims() {
         assert_eq!(find_duplicate_claim(CLAIMS), None);
         assert_eq!(find_duplicate_claim(OPTIONAL_USB_CDC_CLAIMS), None);
+        assert_eq!(find_duplicate_claim(OPTIONAL_ESC_TELEMETRY_CLAIMS), None);
+        assert_eq!(find_duplicate_claim(OPTIONAL_SPI_FLASH_CLAIMS), None);
         for optional in OPTIONAL_USB_CDC_CLAIMS {
+            assert!(!CLAIMS.iter().any(|active| {
+                active.kind == optional.kind && active.resource == optional.resource
+            }));
+        }
+        for optional in OPTIONAL_ESC_TELEMETRY_CLAIMS {
+            assert!(!CLAIMS.iter().any(|active| {
+                active.kind == optional.kind && active.resource == optional.resource
+            }));
+        }
+        for optional in OPTIONAL_SPI_FLASH_CLAIMS {
             assert!(!CLAIMS.iter().any(|active| {
                 active.kind == optional.kind && active.resource == optional.resource
             }));
@@ -418,7 +490,18 @@ mod tests {
 
     #[test]
     fn motor_map_preserves_the_primary_foxeer_quad_outputs() {
-        let motors = &PIN_MAP[8..12];
+        let motor = |signal| {
+            PIN_MAP
+                .iter()
+                .find(|assignment| assignment.signal == signal)
+                .expect("motor pin must be present")
+        };
+        let motors = [
+            motor("MOTOR1_PWM"),
+            motor("MOTOR2_PWM"),
+            motor("MOTOR3_PWM"),
+            motor("MOTOR4_PWM_COMPLEMENTARY"),
+        ];
         assert_eq!(
             [
                 (motors[0].pin, motors[0].alternate),
@@ -448,16 +531,22 @@ mod tests {
     }
 
     #[test]
-    fn swd_usb_and_deferred_imu_irq_pin_remain_unclaimed() {
-        for reserved_pin in SWD_PINS
-            .iter()
-            .chain(USB_FS_PINS)
-            .chain(core::iter::once(&IMU_DATA_READY_PIN))
-        {
+    fn swd_and_usb_pins_remain_unclaimed_while_imu_irq_is_owned() {
+        for reserved_pin in SWD_PINS.iter().chain(USB_FS_PINS) {
             assert!(!CLAIMS.iter().any(|claim| {
                 claim.kind == ResourceKind::Pin && claim.resource == *reserved_pin
             }));
         }
+        assert!(CLAIMS.iter().any(|claim| {
+            claim.kind == ResourceKind::Pin
+                && claim.resource == IMU_DATA_READY_PIN
+                && claim.owner == "IMU data ready"
+        }));
+        assert!(CLAIMS.iter().any(|claim| {
+            claim.kind == ResourceKind::Irq
+                && claim.resource == "EXTI4"
+                && claim.owner == "IMU data ready"
+        }));
     }
 
     #[test]

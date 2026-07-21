@@ -4,10 +4,9 @@ rustflags = [
   "-C", "link-arg=-Tdefmt.x",
 ]
 runner = [
-  "powershell",
-  "-NoProfile",
-  "-ExecutionPolicy", "Bypass",
-  "-File", "tools/dfu-runner.ps1",
+  "probe-rs", "run",
+  "--chip", "STM32F405RG",
+  "--protocol", "swd",
 ]
 
 [build]

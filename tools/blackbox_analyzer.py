@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import binascii
+from collections import Counter
 import csv
 import math
 import re
+import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +22,10 @@ LOG_DIRS = (
     REPO_ROOT / "logs" / "terminal_embed",
 )
 CONTROL_RATE_HZ = 400.0
+FLASH_PAGE_LEN = 256
+FLASH_RECORD_LEN = 48
+FLASH_PAGE_DATA_LEN = 240
+FLASH_RECORD_STRUCT = struct.Struct("<IIIH3h3h3h3hH4H")
 
 BB_RE = re.compile(
     r"BB(?P<version>[12]) seq (?P<seq>\d+) imu (?P<imu_seq>\d+) flags (?P<flags>\d+) "
@@ -67,6 +74,17 @@ class AxisStats:
     filtered_peak_to_peak: float
     attenuation: float | None
     drift: float
+
+
+@dataclass(frozen=True)
+class SequenceStats:
+    valid_pairs: int
+    contiguous_control_pairs: int
+    missing_blackbox_frames: int
+    repeated_imu_samples: int
+    imu_samples_per_control_tick: float | None
+    estimated_imu_rate_hz: float | None
+    contiguous_imu_delta_counts: tuple[tuple[int, int], ...]
 
 
 def parse_args() -> argparse.Namespace:
@@ -190,8 +208,53 @@ def samples_from_lines(lines: Iterable[str]) -> list[BlackboxSample]:
 
 
 def samples_from_file(path: Path) -> list[BlackboxSample]:
+    if path.suffix.lower() == ".fwbb":
+        return samples_from_flash_file(path)
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         return samples_from_lines(handle)
+
+
+def samples_from_flash_file(path: Path) -> list[BlackboxSample]:
+    return samples_from_flash_bytes(path.read_bytes())
+
+
+def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
+    samples: list[BlackboxSample] = []
+    if len(data) % FLASH_PAGE_LEN:
+        page_index = len(data) // FLASH_PAGE_LEN
+        raise OSError(
+            f"truncated flash page {page_index}: {len(data) % FLASH_PAGE_LEN} bytes"
+        )
+    for page_start in range(0, len(data), FLASH_PAGE_LEN):
+        page = data[page_start : page_start + FLASH_PAGE_LEN]
+        if page[FLASH_PAGE_DATA_LEN : FLASH_PAGE_DATA_LEN + 2] != b"FB":
+            continue
+        if page[FLASH_PAGE_DATA_LEN + 2] != 1:
+            continue
+        record_count = page[FLASH_PAGE_DATA_LEN + 3]
+        if record_count > FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN:
+            continue
+        expected_crc = int.from_bytes(page[-4:], "little")
+        if binascii.crc32(page[:-4]) != expected_crc:
+            continue
+        for record_index in range(record_count):
+            start = record_index * FLASH_RECORD_LEN
+            values = FLASH_RECORD_STRUCT.unpack_from(page, start)
+            samples.append(
+                BlackboxSample(
+                    version=2,
+                    seq=values[1],
+                    imu_seq=values[2],
+                    flags=values[3],
+                    raw_dps=tuple(value / 10.0 for value in values[4:7]),
+                    gyro_dps=tuple(value / 10.0 for value in values[7:10]),
+                    command_dps=tuple(value / 10.0 for value in values[10:13]),
+                    pid=tuple(values[13:16]),
+                    throttle=values[16],
+                    motors=tuple(values[17:21]),
+                )
+            )
+    return samples
 
 
 def trim_samples_by_seconds(
@@ -207,6 +270,88 @@ def trim_samples_by_seconds(
         )
     end_index = len(samples) - end_count if end_count else len(samples)
     return samples[start_count:end_index], start_count, end_count
+
+
+def u32_forward_delta(previous: int, current: int) -> int:
+    return (current - previous) & 0xFFFF_FFFF
+
+
+def sequence_stats(samples: list[BlackboxSample]) -> SequenceStats:
+    """Compare IMU progress with control progress, tolerating dropped RTT frames.
+
+    A BB2 line is emitted once per control iteration. Dividing the IMU sequence
+    advance by the control sequence advance therefore estimates the sensor sample
+    rate without mistaking missing RTT lines for missing IMU samples.
+    """
+
+    valid_pairs = 0
+    contiguous_control_pairs = 0
+    missing_blackbox_frames = 0
+    repeated_imu_samples = 0
+    total_control_delta = 0
+    total_imu_delta = 0
+    contiguous_deltas: Counter[int] = Counter()
+
+    for previous, current in zip(samples, samples[1:]):
+        control_delta = u32_forward_delta(previous.seq, current.seq)
+        imu_delta = u32_forward_delta(previous.imu_seq, current.imu_seq)
+
+        # A reboot or concatenated capture appears as a huge unsigned jump. Do
+        # not let that boundary dominate the rate estimate.
+        if control_delta == 0 or control_delta > int(CONTROL_RATE_HZ * 60.0):
+            continue
+        if imu_delta > 100_000:
+            continue
+
+        valid_pairs += 1
+        total_control_delta += control_delta
+        total_imu_delta += imu_delta
+        if control_delta == 1:
+            contiguous_control_pairs += 1
+            contiguous_deltas[imu_delta] += 1
+            if imu_delta == 0:
+                repeated_imu_samples += 1
+        else:
+            missing_blackbox_frames += control_delta - 1
+
+    samples_per_tick = None
+    estimated_rate_hz = None
+    if total_control_delta:
+        samples_per_tick = total_imu_delta / total_control_delta
+        estimated_rate_hz = samples_per_tick * CONTROL_RATE_HZ
+
+    return SequenceStats(
+        valid_pairs=valid_pairs,
+        contiguous_control_pairs=contiguous_control_pairs,
+        missing_blackbox_frames=missing_blackbox_frames,
+        repeated_imu_samples=repeated_imu_samples,
+        imu_samples_per_control_tick=samples_per_tick,
+        estimated_imu_rate_hz=estimated_rate_hz,
+        contiguous_imu_delta_counts=tuple(sorted(contiguous_deltas.items())),
+    )
+
+
+def print_sequence_report(samples: list[BlackboxSample]) -> None:
+    stats = sequence_stats(samples)
+    print()
+    print("Sequence/timing:")
+    if stats.estimated_imu_rate_hz is None:
+        print("  insufficient valid sequence pairs")
+        return
+
+    print(
+        f"  estimated IMU rate={stats.estimated_imu_rate_hz:.1f} Hz "
+        f"({stats.imu_samples_per_control_tick:.3f} samples/control tick)"
+    )
+    print(
+        f"  repeated IMU samples={stats.repeated_imu_samples}/"
+        f"{stats.contiguous_control_pairs} contiguous control pairs"
+    )
+    print(f"  missing BB2 frames={stats.missing_blackbox_frames}")
+    histogram = ", ".join(
+        f"{delta}:{count}" for delta, count in stats.contiguous_imu_delta_counts
+    )
+    print(f"  contiguous IMU delta histogram: {histogram or 'none'}")
 
 
 def axis_stats(raw_values: list[float] | None, filtered_values: list[float]) -> AxisStats:
@@ -528,6 +673,7 @@ def main() -> int:
         args.noisy_threshold_dps,
         args.mode,
     )
+    print_sequence_report(samples)
     print_control_report(samples)
 
     print()
