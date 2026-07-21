@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9fd09d5.js";
+            window.path_to_searchindex_js = "searchindex-c31ca70f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -188,7 +188,8 @@ preserve that boundary.</p>
 <ul>
 <li>SBUS input over owned USART2 RX DMA;</li>
 <li>MPU6500 sampling over the bounded SPI1 DMA transport;</li>
-<li>800 Hz IMU polling and a 400 Hz rate-control/mixer update;</li>
+<li>FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling and a 400 Hz
+rate-control/mixer update;</li>
 <li>default, safety-owned four-lane DShot600 at 500 frame sets per second;</li>
 <li>PA10 / USART1 RX BLHeli legacy telemetry managed outside actuator authority;</li>
 <li>idle arming qualification using fresh eRPM evidence from all four ESCs;</li>
@@ -223,13 +224,16 @@ state;</li>
 </ul>
 <p>Source publication does not imply that a firmware binary is flight-qualified.</p>
 <h2 id="phase-2-foxeer-f405-v2-target-validation"><a class="header" href="#phase-2-foxeer-f405-v2-target-validation">Phase 2: Foxeer F405 V2 Target Validation</a></h2>
-<p>The Foxeer app already has ROM-DFU, USB enumeration, read-only status, and
-ICM42688-P runtime evidence. Flight arming remains compile-time inhibited.</p>
+<p>The Foxeer app already has ROM-DFU, USB enumeration, status, ICM42688-P
+runtime evidence, and staged onboard-flash support. Flight arming remains
+compile-time inhibited; the flash path is implemented but lacks target evidence.</p>
 <p>The next hardware sequence is:</p>
 <ol>
 <li>Re-establish a clean build and boot checkpoint on the intended Foxeer board.</li>
 <li>Validate the fitted IMU identity, body-axis mapping, sample freshness, and
 startup behavior.</li>
+<li>Identify the SPI2 NOR, pass the isolated scratch-sector self-test, and
+validate persistent config/log recovery plus control-loop timing.</li>
 <li>Calibrate ADC voltage/current scaling.</li>
 <li>Measure all four PWM outputs, including TIM1_CH3N polarity on M4.</li>
 <li>With propellers removed, verify logical motor order, rotation direction,

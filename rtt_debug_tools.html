@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9fd09d5.js";
+            window.path_to_searchindex_js = "searchindex-c31ca70f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -184,6 +184,12 @@ and they do not command motors.</p>
 <p>Run from the repository root:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py
 </code></pre>
+<p>FCU3 is the default. Select the isolated Foxeer app after fitting its SWD
+connection:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
+</code></pre>
+<p>The Foxeer BSP leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
+must be unpowered at the ESC side; USB DFU remains the recovery path.</p>
 <p>Release and feature-selected images use the same logger:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
 </code></pre>
@@ -321,6 +327,15 @@ control block and one RTT up-channel, so the MVP logger does not link
 <p>Build and flash the blackbox-enabled firmware:</p>
 <pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
 </code></pre>
+<p>For the Foxeer F405 V2 over its retrofitted local SWD connection:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features blackbox_defmt
+</code></pre>
+<p>Begin with ESC power disconnected and hold the board stationary for at least
+ten seconds. The offline analyzer’s <code>Sequence/timing</code> section should estimate
+about <code>1000 Hz</code> for the EXTI-driven Foxeer IMU, with contiguous IMU sequence
+deltas normally alternating between <code>2</code> and <code>3</code> at the unchanged 400 Hz control
+rate. Repeated IMU samples should be zero. Missing BB2 frames indicate RTT
+transport loss and are reported independently from IMU progress.</p>
 <p>For a clean motor-vibration check that disables the PID/mixer and commands all
 four motors equally through the normal actuator-output task, build with:</p>
 <pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features "blackbox_defmt bench_equal_motors"
@@ -375,6 +390,10 @@ ELF first so <code>defmt</code> decoding uses the right metadata:</p>
 .\tools\pi_log_stop.ps1 -Link Cable
 .\tools\pi_log_fetch.ps1 -Link Cable
 python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
+</code></pre>
+<p>After a local <code>terminal_embed.py</code> capture, the analyzer selects the newest RTT
+log automatically:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
 </code></pre>
 <p>For deliberate hand-motion/swing tests, the default <code>--mode auto</code> should classify
 large low-frequency gyro movement as motion. Use <code>--mode rest</code> for stationary

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9fd09d5.js";
+            window.path_to_searchindex_js = "searchindex-c31ca70f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -234,12 +234,22 @@ a five-minute read-only status soak.</p>
 <ol>
 <li>Build, flash, and retain a clean boot/status log.</li>
 <li>Verify IMU orientation and physical response on the actual board.</li>
+<li>Target-verify the implemented PC4/EXTI4 data-ready trigger: interrupt
+polarity, rate, timestamps, rejected-event accounting, and stale-sample
+behavior on the fitted IMU.</li>
 <li>Calibrate ADC voltage and current.</li>
 <li>Measure the four PWM outputs, especially the TIM1_CH3N M4 polarity.</li>
 <li>With propellers removed, identify motor order/direction and verify every
 stick and hand-motion correction sign.</li>
 <li>Review the collected evidence before changing the arming inhibit.</li>
 </ol>
+<p>The Foxeer app provides an explicit <code>bench_actuator_validation</code> commissioning
+gate for steps 4 and 5. It only compiles with a capped equal-motor, physical
+motor, or logical motor bench mode; the ordinary image remains inhibited and
+normal PID/mixer flight output cannot be enabled by this gate. RC qualification,
+arming guards, command freshness, failsafe/disarm handling, and actuator
+ownership remain active. The arming sequence briefly applies PWM idle to all
+four outputs, so the mode is props-off only even when one motor is selected.</p>
 <h2 id="priority-3-add-a-wsldocker-development-environment"><a class="header" href="#priority-3-add-a-wsldocker-development-environment">Priority 3: Add a WSL/Docker Development Environment</a></h2>
 <p>After Foxeer target bring-up, provide a pinned development container that
 runs host tests, strict Clippy, application checks, feature checks, formatting,

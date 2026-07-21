@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9fd09d5.js";
+            window.path_to_searchindex_js = "searchindex-c31ca70f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -212,6 +212,8 @@ bring-up services continue, and flight arming remains inhibited.</p>
 <li>1 kHz low-noise gyro and accelerometer output</li>
 <li>+/-2000 dps gyro and +/-16 g accelerometer ranges</li>
 <li>the required power transition and gyro startup delays</li>
+<li>active-high, push-pull, pulsed INT1 data-ready routing, including the required
+<code>INT_ASYNC_RESET</code> clearing</li>
 <li>the 14-byte temperature/accel/gyro burst beginning at <code>0x1d</code></li>
 <li>temperature and physical-unit conversion helpers</li>
 </ul>
@@ -221,14 +223,16 @@ decoders reject short, all-zero, and all-<code>0xff</code> frames.</p>
 <p>The two sensor layouts both fit the existing fixed 15-byte full-duplex DMA
 transaction: one read-command byte plus 14 response bytes.</p>
 <pre class="mermaid">flowchart LR
-    timer[TIM4&lt;br/&gt;800 Hz poll]
-    poll[SPI1 poll task&lt;br/&gt;sensor-specific start register]
+    fcu[FCU3 TIM4&lt;br/&gt;800 Hz poll]
+    fox[Foxeer PC4/EXTI4&lt;br/&gt;1 kHz data ready]
+    poll[SPI1 request task&lt;br/&gt;sensor-specific start register]
     dma[SPI1 RX DMA]
     parser[Sensor-specific parser]
     data[Latest ImuData]
     control[400 Hz control loop]
 
-    timer --&gt; poll
+    fcu --&gt; poll
+    fox --&gt; poll
     poll --&gt; dma
     dma --&gt; parser
     parser --&gt; data
@@ -238,9 +242,11 @@ transaction: one read-command byte plus 14 response bytes.</p>
 <p><code>SpiDmaOwner</code> exclusively owns SPI1, both DMA halves, chip select, timeout
 recovery, and static receive buffers. The parser returns each receive buffer
 after valid and invalid frames.</p>
-<p>Foxeer currently polls the 1 kHz sensor output at 800 Hz. PC4/EXTI4
-data-ready triggering is mapped by the BSP but remains deferred until target
-timing can be measured.</p>
+<p>Foxeer configures both supported sensors for active-high, push-pull data-ready
+pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
+edge before deferring the bounded SPI request; it performs no blocking bus
+work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
+their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.</p>
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
 <p>Raw values remain in sensor-axis order. Each BSP supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.</p>
@@ -257,18 +263,20 @@ IMU viewer.</p>
 <li>Flash with motor power and props disconnected.</li>
 <li>Record the supported identity log: decimal <code>112</code> for MPU6500 or <code>71</code> for
 ICM42688-P.</li>
-<li>Confirm sequence numbers advance without SPI timeout or invalid-frame
-warnings.</li>
+<li>Confirm the PC4/EXTI4 delta is approximately 2,000 per two-second heartbeat,
+sequence numbers advance, rejected-trigger counts remain zero or explainably
+bounded, and no SPI timeout or invalid-frame warning appears.</li>
 <li>Check stationary acceleration magnitude, gyro noise, and temperature.</li>
 <li>Move one physical axis at a time and record raw signs.</li>
 <li>Run a five-minute sample/heartbeat soak.</li>
-<li>Measure PC4 data-ready timing before replacing timer polling.</li>
+<li>Measure PC4 data-ready polarity, pulse width, cadence, and edge-to-DMA-start
+latency with a logic analyzer.</li>
 <li>Keep the board arming inhibit in place until orientation and motor waveform
 evidence is reviewed.</li>
 </ol>
 <h2 id="roadmap"><a class="header" href="#roadmap">Roadmap</a></h2>
 <ul>
-<li>timestamp samples at the hardware data-ready edge</li>
+<li>propagate the captured hardware-edge timestamp into estimator sample metadata</li>
 <li>validate ICM42688-P filter delay and sample timing on Foxeer</li>
 <li>add fault reporting for invalid or out-of-range samples</li>
 <li>add BMI088 support</li>
