@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c31ca70f.js";
+            window.path_to_searchindex_js = "searchindex-31d7b953.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -209,22 +209,25 @@ motor authority.</p>
 <li>a newly observed low-to-high arm transition;</li>
 <li>arm high for the configured 200 ms hold;</li>
 <li>throttle at or below <code>ARMING_MAX_THROTTLE</code>, currently 65 command counts;</li>
+<li>a supported IMU that has produced a sample;</li>
+<li>completed stationary startup gyro-bias calibration;</li>
+<li>a fresh IMU sample in the control loop;</li>
 <li>no revoked actuator permit or other failed safety check.</li>
 </ul>
-<p>IMU initialization, gyro-bias calibration, and sample freshness are not yet in
-that prerequisite set. A stale IMU can therefore pass the DShot idle-eRPM gate
-and briefly reach <code>Armed</code>; the first post-arm stale-IMU control check requests
-disarm. This is an open prototype safety gap. Calibration state is likewise
-not currently proven before arming.</p>
+<p>These IMU conditions are checked before actuator preparation, throughout its
+10 ms guarded waits/eRPM qualification, and again before the final armed
+transition. Repeated samples do not advance gyro-bias calibration. Host tests
+cover unavailable, uncalibrated, and stale rejection; deliberate target fault
+injection remains follow-up evidence.</p>
 <p>The RC link starts invalid and becomes healthy after three valid SBUS frames.
 It expires after 100 ms without a healthy frame. Booting or recovering the
 link while arm is already high cannot request arming; the input must first be
 observed low and then transition high.</p>
 <p>During actuator preparation, the actuator owner rechecks its permit, RC
-armability, arm state, and throttle every 10 ms. Any failure selects stop
-before publishing an arming-abort reason.</p>
-<h2 id="default-fcu3-dshot-sequence"><a class="header" href="#default-fcu3-dshot-sequence">Default FCU3 DShot Sequence</a></h2>
-<p>The default FCU3 path uses telemetry-qualified DShot arming:</p>
+armability, arm state, throttle, and IMU health every 10 ms. Any failure selects
+stop before publishing an arming-abort reason.</p>
+<h2 id="default-fcu3-and-foxeer-dshot-sequence"><a class="header" href="#default-fcu3-and-foxeer-dshot-sequence">Default FCU3 and Foxeer DShot Sequence</a></h2>
+<p>The default FCU3 and Foxeer paths use telemetry-qualified DShot arming:</p>
 <ol>
 <li>Safety Master enters <code>Arming</code>, grants the temporary permit, and asks
 Actuator Output to prepare the ESCs.</li>

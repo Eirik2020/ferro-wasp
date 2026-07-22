@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c31ca70f.js";
+            window.path_to_searchindex_js = "searchindex-31d7b953.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -191,7 +191,7 @@
 </div>
 <p>An unsupported identity, failed probe, failed reset, or configuration
 read-back failure leaves Foxeer sampling disabled. The heartbeat and unrelated
-bring-up services continue, and flight arming remains inhibited.</p>
+bring-up services continue, while the runtime IMU health gate rejects arming.</p>
 <h2 id="driver-behavior"><a class="header" href="#driver-behavior">Driver Behavior</a></h2>
 <p>Both drivers are allocation-free modules in <code>ferrowasp-drivers</code> and use
 <code>embedded-hal</code> 1.0 traits for blocking boot configuration.</p>
@@ -250,6 +250,14 @@ their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.</p
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
 <p>Raw values remain in sensor-axis order. Each BSP supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.</p>
+<p>The Foxeer-only <code>imu_orientation_rtt</code> feature adds one low-rate, coherent
+sensor-frame snapshot to the existing heartbeat. It reports acceleration in
+mg, uncorrected gyro in tenths of a degree per second, and temperature in
+tenths of a degree Celsius without changing the USB protocol or taking a
+shared RTIC lock. A second line reports the BSP-mapped drone-frame gravity
+vector and gyro rates for direct implementation validation:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features imu_orientation_rtt --probe-speed-khz 1800 --connect-under-reset
+</code></pre>
 <p>FCU3’s mapping and gyro bias behavior have bench evidence. Foxeer’s fitted
 sensor identity, package orientation, body-axis map, and signs must be checked
 on the physical board before its arming inhibit can be removed.</p>
@@ -266,8 +274,14 @@ ICM42688-P.</li>
 <li>Confirm the PC4/EXTI4 delta is approximately 2,000 per two-second heartbeat,
 sequence numbers advance, rejected-trigger counts remain zero or explainably
 bounded, and no SPI timeout or invalid-frame warning appears.</li>
-<li>Check stationary acceleration magnitude, gyro noise, and temperature.</li>
-<li>Move one physical axis at a time and record raw signs.</li>
+<li>Enable <code>imu_orientation_rtt</code> and check stationary acceleration magnitude,
+gyro noise, and temperature.</li>
+<li>Hold the board level, then move it slowly nose-up, right-side-down, and
+clockwise in yaw. Sustain each motion for at least four seconds so a
+two-second orientation snapshot lands during it, then hold and pause before
+the next motion. Record both sensor-frame axes/signs and the mapped body
+response. Positive body roll lowers the right side, positive pitch raises
+the nose, and positive yaw turns the nose right viewed from above.</li>
 <li>Run a five-minute sample/heartbeat soak.</li>
 <li>Measure PC4 data-ready polarity, pulse width, cadence, and edge-to-DMA-start
 latency with a logic analyzer.</li>
