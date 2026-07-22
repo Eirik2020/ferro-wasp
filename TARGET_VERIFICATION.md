@@ -465,16 +465,17 @@ control check requests disarm. Closing this pre-arm gap is still required.
 - [ ] Record interrupt priorities and confirm safety/actuator paths outrank telemetry/display work.
 - [ ] Record worst observed control-loop jitter during normal operation and telemetry load.
 - [ ] Record worst observed time from disarm request to low motor output.
-- [ ] Record worst observed time from the current post-arm stale-IMU check and
-  RC loss to actuator inhibit; separately verify the future IMU pre-arm guard.
+- [ ] Record worst observed time from stale-IMU detection and RC loss to
+  actuator inhibit; target-verify the implemented IMU pre-arm guard negatively.
 - [ ] Save logic analyzer traces for PWM and future DShot output.
 - [ ] Save serial/RTT logs for arm, disarm, RC loss, IMU stale, ADC, and OSD test cases.
 - [ ] Link each passed target check to a commit and board configuration.
 
 ## Foxeer F405 V2 Initial Gate
 
-The Foxeer app must remain arming-inhibited until every item in this section is
-measured on the physical board. Props and motor power must remain disconnected.
+This section records the staged Foxeer gate. The compile-time flight profile is
+now promoted from the captured evidence below, but propellers must remain off
+until the final normal-mixer/OSD handoff at the end of this section passes.
 
 - [x] Record the baseline non-USB `apps/foxeer-f405-v2` build; ELF
   `target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2`, 72,352-byte
@@ -505,45 +506,100 @@ measured on the physical board. Props and motor power must remain disconnected.
   300.584 seconds: IMU 799.996 Hz, control 400.001 Hz, maximum report gap
   2001 ms, and zero stale frames, readiness failures, timestamp regressions,
   IMU/control sequence regressions, serial errors, or safety-state changes.
-- [ ] Build `flash_storage`, run `tools/ferrowasp_storage.py --port COMn info`,
-  and record the fitted SPI2 NOR JEDEC ID. Confirm capacity code `0x18` and
-  `16777216` bytes for the advertised 16 MiB part; do not infer the other ID
-  bytes from board documentation.
-- [ ] In the read-only image, run `list` and confirm existing foreign flash
-  contents produce `writable: False` rather than being overwritten. Confirm
-  `info`, `list`, and rejected out-of-range reads do not disturb IMU, RC, OSD,
-  USB status, or actuator-inhibit behavior.
-- [ ] Build `flash_writes` and run `test --confirm` while disarmed. Capture
+- [x] Build `flash_storage`, run `tools/ferrowasp_storage.py --port COMn info`,
+  and record the fitted SPI2 NOR JEDEC ID. On 2026-07-21 the read-only image
+  reported `jedec=ef:40:18 bytes=16777216 ready=1`, confirming capacity code
+  `0x18` and the advertised 16 MiB capacity without inferring the manufacturer
+  or memory-type bytes from board documentation. The image SHA-256 was
+  `2771E422EDB7D08A26AFBDBD8C18D8A4A0B28F9B516D4A5404E555AA9D8208F9`.
+- [x] In the read-only image, run `list` and confirm existing foreign flash
+  contents produce `writable: False` rather than being overwritten. The
+  2026-07-21 result was `used pages: 0; next flight: 1; capacity pages: 65488;
+  writable: False`; no erase or program command was issued.
+- [ ] Confirm rejected out-of-range reads do not disturb IMU, RC, OSD, USB
+  status, or actuator-inhibit behavior. During the successful `info`/`list`
+  session, `logs/terminal_embed/20260721_215409_rtt.log` retained approximately
+  1.012 kHz IMU/DRDY progress for about 72 seconds with zero rejected DRDY
+  events and no SPI/storage fault; the explicit rejected-read case and live
+  RC/OSD coexistence remain open.
+- [x] Build `flash_writes` and run `test --confirm` while disarmed. Capture
   `OK flash scratch erase/program/read verified`; repeat after a cold reset.
-  This test may alter only the reserved sector at `0x2000`.
+  This test may alter only the reserved sector at `0x2000`. The initial
+  2026-07-21 run passed with `OK flash scratch test started` followed by
+  `OK flash scratch erase/program/read verified`; the subsequent read-only
+  `list` still reported zero FerroWasp pages and `writable: False`. The image
+  SHA-256 was
+  `3747FD6C20A12A7661F0CB656C199DA1FFFDAAAA04215392935B28FBB1DBD8C6`,
+  with RTT retained in `logs/terminal_embed/20260721_220055_rtt.log`. After a
+  cold power cycle, the first USB attempts correctly found no COM port because
+  the debugger held NRST low. Releasing NRST allowed the already-programmed
+  image to enumerate as COM6 without reflashing; the repeated `info`, scratch
+  erase/program/readback, and `list` sequence passed with the same identity and
+  protected-log result.
 - [ ] Stage an allowed configuration value, save it, reboot, and confirm it is
   restored from the newer CRC-valid copy-on-write slot. Interrupt power during
   a later save and confirm either the old or new complete slot is selected,
-  never a torn value. Restore the intended default before actuator work.
+  never a torn value. Restore the intended default before actuator work. On
+  2026-07-21 `log_rate_divisor` was staged from `1` to `2`, saved, and recovered
+  as `2.0000` after a cold boot without reflashing. It was then staged and saved
+  back to `1`; the live read returned `1.0000` and the foreign log region stayed
+  `writable: False`. One final cold-boot read of the restored value and the
+  interrupted-save case remain open.
 - [ ] While armed only under an appropriate props-off commissioning gate,
   confirm configuration changes, log reads/erase, and the scratch self-test
   are rejected. Start maintenance while disarmed, initiate arming, and confirm
   maintenance aborts without granting USB any safety or motor authority.
-- [ ] Build `flash_blackbox bench_actuator_validation bench_equal_motors`,
+- [x] Build `dshot flash_blackbox bench_actuator_validation
+  bench_equal_motors`,
   perform one props-off disarmed/armed/throttle/disarmed run, download the
   `.fwbb`, and verify it with
   `tools/blackbox_analyzer.py`. Confirm CRC-valid records, a final partial page,
   plausible IMU/control sequences, motor values, and zero reported storage
-  write faults or unexplained record drops.
-- [ ] Measure control-loop/IMU timing and UART4 OSD behavior with onboard
-  logging enabled. Confirm the low-priority 10 MHz CPU-driven SPI2 transfers
-  do not create unacceptable control jitter or regress the DMA-based OSD and
-  SBUS paths before using onboard logging in flight.
+  write faults or unexplained record drops. This passed on 2026-07-22 with
+  image SHA-256
+  `47B78242AF0DC46C69C9225042C96BCC4D4F3371AE68FFDB1CE7ACE3C5CAB844`
+  and RTT log `logs/terminal_embed/20260722_014010_rtt.log`. The capture armed
+  only after `[3, 3, 3, 3]` eRPM qualification, logged idle and equal throttle,
+  explicitly disarmed to four DShot zeros, and settled at 551 pages with zero
+  dropped records and write faults. Download
+  `logs/foxeer-blackbox.fwbb` has SHA-256
+  `4950B505EDA22BA34AA25A69AC85E560B4EC29A3A0B4B9D071FF026546A71DCE`:
+  all 551 pages pass CRC, flight ID is 1, page sequences are contiguous
+  `0..550`, 550 pages contain five records, and the final flushed page contains
+  four records. Its 2,754 stored records are contiguous at 400 Hz with no
+  missing BB2 or repeated IMU sample; the analyzer reports 2,751 after its
+  default three-record warm-up trim. Estimated IMU rate is 1,011.2 Hz with
+  deltas only 2/3, and all four motor channels capture the same 120-count
+  peak-to-peak bench command.
+- [x] Measure control-loop/IMU timing with onboard logging enabled. The
+  CRC-valid 2026-07-22 capture contains 2,750 contiguous timestamp intervals:
+  mean 2,500 us, 2,000/3,000 us min/max, 500 us standard deviation and p99
+  absolute jitter, and no interval above 3,000 us. This is the expected
+  quantization of the 1 ms recorded timebase and proves no missed 400 Hz log
+  deadline at that resolution; it does not replace a finer electrical timing
+  measurement.
+- [ ] Confirm UART4 OSD remains live while onboard logging is active and no
+  OSD/SBUS transport fault appears.
 - [ ] Confirm cold boot, reset, RTT heartbeat, and a sustained run without panic.
+  Begin with `python tools/terminal_embed.py --foxeer-smoke`; retain its log,
+  firmware hash, and PASS/FAIL summary. Keep ESC power disconnected.
+  The 2026-07-21 SWD reset/program/RTT smoke passed at
+  `9A3AB250FD48D27BCA32099BAB04DFD7A6E396D4082AFAC6728A30825D0DF268`;
+  `logs/terminal_embed/20260721_214256_rtt.log` contains six approximately
+  1 kHz DRDY intervals with zero rejected triggers. A separate cold-power soak
+  remains open.
 - [x] Read and record the fitted SPI1 IMU identity using mode 3. `FWDBG1`
   reported `imu=icm42688p ready=1`; this state is published only after the
   mode-3 probe matches `WHO_AM_I=0x47` and ICM42688-P configuration succeeds.
-- [ ] Validate the new PC4/EXTI4 path. Each two-second RTT heartbeat should
+- [x] Functionally validate the new PC4/EXTI4 path. Each two-second RTT heartbeat should
   report an IRQ delta near 2,000 for the 1 kHz ICM42688-P, advancing IMU
   sequence, and zero or explainably bounded rejected triggers. Scope PC4 to
   confirm an active-high data-ready pulse and record pulse width and cadence.
   The earlier five-minute USB soak used timer polling and does not close this
-  checkpoint.
+  checkpoint. The 2026-07-21 and 2026-07-22 captures repeatedly measured
+  2,024-2,025 IRQ/sample increments per two seconds with zero rejected triggers
+  and no post-startup stale warning. The electrical scope portion was
+  intentionally skipped and remains unclaimed.
 - [ ] Capture at least ten stationary seconds with `blackbox_defmt` and run
   `tools/blackbox_analyzer.py --mode rest`. Record the estimated IMU rate,
   repeated-sample count, missing-BB2 count, and contiguous IMU-delta histogram.
@@ -555,21 +611,248 @@ measured on the physical board. Props and motor power must remain disconnected.
   minutes without SPI timeout, invalid-frame, or stale-IMU warnings. The
   five-minute USB sequence/stale/gyro portion passed; accel, temperature, and
   explicit RTT warning observation remain.
-- [ ] Verify raw accelerometer/gyro axes and signs against board motion.
-- [ ] Confirm USART2 SBUS qualification, timeout invalidation, and rearm latch.
+- [x] Verify raw accelerometer/gyro axes and signs against board motion. Use
+  the observational `imu_orientation_rtt` image with ESC power disconnected;
+  capture level, then sustain slow nose-up, right-side-down, and clockwise-yaw
+  motions for at least four seconds each. Its `IMU ORIENT sensor` line reports
+  coherent sensor-frame acceleration in mg, gyro in 0.1 degrees/second, and
+  temperature in 0.1 degrees Celsius without changing control or actuator
+  behavior. The
+  2026-07-21 capture `logs/terminal_embed/20260721_232959_rtt.log`, image
+  SHA-256 `70E04FDDAAD7EC297B35BC1BE770FE1CEDDCB22A99187E7673AEC7B84A234FF8`,
+  established level acceleration near `[0, 0, +995]` mg, nose-up motion on
+  negative sensor gyro X with gravity moving toward negative sensor Y, and
+  opposite yaw signs on sensor gyro Z. A follow-up explicitly lifted both left
+  motors, producing the required right-side-down/positive-roll motion in
+  `logs/terminal_embed/20260721_233738_rtt.log`: sensor gyro Y was negative,
+  held acceleration moved to approximately `[+780, -30, +620]` mg, and the
+  return motion reversed gyro Y. Together the captures establish
+  `FrameRotation::new([1, 0, 2], [-1, -1, -1])` for gyro, with negated mapped
+  specific force supplying the estimator's drone-frame gravity vector.
+- [x] Reflash `imu_orientation_rtt` with the measured BSP mapping and confirm
+  its `IMU ORIENT body` line: level gravity must be approximately `[0, 0,
+  +1000]` mg; right-side-down must produce positive body Y gravity and positive
+  roll rate; nose-up must produce negative body X gravity and positive pitch
+  rate; nose-right/CW yaw must produce positive body yaw. Keep flight arming
+  inhibited while collecting this implementation evidence. The 2026-07-21
+  mapped capture `logs/terminal_embed/20260721_234528_rtt.log`, image SHA-256
+  `3832A346EACDD86B910EF21CE88821D17FAE8B6F39844A549407424FD6405591`,
+  passed: level gravity was approximately `[0, 0, +995]` mg; lifting the left
+  side produced positive roll and positive body Y gravity; nose-up produced
+  positive pitch and negative body X gravity; nose-right yaw was positive and
+  the return yaw was negative. Final level gravity returned to approximately
+  `[0, 0, +995]` mg. All 2,024-2,025-sample DRDY intervals had zero rejects,
+  with no post-startup stale or transport warning.
+- [x] Confirm USART2 SBUS qualification, timeout invalidation, and rearm latch.
+  The powered props-off M4 session on 2026-07-22 confirmed healthy-frame
+  qualification, immediate motor stop on link loss, no automatic rearm after
+  recovery, and the required explicit arm-low then arm-high sequence. It also
+  confirmed that raising throttle during PWM preparation aborts arming.
+  However, the M3 image armed after a flash/reset while the transmitter arm
+  switch had remained high at zero throttle. Log
+  `logs/terminal_embed/20260722_000038_rtt.log` records link qualification
+  followed by `RC Requests ARM!` and `SYSTEM ARMED FOR CAPPED FOXEER ACTUATOR
+  VALIDATION`. The shared RC latch now ignores arm-low observations received
+  before link qualification completes. The exact rebuilt
+  `bench_actuator_validation bench_motor3_only` candidate has SHA-256
+  `9482D89270F4D7D6C1F5E83D60F42817DB90AABEB75D119D6F66E15C2FACCA3D`.
+  Its 2026-07-22 repeat in
+  `logs/terminal_embed/20260722_001436_rtt.log` held the transmitter arm switch
+  high across flashing: the RC link qualified, then ran for approximately 14
+  seconds without `RC Requests ARM!`, PWM preparation, idle, or an armed
+  transition. This closes the observed boot-high regression. Together with
+  the earlier powered M4 loss/recovery test, startup and reconnect both require
+  a valid arm-low observation before a later high transition can request arm.
 - [ ] Confirm UART4 DJI MSP DisplayPort and live throttle/battery updates.
 - [ ] Calibrate PC0 voltage and PC1 current against external instruments.
   The USB-only runs correctly reported `vbat_dV=0`, but observed
   `current_cA=793..820` is an uncalibrated offset and must not be accepted as
-  a physical current reading.
-- [ ] Scope PA8, PC9, PC8, and PB15 with ESC power disconnected.
+  a physical current reading. The flight baseline now uses the upstream
+  Betaflight default VBAT scale 110 (11.0 ratio), Foxeer's published current
+  scale 70, and repeated powered observations of 23.2-24.0 V. Fine calibration
+  remains open; firmware forces displayed `current_cA` to zero until the PC1
+  zero offset is calibrated while retaining raw `adc_i_mV` for that work.
+- [ ] Scope PA8, PC9, PC8, and PB15 with ESC power disconnected. This
+  electrical check was intentionally skipped for the current bring-up; do not
+  claim measured pulse width, frequency, idle level, or cross-timer phase.
 - [ ] Verify the active RC PWM protocol is 400 Hz with a 1000..2000 us pulse
-  range on all four outputs.
-- [ ] Verify PB15 is the intended active-high M4 waveform from `TIM1_CH3N`.
-- [ ] Verify Betaflight logical rear-right/front-right/rear-left/front-left maps
-  to Foxeer outputs M1/M2/M3/M4 before changing
-  `MOTOR_OUTPUT_ORDER_VERIFIED`.
-- [ ] Verify reset/boot and forced-off behavior produce no unintended pulse.
+  range on all four outputs. All four ESCs decoded the configured PWM output,
+  but exact timing remains unmeasured because the electrical check was
+  skipped.
+- [x] Functionally verify PB15's configured active-high `TIM1_CH3N` polarity.
+  The M4 image drove front-left normally through idle and capped throttle,
+  then stopped on disarm and RC loss. This validates the selected functional
+  polarity but is not an electrical waveform measurement.
+- [x] Verify Betaflight logical rear-right/front-right/rear-left/front-left maps
+  to Foxeer outputs M1/M2/M3/M4. Powered props-off PWM selection on 2026-07-22
+  confirmed M1 rear-right CW, M2 front-right CCW, M3 rear-left CCW, and M4
+  front-left CW. The retained logs and image hashes are:
+  `20260721_235448_rtt.log` / `15B4598653AB7315658CC186A8047908E87F2E50E01B81481174B7DCD70DBA1F`,
+  `20260721_235936_rtt.log` / `D82149A61BA74AA8204539B9D3FD851856A3584972D2C817C9C4008B10112E21`,
+  `20260722_000038_rtt.log` / `7CCB9A51AA39D6A47AE84D5BF728398C81DA42A62A3C42463F172D7C67846708`,
+  and `20260722_000213_rtt.log` /
+  `99FE33235FCAC50F62D8C8132CD253B2123FCF96D2C120F32C65A7F0EA84B745`.
+- [x] Run the capped equal-motor PWM image and verify all four outputs enter
+  idle together, respond together to a small throttle command, and stop on
+  explicit disarm. The 2026-07-22 powered props-off test passed by operator
+  observation using image SHA-256
+  `F84433707C03FC7E477981C6760189D920F507B2B8BB2A9C55A2C5DD41A1ABE9`.
+  `logs/terminal_embed/20260722_001849_rtt.log` records guarded arming, explicit
+  disarm, continued approximately 1.012 kHz IMU/DRDY progress with zero
+  rejected triggers, and no automatic arm observed at boot.
+- [x] Build and statically identify the first Foxeer DShot600 commissioning
+  candidate with `dshot bench_actuator_validation bench_equal_motors`. The
+  2026-07-22 release ELF has SHA-256
+  `2D3BC3824405D9FED247F4FF52BB266FD1ABC893A1A113854E9E9EFC7EDAB245`;
+  `DMA2_STREAM1/2/6/7` are bound at
+  `0x08004BD4/0x08004BF0/0x08004F42/0x08004F5E`.
+- [x] With ESC power disconnected, run the Foxeer DShot600 candidate for at
+  least 20 seconds. Require synchronized lane counters, one or fewer frame
+  sets in flight, and zero busy, expiry, timeout, fault, and spurious-IRQ
+  warnings. Exact electrical timing remains unmeasured because the analyzer
+  checkpoint was skipped. The 2026-07-22 run in
+  `logs/terminal_embed/20260722_002358_rtt.log` reached 25,000 starts over 50
+  seconds. Every report contained values `[0, 0, 0, 0]`, completed exactly one
+  frame behind started, and four identical lane counters; busy, expiry,
+  timeout, and fault counters remained zero. No spurious IRQ warning appeared.
+  IMU DRDY advanced by 2,024 samples per two-second interval, apart from one
+  explainable 2,025 interval, with zero rejected triggers.
+- [x] Diagnose the first powered Foxeer DShot arming attempt. Although the
+  shared timer-DMA backend was active, Foxeer's app-local `EnterIdle` branch
+  still executed the legacy 2.5-second PWM-low plus 500 ms idle preparation.
+  The operator observed all four motors spin during that inappropriate
+  pre-armed idle interval and stopped the test. This was an app-shell
+  orchestration defect, not a DShot transport or safety-authority bypass.
+- [x] Split Foxeer actuator preparation by protocol, matching FCU3's DShot
+  branch structure. PWM retains its existing low/idle holds. DShot now emits
+  stop frames for a guarded 100 ms safety-recheck dwell, reports preparation
+  complete while all outputs remain stopped, and permits idle only after the
+  safety master sets `SYSTEM ARMED`. The corrected DShot candidate SHA-256 is
+  `06AB74FCA6678AA2116297DA8CDFC19DD2F6677004D077DC2A4B6853132D69A6`.
+  Its ELF contains `Attempting DShot safety arming`, `Preparing DShot
+  actuators`, and `DShot pre-arm complete; motor outputs remain stopped`, with
+  none of the PWM arming/idle identities. The default PWM ELF retains the PWM
+  identities and none of the DShot preparation identities.
+- [x] Exercise complete arm/disarm, throttle, and RC-loss transitions on the
+  corrected DShot image. Receiver and ESC power cannot be separated on this
+  installation, so the ordering regression was completed powered with
+  propellers removed after the corrected-image stop-only soak in
+  `logs/terminal_embed/20260722_004059_rtt.log` reached 20,000 starts over 40
+  seconds with four zeros, synchronized lanes, and zero backend errors, but
+  no RC link. The powered run in `20260722_004429_rtt.log` then showed the
+  exact DShot 100 ms stop preparation before `SYSTEM ARMED`; values remained
+  zero before that transition, idled at `112`, followed equal throttle through
+  `172`, `244`, and `138`, and returned to four zeros on explicit disarm.
+  A second arm held `112` until RC frame timeout, after which the next DShot
+  report contained four zeros. Restoring the link with arm high did not rearm;
+  a later explicit low-to-high request completed the same DShot preparation.
+  All lane counters stayed synchronized and busy, expiry, timeout, and fault
+  counts remained zero through 59,000 starts. Short repeats
+  `20260722_004643_rtt.log` and `20260722_004712_rtt.log` additionally captured
+  throttle value `297`, idle `112`, explicit disarm to zero, and no automatic
+  arm after flash/boot. Operator observation confirmed all motors idled only
+  once armed, followed throttle, and stopped on disarm and RC loss. No PWM
+  preparation message appeared.
+- [x] Cross-check and build the observational Foxeer PA10 BLHeli telemetry
+  candidate against the FCU3 golden app. Both use the shared bounded ESC
+  manager at 2 ms, PA10 / USART1 RX with DMA2 Stream 5 Channel 4, and a
+  sequenced request/ack path whose only request consumer is the safety-owned
+  DShot service. Foxeer intentionally does not use eRPM to qualify arming yet.
+  The first 2026-07-22 release ELF SHA-256 was
+  `8DFAF9EC34D22F91D2410D93FB2DA285A13557A37C389E486C05968843188C41`.
+- [x] Diagnose the first powered Foxeer telemetry run. Log
+  `logs/terminal_embed/20260722_005707_rtt.log` proved PA10 received 14,498
+  CRC-valid frames with no CRC failure or discarded byte and preserved clean
+  DShot/motor safety behavior. It did not prove request association:
+  `queued/started` remained `0/0` while mismatched acknowledgements reached
+  14,499 and unsolicited frames reached 14,498. Foxeer had put the
+  state-changing `mark_request_queued` call inside `debug_assert!`, so release
+  compilation removed it and the actuator emitted a request every 2 ms. The
+  call now always executes, matching FCU3; only its result is debug-asserted.
+  The corrected release ELF SHA-256 is
+  `CCD4B30A5CA900E28BF1C07D75E63E59353206EE870427A32A93787D74DBD16F`.
+- [x] With propellers removed, power the FC, receiver, and ESC bank together
+  and validate observational PA10 telemetry. Require a valid sample from all
+  four explicitly labelled physical/logical outputs, zero eRPM while stopped,
+  nonzero eRPM at armed idle, rising eRPM with throttle, and return to zero
+  after disarm. Require no latched manager fault, acknowledgement/response
+  timeout, mismatched acknowledgement, or unsolicited response; CRC/discard
+  counters must remain stable. The corrected candidate passed in
+  `logs/terminal_embed/20260722_010421_rtt.log`: all four outputs reported zero
+  stopped, approximately 6,600-7,200 eRPM at DShot idle value `112`, and
+  approximately 10,100-10,700 eRPM at throttle value `133`. Disarming while
+  throttle was raised selected four zero DShot values and all four eRPM
+  readings returned to zero by the next report. `queued/started/valid` reached
+  `2450/2450/2450`; manager fault, acknowledgement timeout, response timeout,
+  mismatched acknowledgement, unsolicited frame, CRC failure, discarded byte,
+  and every DShot backend fault counter remained zero.
+- [x] Promote Foxeer DShot arming to the FCU3 golden eRPM-qualified policy.
+  Feature `dshot` now includes `esc_telemetry`; after the guarded 100 ms stop
+  dwell, the actuator owner applies idle only under its temporary permit and
+  requires three consecutive fresh 3,000-10,000 eRPM observations from every
+  physical output after a 250 ms spin-up grace. The deadline is 1.2 seconds
+  and maximum sample age is 200 ms. The normal candidate SHA-256 is
+  `28C5E4BDC4C9B51998385A434983D83035B5FAE8136E8437E8B07ABF9A8A2B70`;
+  the physical-output-1/logical-M1 zero-eRPM injection candidate is
+  `9A7A14751747969CDE80265AD2ADA7AB0464A423A1D4A64DC1DE6CED9E8A9073`.
+- [x] With propellers removed, wait at least five seconds after boot, request
+  arm at zero throttle, and verify the positive candidate reports the guarded
+  stop dwell, temporary idle, four `[3, 3, 3, 3]` qualification counts, then
+  and only then `SYSTEM ARMED`. Candidate
+  `28C5E4BDC4C9B51998385A434983D83035B5FAE8136E8437E8B07ABF9A8A2B70`
+  passed in `logs/terminal_embed/20260722_012353_rtt.log`: all four outputs
+  qualified before the armed transition, idle telemetry remained in range,
+  explicit disarm selected four zeros, and every DShot/telemetry fault counter
+  remained zero.
+- [x] Run the injected candidate with propellers removed. Physical output 1 /
+  logical M1 rear-right may physically spin, but its qualification evidence is
+  forced to zero. Require a 1.2-second timeout naming that output, four stop
+  values, no `SYSTEM ARMED`, and a fresh arm-low observation before any later
+  arm request. Candidate
+  `9A7A14751747969CDE80265AD2ADA7AB0464A423A1D4A64DC1DE6CED9E8A9073`
+  passed twice in `logs/terminal_embed/20260722_012445_rtt.log`: qualification
+  counts were `[0, 12, 12, 12]` and `[0, 13, 12, 12]`, output 1 / logical M1
+  was named, all outputs returned to zero, and `SYSTEM ARMED` never appeared.
+  Normal diagnostic telemetry still observed M1 physically turning, proving
+  that the injection changed evidence rather than motor authority.
+- [ ] Add deterministic qualification-interruption testing rather than asking
+  an operator to break RC, raise throttle, or disarm inside the 1.2-second
+  qualification window. Prefer host-controlled/fault-injected guard revocation
+  with a timestamped expected stop deadline. Existing RC-loss tests establish
+  live stop/rearm behavior, and the injected eRPM test establishes the
+  qualification failure stop path, but their composition is not a direct
+  measurement of guard revocation during qualification.
+- [x] Functionally verify reset/boot with arm held high cannot automatically
+  arm the system. The original 2026-07-22 M3 test failed, but the tightened
+  candidate repeat in `20260722_001436_rtt.log` remained disarmed throughout
+  the observation window. Exact reset-time pad behavior remains unmeasured
+  because the electrical analyzer test was intentionally skipped.
 - [ ] Keep PA13/PA14 available for SWD; do not depend on the shared status LEDs.
-- [ ] Update the BSP verification constants only from captured evidence and
-  review that change separately before any powered actuator test.
+- [x] Update the BSP verification constants only from captured evidence. The
+  flight profile now combines target-verified IMU identity/orientation,
+  motor order, functional M4 polarity, DShot/eRPM behavior, the documented ADC
+  baseline, and explicit deferred-fine-calibration flags. Review the resulting
+  diff again before the final powered normal-mixer test.
+- [x] Add a shared pre-arm IMU health policy before enabling the Foxeer flight
+  profile. Both FCU3 and Foxeer now require an IMU sample, completed gyro-bias
+  calibration, and fresh data before actuator preparation, during guarded
+  preparation, and before the final armed transition. Stale samples cannot
+  advance bias calibration. Host tests cover unavailable, uncalibrated, and
+  stale rejection.
+- [x] Promote DShot600 plus PA10 eRPM qualification to the Foxeer default motor
+  protocol. RC PWM remains an explicit no-default-features fallback, and the
+  smoke preset adds a separate compile-time actuator lockout.
+- [ ] Final normal-mixer props-off flight handoff: boot still for bias
+  calibration, confirm the healthy IMU gate permits arm, exercise low roll,
+  pitch, yaw, and throttle commands, confirm live OSD voltage/throttle/armed
+  state while `flash_blackbox` records, then verify explicit disarm and RC loss
+  select four stop values. Do not install propellers until this passes and its
+  exact ELF hash/log are retained. The pre-bench `flash_blackbox` release ELF is
+  SHA-256
+  `02ECFAF2EC9544802323EBB4219A8B0D2DC58B8CADCFFE4FC82E989DBA4A815C`.
+- [ ] Immediately before the normal handoff, build `bench_prearm_imu_stale`,
+  wait for real gyro-bias calibration, and request arm at zero throttle. Require
+  the explicit forced-stale banner and `Arming aborted: IMU sample is stale`,
+  with no temporary idle or `SYSTEM ARMED`. Reflash without the injection before
+  any further motor test. The pre-bench injection release ELF is SHA-256
+  `A61B1A8C90266BA03CC24BBC219F1C317FBDF7388D1FF103119ED6A25468B9C0`.

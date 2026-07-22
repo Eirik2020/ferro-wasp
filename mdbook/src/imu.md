@@ -12,7 +12,7 @@ FerroWasp currently supports MPU6500 and ICM42688-P devices over SPI1.
 
 An unsupported identity, failed probe, failed reset, or configuration
 read-back failure leaves Foxeer sampling disabled. The heartbeat and unrelated
-bring-up services continue, and flight arming remains inhibited.
+bring-up services continue, while the runtime IMU health gate rejects arming.
 
 ## Driver Behavior
 
@@ -82,6 +82,17 @@ their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.
 Raw values remain in sensor-axis order. Each BSP supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.
 
+The Foxeer-only `imu_orientation_rtt` feature adds one low-rate, coherent
+sensor-frame snapshot to the existing heartbeat. It reports acceleration in
+mg, uncorrected gyro in tenths of a degree per second, and temperature in
+tenths of a degree Celsius without changing the USB protocol or taking a
+shared RTIC lock. A second line reports the BSP-mapped drone-frame gravity
+vector and gyro rates for direct implementation validation:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features imu_orientation_rtt --probe-speed-khz 1800 --connect-under-reset
+```
+
 FCU3's mapping and gyro bias behavior have bench evidence. Foxeer's fitted
 sensor identity, package orientation, body-axis map, and signs must be checked
 on the physical board before its arming inhibit can be removed.
@@ -101,8 +112,14 @@ IMU viewer.
 3. Confirm the PC4/EXTI4 delta is approximately 2,000 per two-second heartbeat,
    sequence numbers advance, rejected-trigger counts remain zero or explainably
    bounded, and no SPI timeout or invalid-frame warning appears.
-4. Check stationary acceleration magnitude, gyro noise, and temperature.
-5. Move one physical axis at a time and record raw signs.
+4. Enable `imu_orientation_rtt` and check stationary acceleration magnitude,
+   gyro noise, and temperature.
+5. Hold the board level, then move it slowly nose-up, right-side-down, and
+   clockwise in yaw. Sustain each motion for at least four seconds so a
+   two-second orientation snapshot lands during it, then hold and pause before
+   the next motion. Record both sensor-frame axes/signs and the mapped body
+   response. Positive body roll lowers the right side, positive pitch raises
+   the nose, and positive yaw turns the nose right viewed from above.
 6. Run a five-minute sample/heartbeat soak.
 7. Measure PC4 data-ready polarity, pulse width, cadence, and edge-to-DMA-start
    latency with a logic analyzer.

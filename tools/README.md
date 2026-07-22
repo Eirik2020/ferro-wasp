@@ -17,7 +17,8 @@ python tools\terminal_embed.py
 ```
 
 The default board is FerroWasp FCU3. After an SWD connection has been fitted to
-the Foxeer F405 V2, select its isolated app explicitly:
+the Foxeer F405 V2, select its isolated app explicitly. The Foxeer app now also
+defaults to its normal DShot600/eRPM-qualified flight path:
 
 ```powershell
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
@@ -26,6 +27,35 @@ python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 This builds `apps/foxeer-f405-v2`, flashes its own
 `FerroWaspFoxeerF405V2` ELF through `probe-rs`, and decodes RTT. PA13/SWDIO and
 PA14/SWCLK are reserved by the Foxeer BSP and are not configured as LEDs.
+The host prints explicit milestones so a quiet or slow probe cannot be mistaken
+for a stalled command:
+
+```text
+HOST: === FLASH STARTED: connecting, erasing, and programming ===
+HOST: === FLASH ACTIVE: erase/program transfer observed ===
+HOST: === FLASH PROGRAMMED: waiting for firmware boot/RTT ===
+HOST: === FLASH SUCCEEDED: firmware boot and RTT observed ===
+```
+
+An attach/program failure prints `HOST: === FLASH FAILED: ... ===` and returns
+a nonzero exit code. `FLASH PROGRAMMED` alone is not a complete success; wait
+for `FLASH SUCCEEDED`, which proves the programmed firmware booted far enough
+to produce RTT.
+
+For the first retrofitted SWD connection, use the self-terminating smoke test:
+
+```powershell
+python tools\terminal_embed.py --foxeer-smoke
+```
+
+This uses the normal arming-inhibited release image, waits through programming,
+then listens for 14 seconds after firmware boot. It checks boot/RTT/IMU/EXTI
+evidence, prints a PASS/FAIL summary, and interrupts `probe-rs` cleanly. It does
+not enable a motor commissioning feature. The command automatically adds the
+Foxeer `imu_transport_rtt` diagnostic and `smoke_actuator_inhibit` features, so
+the flight-capable default remains compile-time actuator-locked for this test.
+Routine Foxeer builds omit periodic IMU raw/DRDY lines to keep RTT available
+for operational evidence.
 
 You can also run `python terminal_embed.py` from inside the `tools` directory.
 
@@ -520,15 +550,27 @@ After `flash_blackbox` has recorded a props-off armed/disarmed session,
 download its CRC-protected raw pages and analyze them with the existing tool:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "flash_blackbox bench_actuator_validation bench_equal_motors"
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_blackbox --probe-speed-khz 1800 --connect-under-reset
+python tools\ferrowasp_storage.py --port COM7 list
+python tools\ferrowasp_storage.py --port COM7 erase --confirm
+python tools\ferrowasp_storage.py --port COM7 list
+# Reboot or reflash the same image after erase, then record the armed session.
 python tools\ferrowasp_storage.py --port COM7 read --output logs\foxeer-props-off.fwbb
-python tools\blackbox_analyzer.py logs\foxeer-props-off.fwbb --mode rest --csv logs\foxeer-props-off.csv
+python tools\blackbox_analyzer.py logs\foxeer-props-off.fwbb --mode auto --csv logs\foxeer-props-off.csv
 ```
 
 `erase --confirm` erases every sector in the log partition, not the
 configuration slots or scratch sector. Storage reads and all writes are
 rejected while armed; in-progress erase/config/self-test maintenance is
 aborted if arming begins. The CLI has no actuator or safety authority.
+The initial erase must end with `used pages: 0` and `writable: True`. Rebooting
+afterward resets the expected disarmed-record drops accumulated while flash
+maintenance was busy, so record-drop evidence from the actual capture starts
+clean.
+For `.fwbb` input the analyzer rejects every invalid or truncated page and
+prints the CRC-valid page count, record count, flight IDs, page-sequence
+endpoints, partial-page count, and final-page record count before its normal
+BB2 analysis.
 
 ## Flight Reports
 

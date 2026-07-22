@@ -103,6 +103,29 @@ impl GyroBiasCalibrator {
             bias_raw: self.bias_raw,
         }
     }
+
+    /// Advances calibration only for a newly received IMU sample.
+    ///
+    /// Repeated samples may still be bias-corrected for observation, but they
+    /// must never count toward the stationary startup calibration window.
+    pub fn update_if_fresh(&mut self, armed: bool, fresh: bool, raw: [i32; 3]) -> GyroBiasUpdate {
+        if fresh {
+            return self.update(armed, raw);
+        }
+
+        let mut corrected_raw = raw;
+        if self.ready {
+            for (axis, value) in corrected_raw.iter_mut().enumerate() {
+                *value -= self.bias_raw[axis];
+            }
+        }
+
+        GyroBiasUpdate {
+            corrected_raw,
+            newly_calibrated: false,
+            bias_raw: self.bias_raw,
+        }
+    }
 }
 
 /// Maps logical mixer motors to physical actuator outputs.
@@ -1267,6 +1290,29 @@ mod tests {
             calibrator.update(true, [20, -10, 40]).corrected_raw,
             [6, 6, 4]
         );
+    }
+
+    #[test]
+    fn stale_samples_do_not_advance_gyro_bias_calibration() {
+        let mut calibrator = GyroBiasCalibrator::new(2, 1000);
+
+        for _ in 0..10 {
+            let update = calibrator.update_if_fresh(false, false, [10, -20, 30]);
+            assert!(!update.newly_calibrated);
+        }
+        assert!(!calibrator.ready());
+
+        assert!(
+            !calibrator
+                .update_if_fresh(false, true, [10, -20, 30])
+                .newly_calibrated
+        );
+        assert!(
+            calibrator
+                .update_if_fresh(false, true, [12, -18, 32])
+                .newly_calibrated
+        );
+        assert_eq!(calibrator.bias_raw(), [11, -19, 31]);
     }
 
     #[test]

@@ -62,27 +62,22 @@ approval.
 
 ## Priority 2: Run FerroWasp on Foxeer F405 V2
 
-The Foxeer image currently remains compile-time arming-inhibited. Existing
-evidence covers ROM-DFU programming, USB enumeration, ICM42688-P selection, and
-a five-minute read-only status soak.
+The Foxeer image is now a default-DShot flight candidate. Evidence covers
+ROM-DFU/SWD, USB, ICM42688-P/EXTI, orientation, RC interlocks, motor
+order/direction, eRPM-qualified arming, and onboard blackbox recording.
 
 Next checks:
 
-1. Build, flash, and retain a clean boot/status log.
-2. Verify IMU orientation and physical response on the actual board.
-3. Target-verify the implemented PC4/EXTI4 data-ready trigger: interrupt
-   polarity, rate, timestamps, rejected-event accounting, and stale-sample
-   behavior on the fitted IMU.
-4. Calibrate ADC voltage and current.
-5. Measure the four PWM outputs, especially the TIM1_CH3N M4 polarity.
-6. With propellers removed, identify motor order/direction and verify every
-   stick and hand-motion correction sign.
-7. Review the collected evidence before changing the arming inhibit.
+1. Run the normal uncapped mixer with propellers removed and retain its hash/log.
+2. Confirm the healthy/calibrated/fresh IMU pre-arm gate on target.
+3. Confirm low roll/pitch/yaw/throttle mixing and immediate stop on disarm/RC loss.
+4. Confirm live UART4 OSD while onboard blackbox logging is active.
+5. Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.
 
 The Foxeer app provides an explicit `bench_actuator_validation` commissioning
-gate for steps 4 and 5. It only compiles with a capped equal-motor, physical
-motor, or logical motor bench mode; the ordinary image remains inhibited and
-normal PID/mixer flight output cannot be enabled by this gate. RC qualification,
+gate for repeated motor checks. It only compiles with a capped equal-motor,
+physical-motor, or logical-motor bench mode and cannot select normal PID/mixer
+flight output. RC qualification,
 arming guards, command freshness, failsafe/disarm handling, and actuator
 ownership remain active. The arming sequence briefly applies PWM idle to all
 four outputs, so the mode is props-off only even when one motor is selected.

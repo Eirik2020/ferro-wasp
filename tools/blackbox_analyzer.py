@@ -50,6 +50,7 @@ class BlackboxSample:
     pid: tuple[int, int, int]
     throttle: int
     motors: tuple[int, int, int, int]
+    timestamp_us: int | None = None
 
     @property
     def armed(self) -> bool:
@@ -85,6 +86,28 @@ class SequenceStats:
     imu_samples_per_control_tick: float | None
     estimated_imu_rate_hz: float | None
     contiguous_imu_delta_counts: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
+class FlashLogStats:
+    page_count: int
+    record_count: int
+    flight_ids: tuple[int, ...]
+    first_page_sequence: int | None
+    last_page_sequence: int | None
+    partial_page_count: int
+    final_page_records: int | None
+
+
+@dataclass(frozen=True)
+class TimestampStats:
+    contiguous_pairs: int
+    mean_interval_us: float
+    std_interval_us: float
+    min_interval_us: int
+    max_interval_us: int
+    p99_abs_jitter_us: int
+    intervals_over_3000_us: int
 
 
 def parse_args() -> argparse.Namespace:
@@ -218,25 +241,56 @@ def samples_from_flash_file(path: Path) -> list[BlackboxSample]:
     return samples_from_flash_bytes(path.read_bytes())
 
 
-def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
-    samples: list[BlackboxSample] = []
+def validated_flash_pages(data: bytes) -> list[tuple[bytes, int, int, int]]:
     if len(data) % FLASH_PAGE_LEN:
         page_index = len(data) // FLASH_PAGE_LEN
         raise OSError(
             f"truncated flash page {page_index}: {len(data) % FLASH_PAGE_LEN} bytes"
         )
+    pages: list[tuple[bytes, int, int, int]] = []
     for page_start in range(0, len(data), FLASH_PAGE_LEN):
+        page_index = page_start // FLASH_PAGE_LEN
         page = data[page_start : page_start + FLASH_PAGE_LEN]
         if page[FLASH_PAGE_DATA_LEN : FLASH_PAGE_DATA_LEN + 2] != b"FB":
-            continue
+            raise OSError(f"invalid flash page magic at page {page_index}")
         if page[FLASH_PAGE_DATA_LEN + 2] != 1:
-            continue
+            raise OSError(f"unsupported flash page version at page {page_index}")
         record_count = page[FLASH_PAGE_DATA_LEN + 3]
         if record_count > FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN:
-            continue
+            raise OSError(
+                f"invalid flash record count {record_count} at page {page_index}"
+            )
         expected_crc = int.from_bytes(page[-4:], "little")
         if binascii.crc32(page[:-4]) != expected_crc:
-            continue
+            raise OSError(f"flash page CRC mismatch at page {page_index}")
+        flight_id = int.from_bytes(
+            page[FLASH_PAGE_DATA_LEN + 4 : FLASH_PAGE_DATA_LEN + 8], "little"
+        )
+        page_sequence = int.from_bytes(
+            page[FLASH_PAGE_DATA_LEN + 8 : FLASH_PAGE_DATA_LEN + 12], "little"
+        )
+        pages.append((page, flight_id, page_sequence, record_count))
+    return pages
+
+
+def flash_log_stats(data: bytes) -> FlashLogStats:
+    pages = validated_flash_pages(data)
+    return FlashLogStats(
+        page_count=len(pages),
+        record_count=sum(page[3] for page in pages),
+        flight_ids=tuple(sorted({page[1] for page in pages})),
+        first_page_sequence=pages[0][2] if pages else None,
+        last_page_sequence=pages[-1][2] if pages else None,
+        partial_page_count=sum(
+            page[3] < FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN for page in pages
+        ),
+        final_page_records=pages[-1][3] if pages else None,
+    )
+
+
+def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
+    samples: list[BlackboxSample] = []
+    for page, _, _, record_count in validated_flash_pages(data):
         for record_index in range(record_count):
             start = record_index * FLASH_RECORD_LEN
             values = FLASH_RECORD_STRUCT.unpack_from(page, start)
@@ -252,6 +306,7 @@ def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
                     pid=tuple(values[13:16]),
                     throttle=values[16],
                     motors=tuple(values[17:21]),
+                    timestamp_us=values[0],
                 )
             )
     return samples
@@ -270,6 +325,31 @@ def trim_samples_by_seconds(
         )
     end_index = len(samples) - end_count if end_count else len(samples)
     return samples[start_count:end_index], start_count, end_count
+
+
+def timestamp_stats(samples: list[BlackboxSample]) -> TimestampStats | None:
+    intervals: list[int] = []
+    for previous, current in zip(samples, samples[1:]):
+        if previous.timestamp_us is None or current.timestamp_us is None:
+            continue
+        if current.seq - previous.seq != 1:
+            continue
+        intervals.append((current.timestamp_us - previous.timestamp_us) & 0xFFFF_FFFF)
+
+    if not intervals:
+        return None
+
+    absolute_jitter = sorted(abs(interval - 2500) for interval in intervals)
+    p99_index = min(len(absolute_jitter) - 1, math.ceil(len(absolute_jitter) * 0.99) - 1)
+    return TimestampStats(
+        contiguous_pairs=len(intervals),
+        mean_interval_us=mean(intervals),
+        std_interval_us=pstdev(intervals),
+        min_interval_us=min(intervals),
+        max_interval_us=max(intervals),
+        p99_abs_jitter_us=absolute_jitter[p99_index],
+        intervals_over_3000_us=sum(interval > 3000 for interval in intervals),
+    )
 
 
 def u32_forward_delta(previous: int, current: int) -> int:
@@ -562,6 +642,7 @@ def write_csv(path: Path, samples: list[BlackboxSample]) -> None:
         writer = csv.writer(handle)
         writer.writerow(
             [
+                "timestamp_us",
                 "seq",
                 "imu_seq",
                 "flags",
@@ -590,6 +671,7 @@ def write_csv(path: Path, samples: list[BlackboxSample]) -> None:
             raw = sample.raw_dps or ("", "", "")
             writer.writerow(
                 [
+                    sample.timestamp_us if sample.timestamp_us is not None else "",
                     sample.seq,
                     sample.imu_seq,
                     sample.flags,
@@ -620,12 +702,18 @@ def main() -> int:
     args = parse_args()
     samples: list[BlackboxSample] = []
     sources: list[str] = []
+    flash_summaries: list[FlashLogStats] = []
 
     try:
         paths = args.log_files or [latest_log_file()]
         for path in paths:
             resolved = path if path.is_absolute() else REPO_ROOT / path
-            samples.extend(samples_from_file(resolved))
+            if resolved.suffix.lower() == ".fwbb":
+                data = resolved.read_bytes()
+                flash_summaries.append(flash_log_stats(data))
+                samples.extend(samples_from_flash_bytes(data))
+            else:
+                samples.extend(samples_from_file(resolved))
             sources.append(str(resolved))
     except (FileNotFoundError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
@@ -656,12 +744,31 @@ def main() -> int:
 
     print()
     print(f"Source: {', '.join(sources)}")
+    for stats in flash_summaries:
+        flight_ids = ",".join(str(value) for value in stats.flight_ids) or "none"
+        print(
+            f"Flash pages: {stats.page_count} CRC-valid; records: {stats.record_count}; "
+            f"flight IDs: {flight_ids}; page sequence: "
+            f"{stats.first_page_sequence}..{stats.last_page_sequence}; "
+            f"partial pages: {stats.partial_page_count}; "
+            f"final page: {stats.final_page_records}/{FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN} records"
+        )
     print(f"Format: BB{max(sample.version for sample in samples)} blackbox")
     print(f"Samples: {len(samples)}  seq: {first_seq}..{last_seq}  estimated rate: {sample_rate_hz:.1f} Hz")
     if trimmed_start or trimmed_end:
         print(f"Trimmed samples: start={trimmed_start}, end={trimmed_end}")
     print(f"Armed samples: {sum(1 for sample in samples if sample.armed)}")
     print(f"Fresh IMU samples: {sum(1 for sample in samples if sample.imu_fresh)}")
+    timing = timestamp_stats(samples)
+    if timing is not None:
+        print(
+            "Control timestamps: "
+            f"pairs={timing.contiguous_pairs} mean={timing.mean_interval_us:.1f} us "
+            f"std={timing.std_interval_us:.1f} us min/max="
+            f"{timing.min_interval_us}/{timing.max_interval_us} us "
+            f"p99 |jitter|={timing.p99_abs_jitter_us} us "
+            f">3000 us={timing.intervals_over_3000_us}"
+        )
     if not any(sample.raw_dps is not None for sample in samples):
         print("Raw gyro unavailable. Reflash BB2 firmware for raw-vs-filtered analysis.")
     print()

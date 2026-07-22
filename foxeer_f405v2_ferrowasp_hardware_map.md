@@ -208,7 +208,16 @@ ArduPilot uses approximate board-level scaling values:
 - Battery divider scale: approximately 11.0
 - Current scale: approximately 142.9 in ArduPilot's units
 
-Betaflight uses a default current-meter scale of 70. These values use different conventions and must not be copied directly into FerroWasp without calibration.
+The upstream [`FOXEERF405V2` Betaflight target](https://support.betaflight.com/targets/FOXEERF405V2)
+does not override the default
+VBAT scale 110, corresponding to FerroWasp's provisional 11.0 divider ratio,
+and explicitly selects current-meter scale 70. [Foxeer also publishes current
+scale 70](https://www.foxeer.com/foxeer-f405-v2-plug-fc-reaper-55a-esc-8s-stack-video-switcher-servo-borameter-g-578)
+for the bundled Reaper 55A ESC. Powered FerroWasp logs repeatedly
+reported a plausible 23.2-24.0 V pack with the 11.0 baseline. The PC1 zero
+offset is not calibrated, so current display remains disabled and raw
+millivolts are retained for later calibration. ArduPilot's current value uses a
+different convention and is not copied into FerroWasp.
 
 Recommended approach:
 
@@ -731,6 +740,21 @@ These names use different coordinate and sensor-driver conventions.
 
 Do not convert them by name alone.
 
+Physical captures on 2026-07-21 resolved the driver-level convention for the
+fitted ICM42688-P. FerroWasp body roll, pitch, and yaw map from sensor gyro axes
+as `[-Y, -X, -Z]`, represented by
+`FrameRotation::new([1, 0, 2], [-1, -1, -1])`. Level sensor specific force is
+approximately `[0, 0, +1g]`; the estimator consumes the negative of the mapped
+specific-force vector as drone-frame gravity. Retained evidence is
+`logs/terminal_embed/20260721_232959_rtt.log` plus the explicit right-side-down
+capture `logs/terminal_embed/20260721_233738_rtt.log`.
+The mapped implementation then passed in
+`logs/terminal_embed/20260721_234528_rtt.log`: level gravity remained
+approximately `[0, 0, +1g]`, right-side-down and nose-up produced positive body
+roll and pitch respectively, nose-right yaw was positive, and every return had
+the expected opposite rate sign. The fitted sensor orientation is therefore
+target-verified; PC4 pulse shape remains a separate electrical measurement.
+
 Required bench tests:
 
 1. Stationary board:
@@ -859,8 +883,8 @@ Defer initially:
 
 - [ ] Confirm MCU marking
 - [ ] Confirm HSE frequency
-- [ ] Confirm fitted IMU
-- [ ] Confirm flash JEDEC ID
+- [x] Confirm fitted IMU: ICM42688-P (`WHO_AM_I=0x47`, verified 2026-07-21)
+- [x] Confirm flash JEDEC ID: `ef:40:18`, 16 MiB (verified 2026-07-21)
 - [ ] Confirm barometer identity
 - [ ] Confirm OSD identity
 - [ ] Confirm buzzer polarity
@@ -871,22 +895,24 @@ Defer initially:
 
 ### Pin mux
 
-- [ ] PA5/PA6/PA7 operate as SPI1
-- [ ] PC4 generates EXTI4
-- [ ] PB13/PC2/PC3 operate as SPI2
+- [x] PA5/PA6/PA7 operate as SPI1 (ICM42688-P sampling verified 2026-07-21)
+- [x] PC4 generates EXTI4 (approximately 1.012 kHz, verified 2026-07-21)
+- [x] PB13/PC2/PC3 operate as SPI2 (JEDEC/read-only scan verified 2026-07-21)
 - [ ] PB12 remains high when idle and selects only the onboard flash
 - [ ] PB3/PB4/PB5 operate as SPI3
 - [ ] PB8/PB9 operate as I2C1
-- [ ] PA11/PA12 operate as USB FS
-- [ ] SWD remains functional
+- [x] PA11/PA12 operate as USB FS (CDC diagnostics/storage CLI verified 2026-07-21)
+- [x] SWD remains functional (PA13/PA14 plus NRST, verified 2026-07-21)
 
 ### Motor outputs
 
-- [ ] M1 PA8 produces expected waveform
-- [ ] M2 PC9 produces expected waveform
-- [ ] M3 PC8 produces expected waveform
-- [ ] M4 PB15 produces expected waveform
-- [ ] M4 uses CH3N correctly
+- [x] M1 PA8 functionally drives rear-right CW (powered props-off PWM, 2026-07-22)
+- [x] M2 PC9 functionally drives front-right CCW (powered props-off PWM, 2026-07-22)
+- [x] M3 PC8 functionally drives rear-left CCW (powered props-off PWM, 2026-07-22)
+- [x] M4 PB15 functionally drives front-left CW (powered props-off PWM, 2026-07-22)
+- [x] M4 uses CH3N with a functionally correct polarity
+- [ ] Capture exact M1-M4 electrical waveform timing and idle levels (analyzer
+  check intentionally skipped during current bring-up)
 - [ ] Motors remain inactive during reset
 - [ ] Motors remain inactive during panic
 - [ ] Motors remain inactive before arming

@@ -8,12 +8,11 @@ be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
 - Prioritize the minimum safe flight path: RC input, IMU sampling, arming/disarming, rate loop, mixer, safety-gated motor output, and basic bench/flight telemetry.
 - Defer non-essential expansion until the MVP flies predictably: broad protocol support, configurator polish, board generator work, and advanced companion modules.
 
-## Current Work Order - 2026-07-20
+## Current Work Order - 2026-07-22
 
 1. Prepare a sanitized, accurate public source repository and pass every
    supported target/CI check.
-2. Bring up FerroWasp on Foxeer F405 V2 with arming inhibited until its physical
-   verification gates pass.
+2. Complete the Foxeer F405 V2 normal-mixer/OSD props-off flight handoff.
 3. Add a reproducible WSL/Docker development environment.
 4. Resume FCU3 tuning with the isolated pitch P `0.25 -> 0.30` experiment.
 
@@ -33,10 +32,9 @@ be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
 
 - Independent actuator-deadline detection for a total loss of future motor
   commands is not yet implemented.
-- IMU initialization, gyro-bias calibration, and freshness are not yet pre-arm
-  prerequisites. The first post-arm stale-IMU check requests disarm, but the
-  intervening armed transition remains an open gap. ADC/OSD freshness policy
-  also remains prototype-level.
+- IMU initialization, gyro-bias calibration, and freshness are pre-arm
+  prerequisites; negative target fault-injection evidence remains open.
+  ADC/OSD freshness policy also remains prototype-level.
 - DShot waveform timing, jitter, M4 polarity margin, and TIM1/TIM8 phase still
   require logic-analyzer evidence.
 

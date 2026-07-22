@@ -4,14 +4,15 @@
 #![no_main]
 #![no_std]
 
-#[cfg(all(feature = "dshot", not(feature = "bench_actuator_validation")))]
-compile_error!("Foxeer DShot requires the props-off `bench_actuator_validation` gate.");
-#[cfg(all(feature = "dshot", not(feature = "bench_equal_motors")))]
-compile_error!("Foxeer DShot commissioning requires the capped `bench_equal_motors` gate.");
 #[cfg(all(feature = "dshot", feature = "pwm_cal"))]
 compile_error!("Foxeer DShot cannot be combined with PWM calibration.");
 #[cfg(all(feature = "esc_telemetry", not(feature = "dshot")))]
 compile_error!("Foxeer ESC telemetry requires the DShot actuator service.");
+#[cfg(all(
+    feature = "bench_dshot_idle_output1_not_running",
+    not(feature = "dshot")
+))]
+compile_error!("Foxeer idle-eRPM fault injection requires the DShot actuator service.");
 #[cfg(all(
     feature = "dshot",
     any(
@@ -209,6 +210,14 @@ type EscAckProducer = ();
 type EscAckConsumer = esc::EscAckConsumer;
 #[cfg(not(feature = "esc_telemetry"))]
 type EscAckConsumer = ();
+#[cfg(feature = "esc_telemetry")]
+type EscTelemetryUpdateProducer = esc::EscTelemetryUpdateProducer;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscTelemetryUpdateProducer = ();
+#[cfg(feature = "esc_telemetry")]
+type EscTelemetryUpdateConsumer = esc::EscTelemetryUpdateConsumer;
+#[cfg(not(feature = "esc_telemetry"))]
+type EscTelemetryUpdateConsumer = ();
 
 type AdcTransfer = board::aliases::Adc1ObservationTransfer;
 type ControlScheduler = board::aliases::ControlScheduler;
@@ -262,10 +271,25 @@ type FlashResponseConsumer = ();
 
 use board::Spi1ImuKind;
 use board::profiles::{
-    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE,
+    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, DSHOT_IDLE_THROTTLE_COMMAND,
+    FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE,
+};
+#[cfg(feature = "dshot")]
+use board::profiles::{
+    DSHOT_IDLE_QUALIFICATION_CONSECUTIVE_SAMPLES, DSHOT_IDLE_QUALIFICATION_MAX_ERPM_DIV100,
+    DSHOT_IDLE_QUALIFICATION_MAX_SAMPLE_AGE_MS, DSHOT_IDLE_QUALIFICATION_MIN_ERPM_DIV100,
+    DSHOT_IDLE_QUALIFICATION_SPINUP_GRACE_MS, DSHOT_IDLE_QUALIFICATION_TIMEOUT_MS,
+    DSHOT_PREARM_STOP_HOLD_MS,
 };
 const BENCH_ACTUATOR_VALIDATION_ENABLED: bool = cfg!(feature = "bench_actuator_validation");
-const ACTUATOR_OUTPUT_ENABLED: bool = FLIGHT_ARMING_ENABLED || BENCH_ACTUATOR_VALIDATION_ENABLED;
+const SMOKE_ACTUATOR_INHIBIT_ENABLED: bool = cfg!(feature = "smoke_actuator_inhibit");
+const ACTUATOR_OUTPUT_ENABLED: bool =
+    !SMOKE_ACTUATOR_INHIBIT_ENABLED && (FLIGHT_ARMING_ENABLED || BENCH_ACTUATOR_VALIDATION_ENABLED);
+const ACTUATOR_INHIBIT_REASON: &str = if SMOKE_ACTUATOR_INHIBIT_ENABLED {
+    "Foxeer smoke-test actuator lockout is active"
+} else {
+    ARMING_INHIBIT_REASON
+};
 #[rtic::app(device = pac, peripherals = true, dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN])]
 mod app {
     use super::*; // Import everything from parent module
@@ -282,7 +306,8 @@ mod app {
     static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
     static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
     static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
-    static IMU_STALE: AtomicBool = AtomicBool::new(false);
+    static IMU_STALE: AtomicBool = AtomicBool::new(true);
+    static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
     static CONTROL_RATE_SEQ: AtomicU32 = AtomicU32::new(0);
     static CONTROL_ISR_SEQ: AtomicU32 = AtomicU32::new(0);
     static CONTROL_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
@@ -295,6 +320,22 @@ mod app {
     static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
     static IMU_LATEST_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
     static IMU_LATEST_YAW_RAW: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_ORIENTATION_VERSION: AtomicU32 = AtomicU32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_ACCEL_X_MG: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_ACCEL_Y_MG: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_ACCEL_Z_MG: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_GYRO_X_DPS10: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_GYRO_Y_DPS10: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_GYRO_Z_DPS10: AtomicI32 = AtomicI32::new(0);
+    #[cfg(feature = "imu_orientation_rtt")]
+    static IMU_LATEST_TEMP_C10: AtomicI32 = AtomicI32::new(0);
     static IMU_TRANSPORT_READY: AtomicBool = AtomicBool::new(false);
     static IMU_DRDY_IRQ_COUNT: AtomicU32 = AtomicU32::new(0);
     static IMU_DRDY_REJECTED_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -327,6 +368,37 @@ mod app {
     static FLASH_PAGES_WRITTEN: AtomicU32 = AtomicU32::new(0);
     #[cfg(feature = "flash_storage")]
     static FLASH_WRITE_FAULTS: AtomicU32 = AtomicU32::new(0);
+    #[cfg(feature = "esc_telemetry")]
+    const ESC_MANAGER_PERIOD_MS: u32 = 2;
+
+    #[cfg(feature = "imu_orientation_rtt")]
+    fn imu_orientation_snapshot() -> Option<(u32, [i32; 3], [i32; 3], i32)> {
+        for _ in 0..4 {
+            let version_before = IMU_ORIENTATION_VERSION.load(Ordering::Acquire);
+            if version_before & 1 != 0 {
+                continue;
+            }
+
+            let accel_mg = [
+                IMU_LATEST_ACCEL_X_MG.load(Ordering::Relaxed),
+                IMU_LATEST_ACCEL_Y_MG.load(Ordering::Relaxed),
+                IMU_LATEST_ACCEL_Z_MG.load(Ordering::Relaxed),
+            ];
+            let gyro_dps10 = [
+                IMU_LATEST_GYRO_X_DPS10.load(Ordering::Relaxed),
+                IMU_LATEST_GYRO_Y_DPS10.load(Ordering::Relaxed),
+                IMU_LATEST_GYRO_Z_DPS10.load(Ordering::Relaxed),
+            ];
+            let temp_c10 = IMU_LATEST_TEMP_C10.load(Ordering::Relaxed);
+            let version_after = IMU_ORIENTATION_VERSION.load(Ordering::Acquire);
+            if version_before == version_after {
+                return Some((version_after / 2, accel_mg, gyro_dps10, temp_c10));
+            }
+        }
+
+        None
+    }
+
     #[cfg(not(feature = "flash_storage"))]
     const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 USB debug v1 (read-only)\r\n";
     #[cfg(feature = "flash_storage")]
@@ -348,8 +420,44 @@ mod app {
     static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
     const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
     const ADC_CURRENT_BETAFLIGHT_SCALE: u32 = ADC_OBSERVATION_PROFILE.current_betaflight_scale;
+    const ADC_CURRENT_DISPLAY_ENABLED: bool = ADC_OBSERVATION_PROFILE.current_offset_calibrated;
     const BATTERY_CELL_COUNT: u8 = ADC_OBSERVATION_PROFILE.battery_cell_count;
-    const FOXEER_DSHOT_IDLE_COMMAND: f32 = 65.0;
+    const FOXEER_DSHOT_IDLE_COMMAND: f32 = DSHOT_IDLE_THROTTLE_COMMAND as f32;
+    #[cfg(feature = "dshot")]
+    const DSHOT_IDLE_QUALIFICATION_CONFIG: esc::EscIdleQualificationConfig =
+        esc::EscIdleQualificationConfig {
+            min_erpm_div100: DSHOT_IDLE_QUALIFICATION_MIN_ERPM_DIV100,
+            max_erpm_div100: DSHOT_IDLE_QUALIFICATION_MAX_ERPM_DIV100,
+            spinup_grace_ms: DSHOT_IDLE_QUALIFICATION_SPINUP_GRACE_MS,
+            timeout_ms: DSHOT_IDLE_QUALIFICATION_TIMEOUT_MS,
+            max_sample_age_ms: DSHOT_IDLE_QUALIFICATION_MAX_SAMPLE_AGE_MS,
+            required_consecutive_samples: DSHOT_IDLE_QUALIFICATION_CONSECUTIVE_SAMPLES,
+        };
+    #[cfg(feature = "dshot")]
+    const _: () = {
+        assert!(DSHOT_IDLE_THROTTLE_COMMAND > 0);
+        assert!(DSHOT_IDLE_QUALIFICATION_CONFIG.is_valid());
+    };
+
+    #[cfg(feature = "bench_dshot_idle_output1_not_running")]
+    fn inject_idle_qualification_fault(
+        mut update: esc::EscTelemetryUpdate,
+    ) -> esc::EscTelemetryUpdate {
+        if update.output == esc::EscOutput::Output1 {
+            update.observation.sample.erpm_div100 = 0;
+        }
+        update
+    }
+
+    #[cfg(all(
+        feature = "dshot",
+        not(feature = "bench_dshot_idle_output1_not_running")
+    ))]
+    const fn inject_idle_qualification_fault(
+        update: esc::EscTelemetryUpdate,
+    ) -> esc::EscTelemetryUpdate {
+        update
+    }
     #[cfg(any(
         feature = "bench_equal_motors",
         feature = "bench_motor1_only",
@@ -449,6 +557,8 @@ mod app {
         esc_request_consumer: EscRequestConsumer,
         esc_ack_producer: EscAckProducer,
         esc_ack_consumer: EscAckConsumer,
+        esc_telemetry_update_producer: EscTelemetryUpdateProducer,
+        esc_telemetry_update_consumer: EscTelemetryUpdateConsumer,
 
         // SPI1
         spi1_parser: SpiRxParserSide,
@@ -766,6 +876,8 @@ mod app {
             esc_request_consumer,
             esc_ack_producer,
             esc_ack_consumer,
+            esc_telemetry_update_producer,
+            esc_telemetry_update_consumer,
         ) = {
             let requests =
                 cortex_m::singleton!(: esc::EscRequestQueue = esc::EscRequestQueue::new()).unwrap();
@@ -773,12 +885,19 @@ mod app {
                 cortex_m::singleton!(: esc::EscAckQueue = esc::EscAckQueue::new()).unwrap();
             let (request_producer, request_consumer) = requests.split();
             let (ack_producer, ack_consumer) = acknowledgements.split();
+            let updates = cortex_m::singleton!(
+                : esc::EscTelemetryUpdateQueue = esc::EscTelemetryUpdateQueue::new()
+            )
+            .unwrap();
+            let (update_producer, update_consumer) = updates.split();
             (
                 esc::EscManager::new(esc::EscManagerConfig::legacy_uart(), 0),
                 request_producer,
                 request_consumer,
                 ack_producer,
                 ack_consumer,
+                update_producer,
+                update_consumer,
             )
         };
         #[cfg(not(feature = "esc_telemetry"))]
@@ -788,7 +907,9 @@ mod app {
             esc_request_consumer,
             esc_ack_producer,
             esc_ack_consumer,
-        ) = ((), (), (), (), ());
+            esc_telemetry_update_producer,
+            esc_telemetry_update_consumer,
+        ) = ((), (), (), (), (), (), ());
 
         #[cfg(not(feature = "dshot"))]
         let (motors, dshot_motors) = (
@@ -1006,16 +1127,25 @@ mod app {
                 }
             },
         }
-        if BENCH_ACTUATOR_VALIDATION_ENABLED {
+        if SMOKE_ACTUATOR_INHIBIT_ENABLED {
+            warn!("Flight arming inhibited: {}", ACTUATOR_INHIBIT_REASON);
+        } else if BENCH_ACTUATOR_VALIDATION_ENABLED {
             warn!("PROPS OFF: capped Foxeer actuator-validation mode enabled");
-            warn!("Normal Foxeer flight arming remains inhibited");
+            warn!("Normal mixer output is not active in this commissioning image");
         } else if !FLIGHT_ARMING_ENABLED {
             warn!("Flight arming inhibited: {}", ARMING_INHIBIT_REASON);
+        } else {
+            info!("Foxeer flight arming enabled with runtime IMU health checks");
+            warn!("Foxeer current display disabled pending zero-offset calibration");
         }
         #[cfg(feature = "esc_telemetry")]
-        info!(
-            "Foxeer observational BLHeli telemetry active on PA10 USART1 RX; arming does not depend on telemetry"
+        info!("Foxeer BLHeli telemetry-qualified DShot arming active on PA10 USART1 RX");
+        #[cfg(feature = "bench_dshot_idle_output1_not_running")]
+        warn!(
+            "FAULT INJECTION ACTIVE: Foxeer physical ESC output 1 (logical M1/rear-right) idle qualification eRPM forced to zero; arming must fail"
         );
+        #[cfg(feature = "bench_prearm_imu_stale")]
+        warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         heartbeat::spawn().unwrap();
         adc1_polling::spawn().ok();
         uart4_tx_worker::spawn().unwrap();
@@ -1073,6 +1203,8 @@ mod app {
                 esc_request_consumer,
                 esc_ack_producer,
                 esc_ack_consumer,
+                esc_telemetry_update_producer,
+                esc_telemetry_update_consumer,
 
                 // SPI1
                 spi1_parser: spi1_imu.parser,
@@ -1190,6 +1322,15 @@ mod app {
                 "Arming aborted: throttle exceeds {}",
                 safety::ARMING_MAX_THROTTLE
             ),
+            safety::ArmingAbortReason::ImuUnavailable => {
+                warn!("Arming aborted: IMU has not produced a valid sample")
+            }
+            safety::ArmingAbortReason::ImuBiasUncalibrated => {
+                warn!("Arming aborted: gyro bias calibration is incomplete")
+            }
+            safety::ArmingAbortReason::ImuStale => {
+                warn!("Arming aborted: IMU sample is stale")
+            }
             safety::ArmingAbortReason::EscIdleTelemetryTimeout => {
                 warn!("Arming aborted: ESC idle telemetry qualification timed out")
             }
@@ -1235,11 +1376,11 @@ mod app {
 
                 if !ACTUATOR_OUTPUT_ENABLED {
                     arm_permit.revoke();
-                    warn!("Arming inhibited: {}", ARMING_INHIBIT_REASON);
+                    warn!("Arming inhibited: {}", ACTUATOR_INHIBIT_REASON);
                     return;
                 }
 
-                let guard = safety::validate_arming_guard(
+                let guard = validate_live_arming_guard(
                     true,
                     rc_link.is_armable(now_us),
                     rc_arm_high.read(),
@@ -1247,6 +1388,9 @@ mod app {
                 );
                 if guard.is_ok() {
                     arm_permit.allow();
+                    #[cfg(feature = "dshot")]
+                    info!("Attempting DShot safety arming");
+                    #[cfg(not(feature = "dshot"))]
                     info!("Attempting BLHeli PWM arming!");
 
                     if actuator_output::spawn(safety::ActuatorCmd::EnterIdle).is_err() {
@@ -1261,7 +1405,7 @@ mod app {
 
             safety::SafetyEvent::ActuatorIdling => {
                 if ACTUATOR_OUTPUT_ENABLED
-                    && safety::validate_arming_guard(
+                    && validate_live_arming_guard(
                         arm_permit.is_allowed(),
                         rc_link.is_armable(now_us),
                         rc_arm_high.read(),
@@ -1524,6 +1668,7 @@ mod app {
                 cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
             }
 
+            #[cfg(feature = "imu_transport_rtt")]
             info!(
                 "IMU raw gyro [{}, {}, {}], seq {}",
                 IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed),
@@ -1531,16 +1676,52 @@ mod app {
                 IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
                 IMU_LATEST_SEQ.load(Ordering::Relaxed)
             );
-            let drdy_count = IMU_DRDY_IRQ_COUNT.load(Ordering::Relaxed);
-            let drdy_rejected = IMU_DRDY_REJECTED_COUNT.load(Ordering::Relaxed);
-            info!(
-                "IMU DRDY IRQ {}, delta {}, rejected {}, delta {}, last {} us",
-                drdy_count,
-                drdy_count.wrapping_sub(*cx.local.previous_drdy_count),
-                drdy_rejected,
-                drdy_rejected.wrapping_sub(*cx.local.previous_drdy_rejected),
-                IMU_DRDY_LAST_US.load(Ordering::Relaxed)
-            );
+            #[cfg(feature = "imu_orientation_rtt")]
+            if let Some((sequence, accel_mg, gyro_dps10, temp_c10)) = imu_orientation_snapshot() {
+                let body_gyro_dps10 = CONTROL_IMU_TO_DRONE_ROTATION.map_i32(gyro_dps10);
+                let body_specific_force_mg = CONTROL_IMU_TO_DRONE_ROTATION.map_i32(accel_mg);
+                let body_gravity_mg = [
+                    -body_specific_force_mg[0],
+                    -body_specific_force_mg[1],
+                    -body_specific_force_mg[2],
+                ];
+                info!(
+                    "IMU ORIENT sensor seq {} acc_mg [{}, {}, {}] gyro_dps10 [{}, {}, {}] temp_c10 {}",
+                    sequence,
+                    accel_mg[0],
+                    accel_mg[1],
+                    accel_mg[2],
+                    gyro_dps10[0],
+                    gyro_dps10[1],
+                    gyro_dps10[2],
+                    temp_c10
+                );
+                info!(
+                    "IMU ORIENT body seq {} gravity_mg [{}, {}, {}] gyro_dps10 [{}, {}, {}]",
+                    sequence,
+                    body_gravity_mg[0],
+                    body_gravity_mg[1],
+                    body_gravity_mg[2],
+                    body_gyro_dps10[0],
+                    body_gyro_dps10[1],
+                    body_gyro_dps10[2]
+                );
+            }
+            #[cfg(feature = "imu_transport_rtt")]
+            {
+                let drdy_count = IMU_DRDY_IRQ_COUNT.load(Ordering::Relaxed);
+                let drdy_rejected = IMU_DRDY_REJECTED_COUNT.load(Ordering::Relaxed);
+                info!(
+                    "IMU DRDY IRQ {}, delta {}, rejected {}, delta {}, last {} us",
+                    drdy_count,
+                    drdy_count.wrapping_sub(*cx.local.previous_drdy_count),
+                    drdy_rejected,
+                    drdy_rejected.wrapping_sub(*cx.local.previous_drdy_rejected),
+                    IMU_DRDY_LAST_US.load(Ordering::Relaxed)
+                );
+                *cx.local.previous_drdy_count = drdy_count;
+                *cx.local.previous_drdy_rejected = drdy_rejected;
+            }
             #[cfg(feature = "flash_storage")]
             info!(
                 "SPI2 flash ready {}, JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes",
@@ -1558,8 +1739,6 @@ mod app {
                 FLASH_WRITE_FAULTS.load(Ordering::Relaxed),
                 FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed)
             );
-            *cx.local.previous_drdy_count = drdy_count;
-            *cx.local.previous_drdy_rejected = drdy_rejected;
             Mono::delay(2000.millis()).await;
         }
     }
@@ -2302,7 +2481,7 @@ mod app {
 
         if !IMU_TRANSPORT_READY.load(Ordering::Relaxed) {
             *cnt = 0;
-            IMU_STALE.store(true, Ordering::Relaxed);
+            IMU_STALE.store(true, Ordering::Release);
             return;
         }
 
@@ -2311,10 +2490,9 @@ mod app {
         if cnt >= samples_per_control_loop {
             *cnt = 0; // Reset sampling counter
 
-            let (acc_x, acc_y, acc_z) = cx
-                .shared
-                .imu_data
-                .lock(|imu| (imu.acc[0], imu.acc[1], imu.acc[2]));
+            let sensor_accel = cx.shared.imu_data.lock(|imu| imu.acc);
+            let drone_gravity =
+                IMU_CONTROL_AXIS_PROFILE.sensor_accel_to_drone_gravity(sensor_accel);
             let gyro_raw = [
                 IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed) as i16,
                 IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed) as i16,
@@ -2322,12 +2500,20 @@ mod app {
             ];
             let imu_sequence = IMU_LATEST_SEQ.load(Ordering::Relaxed);
 
+            let imu_fresh =
+                imu::classify_sample_freshness(*cx.local.imu_last_sequence, imu_sequence)
+                    == imu::SampleFreshness::Fresh;
+            *cx.local.imu_last_sequence = imu_sequence;
+            IMU_STALE.store(!imu_fresh, Ordering::Release);
+
             let control_armed = cx.local.control_safety_arm_reader.read();
-            let gyro_bias_update = cx
-                .local
-                .gyro_bias_calibrator
-                .update(control_armed, cx.local.gyro_axis_map.map_raw(gyro_raw));
+            let gyro_bias_update = cx.local.gyro_bias_calibrator.update_if_fresh(
+                control_armed,
+                imu_fresh,
+                cx.local.gyro_axis_map.map_raw(gyro_raw),
+            );
             if gyro_bias_update.newly_calibrated {
+                IMU_BIAS_CALIBRATED.store(true, Ordering::Release);
                 info!(
                     "Gyro bias calibrated raw [{}, {}, {}]",
                     gyro_bias_update.bias_raw[0],
@@ -2342,11 +2528,6 @@ mod app {
             CONTROL_ROLL_RAW.store(control_gyro_raw[0], Ordering::Relaxed);
             CONTROL_PITCH_RAW.store(control_gyro_raw[1], Ordering::Relaxed);
             CONTROL_YAW_RAW.store(control_gyro_raw[2], Ordering::Relaxed);
-            let imu_fresh =
-                imu::classify_sample_freshness(*cx.local.imu_last_sequence, imu_sequence)
-                    == imu::SampleFreshness::Fresh;
-            *cx.local.imu_last_sequence = imu_sequence;
-
             let (imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered) = cx
                 .local
                 .imu_rate_filter
@@ -2404,12 +2585,10 @@ mod app {
                     let _ = safety_master::spawn(safety::SafetyEvent::DisarmRequested);
                 }
 
-                IMU_STALE.store(true, Ordering::Relaxed);
                 return;
             }
 
             *cx.local.imu_stale_ticks = 0;
-            IMU_STALE.store(false, Ordering::Relaxed);
 
             let now_us = Mono::now().duration_since_epoch().to_micros();
             let rc_link = cx.local.control_rc_link_reader.status(now_us);
@@ -2433,7 +2612,7 @@ mod app {
 
             let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
                 [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                [acc_x, acc_y, acc_z],
+                drone_gravity,
                 dt::CONTROL_LOOP_DT_SECONDS,
             );
             cx.shared.imu_angles.lock(|angles| {
@@ -2762,28 +2941,26 @@ mod app {
                     #[cfg(feature = "flash_blackbox")]
                     enqueue_flash_record(
                         cx.local.flash_record_producer,
-                        dt::CompactRateBlackboxSample::from_fields(
-                            dt::CompactRateBlackboxFields {
-                                seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-                                imu_seq: imu_sequence,
-                                armed: control_armed,
-                                imu_fresh,
-                                raw_gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                                filtered_gyro_dps: [
-                                    imu_roll_filtered,
-                                    imu_pitch_filtered,
-                                    imu_yaw_filtered,
-                                ],
-                                command_dps: [
-                                    rc_raw.roll as f32,
-                                    rc_raw.pitch as f32,
-                                    rc_raw.yaw as f32,
-                                ],
-                                pid: [0.0; 3],
-                                throttle: bench_throttle,
-                                motors: motor_commands,
-                            },
-                        ),
+                        dt::CompactRateBlackboxSample::from_fields(dt::CompactRateBlackboxFields {
+                            seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                            imu_seq: imu_sequence,
+                            armed: control_armed,
+                            imu_fresh,
+                            raw_gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
+                            filtered_gyro_dps: [
+                                imu_roll_filtered,
+                                imu_pitch_filtered,
+                                imu_yaw_filtered,
+                            ],
+                            command_dps: [
+                                rc_raw.roll as f32,
+                                rc_raw.pitch as f32,
+                                rc_raw.yaw as f32,
+                            ],
+                            pid: [0.0; 3],
+                            throttle: bench_throttle,
+                            motors: motor_commands,
+                        }),
                     );
 
                     #[cfg(not(any(feature = "pwm_cal")))]
@@ -2867,6 +3044,24 @@ mod app {
 
     const ARMING_GUARD_POLL_MS: u32 = 10;
 
+    fn validate_live_arming_guard(
+        permit: bool,
+        rc_link_armable: bool,
+        arm_high: bool,
+        throttle: u32,
+    ) -> Result<(), safety::ArmingAbortReason> {
+        safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
+        safety::validate_prearm_health(safety::PreArmHealth {
+            imu_ready: IMU_TRANSPORT_READY.load(Ordering::Acquire)
+                && Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Acquire))
+                    .is_some()
+                && IMU_LATEST_SEQ.load(Ordering::Acquire) != 0,
+            imu_bias_calibrated: IMU_BIAS_CALIBRATED.load(Ordering::Acquire),
+            imu_fresh: !cfg!(feature = "bench_prearm_imu_stale")
+                && !IMU_STALE.load(Ordering::Acquire),
+        })
+    }
+
     fn current_arming_guard(
         permit: &ActuatorArmPermitReader,
         rc_link: &signals::RcLinkReader,
@@ -2874,7 +3069,7 @@ mod app {
         throttle: &signals::RcThrottleReader,
     ) -> Result<(), safety::ArmingAbortReason> {
         let now_us = Mono::now().duration_since_epoch().to_micros();
-        safety::validate_arming_guard(
+        validate_live_arming_guard(
             permit.read(),
             rc_link.is_armable(now_us),
             arm_high.read(),
@@ -3048,6 +3243,24 @@ mod app {
         }
     }
 
+    #[cfg(feature = "esc_telemetry")]
+    const fn logical_motor_for_physical_index(physical_index: usize) -> u8 {
+        let physical_output = physical_index + 1;
+        let mut logical_index = 0;
+        while logical_index < board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT.len() {
+            if board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT[logical_index] == physical_output {
+                return logical_index as u8 + 1;
+            }
+            logical_index += 1;
+        }
+        0
+    }
+
+    #[cfg(feature = "esc_telemetry")]
+    const fn logical_motor_for_esc_output(output: esc::EscOutput) -> u8 {
+        logical_motor_for_physical_index(output.index())
+    }
+
     #[task(binds = DMA2_STREAM1, priority = 16, shared = [dshot_motors])]
     fn dshot_motor1_dma_complete(mut cx: dshot_motor1_dma_complete::Context) {
         #[cfg(feature = "dshot")]
@@ -3138,6 +3351,7 @@ mod app {
             esc_manager_state,
             esc_request_producer,
             esc_ack_consumer,
+            esc_telemetry_update_producer,
             report_ticks: u16 = 0
         ]
     )]
@@ -3145,14 +3359,18 @@ mod app {
         #[cfg(feature = "esc_telemetry")]
         loop {
             let release = Mono::now();
-            let next_release = release + 2.millis();
+            let next_release = release + ESC_MANAGER_PERIOD_MS.millis();
             let now_ms = release.duration_since_epoch().to_millis();
 
             if ESC_TELEMETRY_DISCONTINUITY.swap(false, Ordering::Relaxed) {
                 cx.local.esc_manager_state.record_wire_discontinuity();
             }
             while let Some(ack) = cx.local.esc_ack_consumer.dequeue() {
-                let _ = cx.local.esc_manager_state.on_actuator_ack(ack);
+                if let esc::EscAckOutcome::Sample(update) =
+                    cx.local.esc_manager_state.on_actuator_ack(ack)
+                {
+                    let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
+                }
             }
             while let Some(filled) = cx.local.esc_telemetry_uart.filled_consumer.dequeue() {
                 if filled.uart_error_seen {
@@ -3160,7 +3378,9 @@ mod app {
                 }
                 let len = filled.len.min(filled.buf.len());
                 for byte in &filled.buf[..len] {
-                    let _ = cx.local.esc_manager_state.push_wire_byte(*byte, now_ms);
+                    if let Some(update) = cx.local.esc_manager_state.push_wire_byte(*byte, now_ms) {
+                        let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
+                    }
                 }
                 if cx
                     .local
@@ -3177,13 +3397,15 @@ mod app {
             if let Some(timeout) = cx.local.esc_manager_state.poll_timeout(now_ms) {
                 match timeout {
                     esc::EscManagerTimeout::ActuatorAck(request) => warn!(
-                        "Foxeer ESC telemetry fault: actuator acknowledgement timeout for M{}, request {}",
+                        "Foxeer ESC telemetry manager latched fault after actuator acknowledgement timeout for physical output {} (logical M{}), request {}",
                         request.output.index() + 1,
+                        logical_motor_for_esc_output(request.output),
                         request.sequence
                     ),
                     esc::EscManagerTimeout::TelemetryResponse(request) => warn!(
-                        "Foxeer ESC telemetry fault: response timeout for M{}, request {}",
+                        "Foxeer ESC telemetry manager latched fault after response timeout for physical output {} (logical M{}), request {}",
                         request.output.index() + 1,
+                        logical_motor_for_esc_output(request.output),
                         request.sequence
                     ),
                 }
@@ -3192,11 +3414,11 @@ mod app {
             if let Some(request) = cx.local.esc_manager_state.next_request(now_ms)
                 && cx.local.esc_request_producer.enqueue(request).is_ok()
             {
-                debug_assert!(
-                    cx.local
-                        .esc_manager_state
-                        .mark_request_queued(request, now_ms)
-                );
+                let marked = cx
+                    .local
+                    .esc_manager_state
+                    .mark_request_queued(request, now_ms);
+                debug_assert!(marked);
             }
 
             *cx.local.report_ticks = cx.local.report_ticks.wrapping_add(1);
@@ -3207,25 +3429,28 @@ mod app {
                 {
                     if let Some(observation) = observation {
                         info!(
-                            "Foxeer ESC M{} telemetry: {}00eRPM {}.{}V {}.{}A {}mAh {}C",
+                            "Foxeer physical ESC output {} (logical M{}) telemetry: {}.{}V {}.{}A {}mAh {}00eRPM {}C",
                             index + 1,
-                            observation.sample.erpm_div100,
+                            logical_motor_for_physical_index(index),
                             observation.sample.voltage_cv / 100,
                             observation.sample.voltage_cv % 100,
                             observation.sample.current_ca / 100,
                             observation.sample.current_ca % 100,
                             observation.sample.consumption_mah,
+                            observation.sample.erpm_div100,
                             observation.sample.temperature_c
                         );
                     }
                 }
                 info!(
-                    "Foxeer ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, valid {}, CRC failures {}, discarded {}",
+                    "Foxeer ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, mismatched acks {}, unsolicited {}, valid {}, CRC failures {}, discarded {}",
                     stats.requests_queued,
                     stats.requests_started,
                     cx.local.esc_manager_state.is_faulted(),
                     stats.actuator_ack_timeouts,
                     stats.telemetry_response_timeouts,
+                    stats.mismatched_acks,
+                    stats.unsolicited_frames,
                     stats.wire.valid_frames,
                     stats.wire.crc_failures,
                     stats.wire.discarded_bytes
@@ -3284,16 +3509,13 @@ mod app {
         actuator_rc_link_reader,
         actuator_arm_done_writer,
         motor_cmd_reader,
+        esc_telemetry_update_consumer,
         calibrated,
 
     ]
     )]
     #[allow(unused_mut)]
     async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::ActuatorCmd) {
-        #[cfg(feature = "dshot")]
-        const fn idle_motor_outputs() -> [f32; 4] {
-            [FOXEER_DSHOT_IDLE_COMMAND; 4]
-        }
         #[cfg(not(feature = "dshot"))]
         const fn idle_motor_outputs() -> [f32; 4] {
             [safety::ESC_IDLE_THROTTLE; 4]
@@ -3314,7 +3536,7 @@ mod app {
         if !ACTUATOR_OUTPUT_ENABLED {
             force_off!();
             if !matches!(cmd, safety::ActuatorCmd::Disarm) {
-                warn!("Actuator command inhibited: {}", ARMING_INHIBIT_REASON);
+                warn!("Actuator command inhibited: {}", ACTUATOR_INHIBIT_REASON);
             }
             return;
         }
@@ -3360,21 +3582,17 @@ mod app {
             };
         }
         #[cfg(feature = "dshot")]
-        macro_rules! apply_idle_for_arming {
-            () => {
-                apply_all_with_lease!(
-                    idle_motor_outputs(),
-                    safety::BLHELI_ARM_IDLE_HOLD_MS + safety::MOTOR_CMD_MAX_AGE_MS
-                )
-            };
+        macro_rules! abort_dshot_arming {
+            ($reason:expr, $message:expr) => {{
+                cx.local.actuator_arm_done_writer.clear();
+                force_off!();
+                warn!($message);
+                if safety_master::spawn(safety::SafetyEvent::ArmingAborted($reason)).is_err() {
+                    warn!("Failed to report aborted DShot idle qualification");
+                }
+                return;
+            }};
         }
-        #[cfg(not(feature = "dshot"))]
-        macro_rules! apply_idle_for_arming {
-            () => {
-                apply_all!(idle_motor_outputs())
-            };
-        }
-
         #[cfg(all(feature = "pwm_cal", not(feature = "dshot")))]
         macro_rules! selected_motor_pulse_width_us {
             () => {
@@ -3416,53 +3634,208 @@ mod app {
                     cx.local.actuator_arm_done_writer.clear();
                     force_off!();
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
-                        warn!("Failed to report rejected BLHeli arming sequence");
+                        warn!("Failed to report rejected actuator preparation");
                     }
                     return;
                 }
 
-                info!("Arming BLHeli ESCs with PWM low throttle");
-                cx.local.actuator_arm_done_writer.clear();
+                #[cfg(not(feature = "dshot"))]
+                let prepared_output = {
+                    info!("Arming BLHeli ESCs with PWM low throttle");
+                    cx.local.actuator_arm_done_writer.clear();
 
-                info!("Applying low throttle");
-                apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                if let Err(reason) = wait_arming_hold(
-                    cx.local.actuator_arm_permit_reader,
-                    cx.local.actuator_rc_link_reader,
-                    cx.local.actuator_rc_arm_high_reader,
-                    cx.local.actuator_rc_throttle_reader,
-                    safety::BLHELI_ARM_LOW_HOLD_MS,
-                )
-                .await
-                {
+                    info!("Applying low throttle");
+                    apply_all!([safety::ESC_LOW_THROTTLE; 4]);
+                    if let Err(reason) = wait_arming_hold(
+                        cx.local.actuator_arm_permit_reader,
+                        cx.local.actuator_rc_link_reader,
+                        cx.local.actuator_rc_arm_high_reader,
+                        cx.local.actuator_rc_throttle_reader,
+                        safety::BLHELI_ARM_LOW_HOLD_MS,
+                    )
+                    .await
+                    {
+                        cx.local.actuator_arm_done_writer.clear();
+                        force_off!();
+                        if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
+                        {
+                            warn!("Failed to report aborted BLHeli low-throttle hold");
+                        }
+                        return;
+                    }
+
+                    info!("Applying idle throttle");
+                    apply_all!(idle_motor_outputs());
+                    if let Err(reason) = wait_arming_hold(
+                        cx.local.actuator_arm_permit_reader,
+                        cx.local.actuator_rc_link_reader,
+                        cx.local.actuator_rc_arm_high_reader,
+                        cx.local.actuator_rc_throttle_reader,
+                        safety::BLHELI_ARM_IDLE_HOLD_MS,
+                    )
+                    .await
+                    {
+                        cx.local.actuator_arm_done_writer.clear();
+                        force_off!();
+                        if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
+                        {
+                            warn!("Failed to report aborted BLHeli idle hold");
+                        }
+                        return;
+                    }
+
+                    info!("BLHeli ESCs idling");
+                    idle_motor_outputs()
+                };
+
+                #[cfg(feature = "dshot")]
+                let prepared_output = {
+                    info!(
+                        "Preparing DShot actuators with {} ms of stop frames",
+                        DSHOT_PREARM_STOP_HOLD_MS
+                    );
                     cx.local.actuator_arm_done_writer.clear();
                     force_off!();
-                    if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
-                        warn!("Failed to report aborted BLHeli low-throttle hold");
+                    if let Err(reason) = wait_arming_hold(
+                        cx.local.actuator_arm_permit_reader,
+                        cx.local.actuator_rc_link_reader,
+                        cx.local.actuator_rc_arm_high_reader,
+                        cx.local.actuator_rc_throttle_reader,
+                        DSHOT_PREARM_STOP_HOLD_MS,
+                    )
+                    .await
+                    {
+                        cx.local.actuator_arm_done_writer.clear();
+                        force_off!();
+                        if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
+                        {
+                            warn!("Failed to report aborted DShot pre-arm stop hold");
+                        }
+                        return;
                     }
-                    return;
-                }
 
-                info!("Applying idle throttle");
-                apply_idle_for_arming!();
-                if let Err(reason) = wait_arming_hold(
-                    cx.local.actuator_arm_permit_reader,
-                    cx.local.actuator_rc_link_reader,
-                    cx.local.actuator_rc_arm_high_reader,
-                    cx.local.actuator_rc_throttle_reader,
-                    safety::BLHELI_ARM_IDLE_HOLD_MS,
-                )
-                .await
-                {
-                    cx.local.actuator_arm_done_writer.clear();
-                    force_off!();
-                    if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
-                        warn!("Failed to report aborted BLHeli idle hold");
+                    // Remove samples accumulated while stopped. Qualification
+                    // accepts only responses observed after idle spin starts.
+                    while cx.local.esc_telemetry_update_consumer.dequeue().is_some() {}
+
+                    let qualification_started_ms = Mono::now().duration_since_epoch().to_millis();
+                    let mut qualification = esc::EscIdleQualification::new(
+                        DSHOT_IDLE_QUALIFICATION_CONFIG,
+                        qualification_started_ms,
+                    );
+                    info!(
+                        "DShot pre-arm stop complete; qualifying idle eRPM {}00..{}00 with {} samples/physical output",
+                        DSHOT_IDLE_QUALIFICATION_CONFIG.min_erpm_div100,
+                        DSHOT_IDLE_QUALIFICATION_CONFIG.max_erpm_div100,
+                        DSHOT_IDLE_QUALIFICATION_CONFIG.required_consecutive_samples
+                    );
+
+                    loop {
+                        if let Err(reason) = current_arming_guard(
+                            cx.local.actuator_arm_permit_reader,
+                            cx.local.actuator_rc_link_reader,
+                            cx.local.actuator_rc_arm_high_reader,
+                            cx.local.actuator_rc_throttle_reader,
+                        ) {
+                            abort_dshot_arming!(
+                                reason,
+                                "DShot idle qualification aborted by arming guard"
+                            );
+                        }
+
+                        // Idle remains under the temporary arm permit. Renew
+                        // its bounded lease while the system is still disarmed.
+                        apply_all_with_lease!(
+                            [FOXEER_DSHOT_IDLE_COMMAND; 4],
+                            safety::MOTOR_CMD_MAX_AGE_MS
+                        );
+                        let now_ms = Mono::now().duration_since_epoch().to_millis();
+                        let mut status = esc::EscIdleQualificationStatus::Pending;
+                        while let Some(update) = cx.local.esc_telemetry_update_consumer.dequeue() {
+                            status = qualification
+                                .observe(inject_idle_qualification_fault(update), now_ms);
+                        }
+                        if status == esc::EscIdleQualificationStatus::Pending {
+                            status = qualification.status(now_ms);
+                        }
+
+                        match status {
+                            esc::EscIdleQualificationStatus::Pending => {}
+                            esc::EscIdleQualificationStatus::Qualified => break,
+                            esc::EscIdleQualificationStatus::Failed(
+                                esc::EscIdleQualificationFailure::Overspeed {
+                                    output,
+                                    erpm_div100,
+                                },
+                            ) => {
+                                warn!(
+                                    "Foxeer physical ESC output {} (logical M{}) idle qualification overspeed: {}00 eRPM",
+                                    output.index() + 1,
+                                    logical_motor_for_esc_output(output),
+                                    erpm_div100
+                                );
+                                abort_dshot_arming!(
+                                    safety::ArmingAbortReason::EscIdleRpmOutOfRange,
+                                    "Foxeer DShot idle qualification rejected an overspeed physical output"
+                                );
+                            }
+                            esc::EscIdleQualificationStatus::Failed(
+                                esc::EscIdleQualificationFailure::Timeout {
+                                    consecutive_samples,
+                                },
+                            ) => {
+                                warn!(
+                                    "Foxeer DShot idle qualification timeout; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
+                                    consecutive_samples[0],
+                                    consecutive_samples[1],
+                                    consecutive_samples[2],
+                                    consecutive_samples[3]
+                                );
+                                for (index, samples) in
+                                    consecutive_samples.iter().copied().enumerate()
+                                {
+                                    if samples
+                                        < DSHOT_IDLE_QUALIFICATION_CONFIG
+                                            .required_consecutive_samples
+                                    {
+                                        warn!(
+                                            "Foxeer physical ESC output {} (logical M{}) idle qualification failed: motor not running or RPM evidence invalid ({} of {} samples)",
+                                            index + 1,
+                                            logical_motor_for_physical_index(index),
+                                            samples,
+                                            DSHOT_IDLE_QUALIFICATION_CONFIG
+                                                .required_consecutive_samples
+                                        );
+                                    }
+                                }
+                                abort_dshot_arming!(
+                                    safety::ArmingAbortReason::EscIdleTelemetryTimeout,
+                                    "Foxeer DShot idle qualification did not prove all physical outputs turning"
+                                );
+                            }
+                            esc::EscIdleQualificationStatus::Failed(
+                                esc::EscIdleQualificationFailure::InvalidConfig,
+                            ) => {
+                                abort_dshot_arming!(
+                                    safety::ArmingAbortReason::EscIdleQualificationInvalid,
+                                    "Foxeer DShot idle qualification profile is invalid"
+                                );
+                            }
+                        }
+
+                        Mono::delay(10.millis()).await;
                     }
-                    return;
-                }
 
-                info!("BLHeli ESCs idling");
+                    info!(
+                        "Foxeer DShot idle eRPM qualified; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
+                        qualification.consecutive_samples()[0],
+                        qualification.consecutive_samples()[1],
+                        qualification.consecutive_samples()[2],
+                        qualification.consecutive_samples()[3]
+                    );
+                    [FOXEER_DSHOT_IDLE_COMMAND; 4]
+                };
+
                 cx.local.actuator_arm_done_writer.set_done();
 
                 if actuator_idle_notify::spawn().is_err() {
@@ -3473,12 +3846,12 @@ mod app {
                     ))
                     .is_err()
                     {
-                        warn!("Failed to report BLHeli completion delivery failure");
+                        warn!("Failed to report actuator preparation completion failure");
                     }
                     return;
                 }
 
-                idle_motor_outputs()
+                prepared_output
             }
 
             safety::ActuatorCmd::ApplyLatestThrottle if safety_armed => {
@@ -3838,6 +4211,24 @@ mod app {
 
             match parsed {
                 Some(sample) => {
+                    #[cfg(feature = "imu_orientation_rtt")]
+                    {
+                        IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::AcqRel);
+                        IMU_LATEST_ACCEL_X_MG
+                            .store((sample.acc[0] * 1_000.0) as i32, Ordering::Relaxed);
+                        IMU_LATEST_ACCEL_Y_MG
+                            .store((sample.acc[1] * 1_000.0) as i32, Ordering::Relaxed);
+                        IMU_LATEST_ACCEL_Z_MG
+                            .store((sample.acc[2] * 1_000.0) as i32, Ordering::Relaxed);
+                        IMU_LATEST_GYRO_X_DPS10
+                            .store((sample.gyro[0] * 10.0) as i32, Ordering::Relaxed);
+                        IMU_LATEST_GYRO_Y_DPS10
+                            .store((sample.gyro[1] * 10.0) as i32, Ordering::Relaxed);
+                        IMU_LATEST_GYRO_Z_DPS10
+                            .store((sample.gyro[2] * 10.0) as i32, Ordering::Relaxed);
+                        IMU_LATEST_TEMP_C10.store((sample.temp * 10.0) as i32, Ordering::Relaxed);
+                        IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::Release);
+                    }
                     IMU_LATEST_ROLL_RAW.store(sample.gyro_raw[0] as i32, Ordering::Relaxed);
                     IMU_LATEST_PITCH_RAW.store(sample.gyro_raw[1] as i32, Ordering::Relaxed);
                     IMU_LATEST_YAW_RAW.store(sample.gyro_raw[2] as i32, Ordering::Relaxed);
@@ -4618,10 +5009,11 @@ mod app {
         let pack_mv = ((sample.voltage_mv as f32) * ADC_VBAT_DIVIDER_RATIO) as u32;
         let cell_count = BATTERY_CELL_COUNT;
         let cell_voltage_v100 = osd::pack_millivolts_to_cell_centivolts(pack_mv, cell_count);
-        let current_ca = osd::current_sample_to_centiamps(
-            sample.current_mv as u32,
-            ADC_CURRENT_BETAFLIGHT_SCALE,
-        );
+        let current_ca = if ADC_CURRENT_DISPLAY_ENABLED {
+            osd::current_sample_to_centiamps(sample.current_mv as u32, ADC_CURRENT_BETAFLIGHT_SCALE)
+        } else {
+            0
+        };
 
         let battery_voltage_v10 = ((pack_mv + 50) / 100).min(u8::MAX as u32) as u8;
         BATTERY_VOLTAGE_V10_SNAPSHOT.store(u32::from(battery_voltage_v10), Ordering::Relaxed);

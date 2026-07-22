@@ -34,13 +34,16 @@ An arm attempt requires:
 - a newly observed low-to-high arm transition;
 - arm high for the configured 200 ms hold;
 - throttle at or below `ARMING_MAX_THROTTLE`, currently 65 command counts;
+- a supported IMU that has produced a sample;
+- completed stationary startup gyro-bias calibration;
+- a fresh IMU sample in the control loop;
 - no revoked actuator permit or other failed safety check.
 
-IMU initialization, gyro-bias calibration, and sample freshness are not yet in
-that prerequisite set. A stale IMU can therefore pass the DShot idle-eRPM gate
-and briefly reach `Armed`; the first post-arm stale-IMU control check requests
-disarm. This is an open prototype safety gap. Calibration state is likewise
-not currently proven before arming.
+These IMU conditions are checked before actuator preparation, throughout its
+10 ms guarded waits/eRPM qualification, and again before the final armed
+transition. Repeated samples do not advance gyro-bias calibration. Host tests
+cover unavailable, uncalibrated, and stale rejection; deliberate target fault
+injection remains follow-up evidence.
 
 The RC link starts invalid and becomes healthy after three valid SBUS frames.
 It expires after 100 ms without a healthy frame. Booting or recovering the
@@ -48,12 +51,12 @@ link while arm is already high cannot request arming; the input must first be
 observed low and then transition high.
 
 During actuator preparation, the actuator owner rechecks its permit, RC
-armability, arm state, and throttle every 10 ms. Any failure selects stop
-before publishing an arming-abort reason.
+armability, arm state, throttle, and IMU health every 10 ms. Any failure selects
+stop before publishing an arming-abort reason.
 
-## Default FCU3 DShot Sequence
+## Default FCU3 and Foxeer DShot Sequence
 
-The default FCU3 path uses telemetry-qualified DShot arming:
+The default FCU3 and Foxeer paths use telemetry-qualified DShot arming:
 
 1. Safety Master enters `Arming`, grants the temporary permit, and asks
    Actuator Output to prepare the ESCs.

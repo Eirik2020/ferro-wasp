@@ -65,6 +65,38 @@ Use a layered model:
 - Safety-related tasks must have clear priority rationale and timing assumptions.
 - If adding a new task, update the task/resource/policy manifest or equivalent documentation.
 
+## FCU3 golden app and drift prevention
+
+Treat `apps/stm32f405-flight`, using the FerroWasp FCU3 BSP, as the **golden
+flight app** for established runtime behavior, safety policy, task sequencing,
+and supported feature integration.
+
+- Before implementing any feature in a new or secondary flight app, inspect
+  the corresponding FCU3 implementation and identify the behavior and safety
+  invariants that must be preserved.
+- Implement reusable protocol, driver, safety, and task logic in the shared
+  crates where practical. Board app shells should contain only the RTIC wiring
+  and hardware-specific adaptation that genuinely differs.
+- Do not copy an older FCU3 app-shell branch and assume it is current. Compare
+  arming preparation, disarm/failsafe handling, actuator leases, fault paths,
+  task priorities, logging identities, feature gates, and completion ordering
+  against the current golden app.
+- Before every bench test of a new or secondary app, cross-check its exact
+  enabled feature set against FCU3 again. Confirm that no stale fallback,
+  legacy protocol path, or obsolete safety sequence is selected by the build.
+- Where the secondary board must differ because of pins, timers, DMA routes,
+  sensors, orientation, electrical behavior, or unavailable hardware, document
+  the deviation explicitly and cover it with board-specific tests or target
+  evidence. Golden-app status does not authorize copying FCU3 hardware details
+  onto another board.
+- For a feature that does not yet exist in FCU3, add the reusable logic and
+  integrate it into FCU3 first or in the same change when practical. If that is
+  not practical, document why the secondary app leads and record the required
+  FCU3 reconciliation work.
+- Any intentional departure from FCU3 runtime or safety behavior requires an
+  explicit rationale, review, and verification note. Silent behavioral drift
+  is a defect.
+
 ## Current firmware assumptions
 
 Current/prototyped stack:

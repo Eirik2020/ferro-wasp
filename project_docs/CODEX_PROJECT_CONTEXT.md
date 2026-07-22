@@ -68,10 +68,11 @@ The active bench target is an STM32F405-class RTIC firmware prototype with:
   DShot output.
 
 FerroWasp FCU3 is the validated flight baseline. Foxeer F405 V2 has a separate
-RTIC app and BSP with the same supported flight-service subset, ICM42688-P
-support, and conventional four-channel RC PWM. Its flight arming is
-intentionally inhibited until board-specific target measurements are complete.
-Its base `usb_serial` path reports bounded status only. Flash-enabled variants
+RTIC app and BSP with the same supported flight-service subset, ICM42688-P/EXTI
+sampling, default DShot600/eRPM-qualified arming, and an explicit four-channel
+RC PWM fallback. Its normal flight profile is enabled but still awaits the
+final normal-mixer/OSD props-off handoff. Its base `usb_serial` path reports
+bounded status only. Flash-enabled variants
 accept a bounded, whitelisted storage/config command set while disarmed; USB
 cannot request arming, alter safety state, or command actuators.
 
@@ -108,8 +109,8 @@ order is:
    rotate the historical probe credential before changing visibility.
 2. Consolidate the current working tree onto the intended public default branch
    and make all supported target/CI checks pass.
-3. Bring up and target-verify Foxeer F405 V2 with its arming inhibit retained
-   until every board-specific hardware gate passes.
+3. Complete the final normal-mixer/OSD props-off handoff for the Foxeer F405 V2
+   DShot flight candidate before installing propellers.
 4. Establish a reproducible WSL/Docker development environment after Foxeer
    target bring-up.
 5. Return to FCU3 flight characterization with the isolated pitch P
@@ -157,9 +158,9 @@ small patch.
 - SBUS RC loss, immediate motor stop, arm-high recovery inhibition, and fresh
   low-to-high rearm are target-validated, but broader link-quality policy is
   still needed;
-- IMU initialization, gyro-bias calibration, and freshness are not pre-arm
-  prerequisites. A stale IMU can briefly reach `SYSTEM ARMED` before the first
-  post-arm stale-IMU check requests disarm;
+- IMU initialization, gyro-bias calibration, and freshness are pre-arm
+  prerequisites in both flight apps; negative target fault injection remains
+  to be captured;
 - ADC/OSD freshness is incomplete;
 - motor identity, Betaflight logical mapping, CW/CCW rotation, mixed-command
   direction, reset/reconnect arm-high inhibition, BLHeli legacy eRPM telemetry,
@@ -201,7 +202,7 @@ from the selected isolated package:
 ```text
 apps/stm32f405-flight  STM32F405 flight RTIC contract; FCU3 selected by default
 apps/stm32f401-bringup STM32F401 RTIC bring-up contract; Nucleo selected by default
-apps/foxeer-f405-v2    STM32F405 Foxeer RTIC contract; arming inhibited for bring-up
+apps/foxeer-f405-v2    STM32F405 Foxeer RTIC contract; default DShot flight candidate
 ```
 
 ## Evidence and Documentation

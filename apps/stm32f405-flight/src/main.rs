@@ -222,7 +222,8 @@ mod app {
     static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
     static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
     static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
-    static IMU_STALE: AtomicBool = AtomicBool::new(false);
+    static IMU_STALE: AtomicBool = AtomicBool::new(true);
+    static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
     static CONTROL_RATE_SEQ: AtomicU32 = AtomicU32::new(0);
     static CONTROL_ISR_SEQ: AtomicU32 = AtomicU32::new(0);
     static CONTROL_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
@@ -899,6 +900,8 @@ mod app {
         warn!(
             "FAULT INJECTION ACTIVE: physical ESC output 1 (logical M4/front-left) idle qualification eRPM forced to zero; flight arming must fail"
         );
+        #[cfg(feature = "bench_prearm_imu_stale")]
+        warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         #[cfg(feature = "dshot")]
         info!(
             "DShot arming profile: {} ms stop dwell, idle command {} -> value {}",
@@ -1083,6 +1086,15 @@ mod app {
                 "Arming aborted: throttle exceeds {}",
                 safety::ARMING_MAX_THROTTLE
             ),
+            safety::ArmingAbortReason::ImuUnavailable => {
+                warn!("Arming aborted: IMU has not produced a valid sample")
+            }
+            safety::ArmingAbortReason::ImuBiasUncalibrated => {
+                warn!("Arming aborted: gyro bias calibration is incomplete")
+            }
+            safety::ArmingAbortReason::ImuStale => {
+                warn!("Arming aborted: IMU sample is stale")
+            }
             safety::ArmingAbortReason::EscIdleTelemetryTimeout => {
                 warn!("Arming aborted: ESC idle telemetry qualification timed out")
             }
@@ -1126,7 +1138,7 @@ mod app {
             safety::SafetyEvent::ArmRequested => {
                 system_arm.disarm();
 
-                let guard = safety::validate_arming_guard(
+                let guard = validate_live_arming_guard(
                     true,
                     rc_link.is_armable(now_us),
                     rc_arm_high.read(),
@@ -1150,7 +1162,7 @@ mod app {
             }
 
             safety::SafetyEvent::ActuatorIdling => {
-                if safety::validate_arming_guard(
+                if validate_live_arming_guard(
                     arm_permit.is_allowed(),
                     rc_link.is_armable(now_us),
                     rc_arm_high.read(),
@@ -1404,12 +1416,20 @@ mod app {
             ];
             let imu_sequence = IMU_LATEST_SEQ.load(Ordering::Relaxed);
 
+            let imu_fresh =
+                imu::classify_sample_freshness(*cx.local.imu_last_sequence, imu_sequence)
+                    == imu::SampleFreshness::Fresh;
+            *cx.local.imu_last_sequence = imu_sequence;
+            IMU_STALE.store(!imu_fresh, Ordering::Release);
+
             let control_armed = cx.local.control_safety_arm_reader.read();
-            let gyro_bias_update = cx
-                .local
-                .gyro_bias_calibrator
-                .update(control_armed, cx.local.gyro_axis_map.map_raw(gyro_raw));
+            let gyro_bias_update = cx.local.gyro_bias_calibrator.update_if_fresh(
+                control_armed,
+                imu_fresh,
+                cx.local.gyro_axis_map.map_raw(gyro_raw),
+            );
             if gyro_bias_update.newly_calibrated {
+                IMU_BIAS_CALIBRATED.store(true, Ordering::Release);
                 info!(
                     "Gyro bias calibrated raw [{}, {}, {}]",
                     gyro_bias_update.bias_raw[0],
@@ -1424,11 +1444,6 @@ mod app {
             CONTROL_ROLL_RAW.store(control_gyro_raw[0], Ordering::Relaxed);
             CONTROL_PITCH_RAW.store(control_gyro_raw[1], Ordering::Relaxed);
             CONTROL_YAW_RAW.store(control_gyro_raw[2], Ordering::Relaxed);
-            let imu_fresh =
-                imu::classify_sample_freshness(*cx.local.imu_last_sequence, imu_sequence)
-                    == imu::SampleFreshness::Fresh;
-            *cx.local.imu_last_sequence = imu_sequence;
-
             let (imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered) = cx
                 .local
                 .imu_rate_filter
@@ -1486,12 +1501,10 @@ mod app {
                     let _ = safety_master::spawn(safety::SafetyEvent::DisarmRequested);
                 }
 
-                IMU_STALE.store(true, Ordering::Relaxed);
                 return;
             }
 
             *cx.local.imu_stale_ticks = 0;
-            IMU_STALE.store(false, Ordering::Relaxed);
 
             let now_us = Mono::now().duration_since_epoch().to_micros();
             let rc_link = cx.local.control_rc_link_reader.status(now_us);
@@ -1946,6 +1959,21 @@ mod app {
     #[cfg(feature = "dshot")]
     const _: () = assert!(ARMING_GUARD_POLL_MS < safety::MOTOR_CMD_MAX_AGE_MS);
 
+    fn validate_live_arming_guard(
+        permit: bool,
+        rc_link_armable: bool,
+        arm_high: bool,
+        throttle: u32,
+    ) -> Result<(), safety::ArmingAbortReason> {
+        safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
+        safety::validate_prearm_health(safety::PreArmHealth {
+            imu_ready: IMU_LATEST_SEQ.load(Ordering::Acquire) != 0,
+            imu_bias_calibrated: IMU_BIAS_CALIBRATED.load(Ordering::Acquire),
+            imu_fresh: !cfg!(feature = "bench_prearm_imu_stale")
+                && !IMU_STALE.load(Ordering::Acquire),
+        })
+    }
+
     fn current_arming_guard(
         permit: &ActuatorArmPermitReader,
         rc_link: &signals::RcLinkReader,
@@ -1953,7 +1981,7 @@ mod app {
         throttle: &signals::RcThrottleReader,
     ) -> Result<(), safety::ArmingAbortReason> {
         let now_us = Mono::now().duration_since_epoch().to_micros();
-        safety::validate_arming_guard(
+        validate_live_arming_guard(
             permit.read(),
             rc_link.is_armable(now_us),
             arm_high.read(),

@@ -37,6 +37,7 @@ bench_dshot_idle_output1_not_running = []
 # Compatibility alias retained for the original, physically ambiguous test name.
 bench_dshot_idle_motor1_not_running = ["bench_dshot_idle_output1_not_running"]
 bench_motor_cmd_stale_rejection = []
+bench_prearm_imu_stale = []
 bench_spi_timeout_recovery = ["ferrowasp-stm32f4/bench_spi_timeout_recovery"]
 dshot = [
     "ferrowasp-bsp/ferrowasp-fcu3-dshot-four",

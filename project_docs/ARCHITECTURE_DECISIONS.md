@@ -867,19 +867,17 @@ The manager waits five seconds after boot before issuing requests, so an early
 arm attempt may enter guarded idle and time out after 1.2 seconds; the operator
 must then move the switch low before making a fresh arm request.
 
-IMU initialization, gyro-bias calibration, and freshness are not yet part of
-the arming guard. A stale IMU may therefore pass this ESC qualification and
-briefly reach `SYSTEM ARMED` before the first post-arm stale-IMU control check
-requests disarm. Adding an IMU pre-arm prerequisite remains separate safety
-work.
+IMU initialization, gyro-bias calibration, and freshness are now part of the
+arming guard. They are checked before and throughout ESC qualification and
+again before `SYSTEM ARMED`; stale samples cannot advance bias calibration.
 
 ## ADR-0032: Foxeer Uses A Separate Capped Actuator-Validation Gate
 
-Status: accepted
+Status: accepted for commissioning; original flight-inhibit premise superseded
 
-The Foxeer F405 V2 flight-readiness gate remains false until its physical IMU
-orientation, ADC calibration, motor order, and M4 complementary-output
-polarity are target-verified. Those motor checks cannot be completed while
+The Foxeer F405 V2 flight-readiness gate remained false until its physical IMU
+orientation, ADC baseline, motor order, and M4 complementary-output polarity
+were target-verified. Those motor checks could not be completed while
 every actuator output is blocked, so the app provides a distinct compile-time
 `bench_actuator_validation` commissioning gate.
 
@@ -887,9 +885,10 @@ The gate must be combined with `bench_equal_motors` or exactly one physical or
 logical selected-motor feature. A gate-only image and a selected-motor image
 without the gate are compile-time errors. The mode keeps the 250-command cap,
 RC qualification, low-throttle arming guard, recovery latch, safety-owned
-actuator task, bounded fresh-command path, and RC-loss/disarm behavior. It does
-not make the BSP verification flags true and cannot compile a normal
-PID/mixer-output flight image.
+  actuator task, bounded fresh-command path, and RC-loss/disarm behavior. It
+  does not make BSP verification flags true and cannot select normal PID/mixer
+  output. The BSP flight profile was subsequently promoted from recorded target
+  evidence; this capped gate remains available for commissioning.
 
 The existing PWM arming sequence briefly applies idle to all four outputs
 before selected/capped commands begin. The commissioning image is therefore

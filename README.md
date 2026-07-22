@@ -31,8 +31,8 @@ FerroWasp is in rapid prototyping.
 | RC input | SBUS over USART2 RX DMA |
 | IMU | MPU6500 on FCU3; runtime-selected MPU6500/ICM42688-P on Foxeer |
 | Control | FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling, 400 Hz control update, prototype rate loop |
-| Motor output | Safety-gated four-lane DShot600 on FCU3 by default; explicit RC PWM fallback |
-| ESC telemetry | Default FCU3 DShot image only: BLHeli/KISS legacy UART telemetry on PA10/USART1 RX; eRPM validated on all four ESCs |
+| Motor output | Safety-gated four-lane DShot600 by default on FCU3 and Foxeer; explicit RC PWM fallbacks |
+| ESC telemetry | Default DShot images: BLHeli/KISS legacy UART telemetry on PA10/USART1 RX; eRPM validated on all four ESCs on both boards |
 | Logging/debug | `defmt`/RTT, compact BB2 frames, and opt-in Foxeer SPI-NOR blackbox/config storage with USB CLI |
 | OSD/telemetry | DJI O4 MSPv1 OSD on UART4 and Foxeer USB CDC status/storage access |
 
@@ -133,7 +133,7 @@ images are isolated so incompatible STM32 PAC features cannot be unified:
 ```text
 apps/stm32f405-flight  RTIC 2 flight app; FerroWasp FCU3 by default
 apps/stm32f401-bringup Minimal F401 RTIC LED/USART bring-up app
-apps/foxeer-f405-v2    RTIC 2 Foxeer flight app; arming inhibited for bring-up
+apps/foxeer-f405-v2    RTIC 2 Foxeer flight app; default DShot flight candidate
 ```
 
 Run firmware commands from the selected app directory.
@@ -188,16 +188,16 @@ Shared flight logic uses Betaflight Quad X logical motor numbering:
 Each board profile maps those logical motors to physical output pads. Re-test
 motor order, motor direction, and stick/tilt response with propellers removed
 before any flight on every actuator-capable board, including FCU3 after mapping
-changes, Foxeer before removing its arming inhibit, and any future
+changes, Foxeer before its first flight, and any future
 actuator-capable target. The F401 bring-up board declares no actuator outputs.
 
 Important rule for contributors: do not add a path that can command motors
 outside the safety/actuator-output path.
 
-Known prototype limitation: healthy, calibrated, fresh IMU state is not yet an
-explicit pre-arm prerequisite. A stale IMU requests disarm on the first armed
-control tick, which means a dead IMU can briefly reach the armed state. Treat
-closing this gap as required safety work, not as completed flight readiness.
+Arming now requires a supported IMU that has produced data, completed startup
+gyro-bias calibration, and remains fresh. The same health guard is rechecked
+during actuator preparation. This is implemented in both FCU3 and Foxeer app
+shells; negative target fault-injection evidence remains a follow-up.
 
 ## Roadmap
 
@@ -207,15 +207,15 @@ Near-term FCU work:
   prepared sanitized `main` baseline
 - increment pitch P cautiously while checking commanded-rate tracking and
   mixer headroom
-- target-validate the Foxeer F405 V2 before removing its arming inhibit
+- complete the Foxeer F405 V2 normal-mixer/OSD props-off flight handoff
 - establish a reproducible WSL/Docker development environment after Foxeer
   bring-up
 - preserve the target-validated arming, disarm, RC-loss, and actuator-gating
   behavior
 - target-validate stale motor-command rejection and add an independent actuator
   deadline watchdog
-- make healthy, calibrated, fresh IMU state a pre-arm prerequisite and complete
-  ADC/OSD freshness handling
+- target-validate the healthy/calibrated/fresh IMU pre-arm prerequisite and
+  complete ADC/OSD freshness handling
 - capture more short flight and characterization logs
 - validate DShot timing and synchronization with a logic analyzer
 - add CRSF/ELRS after the SBUS/F405 path is stable
@@ -270,9 +270,10 @@ DO-178C, airworthiness, or production safety for this prototype.
 ## Hardware
 
 FerroWasp FCU3 is the current flight-tested baseline. Foxeer F405 V2 is a WIP
-bring-up target with arming intentionally inhibited until board-specific
-measurements are complete. NUCLEO-F401RE is a dev-board scheduler and
-USART-heartbeat target with no actuator outputs.
+flight candidate with default DShot600, target-verified motor/RC/IMU/eRPM and
+blackbox paths, and runtime IMU pre-arm checks. It still requires the final
+normal-mixer/OSD props-off handoff before its first flight. NUCLEO-F401RE is a
+dev-board scheduler and USART-heartbeat target with no actuator outputs.
 
 If hardware behaves unexpectedly, stop testing and inspect the board, wiring,
 ESCs, and motors. Propellers must be removed for motor-order, motor-direction,

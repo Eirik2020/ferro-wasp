@@ -856,6 +856,58 @@ bounded SPI DMA request rather than performing blocking SPI work. Total and
 rejected trigger counts are reported through RTT. Target evidence must still
 establish interrupt polarity/rate, rejected-event behavior, deadline recovery,
 and stale-sample behavior for the fitted IMU before flight arming is enabled.
+An opt-in `imu_orientation_rtt` diagnostic now publishes one coherent,
+sensor-frame accel/gyro/temperature snapshot through the two-second RTT
+heartbeat. Its fixed-point values are copied through feature-gated atomics with
+an odd/even version guard; it adds no RTIC shared-resource lock, task, USB
+protocol field, or actuator path. This is the prepared level/nose-up/
+right-side-down/clockwise-yaw evidence image and does not itself verify the
+provisional identity rotation.
+The first target capture is `logs/terminal_embed/20260721_232959_rtt.log` from
+image SHA-256
+`70E04FDDAAD7EC297B35BC1BE770FE1CEDDCB22A99187E7673AEC7B84A234FF8`.
+It ran for about 86 seconds at 2,024-2,025 samples per heartbeat interval with
+zero rejected DRDY events, level acceleration near `[0, 0, +995]` mg, and
+32.2-32.6 C temperature. The named nose-up action produced negative sensor-X
+gyro and shifted gravity toward negative sensor Y. The two yaw directions
+produced opposite sensor-Z signs. The middle tilt pair produced opposite
+sensor-Y signs, but the fourth action described as the opposite roll repeated
+the first negative-X signature. Because that action sequence cannot represent
+opposite rotations around one physical axis, orientation remains unverified
+pending one explicitly named right-side-down capture; the BSP identity rotation
+was not changed.
+The explicit follow-up is `logs/terminal_embed/20260721_233738_rtt.log`. The
+operator lifted both left-side motors, unambiguously producing right-side-down
+positive roll when viewed from the FPV camera. Sensor gyro Y was negative
+during the slow lift, held acceleration reached approximately
+`[+780, -30, +620]` mg, and the return motion reversed gyro Y. Combined with
+the earlier nose-up and opposite-yaw evidence, this establishes gyro mapping
+`FrameRotation::new([1, 0, 2], [-1, -1, -1])`: body roll `=-sensor Y`, pitch
+`=-sensor X`, and yaw `=-sensor Z`.
+
+That measured rotation is now installed in the Foxeer BSP, and the fitted
+sensor identity/orientation flags are true. The estimator receives the negative
+of mapped accelerometer specific force as its drone-frame gravity vector, so
+the captured level, nose-up, and right-side-down observations map to its
+existing `[0,0,+g]`, negative-X, and positive-Y gravity convention. Unit tests
+cover the measured gyro permutation and these three gravity cases. Flight
+arming remains inhibited because ADC calibration, logical motor order, and M4
+CH3N polarity remain false. A follow-up `imu_orientation_rtt` image now emits a
+mapped `IMU ORIENT body` line and must pass on target before the implementation
+checkpoint is treated as closed.
+That mapped target validation passed in
+`logs/terminal_embed/20260721_234528_rtt.log` using image SHA-256
+`3832A346EACDD86B910EF21CE88821D17FAE8B6F39844A549407424FD6405591`.
+Level and final-rest body gravity were approximately `[0,0,+995]` mg. Lifting
+the left side produced positive roll and positive body-Y gravity; lifting the
+nose produced positive pitch and negative body-X gravity; turning the nose
+right produced positive yaw, and returning produced negative yaw. Every
+two-second DRDY interval advanced 2,024-2,025 events with zero rejects, and no
+post-startup stale/transport warning appeared. This closes the fitted-IMU
+identity, sensor-to-body axis/sign, estimator-gravity conversion, and mapped
+implementation checkpoint. PC4 electrical pulse shape/cadence still requires
+scope evidence, and the unrelated ADC/motor/M4 gates continue to inhibit
+flight arming.
 The provisional logical-to-physical map is `[1, 2, 3, 4]` under the shared
 Betaflight Quad X convention; unlike FCU3's measured physical output order and
 current `[3, 4, 2, 1]` remap, it is not treated as target evidence.
@@ -882,6 +934,35 @@ its ELF through STM32CubeProgrammer. The DFU runner validates the ELF origin at
 available `USBn` port, verifies after programming, and starts execution at
 `0x08000000`. Use the helper with
 `FERROWASP_DFU_DRY_RUN=1` for a guaranteed no-flash integration check.
+
+The first retrofitted-SWD checkpoint is now automated as
+`python tools/terminal_embed.py --foxeer-smoke`. It builds the normal
+arming-inhibited release image, programs it through `probe-rs`, retains the
+ELF hash and RTT transcript, and terminates after 14 seconds of post-boot RTT. PASS requires
+successful Foxeer initialization, the Foxeer RTT hello, the board arming
+inhibit, a supported IMU identity, two approximately 1 kHz PC4/EXTI4 intervals,
+and no panic/error marker. This test does not enable any actuator commissioning
+feature; propellers remain removed and ESC power remains disconnected.
+
+On 2026-07-21 the connect-under-reset release run programmed successfully and
+the automated post-boot smoke capture passed with ELF SHA-256
+`9A3AB250FD48D27BCA32099BAB04DFD7A6E396D4082AFAC6728A30825D0DF268`.
+The retained log is `logs/terminal_embed/20260721_214256_rtt.log`. It identified
+ICM42688-P `WHO_AM_I=0x47`, preserved the flight-arming inhibit, advanced six
+successive PC4/EXTI4 intervals by 2,024-2,025 events each, and reported zero
+rejected triggers. A host-tool timing defect discovered during this work was
+fixed: its 14-second window now begins after firmware boot rather than killing
+the slow ST-Link during its approximately 24-second programming operation.
+Subsequent no-reset reads returned STM32 DBGMCU value `0x100F6413` and a valid
+flash vector block at 950 kHz and 1.8 MHz without replugging the probe. A 4 MHz
+request was capped by the probe to 1.8 MHz, so the smoke preset now uses the
+measured 1.8 MHz ceiling with an explicit lower-speed override available.
+The shared terminal helper now also emits explicit `FLASH STARTED`,
+`FLASH ACTIVE`, `FLASH PROGRAMMED`, and `FLASH SUCCEEDED` milestones for every
+`probe-rs run`. Success requires observed firmware RTT after programming;
+probe exit or startup timeout before RTT produces a prominent `FLASH FAILED`
+line and nonzero status. This distinguishes slow programming from an asserted
+NRST or a firmware that never booted.
 
 Physical ROM-DFU programming was verified on 2026-07-18 with
 STM32CubeProgrammer 2.23.0: one Foxeer device was detected as `USB1`, the
@@ -934,6 +1015,47 @@ workspace Clippy, and optimized feature builds pass. Physical JEDEC, scratch
 write/readback, power-interrupted config recovery, log capture, and control-
 timing/OSD coexistence evidence remain required before flight use.
 
+The read-only physical storage checkpoint passed on 2026-07-21. The
+`flash_storage` image SHA-256 was
+`2771E422EDB7D08A26AFBDBD8C18D8A4A0B28F9B516D4A5404E555AA9D8208F9`, and
+`logs/terminal_embed/20260721_215409_rtt.log` recorded JEDEC `ef:40:18`,
+16,777,216-byte capacity, successful recovery at log page zero, and
+`writable false`. The USB CLI independently returned
+`OK jedec=ef:40:18 bytes=16777216 ready=1` and zero used pages out of 65,488.
+The foreign/non-FerroWasp log region was preserved. Over roughly 72 seconds,
+IMU/DRDY progress remained approximately 1.012 kHz with zero rejected events
+and no SPI/storage warning after initialization. One preceding
+connect-under-reset attempt timed out before programming; an immediate retry
+at 1.8 MHz attached and completed normally. Scratch writes, configuration
+recovery, explicit invalid-read rejection, and logging coexistence remain open.
+
+The first `flash_writes` scratch-sector transaction also passed on 2026-07-21.
+The USB CLI reported `OK flash scratch test started` and then
+`OK flash scratch erase/program/read verified`; a follow-up read-only `list`
+still returned zero recognized FerroWasp pages and `writable false`, so the
+foreign log region remained locked. The image SHA-256 was
+`3747FD6C20A12A7661F0CB656C199DA1FFFDAAAA04215392935B28FBB1DBD8C6`, and the
+RTT transcript is `logs/terminal_embed/20260721_220055_rtt.log`. This closed the
+live erase/program/readback mechanism; its cold-power repeat followed below.
+Configuration copy-on-write, interrupted-save recovery, and log-region erase
+remained untouched at this point.
+
+The cold-power scratch repeat subsequently passed without reflashing. Initial
+host attempts reported no COM6 because the attached debugger was holding NRST
+low; after releasing reset, the Foxeer enumerated normally and repeated JEDEC
+identity, scratch erase/program/readback verification, and the protected
+zero-page `writable false` scan. This closes the cold-power scratch checkpoint
+and identifies the transient enumeration failure as debugger reset assertion,
+not a storage or USB firmware fault.
+
+The first normal copy-on-write configuration recovery also passed. The operator
+staged `log_rate_divisor` from `1` to `2`, saved it, cold-booted without
+reflashing, and read back `2.0000`. The value was then staged and saved back to
+the intended default `1`; a live read returned `1.0000`, while the foreign log
+region remained protected with zero FerroWasp pages and `writable false`.
+Cold-boot verification of the restored newer slot and deterministic torn-save
+recovery remain open; no PID value or log-region sector was changed.
+
 ## Isolated Firmware App Packages
 
 The repository root is now a virtual workspace containing reusable crates.
@@ -981,17 +1103,13 @@ ELF sync, detached logging, and log fetch implementation in FerroDebugger.
 
 ## Current Focus
 
-The active work is publication preparation for the experimental FerroWasp
-source repository. The current tree must be consolidated deliberately, public
-documentation must describe the DShot/telemetry-qualified baseline accurately,
-all supported app checks must pass, and sensitive or oversized historical Git
-objects must not become public.
-
-After publication preparation, the next target is Foxeer F405 V2 bring-up. Its
-existing compile-time arming inhibit remains mandatory until its physical IMU
-orientation, RC, OSD, ADC, motor waveform, motor order, and reset/forced-off
-gates are measured. WSL/Docker development-environment work follows the Foxeer
-checkpoint.
+The active work is the final Foxeer F405 V2 props-off flight handoff. Its IMU
+orientation/EXTI, RC interlocks, motor identity/direction, DShot600, PA10 eRPM
+qualification, and onboard blackbox paths now have target evidence. DShot is
+the app default. The normal mixer must still complete one powered props-off run
+with the new IMU pre-arm gate, live OSD, logging, disarm, and RC-loss behavior
+before propellers are installed. WSL/Docker development-environment work
+follows the Foxeer checkpoint.
 
 FCU3 flight tuning is deliberately parked while publication work is active.
 The previous yaw tendency was absent in the latest flight. The next isolated
@@ -1245,22 +1363,18 @@ Key results:
   target and the normal-build checkpoint remains
 - independent actuator deadline detection for total control-loop command loss
   is not yet implemented
-- IMU initialization, gyro-bias calibration, and freshness are not arming
-  prerequisites. The current first post-arm stale-IMU check requests disarm,
-  leaving a brief armed transition possible; RC/IMU/ADC freshness and loss
-  policies remain prototype-level
+- IMU initialization, gyro-bias calibration, and freshness are now pre-arm
+  prerequisites and are rechecked during actuator preparation. Negative target
+  fault-injection evidence and broader RC/IMU/ADC freshness policy remain open
 
 ## Recommended Next Session
 
-1. Finish the publication-preparation checklist: clean supported-target builds,
-   current public documentation, concrete security reporting, dependency and
-   toolchain pinning, and an intentional clean publication tree.
-2. Rotate the historical probe credential before repository visibility changes.
-   Publish from sanitized history; do not expose the old raw-capture branch.
-3. Run the final checks from a fresh clone of the proposed public history.
-4. Begin the Foxeer F405 V2 physical checklist with arming still inhibited.
-5. After Foxeer works, add and verify the WSL/Docker development environment.
-6. Return to FCU3 pitch tuning with the isolated P `0.30` trial and preferably
+1. Complete the Foxeer normal-mixer/OSD props-off handoff and retain its image
+   hash, RTT log, and onboard blackbox.
+2. If it passes, perform the first controlled open-field Foxeer hop with a
+   conservative envelope and immediate abort criteria.
+3. Add and verify the WSL/Docker development environment.
+4. Return to FCU3 pitch tuning with the isolated P `0.30` trial and preferably
    a BB2 flight capture.
 
 ## Verification Commands Used
@@ -1438,3 +1552,264 @@ of actuator requests and acknowledges only after the selected telemetry bit is
 emitted. Foxeer arming does not yet depend on telemetry: eRPM is logged for
 motor identity and wiring validation only. Promoting it into idle qualification
 requires successful DShot and telemetry bench evidence first.
+
+The individual powered props-off Foxeer PWM checkpoint ran on 2026-07-22.
+Physical outputs matched the provisional identity map and the shared Quad-X
+convention: M1 rear-right CW, M2 front-right CCW, M3 rear-left CCW, and M4
+front-left CW. M4 responding normally establishes the functional
+`TIM1_CH3N` polarity selection, although no scope/logic-analyzer measurement
+was taken and exact PWM timing remains unclaimed. The four retained logs are
+`20260721_235448_rtt.log`, `20260721_235936_rtt.log`,
+`20260722_000038_rtt.log`, and `20260722_000213_rtt.log`, with their exact
+image hashes recorded in `TARGET_VERIFICATION.md`. The BSP motor-order and M4
+functional-polarity verification flags are now true; ADC calibration remains
+false and continues to inhibit normal Foxeer flight arming.
+
+The M4 run also passed powered RC-loss behavior: an active motor stopped
+immediately on link loss, link restoration did not rearm, and a deliberate
+arm-low then arm-high transition was required. Raising throttle above the
+arming limit during PWM preparation aborted the sequence. A separate M3 test
+found a boot interlock defect: with arm held high and throttle zero across the
+flash/reset, the recovered link eventually requested arm and completed capped
+commissioning arming. The shared `RcLinkState` had allowed a transient low arm
+sample seen during its three-frame recovery window to set `rearm_allowed`.
+The candidate fix accepts an arm-low observation only once the link has
+reached valid state and includes a regression for low/low/high startup frames.
+The target repeat passed using image SHA-256
+`9482D89270F4D7D6C1F5E83D60F42817DB90AABEB75D119D6F66E15C2FACCA3D` and
+`logs/terminal_embed/20260722_001436_rtt.log`. With arm held high across the
+flash, the RC link qualified and the firmware then ran for approximately 14
+seconds without an arm request, PWM preparation, idle stage, or armed
+transition. Combined with the earlier powered reconnect-high test, this closes
+the startup/reconnect arm-high interlock regression and clears equal-motor PWM
+commissioning to continue.
+
+Equal-motor PWM commissioning then passed on 2026-07-22. With propellers
+removed, all four motors entered idle together, tracked the capped throttle
+command together, and stopped on explicit disarm; no boot-time automatic arm
+was observed. The retained log is
+`logs/terminal_embed/20260722_001849_rtt.log` and the image SHA-256 is
+`F84433707C03FC7E477981C6760189D920F507B2B8BB2A9C55A2C5DD41A1ABE9`.
+The log preserves guarded arm/disarm transitions and uninterrupted 1.012 kHz
+IMU/DRDY progress with zero rejected triggers. This closes Foxeer conventional
+PWM commissioning and clears the unpowered DShot600 counter/fault checkpoint.
+
+The unpowered Foxeer DShot600 checkpoint passed immediately afterward using
+image SHA-256
+`2D3BC3824405D9FED247F4FF52BB266FD1ABC893A1A113854E9E9EFC7EDAB245`.
+`logs/terminal_embed/20260722_002358_rtt.log` reached 25,000 frame starts in 50
+seconds. All four requested values stayed zero, every lane completion counter
+matched, completed sets remained exactly one behind started sets, and all
+busy, lease-expiry, timeout, and fault counters stayed zero. No spurious DMA
+interrupt was reported, while IMU/DRDY sampling remained approximately 1.012
+kHz with zero rejected triggers. Electrical pulse timing remains unmeasured by
+explicit operator choice. This clears the powered props-off DShot decode,
+idle, throttle, disarm, and RC-loss checkpoint to begin; it does not complete
+that powered checkpoint.
+
+The first powered DShot attempt exposed an app-orchestration mismatch before
+the checkpoint could be credited. Although Foxeer used the same reusable
+DShot600 encoder, timer/DMA bank, command lease, and fault handling as FCU3,
+its app-local `EnterIdle` arm still ran the PWM 2.5-second low plus 500 ms idle
+sequence. The operator observed that PWM-labelled sequence and all motors
+spinning during the pre-armed idle interval. The implementation is now split
+by protocol: PWM is unchanged, while Foxeer DShot uses the same 100 ms guarded
+stop-frame policy as FCU3 and keeps stop selected until `SYSTEM ARMED`.
+Telemetry-qualified idle is not copied by assumption; Foxeer PA10 telemetry
+remains observational until its own target checkpoint passes. The corrected
+DShot image SHA-256 is
+`06AB74FCA6678AA2116297DA8CDFC19DD2F6677004D077DC2A4B6853132D69A6`.
+Strict PWM/DShot Clippy, the full workspace tests, and static defmt-message
+inspection pass. One unpowered arm/disarm ordering regression is required
+before returning to powered DShot.
+
+The corrected image received an additional ESC-unpowered stop soak in
+`logs/terminal_embed/20260722_004059_rtt.log`. It reached 20,000 frame starts
+over 40 seconds with four zero values, equal lane counters, and zero busy,
+expiry, timeout, or fault counts. The receiver did not qualify in that setup,
+so no arm request, DShot preparation, armed transition, or disarm was present.
+This strengthens corrected-image transport evidence but does not close the
+required arm/disarm ordering regression.
+
+Because this installation cannot power the receiver without also powering the
+ESC, the corrected ordering regression proceeded powered with propellers
+removed. It passed. `logs/terminal_embed/20260722_004429_rtt.log` records the
+100 ms DShot stop preparation before `SYSTEM ARMED`, idle value `112` only
+after that transition, equal throttle values `172`, `244`, and `138`, and four
+zeros after explicit disarm. A later armed-idle interval returned to four zeros
+on RC timeout; recovery with arm high did not rearm, while a later explicit
+low-to-high request completed the correct DShot sequence. Lane counters stayed
+equal and all backend error counters remained zero through 59,000 starts.
+`20260722_004643_rtt.log` adds equal throttle value `297`, and
+`20260722_004712_rtt.log` adds another idle-to-explicit-disarm transition.
+Operator observation confirmed all motors idled only when armed, followed
+throttle, and stopped on disarm and RC loss. Flash/boot with RC arm high did
+not automatically arm. This closes base Foxeer DShot600 commissioning and
+clears the observational PA10 BLHeli telemetry checkpoint.
+
+The observational telemetry candidate was then cross-checked against the
+FCU3 golden app before bench use. It retains the same shared ESC manager,
+2 ms scheduling period, PA10 / USART1 RX DMA2 Stream 5 Channel 4 route,
+sequenced request/ack ownership, wire parser, and fault latch. The Foxeer
+application deliberately consumes samples only for diagnostics; unlike FCU3,
+it does not use telemetry as an arming prerequisite. RTT output now names both
+the physical ESC output and logical motor and includes mismatched-ack and
+unsolicited-frame counters. The strict feature build
+`dshot esc_telemetry bench_actuator_validation bench_equal_motors` has release
+ELF SHA-256
+`8DFAF9EC34D22F91D2410D93FB2DA285A13557A37C389E486C05968843188C41`.
+Workspace formatting, strict Clippy, all host tests, the exact embedded
+release build, terminal-tool tests, and the documentation build pass. Powered
+props-off PA10 telemetry evidence remains the next checkpoint.
+
+The first powered telemetry attempt used that exact image and is retained in
+`logs/terminal_embed/20260722_005707_rtt.log`. PA10 delivered 14,498 valid
+frames with zero CRC failure and zero discarded bytes, while DShot transport,
+arming, throttle, and disarm remained clean. Association failed, however:
+manager `queued/started` stayed `0/0`, mismatched acknowledgements reached
+14,499, and unsolicited frames reached 14,498. The Foxeer app had placed
+`mark_request_queued` itself inside `debug_assert!`; release compilation
+therefore removed the required state change while the queued actuator request
+still executed every 2 ms. FCU3 executes the call unconditionally and only
+debug-asserts its returned boolean. Foxeer now matches that pattern. Routine
+builds also omit the periodic IMU raw/DRDY RTT reports; the new
+`imu_transport_rtt` feature restores them, and `--foxeer-smoke` adds that
+feature automatically so the smoke-test evidence contract remains intact.
+The corrected telemetry release ELF SHA-256 is
+`CCD4B30A5CA900E28BF1C07D75E63E59353206EE870427A32A93787D74DBD16F`.
+The powered props-off association repeat passed in
+`logs/terminal_embed/20260722_010421_rtt.log`. All four explicitly labelled
+physical/logical outputs reported zero eRPM while stopped, approximately
+6,600-7,200 eRPM at idle command `112`, and approximately 10,100-10,700 eRPM
+at throttle command `133`. The operator disarmed while throttle remained
+raised; the next DShot report contained four zeros and every ESC returned to
+zero eRPM. Manager `queued/started/valid` reached `2450/2450/2450`, with no
+latched fault, timeout, mismatch, unsolicited frame, CRC failure, or discarded
+byte. DShot lane counts remained equal and every backend error counter stayed
+zero. This closes Foxeer observational PA10 BLHeli legacy telemetry
+commissioning; telemetry remains intentionally independent of arming.
+
+Foxeer DShot arming is now promoted to the FCU3 golden telemetry-qualified
+policy following that successful observational checkpoint. The `dshot` feature
+includes `esc_telemetry`, and the manager publishes its already sequenced,
+timestamped samples through the bounded update queue consumed only by the
+actuator owner. After the existing 100 ms guarded stop dwell, the owner applies
+idle command `65` / DShot value `112` under the temporary permit while the
+system remains disarmed. It requires three consecutive fresh observations
+from all four physical outputs between 3,000 and 10,000 eRPM after a 250 ms
+spin-up grace, with a 200 ms sample-age limit and 1.2-second overall timeout.
+Guard failure, missing/zero/stale evidence, overspeed, invalid configuration,
+or notification failure selects four stop values before reporting the abort.
+Telemetry loss after a completed armed transition remains observational, as on
+FCU3.
+
+The positive props-off candidate SHA-256 is
+`28C5E4BDC4C9B51998385A434983D83035B5FAE8136E8437E8B07ABF9A8A2B70`.
+The negative feature `bench_dshot_idle_output1_not_running` forces only the
+observed eRPM for physical output 1 / logical M1 rear-right to zero; its
+candidate SHA-256 is
+`9A7A14751747969CDE80265AD2ADA7AB0464A423A1D4A64DC1DE6CED9E8A9073`.
+The injection does not directly stop a physical motor. The expected negative
+result is a timeout near 1.2 seconds, explicit identification of output 1,
+four stop values, and no `SYSTEM ARMED`. Both powered props-off target runs are
+still required. Because the legacy manager waits five seconds after boot, each
+run must wait past that delay before requesting arm; an earlier attempt is
+expected to fail closed.
+
+Both Foxeer telemetry-qualified arming candidates subsequently passed on
+2026-07-22. The positive image is retained in
+`logs/terminal_embed/20260722_012353_rtt.log`: qualification reached
+`[3, 3, 3, 3]` before `SYSTEM ARMED`, idle eRPM remained approximately
+6,600-7,200, explicit disarm selected four zeros, and all transport/manager
+fault counters remained zero. The injected image is retained in
+`logs/terminal_embed/20260722_012445_rtt.log`: two attempts timed out with
+counts `[0, 12, 12, 12]` and `[0, 13, 12, 12]`, named physical output 1 /
+logical M1, selected four stop values, and never armed. Independent diagnostic
+telemetry still observed M1 turning, confirming that the test modified only
+qualification evidence.
+
+Do not require an operator to interrupt RC or another arming guard manually
+inside the 1.2-second qualification window. A future deterministic bench or
+host-controlled fault-injection setup should revoke one guard at a known time
+and measure the stop deadline. Existing Foxeer RC-loss evidence and the new
+qualification-failure evidence cover the two paths separately, but do not
+constitute a direct timing measurement of guard revocation during
+qualification.
+
+The next props-off candidate combines the validated DShot/telemetry path with
+onboard SPI-NOR blackbox recording using features `dshot flash_blackbox
+bench_actuator_validation bench_equal_motors`. SPI2 remains CPU-driven at
+10 MHz and therefore adds no DMA conflict with the DShot lanes, PA10 ESC
+telemetry, SBUS, or UART4 OSD. The pre-bench release ELF SHA-256 is
+`47B78242AF0DC46C69C9225042C96BCC4D4F3371AE68FFDB1CE7ACE3C5CAB844`.
+The existing flash contents are protected as foreign (`writable false`), so
+the log partition must be explicitly erased once while disarmed. Reboot the
+same image after erase to reset records dropped while maintenance monopolized
+the flash manager, then require zero drops/write faults during the actual
+disarmed/armed/throttle/disarmed capture and wait at least two seconds after
+disarm for the partial-page flush before downloading the `.fwbb` file.
+
+That Foxeer DShot/onboard-blackbox checkpoint passed on 2026-07-22. The
+retained RTT log is `logs/terminal_embed/20260722_014010_rtt.log`; it records
+successful `[3, 3, 3, 3]` idle qualification, capped armed idle, equal throttle
+at DShot value `167`, explicit disarm to four zeros, synchronized DShot lanes,
+clean ESC-manager counters, and final SPI2 totals of 551 pages, zero dropped
+records, and zero write faults. The downloaded
+`logs/foxeer-blackbox.fwbb` SHA-256 is
+`4950B505EDA22BA34AA25A69AC85E560B4EC29A3A0B4B9D071FF026546A71DCE`.
+Every downloaded page is CRC-valid, flight ID is 1, page sequences are
+contiguous `0..550`, and the final page is a successful four-record partial
+flush. The file holds 2,754 records; after the analyzer's default three-record
+warm-up trim it reports 2,751 contiguous 400 Hz samples, no missing BB2 frames,
+no repeated IMU sample, approximately 1,011.2 Hz IMU progress, and only 2/3
+IMU sequence deltas. All four motor channels record the same capped command.
+
+The host analyzer now treats every `.fwbb` page as required evidence: invalid
+magic, version, record count, CRC, or page truncation fails analysis instead of
+silently skipping the page. It also reports total CRC-valid pages, records,
+flight IDs, page-sequence endpoints, partial-page count, and the final-page
+record count. This closes file integrity and partial-flush interpretation for
+the current bench capture. Control-jitter measurement under logging and live
+OSD observation remain separate target checkpoints before onboard logging is
+used in flight.
+
+### Foxeer first-flight candidate hardening (2026-07-22)
+
+The flash capture's stored control timestamps are now analyzed directly. Its
+2,750 contiguous intervals have a 2,500 us mean, 2,000/3,000 us min/max, 500 us
+standard deviation and p99 absolute jitter, and no interval above 3,000 us.
+That is the expected 2/3 ms quantization of the recorded 1 ms timebase and
+shows no missed 400 Hz logging deadline at that resolution. Live UART4 OSD
+coexistence is still a final operator-visible checkpoint.
+
+The long-standing pre-arm IMU gap is closed in code in both FCU3 and Foxeer.
+Arming now requires a produced IMU sample, completed stationary gyro-bias
+calibration, and fresh data. The same guard is applied before actuator
+preparation, throughout the 10 ms guarded holds/eRPM qualification, and at the
+final armed transition. Stale samples no longer advance gyro-bias calibration.
+Host tests cover each failure reason. Feature `bench_prearm_imu_stale` forces
+only the freshness evidence false for a deterministic negative target run; it
+must reject before temporary idle and be reflashed away before motor testing.
+
+Foxeer's ADC flight baseline now records its actual evidence rather than
+claiming fine calibration: upstream Betaflight uses default VBAT scale 110
+(11.0 divider), Foxeer publishes current scale 70 for the Reaper 55A ESC, and
+powered FerroWasp logs repeatedly observed a plausible 23.2-24.0 V pack. PC1
+has a large uncalibrated zero offset, so the displayed current is forced to
+zero while raw ADC millivolts remain available for later calibration.
+
+With those gates resolved, Foxeer defaults to DShot600 plus PA10 telemetry and
+normal flight arming. RC PWM is an explicit no-default-features fallback. The
+`--foxeer-smoke` preset adds `smoke_actuator_inhibit`, retaining an independent
+compile-time actuator lockout despite the flight profile promotion. The next
+and only required powered handoff is a propellers-off normal-mixer run using
+`flash_blackbox`: confirm bias completion before arm, `[3,3,3,3]` eRPM
+qualification, low stick/mixer response, live OSD, explicit disarm, and RC-loss
+stop behavior. Retain the exact ELF hash and RTT log before any flight.
+
+Pre-bench release identities from this state:
+
+- deterministic `bench_prearm_imu_stale`:
+  `A61B1A8C90266BA03CC24BBC219F1C317FBDF7388D1FF103119ED6A25468B9C0`;
+- normal default-DShot plus `flash_blackbox` flight candidate:
+  `02ECFAF2EC9544802323EBB4219A8B0D2DC58B8CADCFFE4FC82E989DBA4A815C`.

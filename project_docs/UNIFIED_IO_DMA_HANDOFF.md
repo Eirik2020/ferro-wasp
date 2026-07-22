@@ -1490,6 +1490,10 @@ with the F405 image. PWM/DShot DMA remains deferred.
 - Foxeer arming remains compile-time inhibited. Identity, orientation, ADC
   calibration, motor order, and M4 polarity still require physical evidence.
 
+The two bullets above describe the earlier bring-up checkpoint. They are
+superseded by the 2026-07-22 default-DShot flight-candidate state recorded in
+`CODEX_ACTIVE_WORK.md` and `TARGET_VERIFICATION.md`.
+
 # Continuation Notes - Foxeer Read-Only USB Debug
 
 - Replaced the Foxeer one-shot USB hello stub with an opt-in CDC ACM

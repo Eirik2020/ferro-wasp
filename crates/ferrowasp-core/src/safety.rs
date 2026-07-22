@@ -80,10 +80,32 @@ pub enum ArmingAbortReason {
     RcLinkInvalid,
     ArmSwitchLow,
     ThrottleHigh,
+    ImuUnavailable,
+    ImuBiasUncalibrated,
+    ImuStale,
     EscIdleTelemetryTimeout,
     EscIdleRpmOutOfRange,
     EscIdleQualificationInvalid,
     CompletionDeliveryFailed,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct PreArmHealth {
+    pub imu_ready: bool,
+    pub imu_bias_calibrated: bool,
+    pub imu_fresh: bool,
+}
+
+pub const fn validate_prearm_health(health: PreArmHealth) -> Result<(), ArmingAbortReason> {
+    if !health.imu_ready {
+        Err(ArmingAbortReason::ImuUnavailable)
+    } else if !health.imu_bias_calibrated {
+        Err(ArmingAbortReason::ImuBiasUncalibrated)
+    } else if !health.imu_fresh {
+        Err(ArmingAbortReason::ImuStale)
+    } else {
+        Ok(())
+    }
 }
 
 pub const fn validate_arming_guard(
@@ -166,7 +188,10 @@ impl RcLinkState {
         if self.consecutive_healthy_frames >= RC_LINK_RECOVERY_FRAMES {
             self.valid = true;
         }
-        if !arm_high {
+        // Do not let a transient low arm value seen while the receiver link is
+        // still qualifying satisfy the boot/reconnect rearm interlock. The
+        // switch must be observed low on a link that has reached valid state.
+        if self.valid && !arm_high {
             self.rearm_allowed = true;
         }
 
@@ -651,6 +676,21 @@ mod tests {
     }
 
     #[test]
+    fn rc_link_ignores_arm_low_transients_before_recovery_completes() {
+        let mut link = RcLinkState::new();
+
+        assert!(!link.observe_healthy_frame(1_000, false).valid);
+        assert!(!link.observe_healthy_frame(2_000, false).valid);
+
+        let recovered_high = link.observe_healthy_frame(3_000, true);
+        assert!(recovered_high.valid);
+        assert!(!recovered_high.armable);
+
+        let observed_low_while_valid = link.observe_healthy_frame(4_000, false);
+        assert!(observed_low_while_valid.armable);
+    }
+
+    #[test]
     fn rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation() {
         let mut link = RcLinkState::new();
         link.observe_healthy_frame(1_000, false);
@@ -753,6 +793,38 @@ mod tests {
         assert_eq!(
             validate_arming_guard(true, true, true, ARMING_MAX_THROTTLE + 1),
             Err(ArmingAbortReason::ThrottleHigh)
+        );
+    }
+
+    #[test]
+    fn prearm_health_requires_ready_calibrated_fresh_imu() {
+        let healthy = PreArmHealth {
+            imu_ready: true,
+            imu_bias_calibrated: true,
+            imu_fresh: true,
+        };
+        assert_eq!(validate_prearm_health(healthy), Ok(()));
+
+        assert_eq!(
+            validate_prearm_health(PreArmHealth {
+                imu_ready: false,
+                ..healthy
+            }),
+            Err(ArmingAbortReason::ImuUnavailable)
+        );
+        assert_eq!(
+            validate_prearm_health(PreArmHealth {
+                imu_bias_calibrated: false,
+                ..healthy
+            }),
+            Err(ArmingAbortReason::ImuBiasUncalibrated)
+        );
+        assert_eq!(
+            validate_prearm_health(PreArmHealth {
+                imu_fresh: false,
+                ..healthy
+            }),
+            Err(ArmingAbortReason::ImuStale)
         );
     }
 
