@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-31d7b953.js";
+            window.path_to_searchindex_js = "searchindex-cf8932c5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b4e0e1f2.js"></script>
@@ -227,15 +227,17 @@ and third-party attribution;</li>
 <p>Publication is a source-sharing milestone, not a firmware release or safety
 approval.</p>
 <h2 id="priority-2-run-ferrowasp-on-foxeer-f405-v2"><a class="header" href="#priority-2-run-ferrowasp-on-foxeer-f405-v2">Priority 2: Run FerroWasp on Foxeer F405 V2</a></h2>
-<p>The Foxeer image is now a default-DShot flight candidate. Evidence covers
-ROM-DFU/SWD, USB, ICM42688-P/EXTI, orientation, RC interlocks, motor
-order/direction, eRPM-qualified arming, and onboard blackbox recording.</p>
+<p>The Foxeer image uses default DShot and has evidence for ROM-DFU/SWD, USB,
+ICM42688-P/EXTI, physical orientation, RC interlocks, motor order/direction,
+eRPM-qualified arming, and onboard blackbox recording. Its first prop-on
+departure exposed positive pitch feedback and attempted a forward flip. The
+pre-fix image is withdrawn. The correction has since passed unpowered
+frame-sign and powered normal-mixer props-off opposition checks.</p>
 <p>Next checks:</p>
 <ol>
-<li>Run the normal uncapped mixer with propellers removed and retain its hash/log.</li>
-<li>Confirm the healthy/calibrated/fresh IMU pre-arm gate on target.</li>
-<li>Confirm low roll/pitch/yaw/throttle mixing and immediate stop on disarm/RC loss.</li>
-<li>Confirm live UART4 OSD while onboard blackbox logging is active.</li>
+<li>Inspect the airframe and propellers, then repeat a bounded controlled-field
+hop with immediate abort criteria.</li>
+<li>Review the new flight record before expanding the envelope.</li>
 <li>Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.</li>
 </ol>
 <p>The Foxeer app provides an explicit <code>bench_actuator_validation</code> commissioning
