@@ -1,0 +1,34 @@
+schema_version = 6
+
+[bsp]
+id = "nucleo-f401re"
+mcu = "STM32F401"
+
+[clock]
+source = "hsi"
+source_frequency_hz = 16000000
+system_clock_hz = 84000000
+
+[resources.leds.led2]
+pin = "PA5"
+default = "high"
+
+[resources.buttons.user_button]
+pin = "PC13"
+
+[resources.serial.usart1]
+peripheral = "USART1"
+tx_pin = "PA9"
+rx_pin = "PA10"
+
+[resources.dma.usart1_rx]
+controller = "DMA2"
+stream = 5
+channel = 4
+interrupt = "DMA2_STREAM5"
+
+[resources.dma.usart1_tx]
+controller = "DMA2"
+stream = 7
+channel = 4
+interrupt = "DMA2_STREAM7"

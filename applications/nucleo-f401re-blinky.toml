@@ -1,0 +1,21 @@
+schema_version = 6
+
+[application]
+name = "nucleo-f401re-blinky"
+bsp = "nucleo-f401re"
+feature_order = ["blink_led", "button_toggle"]
+
+[features.blink_led]
+implementation = "stm32f4/blink-led"
+task_name = "blink_led"
+task_priority = 1
+toggle_period_ms = 1000
+led = "led2"
+
+[features.button_toggle]
+implementation = "stm32f4/button-toggle-blink"
+task_name = "button_toggle"
+task_priority = 2
+debounce_ms = 20
+button = "user_button"
+led = "led2"
