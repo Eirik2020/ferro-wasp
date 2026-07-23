@@ -1429,6 +1429,22 @@ mod tests {
     }
 
     #[test]
+    fn measured_nose_down_pitch_rate_commands_front_motors_up() {
+        let mut controller = test_controller();
+
+        controller.update_throttle_setpoint(1000.0);
+        controller.update_attitude_rate_setpoint(0.0, 0.0, 0.0);
+        controller.update_rate_measured(0.0, 100.0, 0.0);
+        controller.update_motor_commands();
+
+        assert_eq!(controller.get_rate_controller_output(), [0.0, -100.0, 0.0]);
+        assert_eq!(
+            controller.get_logical_motor_commands(),
+            [900.0, 1100.0, 900.0, 1100.0]
+        );
+    }
+
+    #[test]
     fn pid_contributions_are_exposed_per_axis() {
         let mut controller = test_controller();
 

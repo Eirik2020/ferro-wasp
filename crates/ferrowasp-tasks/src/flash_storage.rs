@@ -4,6 +4,9 @@ use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, FlightRecord, RECORDS_PER_PAGE, e
 use heapless::String;
 use heapless::spsc::{Consumer, Producer, Queue};
 
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_mspv2::rpc;
+
 use crate::drone_toolbox::{PidGains, RateControllerGains, TuningProfile};
 
 pub const RECORD_QUEUE_CAPACITY: usize = 64;
@@ -28,6 +31,23 @@ pub type CommandConsumer = Consumer<'static, StorageCommand>;
 pub type ResponseQueue = Queue<ResponseFrame, RESPONSE_QUEUE_CAPACITY>;
 pub type ResponseProducer = Producer<'static, ResponseFrame>;
 pub type ResponseConsumer = Consumer<'static, ResponseFrame>;
+
+#[cfg(feature = "mspv2_configurator")]
+pub const RPC_COMMAND_QUEUE_CAPACITY: usize = 4;
+#[cfg(feature = "mspv2_configurator")]
+pub const RPC_RESPONSE_QUEUE_CAPACITY: usize = 2;
+#[cfg(feature = "mspv2_configurator")]
+pub type RpcCommandQueue = Queue<rpc::RpcRequest, RPC_COMMAND_QUEUE_CAPACITY>;
+#[cfg(feature = "mspv2_configurator")]
+pub type RpcCommandProducer = Producer<'static, rpc::RpcRequest>;
+#[cfg(feature = "mspv2_configurator")]
+pub type RpcCommandConsumer = Consumer<'static, rpc::RpcRequest>;
+#[cfg(feature = "mspv2_configurator")]
+pub type RpcResponseQueue = Queue<rpc::RpcResponse, RPC_RESPONSE_QUEUE_CAPACITY>;
+#[cfg(feature = "mspv2_configurator")]
+pub type RpcResponseProducer = Producer<'static, rpc::RpcResponse>;
+#[cfg(feature = "mspv2_configurator")]
+pub type RpcResponseConsumer = Consumer<'static, rpc::RpcResponse>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfigKey {
@@ -348,6 +368,72 @@ impl StoredConfig {
             Some(candidate)
         }
     }
+
+    #[cfg(feature = "mspv2_configurator")]
+    pub fn to_rpc(self) -> rpc::ConfigV1 {
+        rpc::ConfigV1 {
+            roll_p: self.get(ConfigKey::RollP),
+            roll_i: self.get(ConfigKey::RollI),
+            roll_d: self.get(ConfigKey::RollD),
+            pitch_p: self.get(ConfigKey::PitchP),
+            pitch_i: self.get(ConfigKey::PitchI),
+            pitch_d: self.get(ConfigKey::PitchD),
+            yaw_p: self.get(ConfigKey::YawP),
+            yaw_i: self.get(ConfigKey::YawI),
+            yaw_d: self.get(ConfigKey::YawD),
+            imu_lpf_alpha: self.get(ConfigKey::ImuLpfAlpha),
+            log_rate_divisor: self.log_rate_divisor,
+        }
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    pub fn from_rpc(config: rpc::ConfigV1) -> Result<Self, rpc::ConfigFieldId> {
+        let mut stored = Self::first_hop_default();
+        let fields = [
+            (ConfigKey::RollP, config.roll_p, rpc::ConfigFieldId::RollP),
+            (ConfigKey::RollI, config.roll_i, rpc::ConfigFieldId::RollI),
+            (ConfigKey::RollD, config.roll_d, rpc::ConfigFieldId::RollD),
+            (
+                ConfigKey::PitchP,
+                config.pitch_p,
+                rpc::ConfigFieldId::PitchP,
+            ),
+            (
+                ConfigKey::PitchI,
+                config.pitch_i,
+                rpc::ConfigFieldId::PitchI,
+            ),
+            (
+                ConfigKey::PitchD,
+                config.pitch_d,
+                rpc::ConfigFieldId::PitchD,
+            ),
+            (ConfigKey::YawP, config.yaw_p, rpc::ConfigFieldId::YawP),
+            (ConfigKey::YawI, config.yaw_i, rpc::ConfigFieldId::YawI),
+            (ConfigKey::YawD, config.yaw_d, rpc::ConfigFieldId::YawD),
+            (
+                ConfigKey::ImuLpfAlpha,
+                config.imu_lpf_alpha,
+                rpc::ConfigFieldId::ImuLpfAlpha,
+            ),
+            (
+                ConfigKey::LogRateDivisor,
+                config.log_rate_divisor as f32,
+                rpc::ConfigFieldId::LogRateDivisor,
+            ),
+        ];
+        for (key, value, field) in fields {
+            if !stored.set(key, value) {
+                return Err(field);
+            }
+        }
+        Ok(stored)
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    pub fn crc32(self) -> u32 {
+        ferrowasp_core::blackbox::crc32(&self.encode())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -610,6 +696,20 @@ mod tests {
         corrupt[40] = 0;
         corrupt[41] = 0;
         assert_eq!(StoredConfig::decode(&corrupt), None);
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    #[test]
+    fn rpc_config_round_trips_and_reports_the_invalid_field() {
+        let stored = StoredConfig::first_hop_default();
+        assert_eq!(StoredConfig::from_rpc(stored.to_rpc()), Ok(stored));
+
+        let mut invalid = stored.to_rpc();
+        invalid.imu_lpf_alpha = 1.1;
+        assert_eq!(
+            StoredConfig::from_rpc(invalid),
+            Err(rpc::ConfigFieldId::ImuLpfAlpha)
+        );
     }
 
     #[test]

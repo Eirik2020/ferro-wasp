@@ -70,9 +70,14 @@ The active bench target is an STM32F405-class RTIC firmware prototype with:
 FerroWasp FCU3 is the validated flight baseline. Foxeer F405 V2 has a separate
 RTIC app and BSP with the same supported flight-service subset, ICM42688-P/EXTI
 sampling, default DShot600/eRPM-qualified arming, and an explicit four-channel
-RC PWM fallback. Its normal flight profile is enabled but still awaits the
-final normal-mixer/OSD props-off handoff. Its base `usb_serial` path reports
-bounded status only. Flash-enabled variants
+RC PWM fallback. Its normal flight profile and final normal-mixer/OSD
+props-off handoff passed, but its first prop-on departure exposed positive
+pitch feedback and attempted a forward flip. A physical-body/controller pitch
+compatibility correction is implemented and passed new unpowered-orientation
+and powered normal-mixer props-off checks. The clean logged image is programmed
+and boot-verified; the controlled hop remains. Its base `usb_serial` path
+reports bounded status only.
+Flash-enabled variants
 accept a bounded, whitelisted storage/config command set while disarmed; USB
 cannot request arming, alter safety state, or command actuators.
 
@@ -109,8 +114,9 @@ order is:
    rotate the historical probe credential before changing visibility.
 2. Consolidate the current working tree onto the intended public default branch
    and make all supported target/CI checks pass.
-3. Complete the final normal-mixer/OSD props-off handoff for the Foxeer F405 V2
-   DShot flight candidate before installing propellers.
+3. Repeat the corrected Foxeer controlled-field first hop. Both props-off gates
+   and the clean-image programming/boot check passed; the pre-fix image remains
+   withdrawn from flight use.
 4. Establish a reproducible WSL/Docker development environment after Foxeer
    target bring-up.
 5. Return to FCU3 flight characterization with the isolated pitch P

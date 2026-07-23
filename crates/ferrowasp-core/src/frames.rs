@@ -9,6 +9,24 @@ pub enum DroneBodyFrame {
     ForwardRightDown,
 }
 
+/// Converts physical body angular rates into the established FCU3 rate/mixer
+/// convention.
+///
+/// The prototype controller predates `DroneBodyFrame`: its positive pitch
+/// command/output produces nose-down torque, while the physical body-frame
+/// convention names nose-up pitch positive. Roll and yaw already agree. Keep
+/// this compatibility transform explicit instead of hiding it in a board's
+/// measured sensor-to-body rotation. This is a signed-axis reflection, not a
+/// physical rotation; the existing `FrameRotation` type is the bounded
+/// signed-permutation representation used for both.
+pub const BODY_RATE_TO_RATE_CONTROLLER_MAP: FrameRotation =
+    FrameRotation::new([0, 1, 2], [1, -1, 1]);
+
+/// Converts the established FCU3 rate/mixer convention back into physical
+/// body angular rates. The compatibility transform is a single-axis sign
+/// reversal and is therefore its own inverse.
+pub const RATE_CONTROLLER_TO_BODY_MAP: FrameRotation = BODY_RATE_TO_RATE_CONTROLLER_MAP;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FrameRotation {
     pub source_axes: [usize; 3],
@@ -113,6 +131,18 @@ mod tests {
         assert_eq!(
             DroneBodyFrame::ForwardRightDown,
             DroneBodyFrame::ForwardRightDown
+        );
+    }
+
+    #[test]
+    fn controller_compatibility_only_inverts_physical_pitch_rate() {
+        assert_eq!(
+            BODY_RATE_TO_RATE_CONTROLLER_MAP.map_i32([10, 20, 30]),
+            [10, -20, 30]
+        );
+        assert_eq!(
+            BODY_RATE_TO_RATE_CONTROLLER_MAP.then(RATE_CONTROLLER_TO_BODY_MAP),
+            FrameRotation::IDENTITY
         );
     }
 }

@@ -33,8 +33,8 @@ FerroWasp is in rapid prototyping.
 | Control | FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling, 400 Hz control update, prototype rate loop |
 | Motor output | Safety-gated four-lane DShot600 by default on FCU3 and Foxeer; explicit RC PWM fallbacks |
 | ESC telemetry | Default DShot images: BLHeli/KISS legacy UART telemetry on PA10/USART1 RX; eRPM validated on all four ESCs on both boards |
-| Logging/debug | `defmt`/RTT, compact BB2 frames, and opt-in Foxeer SPI-NOR blackbox/config storage with USB CLI |
-| OSD/telemetry | DJI O4 MSPv1 OSD on UART4 and Foxeer USB CDC status/storage access |
+| Logging/debug | `defmt`/RTT, compact BB2 frames, and opt-in Foxeer SPI-NOR blackbox/config storage with USB CLI or native MSPv2 RPC |
+| OSD/telemetry | DJI O4 MSPv1 OSD on UART4 and Foxeer USB CDC status/storage/configurator access |
 
 More detail lives in the current support matrix:
 [mdbook/src/current_support.md](mdbook/src/current_support.md).
@@ -45,6 +45,13 @@ and no recurrence of the prior yawing behavior. Pitch authority appeared low;
 incremental pitch-P testing is the next tuning follow-up. DShot electrical
 waveform timing and phase measurements remain open, and this flight is
 prototype evidence rather than an airworthiness or production-safety claim.
+
+The Foxeer F405 V2 first-hop attempt on 2026-07-22 exposed positive pitch
+feedback and attempted a forward flip. The blackbox-backed polarity correction
+has passed both the unpowered frame-sign check and powered normal-mixer
+props-off opposition check. The pre-fix image is withdrawn from flight use; a
+clean logged image is now programmed and boot-verified, leaving the
+conservative controlled hop as the remaining field step.
 
 ## Features
 
@@ -159,7 +166,12 @@ diagnostics.
 
 ## Configuration And Tools
 
-FerroWasp does not yet have a full configurator.
+FerroWasp has an opt-in, feature-gated native MSPv2 configurator endpoint on
+the Foxeer USB CDC port. It reports `FWSP`, exposes only the existing
+whitelisted tuning object and bounded onboard-blackbox reads, and retains the
+flash manager's disarmed-only write policy. The current stable repository-local
+tools and the ASCII storage endpoint remain available when the MSPv2 gate is
+not selected.
 
 Current bring-up and debug workflows are repository-local:
 
@@ -169,6 +181,7 @@ Current bring-up and debug workflows are repository-local:
 - `tools/blackbox_analyzer.py` for compact BB2 log analysis
 - `tools/ferrowasp_storage.py` for Foxeer onboard logs and whitelisted settings
 - `tools/imu_live_view.py` for live IMU/control observation
+- `apps/foxeer-f405-v2/README.md` for the `mspv2_configurator` build contract
 
 Telemetry and configuration interfaces are intentionally limited at this stage.
 USB, OSD, logging, and analyzer paths must not gain motor authority or change
@@ -207,7 +220,8 @@ Near-term FCU work:
   prepared sanitized `main` baseline
 - increment pitch P cautiously while checking commanded-rate tracking and
   mixer headroom
-- complete the Foxeer F405 V2 normal-mixer/OSD props-off flight handoff
+- pass the Foxeer corrective props-off pitch-opposition gate and repeat the
+  controlled-field first hop with a new retained image
 - establish a reproducible WSL/Docker development environment after Foxeer
   bring-up
 - preserve the target-validated arming, disarm, RC-loss, and actuator-gating
@@ -271,9 +285,12 @@ DO-178C, airworthiness, or production safety for this prototype.
 
 FerroWasp FCU3 is the current flight-tested baseline. Foxeer F405 V2 is a WIP
 flight candidate with default DShot600, target-verified motor/RC/IMU/eRPM and
-blackbox paths, and runtime IMU pre-arm checks. It still requires the final
-normal-mixer/OSD props-off handoff before its first flight. NUCLEO-F401RE is a
-dev-board scheduler and USART-heartbeat target with no actuator outputs.
+blackbox paths, and runtime IMU pre-arm checks. Its first-hop pitch-polarity
+failure is corrected and the repeated props-off opposition gate passed; a clean
+logged image is programmed, and a conservative hop remains before flight
+validation.
+NUCLEO-F401RE is a dev-board scheduler and USART-heartbeat target with no
+actuator outputs.
 
 If hardware behaves unexpectedly, stop testing and inspect the board, wiring,
 ESCs, and motors. Propellers must be removed for motor-order, motor-direction,

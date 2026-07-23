@@ -143,6 +143,8 @@ use ferrowasp_io_core::{
     time::TimestampMicros,
 };
 use ferrowasp_mspv1 as mspv1;
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_mspv2 as mspv2;
 use ferrowasp_stm32f4::adc as stm32_adc;
 use ferrowasp_stm32f4::hal_prelude::*;
 use ferrowasp_stm32f4::memory as stm32_memory;
@@ -156,6 +158,7 @@ use ferrowasp_tasks::drone_toolbox as dt;
 use ferrowasp_tasks::esc_manager as esc;
 use ferrowasp_tasks::flash_storage as flash_task;
 use ferrowasp_tasks::osd;
+#[cfg(not(feature = "mspv2_configurator"))]
 use ferrowasp_tasks::usb_debug;
 use fugit::Rate;
 use panic_probe as _;
@@ -268,6 +271,58 @@ type FlashResponseProducer = ();
 type FlashResponseConsumer = flash_task::ResponseConsumer;
 #[cfg(not(feature = "flash_storage"))]
 type FlashResponseConsumer = ();
+
+#[cfg(feature = "mspv2_configurator")]
+type FlashRpcCommandProducer = flash_task::RpcCommandProducer;
+#[cfg(not(feature = "mspv2_configurator"))]
+type FlashRpcCommandProducer = ();
+#[cfg(feature = "mspv2_configurator")]
+type FlashRpcCommandConsumer = flash_task::RpcCommandConsumer;
+#[cfg(not(feature = "mspv2_configurator"))]
+type FlashRpcCommandConsumer = ();
+#[cfg(feature = "mspv2_configurator")]
+type FlashRpcResponseProducer = flash_task::RpcResponseProducer;
+#[cfg(not(feature = "mspv2_configurator"))]
+type FlashRpcResponseProducer = ();
+#[cfg(feature = "mspv2_configurator")]
+type FlashRpcResponseConsumer = flash_task::RpcResponseConsumer;
+#[cfg(not(feature = "mspv2_configurator"))]
+type FlashRpcResponseConsumer = ();
+
+#[cfg(feature = "mspv2_configurator")]
+struct ConfiguratorUsbState {
+    parser: mspv2::MspParser,
+    pending_tx: mspv2::EncodedFrame,
+    rpc_payload: [u8; mspv2::MAX_PAYLOAD_LEN],
+}
+
+#[cfg(feature = "mspv2_configurator")]
+impl ConfiguratorUsbState {
+    const fn new() -> Self {
+        Self {
+            parser: mspv2::MspParser::new(),
+            pending_tx: mspv2::EncodedFrame::new(),
+            rpc_payload: [0; mspv2::MAX_PAYLOAD_LEN],
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+#[cfg_attr(not(feature = "mspv2_configurator"), allow(dead_code))]
+enum ConfigRpcCompletion {
+    Commit(u16),
+    Defaults(u16),
+}
+
+#[cfg(not(feature = "mspv2_configurator"))]
+struct ConfiguratorUsbState;
+
+#[cfg(not(feature = "mspv2_configurator"))]
+impl ConfiguratorUsbState {
+    const fn new() -> Self {
+        Self
+    }
+}
 
 use board::Spi1ImuKind;
 use board::profiles::{
@@ -401,7 +456,7 @@ mod app {
 
     #[cfg(not(feature = "flash_storage"))]
     const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 USB debug v1 (read-only)\r\n";
-    #[cfg(feature = "flash_storage")]
+    #[cfg(all(feature = "flash_storage", not(feature = "mspv2_configurator")))]
     const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 storage CLI v1; type help\r\n";
     type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
     type Spi1Executor =
@@ -471,8 +526,11 @@ mod app {
     ))]
     const BENCH_EQUAL_MOTOR_MAX_THROTTLE: f32 = 250.0;
     const IMU_GYRO_RAW_TO_DPS: f32 = IMU_CONTROL_AXIS_PROFILE.gyro_raw_to_dps as f32 / 10.0;
-    const CONTROL_IMU_TO_DRONE_ROTATION: dt::FrameRotation =
+    #[cfg(feature = "imu_orientation_rtt")]
+    const PHYSICAL_IMU_TO_DRONE_ROTATION: dt::FrameRotation =
         IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation();
+    const CONTROL_IMU_TO_RATE_CONTROLLER_MAP: dt::FrameRotation =
+        IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map();
     const GYRO_BIAS_CALIBRATION_SAMPLES: u32 = IMU_CONTROL_AXIS_PROFILE.bias_calibration_samples;
     const GYRO_BIAS_CALIBRATION_MAX_RAW: i32 = IMU_CONTROL_AXIS_PROFILE.bias_calibration_max_raw;
     //------------------------------------------------------------------------
@@ -573,6 +631,10 @@ mod app {
         flash_command_consumer: FlashCommandConsumer,
         flash_response_producer: FlashResponseProducer,
         flash_response_consumer: FlashResponseConsumer,
+        flash_rpc_command_producer: FlashRpcCommandProducer,
+        flash_rpc_command_consumer: FlashRpcCommandConsumer,
+        flash_rpc_response_producer: FlashRpcResponseProducer,
+        flash_rpc_response_consumer: FlashRpcResponseConsumer,
 
         // ADC
         adc1_buffer: Option<&'static mut [u16; 3]>,
@@ -655,6 +717,7 @@ mod app {
         usb_dev: Option<UsbDevice<'static, UsbBusType>>,
         usb_serial: Option<UsbDebugSerial>,
         usb_header_sent: bool,
+        configurator_usb: ConfiguratorUsbState,
     }
     #[init(local = [
         uart1_rx_buffers: board::storage::UartRxBufferBank =
@@ -996,6 +1059,10 @@ mod app {
             flash_command_consumer,
             flash_response_producer,
             flash_response_consumer,
+            flash_rpc_command_producer,
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
+            flash_rpc_response_consumer,
         ) = {
             let mut flash = board::init::init_spi2_flash(
                 board::init::Spi2FlashResources {
@@ -1044,6 +1111,37 @@ mod app {
             .unwrap();
             let (command_producer, command_consumer) = commands.split();
             let (response_producer, response_consumer) = responses.split();
+            #[cfg(feature = "mspv2_configurator")]
+            let (
+                rpc_command_producer,
+                rpc_command_consumer,
+                rpc_response_producer,
+                rpc_response_consumer,
+            ) = {
+                let commands = cortex_m::singleton!(
+                    : flash_task::RpcCommandQueue = flash_task::RpcCommandQueue::new()
+                )
+                .unwrap();
+                let responses = cortex_m::singleton!(
+                    : flash_task::RpcResponseQueue = flash_task::RpcResponseQueue::new()
+                )
+                .unwrap();
+                let (command_producer, command_consumer) = commands.split();
+                let (response_producer, response_consumer) = responses.split();
+                (
+                    command_producer,
+                    command_consumer,
+                    response_producer,
+                    response_consumer,
+                )
+            };
+            #[cfg(not(feature = "mspv2_configurator"))]
+            let (
+                rpc_command_producer,
+                rpc_command_consumer,
+                rpc_response_producer,
+                rpc_response_consumer,
+            ) = ((), (), (), ());
             (
                 flash,
                 producer,
@@ -1052,6 +1150,10 @@ mod app {
                 command_consumer,
                 response_producer,
                 response_consumer,
+                rpc_command_producer,
+                rpc_command_consumer,
+                rpc_response_producer,
+                rpc_response_consumer,
             )
         };
         #[cfg(not(feature = "flash_storage"))]
@@ -1063,7 +1165,11 @@ mod app {
             flash_command_consumer,
             flash_response_producer,
             flash_response_consumer,
-        ) = ((), (), (), (), (), (), ());
+            flash_rpc_command_producer,
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
+            flash_rpc_response_consumer,
+        ) = ((), (), (), (), (), (), (), (), (), (), ());
 
         // Init rate controller
         let tuning_profile = dt::TuningProfile::default_first_hop();
@@ -1217,6 +1323,10 @@ mod app {
                 flash_command_consumer,
                 flash_response_producer,
                 flash_response_consumer,
+                flash_rpc_command_producer,
+                flash_rpc_command_consumer,
+                flash_rpc_response_producer,
+                flash_rpc_response_consumer,
 
                 // ADC
                 adc1_buffer: Some(adc1_battery.spare_buffer),
@@ -1227,7 +1337,7 @@ mod app {
                 flight_controller,
                 imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::IMU_GYRO_LPF_ALPHA),
                 imu_angle_integrator: dt::GyroAngleIntegrator::new(),
-                gyro_axis_map: CONTROL_IMU_TO_DRONE_ROTATION,
+                gyro_axis_map: CONTROL_IMU_TO_RATE_CONTROLLER_MAP,
                 gyro_bias_calibrator: dt::GyroBiasCalibrator::new(
                     GYRO_BIAS_CALIBRATION_SAMPLES,
                     GYRO_BIAS_CALIBRATION_MAX_RAW,
@@ -1303,6 +1413,7 @@ mod app {
                 usb_dev,
                 usb_serial,
                 usb_header_sent: false,
+                configurator_usb: ConfiguratorUsbState::new(),
             },
         )
     }
@@ -1515,11 +1626,168 @@ mod app {
         }
     }
 
+    #[cfg(not(feature = "mspv2_configurator"))]
     fn active_usb_debug_imu_kind() -> usb_debug::ImuKind {
         match Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Relaxed)) {
             Some(Spi1ImuKind::Mpu6500) => usb_debug::ImuKind::Mpu6500,
             Some(Spi1ImuKind::Icm42688P) => usb_debug::ImuKind::Icm42688P,
             None => usb_debug::ImuKind::None,
+        }
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn device_uid() -> [u8; 12] {
+        let uid = stm32f4xx_hal::signature::Uid::get();
+        let mut bytes = [0u8; 12];
+        bytes[..2].copy_from_slice(&uid.x().to_le_bytes());
+        bytes[2..4].copy_from_slice(&uid.y().to_le_bytes());
+        bytes[4] = uid.waf_num();
+        let lot = uid.lot_num().as_bytes();
+        let len = lot.len().min(7);
+        bytes[5..5 + len].copy_from_slice(&lot[..len]);
+        bytes
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn fixed_bytes<const N: usize>(value: &[u8]) -> [u8; N] {
+        let mut output = [0u8; N];
+        let len = value.len().min(N);
+        output[..len].copy_from_slice(&value[..len]);
+        output
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn msp_common_info() -> mspv2::commands::CommonInfo<'static> {
+        mspv2::commands::CommonInfo {
+            firmware_version: [0, 1, 0],
+            board_identifier: *b"FXR2",
+            board_name: b"Foxeer F405 V2",
+            target_name: b"foxeer_f405_v2",
+            build_date: fixed_bytes(env!("FWSP_BUILD_DATE").as_bytes()),
+            build_time: fixed_bytes(env!("FWSP_BUILD_TIME").as_bytes()),
+            git_revision: fixed_bytes(env!("FWSP_GIT_REV").as_bytes()),
+            uid: device_uid(),
+            cycle_time_us: 2_500,
+            sensors: u16::from(IMU_TRANSPORT_READY.load(Ordering::Relaxed)),
+            armed: SAFETY_ARMED.load(Ordering::Acquire),
+        }
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn rpc_device_info() -> mspv2::rpc::DeviceInfo {
+        use mspv2::rpc::capabilities;
+
+        let mut capabilities = capabilities::CONFIG_READ
+            | capabilities::BLACKBOX_LIST
+            | capabilities::BLACKBOX_DOWNLOAD;
+        if cfg!(feature = "flash_writes") {
+            capabilities |= capabilities::CONFIG_WRITE | capabilities::CONFIG_RESET;
+        }
+        let mut board_id = [0u8; 16];
+        let id = b"foxeer_f405_v2";
+        board_id[..id.len()].copy_from_slice(id);
+        mspv2::rpc::DeviceInfo {
+            protocol_version: mspv2::rpc::FWSP_RPC_VERSION,
+            firmware_version: [0, 1, 0],
+            git_revision: fixed_bytes(env!("FWSP_GIT_REV").as_bytes()),
+            board_id,
+            board_id_len: id.len() as u8,
+            mcu: mspv2::rpc::McuKind::Stm32F405,
+            device_serial: device_uid(),
+            armed: SAFETY_ARMED.load(Ordering::Acquire),
+            capabilities,
+            max_blackbox_chunk: mspv2::rpc::MAX_BLACKBOX_CHUNK as u16,
+            config_schema_version: mspv2::rpc::CONFIG_SCHEMA_VERSION,
+        }
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn stage_rpc_response(
+        state: &mut ConfiguratorUsbState,
+        response: &mspv2::rpc::RpcResponse,
+    ) -> bool {
+        let ConfiguratorUsbState {
+            pending_tx,
+            rpc_payload,
+            ..
+        } = state;
+        let Ok(payload) = mspv2::rpc::encode_response(response, rpc_payload) else {
+            return false;
+        };
+        pending_tx
+            .set(
+                mspv2::MspDirection::FromFlightController,
+                0,
+                mspv2::rpc::MSP2_FWSP_RPC,
+                payload,
+            )
+            .is_ok()
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn handle_msp_packet(
+        packet: mspv2::MspPacket,
+        state: &mut ConfiguratorUsbState,
+        rpc_commands: &mut flash_task::RpcCommandProducer,
+    ) {
+        if packet.direction != mspv2::MspDirection::ToFlightController
+            || state.pending_tx.is_pending()
+        {
+            return;
+        }
+
+        let mut common_payload = [0u8; 96];
+        if let Some(len) =
+            mspv2::commands::encode_common_payload(&packet, &msp_common_info(), &mut common_payload)
+        {
+            let _ = state.pending_tx.set(
+                mspv2::MspDirection::FromFlightController,
+                packet.flags,
+                packet.function,
+                &common_payload[..len],
+            );
+            return;
+        }
+
+        if packet.function != mspv2::rpc::MSP2_FWSP_RPC {
+            let _ = state.pending_tx.set(
+                mspv2::MspDirection::Error,
+                packet.flags,
+                packet.function,
+                &[],
+            );
+            return;
+        }
+
+        let Ok(request) = mspv2::rpc::decode_request(packet.payload()) else {
+            let _ = state.pending_tx.set(
+                mspv2::MspDirection::Error,
+                packet.flags,
+                packet.function,
+                &[],
+            );
+            return;
+        };
+        if request.protocol_version != mspv2::rpc::FWSP_RPC_VERSION {
+            let response = mspv2::rpc::error(
+                request.request_id,
+                mspv2::rpc::DeviceError::UnsupportedProtocolVersion,
+            );
+            let _ = stage_rpc_response(state, &response);
+            return;
+        }
+        if request.operation == mspv2::rpc::Request::Hello {
+            let response = mspv2::rpc::ok(
+                request.request_id,
+                mspv2::rpc::Response::Hello(rpc_device_info()),
+            );
+            let _ = stage_rpc_response(state, &response);
+            return;
+        }
+        let request_id = request.request_id;
+        if rpc_commands.enqueue(request).is_err() {
+            let response = mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy);
+            let _ = stage_rpc_response(state, &response);
         }
     }
 
@@ -1533,8 +1801,11 @@ mod app {
             usb_header_sent,
             flash_command_producer,
             flash_response_consumer,
+            flash_rpc_command_producer,
+            flash_rpc_response_consumer,
             flash_command_parser: flash_task::CommandParser = flash_task::CommandParser::new(),
-            flash_pending_response: Option<flash_task::ResponseFrame> = None
+            flash_pending_response: Option<flash_task::ResponseFrame> = None,
+            configurator_usb
         ]
     )]
     fn usb_fs(cx: usb_fs::Context) {
@@ -1552,7 +1823,7 @@ mod app {
         #[cfg(not(feature = "flash_storage"))]
         let _ = read_len;
 
-        #[cfg(feature = "flash_storage")]
+        #[cfg(all(feature = "flash_storage", not(feature = "mspv2_configurator")))]
         for byte in &rx_buf[..read_len] {
             let Some(parsed) = cx.local.flash_command_parser.ingest(*byte) else {
                 continue;
@@ -1569,8 +1840,24 @@ mod app {
             }
         }
 
+        #[cfg(feature = "mspv2_configurator")]
+        for byte in &rx_buf[..read_len] {
+            if let Ok(Some(packet)) = cx.local.configurator_usb.parser.parse(*byte) {
+                handle_msp_packet(
+                    packet,
+                    cx.local.configurator_usb,
+                    cx.local.flash_rpc_command_producer,
+                );
+            }
+        }
+
         if usb_dev.state() != UsbDeviceState::Configured {
             *cx.local.usb_header_sent = false;
+            #[cfg(feature = "mspv2_configurator")]
+            {
+                cx.local.configurator_usb.parser.clear();
+                cx.local.configurator_usb.pending_tx.clear();
+            }
             return;
         }
 
@@ -1578,6 +1865,22 @@ mod app {
             return;
         }
 
+        #[cfg(feature = "mspv2_configurator")]
+        {
+            if !cx.local.configurator_usb.pending_tx.is_pending()
+                && let Some(response) = cx.local.flash_rpc_response_consumer.dequeue()
+            {
+                let _ = stage_rpc_response(cx.local.configurator_usb, &response);
+            }
+            if cx.local.configurator_usb.pending_tx.is_pending()
+                && let Ok(written) = serial.write(cx.local.configurator_usb.pending_tx.remaining())
+            {
+                cx.local.configurator_usb.pending_tx.advance(written);
+            }
+            return;
+        }
+
+        #[cfg(not(feature = "mspv2_configurator"))]
         if !*cx.local.usb_header_sent {
             if matches!(
                 serial.write(USB_DEBUG_HEADER),
@@ -1588,7 +1891,7 @@ mod app {
             return;
         }
 
-        #[cfg(feature = "flash_storage")]
+        #[cfg(all(feature = "flash_storage", not(feature = "mspv2_configurator")))]
         {
             if cx.local.flash_pending_response.is_none() {
                 *cx.local.flash_pending_response = cx.local.flash_response_consumer.dequeue();
@@ -1605,10 +1908,12 @@ mod app {
             }
         }
 
+        #[cfg(not(feature = "mspv2_configurator"))]
         if !USB_DEBUG_DUE.swap(false, Ordering::AcqRel) {
             return;
         }
 
+        #[cfg(not(feature = "mspv2_configurator"))]
         let snapshot = usb_debug::StatusSnapshot {
             uptime_ms: Mono::now().duration_since_epoch().to_millis(),
             imu_kind: active_usb_debug_imu_kind(),
@@ -1631,11 +1936,13 @@ mod app {
             adc_voltage_mv: ADC_VOLTAGE_MV_SNAPSHOT.load(Ordering::Relaxed),
             adc_current_mv: ADC_CURRENT_MV_SNAPSHOT.load(Ordering::Relaxed),
         };
+        #[cfg(not(feature = "mspv2_configurator"))]
         let Ok(line) = usb_debug::format_status(snapshot) else {
             USB_DEBUG_DUE.store(true, Ordering::Release);
             return;
         };
 
+        #[cfg(not(feature = "mspv2_configurator"))]
         if !matches!(
             serial.write(line.as_bytes()),
             Ok(written) if written == line.len()
@@ -1678,8 +1985,9 @@ mod app {
             );
             #[cfg(feature = "imu_orientation_rtt")]
             if let Some((sequence, accel_mg, gyro_dps10, temp_c10)) = imu_orientation_snapshot() {
-                let body_gyro_dps10 = CONTROL_IMU_TO_DRONE_ROTATION.map_i32(gyro_dps10);
-                let body_specific_force_mg = CONTROL_IMU_TO_DRONE_ROTATION.map_i32(accel_mg);
+                let body_gyro_dps10 = PHYSICAL_IMU_TO_DRONE_ROTATION.map_i32(gyro_dps10);
+                let control_gyro_dps10 = CONTROL_IMU_TO_RATE_CONTROLLER_MAP.map_i32(gyro_dps10);
+                let body_specific_force_mg = PHYSICAL_IMU_TO_DRONE_ROTATION.map_i32(accel_mg);
                 let body_gravity_mg = [
                     -body_specific_force_mg[0],
                     -body_specific_force_mg[1],
@@ -1705,6 +2013,10 @@ mod app {
                     body_gyro_dps10[0],
                     body_gyro_dps10[1],
                     body_gyro_dps10[2]
+                );
+                info!(
+                    "IMU ORIENT control seq {} gyro_dps10 [{}, {}, {}]",
+                    sequence, control_gyro_dps10[0], control_gyro_dps10[1], control_gyro_dps10[2]
                 );
             }
             #[cfg(feature = "imu_transport_rtt")]
@@ -1908,6 +2220,198 @@ mod app {
         true
     }
 
+    #[cfg(feature = "mspv2_configurator")]
+    fn queue_rpc_response(
+        producer: &mut flash_task::RpcResponseProducer,
+        response: mspv2::rpc::RpcResponse,
+    ) -> bool {
+        if producer.enqueue(response).is_err() {
+            return false;
+        }
+        cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+        true
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn finish_config_rpc_error(
+        producer: &mut flash_task::RpcResponseProducer,
+        completion: &mut Option<ConfigRpcCompletion>,
+        error: mspv2::rpc::DeviceError,
+    ) -> bool {
+        let Some(completion) = completion.take() else {
+            return false;
+        };
+        let request_id = match completion {
+            ConfigRpcCompletion::Commit(id) | ConfigRpcCompletion::Defaults(id) => id,
+        };
+        queue_rpc_response(producer, mspv2::rpc::error(request_id, error))
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn blackbox_flight_id_at(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+        page_index: u32,
+    ) -> Result<u32, ()> {
+        let address = layout.log_page_address(page_index).ok_or(())?;
+        let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+        flash.read(address, &mut page).map_err(|_| ())?;
+        ferrowasp_core::blackbox::decode_page(&page)
+            .map(|metadata| metadata.flight_id)
+            .map_err(|_| ())
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn blackbox_bounds(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+        used_pages: u32,
+        id: mspv2::rpc::BlackboxId,
+    ) -> Result<Option<(u32, u32)>, ()> {
+        let mut low = 0;
+        let mut high = used_pages;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if blackbox_flight_id_at(flash, layout, middle)? < id.0 {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        let start = low;
+        if start == used_pages || blackbox_flight_id_at(flash, layout, start)? != id.0 {
+            return Ok(None);
+        }
+        high = used_pages;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if blackbox_flight_id_at(flash, layout, middle)? <= id.0 {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        Ok(Some((start, low)))
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn blackbox_info(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+        used_pages: u32,
+        id: mspv2::rpc::BlackboxId,
+        active_id: Option<u32>,
+    ) -> Result<Option<mspv2::rpc::BlackboxInfo>, ()> {
+        let Some((start, end)) = blackbox_bounds(flash, layout, used_pages, id)? else {
+            return Ok(None);
+        };
+        Ok(Some(mspv2::rpc::BlackboxInfo {
+            id,
+            size_bytes: (end - start) * ferrowasp_core::blackbox::FLASH_PAGE_LEN as u32,
+            state: if active_id == Some(id.0) {
+                mspv2::rpc::BlackboxState::Active
+            } else {
+                mspv2::rpc::BlackboxState::Complete
+            },
+            created_unix_s: None,
+            file_crc32: None,
+        }))
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn list_blackboxes(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+        used_pages: u32,
+        active_id: Option<u32>,
+    ) -> Result<mspv2::rpc::BlackboxList, ()> {
+        let mut entries = heapless::Vec::new();
+        if used_pages == 0 {
+            return Ok(mspv2::rpc::BlackboxList {
+                entries,
+                truncated: false,
+            });
+        }
+        let mut cursor = used_pages;
+        while cursor != 0 {
+            let id = mspv2::rpc::BlackboxId(blackbox_flight_id_at(flash, layout, cursor - 1)?);
+            let Some((start, end)) = blackbox_bounds(flash, layout, used_pages, id)? else {
+                return Err(());
+            };
+            let info = mspv2::rpc::BlackboxInfo {
+                id,
+                size_bytes: (end - start) * ferrowasp_core::blackbox::FLASH_PAGE_LEN as u32,
+                state: if active_id == Some(id.0) {
+                    mspv2::rpc::BlackboxState::Active
+                } else {
+                    mspv2::rpc::BlackboxState::Complete
+                },
+                created_unix_s: None,
+                file_crc32: None,
+            };
+            if entries.push(info).is_err() {
+                break;
+            }
+            cursor = start;
+        }
+        Ok(mspv2::rpc::BlackboxList {
+            entries,
+            truncated: cursor != 0,
+        })
+    }
+
+    #[cfg(feature = "mspv2_configurator")]
+    fn read_blackbox_chunk(
+        flash: &mut FlashDevice,
+        layout: flash_task::StorageLayout,
+        used_pages: u32,
+        id: mspv2::rpc::BlackboxId,
+        offset: u32,
+        requested_length: u16,
+    ) -> Result<mspv2::rpc::BlackboxChunk, mspv2::rpc::DeviceError> {
+        let (start, end) = blackbox_bounds(flash, layout, used_pages, id)
+            .map_err(|_| mspv2::rpc::DeviceError::ReadFailure)?
+            .ok_or(mspv2::rpc::DeviceError::BlackboxNotFound)?;
+        let size = (end - start) * ferrowasp_core::blackbox::FLASH_PAGE_LEN as u32;
+        if offset > size || requested_length == 0 {
+            return Err(mspv2::rpc::DeviceError::InvalidOffset);
+        }
+        let requested = usize::from(requested_length).min(mspv2::rpc::MAX_BLACKBOX_CHUNK);
+        let actual = requested.min((size - offset) as usize);
+        let mut data = heapless::Vec::<u8, { mspv2::rpc::MAX_BLACKBOX_CHUNK }>::new();
+        let mut position = offset as usize;
+        while data.len() < actual {
+            let relative_page = position / ferrowasp_core::blackbox::FLASH_PAGE_LEN;
+            let page_offset = position % ferrowasp_core::blackbox::FLASH_PAGE_LEN;
+            let page_index = start + relative_page as u32;
+            let address = layout
+                .log_page_address(page_index)
+                .ok_or(mspv2::rpc::DeviceError::ReadFailure)?;
+            let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+            flash
+                .read(address, &mut page)
+                .map_err(|_| mspv2::rpc::DeviceError::ReadFailure)?;
+            let metadata = ferrowasp_core::blackbox::decode_page(&page)
+                .map_err(|_| mspv2::rpc::DeviceError::ChecksumMismatch)?;
+            if metadata.flight_id != id.0 || page_index >= end {
+                return Err(mspv2::rpc::DeviceError::ReadFailure);
+            }
+            let copy_len =
+                (ferrowasp_core::blackbox::FLASH_PAGE_LEN - page_offset).min(actual - data.len());
+            data.extend_from_slice(&page[page_offset..page_offset + copy_len])
+                .map_err(|_| mspv2::rpc::DeviceError::Internal)?;
+            position += copy_len;
+        }
+        let chunk_crc32 = ferrowasp_core::blackbox::crc32(data.as_slice());
+        Ok(mspv2::rpc::BlackboxChunk {
+            id,
+            offset,
+            data,
+            chunk_crc32,
+            end_of_file: offset.saturating_add(actual as u32) == size,
+        })
+    }
+
     #[cfg(feature = "flash_storage")]
     fn queue_page_hex(
         producer: &mut flash_task::ResponseProducer,
@@ -1954,6 +2458,8 @@ mod app {
             flash_record_consumer,
             flash_command_consumer,
             flash_response_producer,
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
             assembler: flash_task::PageAssembler = flash_task::PageAssembler::new(),
             pending_page: Option<[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN]> = None,
             initialized: bool = false,
@@ -1967,8 +2473,11 @@ mod app {
             flash_test_phase: u8 = 0,
             config_save_phase: u8 = 0,
             config_save_slot: u8 = 0,
+            config_save_candidate: flash_task::StoredConfig = flash_task::StoredConfig::first_hop_default(),
             config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
-                [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN]
+                [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
+            staged_rpc_config: Option<flash_task::StoredConfig> = None,
+            config_rpc_completion: Option<ConfigRpcCompletion> = None
         ],
         shared = [tuning_profile, tuning_request_seq]
     )]
@@ -1979,6 +2488,8 @@ mod app {
             flash_record_consumer,
             flash_command_consumer,
             flash_response_producer,
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
             assembler,
             pending_page,
             initialized,
@@ -1992,12 +2503,28 @@ mod app {
             flash_test_phase,
             config_save_phase,
             config_save_slot,
+            config_save_candidate,
             config_save_page,
+            staged_rpc_config,
+            config_rpc_completion,
             ..
         } = cx.local;
 
         #[cfg(all(feature = "flash_storage", not(feature = "flash_blackbox")))]
-        let _ = (flash_record_consumer, assembler, pending_page);
+        let _ = (flash_record_consumer, pending_page);
+        #[cfg(all(feature = "flash_storage", not(feature = "mspv2_configurator")))]
+        let _ = (
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
+            staged_rpc_config,
+            config_rpc_completion,
+        );
+        #[cfg(all(
+            feature = "flash_storage",
+            not(feature = "flash_blackbox"),
+            not(feature = "mspv2_configurator")
+        ))]
+        let _ = assembler;
 
         #[cfg(not(feature = "flash_storage"))]
         let _ = &mut cx;
@@ -2006,6 +2533,16 @@ mod app {
             #[cfg(feature = "flash_storage")]
             {
                 if !FLASH_READY.load(Ordering::Acquire) {
+                    #[cfg(feature = "mspv2_configurator")]
+                    if let Some(request) = flash_rpc_command_consumer.dequeue() {
+                        let _ = queue_rpc_response(
+                            flash_rpc_response_producer,
+                            mspv2::rpc::error(
+                                request.request_id,
+                                mspv2::rpc::DeviceError::StorageUnavailable,
+                            ),
+                        );
+                    }
                     Mono::delay(100.millis()).await;
                     continue;
                 }
@@ -2013,6 +2550,16 @@ mod app {
                     flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
                 else {
                     FLASH_READY.store(false, Ordering::Release);
+                    #[cfg(feature = "mspv2_configurator")]
+                    if let Some(request) = flash_rpc_command_consumer.dequeue() {
+                        let _ = queue_rpc_response(
+                            flash_rpc_response_producer,
+                            mspv2::rpc::error(
+                                request.request_id,
+                                mspv2::rpc::DeviceError::StorageUnavailable,
+                            ),
+                        );
+                    }
                     continue;
                 };
 
@@ -2032,6 +2579,7 @@ mod app {
                     *next_flight_id = flight;
                     *log_region_writable = writable;
                     *stored_config = config;
+                    *config_save_candidate = config;
                     *config_sequence = sequence;
                     *config_active_slot = slot;
                     FLASH_LOG_RATE_DIVISOR
@@ -2056,6 +2604,12 @@ mod app {
                         FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                         FLASH_READY.store(false, Ordering::Release);
                         warn!("SPI2 flash status read failed; storage disabled");
+                        #[cfg(feature = "mspv2_configurator")]
+                        let _ = finish_config_rpc_error(
+                            flash_rpc_response_producer,
+                            config_rpc_completion,
+                            mspv2::rpc::DeviceError::StorageUnavailable,
+                        );
                         continue;
                     }
                 };
@@ -2072,10 +2626,20 @@ mod app {
                     *erase_sector_index = None;
                     *flash_test_phase = 0;
                     *config_save_phase = 0;
-                    queue_storage_response(
-                        flash_response_producer,
-                        "ERR maintenance aborted because system armed\r\n",
+                    #[cfg(feature = "mspv2_configurator")]
+                    let rpc_notified = finish_config_rpc_error(
+                        flash_rpc_response_producer,
+                        config_rpc_completion,
+                        mspv2::rpc::DeviceError::Armed,
                     );
+                    #[cfg(not(feature = "mspv2_configurator"))]
+                    let rpc_notified = false;
+                    if !rpc_notified {
+                        queue_storage_response(
+                            flash_response_producer,
+                            "ERR maintenance aborted because system armed\r\n",
+                        );
+                    }
                 }
 
                 if let Some(sector) = *erase_sector_index {
@@ -2168,10 +2732,20 @@ mod app {
                         if flash_device.erase_sector_4k(address).is_err() {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                             *config_save_phase = 0;
-                            queue_storage_response(
-                                flash_response_producer,
-                                "ERR config slot erase failed\r\n",
+                            #[cfg(feature = "mspv2_configurator")]
+                            let rpc_notified = finish_config_rpc_error(
+                                flash_rpc_response_producer,
+                                config_rpc_completion,
+                                mspv2::rpc::DeviceError::WriteFailure,
                             );
+                            #[cfg(not(feature = "mspv2_configurator"))]
+                            let rpc_notified = false;
+                            if !rpc_notified {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR config slot erase failed\r\n",
+                                );
+                            }
                         } else {
                             *config_save_phase = 2;
                         }
@@ -2185,16 +2759,57 @@ mod app {
                         {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                             *config_save_phase = 0;
-                            queue_storage_response(
-                                flash_response_producer,
-                                "ERR config page program failed\r\n",
+                            #[cfg(feature = "mspv2_configurator")]
+                            let rpc_notified = finish_config_rpc_error(
+                                flash_rpc_response_producer,
+                                config_rpc_completion,
+                                mspv2::rpc::DeviceError::WriteFailure,
                             );
+                            #[cfg(not(feature = "mspv2_configurator"))]
+                            let rpc_notified = false;
+                            if !rpc_notified {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR config page program failed\r\n",
+                                );
+                            }
                         } else {
                             *config_save_phase = 3;
                         }
                         continue;
                     }
                     3 => {
+                        let address = layout.config_slot_addresses[*config_save_slot as usize];
+                        let mut persisted = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+                        let expected_sequence = config_sequence.wrapping_add(1);
+                        let expected_payload = config_save_candidate.encode();
+                        let verified = flash_device.read(address, &mut persisted).is_ok()
+                            && matches!(
+                                ferrowasp_core::blackbox::decode_config_page(&persisted),
+                                Ok((sequence, payload))
+                                    if sequence == expected_sequence
+                                        && payload == expected_payload.as_slice()
+                            );
+                        if !verified {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            *config_save_phase = 0;
+                            #[cfg(feature = "mspv2_configurator")]
+                            let rpc_notified = finish_config_rpc_error(
+                                flash_rpc_response_producer,
+                                config_rpc_completion,
+                                mspv2::rpc::DeviceError::ChecksumMismatch,
+                            );
+                            #[cfg(not(feature = "mspv2_configurator"))]
+                            let rpc_notified = false;
+                            if !rpc_notified {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR config persistence verification failed\r\n",
+                                );
+                            }
+                            continue;
+                        }
+                        *stored_config = *config_save_candidate;
                         *config_active_slot = *config_save_slot;
                         *config_sequence = config_sequence.wrapping_add(1);
                         *config_save_phase = 0;
@@ -2206,7 +2821,37 @@ mod app {
                         cx.shared
                             .tuning_request_seq
                             .lock(|sequence| *sequence = sequence.wrapping_add(1));
-                        queue_storage_response(flash_response_producer, "OK config saved\r\n");
+                        #[cfg(feature = "mspv2_configurator")]
+                        let rpc_notified = if let Some(completion) = config_rpc_completion.take() {
+                            let crc = stored_config.crc32();
+                            let (request_id, response) = match completion {
+                                ConfigRpcCompletion::Commit(id) => (
+                                    id,
+                                    mspv2::rpc::Response::ConfigCommitted {
+                                        persisted_crc32: crc,
+                                        reboot_required: false,
+                                    },
+                                ),
+                                ConfigRpcCompletion::Defaults(id) => (
+                                    id,
+                                    mspv2::rpc::Response::DefaultsRestored {
+                                        persisted_crc32: crc,
+                                        reboot_required: false,
+                                    },
+                                ),
+                            };
+                            queue_rpc_response(
+                                flash_rpc_response_producer,
+                                mspv2::rpc::ok(request_id, response),
+                            )
+                        } else {
+                            false
+                        };
+                        #[cfg(not(feature = "mspv2_configurator"))]
+                        let rpc_notified = false;
+                        if !rpc_notified {
+                            queue_storage_response(flash_response_producer, "OK config saved\r\n");
+                        }
                     }
                     _ => {}
                 }
@@ -2378,6 +3023,7 @@ mod app {
                                     &stored_config.encode(),
                                 ) {
                                     Ok(page) => {
+                                        *config_save_candidate = *stored_config;
                                         *config_save_page = page;
                                         *config_save_slot = 1 - *config_active_slot;
                                         *config_save_phase = 1;
@@ -2395,6 +3041,247 @@ mod app {
                                 }
                             }
                         }
+                    }
+                }
+
+                #[cfg(feature = "mspv2_configurator")]
+                if let Some(request) = flash_rpc_command_consumer.dequeue() {
+                    let request_id = request.request_id;
+                    let maintenance_busy = erase_sector_index.is_some()
+                        || *flash_test_phase != 0
+                        || *config_save_phase != 0;
+                    let active_blackbox_id = assembler
+                        .recording()
+                        .then(|| next_flight_id.wrapping_sub(1).max(1));
+                    let response = match request.operation {
+                        mspv2::rpc::Request::Hello => Some(mspv2::rpc::ok(
+                            request_id,
+                            mspv2::rpc::Response::Hello(rpc_device_info()),
+                        )),
+                        mspv2::rpc::Request::GetConfig => {
+                            let crc = stored_config.crc32();
+                            Some(mspv2::rpc::ok(
+                                request_id,
+                                mspv2::rpc::Response::Config(mspv2::rpc::ConfigSnapshot {
+                                    schema_version: mspv2::rpc::CONFIG_SCHEMA_VERSION,
+                                    active_crc32: crc,
+                                    persisted_crc32: crc,
+                                    config: stored_config.to_rpc(),
+                                }),
+                            ))
+                        }
+                        mspv2::rpc::Request::StageConfig(config) => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::Armed,
+                                ))
+                            } else if maintenance_busy {
+                                Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
+                            } else {
+                                match flash_task::StoredConfig::from_rpc(config) {
+                                    Ok(candidate) => {
+                                        let crc = candidate.crc32();
+                                        *staged_rpc_config = Some(candidate);
+                                        Some(mspv2::rpc::ok(
+                                            request_id,
+                                            mspv2::rpc::Response::ConfigStaged {
+                                                staged_crc32: crc,
+                                                reboot_required: false,
+                                            },
+                                        ))
+                                    }
+                                    Err(field) => Some(mspv2::rpc::RpcResponse {
+                                        protocol_version: mspv2::rpc::FWSP_RPC_VERSION,
+                                        request_id,
+                                        result: mspv2::rpc::RpcResult::Err(
+                                            mspv2::rpc::ErrorDetail {
+                                                code: mspv2::rpc::DeviceError::InvalidConfiguration,
+                                                field: Some(field),
+                                                argument: None,
+                                            },
+                                        ),
+                                    }),
+                                }
+                            }
+                        }
+                        mspv2::rpc::Request::CommitConfig {
+                            expected_staged_crc32,
+                        } => {
+                            if !cfg!(feature = "flash_writes") {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::UnsupportedOperation,
+                                ))
+                            } else if SAFETY_ARMED.load(Ordering::Acquire) {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::Armed,
+                                ))
+                            } else if maintenance_busy {
+                                Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
+                            } else if let Some(candidate) = *staged_rpc_config {
+                                if candidate.crc32() != expected_staged_crc32 {
+                                    Some(mspv2::rpc::error(
+                                        request_id,
+                                        mspv2::rpc::DeviceError::ConfigurationConflict,
+                                    ))
+                                } else {
+                                    let next_sequence = config_sequence.wrapping_add(1);
+                                    match ferrowasp_core::blackbox::encode_config_page(
+                                        next_sequence,
+                                        &candidate.encode(),
+                                    ) {
+                                        Ok(page) => {
+                                            *config_save_candidate = candidate;
+                                            *config_save_page = page;
+                                            *config_save_slot = 1 - *config_active_slot;
+                                            *config_save_phase = 1;
+                                            *config_rpc_completion =
+                                                Some(ConfigRpcCompletion::Commit(request_id));
+                                            *staged_rpc_config = None;
+                                            None
+                                        }
+                                        Err(_) => Some(mspv2::rpc::error(
+                                            request_id,
+                                            mspv2::rpc::DeviceError::Internal,
+                                        )),
+                                    }
+                                }
+                            } else {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::ConfigurationConflict,
+                                ))
+                            }
+                        }
+                        mspv2::rpc::Request::ResetConfigToDefaults => {
+                            if !cfg!(feature = "flash_writes") {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::UnsupportedOperation,
+                                ))
+                            } else if SAFETY_ARMED.load(Ordering::Acquire) {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::Armed,
+                                ))
+                            } else if maintenance_busy {
+                                Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
+                            } else {
+                                let candidate = flash_task::StoredConfig::first_hop_default();
+                                let next_sequence = config_sequence.wrapping_add(1);
+                                match ferrowasp_core::blackbox::encode_config_page(
+                                    next_sequence,
+                                    &candidate.encode(),
+                                ) {
+                                    Ok(page) => {
+                                        *config_save_candidate = candidate;
+                                        *config_save_page = page;
+                                        *config_save_slot = 1 - *config_active_slot;
+                                        *config_save_phase = 1;
+                                        *config_rpc_completion =
+                                            Some(ConfigRpcCompletion::Defaults(request_id));
+                                        *staged_rpc_config = None;
+                                        None
+                                    }
+                                    Err(_) => Some(mspv2::rpc::error(
+                                        request_id,
+                                        mspv2::rpc::DeviceError::Internal,
+                                    )),
+                                }
+                            }
+                        }
+                        mspv2::rpc::Request::ListBlackboxes => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::Armed,
+                                ))
+                            } else {
+                                match list_blackboxes(
+                                    flash_device,
+                                    layout,
+                                    *next_page_index,
+                                    active_blackbox_id,
+                                ) {
+                                    Ok(list) => Some(mspv2::rpc::ok(
+                                        request_id,
+                                        mspv2::rpc::Response::BlackboxList(list),
+                                    )),
+                                    Err(_) => Some(mspv2::rpc::error(
+                                        request_id,
+                                        mspv2::rpc::DeviceError::ReadFailure,
+                                    )),
+                                }
+                            }
+                        }
+                        mspv2::rpc::Request::GetBlackboxInfo { id } => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::Armed,
+                                ))
+                            } else {
+                                match blackbox_info(
+                                    flash_device,
+                                    layout,
+                                    *next_page_index,
+                                    id,
+                                    active_blackbox_id,
+                                ) {
+                                    Ok(Some(info)) => Some(mspv2::rpc::ok(
+                                        request_id,
+                                        mspv2::rpc::Response::BlackboxInfo(info),
+                                    )),
+                                    Ok(None) => Some(mspv2::rpc::error(
+                                        request_id,
+                                        mspv2::rpc::DeviceError::BlackboxNotFound,
+                                    )),
+                                    Err(_) => Some(mspv2::rpc::error(
+                                        request_id,
+                                        mspv2::rpc::DeviceError::ReadFailure,
+                                    )),
+                                }
+                            }
+                        }
+                        mspv2::rpc::Request::ReadBlackboxChunk {
+                            id,
+                            offset,
+                            requested_length,
+                        } => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                Some(mspv2::rpc::error(
+                                    request_id,
+                                    mspv2::rpc::DeviceError::Armed,
+                                ))
+                            } else if active_blackbox_id == Some(id.0) {
+                                Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
+                            } else {
+                                match read_blackbox_chunk(
+                                    flash_device,
+                                    layout,
+                                    *next_page_index,
+                                    id,
+                                    offset,
+                                    requested_length,
+                                ) {
+                                    Ok(chunk) => Some(mspv2::rpc::ok(
+                                        request_id,
+                                        mspv2::rpc::Response::BlackboxChunk(chunk),
+                                    )),
+                                    Err(error) => Some(mspv2::rpc::error(request_id, error)),
+                                }
+                            }
+                        }
+                        mspv2::rpc::Request::EraseBlackbox { .. }
+                        | mspv2::rpc::Request::Reboot { .. } => Some(mspv2::rpc::error(
+                            request_id,
+                            mspv2::rpc::DeviceError::UnsupportedOperation,
+                        )),
+                    };
+                    if let Some(response) = response {
+                        let _ = queue_rpc_response(flash_rpc_response_producer, response);
                     }
                 }
 
@@ -2532,12 +3419,20 @@ mod app {
                 .local
                 .imu_rate_filter
                 .update(imu_roll_raw, imu_pitch_raw, imu_yaw_raw);
+            // The rate controller retains FCU3's historical nose-down-positive
+            // pitch convention. Translate its filtered rates back to physical
+            // body rates for attitude estimation and external reporting.
+            let body_rates = ferrowasp_core::frames::RATE_CONTROLLER_TO_BODY_MAP.map_f32([
+                imu_roll_filtered,
+                imu_pitch_filtered,
+                imu_yaw_filtered,
+            ]);
             CONTROL_ROLL_DPS10.store((imu_roll_filtered * 10.0) as i32, Ordering::Relaxed);
             CONTROL_PITCH_DPS10.store((imu_pitch_filtered * 10.0) as i32, Ordering::Relaxed);
             CONTROL_YAW_DPS10.store((imu_yaw_filtered * 10.0) as i32, Ordering::Relaxed);
             CONTROL_RATE_SEQ.fetch_add(1, Ordering::Relaxed);
             cx.shared.imu_rates.lock(|rates| {
-                *rates = [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered];
+                *rates = body_rates;
             });
             if !control_armed {
                 let pending_seq = cx.shared.tuning_request_seq.lock(|seq| *seq);
@@ -2611,7 +3506,7 @@ mod app {
             }
 
             let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
-                [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
+                body_rates,
                 drone_gravity,
                 dt::CONTROL_LOOP_DT_SECONDS,
             );

@@ -33,6 +33,18 @@ voltage baseline and Foxeer current scale. Fine PC0/PC1 calibration remains a
 TODO; uncalibrated current is suppressed from the OSD/status value while raw
 PC1 millivolts remain observable.
 
+The first prop-on departure on 2026-07-22 attempted an immediate forward flip.
+Onboard records established that the physically correct Foxeer pitch rate was
+being fed into the FCU3-compatible controller with the wrong sign, creating
+positive pitch feedback. The physical IMU map remains unchanged; rate control
+now uses an explicit pitch-polarity compatibility transform. Both corrective
+props-off checks below passed on 2026-07-22. The result permits preparation of
+a clean logged candidate, which was subsequently programmed and boot-verified
+as `B85DB4F43897EF628EFF0C368CF0670F34FEEDB3FC59C895F21ECFB91D3E6FC4`.
+This does not itself validate flight. Do not fly the
+pre-fix image with SHA-256
+`E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
+
 The 2026-07-22 individual PWM test also exposed an arm-high reset defect. The
 shared RC-link fix ignores arm-low transients received before link
 qualification completes. Its target repeat held arm high across flashing and
@@ -179,12 +191,13 @@ remained clean through 2,450 associated samples. Telemetry remains
 available after arming for observation; loss after the armed transition does
 not currently trigger an in-flight disarm.
 
-Step 6 passed positively and negatively on 2026-07-22; the exact evidence and
-hashes are retained in `TARGET_VERIFICATION.md`. The remaining flight handoff
-is one normal, uncapped-mixer props-off run confirming the new IMU pre-arm gate,
-stick/mixer response, live OSD, DShot/eRPM health, and disarm/RC-loss behavior.
+Step 6 and the normal uncapped-mixer props-off flight handoff passed on
+2026-07-22. The final run confirmed the IMU pre-arm gate, live OSD voltage,
+DShot/eRPM health, motor response, explicit disarm, RC-loss stop, and the
+arm-low-before-rearm latch. The exact evidence and hashes are retained in
+`TARGET_VERIFICATION.md`.
 
-Before that normal run, exercise the deterministic IMU integration fault once:
+To repeat the deterministic IMU integration fault test:
 
 ```powershell
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features bench_prearm_imu_stale --probe-speed-khz 1800 --connect-under-reset
@@ -218,15 +231,62 @@ python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --featu
 
 Every two seconds it adds one sensor-frame line containing acceleration in mg,
 gyro in tenths of a degree per second, and temperature in tenths of a degree
-Celsius, followed by one body-frame line containing the mapped gravity vector
-and angular rates. Keep ESC power disconnected. Capture stationary level, then slowly
-move nose-up, right-side-down, and clockwise in yaw for at least four seconds
-per motion so a two-second snapshot lands during each movement; hold and pause
-between motions. The feature does not alter the USB
+Celsius, followed by a physical body-frame line containing mapped gravity and
+angular rates and a separate rate-controller line. Physical body pitch follows
+the right-hand rule; the established FCU3 controller convention intentionally
+inverts only pitch. Keep ESC power disconnected. Capture stationary level,
+then slowly move nose-up, right-side-down, and clockwise in yaw for at least
+four seconds per motion so a two-second snapshot lands during each movement;
+hold and pause between motions. The feature does not alter the USB
 status protocol, IMU scheduling, control rate, safety state, or actuator gate.
 The `sensor` line remains uncorrected input evidence; the `body` line validates
-the BSP's measured signed-axis mapping before that mapping is used for later
-actuator commissioning.
+the BSP's measured signed-axis mapping, while the `control` line exposes the
+rates actually passed to the rate PID.
+
+### Corrective pitch-opposition gate
+
+After any pitch-axis or mixer change, remove all propellers. Disconnect ESC
+power and run the combined physical/controller diagnostic and onboard logger
+from the repository root:
+
+```powershell
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "flash_blackbox imu_orientation_rtt" --probe-speed-khz 1800 --connect-under-reset
+```
+
+Keep ARM low and slowly pitch the airframe in both directions. Nose-up must be
+positive on `IMU ORIENT body` and negative on `IMU ORIENT control`; nose-down
+must show the inverse. Roll and yaw must keep the same sign on both lines.
+
+Without reflashing, return the craft to level, connect ESC power, and hold the
+airframe securely. After stationary gyro bias calibration, arm at zero
+throttle, allow all four ESCs to qualify, and use only modest throttle.
+Slowly pitch nose-down: the controller pitch rate must be positive, pitch PID
+negative, and front M2/M4 higher than rear M1/M3. Slowly pitch nose-up:
+controller pitch must be negative, pitch PID positive, and rear M1/M3 higher
+than front M2/M4. Confirm roll and yaw still oppose motion, then disarm and stop
+the run. Leave the system disarmed for at least two seconds so the final flash
+page is committed. Retain the RTT and onboard evidence for review. Do not
+reinstall propellers or attempt another hop until both checks pass.
+
+Both checks passed on 2026-07-22. The unpowered orientation image was
+`C639C8BD3476E8415632644E970D4BAB3B42417FD9C624428B6D5D343D37F7FA`;
+the powered normal-mixer image was
+`FF6606EFACC55C9C88CCDE5EC044C0CB3B3881A5229319C26820621654DD136F`.
+The powered capture produced the correct PID and motor-pair polarity for every
+selected pitch, roll, and yaw motion sample. See `TARGET_VERIFICATION.md` for
+the retained logs and exact counts.
+
+Continue the already completed archive so only pages added by this test cross
+USB, then select the flight ID that `list` reported as `next flight` before
+arming:
+
+```powershell
+python tools\ferrowasp_storage.py --port COM7 list
+python tools\ferrowasp_storage.py --port COM7 --timeout 10 read --resume --output logs\foxeer-hop-front-flip.fwbb
+python tools\blackbox_analyzer.py logs\foxeer-hop-front-flip.fwbb --flight-id 23 --mode swing --csv logs\foxeer-pitch-fix-flight23.csv
+```
+
+Replace the COM port and flight ID with the values observed on the target.
 
 The RC PWM implementation uses a board-local TIM1/TIM8 owner because M4 is
 the complementary `TIM1_CH3N` output. The DShot implementation uses the same
@@ -333,6 +393,23 @@ ASCII commands:
 - `flash_blackbox` records fixed-size CRC-protected control snapshots while
   armed and flushes the final partial page on disarm.
 
+The separate `mspv2_configurator` gate replaces the ASCII/status stream on the
+CDC endpoint with bounded native MSPv2 frames. It implies `flash_storage` and
+implements the common read-only `MSP_API_VERSION`, `MSP_FC_VARIANT` (`FWSP`),
+`MSP_FC_VERSION`, `MSP_BOARD_INFO`, `MSP_BUILD_INFO`, `MSP_STATUS`, and
+`MSP_UID` commands. FerroWasp-native requests use function `0x7A00` and a
+version-1 postcard envelope. Supported native operations are hello/capability
+discovery, whole-config read/stage/CRC-checked commit, defaults restore,
+bounded blackbox listing/info, and CRC-protected reads of at most 512 bytes.
+The endpoint advertises config-write/reset capabilities only when
+`flash_writes` is also selected. Individual-log erase and software reboot are
+not advertised or implemented.
+
+MSPv2 config staging and persistence are rejected while armed. Blackbox access
+is disarmed-only, active logs cannot be downloaded, the host may have only one
+outstanding request, and all parser, queue, response, and chunk sizes are
+fixed. The USB task still owns no safety or actuator handle.
+
 SPI2 runs in mode 0 at 10 MHz using short CPU-driven transfers. This avoids
 the fixed DMA1 Stream 4 collision between SPI2 TX and the validated UART4 OSD
 TX route. The priority-1 flash manager uses bounded queues, never owns motor
@@ -351,6 +428,7 @@ Build the three stages from the repository root:
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_storage
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_writes
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_blackbox
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "mspv2_configurator flash_writes"
 ```
 
 The first props-off capture used the capped DShot commissioning gate. For the

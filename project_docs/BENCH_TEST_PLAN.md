@@ -1242,7 +1242,7 @@ Observed props-off response after this fix:
 
 Status: pass for props-off stick-to-motor response after RC mapping fix.
 
-### Test C: Gyro Sign Step Test
+### Test C: FCU3 Gyro Sign Step Test
 
 Goal:
 
@@ -1276,7 +1276,7 @@ shown to drive reinforcing front-motor correction in the normal control path.
 the manual tilt correction test with props removed before any further prop-on
 attempt.
 
-### Test C2: Field Tilt Log After Failed Takeoff Attempts
+### Test C2: FCU3 Field Tilt Log After Failed Takeoff Attempts
 
 Log:
 
@@ -1315,7 +1315,7 @@ Firmware patch:
 Status: fail before patch; patch applied. Must pass props-off manual tilt
 correction before flight.
 
-### Test C3: After-Patch Field Tilt Log
+### Test C3: FCU3 After-Patch Field Tilt Log
 
 Log:
 
@@ -1352,6 +1352,52 @@ Interpretation:
 Status: useful after-patch evidence, but do not clear for prop-on flight until
 the physical props-off tilt check is observed directly: nose-up raises rear,
 nose-down raises front.
+
+### Test C4: Foxeer First-Hop Pitch Positive Feedback
+
+The first Foxeer prop-on departure on 2026-07-22 attempted an immediate
+forward flip. The recovered archive is
+`logs/foxeer-hop-front-flip.fwbb`, SHA-256
+`DB6E82BFE6E6902BAB26658C4BC9F2FDB3B71FE6E8FF1C05E1ACB0C9AC348537`.
+It contains 16,974 CRC-valid pages and 84,827 records; flight IDs 12 and 13
+contain the powered departure evidence.
+
+At flight-12 sequence 11,407, commanded pitch was zero, controller pitch was
+`-241.0 dps`, pitch PID was `+60`, throttle was `550`, and physical
+M1/M2/M3/M4 were `624/487/597/492`. Increasing rear M1/M3 while the aircraft
+was moving nose-down reinforced the disturbance. Flight 13 independently
+shows the same polarity.
+
+Status: fail. The pre-fix image is withdrawn from flight use. This is a pitch
+sign defect, not a gain-tuning result.
+
+### Test C5: Foxeer Corrected Props-Off Opposition
+
+Run both SWD phases with all propellers removed:
+
+1. With ESC power disconnected, physical nose-up must remain positive body
+   pitch while controller pitch is negative; nose-down must be the inverse.
+   Roll and yaw signs must match between body and controller.
+2. Reflash `blackbox_defmt`, return level, and connect ESC power. Under the
+   normal DShot mixer, nose-up must produce positive pitch PID and raise rear
+   M1/M3; nose-down must produce negative pitch PID and raise front M2/M4. Roll
+   and yaw must also oppose hand motion.
+
+Any reinforcing correction, unexplained motor mapping, failure to stop on
+disarm, or automatic rearm is an immediate fail/no-flight result. Retain the
+exact ELF hash plus RTT and onboard logs. A second hop remains blocked until
+both phases pass and the evidence is reviewed.
+
+Observed 2026-07-22 result: pass. The unpowered image
+`C639C8BD3476E8415632644E970D4BAB3B42417FD9C624428B6D5D343D37F7FA`
+showed the intended physical/controller pitch inversion while preserving roll
+and yaw. Powered image
+`FF6606EFACC55C9C88CCDE5EC044C0CB3B3881A5229319C26820621654DD136F`
+then produced opposing PID and motor-pair polarity for pitch 594/594, roll
+175/175, and yaw 72/72 selected centred-stick motion samples. DShot and
+telemetry counters remained clean, and explicit disarm retained four zero
+outputs. Retained RTT log:
+`logs/terminal_embed/20260722_212914_rtt.log`.
 
 ### Test D: Clean Motor Vibration Test With PID Disabled
 

@@ -672,13 +672,20 @@ IMU sensor frame -> board frame -> drone body frame
 ```
 
 Both steps are represented as signed axis permutations in
-`ferrowasp-core::frames::FrameRotation`. The composed IMU-to-drone rotation is
-what the control loop uses for gyro rates. FCU3 encodes its existing validated
-control-axis behavior as identity IMU-to-board plus the measured board-to-drone
-rotation `[1, 0, 2]` with signs `[1, -1, -1]`. Foxeer currently uses a
-provisional identity/identity profile and remains arming-inhibited until its
-sensor identity, board orientation, ADC, motor order, and M4 polarity are
-measured on target.
+`ferrowasp-core::frames::FrameRotation`. The composed IMU-to-drone rotation
+defines the physical body frame used for acceleration, attitude estimation,
+and external orientation reporting. FCU3 retains its existing validated gyro
+mapping `[1, 0, 2]` with signs `[1, -1, -1]` as the golden controller
+behavior. Target evidence established Foxeer's physical sensor-to-body mapping
+as `[1, 0, 2]` with signs `[-1, -1, -1]`.
+
+The prototype rate controller predates the explicit body-frame type and uses a
+historical nose-down-positive pitch convention. Foxeer therefore composes the
+physical gyro mapping with an explicit controller compatibility transform
+`[roll, -pitch, yaw]`. The transform applies only at the rate-controller
+boundary; controller rates are converted back to physical body rates before
+the complementary estimator combines them with gravity. Hiding this
+compatibility sign inside Foxeer's measured physical orientation is forbidden.
 
 This decision changes representation only. Any change to either rotation on an
 actuator-capable board requires props-off axis/sign, motor order, motor

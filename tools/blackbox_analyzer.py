@@ -51,6 +51,7 @@ class BlackboxSample:
     throttle: int
     motors: tuple[int, int, int, int]
     timestamp_us: int | None = None
+    flight_id: int | None = None
 
     @property
     def armed(self) -> bool:
@@ -124,6 +125,10 @@ def parse_args() -> argparse.Namespace:
         "--csv",
         type=Path,
         help="Write parsed blackbox samples to CSV.",
+    )
+    parser.add_argument(
+        "--flight-id",
+        help="Analyze one onboard-flash flight ID, or 'latest'.",
     )
     parser.add_argument(
         "--warmup",
@@ -290,7 +295,7 @@ def flash_log_stats(data: bytes) -> FlashLogStats:
 
 def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
     samples: list[BlackboxSample] = []
-    for page, _, _, record_count in validated_flash_pages(data):
+    for page, flight_id, _, record_count in validated_flash_pages(data):
         for record_index in range(record_count):
             start = record_index * FLASH_RECORD_LEN
             values = FLASH_RECORD_STRUCT.unpack_from(page, start)
@@ -307,9 +312,38 @@ def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
                     throttle=values[16],
                     motors=tuple(values[17:21]),
                     timestamp_us=values[0],
+                    flight_id=flight_id,
                 )
             )
     return samples
+
+
+def select_flight_samples(
+    samples: list[BlackboxSample], requested: str | None
+) -> tuple[list[BlackboxSample], int | None]:
+    if requested is None:
+        return samples, None
+
+    available = sorted(
+        {sample.flight_id for sample in samples if sample.flight_id is not None}
+    )
+    if not available:
+        raise ValueError("--flight-id requires an onboard .fwbb log")
+
+    if requested.lower() == "latest":
+        selected = available[-1]
+    else:
+        try:
+            selected = int(requested, 10)
+        except ValueError as error:
+            raise ValueError("--flight-id must be an integer or 'latest'") from error
+        if selected not in available:
+            choices = ",".join(str(value) for value in available)
+            raise ValueError(
+                f"flight ID {selected} is unavailable; available IDs: {choices}"
+            )
+
+    return [sample for sample in samples if sample.flight_id == selected], selected
 
 
 def trim_samples_by_seconds(
@@ -643,6 +677,7 @@ def write_csv(path: Path, samples: list[BlackboxSample]) -> None:
         writer.writerow(
             [
                 "timestamp_us",
+                "flight_id",
                 "seq",
                 "imu_seq",
                 "flags",
@@ -672,6 +707,7 @@ def write_csv(path: Path, samples: list[BlackboxSample]) -> None:
             writer.writerow(
                 [
                     sample.timestamp_us if sample.timestamp_us is not None else "",
+                    sample.flight_id if sample.flight_id is not None else "",
                     sample.seq,
                     sample.imu_seq,
                     sample.flags,
@@ -719,6 +755,12 @@ def main() -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
+    try:
+        samples, selected_flight_id = select_flight_samples(samples, args.flight_id)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
     if args.warmup > 0:
         samples = samples[args.warmup :]
 
@@ -753,6 +795,8 @@ def main() -> int:
             f"partial pages: {stats.partial_page_count}; "
             f"final page: {stats.final_page_records}/{FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN} records"
         )
+    if selected_flight_id is not None:
+        print(f"Selected flight ID: {selected_flight_id}")
     print(f"Format: BB{max(sample.version for sample in samples)} blackbox")
     print(f"Samples: {len(samples)}  seq: {first_seq}..{last_seq}  estimated rate: {sample_rate_hz:.1f} Hz")
     if trimmed_start or trimmed_end:

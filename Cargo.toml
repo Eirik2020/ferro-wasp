@@ -7,6 +7,7 @@ members = [
     "crates/ferrowasp-drivers",
     "crates/ferrowasp-io-core",
     "crates/ferrowasp-mspv1",
+    "crates/ferrowasp-mspv2",
     "crates/ferrowasp-pid",
     "crates/ferrowasp-stm32f4",
     "crates/ferrowasp-tasks",

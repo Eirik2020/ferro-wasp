@@ -1,4 +1,4 @@
-use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation};
+use ferrowasp_core::frames::{BODY_RATE_TO_RATE_CONTROLLER_MAP, DroneBodyFrame, FrameRotation};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputProfile {
@@ -77,6 +77,14 @@ impl ImuControlAxisProfile {
     pub const fn imu_to_drone_rotation(self) -> FrameRotation {
         self.imu_to_board_rotation
             .then(self.board_to_drone_rotation)
+    }
+
+    /// Maps sensor angular rates into the established FCU3 rate/mixer sign
+    /// convention. This is intentionally distinct from the physical
+    /// sensor-to-body rotation used by acceleration and orientation reporting.
+    pub const fn imu_to_rate_controller_map(self) -> FrameRotation {
+        self.imu_to_drone_rotation()
+            .then(BODY_RATE_TO_RATE_CONTROLLER_MAP)
     }
 
     /// Converts sensor specific force into the drone-frame gravity direction
@@ -181,11 +189,55 @@ mod tests {
                 .map_raw([10, 20, -30]),
             [-20, -10, 30]
         );
+        assert_eq!(
+            IMU_CONTROL_AXIS_PROFILE
+                .imu_to_rate_controller_map()
+                .map_raw([10, 20, -30]),
+            [-20, 10, 30]
+        );
         let verified = [
             IMU_CONTROL_AXIS_PROFILE.sensor_identity_verified,
             IMU_CONTROL_AXIS_PROFILE.orientation_verified,
         ];
         assert_eq!(verified, [true; 2]);
+    }
+
+    #[test]
+    fn measured_nose_up_rate_maps_negative_for_the_golden_controller() {
+        // Target evidence established physical nose-up as negative sensor X.
+        let sensor_nose_up = [-100, 0, 0];
+        let body = IMU_CONTROL_AXIS_PROFILE
+            .imu_to_drone_rotation()
+            .map_raw(sensor_nose_up);
+        let controller = IMU_CONTROL_AXIS_PROFILE
+            .imu_to_rate_controller_map()
+            .map_raw(sensor_nose_up);
+
+        assert_eq!(body, [0, 100, 0]);
+        assert_eq!(controller, [0, -100, 0]);
+    }
+
+    #[test]
+    fn measured_nose_down_rate_maps_positive_for_the_golden_controller() {
+        // The failed-hop blackbox established physical nose-down as positive
+        // sensor X. The controller must therefore see positive pitch rate and
+        // command the opposing front-motor correction.
+        let sensor_nose_down = [100, 0, 0];
+        let controller = IMU_CONTROL_AXIS_PROFILE
+            .imu_to_rate_controller_map()
+            .map_raw(sensor_nose_down);
+
+        assert_eq!(controller, [0, 100, 0]);
+    }
+
+    #[test]
+    fn controller_compatibility_preserves_verified_roll_and_yaw_signs() {
+        let map = IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map();
+
+        // Target evidence: negative sensor Y is physical right-side-down,
+        // and negative sensor Z is a rightward yaw.
+        assert_eq!(map.map_raw([0, -100, 0]), [100, 0, 0]);
+        assert_eq!(map.map_raw([0, 0, -100]), [0, 0, 100]);
     }
 
     #[test]

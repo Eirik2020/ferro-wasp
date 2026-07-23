@@ -42,6 +42,7 @@ bench_dshot_idle_output1_not_running = []
 flash_storage = ["usb_serial"]
 flash_writes = ["flash_storage"]
 flash_blackbox = ["flash_writes"]
+mspv2_configurator = ["flash_storage", "ferrowasp-tasks/mspv2_configurator"]
 pwm_cal = []
 usb_serial = []
 
@@ -59,6 +60,7 @@ ferrowasp-core = { path = "../../crates/ferrowasp-core" }
 ferrowasp-drivers = { path = "../../crates/ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../../crates/ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../../crates/ferrowasp-mspv1" }
+ferrowasp-mspv2 = { path = "../../crates/ferrowasp-mspv2" }
 ferrowasp-pid = { path = "../../crates/ferrowasp-pid" }
 ferrowasp-stm32f4 = { path = "../../crates/ferrowasp-stm32f4" }
 ferrowasp-tasks = { path = "../../crates/ferrowasp-tasks" }

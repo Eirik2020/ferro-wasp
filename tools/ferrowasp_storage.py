@@ -39,6 +39,11 @@ def parse_args() -> argparse.Namespace:
 
     read = subparsers.add_parser("read", help="Download every stored raw flash page")
     read.add_argument("--output", type=Path, required=True)
+    read.add_argument(
+        "--resume",
+        action="store_true",
+        help="Validate and continue an existing page-aligned partial download",
+    )
 
     erase = subparsers.add_parser("erase")
     erase.add_argument("--confirm", action="store_true")
@@ -119,6 +124,39 @@ def read_page(device: Device, page_index: int) -> bytes:
     return bytes(page)
 
 
+def validated_resume_page_count(path: Path, used_pages: int) -> int:
+    if not path.exists():
+        return 0
+    return validated_resume_page_count_from_bytes(path.read_bytes(), used_pages)
+
+
+def validated_resume_page_count_from_bytes(data: bytes, used_pages: int) -> int:
+    size = len(data)
+    if size % PAGE_SIZE:
+        raise RuntimeError(
+            f"cannot resume: existing file has {size % PAGE_SIZE} trailing bytes"
+        )
+    page_count = size // PAGE_SIZE
+    if page_count > used_pages:
+        raise RuntimeError(
+            f"cannot resume: existing file has {page_count} pages, device has {used_pages}"
+        )
+
+    for page_index in range(page_count):
+        start = page_index * PAGE_SIZE
+        page = data[start : start + PAGE_SIZE]
+        if page[240:242] != b"FB":
+            raise RuntimeError(
+                f"cannot resume: invalid flash-page magic at page {page_index}"
+            )
+        expected_crc = int.from_bytes(page[-4:], "little")
+        if binascii.crc32(page[:-4]) != expected_crc:
+            raise RuntimeError(
+                f"cannot resume: flash-page CRC mismatch at page {page_index}"
+            )
+    return page_count
+
+
 def run(args: argparse.Namespace) -> int:
     device = Device(args.port, args.baud, args.timeout)
     try:
@@ -138,8 +176,14 @@ def run(args: argparse.Namespace) -> int:
         elif args.operation == "read":
             used, _, _, _ = list_logs(device)
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            with args.output.open("wb") as output:
-                for page_index in range(used):
+            start_page = (
+                validated_resume_page_count(args.output, used) if args.resume else 0
+            )
+            if start_page:
+                print(f"resuming at page {start_page}/{used}", file=sys.stderr)
+            mode = "ab" if args.resume else "wb"
+            with args.output.open(mode) as output:
+                for page_index in range(start_page, used):
                     output.write(read_page(device, page_index))
                     if page_index % 128 == 0 or page_index + 1 == used:
                         print(f"downloaded {page_index + 1}/{used} pages", file=sys.stderr)

@@ -559,6 +559,21 @@ python tools\ferrowasp_storage.py --port COM7 read --output logs\foxeer-props-of
 python tools\blackbox_analyzer.py logs\foxeer-props-off.fwbb --mode auto --csv logs\foxeer-props-off.csv
 ```
 
+If a long USB download is interrupted, validate the complete pages already on
+disk and continue without restarting from page zero:
+
+```powershell
+python tools\ferrowasp_storage.py --port COM7 --timeout 10 read --resume --output logs\foxeer-props-off.fwbb
+```
+
+Downloads may contain several armed sessions. Select one flight for sequence,
+rate, and jitter analysis so boundaries between flight IDs are not counted as
+missing frames:
+
+```powershell
+python tools\blackbox_analyzer.py logs\foxeer-props-off.fwbb --flight-id latest --mode auto --csv logs\foxeer-latest.csv
+```
+
 `erase --confirm` erases every sector in the log partition, not the
 configuration slots or scratch sector. Storage reads and all writes are
 rejected while armed; in-progress erase/config/self-test maintenance is
@@ -570,7 +585,8 @@ clean.
 For `.fwbb` input the analyzer rejects every invalid or truncated page and
 prints the CRC-valid page count, record count, flight IDs, page-sequence
 endpoints, partial-page count, and final-page record count before its normal
-BB2 analysis.
+BB2 analysis. `--flight-id N` selects an explicit stored flight and
+`--flight-id latest` selects the highest available ID.
 
 ## Flight Reports
 

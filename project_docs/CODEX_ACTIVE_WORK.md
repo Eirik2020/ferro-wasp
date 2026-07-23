@@ -1,8 +1,17 @@
 # FerroWasp Active Work Handoff
 
-Last updated: 2026-07-20
+Last updated: 2026-07-22
 
-## Current State - 2026-07-20
+## Current State - 2026-07-22
+
+Foxeer F405 V2 flight testing is blocked. Its first prop-on departure on
+2026-07-22 attempted an immediate forward flip. The recovered onboard records
+prove reinforcing pitch feedback in the pre-fix image; this is an axis-sign
+defect, not a tuning problem. A correction is implemented, but it must pass an
+unpowered SWD orientation check followed by a powered props-off normal-mixer
+opposition check before another hop. Keep the propellers removed and do not
+reuse pre-fix image SHA-256
+`E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
 
 The standard FCU3 DShot600 image completed its first controlled outdoor flight
 after the powered props-off, telemetry-qualified arming, motor-map, rotation,
@@ -34,10 +43,10 @@ temporary preparation permit remains future safety work.
 
 The agreed work order is now:
 
-1. prepare and sanitize FerroWasp for public source publication;
-2. bring up and target-verify FerroWasp on the Foxeer F405 V2 while retaining
-   its current arming inhibit until its hardware gates pass;
-3. establish a reproducible WSL/Docker development environment;
+1. validate the Foxeer pitch correction with both props-off SWD gates;
+2. only after reviewed bench evidence, build a clean logged image and repeat a
+   conservative controlled-field hop;
+3. finish the remaining public-source and reproducible WSL/Docker work;
 4. return to isolated FCU3 pitch tuning with the `0.30` P trial.
 
 The remaining sections are a chronological engineering handoff. Statements
@@ -1103,13 +1112,14 @@ ELF sync, detached logging, and log fetch implementation in FerroDebugger.
 
 ## Current Focus
 
-The active work is the final Foxeer F405 V2 props-off flight handoff. Its IMU
+The Foxeer F405 V2 props-off flight handoff is complete. Its IMU
 orientation/EXTI, RC interlocks, motor identity/direction, DShot600, PA10 eRPM
-qualification, and onboard blackbox paths now have target evidence. DShot is
-the app default. The normal mixer must still complete one powered props-off run
-with the new IMU pre-arm gate, live OSD, logging, disarm, and RC-loss behavior
-before propellers are installed. WSL/Docker development-environment work
-follows the Foxeer checkpoint.
+qualification, OSD voltage, normal mixer, and onboard blackbox paths have
+target evidence. The deterministic stale-IMU image rejected arming without
+temporary idle, and the normal image passed eRPM qualification, explicit
+disarm, RC-loss stop, and no-rearm behavior. DShot is the app default. The next
+hardware step is the conservative controlled-field first hop; WSL/Docker
+development-environment work follows the Foxeer checkpoint.
 
 FCU3 flight tuning is deliberately parked while publication work is active.
 The previous yaw tendency was absent in the latest flight. The next isolated
@@ -1801,15 +1811,101 @@ zero while raw ADC millivolts remain available for later calibration.
 With those gates resolved, Foxeer defaults to DShot600 plus PA10 telemetry and
 normal flight arming. RC PWM is an explicit no-default-features fallback. The
 `--foxeer-smoke` preset adds `smoke_actuator_inhibit`, retaining an independent
-compile-time actuator lockout despite the flight profile promotion. The next
-and only required powered handoff is a propellers-off normal-mixer run using
-`flash_blackbox`: confirm bias completion before arm, `[3,3,3,3]` eRPM
-qualification, low stick/mixer response, live OSD, explicit disarm, and RC-loss
-stop behavior. Retain the exact ELF hash and RTT log before any flight.
+compile-time actuator lockout despite the flight profile promotion.
 
-Pre-bench release identities from this state:
+The final 2026-07-22 handoff passed. The deterministic stale-IMU build rejected
+arm with four zero outputs and no `SYSTEM ARMED`; its retained log is
+`logs/terminal_embed/20260722_180351_rtt.log` and tested SHA-256 is
+`EFFC154E59F61896B3AB3EE3D91A424B0110C461012807B84BF399E72BD155F5`.
+The normal image qualified `[3,3,3,3]`, armed, responded to low commands,
+stopped on explicit disarm and RC timeout, and did not rearm on restored
+arm-high. OSD showed 24.9 V against a 25.05 V meter reading. Its retained RTT
+log is `logs/terminal_embed/20260722_180528_rtt.log` and tested SHA-256 is
+`E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
 
-- deterministic `bench_prearm_imu_stale`:
-  `A61B1A8C90266BA03CC24BBC219F1C317FBDF7388D1FF103119ED6A25468B9C0`;
-- normal default-DShot plus `flash_blackbox` flight candidate:
-  `02ECFAF2EC9544802323EBB4219A8B0D2DC58B8CADCFFE4FC82E989DBA4A815C`.
+The downloaded flash archive contains 11,097 CRC-valid pages. Flight ID 7 has
+3,477 contiguous samples at 400 Hz, zero missing BB2 frames, zero repeated IMU
+samples, approximately 1,011.2 Hz IMU progress, and no timestamp interval over
+3 ms. The combined-archive analyzer result must not be used for sequence-loss
+assessment across flight boundaries; select one flight with `--flight-id`.
+
+### Foxeer first-hop pitch-polarity correction (2026-07-22)
+
+The first prop-on Foxeer departure attempted an immediate forward flip. Flight
+testing is stopped until a corrected image passes a new props-off gate. The
+previously retained SHA-256
+`E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`
+must not be flown again.
+
+The initial USB archive transfer timed out after 11,031 pages and therefore did
+not include the field event. `tools/ferrowasp_storage.py read --resume` now
+validates each existing complete page's magic and CRC before resuming. The
+completed 16,974-page archive contains 84,827 records and flight IDs 1-22. It
+is retained as `logs/foxeer-hop-front-flip.fwbb` with SHA-256
+`DB6E82BFE6E6902BAB26658C4BC9F2FDB3B71FE6E8FF1C05E1ACB0C9AC348537`.
+IDs 12 and 13 contain the powered departure evidence; the other short later
+IDs contain zero-output sessions and must not be mistaken for the incident.
+
+Both powered records show pitch positive feedback with zero commanded pitch.
+Flight 12 sequence 11,407 is a compact decisive sample: controller pitch
+`-241.0 dps`, pitch PID `+60`, throttle `550`, and M1/M2/M3/M4
+`624/487/597/492`. Raising rear M1/M3 over front M2/M4 reinforces the physical
+nose-down motion. Flight 13 independently shows the same polarity. This is a
+sign defect, not evidence for a pitch-gain increase.
+
+The measured Foxeer physical sensor-to-body rotation remains
+`[-sensor Y, -sensor X, -sensor Z]`. It is a proper right-handed physical map
+and stays in use for accelerometer/orientation evidence. The FCU3-proven rate
+controller and mixer retain a historical nose-down-positive pitch convention,
+so Foxeer now composes an explicit `[roll, -pitch, yaw]` compatibility
+transform only for rate control. The resulting controller gyro map is
+`[-sensor Y, +sensor X, -sensor Z]`. Filtered controller rates are converted
+back to physical body rates before the complementary estimator combines them
+with physical gravity. Host tests cover both pitch directions, preservation of
+the verified roll/yaw signs, self-inverse composition, and the expected
+front/rear motor opposition.
+
+The unpowered SWD orientation half passed using image SHA-256
+`C639C8BD3476E8415632644E970D4BAB3B42417FD9C624428B6D5D343D37F7FA`
+and `logs/terminal_embed/20260722_212252_rtt.log`. Nose-up produced positive
+physical body pitch and negative controller pitch; nose-down reversed both.
+Roll and yaw retained identical physical/controller signs, IMU cadence stayed
+near 1,012 Hz, and rejected DRDY events remained zero.
+
+The powered props-off normal-mixer half also passed with image SHA-256
+`FF6606EFACC55C9C88CCDE5EC044C0CB3B3881A5229319C26820621654DD136F`
+and `logs/terminal_embed/20260722_212914_rtt.log`. Among centred-stick armed
+motion samples, opposing PID and motor-pair polarity passed pitch 594/594,
+roll 175/175, and yaw 72/72. Sequence 13,501 captured positive pitch
+`+35.2 dps`, PID `-9`, and front M2/M4 `110/110` above rear M1/M3 `92/92`;
+sequence 14,531 captured negative pitch `-19.0 dps`, PID `+5`, and rear
+`106/106` above front `96/96`. This directly reverses the failed-hop feedback.
+The run also retained clean DShot/telemetry counters, explicit disarm, and four
+zero outputs.
+
+Both correction gates are now closed. The clean `flash_blackbox` image was
+then programmed and booted successfully with exact SHA-256
+`B85DB4F43897EF628EFF0C368CF0670F34FEEDB3FC59C895F21ECFB91D3E6FC4`
+and `logs/terminal_embed/20260722_213858_rtt.log`. It recovered flash at page
+16,974, qualified all four ESCs, armed normally, wrote 273 pages with zero
+drops/write faults, and disarmed to four zero DShot/eRPM values with clean
+transport counters.
+
+The next hardware action is to disconnect SWD/NRST and USB, inspect the
+airframe and propellers, and perform only a conservative controlled hop. The
+props-off and programming results clear the corrected candidate, not the hop
+itself.
+
+The current software-only artifacts are:
+
+- accepted unpowered orientation diagnostic, feature `imu_orientation_rtt`:
+  SHA-256
+  `C639C8BD3476E8415632644E970D4BAB3B42417FD9C624428B6D5D343D37F7FA`;
+- accepted powered RTT mixer diagnostic, feature `blackbox_defmt`, SHA-256
+  `FF6606EFACC55C9C88CCDE5EC044C0CB3B3881A5229319C26820621654DD136F`;
+- programmed and boot-verified clean `flash_blackbox` image:
+  SHA-256
+  `B85DB4F43897EF628EFF0C368CF0670F34FEEDB3FC59C895F21ECFB91D3E6FC4`.
+
+All three hashes now have target acceptance evidence. The hop remains a
+separate field result.

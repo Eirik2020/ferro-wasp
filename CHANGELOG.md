@@ -32,6 +32,11 @@ airworthy or production-ready.
 - Optional Foxeer USB CDC status snapshots plus staged onboard SPI-NOR
   discovery, dual-slot whitelisted configuration storage, CRC-protected flight
   logging, download/analyzer tooling, and a reserved-sector write self-test.
+- An opt-in Foxeer MSPv2 configurator endpoint with bounded incremental
+  framing, `FWSP` identification, versioned postcard RPC, whole-config
+  stage/commit/reset, and disarmed-only CRC-protected blackbox chunks. It is
+  gated separately from normal USB/status images and has no safety or actuator
+  authority.
 - Foxeer PC4/EXTI4 IMU data-ready sampling with bounded deferred SPI DMA
   requests and rejected-trigger diagnostics.
 

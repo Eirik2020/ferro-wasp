@@ -6,6 +6,7 @@ from tools.blackbox_analyzer import (
     BlackboxSample,
     flash_log_stats,
     samples_from_flash_bytes,
+    select_flight_samples,
     sequence_stats,
     timestamp_stats,
     u32_forward_delta,
@@ -114,6 +115,7 @@ class SequenceStatsTests(unittest.TestCase):
         self.assertEqual(len(samples), 1)
         self.assertEqual(samples[0].seq, 44)
         self.assertEqual(samples[0].timestamp_us, 123_000)
+        self.assertEqual(samples[0].flight_id, 7)
         self.assertEqual(samples[0].imu_seq, 110)
         self.assertEqual(samples[0].motors, (100, 101, 102, 103))
         stats = flash_log_stats(bytes(page))
@@ -124,6 +126,24 @@ class SequenceStatsTests(unittest.TestCase):
         self.assertEqual(stats.last_page_sequence, 9)
         self.assertEqual(stats.partial_page_count, 1)
         self.assertEqual(stats.final_page_records, 1)
+
+    def test_selects_latest_onboard_flight(self) -> None:
+        samples = [
+            sample(1, 10),
+            BlackboxSample(**{**sample(2, 12).__dict__, "flight_id": 3}),
+            BlackboxSample(**{**sample(3, 15).__dict__, "flight_id": 4}),
+        ]
+
+        selected, flight_id = select_flight_samples(samples, "latest")
+
+        self.assertEqual(flight_id, 4)
+        self.assertEqual([value.seq for value in selected], [3])
+
+    def test_rejects_unavailable_onboard_flight(self) -> None:
+        samples = [BlackboxSample(**{**sample(2, 12).__dict__, "flight_id": 3})]
+
+        with self.assertRaisesRegex(ValueError, "available IDs: 3"):
+            select_flight_samples(samples, "9")
 
     def test_rejects_crc_invalid_onboard_flash_page(self) -> None:
         page = bytearray(b"\xff" * 256)

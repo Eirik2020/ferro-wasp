@@ -827,7 +827,9 @@ until the final normal-mixer/OSD handoff at the end of this section passes.
   candidate repeat in `20260722_001436_rtt.log` remained disarmed throughout
   the observation window. Exact reset-time pad behavior remains unmeasured
   because the electrical analyzer test was intentionally skipped.
-- [ ] Keep PA13/PA14 available for SWD; do not depend on the shared status LEDs.
+- [x] Keep PA13/PA14 available for SWD; do not depend on the shared status LEDs.
+  Retrofitted SWD repeatedly flashed and streamed RTT at 1,800 kHz with
+  connect-under-reset once the physical reset connection was handled.
 - [x] Update the BSP verification constants only from captured evidence. The
   flight profile now combines target-verified IMU identity/orientation,
   motor order, functional M4 polarity, DShot/eRPM behavior, the documented ADC
@@ -842,17 +844,112 @@ until the final normal-mixer/OSD handoff at the end of this section passes.
 - [x] Promote DShot600 plus PA10 eRPM qualification to the Foxeer default motor
   protocol. RC PWM remains an explicit no-default-features fallback, and the
   smoke preset adds a separate compile-time actuator lockout.
-- [ ] Final normal-mixer props-off flight handoff: boot still for bias
+- [x] Final normal-mixer props-off flight handoff: boot still for bias
   calibration, confirm the healthy IMU gate permits arm, exercise low roll,
   pitch, yaw, and throttle commands, confirm live OSD voltage/throttle/armed
   state while `flash_blackbox` records, then verify explicit disarm and RC loss
   select four stop values. Do not install propellers until this passes and its
-  exact ELF hash/log are retained. The pre-bench `flash_blackbox` release ELF is
+  exact ELF hash/log are retained. This passed on 2026-07-22: OSD reported
+  24.9 V against 25.05 V at the pack, all four outputs qualified `[3,3,3,3]`,
+  low commands exercised the motors, explicit disarm and RC timeout selected
+  four stop values, restored arm-high did not rearm, and telemetry completed
+  12,150/12,150 requests without a protocol fault. The retained RTT log is
+  `logs/terminal_embed/20260722_180528_rtt.log`; the tested release ELF is
   SHA-256
-  `02ECFAF2EC9544802323EBB4219A8B0D2DC58B8CADCFFE4FC82E989DBA4A815C`.
-- [ ] Immediately before the normal handoff, build `bench_prearm_imu_stale`,
+  `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
+- [x] Immediately before the normal handoff, build `bench_prearm_imu_stale`,
   wait for real gyro-bias calibration, and request arm at zero throttle. Require
   the explicit forced-stale banner and `Arming aborted: IMU sample is stale`,
   with no temporary idle or `SYSTEM ARMED`. Reflash without the injection before
-  any further motor test. The pre-bench injection release ELF is SHA-256
-  `A61B1A8C90266BA03CC24BBC219F1C317FBDF7388D1FF103119ED6A25468B9C0`.
+  any further motor test. This passed without temporary idle or
+  `SYSTEM ARMED`; the retained RTT log is
+  `logs/terminal_embed/20260722_180351_rtt.log` and the tested injection ELF is
+  SHA-256
+  `EFFC154E59F61896B3AB3EE3D91A424B0110C461012807B84BF399E72BD155F5`.
+
+The final onboard download contains 11,097 CRC-valid pages across historical
+flight IDs 1-7. Analyzing flight 7 independently yields 3,477 contiguous
+400 Hz samples, zero missing BB2 frames, zero repeated IMU samples, an
+estimated 1,011.2 Hz IMU rate, and no recorded control interval above 3 ms.
+All three filtered gyro axes classify quiet. The retained files are
+`logs/foxeer-final-props-off.fwbb` and
+`logs/foxeer-final-props-off-flight7.csv`.
+
+### Foxeer first-hop corrective gate (2026-07-22)
+
+- [x] Stop after the first prop-on departure attempted an immediate forward
+  flip. Do not reuse the previously retained
+  `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`
+  image for flight.
+- [x] Recover the interrupted onboard download before diagnosing the event.
+  `ferrowasp_storage.py read --resume` now validates every existing complete
+  page's magic and CRC before appending. The completed archive contains 16,974
+  CRC-valid pages, 84,827 records, and flight IDs 1-22; IDs 12 and 13 contain
+  the powered departure evidence. Retained archive
+  `logs/foxeer-hop-front-flip.fwbb` has SHA-256
+  `DB6E82BFE6E6902BAB26658C4BC9F2FDB3B71FE6E8FF1C05E1ACB0C9AC348537`.
+- [x] Diagnose the feedback sign from the recorded control data rather than
+  changing gains. With zero pitch command, flight 12 sequence 11,407 recorded
+  controller pitch `-241.0 dps`, pitch PID `+60`, throttle `550`, and
+  M1/M2/M3/M4 `624/487/597/492`. Raising rear M1/M3 over front M2/M4
+  reinforces a physical nose-down motion, establishing positive pitch
+  feedback. Flight 13 independently shows the same polarity.
+- [x] Preserve the measured right-handed physical body map
+  `[-sensor Y, -sensor X, -sensor Z]`, but add an explicit physical-body to
+  FCU3-controller compatibility transform `[roll, -pitch, yaw]`. Foxeer rate
+  control therefore consumes `[-sensor Y, +sensor X, -sensor Z]`, while
+  accelerometer/orientation reporting and the complementary estimator remain
+  in the physical body convention. Host regressions cover nose-up, nose-down,
+  preserved roll/yaw signs, transform composition, and opposing front/rear
+  mixer output.
+- [x] With propellers and ESC power removed, flash `imu_orientation_rtt` over
+  SWD and verify the physical/controller transform. This passed with image
+  SHA-256
+  `C639C8BD3476E8415632644E970D4BAB3B42417FD9C624428B6D5D343D37F7FA`
+  and `logs/terminal_embed/20260722_212252_rtt.log`. Nose-up at sequence 6,075
+  produced body/control pitch `+64/-64` dps10 with body gravity X `-372` mg;
+  the nose-down return at sequence 12,150 produced `-60/+60` dps10. A
+  right-side-down region reached body/control roll `+95/+95` dps10 with
+  gravity Y `+530` mg. Nose-right yaw reached `+284/+284` dps10 and the return
+  reached `-318/-318` dps10. Two-second DRDY deltas were 2,025 except one
+  2,026 interval, with zero rejected triggers. The single ESC response timeout
+  is expected with ESC power disconnected; all four DShot values stayed zero
+  and actuator counters remained fault-free.
+- [x] With propellers removed and ESC power connected, flash
+  `blackbox_defmt` over SWD and repeat the normal-mixer opposition check under
+  modest throttle. Physical nose-down must produce positive controller pitch,
+  negative pitch PID, and front M2/M4 above rear M1/M3. Nose-up must produce
+  negative controller pitch, positive pitch PID, and rear M1/M3 above front
+  M2/M4. Confirm roll and yaw still oppose motion, then disarm and retain the
+  RTT evidence. This passed with image SHA-256
+  `FF6606EFACC55C9C88CCDE5EC044C0CB3B3881A5229319C26820621654DD136F`
+  and `logs/terminal_embed/20260722_212914_rtt.log`, SHA-256
+  `C13C1352041105CBBCDC95E17FB6AC2A82B7BB4C6901A3C6E1D0ADB08D8FB9A8`.
+  With centred axis commands and throttle above 100, every selected motion
+  sample had both the opposing PID sign and correct motor-pair polarity:
+  pitch 594/594, roll 175/175, and yaw 72/72. Representative pitch samples
+  were sequence 13,501 at `+35.2 dps`, PID `-9`, M1/M2/M3/M4
+  `92/110/92/110`, and sequence 14,531 at `-19.0 dps`, PID `+5`, motors
+  `106/96/106/96`. Roll and yaw likewise raised the motion-opposing pairs.
+  The run armed only after normal eRPM qualification, completed 2,950/2,950
+  associated telemetry requests without a protocol fault, kept DShot lane and
+  fault counters clean, explicitly disarmed, and retained four zero outputs.
+  The analyzer recovered 25,239 BB2 samples with zero repeated IMU samples and
+  an estimated 1,011.9 Hz IMU rate; 572 missing BB2 sequence values are RTT
+  text-transport loss, not control or IMU loss. Derived CSV
+  `logs/foxeer-corrected-props-off-rtt.csv` has SHA-256
+  `CC0FF31814B1656DA8143A96DC9C2876BBA27571F2A74AC32CD07F066530EFA5`.
+- [x] After reviewing both corrective props-off gates, program and boot the
+  clean `flash_blackbox` image. This passed over SWD with exact SHA-256
+  `B85DB4F43897EF628EFF0C368CF0670F34FEEDB3FC59C895F21ECFB91D3E6FC4`
+  and retained RTT log `logs/terminal_embed/20260722_213858_rtt.log`. It
+  recovered flash at page 16,974 with next flight 23, reported 24.9 V, completed
+  gyro-bias and RC qualification, qualified all four ESCs `[3,3,3,3]`, armed,
+  and wrote 273 pages with zero dropped records or write faults. Explicit
+  disarm returned all four DShot values and eRPM readings to zero; DShot and
+  telemetry counters remained fault-free.
+- [ ] Disconnect SWD/NRST and USB, inspect the airframe and propellers, then
+  repeat a conservative controlled-field hop. Abort on any unexpected motor
+  response, rapid attitude departure, oscillation, or loss of control
+  authority. The successful build/program/boot check does not itself clear the
+  hop result.

@@ -13,9 +13,14 @@ defmt = { version = "1.0.1", optional = true }
 ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
+ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 ferrowasp-pid = { path = "../ferrowasp-pid" }
 heapless = "0.9.2"
 
 [features]
 default = []
 blackbox_defmt = ["dep:defmt"]
+mspv2_configurator = ["dep:ferrowasp-mspv2"]
+
+[dev-dependencies]
+critical-section = { workspace = true, features = ["std"] }

@@ -62,17 +62,19 @@ approval.
 
 ## Priority 2: Run FerroWasp on Foxeer F405 V2
 
-The Foxeer image is now a default-DShot flight candidate. Evidence covers
-ROM-DFU/SWD, USB, ICM42688-P/EXTI, orientation, RC interlocks, motor
-order/direction, eRPM-qualified arming, and onboard blackbox recording.
+The Foxeer image uses default DShot and has evidence for ROM-DFU/SWD, USB,
+ICM42688-P/EXTI, physical orientation, RC interlocks, motor order/direction,
+eRPM-qualified arming, and onboard blackbox recording. Its first prop-on
+departure exposed positive pitch feedback and attempted a forward flip. The
+pre-fix image is withdrawn. The correction has since passed unpowered
+frame-sign and powered normal-mixer props-off opposition checks.
 
 Next checks:
 
-1. Run the normal uncapped mixer with propellers removed and retain its hash/log.
-2. Confirm the healthy/calibrated/fresh IMU pre-arm gate on target.
-3. Confirm low roll/pitch/yaw/throttle mixing and immediate stop on disarm/RC loss.
-4. Confirm live UART4 OSD while onboard blackbox logging is active.
-5. Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.
+1. Inspect the airframe and propellers, then repeat a bounded controlled-field
+   hop with immediate abort criteria.
+2. Review the new flight record before expanding the envelope.
+4. Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.
 
 The Foxeer app provides an explicit `bench_actuator_validation` commissioning
 gate for repeated motor checks. It only compiles with a capped equal-motor,

@@ -31,9 +31,11 @@ The current image probes the fitted SPI1 IMU and supports either MPU6500 or
 ICM42688-P, SBUS, MSP DisplayPort, ADC, a four-channel conventional RC PWM
 service set, gated four-lane DShot600, and BLHeli legacy telemetry on PA10.
 Telemetry-qualified arming has passed its positive and injected-failure
-props-off target checks. Flight arming is compile-time inhibited pending
-physical board calibration and waveform checks. It is a bring-up target, not
-a flight-validated target.
+props-off target checks. Its first prop-on departure exposed positive pitch
+feedback and attempted a forward flip. The controller-polarity correction is
+implemented and passed repeated unpowered-orientation and powered normal-mixer
+props-off opposition checks. It is still a bring-up target, not a
+flight-validated target; the corrected controlled hop remains.
 
 ## Status Summary
 
@@ -41,7 +43,7 @@ a flight-validated target.
 |---|---|
 | Main target | STM32F405-class flight-controller hardware |
 | Runtime model | Isolated `no_std`, `no_main`, RTIC 2 app shells for FCU3, Foxeer F405 V2, and F401 bring-up |
-| Logging/debug | `defmt`, RTT, optional BB2 frames, Python tools, and staged Foxeer SPI-NOR blackbox/config storage over USB CDC |
+| Logging/debug | `defmt`, RTT, optional BB2 frames, Python tools, and staged Foxeer SPI-NOR blackbox/config storage over USB CDC ASCII or feature-gated MSPv2 RPC |
 | RC input | SBUS over USART2 RX DMA |
 | IMU | FCU3 MPU6500; Foxeer runtime-selected MPU6500/ICM42688-P; blocking init, async `SpiDevice` DMA samples, 250 us transport deadline |
 | Control loop | Timer-driven 400 Hz control; FCU3 retains 800 Hz IMU polling, while Foxeer samples from PC4/EXTI4 data-ready events |
@@ -50,12 +52,12 @@ a flight-validated target.
 | Motor output | FCU3 and Foxeer: default four-lane DShot600 with capped bench modes and explicit four-channel PWM fallbacks |
 | Safety gate | Prototype safety master, arm qualification, telemetry-qualified DShot idle, guarded disarm and RC-loss paths |
 | ADC | ADC1 DMA path for internal temperature, battery voltage, and current-sense input |
-| USB | Optional `usb_serial`; Foxeer emits `FWDBG1` status and can expose bounded storage/config commands through staged flash features |
+| USB | Optional `usb_serial`; Foxeer emits `FWDBG1` status and bounded ASCII storage commands, or selects the opt-in `mspv2_configurator` native endpoint |
 | DShot | FCU3 defaults to four-motor DShot600; unpowered, powered props-off, fault-injection, and initial operator-reported flight checkpoints have passed; electrical timing/jitter and measured stop latency remain open |
 | ESC telemetry | FCU3 default DShot image: target-validated BLHeli legacy UART telemetry on PA10 / USART1 RX. Foxeer: target-validated request association, eRPM, positive idle qualification, and injected missing-evidence rejection on the same bounded manager/route |
 | MSP / OSD | MSPv1 DJI O4 OSD path on UART4 with DisplayPort text frames and status responses |
 | Secondary target | NUCLEO-F401RE RTIC LED/USART bring-up; static checks and target smoke pass |
-| Additional target | Foxeer F405 V2 isolated RTIC app; ROM-DFU/SWD, USB, ICM42688-P/EXTI, RC, PWM, default DShot, legacy eRPM, telemetry-qualified arming, and a props-off onboard-blackbox capture have target evidence; final normal-mixer/OSD props-off handoff remains before first flight |
+| Additional target | Foxeer F405 V2 isolated RTIC app; ROM-DFU/SWD, USB, ICM42688-P/EXTI, RC, PWM, default DShot, legacy eRPM, telemetry-qualified arming, onboard blackbox, and corrected props-off axis opposition have target evidence; a corrected controlled hop remains |
 
 ## Board and Pin Assumptions
 
@@ -232,6 +234,10 @@ orientation as two signed-axis rotations: IMU sensor frame to board frame, then
 board frame to drone body frame. FCU3's composed IMU-to-drone mapping preserves
 the current bench/flight evidence; Foxeer's orientation is target-verified from
 sustained level, roll, pitch, and yaw motions.
+The prototype FCU3 controller/mixer predates the physical frame type and uses a
+nose-down-positive pitch convention. Foxeer keeps its measured right-handed
+physical body map for acceleration and estimation, then applies an explicit
+pitch-only compatibility transform to gyro rates passed to that controller.
 The optional `blackbox_defmt` feature emits both raw and filtered control-axis
 rates as BB2 frames for bench observation. This is useful for bring-up, but it
 is not yet a validated estimator.
@@ -488,6 +494,9 @@ The current firmware has early communication and display pieces:
   `flash_storage`, disarmed-only maintenance and dual-slot whitelisted tuning
   storage with `flash_writes`, and CRC-protected armed-flight logging with
   `flash_blackbox`
+- opt-in Foxeer `mspv2_configurator`: bounded native framing, standard `FWSP`
+  identity/status commands, versioned whole-config stage/commit/reset, and
+  disarmed-only 512-byte CRC-protected blackbox reads over function `0x7A00`
 - FCU3's older USB endpoint remains a minimal one-shot hello
 - MSPv1 parser/serializer module with tests
 - DJI O4 MSP OSD task using UART4 TX/RX DMA
@@ -497,12 +506,14 @@ The current firmware has early communication and display pieces:
   default FCU3 DShot image; inactive in the explicit PWM fallback
 - UART modes for SBUS, MSP, and MAVLink configuration values
 
-Telemetry/config commands are not yet a complete runtime interface. The base
-Foxeer USB-status image discards input; flash-enabled images parse only the
-bounded storage/config command set. Configuration keys and ranges are
-whitelisted, destructive operations require explicit confirmation and a
-disarmed state, and the flash manager owns no safety or actuator resource.
-OSD and USB remain non-authoritative over safety state and motor output.
+The base Foxeer USB-status image discards input; ordinary flash-enabled images
+parse only the bounded ASCII storage/config command set. The opt-in MSPv2 image
+uses the same low-priority flash owner and whitelist. Configuration keys and
+ranges remain explicit, persistence and blackbox reads require a disarmed
+state, active logs are not downloadable, and unsupported erase/reboot requests
+fail closed. OSD and USB remain non-authoritative over safety state and motor
+output. The native endpoint has static verification but still requires a
+target USB interoperability checkpoint with the host configurator.
 
 Legacy ESC frames do not identify their source motor. A low-priority ESC
 manager therefore rotates physical DShot output lanes 1-4, owns response
@@ -558,7 +569,8 @@ These are expected at the current stage:
 - healthy/calibrated/fresh IMU is now a pre-arm prerequisite, but negative
   target fault-injection evidence and broader sensor/setpoint freshness policy
   remain incomplete
-- no full telemetry/config protocol yet
+- the feature-gated MSPv2 configurator endpoint still needs host/target USB
+  interoperability evidence and is not enabled in normal flight images
 - OSD data freshness is not complete yet
 - battery cell count, ADC scale assumptions, and current-board IMU axis mapping
   now live in the FCU3 BSP profile, but still need real board-specific
@@ -568,8 +580,12 @@ These are expected at the current stage:
 - Foxeer F405 V2 has physical ROM-DFU/SWD, USB enumeration, ICM42688-P/EXTI,
   verified IMU orientation, powered props-off motor order/direction, default
   DShot/eRPM-qualified arming, RC-loss/rearm interlocks, and onboard-blackbox
-  evidence. Fine ADC calibration, live OSD confirmation, exact waveforms, and
-  the final normal-mixer props-off flight handoff remain open
+  evidence. The final normal-mixer/OSD props-off handoff passed, but the first
+  prop-on departure exposed positive pitch feedback and attempted a forward
+  flip. Its code correction passed new unpowered and powered props-off
+  opposition checks. The clean corrected image is programmed and
+  boot-verified; the controlled hop remains. Fine ADC calibration and exact
+  waveforms remain open
 - no validated estimator or tuned flight-control loop yet
 - Foxeer onboard SPI-NOR blackbox recording has a CRC-valid props-off
   DShot/armed/throttle/disarm capture with a final partial-page flush and zero
