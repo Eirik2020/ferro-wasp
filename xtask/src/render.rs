@@ -233,7 +233,7 @@ pub fn render_crate(
                 .iter()
                 .any(|feature| feature.id == "osd_displayport")
             {
-                "cortex-m = \"=0.7.7\"\nferrowasp-serial-osd-compat = { path = \"../../../compat/ferrowasp-serial-osd\" }".to_owned()
+                "cortex-m = \"=0.7.7\"\nrtic-sync = \"=1.5.0\"\nferrowasp-serial-osd-compat = { path = \"../../../compat/ferrowasp-serial-osd\" }".to_owned()
             } else {
                 String::new()
             },

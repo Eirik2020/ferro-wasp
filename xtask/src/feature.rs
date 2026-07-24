@@ -408,17 +408,46 @@ fn rust_identifier_tokens(source: &str) -> Vec<String> {
                     cursor += 1;
                 }
             }
-        } else if matches!(bytes[cursor], b'"' | b'\'') {
-            let quote = bytes[cursor];
+        } else if bytes[cursor] == b'"' {
             cursor += 1;
             while cursor < bytes.len() {
                 if bytes[cursor] == b'\\' {
                     cursor = (cursor + 2).min(bytes.len());
-                } else if bytes[cursor] == quote {
+                } else if bytes[cursor] == b'"' {
                     cursor += 1;
                     break;
                 } else {
                     cursor += 1;
+                }
+            }
+        } else if bytes[cursor] == b'\'' {
+            let identifier_start = cursor + 1;
+            if identifier_start < bytes.len() && is_identifier_start(bytes[identifier_start]) {
+                let mut identifier_end = identifier_start + 1;
+                while identifier_end < bytes.len() && is_identifier_continue(bytes[identifier_end])
+                {
+                    identifier_end += 1;
+                }
+                if bytes.get(identifier_end) == Some(&b'\'') {
+                    // One-character Rust character literal such as `'x'`.
+                    cursor = identifier_end + 1;
+                } else {
+                    // Rust lifetime such as `'static`; declaration scanning
+                    // must not mistake it for a `static` item keyword.
+                    cursor = identifier_end;
+                }
+            } else {
+                // Escaped character literal such as `'\n'`.
+                cursor += 1;
+                while cursor < bytes.len() {
+                    if bytes[cursor] == b'\\' {
+                        cursor = (cursor + 2).min(bytes.len());
+                    } else if bytes[cursor] == b'\'' {
+                        cursor += 1;
+                        break;
+                    } else {
+                        cursor += 1;
+                    }
                 }
             }
         } else if is_identifier_start(bytes[cursor]) {
@@ -689,6 +718,26 @@ insertion_after = []
         assert!(error.to_string().contains("invalid placeholder"));
         let error = scan_placeholders("{{UNCLOSED", "test").unwrap_err();
         assert!(error.to_string().contains("unclosed placeholder"));
+    }
+
+    #[test]
+    fn declaration_scanner_ignores_lifetimes_and_literals() {
+        let source = r#"
+            type WorkSender = Sender<'static, OsdWork<70>, 4>;
+            const MARKER: char = 'x';
+            const NEWLINE: char = '\n';
+            async fn osd_displayport() {}
+        "#;
+
+        assert_eq!(
+            scan_declared_symbols(source),
+            BTreeSet::from([
+                "MARKER".to_owned(),
+                "NEWLINE".to_owned(),
+                "WorkSender".to_owned(),
+                "osd_displayport".to_owned(),
+            ])
+        );
     }
 
     #[test]

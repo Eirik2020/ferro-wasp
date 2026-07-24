@@ -10,20 +10,24 @@ Terminology and the resulting architectural refactor are defined in
 ## Ownership boundary
 
 The generated RTIC hardware layer owns USART1, DMA2 streams 5 and 7, all three
-interrupt handlers, and fixed transfer buffers. RX idle or transfer-complete
-events place a bounded chunk into `SerialRxTx`; TX takes bounded chunks from
-the same endpoint and starts DMA. Queue overflow is counted and drops the new
-chunk rather than allowing unbounded allocation.
+interrupt handlers, and fixed transfer buffers. RX idle and RX-DMA events are
+two producers of one bounded MPSC work channel. A once-started divergent OSD
+task is its sole consumer. The OSD task produces bounded TX chunks for a
+once-started divergent TX worker, and the TX-DMA interrupt reports completion
+through a separate capacity-one channel. Hardware producers never block;
+overflow rejects the new item and records a typed fault.
 
 In the agreed terminology, the reusable UART-DMA provider is a component and
-this USART1/pin/DMA instantiation is an endpoint. The current prototype exposes
-one concrete `SerialRxTx` Rust boundary to the OSD component; target metadata
-replaces that bidirectional label with directed RX-publish/consume and
-TX-emit/handle ports.
+this USART1/pin/DMA instantiation is an endpoint. The compatibility types are
+deliberately USART1-specific and do not claim multi-instance or multi-UART
+support. Directed channels expose RX-publish/consume, TX-emit/handle, and TX
+completion edges independently.
 
 The OSD software component owns only MSP parser/responder state and its output
-buffer. It consumes `SerialRxTx` and has no USART, pin, DMA, PAC, or interrupt
-type in its public boundary.
+buffer. It consumes `OsdWork`, a copied `OsdTelemetrySnapshot`, and a bounded
+TX callback; it has no USART, pin, DMA, PAC, or interrupt type in its public
+boundary. Telemetry is copied under a short RTIC lock, while parsing,
+rendering, and TX enqueueing happen outside shared locks.
 
 The separate `button_arm_toggle` consumer uses B1 on PC13, EXTI15_10, and a
 20 ms logical debounce delay from the shared monotonic to toggle the shared demonstration telemetry state. It does not
@@ -31,8 +35,20 @@ represent or call FerroWasp's safety/arming state machine. A change queues an
 updated `ARMED`/`DISARMED` row and `DRAW_SCREEN` on the next 100 ms refresh.
 
 ```text
-USART1 + RX DMA -> bounded RX queue -> MSP/DisplayPort component
-USART1 + TX DMA <- bounded TX queue <- MSP/DisplayPort component
+USART1 IDLE ----\
+                 +-> bounded MPSC work channel -> divergent MSP/OSD task
+RX DMA IRQ -----/                                |
+                                                  v
+                                      bounded SPSC TX channel
+                                                  |
+                                                  v
+                                      divergent TX DMA worker
+                                                  ^
+                                                  |
+                                      SPSC completion channel
+                                                  ^
+                                                  |
+                                            TX DMA IRQ
 ```
 
 The BSP keeps physical endpoint facts explicit, while the application keeps
@@ -42,7 +58,8 @@ buffer and scheduling policy explicit:
 - RX DMA2 stream 5 channel 4 and TX DMA2 stream 7 channel 4
 - two 70-byte RX DMA buffers and one 70-byte TX DMA buffer
 - RX queue capacity 4 and TX queue capacity 16
-- shared-monotonic OSD refresh task every 100 ms
+- fixed-delay OSD refresh task every 100 ms; refresh is the third MPSC work
+  producer
 - USART/RX-DMA/TX-DMA priorities 4, TX worker priority 3, OSD priority 2
 - EXTI0, EXTI1, and EXTI2 as RTIC software-task dispatchers
 - B1/PC13 with EXTI15_10, a 20 ms logical debounce delay, and priority 5
@@ -58,6 +75,16 @@ because the legacy generator compiles every feature prefix. This is a
 transitional constraint, not a target architecture rule. The resolved-graph
 pipeline will model endpoint and consumer separately and compile complete,
 semantically valid checkpoints.
+
+## Failure and safety contract
+
+This is a `Validation` application with no actuator owner. Its typed fault
+catalogue covers RX/TX DMA failures, work/TX/completion channel overflow or
+closure, and debounce spawn failure. Faults are bounded counters with stable
+IDs, severity, transient semantics, and no arming effect. Once-at-boot spawns
+for divergent tasks are explicit panic/halt invariants; runtime failures are
+recorded rather than silently ignored. The checked contract is
+`architecture-contracts/nucleo-f401re-osd.toml`.
 
 ## FerroWasp provenance and replacement
 

@@ -9,7 +9,7 @@ shared_constructors = "shared-constructors.rs.tpl"
 local_constructors = "local-constructors.rs.tpl"
 tasks = "tasks.rs.tpl"
 
-required_placeholders = ["BUTTON_RESOURCE_NAME", "BUTTON_RESOURCE_TYPE", "BUTTON_INIT_EXPRESSION", "EXTI_RESOURCE_NAME", "EXTI_RESOURCE_TYPE", "EXTI_INIT_EXPRESSION", "BLINKER_ENABLED_NAME", "LED_RESOURCE_NAME", "BUTTON_INTERRUPT", "TASK_PRIORITY", "DEBOUNCE_MS"]
+required_placeholders = ["BUTTON_RESOURCE_NAME", "BUTTON_RESOURCE_TYPE", "BUTTON_INIT_EXPRESSION", "EXTI_RESOURCE_NAME", "EXTI_RESOURCE_TYPE", "EXTI_INIT_EXPRESSION", "BLINKER_ENABLED_NAME", "LED_RESOURCE_NAME", "BUTTON_INTERRUPT", "TASK_PRIORITY", "DEBOUNCE_MS", "BUTTON_FAULT_RESOURCE"]
 
 claimed_symbols = [
     "button_toggle",
@@ -23,6 +23,7 @@ required_symbols = [
 claimed_resources = [
     "BUTTON_RESOURCE_NAME",
     "EXTI_RESOURCE_NAME",
+    "BUTTON_FAULT_RESOURCE",
 ]
 
 claimed_interrupts = ["BUTTON_INTERRUPT"]

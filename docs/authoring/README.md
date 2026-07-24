@@ -34,8 +34,11 @@ UART-DMA endpoint component
             written only through explicitly modeled demo/observation ports
 ```
 
-`SerialRxTx` remains the concrete bidirectional Rust type in the compatibility
-prototype. It is not the target metadata vocabulary.
+The compatibility prototype now uses distinct bounded work, TX, and
+completion channels plus a copied telemetry snapshot. Its endpoint types
+remain intentionally USART1-specific. The target metadata vocabulary must
+preserve these directed transport edges and must not infer fan-out from one
+destructive queue.
 
 ## Handbook scope
 
@@ -65,14 +68,20 @@ created. Do not maintain a second authoring roadmap here.
 Every component, endpoint, and capability guide must answer:
 
 - What does this unit own?
-- What capability class and explicit port role does each connection use?
-- Which RTIC hardware and software tasks does it introduce?
+- What interaction kind, safety class, and explicit port role does each
+  connection use?
+- Which exact SPSC, MPSC, latest-value, journal, same-task, or service
+  transport implements each edge?
+- Which RTIC hardware, divergent consumer, periodic, or delayed one-shot tasks
+  does it introduce?
 - Which pins, peripherals, DMA routes, interrupts, and dispatcher capacity
   does it claim?
 - What memory is statically allocated, and how are its capacities selected?
 - What happens on queue overflow, malformed input, timeout, or hardware error?
 - Which configuration belongs to the BSP, application, persisted platform
   configuration, or backend?
+- Which failures reject resolution/build, which occur at boot, and which are
+  runtime faults? What typed fault sink and arming effect apply?
 - What initialization and shutdown/safe-state behavior is required?
 - Can multiple instances be generated without symbol or resource collisions?
 - Which automated and hardware tests establish that it works?
@@ -93,9 +102,12 @@ Every component, endpoint, and capability guide must answer:
 ## Current implementation versus planned contracts
 
 Today, feature metadata records symbols, required symbols, resources,
-interrupts, and insertion ordering. `SerialRxTx` demonstrates a real typed
-Rust boundary, but the generator does not yet express general capability
-class, port-role, cardinality, and compatibility metadata.
+interrupts, and insertion ordering. Strict NUCLEO contracts additionally
+validate exact task forms, transport topology/capacity/overflow/wake-up,
+interaction and safety classifications, typed faults, application safety
+scope, and typed/versioned backend mechanisms. These contracts are executable
+vertical-slice evidence; the generator does not yet expose them as the general
+component catalogue schema.
 
 The planned guides must distinguish executable behavior from proposed schema.
 Until typed metadata is implemented, examples should identify capability

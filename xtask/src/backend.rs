@@ -26,7 +26,7 @@ const EXPECTED_PLACEHOLDERS: [&str; 6] = [
     "BLINK_PERIOD_MS",
     "TASK_PRIORITY",
 ];
-const BUTTON_EXPECTED_PLACEHOLDERS: [&str; 11] = [
+const BUTTON_EXPECTED_PLACEHOLDERS: [&str; 12] = [
     "BUTTON_RESOURCE_NAME",
     "BUTTON_RESOURCE_TYPE",
     "BUTTON_INIT_EXPRESSION",
@@ -38,8 +38,9 @@ const BUTTON_EXPECTED_PLACEHOLDERS: [&str; 11] = [
     "BUTTON_INTERRUPT",
     "TASK_PRIORITY",
     "DEBOUNCE_MS",
+    "BUTTON_FAULT_RESOURCE",
 ];
-const OSD_EXPECTED_PLACEHOLDERS: [&str; 20] = [
+const OSD_EXPECTED_PLACEHOLDERS: [&str; 23] = [
     "BUFFER_SIZE",
     "RX_QUEUE_CAPACITY",
     "TX_QUEUE_CAPACITY",
@@ -54,14 +55,17 @@ const OSD_EXPECTED_PLACEHOLDERS: [&str; 20] = [
     "UART_INTERRUPT",
     "RX_DMA_INTERRUPT",
     "TX_DMA_INTERRUPT",
-    "SERIAL_RESOURCE",
     "RX_DMA_RESOURCE",
     "TX_DMA_RESOURCE",
     "OSD_COMPONENT_RESOURCE",
     "OSD_OUTPUT_RESOURCE",
     "OSD_TELEMETRY_RESOURCE",
+    "OSD_FAULT_RESOURCE",
+    "OSD_WORK_IDLE_SENDER_RESOURCE",
+    "OSD_WORK_DMA_SENDER_RESOURCE",
+    "TX_COMPLETION_SENDER_RESOURCE",
 ];
-const BUTTON_ARM_EXPECTED_PLACEHOLDERS: [&str; 10] = [
+const BUTTON_ARM_EXPECTED_PLACEHOLDERS: [&str; 11] = [
     "BUTTON_RESOURCE_NAME",
     "BUTTON_RESOURCE_TYPE",
     "BUTTON_INIT_EXPRESSION",
@@ -72,6 +76,7 @@ const BUTTON_ARM_EXPECTED_PLACEHOLDERS: [&str; 10] = [
     "TASK_PRIORITY",
     "DEBOUNCE_MS",
     "OSD_TELEMETRY_RESOURCE",
+    "OSD_FAULT_RESOURCE",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -154,7 +159,7 @@ fn resolve_osd_feature(
             "usart1_rx_idle",
             "usart1_rx_dma",
             "usart1_tx_dma",
-            "usart1_tx_kick",
+            "usart1_tx_worker",
             "osd_displayport",
             "osd_refresh_tick",
         ],
@@ -163,12 +168,15 @@ fn resolve_osd_feature(
         "claimed_resources",
         &bundle.metadata.claimed_resources,
         &[
-            "SERIAL_RESOURCE",
             "RX_DMA_RESOURCE",
             "TX_DMA_RESOURCE",
             "OSD_COMPONENT_RESOURCE",
             "OSD_OUTPUT_RESOURCE",
             "OSD_TELEMETRY_RESOURCE",
+            "OSD_FAULT_RESOURCE",
+            "OSD_WORK_IDLE_SENDER_RESOURCE",
+            "OSD_WORK_DMA_SENDER_RESOURCE",
+            "TX_COMPLETION_SENDER_RESOURCE",
         ],
     )?;
     require_set(
@@ -226,7 +234,6 @@ fn resolve_osd_feature(
         ("UART_INTERRUPT".to_owned(), serial.peripheral.clone()),
         ("RX_DMA_INTERRUPT".to_owned(), rx_dma.interrupt.clone()),
         ("TX_DMA_INTERRUPT".to_owned(), tx_dma.interrupt.clone()),
-        ("SERIAL_RESOURCE".to_owned(), "osd_serial".to_owned()),
         ("RX_DMA_RESOURCE".to_owned(), "usart1_rx_dma".to_owned()),
         ("TX_DMA_RESOURCE".to_owned(), "usart1_tx_dma".to_owned()),
         (
@@ -238,17 +245,33 @@ fn resolve_osd_feature(
             "OSD_TELEMETRY_RESOURCE".to_owned(),
             "osd_telemetry".to_owned(),
         ),
+        ("OSD_FAULT_RESOURCE".to_owned(), "osd_faults".to_owned()),
+        (
+            "OSD_WORK_IDLE_SENDER_RESOURCE".to_owned(),
+            "osd_work_idle_tx".to_owned(),
+        ),
+        (
+            "OSD_WORK_DMA_SENDER_RESOURCE".to_owned(),
+            "osd_work_dma_tx".to_owned(),
+        ),
+        (
+            "TX_COMPLETION_SENDER_RESOURCE".to_owned(),
+            "tx_completion_tx".to_owned(),
+        ),
     ]);
     let claims = ResolvedClaims {
         symbols: bundle.metadata.claimed_symbols.iter().cloned().collect(),
         required_symbols: BTreeSet::new(),
         resources: [
-            "osd_serial",
             "usart1_rx_dma",
             "usart1_tx_dma",
             "osd_component",
             "osd_output",
             "osd_telemetry",
+            "osd_faults",
+            "osd_work_idle_tx",
+            "osd_work_dma_tx",
+            "tx_completion_tx",
         ]
         .into_iter()
         .map(str::to_owned)
@@ -357,6 +380,7 @@ fn resolve_button_arm_feature(
             "OSD_TELEMETRY_RESOURCE".to_owned(),
             "osd_telemetry".to_owned(),
         ),
+        ("OSD_FAULT_RESOURCE".to_owned(), "osd_faults".to_owned()),
     ]);
     let claims = ResolvedClaims {
         symbols: bundle.metadata.claimed_symbols.iter().cloned().collect(),
@@ -538,6 +562,10 @@ fn resolve_button_feature(
             feature.task_priority.to_string(),
         ),
         ("DEBOUNCE_MS".to_owned(), feature.debounce_ms.to_string()),
+        (
+            "BUTTON_FAULT_RESOURCE".to_owned(),
+            "button_debounce_spawn_failures".to_owned(),
+        ),
     ]);
     let replacement_keys: BTreeSet<_> = replacements.keys().map(String::as_str).collect();
     let expected_keys: BTreeSet<_> = BUTTON_EXPECTED_PLACEHOLDERS.into_iter().collect();
@@ -548,7 +576,13 @@ fn resolve_button_feature(
     let claims = ResolvedClaims {
         symbols: bundle.metadata.claimed_symbols.iter().cloned().collect(),
         required_symbols: bundle.metadata.required_symbols.iter().cloned().collect(),
-        resources: [button_name.clone(), exti_name].into_iter().collect(),
+        resources: [
+            button_name.clone(),
+            exti_name,
+            "button_debounce_spawn_failures".to_owned(),
+        ]
+        .into_iter()
+        .collect(),
         pins: [button.pin.clone()].into_iter().collect(),
         peripherals: ["EXTI".to_owned()].into_iter().collect(),
         interrupts: ["EXTI15_10".to_owned(), "EXTI1".to_owned()]
@@ -676,7 +710,11 @@ fn require_button_metadata_contract(bundle: &FeatureBundle) -> Result<()> {
     require_set(
         "claimed_resources",
         &bundle.metadata.claimed_resources,
-        &["BUTTON_RESOURCE_NAME", "EXTI_RESOURCE_NAME"],
+        &[
+            "BUTTON_RESOURCE_NAME",
+            "EXTI_RESOURCE_NAME",
+            "BUTTON_FAULT_RESOURCE",
+        ],
     )?;
     require_set(
         "claimed_interrupts",
@@ -879,7 +917,11 @@ mod tests {
             resolved.claims.pins,
             BTreeSet::from(["PA10".to_owned(), "PA9".to_owned()])
         );
-        assert!(resolved.claims.resources.contains("osd_serial"));
+        assert!(!resolved.claims.resources.contains("osd_serial"));
+        assert!(resolved.claims.resources.contains("osd_work_idle_tx"));
+        assert!(resolved.claims.resources.contains("osd_work_dma_tx"));
+        assert!(resolved.claims.resources.contains("tx_completion_tx"));
+        assert!(resolved.claims.resources.contains("osd_faults"));
         assert!(resolved.claims.resources.contains("osd_component"));
     }
 
@@ -900,6 +942,7 @@ mod tests {
             resolved.replacements["OSD_TELEMETRY_RESOURCE"],
             "osd_telemetry"
         );
+        assert_eq!(resolved.replacements["OSD_FAULT_RESOURCE"], "osd_faults");
         assert_eq!(
             resolved.claims.required_symbols,
             BTreeSet::from([OSD_ID.to_owned()])

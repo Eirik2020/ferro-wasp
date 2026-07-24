@@ -32,6 +32,7 @@ mod app {
 
         user_button: PC13<Input>,
         user_button_exti: EXTI,
+        button_debounce_spawn_failures: u32,
     }
 
     #[local]
@@ -51,7 +52,9 @@ mod app {
         let mut led2 = gpioa.pa5.into_push_pull_output_in_state(PinState::High);
         led2.set_internal_resistor(Pull::None);
         led2.set_speed(Speed::Low);
-        blink_led::spawn().ok();
+        if blink_led::spawn().is_err() {
+            panic!("failed to start the divergent blink task during initialization");
+        }
 
         let mut user_button = Input::new(gpioc.pc13, Pull::Up);
         user_button.make_interrupt_source(&mut syscfg);
@@ -66,6 +69,7 @@ mod app {
 
                 user_button,
                 user_button_exti,
+                button_debounce_spawn_failures: 0,
             },
             Local {
                 // The blink-led feature has no task-local resource values.
@@ -96,14 +100,21 @@ mod app {
     #[task(
     binds = EXTI15_10,
     priority = 2,
-    shared = [user_button, user_button_exti]
+    shared = [user_button, user_button_exti, button_debounce_spawn_failures]
 )]
     fn button_toggle(cx: button_toggle::Context) {
-        (cx.shared.user_button, cx.shared.user_button_exti).lock(|button, exti| {
-            button.clear_interrupt_pending_bit();
-            button.disable_interrupt(exti);
-        });
-        button_toggle_debounce::spawn().ok();
+        (
+            cx.shared.user_button,
+            cx.shared.user_button_exti,
+            cx.shared.button_debounce_spawn_failures,
+        )
+            .lock(|button, exti, faults| {
+                button.clear_interrupt_pending_bit();
+                button.disable_interrupt(exti);
+                if button_toggle_debounce::spawn().is_err() {
+                    *faults = faults.saturating_add(1);
+                }
+            });
     }
 
     #[task(

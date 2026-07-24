@@ -33,6 +33,19 @@ FerroWasp crates once a stable in-tree interface exists.
 Its debounced B1 feature toggles only the displayed demonstration ARM state;
 it cannot arm motors or enter FerroWasp's flight arming path.
 
+Both NUCLEO applications have strict executable architecture contracts under
+`architecture-contracts/`. The contracts separate interaction from safety
+classification and declare exact RTIC 2 task forms, SPSC/MPSC/latest-value
+transports, queue topology, timing semantics, typed faults, application safety
+scope, and typed/versioned backend mechanisms. Generation validates the
+applicable contract before it renders or mutates output.
+
+The OSD hardware tasks use bounded nonblocking channel sends. OSD and TX
+processing run as once-started divergent async consumers, so data buffering is
+not represented as software-task spawn capacity and the renderer does not
+generate a queue/pending wake protocol. Telemetry is copied under a short lock;
+MSP parsing and frame rendering occur outside RTIC shared locks.
+
 The BSP selects a Betaflight-style MCU compatibility profile with the compact
 identifier `STM32F401`. The backend derives the Rust target, HAL/PAC selection,
 and linker memory layout from that profile; those implementation details are
@@ -112,6 +125,7 @@ probe-rs chip name and Rust target from the BSP's MCU profile. See
 ```text
 cargo check -p xtask --locked
 cargo test -p xtask --locked
+cargo check --manifest-path compat/ferrowasp-serial-osd/Cargo.toml --tests --locked
 ```
 
 The generator itself performs the embedded check and release-link gates. The

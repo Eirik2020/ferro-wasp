@@ -1,15 +1,21 @@
 #[task(
     binds = {{BUTTON_INTERRUPT}},
     priority = {{TASK_PRIORITY}},
-    shared = [{{BUTTON_RESOURCE_NAME}}, {{EXTI_RESOURCE_NAME}}]
+    shared = [{{BUTTON_RESOURCE_NAME}}, {{EXTI_RESOURCE_NAME}}, {{BUTTON_FAULT_RESOURCE}}]
 )]
 fn button_toggle(cx: button_toggle::Context) {
-    (cx.shared.{{BUTTON_RESOURCE_NAME}}, cx.shared.{{EXTI_RESOURCE_NAME}})
-        .lock(|button, exti| {
+    (
+        cx.shared.{{BUTTON_RESOURCE_NAME}},
+        cx.shared.{{EXTI_RESOURCE_NAME}},
+        cx.shared.{{BUTTON_FAULT_RESOURCE}},
+    )
+        .lock(|button, exti, faults| {
             button.clear_interrupt_pending_bit();
             button.disable_interrupt(exti);
+            if button_toggle_debounce::spawn().is_err() {
+                *faults = faults.saturating_add(1);
+            }
         });
-    button_toggle_debounce::spawn().ok();
 }
 
 #[task(
