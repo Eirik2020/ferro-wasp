@@ -1,4 +1,16 @@
-# RTIC feature assembler MVP
+# RTIC App Builder prototype
+
+This directory contains the working NUCLEO-F401RE prototype and the migration
+path toward the RTIC App Builder architecture. Its canonical location is
+`tools/rtic-app-builder` in the FerroWasp monorepo. It remains an intentionally
+isolated nested Cargo workspace: FerroWasp's root workspace does not include it,
+so builder dependency and toolchain changes cannot alter firmware builds
+implicitly. Run builder commands from this directory.
+
+Current commands and behavior are documented here. The canonical forward roadmap is
+[`RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`](RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md);
+the [older feature-assembler plan](docs/archive/rtic_feature_assembler_mvp_implementation_plan.md)
+is retained only as historical context.
 
 This repository builds a deterministic RTIC application for the
 NUCLEO-F401RE from separate strict BSP and application manifests plus a
@@ -17,7 +29,7 @@ An additional, isolated `nucleo-f401re-osd` application exercises USART1 on
 PA9/PA10 with separate RX/TX DMA streams and an MSP DisplayPort consumer. It
 does not modify or depend directly on any FerroWasp flight application. Its
 temporary compatibility crates are marked for replacement by the canonical
-FerroWasp crates once a stable cross-repository interface exists.
+FerroWasp crates once a stable in-tree interface exists.
 Its debounced B1 feature toggles only the displayed demonstration ARM state;
 it cannot arm motors or enter FerroWasp's flight arming path.
 
@@ -109,16 +121,26 @@ and safe replacement boundary are documented in `docs/osd-usart1-dma.md`.
 
 ## Design notes
 
-The canonical Betaflight-inspired target, boot-time platform configuration,
-and cross-repository integration direction is recorded in
-`docs/betaflight-target-definition-notes.md`. Current FerroWasp board status
-and priorities remain owned by the FerroWasp repository rather than being
-duplicated here.
+The reference implementation plan owns sequencing, milestones, schemas, and
+migration policy. Focused notes remain authoritative only for the narrower
+topics they document:
+
+- `docs/architecture-observations.md` records evidence and lessons from the
+  current prototypes;
+- `docs/betaflight-target-definition-notes.md` records the board-capability and
+  boot-frozen platform-configuration model;
+- `docs/stm32f4-backend.md` records the current narrow backend contract;
+- `docs/osd-usart1-dma.md` records the current OSD prototype and provenance.
+
+Current FerroWasp board status, golden applications, and target evidence remain
+owned by the monorepo root. Inspect those sources and the applicable
+`../../project_docs` guidance at a pinned commit when a task depends on them;
+do not duplicate their status in builder documentation.
 
 The agreed vocabulary and lessons from the complete UART RX/TX DMA plus OSD
 prototype are maintained in `docs/architecture-observations.md`.
 
-The planned component, endpoint, and capability authoring handbook starts at
+The component, endpoint, and capability authoring handbook starts at
 `docs/authoring/README.md`. It records the common ownership and testing
 checklist and separates current builder behavior from the future typed
 capability metadata.

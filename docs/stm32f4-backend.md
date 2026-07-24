@@ -87,9 +87,10 @@ the `msp_displayport` backend profile: 115200 baud and 8-N-1. This is a
 transitional constraint, not the long-term configuration boundary.
 
 USART1, both DMA streams, transfer buffers, and their interrupts remain in the
-hardware layer. The MSP component receives only a bounded `SerialRxTx`
-endpoint. This experimental path is not wired into the flight-tested
-FerroWasp applications. See `osd-usart1-dma.md`.
+hardware layer. The MSP component receives only the current bounded
+`SerialRxTx` compatibility boundary; target metadata models its RX and TX
+directions as separate port roles. This experimental path is not wired into
+FerroWasp flight applications. See `osd-usart1-dma.md`.
 
 The shared monotonic schedules a refresh every 100 ms. Each refresh queues a DisplayPort
 heartbeat and one frame from FerroWasp's bounded 15-step overlay sequence.

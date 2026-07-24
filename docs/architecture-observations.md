@@ -5,6 +5,10 @@ NUCLEO-F401RE blinker/button and USART1 DMA MSP DisplayPort applications. The
 application manifests remain the authoritative record of which examples are
 implemented.
 
+This is an evidence and terminology note, not an independent roadmap. The
+canonical migration sequence and target schemas are in
+`../RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`.
+
 ## Terminology
 
 - **Application** — generated RTIC source application. It is the assembled
@@ -17,25 +21,29 @@ implemented.
   monitoring, or a UART-DMA driver/provider.
 - **Endpoint** — a concrete hardware-facing instance, such as USART1 on
   PA9/PA10 with DMA2 streams 5/7, USART6 RX DMA, or ADC1 channel 3.
-- **Capability** — a typed contract between components and endpoints. A
-  capability describes what is provided or required without transferring
-  ownership of the underlying peripheral.
+- **Capability** — a typed semantic contract between components and
+  endpoints. Its class and each port's explicit role describe direction and
+  responsibility without transferring ownership of the underlying
+  peripheral.
 
 A UART can appear to be both a component and an endpoint, so the level of
 description matters. The reusable UART RX/TX DMA implementation is a
 component. Once instantiated with a peripheral, pins, DMA streams, buffers,
-and interrupts, it is an endpoint. That endpoint provides a capability such
-as `SerialRxTx`; OSD consumes that capability without knowing whether it is
-backed by USART1, USART6, or another compatible endpoint.
+and interrupts, it is an endpoint. The current prototype exposes that boundary
+through the concrete `SerialRxTx` Rust type; OSD uses it without knowing
+whether a future compatible boundary is backed by USART1, USART6, or another
+endpoint. Target metadata represents the two directions explicitly: RX chunks
+are published/consumed as critical data, while TX requests are emitted/handled
+as requests.
 
 Use these terms consistently in manifests and generator diagnostics:
 
 ```text
 UART-DMA component
     instantiates USART1/PA9/PA10/DMA2 endpoint
-        provides SerialRxTx capability
-            consumed by OSD component
-                implemented by RTIC parsing/rendering tasks
+        publishes bounded RX chunks -> consumed by OSD
+        handles bounded TX requests <- emitted by OSD
+    connects to MSP parsing/rendering RTIC tasks
 ```
 
 ## What the prototype validated
@@ -57,9 +65,9 @@ The demonstrated path is:
 
 ```text
 USART1 RX/IDLE and DMA tasks
-    -> bounded SerialRxTx capability
+    -> bounded SerialRxTx Rust boundary
         -> MSP/DisplayPort component task
-            -> bounded SerialRxTx capability
+            -> bounded SerialRxTx Rust boundary
                 -> USART1 TX DMA tasks
 
 B1 EXTI task -> monotonic debounce task -> OSD telemetry capability
@@ -73,20 +81,22 @@ the OSD consumer together. The intended reusable composition is:
 
 ```text
 uart_dma_endpoint component
-    provides SerialRxTx
+    publishes bounded SerialRxChunk
+    handles bounded SerialTxChunk requests
 
 msp_displayport component
-    requires SerialRxTx
-    provides OsdTelemetry
+    consumes bounded SerialRxChunk
+    emits bounded SerialTxChunk requests
+    reads OsdTelemetry observation
 
 button_arm_demo component
-    requires OsdTelemetry
+    writes only the display-demo observation in the current prototype
 ```
 
-The generated UART endpoint must be independently valid even when no software
-consumer is assigned. It may remain dormant until the boot router claims it.
-This allows the generator's compile-after-each-feature gate to remain intact
-while endpoint and consumer features are separated.
+The generated UART endpoint and consumer must be separately modeled, but the
+new resolver compiles complete, semantically valid graph checkpoints. It does
+not require every arbitrary component prefix to compile, and it must not bundle
+endpoint and consumer merely to preserve the legacy feature-prefix loop.
 
 ## Boot-time routing direction
 
@@ -157,12 +167,12 @@ limitation, not the target manifest ownership model.
 
 ## Capability contracts
 
-Feature metadata should grow from collision-only claims into typed contracts:
+Target component metadata grows from collision-only claims into typed ports:
 
-- `provides`: capability name, type/ABI revision, direction, multiplicity,
-  capacity, and relevant semantics;
-- `requires`: compatible type/ABI revision, direction, minimum capacity, and
-  whether the dependency is mandatory;
+- capability class plus explicit role such as publish/consume,
+  emit-request/handle-request, offer/use, or grant/receive authority;
+- type/ABI revision, cardinality, capacity, relevant semantics, and whether the
+  port is mandatory;
 - exclusive physical claims: pins, peripherals, DMA routes, and interrupts;
 - scheduling requirements: task priorities, dispatchers, timer/monotonic use,
   and maximum critical-section expectations.
@@ -191,26 +201,29 @@ than one instance of the same component.
 - Replace feature-specific lockfile templates with deterministic dependency
   closure generation.
 - Replace compatibility copies with canonical FerroWasp crates once stable
-  cross-repository capability boundaries are available.
+  in-tree capability boundaries are available.
 - Keep the button ARM example explicitly display-only. Real OSD telemetry must
   consume latest-value capabilities published by the safety, battery, RC, and
   IMU components; it must never own or emulate flight arming authority.
 
-## Recommended next refactor
+## Migration implications
 
 Preserve the working OSD application as an integration and hardware regression
-reference. The authoring-handbook plan and shared review checklist are recorded
-in `authoring/README.md`. Before adding another UART protocol component:
+reference. The authoring checklist is recorded in `authoring/README.md`. The
+canonical reference plan owns implementation ordering. The prototype implies
+these migration requirements:
 
-1. Complete the capability guide using versioned `SerialRx`, `SerialTx`, and
-   `SerialRxTx` as its executable examples.
-2. Document and extract USART1 RX/TX DMA ownership into a self-contained
-   endpoint component.
-3. Document and make MSP DisplayPort a software-only consumer of `SerialRxTx`.
-4. Add typed `provides`/`requires` metadata and instance-safe resource names.
-5. Connect the endpoint and OSD through a frozen boot assignment.
-6. Port the canonical FerroWasp chunk metadata, overflow behavior, and fault
+1. Verify/freeze the existing byte-compared blinky golden and add the missing
+   OSD structural/golden migration fixture.
+2. Define the constrained renderer invocation and initialization contract.
+3. Model USART1 RX/TX DMA ownership as a self-contained endpoint component.
+4. Model MSP DisplayPort as a software consumer with directed RX/TX ports.
+5. Add instance-safe names, exact physical claims, and complete task/resource
+   access metadata.
+6. Port canonical FerroWasp chunk metadata, overflow behavior, and fault
    reporting before generalizing to more UART instances.
+7. Treat boot-frozen routing as a later runtime projection from the resolved
+   static graph, not as ownership transfer.
 
 This preserves the successful static RTIC ownership model while creating the
 generic endpoint layer needed for configurable multi-board applications.

@@ -5,6 +5,10 @@ a ChatGPT Project. It gives ChatGPT enough context to discuss and develop the
 architecture without treating historical plans, prototypes, and long-term
 goals as if they were all implemented today.
 
+This is a derived summary, not a planning authority. When repository access is
+available, use `../RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md` for the
+canonical roadmap and verify current behavior in code and tests.
+
 ## Project purpose
 
 FerroWasp is an RTIC-based flight controller. Its aspirational long-term goal
@@ -17,9 +21,11 @@ tasks are assembled into generated RTIC source applications from strict BSP
 and application manifests. A change to shared logic should then propagate to
 every generated board application instead of being copied manually.
 
-The builder is presently a side project and prototype. FerroWasp owns flight
-product priorities, safety decisions, and current board status; those should
-not be inferred from this repository.
+The builder is presently a prototype under `tools/rtic-app-builder` in the
+FerroWasp monorepo. It is an isolated nested Cargo workspace and is not a
+member of the firmware workspace. The monorepo root owns flight-product
+priorities, safety decisions, and current board status; those should not be
+inferred from builder documents.
 
 ## Relationship between the layers
 
@@ -61,16 +67,21 @@ Example:
 ```text
 UART-DMA endpoint component
     instantiated as USART1/PA9/PA10/DMA2 endpoint
-        provides SerialRxTx capability
-            consumed by MSP DisplayPort component
-                provides OsdTelemetry capability
+        publishes bounded RX chunks -> consumed by MSP DisplayPort
+        handles bounded TX requests <- emitted by MSP DisplayPort
+        MSP reads OsdTelemetry observations published by explicit state owners
 ```
+
+The compatibility prototype implements these two directions through one
+concrete `SerialRxTx` Rust type. Target metadata keeps direction and
+responsibility explicit.
 
 ## Configuration ownership
 
-### BSP manifest
+### Board definition / current BSP manifest
 
-The BSP describes immutable physical board facts:
+The target `BoardDefinition`, represented by the current prototype's BSP
+manifest, describes immutable physical board facts:
 
 - MCU compatibility profile;
 - pins and board wiring;
@@ -81,9 +92,10 @@ The BSP describes immutable physical board facts:
 The BSP should not contain user-selectable protocol assignments or redundant
 HAL setup details.
 
-### Application manifest
+### Application profile / current application manifest
 
-The application selects compile-time composition and bounded policy:
+The target `ApplicationProfile`, represented narrowly by the current
+application manifest, selects compile-time composition and bounded policy:
 
 - components and endpoint instances included in the binary;
 - task priorities;
@@ -134,6 +146,16 @@ Hardware interrupt tasks should remain short. Parsing, encoding, and other
 substantial work should be deferred to software tasks through bounded
 capabilities.
 
+Artifact mapping:
+
+- `BoardDefinition` is the physical authoring input;
+- `ResolvedApplication` is the compile-time canonical graph;
+- generated `BoardCapabilities` is the read-only runtime projection of
+  compiled endpoints and supported roles;
+- persisted `PlatformConfigV1` is a complete assignment candidate;
+- `ActivePlatformConfig` is the validated immutable value selected for one
+  boot.
+
 ## Scheduling model
 
 The STM32F4 backend currently owns one 1 kHz Cortex-M SysTick monotonic. Blink,
@@ -147,7 +169,9 @@ timer may also claim one explicitly.
 
 RTIC software dispatchers are still selected by a renderer special case. The
 future allocator must derive the required count from distinct software-task
-priorities and select conflict-free interrupts from an MCU backend pool.
+priorities and select conflict-free interrupts from the board definition's
+ordered candidate allowlist after applying backend-reserved/forbidden
+constraints.
 
 ## Working prototypes
 
@@ -186,10 +210,11 @@ boot router applies persisted platform configuration.
 - Resource and priority conflicts should fail before code generation whenever
   possible.
 - Generated names must eventually support multiple instances safely.
-- Generated code is validated incrementally after each inserted feature and
-  linked in release mode.
-- Existing flight-tested FerroWasp applications must not be modified or
-  replaced without explicit authorization and fresh bench/flight validation.
+- The legacy prototype validates an empty shell and each feature prefix. The
+  target pipeline validates complete, semantically valid resolved checkpoints
+  and links applicable release/reference applications.
+- Externally designated golden FerroWasp applications must not be modified or
+  replaced without explicit authorization and fresh applicable validation.
 - Experimental replacements should be parallel applications.
 - Reuse existing FerroWasp work; do not reinvent working drivers, protocols,
   tasks, or flight logic.
@@ -202,7 +227,8 @@ boot router applies persisted platform configuration.
 
 The following are directions, not completed functionality:
 
-- general typed `provides` and `requires` capability metadata;
+- typed capability classes, directed port roles, cardinality, and
+  compatibility metadata;
 - splitting the combined UART-DMA/OSD feature bundle into an independently
   valid endpoint provider and software consumer;
 - boot-time endpoint routing from persisted platform configuration;
@@ -212,23 +238,25 @@ The following are directions, not completed functionality:
 - deterministic dependency closure instead of feature-specific lockfiles;
 - replacement of temporary compatibility crates with canonical FerroWasp
   crate boundaries;
-- moving final generated applications into `apps/<application>` while keeping
-  checkpoints and failed candidates in separate builder state;
-- a thin FerroWasp integration that invokes a reusable standalone builder
-  library without reorganizing the flight project around the tool.
+- canonical semantic composition identity, exact input identity, and separate
+  build provenance;
+- immutable semantic/input-keyed source artifacts, build-provenance records,
+  failed-candidate retention, and reviewed committed reference outputs;
+- possible standalone extraction only after stable interfaces and demonstrated
+  external demand.
 
-The preferred FerroWasp migration is gradual: preserve flight-tested apps,
-generate parallel replacements, reuse existing modules, compare resource and
-interrupt ownership, bench-test, and promote only after explicit flight
-validation.
+The preferred FerroWasp integration is gradual: preserve the golden
+applications designated by the pinned monorepo commit, generate parallel
+replacements, reuse existing modules, compare resource and interrupt
+ownership, bench-test, and promote only after explicit applicable validation.
 
 ## Authoring guidance
 
-Before adding SBUS, CRSF, or another protocol, establish guides for capability,
-endpoint, component, composition, and testing authoring. Every new unit should
-state ownership, provided/required capabilities, RTIC tasks, physical claims,
-memory bounds, error/overflow behavior, configuration ownership,
-multi-instance behavior, and its automated/hardware tests.
+When adding SBUS, CRSF, or another protocol, follow the capability, endpoint,
+component, composition, and testing guides established by the canonical plan.
+Every new unit should state ownership, capability classes and port roles, RTIC
+tasks, physical claims, memory bounds, error/overflow behavior, configuration
+ownership, multi-instance behavior, and its automated/hardware tests.
 
 Use the USART1 DMA plus MSP DisplayPort path as the canonical executable
 example. Do not present proposed manifest syntax as implemented. API-level
@@ -256,12 +284,15 @@ memory, and test coverage.
 When documents disagree, use this order:
 
 1. The user's latest explicit architectural decision.
-2. Checked-in application/BSP manifests, schema structs, validation, backend,
-   feature bundles, and passing generated applications.
-3. `architecture-observations.md`, `stm32f4-backend.md`, and the authoring
-   handbook.
-4. Betaflight comparison notes and forward-looking integration plans.
-5. The original MVP implementation plan, which is a historical reference.
+2. Accepted ADRs and protected safety decisions.
+3. Checked-in code, strict schemas, tests, and recorded target evidence.
+4. `../RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`.
+5. `architecture-observations.md`, `stm32f4-backend.md`,
+   `betaflight-target-definition-notes.md`, and the authoring handbook for
+   their focused topics.
+6. The [archived original MVP implementation plan](archive/rtic_feature_assembler_mvp_implementation_plan.md),
+   which is a superseded historical reference.
 
-Do not copy current FerroWasp board status into this repository. Confirm it
-from FerroWasp when a task depends on current flight-project state.
+Do not copy current FerroWasp board status into builder documentation. Confirm
+it from the monorepo root at a pinned commit when a task depends on current
+flight-project state.

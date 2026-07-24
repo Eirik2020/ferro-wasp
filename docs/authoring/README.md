@@ -4,6 +4,9 @@ This directory is the planned authoring handbook for extending the app
 builder. It defines the documentation structure and the common review
 checklist before additional protocols such as SBUS or CRSF are added.
 
+It does not define implementation order or target schemas. Those are owned by
+`../../RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`.
+
 The working USART1 DMA plus MSP DisplayPort application is the canonical
 vertical example. New guides and abstractions should be verified against that
 implementation rather than built around hypothetical code.
@@ -16,24 +19,27 @@ implementation rather than built around hypothetical code.
   as the STM32F4 UART RX/TX DMA driver.
 - **Endpoint instance** — an endpoint component bound to concrete hardware,
   such as USART1, PA9/PA10, DMA2 streams 5/7, buffers, and interrupts.
-- **Capability** — the typed contract an endpoint or component provides to
-  another component. A capability does not transfer ownership of the backing
-  peripheral.
+- **Capability** — a typed semantic contract exposed through ports with
+  explicit roles such as publish/consume or emit/handle. It does not transfer
+  ownership of the backing peripheral.
 
 The existing OSD example demonstrates the intended chain:
 
 ```text
 UART-DMA endpoint component
     instantiated as USART1/PA9/PA10/DMA2 endpoint
-        provides SerialRxTx capability
-            consumed by MSP DisplayPort component
-                provides OsdTelemetry capability
-                    consumed by button ARM-demo component
+        publishes bounded RX chunks -> consumed by MSP DisplayPort
+        handles bounded TX requests <- emitted by MSP DisplayPort
+        MSP reads OsdTelemetry observation
+            written only through explicitly modeled demo/observation ports
 ```
 
-## Planned handbook
+`SerialRxTx` remains the concrete bidirectional Rust type in the compatibility
+prototype. It is not the target metadata vocabulary.
 
-The handbook should be developed in dependency order:
+## Handbook scope
+
+The completed handbook is expected to contain:
 
 1. `capabilities.md` — define typed contracts, ownership, boundedness, error
    and overflow semantics, timing, configuration, multiplicity, and
@@ -41,22 +47,25 @@ The handbook should be developed in dependency order:
 2. `endpoints.md` — define peripheral, pin, DMA, interrupt, buffer, and
    initialization ownership. The USART1 DMA provider is the first worked
    example.
-3. `components.md` — define software state and RTIC task ownership, required
-   and provided capabilities, instance-safe naming, and hardware-independent
+3. `components.md` — define software state and RTIC task ownership, directed
+   capability ports and roles, instance-safe naming, and hardware-independent
    logic. MSP DisplayPort is the first worked example.
 4. `composition.md` — describe capability matching, insertion ordering,
    exclusive resource claims, priorities, shared logical scheduling, and the
    BSP/application/platform/backend configuration boundaries.
-5. `testing.md` — define host tests, manifest validation, rendered-Rust
-   parsing, incremental embedded checks, release linking, overflow tests, and
-   hardware smoke tests.
+5. `testing.md` — define host tests, manifest validation, resolved-graph
+   fixtures, rendered-Rust parsing, complete-checkpoint embedded checks,
+   release linking, overflow tests, and hardware smoke tests.
+
+The reference plan determines when each guide and executable example is
+created. Do not maintain a second authoring roadmap here.
 
 ## Common authoring checklist
 
 Every component, endpoint, and capability guide must answer:
 
 - What does this unit own?
-- What capabilities does it provide and require?
+- What capability class and explicit port role does each connection use?
 - Which RTIC hardware and software tasks does it introduce?
 - Which pins, peripherals, DMA routes, interrupts, and dispatcher capacity
   does it claim?
@@ -85,8 +94,8 @@ Every component, endpoint, and capability guide must answer:
 
 Today, feature metadata records symbols, required symbols, resources,
 interrupts, and insertion ordering. `SerialRxTx` demonstrates a real typed
-Rust boundary, but the generator does not yet express general typed
-`provides` and `requires` capability metadata.
+Rust boundary, but the generator does not yet express general capability
+class, port-role, cardinality, and compatibility metadata.
 
 The planned guides must distinguish executable behavior from proposed schema.
 Until typed metadata is implemented, examples should identify capability
@@ -100,10 +109,7 @@ handbook explains ownership, design choices, and the end-to-end workflow.
 Manifest and generated-code snippets should come from checked examples where
 possible.
 
-CI should generate and compile every canonical handbook example. A feature is
-not considered documented when its example no longer passes manifest
-validation, embedded `cargo check --locked`, and release linking.
-
-The capability guide should be completed first, followed by the USART1 DMA
-endpoint and MSP DisplayPort component guides. Those three documents establish
-the pattern that SBUS and CRSF can then test and refine.
+CI should generate and compile every canonical handbook example. A component
+is not considered documented when its example no longer passes schema and
+resolved-graph validation, embedded `cargo check --locked`, and its applicable
+build or target gate.

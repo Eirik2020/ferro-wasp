@@ -1,23 +1,19 @@
 # Betaflight-inspired target and platform configuration model
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-24
 
-Status: Accepted architectural direction for future expansion of the RTIC app
-builder. This is not a description of functionality that exists today, and it
-is not an immediate FerroWasp integration plan.
+Status: Focused accepted direction for board capabilities and boot-frozen
+platform configuration. This is not a description of functionality that exists
+today and does not own implementation sequencing. The canonical builder roadmap
+is `../RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`.
 
 ## Purpose and project boundary
-
-FerroWasp currently has a working FCU3 flight baseline. The nearer-term project
-work remains bringing up the Foxeer F405 V2, establishing a reproducible
-WSL/Docker development environment, and allowing FerroConfigurator to flash and
-configure that target. The app builder is a side project intended to reduce the
-cost of adding and maintaining more boards after that path is established.
 
 Live FerroWasp target status, bench evidence, and current priorities remain
 owned by the `ferro-wasp` repository. This document records only the durable
 builder/configuration boundaries so it does not become a second, stale support
-matrix.
+matrix. Any implementation task that depends on current external status must
+pin and inspect the relevant FerroWasp/FerroConfigurator repository commit.
 
 ## Sources and implementations reviewed
 
@@ -30,7 +26,8 @@ The design is inspired by the separation used in Betaflight:
 - [Betaflight serial initialization and claiming](https://github.com/betaflight/betaflight/blob/master/src/main/io/serial.c)
 - [Betaflight generic UART driver](https://github.com/betaflight/betaflight/blob/master/src/main/drivers/serial_uart.c)
 
-The assessment also covered the current working implementations in:
+The assessment also covered implementations observed during the architecture
+review in:
 
 - this repository's manifest, backend, feature fragments, validation, and RTIC
   application template;
@@ -39,30 +36,37 @@ The assessment also covered the current working implementations in:
 - `ferro-configurator`, particularly its configuration model, staging,
   persistence, readback, and future RPC reference design.
 
-The implementation observations below are a dated snapshot, not an API
-contract. The architecture sections are the intended long-lived part of this
+The implementation observations below are a dated 2026-07-23 snapshot, not an
+API contract. The exact external FerroWasp/FerroConfigurator revisions were
+not recorded; all such facts must be re-verified against pinned commits before
+use. The architecture sections are the intended long-lived part of this
 document.
 
 ## Architectural decision
 
-Use three distinct layers:
+Use distinct authoring, compile-time, runtime-platform, and tuning artifacts:
 
-| Layer | Owns | Must not own |
+| Artifact/layer | Owns | Must not own |
 | --- | --- | --- |
-| BSP / generated board application | MCU, pins, alternate functions, clocks, interrupts, DMA routes, buffers, static RTIC tasks, electrical constraints, and available endpoint capabilities | Per-aircraft feature assignments or tuning |
+| `BoardDefinition` (current prototype: BSP manifest) | MCU, pins, physical wiring, valid peripheral/DMA/interrupt routes, electrical constraints, and explicit endpoint slots | Component selection, task topology, per-aircraft assignments, or tuning |
+| `ApplicationProfile` | Selected component instances, capacities, scheduling policy, and explicit capability-port connections | New physical routes, runtime assignment, or behavioral implementation |
+| `ResolvedApplication` / generated board application | Exact buffers, static RTIC tasks, ownership, initialization, dispatchers, Cargo plan, and generated `BoardCapabilities` projection | User tuning or runtime ownership transfer |
 | Platform configuration | Assignment of compiled endpoints to functions, motor layout and direction metadata, and board-to-vehicle orientation | Pin mux, DMA/IRQ selection, task topology, or safety authority |
 | Tuning configuration | PID gains, filters, rates, logging options, and other explicitly live/disarmed settings | Peripheral topology or actuator ownership |
 
-The BSP describes what the firmware can safely do. Platform configuration
-selects among those compiled capabilities at boot. It cannot create a new
-peripheral route, change an RTIC interrupt binding, or select code that was not
-compiled into the board application.
+The `BoardDefinition` describes physical possibilities. The
+`ApplicationProfile` selects a compile-time composition. The resulting
+`ResolvedApplication` records exactly what the firmware contains, and its
+generated `BoardCapabilities` projection describes the finite runtime choices.
+Platform configuration selects among those compiled capabilities at boot. It
+cannot create a new peripheral route, change an RTIC interrupt binding, or
+select code that was not compiled into the board application.
 
-The builder manifest and the persisted platform configuration are therefore
-different artifacts:
+Builder inputs, resolved composition, and persisted platform configuration are
+therefore different artifacts:
 
-- the builder consumes board facts and feature availability to generate one
-  deterministic RTIC application;
+- the builder consumes board facts and an application profile to generate one
+  deterministic resolved graph and RTIC application;
 - the FCU stores a platform configuration for one physical installation;
 - FerroConfigurator edits that stored configuration without generating another
   firmware binary.
@@ -136,19 +140,21 @@ The builder should generate a read-only `BoardCapabilities` description with a
 stable target identifier and capability/ABI revision. Each endpoint has a
 stable ID and its complete physical contract.
 
-Feature bundles should distinguish ownership from consumption:
+Component ports distinguish ownership, semantics, and direction:
 
-- a hardware endpoint bundle **provides** a typed service and exclusively owns
-  its HAL object, IRQs, DMA routes, buffers, and queues;
-- a feature bundle **requires** a service capability but does not claim the
-  underlying hardware;
-- the generated application checks that required services can be supplied and
-  generates all static task and resource instances;
+- a hardware endpoint component exclusively owns its HAL object, IRQs, DMA
+  routes, buffers, and queues;
+- for UART, it **publishes** bounded RX chunks and **handles** bounded TX
+  requests;
+- a functional component **consumes** compatible RX chunks or **emits** TX
+  requests without claiming the underlying hardware;
+- the generated application checks class, role, type/version, cardinality, and
+  capacity compatibility before generating static task and resource instances;
 - the boot router connects the instances selected by platform configuration.
 
-For example, OSD provides parsing and encoding software tasks and requires a
-bidirectional serial service. It does not instantiate or own a particular UART,
-UART RX DMA task, UART TX DMA task, or UART peripheral task.
+For example, OSD owns parsing and encoding software tasks, consumes serial RX
+chunks, and emits serial TX requests. It does not instantiate or own a
+particular UART, UART RX DMA task, UART TX DMA task, or UART peripheral task.
 
 Central board initialization must split clocks, GPIO banks, DMA controllers,
 and PAC peripherals once. Feature bundles must not independently freeze clocks
@@ -266,11 +272,12 @@ tasks never gain direct motor authority.
 
 ### Motor direction
 
-FerroWasp does not currently have a complete motor-direction representation.
-Initially treat direction as validated installation/mixer metadata. Do not imply
-that changing this value programs an ESC. Reversing an ESC through DShot or
-another maintenance protocol would be a separate, disarmed operation with its
-own validation and confirmation flow.
+The unpinned 2026-07-23 FerroWasp snapshot did not show a complete
+motor-direction representation; re-verify that status before implementation.
+For this target model, initially treat direction as validated
+installation/mixer metadata. Do not imply that changing this value programs an
+ESC. Reversing an ESC through DShot or another maintenance protocol would be a
+separate, disarmed operation with its own validation and confirmation flow.
 
 ### FCU orientation
 
@@ -329,14 +336,14 @@ It currently has two generated NUCLEO-F401RE applications:
   declares buffer sizes, queue capacities, priorities, and behavior;
 - incremental checks compile the empty application and every feature prefix;
 - compatibility copies let the builder reuse FerroWasp protocol and ownership
-  work without changing the flight-test repository.
+  work without changing the external source repository.
 
 The prototype also exposed the next required abstractions:
 
 - the UART-DMA provider and MSP DisplayPort consumer are internally separated
   but still packaged in one feature bundle;
 - exclusive resource claims and `required_symbols` do not yet express typed
-  `provides`/`requires` capability contracts;
+  capability classes and directed port roles;
 - the serial queues do not yet carry canonical FerroWasp discontinuity,
   completion, timestamp, generation, and UART-error metadata;
 - TX is protocol-buffer-sized rather than a generic length-aware DMA service;
@@ -346,15 +353,16 @@ The prototype also exposed the next required abstractions:
   generated.
 
 These are expected MVP limitations. The separate input manifests establish the
-board/application boundary for the example. Typed provider/consumer services
-should be added before extracting many FerroWasp tasks, otherwise
+board/application boundary for the example. Typed directed ports and bounded
+adapters should be added before extracting many FerroWasp tasks, otherwise
 feature-owned endpoint construction will be costly to unwind. The terminology,
-prototype evidence, and prioritized refactor are maintained in
+prototype evidence, and migration implications are maintained in
 `architecture-observations.md`.
 
-### FerroWasp
+### FerroWasp snapshot requiring re-verification
 
-FerroWasp already contains much of the required foundation:
+The unpinned external FerroWasp tree observed on 2026-07-23 contained much of
+the required foundation:
 
 - thin board apps and explicit BSP resource/DMA declarations;
 - generic, bounded UART and SPI ownership primitives;
@@ -364,24 +372,26 @@ FerroWasp already contains much of the required foundation:
 - whole-object MSPv2 stage/commit messages with CRCs and a
   `reboot_required` result field.
 
-Current applications still construct feature-specific UART endpoints and bind
-USART2 to receiver input and UART4 to OSD at initialization. Current persistent
-configuration contains tuning/logging values, is loaded after normal peripheral
-initialization, and is applied while disarmed. SPI ownership currently embeds
-one chip-select, ADC uses a fixed scan, and I2C is not implemented. Platform
-configuration therefore requires a deliberate two-phase boot refactor rather
+The applications observed in that snapshot constructed feature-specific UART
+endpoints and bound USART2 to receiver input and UART4 to OSD at
+initialization. Persisted configuration then contained tuning/logging values,
+was loaded after normal peripheral initialization, and was applied while
+disarmed. SPI ownership embedded one chip-select, ADC used a fixed scan, and
+I2C was not implemented. If re-verification confirms those constraints,
+platform configuration requires a deliberate two-phase boot refactor rather
 than a schema-only change.
 
-Persistent configuration is not yet available through one common provider on
-all boards. Foxeer's external flash implementation is useful prior art, but the
-golden FCU3 application does not currently expose the same storage service.
+In that snapshot, persistent configuration was not available through one
+common provider on all boards. Foxeer's external-flash implementation was
+useful prior art, while the application then described as golden FCU3 did not
+expose the same storage service. Re-verify both status and designation.
 
-### FerroConfigurator
+### FerroConfigurator snapshot requiring re-verification
 
-The implemented configurator schema contains only the current tuning and
-logging fields. Its ASCII workflow stages values individually, saves them, and
-immediately reads them back. That behavior is suitable for the existing tuning
-contract but not for platform topology.
+The unpinned configurator snapshot observed on 2026-07-23 contained only the
+then-current tuning and logging fields. Its ASCII workflow staged values
+individually, saved them, and immediately read them back. That behavior was
+suitable for the observed tuning contract but not for platform topology.
 
 The configurator reference design and FerroWasp's in-progress MSPv2 work already
 contain the useful direction: device/board identity, capability reporting,
@@ -390,26 +400,25 @@ and a reboot-required result. Platform configuration should build on that
 contract as a separate versioned type and add reconnect/post-boot activation
 verification.
 
-## Recommended implementation order
+## Integration dependencies
 
-This sequence is for future builder expansion; it does not replace the current
-Foxeer, reproducible-environment, or configurator-flashing priorities.
+The reference implementation plan owns ordering. Work packages that implement
+this focused model must preserve these dependencies:
 
-1. Define `BoardCapabilities`, `PlatformConfigV1`, `ActivePlatformConfig`, stable
-   endpoint IDs, and the compatibility/versioning rules as pure types.
-2. Split board initialization from feature initialization in the builder.
-3. Add typed `provides`/`requires` feature metadata and instance-safe generated
-   names.
-4. Generate one generic UART endpoint and its fixed RTIC IRQ/DMA tasks, then
-   connect one software feature through a frozen boot assignment.
-5. Add host tests for configuration validation, resource conflicts, recovery,
-   and invalid vehicle geometry.
-6. Add atomic platform persistence and the two-phase boot/arming gate in
-   FerroWasp.
-7. Add FerroConfigurator stage, commit, reboot, reconnect, and active-config
-   verification.
-8. Generalize to remaining UARTs, then address SPI bus/device arbitration, ADC
-   semantic mapping, and I2C when its firmware service exists.
+- generate `BoardCapabilities` as a read-only projection of a valid
+  `ResolvedApplication`, not as another board-authoring input;
+- define `PlatformConfigV1`, `ActivePlatformConfig`, stable endpoint IDs, and
+  their compatibility/versioning rules before enabling runtime assignment;
+- establish typed capability classes and directed port roles before routing
+  functional consumers;
+- validate configuration, resource conflicts, recovery, and vehicle geometry
+  as complete objects;
+- implement atomic persistence and the two-phase boot/arming gate in
+  FerroWasp before claiming boot-frozen routing;
+- make FerroConfigurator verify commit, reboot/reconnect, and the activated
+  configuration;
+- address shared SPI/I2C bus arbitration with bus-owner models rather than
+  copying UART exclusivity.
 
 ## Open design decisions
 
@@ -425,6 +434,6 @@ implementation:
 - which, if any, serial sharing modes are worth supporting;
 - the SPI bus arbitration and per-device descriptor model.
 
-This file is the canonical app-builder note for the Betaflight-inspired target
-and platform configuration direction. Other plans should link here instead of
-copying these rules.
+This file is the focused note for the Betaflight-inspired target and platform
+configuration direction. The reference implementation plan links here and owns
+cross-topic sequencing and milestones.

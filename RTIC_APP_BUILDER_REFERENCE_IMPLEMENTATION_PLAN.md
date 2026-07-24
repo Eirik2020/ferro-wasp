@@ -8,10 +8,70 @@
 **Document type:** Reference implementation plan  
 **Baseline date:** 24 July 2026  
 **Classification:** Internal project planning source; review before public publication  
-**Status:** Proposed implementation baseline derived from the current FerroWasp/FerroPilot master source  
+**Status:** Proposed implementation baseline derived from an external planning source and current monorepo evidence
 **Primary implementation horizon:** Immediate work through approximately 24 months, followed by long-term product maturation
 
 > This plan is an implementation specification, not evidence that any described feature is already implemented, flight-ready, certified, or assurance-approved. Current repository code, tests, accepted architecture decisions, and target evidence remain authoritative.
+
+### Status, scope, and precedence
+
+This document is the canonical forward implementation plan for the RTIC App
+Builder. It supersedes the roadmap and post-MVP expansion sequence in
+`docs/archive/rtic_feature_assembler_mvp_implementation_plan.md`, which
+remains a historical record of the first NUCLEO prototype.
+
+Use this precedence when sources disagree:
+
+1. the user's latest explicit architectural or safety decision;
+2. accepted ADRs and protected FerroWasp safety decisions;
+3. checked-in code, strict input schemas, tests, and recorded target evidence;
+4. this reference implementation plan;
+5. focused architecture notes linked from this plan;
+6. historical plans and dated implementation observations.
+
+The FerroWasp monorepo contains this RTIC App Builder prototype at
+`tools/rtic-app-builder`, alongside the protected applications and canonical
+FerroWasp crates. The builder remains a nested Cargo workspace and is not a
+member of the firmware workspace. Its temporary compatibility crates are still
+transitional; co-location alone does not authorize replacing them or changing
+flight code. Work that depends on golden applications or canonical component
+APIs must record the monorepo commit and exact paths before implementation
+begins. An example Rust path in this document is not evidence that the item
+currently exists.
+
+Document map:
+
+- `README.md` — current implemented commands and repository orientation;
+- `docs/architecture-observations.md` — evidence and lessons from the current
+  blinky and UART-DMA/MSP prototypes;
+- `docs/stm32f4-backend.md` — current narrow backend contract;
+- `docs/osd-usart1-dma.md` — current OSD prototype and pinned provenance;
+- `docs/betaflight-target-definition-notes.md` — focused board-capability and
+  boot-frozen platform-configuration model;
+- `docs/authoring/README.md` — current authoring checklist and handbook entry;
+- `docs/chatgpt-project-context.md` — derived, compact upload summary;
+- `docs/archive/rtic_feature_assembler_mvp_implementation_plan.md` —
+  superseded historical MVP plan.
+
+### Adopted review corrections
+
+The implementation baseline includes these corrections:
+
+- define a constrained renderer-facing invocation and initialization contract
+  before freezing schema v0.1;
+- keep catalogue files declarative and prohibit arbitrary Rust fragments;
+- distinguish capability semantic class from the role of each port;
+- use exact component versions in the near term;
+- separate semantic composition identity, exact input identity, and build
+  provenance;
+- reuse the prototype's tested framed hashing, command-running, locking,
+  failure capture, and successful Windows-safe promotion paths while adding
+  complete fingerprints, immutable commits, and rollback fault tests;
+- make schema examples executable fixtures rather than independently maintained
+  pseudo-specifications;
+- gate F405 work on pinned access to canonical FerroWasp sources and APIs;
+- deliver the NUCLEO builder core as a milestone independent of the later F405
+  candidate.
 
 ---
 
@@ -44,12 +104,18 @@ working handwritten prototypes
     -> clean endpoint/consumer vertical slice
     -> deterministic ResolvedApplication
     -> generated validation applications
-    -> generated parallel F405 flight application
+    -> generated parallel, output-inhibited F405 candidate
     -> reconciled generated release path
     -> multiple backends and targets
 ```
 
-The existing flight-tested FCU3 application remains the golden runtime reference until a generated application has been statically, electrically, bench, and flight reconciled. Codex must not replace or broadly refactor the golden application as an incidental part of builder work.
+The application designated as golden by the pinned FerroWasp source remains
+the runtime reference until a generated application has been statically,
+electrically, bench, and flight reconciled. The source material used to draft
+this plan named FCU3, but every implementation task must verify the current
+designation and commit rather than treating that status as live repository
+fact. Builder work must not replace or broadly refactor the verified golden
+application incidentally.
 
 ---
 
@@ -177,7 +243,7 @@ The mid-term implementation shall add:
 - boot-frozen endpoint routing;
 - observation snapshots;
 - component health metadata;
-- generated parallel F405 flight application;
+- generated parallel, output-inhibited F405 candidate;
 - STM32H7 backend and board targets;
 - semantic graph diff;
 - resource, memory, task, interrupt, capability, and provenance reports;
@@ -313,13 +379,20 @@ Rules:
 
 ## 5. Core domain model
 
-All external inputs and generated artifacts require an explicit `schema_version`. Stable IDs shall be strings with restricted syntax:
+All external inputs and generated artifacts require an explicit
+`schema_version`. Leaf IDs use:
 
 ```text
 [a-z][a-z0-9]*(?:[-_][a-z0-9]+)*
 ```
 
-Use namespaced IDs where collision risk exists:
+Qualified references use a namespace and one or more `/`-separated leaf IDs:
+
+```text
+<leaf-id> ":" <leaf-id> ("/" <leaf-id>)*
+```
+
+Use qualified references where collision risk exists:
 
 ```text
 component:uart-dma-endpoint
@@ -351,6 +424,12 @@ pub struct Diagnostic {
 }
 ```
 
+Serialized source paths shall be repository-relative logical paths using `/`
+separators. Absolute paths, host prefixes, temporary-directory names, and
+platform-native separators must not enter canonical artifacts. Source
+locations are diagnostic metadata and are excluded from semantic composition
+identity; exact labeled input bytes are covered separately by `InputIdentity`.
+
 Do not expose internal panics as user diagnostics. Expected invalid input returns structured diagnostics. Internal invariant violations may panic only in tests; production CLI converts them into a builder-internal failure with a preserved error chain.
 
 ### 5.2 Board definition
@@ -374,6 +453,7 @@ pub struct BoardDefinition {
     pub timers: BTreeMap<TimerResourceId, TimerDefinition>,
     pub fitted_devices: BTreeMap<DeviceId, FittedDevice>,
     pub endpoint_slots: BTreeMap<EndpointSlotId, EndpointSlot>,
+    pub dispatcher_candidates: Vec<InterruptId>,
     pub reserved_resources: BTreeSet<PhysicalResourceId>,
     pub metadata: BoardMetadata,
 }
@@ -385,6 +465,9 @@ Important distinction:
 - Application profiles select endpoint/component instances.
 - Platform configuration may later select a boot-frozen protocol role among already compiled compatible roles.
 - Runtime configuration never changes physical ownership.
+- `dispatcher_candidates` is an explicitly ordered allowlist. Every candidate
+  also appears in `interrupts`, and the resolver rejects candidates that are
+  reserved or claimed by hardware tasks.
 
 ### 5.3 Application profile
 
@@ -397,10 +480,17 @@ pub struct ApplicationProfile {
     pub components: Vec<ComponentInstanceRequest>,
     pub explicit_connections: Vec<ConnectionRequest>,
     pub scheduling_classes: BTreeMap<SchedulingClassId, Priority>,
-    pub capacities: BTreeMap<CapacityId, usize>,
+    pub capacities: BTreeMap<CapacityId, CapacitySelection>,
+    pub timebase: Option<TimebaseRequest>,
     pub policies: ApplicationPolicies,
     pub feature_flags: BTreeSet<FeatureId>,
     pub build_profile: BuildProfileId,
+}
+
+pub struct CapacitySelection {
+    pub value: usize,
+    pub rationale: String,
+    pub source: Option<SourceRef>,
 }
 ```
 
@@ -428,13 +518,13 @@ pub struct ComponentDefinition {
     pub maturity: ComponentMaturity,
     pub implementation: ImplementationReference,
     pub multiplicity: MultiplicityPolicy,
-    pub provides: Vec<ProvidedCapabilityDefinition>,
-    pub requires: Vec<RequiredCapabilityDefinition>,
+    pub capability_ports: Vec<CapabilityPortDefinition>,
     pub tasks: Vec<TaskTemplate>,
     pub resources: Vec<ResourceTemplate>,
     pub physical_claims: Vec<PhysicalClaimTemplate>,
     pub capacities: Vec<CapacityRequirement>,
     pub initialization: InitializationTemplate,
+    pub bindings: Vec<BindingDefinition>,
     pub configuration: Vec<ConfigurationBinding>,
     pub failure_contract: FailureContract,
     pub tests: TestReferences,
@@ -447,14 +537,41 @@ pub struct ComponentDefinition {
 pub struct ImplementationReference {
     pub crate_name: String,
     pub module_path: String,
-    pub init_fn: Option<String>,
-    pub task_entrypoints: BTreeMap<TaskTemplateId, String>,
-    pub resource_types: BTreeMap<ResourceTemplateId, String>,
+    pub constructors: BTreeMap<ConstructorId, RustPath>,
+    pub task_entrypoints: BTreeMap<TaskEntrypointId, RustPath>,
     pub cargo_features: BTreeSet<String>,
 }
 ```
 
-This is a reference, not arbitrary source.
+`RustPath` is a validated Rust item path, not arbitrary source. Resource
+templates use structured, validated `RustTypeTemplate` values. Relative item paths
+are resolved against `crate_name` and `module_path` during normalization, so
+the resolved application contains only complete, unambiguous paths.
+
+Component definitions also declare every structural binding accepted by an
+instance:
+
+```rust
+pub struct BindingDefinition {
+    pub id: BindingKey,
+    pub value_kind: BindingValueKind,
+    pub required: bool,
+    pub constraints: Vec<BindingConstraint>,
+}
+
+pub enum BindingValueKind {
+    EndpointSlot { kind: EndpointKindId },
+    Capacity { unit: CapacityUnit },
+    PhysicalResource { kind: PhysicalResourceKind },
+    ComponentInstance,
+    Constant { value_type: ScalarType },
+}
+```
+
+`bind` selects compile-time structure, ownership, or sizing. `configuration`
+supplies typed component behavior settings. They are separate namespaces;
+unknown, duplicate, missing-required, or wrong-kind entries are errors before
+candidate instantiation.
 
 ### 5.5 Capability classes
 
@@ -469,13 +586,49 @@ pub enum CapabilityClass {
 }
 ```
 
+A capability class describes semantics, not the direction of a component
+port. Direction and responsibility are represented separately:
+
+```rust
+pub enum CapabilityPortRole {
+    GrantAuthority,
+    ReceiveAuthority,
+    PublishCritical,
+    ConsumeCritical,
+    EmitRequest,
+    HandleRequest,
+    PublishObservation,
+    ReadObservation,
+    AppendObservationEvent,
+    ReadObservationEvent,
+    OfferService,
+    UseService,
+}
+
+pub struct CapabilityPortDefinition {
+    pub id: CapabilityPortId,
+    pub key: CapabilityKey,
+    pub type_arguments: BTreeMap<TypeParameterId, ValueTemplateRef>,
+    pub role: CapabilityPortRole,
+    pub cardinality: Cardinality,
+    pub required: bool,
+    pub transport: Option<CapabilityTransportTemplate>,
+}
+
+pub enum CapabilityTransportTemplate {
+    BoundedQueue {
+        resource: ResourceTemplateId,
+    },
+    Direct,
+}
+```
+
 A capability key shall include:
 
 - class;
 - semantic type ID;
 - version;
 - optional instance/domain qualifier;
-- cardinality rules.
 
 ```rust
 pub struct CapabilityKey {
@@ -486,18 +639,47 @@ pub struct CapabilityKey {
 }
 ```
 
+Semantic capability IDs resolve through a versioned catalogue entry before
+task or resource resolution:
+
+```rust
+pub struct CapabilityTypeDefinition {
+    pub type_id: CapabilityTypeId,
+    pub version: CapabilityVersion,
+    pub payload: RustTypeTemplate,
+    pub parameters: Vec<TypeParameterDefinition>,
+    pub allowed_transports: BTreeSet<CapabilityTransportKind>,
+}
+```
+
+`RustTypeTemplate` is a validated path plus typed generic/const parameters,
+not a format string. Every resolved capability records the fully instantiated
+payload type, adapter type, transport, capacity/overflow contract, and owner,
+so rendering never looks the semantic ID up again.
+
 Connection rules:
 
-| Class | Providers | Consumers | Fan-out | Missing connection |
-|---|---:|---:|---|---|
-| `Authority<T>` | exactly 1 unless profile explicitly excludes capability | normally exactly 1 authorized consumer | prohibited by default | error |
-| `Critical<T>` | exactly 1 unless aggregation component is explicit | one or more explicit consumers | no automatic fan-out | error for required input |
-| `Request<T>` | one service owner | one or more requesters | explicit | error if required |
-| `Observe<T>` | exactly 1 writer | zero or more readers | allowed | allowed |
-| `ObserveEvent<T>` | exactly 1 journal owner or explicit aggregator | zero or more readers | allowed and bounded | allowed |
-| `Service<T>` | exactly 1 selected provider | one or more clients | explicit or uniquely inferred | error if required |
+| Class | Source role | Destination role | Fan-out | Missing required port |
+|---|---|---|---|---|
+| `Authority<T>` | exactly one `GrantAuthority` unless excluded by policy | normally exactly one approved `ReceiveAuthority` | prohibited by default | error |
+| `Critical<T>` | exactly one `PublishCritical` unless an explicit aggregator exists | one or more explicit `ConsumeCritical` ports | no automatic fan-out | error |
+| `Request<T>` | one or more `EmitRequest` ports | exactly one selected `HandleRequest` owner | explicit | error |
+| `Observe<T>` | exactly one `PublishObservation` writer | zero or more `ReadObservation` readers | allowed | allowed unless reader is required |
+| `ObserveEvent<T>` | exactly one `AppendObservationEvent` journal owner or explicit aggregator | zero or more `ReadObservationEvent` readers | allowed and bounded | allowed unless reader is required |
+| `Service<T>` | exactly one selected `OfferService` provider | one or more `UseService` clients | explicit or uniquely inferred | error |
 
 The resolver must never infer an authority connection solely because types match. Authority edges must be explicitly declared or introduced by a narrowly defined core policy that is visible in the resolved graph.
+
+For the first UART/MSP slice, the role that owns a bounded transport declares
+its backing resource: `PublishCritical` owns the RX queue and `HandleRequest`
+owns the TX queue. Connected consumer/emitter ports reuse that resolved
+transport and must not declare a second queue. Queue capacity, overflow,
+wake-up, and fault behavior therefore have one explicit owner.
+
+Schema fields may use concise names such as `emits`, `handles`, `publishes`, or
+`reads`, but they must deserialize into the explicit port roles above.
+Generic `provides`/`requires` wording must not be used for `Request<T>` or
+`Authority<T>` because it obscures responsibility.
 
 ### 5.6 Component instances
 
@@ -528,15 +710,119 @@ pub enum TaskKind {
 pub struct TaskTemplate {
     pub id: TaskTemplateId,
     pub kind: TaskKindTemplate,
-    pub entrypoint: RustPath,
+    pub invocation: TaskInvocationTemplate,
     pub scheduling: SchedulingRequirement,
     pub local_resources: Vec<ResourceTemplateId>,
     pub shared_resources: Vec<ResourceAccessTemplate>,
+    pub capability_bindings: Vec<TaskCapabilityBinding>,
+    pub lock_groups: Vec<LockGroupTemplate>,
     pub spawn_inputs: Vec<SpawnInput>,
     pub capacity: Option<CapacityRequirement>,
-    pub period: Option<DurationRequirement>,
+    pub execution: TaskExecutionTemplate,
+}
+
+pub enum TaskExecutionTemplate {
+    OneShot,
+    AsyncPeriodicLoop {
+        period: DurationRequirement,
+    },
+}
+
+pub enum TaskCapabilityBinding {
+    Adapter {
+        port: CapabilityPortId,
+    },
+    WakeOnDelivery {
+        port: CapabilityPortId,
+        policy: WakePolicy,
+    },
+}
+
+pub enum WakePolicy {
+    CoalesceWhilePending,
+    FaultOnFull { fault: FaultId },
+}
+
+pub struct LockGroupTemplate {
+    pub id: LockGroupId,
+    pub members: Vec<LockMemberTemplate>,
+}
+
+pub enum LockMemberTemplate {
+    SharedResource(ResourceTemplateId),
+    CapabilityPort(CapabilityPortId),
 }
 ```
+
+Every one-shot task activation performs exactly one declared implementation
+invocation. An `AsyncPeriodicLoop` performs that same bounded invocation once
+per declared period inside one generated RTIC async loop. Lock acquisition,
+argument borrowing, fixed outcome handling, and spawning are generated from
+typed metadata:
+
+```rust
+pub struct TaskInvocationTemplate {
+    pub entrypoint: TaskEntrypointId,
+    pub arguments: Vec<InvocationArgumentTemplate>,
+    pub outcome_actions: Vec<OutcomeActionTemplate>,
+}
+
+pub enum InvocationArgumentTemplate {
+    LocalResource(ResourceTemplateId),
+    SharedResource(ResourceTemplateId),
+    CapabilityPort(CapabilityPortId),
+    SpawnInput(SpawnInputId),
+    Configuration(ConfigKey),
+    Constant(ConstantId),
+}
+
+pub enum OutcomeActionTemplate {
+    SpawnOn {
+        outcome: OutcomeVariantId,
+        task: TaskTemplateId,
+    },
+    RecordFaultOn {
+        outcome: OutcomeVariantId,
+        fault: FaultId,
+    },
+    WakePortOn {
+        outcome: OutcomeVariantId,
+        port: CapabilityPortId,
+    },
+    Ignore {
+        outcome: OutcomeVariantId,
+        rationale: String,
+    },
+}
+
+pub struct ResolvedTaskInvocation {
+    pub function: RustPath,
+    pub arguments: Vec<ResolvedInvocationArgument>,
+    pub lock_groups: Vec<ResolvedLockGroup>,
+    pub outcome_actions: Vec<ResolvedOutcomeAction>,
+}
+```
+
+Entrypoints return ordinary typed values or component-defined outcome enums.
+The renderer may match a declared outcome and perform one of the bounded
+actions above. Catalogue metadata cannot contain expressions, statements,
+closure bodies, or arbitrary Rust.
+
+The external schema serializes invocation arguments as tagged records in
+their call order. `Adapter` passes a direction-appropriate generated
+capability adapter to an entrypoint. `WakeOnDelivery` schedules a consumer to
+drain its bounded adapter without putting the payload in the RTIC spawn
+queue. Its `WakePolicy` explicitly distinguishes coalescing an already-pending
+wake-up from a fault. Data loss remains governed by the capability queue's
+overflow contract. A task's declared local/shared resources, capability
+bindings, lock groups, and spawn inputs must exactly cover the references used
+by its invocation; unused or undeclared references are schema errors.
+
+Each lock group is ordered and rendered as one RTIC tuple lock. Every mutable
+shared-resource or capability-adapter argument belongs to exactly one group
+unless its validated type supports independent access. This makes the paired
+locks used by the current UART-DMA wrappers explicit rather than a
+renderer-specific inference.
 
 The resolved task contains exact:
 
@@ -549,6 +835,9 @@ The resolved task contains exact:
 - capacity;
 - period;
 - spawn edges;
+- resolved implementation entrypoint and ordered arguments;
+- exact local/shared/capability access and lock grouping;
+- bounded outcome-to-spawn/fault handling;
 - source component instance.
 
 ### 5.8 Resources
@@ -563,30 +852,205 @@ Resources are separated into:
 - initialization-only values.
 
 ```rust
-pub enum ResourceKind {
+pub struct ResourceTemplate {
+    pub id: ResourceTemplateId,
+    pub storage: ResourceStorageKind,
+    pub placement: ResourcePlacement,
+}
+
+pub enum ResourceStorageKind {
     Physical(PhysicalResourceId),
-    Local,
-    Shared,
-    StaticBuffer,
-    StaticQueue,
-    Snapshot,
-    Constant,
+    TypedValue {
+        rust_type: RustTypeTemplate,
+    },
+    StaticBuffer {
+        element_type: RustTypeTemplate,
+        length: SizeTemplate,
+        count: SizeTemplate,
+    },
+    StaticQueue {
+        item_type: RustTypeTemplate,
+        capacity: CapacityRequirement,
+        overflow: OverflowContract,
+    },
+    Snapshot {
+        value_type: RustTypeTemplate,
+    },
+    Constant {
+        value_type: RustTypeTemplate,
+        value: ConstantTemplate,
+    },
+}
+
+pub enum ResourcePlacement {
+    RticLocal { owner: TaskTemplateId },
+    RticShared,
+    Immutable,
+    InitializationOnly,
 }
 ```
 
-A resolved physical resource has exactly one owner. Shared logical resources may have several task accesses, but exactly one generated storage definition.
+The external TOML flattens these tagged variants into fields such as
+`storage`, `rust_type`, `element_rust_type`, `size_from_binding`,
+`item_rust_type`, typed generic/const-argument bindings,
+`capacity_from_binding`, and `owner_task`; normalization must populate the
+structured variants above and reject fields that do not belong to the
+selected variant.
+
+Storage shape and RTIC access placement are independent. For example, a
+bounded static queue used by several tasks has `StaticQueue` storage and
+`RticShared` placement; it is not forced to choose one concept as its
+`kind`. A resolved physical resource has exactly one owner. Shared logical
+resources may have several task accesses, but exactly one generated storage
+definition.
+
+Every resource definition must state:
+
+- its generated storage class;
+- its owner component instance;
+- all task readers/writers;
+- whether access is local, immutable, or RTIC-shared;
+- exact capacity where applicable;
+- capacity source and sizing rationale;
+- overflow policy and fault/health propagation;
+- initialization producer and consumers.
+
+The UART-DMA vertical slice therefore models RX-DMA state as shared by the
+USART-IDLE and RX-DMA interrupt tasks, TX-DMA state as shared by the TX-DMA
+interrupt and TX-service tasks, and queue handles according to their actual
+task access. It must not describe one broad endpoint as task-local when
+several tasks access it.
+
+### 5.8.1 Constrained renderer-facing construction contract
+
+`ResolvedApplication` must contain enough structure to render without
+consulting component definitions again and without recognizing component IDs.
+Component definitions express initialization through the same closed
+vocabulary, but refer to catalogue-local constructor IDs and unresolved
+bindings:
+
+```rust
+pub struct InitializationTemplate {
+    pub operations: Vec<InitializationOperationTemplate>,
+}
+
+pub enum InitializationOperationTemplate {
+    BackendPrepare {
+        recipe: BackendRecipeId,
+        inputs: Vec<ValueTemplateRef>,
+        outputs: Vec<ResourceTemplateId>,
+    },
+    CallConstructor {
+        constructor: ConstructorId,
+        arguments: Vec<ValueTemplateRef>,
+        outputs: Vec<ResourceTemplateId>,
+    },
+    ConstructResource {
+        resource: ResourceTemplateId,
+        constructor: ConstructorKind,
+    },
+    SpawnTask {
+        task: TaskTemplateId,
+        inputs: Vec<ValueTemplateRef>,
+    },
+}
+```
+
+Normalization validates every referenced constructor against
+`ImplementationReference`, resolves bindings and generated resource names,
+and produces a deliberately small, versioned operation set:
+
+Every intermediate token passed between template operations is declared as a
+resource with `InitializationOnly` placement. Template outputs therefore use
+`ResourceTemplateId`; resolution maps them to general `ResolvedValueId`
+values without introducing hidden backend temporaries.
+
+```rust
+pub enum ResolvedInitOperation {
+    BackendPrepare {
+        recipe: BackendRecipeId,
+        inputs: Vec<ResolvedValueRef>,
+        outputs: Vec<ResolvedValueId>,
+    },
+    CallConstructor {
+        function: RustPath,
+        arguments: Vec<ResolvedValueRef>,
+        outputs: Vec<ResolvedValueId>,
+    },
+    ConstructValue {
+        rust_type: ResolvedRustType,
+        constructor: ConstructorKind,
+        output: ResolvedValueId,
+    },
+    SpawnTask {
+        task: ResolvedTaskId,
+        inputs: Vec<ResolvedValueRef>,
+    },
+}
+```
+
+Rules:
+
+- `BackendRecipeId` selects a recipe implemented and tested by the selected
+  platform backend, such as clock preparation, GPIO-bank splitting, or a
+  typed UART-DMA endpoint constructor. It is not a Rust snippet.
+- Adding a recipe requires a backend contract change, renderer support,
+  focused tests, and a schema/compatibility decision.
+- `CallConstructor` calls a validated normal Rust item using only resolved
+  arguments and records all returned values. Its `function` path must come
+  from the component's validated constructor map.
+- `ConstructorKind` is a closed set for mechanically constructible values,
+  such as `Default` or a zeroed fixed-size array where the resolved type makes
+  that operation valid. Named associated or free constructors use
+  `CallConstructor`. Neither form can contain source text.
+- `ResolvedRustType` contains the fully instantiated path, generic/const
+  arguments, array lengths/counts, and storage shape required to emit a
+  concrete type; it contains no unresolved binding or format string.
+- Task wrappers are rendered from `ResolvedTask`, its
+  `ResolvedTaskInvocation`, resolved resource/capability accesses, lock groups,
+  and resolved outcome actions. No template IDs remain at render time.
+- Imports and Cargo dependencies come from the resolved Cargo plan.
+- Component definitions and application profiles never carry arbitrary
+  imports, item bodies, statements, or template fragments.
+
+Before schema v0.1 is frozen, a renderer-contract ADR must demonstrate that
+this operation set can represent the complete current blinky and NUCLEO OSD
+prototypes. The latter includes the arm-button/debounce tasks, shared
+`OsdTelemetryState`, and telemetry input in addition to the extracted
+UART-DMA/MSP core shown in section 6. If the operation set cannot represent
+that topology, extend the closed structural model or improve the
+implementation-crate facade; do not add an escape hatch for arbitrary Rust.
 
 ### 5.9 Scheduling and dispatchers
 
 Profiles use named scheduling classes. The resolver records numeric priorities.
 
 ```rust
+pub struct TimebaseRequest {
+    pub tick_hz: NonZeroU32,
+}
+
+pub struct ResolvedTimebase {
+    pub backend_recipe: BackendRecipeId,
+    pub generated_name: GeneratedSymbol,
+    pub tick_hz: NonZeroU32,
+    pub clock_hz: NonZeroU32,
+    pub cargo: ResolvedCargoContribution,
+}
+
 pub struct SchedulingRequirement {
     pub class: SchedulingClassId,
     pub relation: Vec<PriorityRelation>,
     pub must_be_hardware: bool,
 }
 ```
+
+The backend timebase recipe is a closed renderer/backend contract. For the
+NUCLEO slice it accounts for the `systick_monotonic!` declaration, imports and
+Cargo contribution, and the `Mono::start` initialization step. The resolver
+adds the corresponding `BackendPrepare` operation before component
+initialization. Periodic execution is invalid without exactly one compatible
+resolved timebase.
 
 Example classes:
 
@@ -622,9 +1086,11 @@ pub struct ResolvedApplication {
     pub builder_version: String,
     pub id: ResolvedApplicationId,
     pub input_identity: InputIdentity,
+    pub semantic_identity: SemanticIdentity,
     pub board: ResolvedBoardIdentity,
     pub backend: ResolvedBackendIdentity,
-    pub toolchain: ToolchainIdentity,
+    pub build_policy: ResolvedBuildPolicy,
+    pub timebase: Option<ResolvedTimebase>,
     pub components: Vec<ResolvedComponentInstance>,
     pub capabilities: Vec<ResolvedCapability>,
     pub connections: Vec<ResolvedConnection>,
@@ -633,6 +1099,7 @@ pub struct ResolvedApplication {
     pub physical_claims: Vec<ResolvedPhysicalClaim>,
     pub dispatchers: Vec<ResolvedDispatcher>,
     pub initialization_order: Vec<InitializationStep>,
+    pub initialization_operations: Vec<ResolvedInitOperation>,
     pub cargo: ResolvedCargoPlan,
     pub generated_names: GeneratedNameTable,
     pub warnings: Vec<Diagnostic>,
@@ -646,67 +1113,150 @@ Requirements:
 - stable schema;
 - self-contained enough for rendering and reporting;
 - source references retained where practical;
-- hash computed from canonical serialized representation;
+- semantic hash computed from the canonical resolved semantics;
+- exact labeled input hashes recorded separately;
 - builder version and input hashes recorded;
 - no target-runtime values that are only known after execution.
+
+`BuildProvenance` is emitted by the CLI after formatting/checking/building. It
+records the semantic identity, exact input identity, actual toolchain identity,
+implementation-source/content identities, sanitized build environment, host,
+target, command lines and environment overrides, Cargo lock identity, and
+produced artifacts. It is not embedded in the semantic hash and is not an
+input to rendering.
+
+### 5.11 Relationship to runtime platform configuration
+
+The focused platform-configuration note uses four artifacts that are
+complementary, not competing:
+
+| Artifact | Lifecycle | Purpose |
+|---|---|---|
+| `BoardDefinition` | builder input | Authoritative physical board facts and explicit endpoint slots |
+| `ResolvedApplication` | compile-time IR | Exact component, task, resource, ownership, connection, and build composition |
+| `BoardCapabilities` | generated read-only runtime projection | Stable target/capability identity and the finite set of compiled endpoints and roles |
+| `PlatformConfigV1` | persisted candidate | Complete user-selected assignment among compiled compatible roles |
+| `ActivePlatformConfig` | one boot | Validated, immutable routing/configuration selected before endpoints are enabled |
+
+`BoardCapabilities` is generated from `ResolvedApplication`; it is not another
+board-authoring schema. `PlatformConfigV1` cannot add code or transfer hardware
+ownership. Boot validation produces `ActivePlatformConfig`, which remains
+frozen until reset. Exact platform-config schema and recovery policy remain
+subject to their focused ADRs and do not block the first static NUCLEO slice.
 
 ---
 
 ## 6. Input schemas and examples
 
+The Rust types in section 5 describe the normalized semantic model; the TOML
+below is the external serialization. The schema uses these explicit mappings:
+
+| TOML form | Normalized field |
+|---|---|
+| `[[connections]]` | `ApplicationProfile.explicit_connections` |
+| `execution` plus `period_us` or `period_us_from_configuration` | closed `TaskExecutionTemplate` with a typed period |
+| flattened resource shape/placement fields | tagged `ResourceStorageKind` and `ResourcePlacement` |
+| relative implementation item path | complete validated `RustPath` |
+
+Only `SourceRef` spans, explicitly optional scalar values, and collections
+marked `default_empty` by schema may be omitted in authoring input.
+`default_empty` is limited to semantically neutral collections such as no
+local resources, no spawn inputs, no constructor entries, or no Cargo
+features; normalization always serializes them explicitly in canonical
+artifacts. Application safety policies, component failure contracts,
+transport overflow behavior, required bindings, and initialization producers
+never receive silent defaults. These examples are intended to be copied from
+or byte-checked against the valid fixture set once schema v0.1 is implemented.
+
 ### 6.1 Board definition example
 
 ```toml
 schema_version = "0.1"
+dispatcher_candidates = ["exti0", "exti1", "exti2", "exti3"]
+reserved_resources = []
+timers = {}
+fitted_devices = {}
+metadata = {}
 
 [board]
-id = "reference-f405"
+id = "nucleo-f401re"
 family = "stm32f4"
 backend = "ferrowasp-stm32f4"
-mcu = "STM32F405RGT6"
-revision = "v1"
+mcu = "STM32F401"
+revision = "re"
 
 [clock]
-source = "hse"
-hse_hz = 8_000_000
-sysclk_hz = 168_000_000
+source = "hsi"
+source_hz = 16_000_000
+sysclk_hz = 84_000_000
 
-[interrupts]
-reserved = ["OTG_FS", "OTG_HS"]
-dispatchers = ["EXTI2", "EXTI3", "EXTI4", "TIM6_DAC"]
+[memory_regions.flash]
+kind = "flash"
+origin = 0x08000000
+length_bytes = 524288
+
+[memory_regions.ram]
+kind = "ram"
+origin = 0x20000000
+length_bytes = 98304
+
+[pins.pa9]
+package_pin = "PA9"
+capabilities = ["usart1-tx-af7"]
+
+[pins.pa10]
+package_pin = "PA10"
+capabilities = ["usart1-rx-af7"]
+
+[peripherals.usart1]
+kind = "uart"
+hardware = "USART1"
+
+[peripherals.dma2]
+kind = "dma-controller"
+hardware = "DMA2"
+
+[interrupts.usart1]
+vector = "USART1"
+
+[interrupts.dma2_stream5]
+vector = "DMA2_STREAM5"
+
+[interrupts.dma2_stream7]
+vector = "DMA2_STREAM7"
+
+[interrupts.exti0]
+vector = "EXTI0"
+
+[interrupts.exti1]
+vector = "EXTI1"
+
+[interrupts.exti2]
+vector = "EXTI2"
+
+[interrupts.exti3]
+vector = "EXTI3"
+
+[dma_routes.usart1_rx]
+controller = "dma2"
+stream = 5
+channel = 4
+interrupt = "dma2_stream5"
+
+[dma_routes.usart1_tx]
+controller = "dma2"
+stream = 7
+channel = 4
+interrupt = "dma2_stream7"
 
 [endpoint_slots.uart1]
 kind = "uart-dma"
-peripheral = "USART1"
-rx = "PA10"
-tx = "PA9"
-rx_interrupt = "USART1"
-dma_rx = "DMA2_STREAM2_CHANNEL4"
-dma_tx = "DMA2_STREAM7_CHANNEL4"
-rx_buffer_bytes = 256
-tx_buffer_bytes = 256
-
-[endpoint_slots.spi1_imu]
-kind = "spi-dma-sample"
-peripheral = "SPI1"
-sck = "PB3"
-miso = "PB4"
-mosi = "PB5"
-cs = "PA4"
-data_ready = "PB0"
-data_ready_interrupt = "EXTI0"
-dma_rx = "DMA2_STREAM0_CHANNEL3"
-dma_tx = "DMA2_STREAM3_CHANNEL3"
-
-[fitted_devices.imu1]
-driver = "mpu6500"
-endpoint_slot = "spi1_imu"
-board_rotation = "identity"
-
-[output_slots.motor1]
-kind = "waveform"
-timer = "TIM1_CH1"
-pin = "PA8"
+peripheral = "usart1"
+rx_pin = "pa10"
+tx_pin = "pa9"
+rx_interrupt = "usart1"
+dma_rx = "usart1_rx"
+dma_tx = "usart1_tx"
 ```
 
 Validation rules include:
@@ -714,65 +1264,170 @@ Validation rules include:
 - referenced pins/peripherals/routes exist;
 - physical resources are unique unless explicitly shareable;
 - timer and DMA routes are supported by backend metadata;
+- RX/TX direction is derived from the typed `dma_rx`/`dma_tx` endpoint role
+  and is not repeated as an independently editable board fact;
 - dispatcher interrupts are not reserved or claimed by hardware tasks;
 - capacities are within backend limits;
 - fitted device bindings are compatible with endpoint slot type.
+
+This example intentionally matches the implemented NUCLEO route: USART1 RX is
+DMA2 stream 5 channel 4, not the valid-but-different STM32F405 stream 2 route.
+F405 examples must live in separate fixtures and identify an F405 board.
 
 ### 6.2 Application profile example
 
 ```toml
 schema_version = "0.1"
+feature_flags = []
+
+[policies]
+allow_authority_inference = false
+allow_experimental = true
+warnings_as_errors = true
 
 [application]
-id = "nucleo-msp-reference"
+id = "nucleo-msp-core"
 board = "nucleo-f401re"
 build_profile = "dev"
 
+[timebase]
+tick_hz = 1_000
+
 [scheduling_classes]
-serial = 8
-observer = 3
+serial-hardware = 4
+serial-service = 3
+observer = 2
 background = 1
 
-[capacities]
-uart_rx_bytes = 256
-uart_tx_bytes = 256
-msp_frames = 8
+[capacities.serial_chunk_bytes]
+value = 70
+rationale = "Current MSPv1 compatibility transport maximum"
+
+[capacities.uart_rx_buffers]
+value = 2
+rationale = "Active plus spare RX DMA buffer"
+
+[capacities.uart_rx_queue]
+value = 4
+rationale = "Current prototype configuration; traffic bound not yet justified"
+
+[capacities.uart_tx_buffers]
+value = 1
+rationale = "One active TX DMA transfer"
+
+[capacities.uart_tx_queue]
+value = 16
+rationale = "Current prototype configuration; traffic bound not yet justified"
+
+[capacities.uart_tx_service_task]
+value = 1
+rationale = "One coalesced TX-service wake-up, independent of the data queue"
+
+[capacities.msp_task_queue]
+value = 1
+rationale = "Coalesced consumer wake-up; queue storage remains separately bounded"
 
 [[components]]
 id = "uart1"
 component = "uart-dma-endpoint"
-version = "0.1"
-scheduling_class = "serial"
+version = "0.1.0"
+enabled = true
 
 [components.bind]
 endpoint_slot = "uart1"
-rx_capacity = "uart_rx_bytes"
-tx_capacity = "uart_tx_bytes"
+rx_buffer_bytes = "serial_chunk_bytes"
+rx_buffer_count = "uart_rx_buffers"
+rx_queue_capacity = "uart_rx_queue"
+tx_buffer_bytes = "serial_chunk_bytes"
+tx_buffer_count = "uart_tx_buffers"
+tx_queue_capacity = "uart_tx_queue"
+tx_service_capacity = "uart_tx_service_task"
+
+[components.configuration]
+serial_profile = "msp_displayport"
 
 [[components]]
 id = "displayport"
 component = "msp-displayport"
-version = "0.1"
-scheduling_class = "observer"
+version = "0.1.0"
+enabled = true
 
 [components.bind]
-rx_endpoint = "uart1"
-tx_endpoint = "uart1"
-frame_capacity = "msp_frames"
+frame_bytes = "serial_chunk_bytes"
+task_capacity = "msp_task_queue"
+
+[components.configuration]
+refresh_period_us = 100_000
 
 [[connections]]
-from = "uart1.provides.critical:serial-rx-bytes"
-to = "displayport.requires.critical:serial-rx-bytes"
+from = "uart1.rx_chunks"
+to = "displayport.rx_chunks"
 
 [[connections]]
-from = "displayport.provides.request:serial-tx-frame"
-to = "uart1.requires.request:serial-tx-frame"
+from = "displayport.tx_frames"
+to = "uart1.tx_frames"
 ```
+
+This is the extracted two-component serial/MSP core, not the complete current
+`applications/nucleo-f401re-osd.toml` composition. The full migration parity
+fixture also models `button_arm_toggle`, debounce/interrupt work, the
+display-state writer, shared `OsdTelemetryState`, and the DisplayPort
+component's telemetry read port. Omitting those from this focused schema
+example must not be reported as full current-app parity.
+
+For compile-smoke purposes, the core component explicitly constructs a fixed
+default `OsdTelemetryState`; it does not pretend that this is a connected
+observation source. The full-parity catalogue version replaces that fixture
+resource with a required `ReadObservation` port connected to the demo writer,
+and later flight-relevant profiles connect authoritative observation
+publishers.
+
+The explicit `serial_profile = "msp_displayport"` is likewise a transitional
+static selection for this development fixture. Once boot-frozen routing is
+implemented, `ActivePlatformConfig` supplies that validated named profile;
+neither the board definition nor a hidden backend default chooses it.
 
 ### 6.3 Component definition example: UART-DMA endpoint
 
+The fixture catalogue first defines the payload shared by the two component
+files. The temporary compatibility path remains provenance-pinned until the
+canonical facade replaces it:
+
 ```toml
 schema_version = "0.1"
+
+[[capability_types]]
+id = "serial-rx-chunk"
+version = "1"
+rust_type_path = "ferrowasp_serial_osd_compat::SerialChunk"
+allowed_transports = ["bounded-queue"]
+
+[[capability_types.parameters]]
+id = "frame_bytes"
+kind = "const-usize"
+
+[[capability_types]]
+id = "serial-tx-chunk"
+version = "1"
+rust_type_path = "ferrowasp_serial_osd_compat::SerialChunk"
+allowed_transports = ["bounded-queue"]
+
+[[capability_types.parameters]]
+id = "frame_bytes"
+kind = "const-usize"
+```
+
+The checked-in compatibility crate already owns the concrete endpoint,
+transport, and OSD types, but its current APIs are coupled and it does not yet
+contain the `builder_facade` entrypoints named below. The facade migration
+task must add thin behavior-preserving normal Rust wrappers before these
+component definitions enter the compile-smoke-tested catalogue. Schema-only
+fixtures may parse earlier, but must be labelled non-compilable until that
+entry condition is met.
+
+```toml
+schema_version = "0.1"
+capacities = []
 
 [component]
 id = "uart-dma-endpoint"
@@ -781,54 +1436,260 @@ maturity = "experimental"
 multiplicity = "many"
 
 [implementation]
-crate = "ferrowasp-stm32f4"
-module = "serial::uart_dma"
-init_fn = "init_endpoint"
+crate = "ferrowasp-serial-osd-compat"
+module = "builder_facade::uart_dma"
 
 [implementation.task_entrypoints]
-rx_irq = "on_rx_interrupt"
-tx_irq = "on_tx_interrupt"
+rx_idle = "on_idle_interrupt"
+rx_dma = "on_rx_dma_interrupt"
+tx_dma = "on_tx_dma_interrupt"
 tx_service = "service_tx"
 
-[[provides]]
-id = "rx_bytes"
-class = "critical"
-type = "serial-rx-bytes"
-version = "1"
+[[bindings]]
+id = "endpoint_slot"
+kind = "endpoint-slot"
+endpoint_kind = "uart-dma"
+required = true
 
-[[requires]]
-id = "tx_request"
-class = "request"
-type = "serial-tx-frame"
+[[bindings]]
+id = "rx_buffer_bytes"
+kind = "capacity"
+unit = "bytes"
+required = true
+
+[[bindings]]
+id = "rx_buffer_count"
+kind = "capacity"
+unit = "items"
+required = true
+
+[[bindings]]
+id = "rx_queue_capacity"
+kind = "capacity"
+unit = "items"
+required = true
+
+[[bindings]]
+id = "tx_buffer_bytes"
+kind = "capacity"
+unit = "bytes"
+required = true
+
+[[bindings]]
+id = "tx_buffer_count"
+kind = "capacity"
+unit = "items"
+required = true
+
+[[bindings]]
+id = "tx_queue_capacity"
+kind = "capacity"
+unit = "items"
+required = true
+
+[[bindings]]
+id = "tx_service_capacity"
+kind = "capacity"
+unit = "task-slots"
+required = true
+
+[[configuration]]
+id = "serial_profile"
+value_type = "enum"
+allowed = ["msp_displayport"]
+required = true
+
+[[capability_ports]]
+id = "rx_chunks"
+class = "critical"
+role = "publish-critical"
+type = "serial-rx-chunk"
 version = "1"
+type_arguments = { frame_bytes = "rx_buffer_bytes" }
+cardinality = "one-or-more"
+required = true
+transport = { kind = "bounded-queue", resource = "rx_queue" }
+
+[[capability_ports]]
+id = "tx_frames"
+class = "request"
+role = "handle-request"
+type = "serial-tx-chunk"
+version = "1"
+type_arguments = { frame_bytes = "tx_buffer_bytes" }
 cardinality = "zero-or-more"
+required = false
+transport = { kind = "bounded-queue", resource = "tx_queue" }
 
 [[tasks]]
-id = "rx_irq"
+id = "rx_idle"
 kind = "hardware"
+execution = "one-shot"
 interrupt_from_binding = "endpoint_slot.rx_interrupt"
-scheduling_class = "serial"
+scheduling_class = "serial-hardware"
+shared_resources = [
+  { id = "rx_dma_state", access = "exclusive" },
+]
+capability_bindings = [
+  { kind = "adapter", port = "rx_chunks" },
+]
+lock_groups = [
+  { id = "rx_endpoint", members = ["shared:rx_dma_state", "port:rx_chunks"] },
+]
+
+[tasks.invocation]
+entrypoint = "rx_idle"
+arguments = [
+  { kind = "shared-resource", id = "rx_dma_state" },
+  { kind = "capability-port", id = "rx_chunks" },
+]
+outcome_actions = [
+  { kind = "wake-port-on", outcome = "queued-new-work", port = "rx_chunks" },
+]
+
+[[tasks]]
+id = "rx_dma"
+kind = "hardware"
+execution = "one-shot"
+interrupt_from_binding = "endpoint_slot.dma_rx.interrupt"
+scheduling_class = "serial-hardware"
+shared_resources = [
+  { id = "rx_dma_state", access = "exclusive" },
+]
+capability_bindings = [
+  { kind = "adapter", port = "rx_chunks" },
+]
+lock_groups = [
+  { id = "rx_endpoint", members = ["shared:rx_dma_state", "port:rx_chunks"] },
+]
+
+[tasks.invocation]
+entrypoint = "rx_dma"
+arguments = [
+  { kind = "shared-resource", id = "rx_dma_state" },
+  { kind = "capability-port", id = "rx_chunks" },
+]
+outcome_actions = [
+  { kind = "wake-port-on", outcome = "queued-new-work", port = "rx_chunks" },
+]
+
+[[tasks]]
+id = "tx_dma"
+kind = "hardware"
+execution = "one-shot"
+interrupt_from_binding = "endpoint_slot.dma_tx.interrupt"
+scheduling_class = "serial-hardware"
+shared_resources = [
+  { id = "tx_dma_state", access = "exclusive" },
+  { id = "tx_queue", access = "exclusive" },
+]
+capability_bindings = []
+lock_groups = [
+  { id = "tx_endpoint", members = ["shared:tx_dma_state", "shared:tx_queue"] },
+]
+
+[tasks.invocation]
+entrypoint = "tx_dma"
+arguments = [
+  { kind = "shared-resource", id = "tx_dma_state" },
+  { kind = "shared-resource", id = "tx_queue" },
+]
+outcome_actions = []
 
 [[tasks]]
 id = "tx_service"
 kind = "software"
-scheduling_class = "serial"
-capacity_from_binding = "tx_queue_capacity"
+execution = "one-shot"
+scheduling_class = "serial-service"
+capacity_from_binding = "tx_service_capacity"
+shared_resources = [
+  { id = "tx_dma_state", access = "exclusive" },
+]
+capability_bindings = [
+  { kind = "wake-on-delivery", port = "tx_frames", policy = "coalesce-while-pending" },
+]
+lock_groups = [
+  { id = "tx_endpoint", members = ["shared:tx_dma_state", "port:tx_frames"] },
+]
+
+[tasks.invocation]
+entrypoint = "tx_service"
+arguments = [
+  { kind = "shared-resource", id = "tx_dma_state" },
+  { kind = "capability-port", id = "tx_frames" },
+]
+outcome_actions = []
 
 [[resources]]
-id = "endpoint"
-kind = "local"
-rust_type = "ferrowasp_stm32f4::serial::UartDmaEndpoint"
+id = "rx_dma_state"
+storage = "typed-value"
+placement = "rtic-shared"
+rust_type = "ferrowasp_serial_osd_compat::Usart1RxDma"
+rust_type_const_arguments_from_bindings = ["rx_buffer_bytes"]
 
 [[resources]]
-id = "rx_buffer"
-kind = "static-buffer"
-size_from_binding = "rx_capacity"
+id = "tx_dma_state"
+storage = "typed-value"
+placement = "rtic-shared"
+rust_type = "ferrowasp_serial_osd_compat::Usart1TxDma"
+rust_type_const_arguments_from_bindings = ["tx_buffer_bytes"]
+
+[[resources]]
+id = "rx_buffers"
+storage = "static-buffer"
+placement = "initialization-only"
+element_rust_type = "u8"
+size_from_binding = "rx_buffer_bytes"
+count_from_binding = "rx_buffer_count"
+
+[[resources]]
+id = "tx_buffers"
+storage = "static-buffer"
+placement = "initialization-only"
+element_rust_type = "u8"
+size_from_binding = "tx_buffer_bytes"
+count_from_binding = "tx_buffer_count"
+
+[[resources]]
+id = "rx_queue"
+storage = "static-queue"
+placement = "rtic-shared"
+item_rust_type = "ferrowasp_serial_osd_compat::SerialChunk"
+item_const_arguments_from_bindings = ["rx_buffer_bytes"]
+capacity_from_binding = "rx_queue_capacity"
+overflow = "reject-new-and-record-fault"
+overflow_fault = "serial-rx-overflow"
 
 [[resources]]
 id = "tx_queue"
-kind = "static-queue"
-size_from_binding = "tx_capacity"
+storage = "static-queue"
+placement = "rtic-shared"
+item_rust_type = "ferrowasp_serial_osd_compat::SerialChunk"
+item_const_arguments_from_bindings = ["tx_buffer_bytes"]
+capacity_from_binding = "tx_queue_capacity"
+overflow = "reject-new-and-record-fault"
+overflow_fault = "serial-tx-overflow"
+
+[[initialization.operations]]
+kind = "construct-resource"
+resource = "rx_buffers"
+constructor = "zeroed-array"
+
+[[initialization.operations]]
+kind = "construct-resource"
+resource = "tx_buffers"
+constructor = "zeroed-array"
+
+[[initialization.operations]]
+kind = "backend-prepare"
+recipe = "stm32f4/uart-dma-endpoint-v1"
+inputs = [
+  "endpoint_slot",
+  "rx_buffers",
+  "tx_buffers",
+  "configuration.serial_profile",
+]
+outputs = ["rx_dma_state", "tx_dma_state", "rx_queue", "tx_queue"]
 
 [[physical_claims]]
 binding = "endpoint_slot.peripheral"
@@ -843,18 +1704,28 @@ binding = "endpoint_slot.dma_tx"
 exclusive = true
 
 [[physical_claims]]
-binding = "endpoint_slot.rx"
+binding = "endpoint_slot.rx_pin"
 exclusive = true
 
 [[physical_claims]]
-binding = "endpoint_slot.tx"
+binding = "endpoint_slot.tx_pin"
 exclusive = true
+
+[failure_contract]
+initialization_failure = "reject-build"
+unhandled_task_error = "record-component-fault"
+
+[tests]
+compile_fixtures = ["nucleo-msp-core"]
+host_targets = []
 ```
 
 ### 6.4 Component definition example: MSP DisplayPort consumer
 
 ```toml
 schema_version = "0.1"
+capacities = []
+physical_claims = []
 
 [component]
 id = "msp-displayport"
@@ -863,41 +1734,185 @@ maturity = "experimental"
 multiplicity = "many"
 
 [implementation]
-crate = "ferrowasp-tasks"
-module = "osd::msp_displayport"
-init_fn = "init"
+crate = "ferrowasp-serial-osd-compat"
+module = "builder_facade::msp_displayport"
+
+[implementation.constructors]
+state = "ferrowasp_serial_osd_compat::OsdComponent::new"
+telemetry = "ferrowasp_serial_osd_compat::OsdTelemetryState::default"
 
 [implementation.task_entrypoints]
 consume_rx = "consume_rx"
 periodic = "periodic"
-submit_tx = "submit_tx"
 
-[[requires]]
-id = "rx_bytes"
+[[bindings]]
+id = "frame_bytes"
+kind = "capacity"
+unit = "bytes"
+required = true
+
+[[bindings]]
+id = "task_capacity"
+kind = "capacity"
+unit = "task-slots"
+required = true
+
+[[configuration]]
+id = "refresh_period_us"
+value_type = "duration-us"
+required = true
+
+[[capability_ports]]
+id = "rx_chunks"
 class = "critical"
-type = "serial-rx-bytes"
+role = "consume-critical"
+type = "serial-rx-chunk"
 version = "1"
+type_arguments = { frame_bytes = "frame_bytes" }
 cardinality = "exactly-one"
+required = true
 
-[[provides]]
-id = "tx_frame"
+[[capability_ports]]
+id = "tx_frames"
 class = "request"
-type = "serial-tx-frame"
+role = "emit-request"
+type = "serial-tx-chunk"
 version = "1"
+type_arguments = { frame_bytes = "frame_bytes" }
+cardinality = "exactly-one"
+required = true
 
 [[tasks]]
 id = "consume_rx"
 kind = "software"
+execution = "one-shot"
 scheduling_class = "observer"
-capacity = 8
+capacity_from_binding = "task_capacity"
+local_resources = ["consume_output"]
+shared_resources = [
+  { id = "state", access = "exclusive" },
+  { id = "telemetry", access = "read" },
+]
+capability_bindings = [
+  { kind = "wake-on-delivery", port = "rx_chunks", policy = "coalesce-while-pending" },
+  { kind = "adapter", port = "tx_frames" },
+]
+lock_groups = [
+  { id = "displayport", members = ["port:rx_chunks", "shared:state", "shared:telemetry", "port:tx_frames"] },
+]
+
+[tasks.invocation]
+entrypoint = "consume_rx"
+arguments = [
+  { kind = "capability-port", id = "rx_chunks" },
+  { kind = "shared-resource", id = "state" },
+  { kind = "shared-resource", id = "telemetry" },
+  { kind = "local-resource", id = "consume_output" },
+  { kind = "capability-port", id = "tx_frames" },
+]
+outcome_actions = [
+  { kind = "wake-port-on", outcome = "queued-new-work", port = "tx_frames" },
+]
 
 [[tasks]]
 id = "periodic"
 kind = "software"
-scheduling_class = "observer"
-period_us = 100_000
+execution = "async-periodic-loop"
+scheduling_class = "serial-service"
+period_us_from_configuration = "refresh_period_us"
 capacity = 1
+local_resources = ["periodic_output"]
+shared_resources = [
+  { id = "state", access = "exclusive" },
+  { id = "telemetry", access = "read" },
+]
+capability_bindings = [
+  { kind = "adapter", port = "tx_frames" },
+]
+lock_groups = [
+  { id = "displayport_refresh", members = ["shared:state", "shared:telemetry", "port:tx_frames"] },
+]
+
+[tasks.invocation]
+entrypoint = "periodic"
+arguments = [
+  { kind = "shared-resource", id = "state" },
+  { kind = "shared-resource", id = "telemetry" },
+  { kind = "local-resource", id = "periodic_output" },
+  { kind = "capability-port", id = "tx_frames" },
+]
+outcome_actions = [
+  { kind = "wake-port-on", outcome = "queued-new-work", port = "tx_frames" },
+]
+
+[[resources]]
+id = "state"
+storage = "typed-value"
+placement = "rtic-shared"
+rust_type = "ferrowasp_serial_osd_compat::OsdComponent"
+
+[[resources]]
+id = "telemetry"
+storage = "typed-value"
+placement = "rtic-shared"
+rust_type = "ferrowasp_serial_osd_compat::OsdTelemetryState"
+
+[[resources]]
+id = "consume_output"
+storage = "static-buffer"
+placement = "rtic-local"
+owner_task = "consume_rx"
+element_rust_type = "u8"
+size_from_binding = "frame_bytes"
+count = 1
+
+[[resources]]
+id = "periodic_output"
+storage = "static-buffer"
+placement = "rtic-local"
+owner_task = "periodic"
+element_rust_type = "u8"
+size_from_binding = "frame_bytes"
+count = 1
+
+[[initialization.operations]]
+kind = "call-constructor"
+constructor = "state"
+outputs = ["state"]
+
+[[initialization.operations]]
+kind = "call-constructor"
+constructor = "telemetry"
+outputs = ["telemetry"]
+
+[[initialization.operations]]
+kind = "construct-resource"
+resource = "consume_output"
+constructor = "zeroed-array"
+
+[[initialization.operations]]
+kind = "construct-resource"
+resource = "periodic_output"
+constructor = "zeroed-array"
+
+[[initialization.operations]]
+kind = "spawn-task"
+task = "periodic"
+inputs = []
+
+[failure_contract]
+initialization_failure = "reject-build"
+unhandled_task_error = "record-component-fault"
+
+[tests]
+compile_fixtures = ["nucleo-msp-core"]
+host_targets = []
 ```
+
+The checked fixture may use temporary compatibility paths until canonical
+FerroWasp facades exist, but catalogue maturity and provenance must say so.
+Changing from compatibility to canonical paths is an explicit catalogue and
+fixture change.
 
 ---
 
@@ -992,16 +2007,14 @@ For every requested component:
 
 ### 7.5 Stage 5: dependency closure
 
-Near-term closure should be explicit and conservative.
-
-Supported mechanisms:
-
-1. profile explicitly lists all components; or
-2. a component declares a required implementation dependency with exactly one catalogue provider.
+Near-term v0.1 does not add components. The profile explicitly lists every
+component instance, and this stage validates that the listed set satisfies all
+explicit port, implementation, and backend requirements.
 
 Do not initially support broad “find any provider for this type” behavior. Ambiguous providers are an error.
 
-Future deterministic closure may:
+The constrained component-dependency metadata and deterministic selection
+mechanism are introduced only in M3. That future closure may:
 
 - select a provider specified by policy;
 - select the only compatible provider;
@@ -1149,15 +2162,49 @@ Canonicalization shall:
 - sort lists by stable ID where ordering has no semantic meaning;
 - preserve explicit semantic order where required;
 - serialize using a fixed format;
-- exclude volatile timestamps from identity hash;
-- include builder semantic version, schema versions, catalogue hashes, board hash, profile hash, and selected toolchain identity.
+- normalize logical source labels and paths to repository-relative `/` form;
+- exclude source spans, absolute paths, host identity, timestamps, commands,
+  and produced-artifact paths from semantic composition identity;
+- include builder semantic version, schema versions, resolved board/backend
+  semantics, selected components, connections, resources, scheduling, Cargo
+  plan, and normalized build policy in semantic composition identity;
+- record hashes of exact labeled board, profile, catalogue, policy, and
+  lockfile input bytes as a separate input identity;
+- record the actual toolchain, host, target, commands, and artifact hashes in
+  post-resolution build provenance.
+
+The composition hash is computed from a versioned
+`SemanticApplicationIdentityInput` projection, not by blindly hashing the
+entire serialized `ResolvedApplication`. The projection excludes its own
+derived ID, diagnostic source spans, warnings, exact input-byte hashes, and
+build provenance. Tests must enumerate every included and excluded field so a
+new IR field cannot silently change or escape identity policy.
 
 Suggested identity:
 
 ```text
 resolved_application_id =
-    <application-id>-<board-id>-<first-12-hex-of-sha256>
+    <application-id>-<board-id>-<first-12-hex-of-composition-sha256>
+
+input_set_id =
+    sha256(canonical labels + exact input bytes)
+
+build_input_id =
+    sha256(input set id + implementation source identities + builder/renderer/
+           backend/template identities + lock/toolchain policy + sanitized
+           build environment)
+
+build_provenance_id =
+    sha256(composition id + build input id + actual commands/toolchain/host +
+           artifact hashes)
 ```
+
+The same resolved semantics must produce the same composition hash on Linux
+and Windows. Build provenance is expected to differ when actual toolchains,
+hosts, or produced artifacts differ. The 12-hex composition suffix is
+human-facing only. Canonical metadata retains the full digest, storage keys
+use full digests, and any existing-key reuse verifies exact identity and
+bytes.
 
 ### 7.13 Stage 13: rendering
 
@@ -1204,25 +2251,46 @@ For the first implementation, a single generated `src/main.rs` is acceptable if 
 
 ### 7.15 Stage 15: transactional commit
 
-Use a working directory:
+Rendered source and build records are immutable, separately keyed artifacts:
 
 ```text
-generated/work/<application-id>/<run-id>/
+generated/committed/source/<application-id>/<full-composition-sha256>/<input-set-id>/
+generated/committed/build/<build-provenance-id>/
+generated/failed/<application-id>/<run-id>/
 ```
 
 Process:
 
-1. render into a clean run directory;
-2. format;
-3. write IR and reports;
-4. run `cargo check`;
-5. optionally run release build and configured tests;
-6. on success, atomically replace/update `generated/committed/<resolved-id>/`;
-7. update a stable pointer file for the application;
-8. preserve failed candidate under `generated/failed/` only when requested or in CI artifacts;
-9. never partially overwrite the last valid committed output.
+1. create a same-filesystem candidate as a sibling of the eventual source
+   destination, preserving path depth for relative Cargo dependencies;
+2. render into the clean candidate;
+3. format;
+4. write IR and reports;
+5. run `cargo check` and optionally run release build/configured tests;
+6. promote the candidate to its immutable full-digest source destination.
+   Refuse to overwrite an existing identity unless all identity metadata and
+   bytes match, in which case reuse it;
+7. validate the exact promoted path before publishing it. Generated Cargo
+   dependencies must be depth-independent, or the final-path check is
+   mandatory; a candidate-only check is not sufficient;
+8. write the immutable build record/artifacts under the full
+   `build_provenance_id`;
+9. atomically update a small stable pointer file containing the full source
+   and build IDs only after both artifacts are valid;
+10. preserve failed candidate and command diagnostics under
+   `generated/failed/`; an explicit retention/cleanup command may prune old
+   failures without touching the last-known-good output;
+11. never partially overwrite the last valid committed output.
 
 No implementation shall “incrementally edit” the committed generated application in place.
+
+The current prototype does not yet provide this immutable source/build store
+or end-to-end last-known-good guarantee. It uses a mutable `working`
+generation, sibling `.candidate-*` directories, and per-feature failures; it
+can promote prefixes before the final release build succeeds. Reuse its
+framed hashing, locking, diagnostic capture, and same-filesystem promotion
+primitives, but treat the state layout and pointer guarantee above as new
+work.
 
 ---
 
@@ -1235,12 +2303,12 @@ Recommended commands:
 ```text
 cargo xtask app validate \
   --board boards/nucleo-f401re.toml \
-  --profile application_profiles/nucleo-msp.toml
+  --profile application_profiles/nucleo-msp-core.toml
 
 cargo xtask app resolve \
   --board ... \
   --profile ... \
-  --out generated/work/...
+  --out <scratch>/resolved_application.json
 
 cargo xtask app generate \
   --board ... \
@@ -1253,8 +2321,8 @@ cargo xtask app build \
   --release
 
 cargo xtask app diff \
-  --old generated/committed/<old>/resolved_application.json \
-  --new generated/work/<new>/resolved_application.json
+  --old generated/committed/source/<app>/<composition>/<input-set>/resolved_application.json \
+  --new <scratch>/resolved_application.json
 
 cargo xtask app graph \
   --resolved ... \
@@ -1315,63 +2383,33 @@ This avoids making the builder an opaque solver.
 
 The generated app should be intentionally boring.
 
-Illustrative RTIC skeleton:
+The exact source skeleton is maintained as generated, formatted, compiled
+fixtures rather than duplicated as pseudo-Rust in this plan. The first
+normative fixtures are:
 
-```rust
-#![no_std]
-#![no_main]
-
-use rtic::app;
-
-mod generated_provenance {
-    pub const BUILDER_VERSION: &str = "...";
-    pub const RESOLVED_APPLICATION_ID: &str = "...";
-    pub const INPUT_HASH: &str = "...";
-}
-
-#[app(
-    device = stm32f4xx_hal::pac,
-    dispatchers = [EXTI2, EXTI3],
-    peripherals = true
-)]
-mod app {
-    #[shared]
-    struct Shared {
-        displayport__state: ferrowasp_tasks::osd::DisplayPortState,
-    }
-
-    #[local]
-    struct Local {
-        uart1__endpoint: ferrowasp_stm32f4::serial::UartDmaEndpoint,
-        uart1__rx_buffer: &'static mut [u8; 256],
-    }
-
-    #[init(local = [
-        uart1__rx_storage: [u8; 256] = [0; 256],
-        uart1__tx_storage: [u8; 256] = [0; 256],
-    ])]
-    fn init(ctx: init::Context) -> (Shared, Local) {
-        // Deterministically ordered generated construction.
-        // Calls normal implementation-crate constructors.
-        todo!()
-    }
-
-    #[task(
-        binds = USART1,
-        priority = 8,
-        local = [uart1__endpoint],
-        shared = [displayport__state]
-    )]
-    fn uart1__rx_irq(ctx: uart1__rx_irq::Context) {
-        ferrowasp_stm32f4::serial::uart_dma::on_rx_interrupt(...);
-    }
-
-    #[task(priority = 3, capacity = 1, shared = [displayport__state])]
-    async fn displayport__periodic(ctx: displayport__periodic::Context) {
-        ferrowasp_tasks::osd::msp_displayport::periodic(...);
-    }
-}
+```text
+tests/fixtures/valid/nucleo-led/
+tests/fixtures/valid/nucleo-msp-core/
+tests/golden-ir/nucleo-led/resolved_application.json
+tests/golden-ir/nucleo-msp-core/resolved_application.json
+tests/golden-source/nucleo-led/
+tests/golden-source/nucleo-msp-core/
 ```
+
+The NUCLEO MSP-core fixture must demonstrate:
+
+- generated provenance constants for builder version, composition ID, and
+  exact input-set ID;
+- the selected PAC path and deterministic dispatcher list;
+- exact `Shared`, `Local`, and init-local static storage;
+- two RX buffers and one TX buffer for the current endpoint contract;
+- distinct USART-IDLE, RX-DMA, TX-DMA, TX-service, MSP-consumer, and periodic
+  task wrappers;
+- resource access matching the resolved graph;
+- normal implementation-crate calls with no generated protocol or DMA state
+  machine;
+- no `todo!`, ellipses, placeholder markers, or hand-maintained behavioral
+  hooks.
 
 The implementation crate functions remain responsible for behavior. The renderer supplies types, names, bindings, resource placement, priorities, and wiring.
 
@@ -1476,7 +2514,10 @@ Diagnostics shall include source file/line where possible and related claims for
 
 The near-term objective is not “generate the entire flight controller.” It is:
 
-> Establish one trustworthy composition pipeline that can resolve, render, check, inspect, and reproduce a small RTIC application, then extend the exact same model to a generated parallel F405 application without replacing the golden flight application.
+> Establish one trustworthy composition pipeline that can resolve, render,
+> check, inspect, and reproduce a small RTIC application, then extend the same
+> model to a generated, output-inhibited parallel F405 candidate without
+> replacing the golden flight application.
 
 The near-term programme is divided into two sub-phases:
 
@@ -1502,21 +2543,29 @@ The near-term programme is divided into two sub-phases:
    - UART-DMA endpoint code;
    - OSD consumer code;
    - current generated code/checkpoint logic;
-   - `PROJECT_CONTEXT.md`;
-   - `CODEX_ACTIVE_WORK.md`;
-   - active ADRs;
-   - target support documents.
-2. Produce `tools/rtic-app-builder/IMPLEMENTATION_INVENTORY.md` containing:
+   - `README.md`;
+   - `docs/chatgpt-project-context.md`;
+   - this reference plan;
+   - any ADRs or active-work records that actually exist at task time;
+   - target support documents;
+   - the pinned FerroWasp monorepo commit and root-level project guidance when
+     the task depends on flight or canonical component sources.
+2. Produce `docs/implementation-inventory.md` containing:
    - existing paths;
    - reusable code;
    - transitional code;
    - duplicate responsibilities;
    - current tests;
    - missing tests;
+   - configured capacities, their evidence/rationale, and any unverified
+     prototype-only values;
    - current command entrypoints;
    - safety-sensitive files not to modify.
 3. Record the exact golden application and target configuration.
-4. Add no behavior changes in this task.
+4. Record which protected/golden paths are in the monorepo and which required
+   sources, if any, still live externally; do not invent local paths for
+   external sources.
+5. Add no behavior changes in this task.
 
 **Acceptance criteria:**
 
@@ -1550,7 +2599,11 @@ Create or update ADRs for:
 7. transactional generation;
 8. explicit verbose board targets;
 9. golden handwritten app preservation;
-10. public builder/private assurance boundary.
+10. public builder/private assurance boundary;
+11. constrained renderer-facing initialization, task-invocation, lock-group,
+    timebase, and periodic-execution contract;
+12. semantic identity versus exact input identity versus build provenance;
+13. FerroWasp source pinning and compatibility-facade migration.
 
 **Acceptance criteria:**
 
@@ -1655,13 +2708,16 @@ The implementation may use Rust validation as authoritative and generate JSON Sc
 - no arbitrary code;
 - no inheritance;
 - no runtime routing;
-- no implicit component discovery.
+- no implicit component discovery;
+- exact port roles rather than ambiguous request/authority
+  `provides`/`requires` labels;
+- only closed structural renderer operations and validated Rust paths.
 
 **Fixtures:**
 
 ```text
 tests/fixtures/valid/minimal-led/
-tests/fixtures/valid/nucleo-msp/
+tests/fixtures/valid/nucleo-msp-core/
 tests/fixtures/invalid/duplicate-id/
 tests/fixtures/invalid/resource-conflict/
 tests/fixtures/invalid/missing-capability/
@@ -1671,6 +2727,8 @@ tests/fixtures/invalid/authority-fanout/
 **Acceptance criteria:**
 
 - all valid fixtures parse and normalize;
+- the TOML examples in section 6 are sourced from or byte-checked against the
+  valid fixture files;
 - each invalid fixture produces the expected diagnostic code;
 - unknown fields are rejected;
 - schema version is mandatory;
@@ -1682,12 +2740,20 @@ tests/fixtures/invalid/authority-fanout/
 
 **Objective:** Represent the existing NUCLEO MSP prototype without embedding behavior in the builder.
 
+**Entry condition:** Every catalogue entry names an existing implementation
+item. Move the current LED/button behavior behind small normal Rust
+entrypoints before cataloguing it. Record a pinned FerroWasp source identity
+for external items and confirm that required endpoint/consumer facade items
+exist. Until then, the checked UART/MSP slice may reference the
+provenance-pinned compatibility crates, with experimental maturity and an
+explicit replacement note. Do not write catalogue entries that claim
+nonexistent canonical Rust paths.
+
 Initial catalogue:
 
 ```text
 component_catalogue/
 ├── platform/
-│   ├── monotonic-systick.toml
 │   └── gpio-led.toml
 ├── endpoints/
 │   └── uart-dma-endpoint.toml
@@ -1696,18 +2762,26 @@ component_catalogue/
     └── msp-displayport.toml
 ```
 
+The first-class `TimebaseRequest` is resolved by the selected backend and is
+not also represented as a component catalogue entry.
+
+Land entries incrementally only after their referenced implementation items
+exist: LED/button first, then UART/MSP after the compatibility or canonical
+facades are added. The loader may validate schema-only draft fixtures earlier,
+but it must not report their Rust paths as compile-smoke-validated.
+
 **Required decomposition:**
 
 ```text
 UART-DMA endpoint
     owns USART, DMA, pins, buffers, interrupts
-    provides bounded RX capability
-    consumes bounded TX requests
+    publishes bounded RX chunks
+    handles bounded TX requests
 
 MSP DisplayPort consumer
     owns parser/renderer state only
-    receives RX capability
-    submits TX requests
+    consumes bounded RX chunks
+    emits bounded TX requests
     contributes periodic software task
 ```
 
@@ -1723,6 +2797,8 @@ MSP DisplayPort consumer
 - the catalogue validates independently;
 - component definitions refer to existing Rust paths;
 - missing Rust paths are detected during a catalogue smoke build or generated app check;
+- compatibility paths are provenance-pinned and cannot be mistaken for
+  canonical FerroWasp APIs;
 - repeated UART instance names produce distinct generated symbols in unit tests.
 
 ---
@@ -1753,6 +2829,9 @@ resolve_physical_claims
 resolve_scheduling
 allocate_dispatchers
 order_initialization
+resolve_initialization_operations
+resolve_task_invocations
+resolve_cargo_plan
 validate_architecture
 canonicalize
 ```
@@ -1770,8 +2849,11 @@ Avoid a long untyped `serde_json::Value` transformation pipeline.
 - input file order does not affect output;
 - component catalogue traversal order does not affect output;
 - resource conflicts report both owners;
-- required capability omissions report provider/consumer context;
+- required capability omissions report source/destination port roles and
+  connection context;
 - initialization cycles report a readable cycle;
+- complete blinky and NUCLEO MSP-core IRs contain no unresolved renderer
+  choices;
 - no generated source is required to test the resolver.
 
 ---
@@ -1799,6 +2881,9 @@ Avoid a long untyped `serde_json::Value` transformation pipeline.
 - component entrypoint calls;
 - generated provenance;
 - Cargo dependencies/features.
+- fixed task-wrapper invocation and outcome handling from resolved structural
+  metadata;
+- backend preparation recipes selected by resolved backend recipe IDs.
 
 **Renderer non-responsibilities:**
 
@@ -1808,6 +2893,9 @@ Avoid a long untyped `serde_json::Value` transformation pipeline.
 - OSD formatting;
 - control logic;
 - safety logic.
+- component-ID matching;
+- loading component definitions after resolution;
+- arbitrary Rust fragments from catalogue or application inputs.
 
 **Testing approach:**
 
@@ -1816,15 +2904,21 @@ Avoid a long untyped `serde_json::Value` transformation pipeline.
 - compile tests are authoritative over textual snapshots;
 - snapshots must be easy to update intentionally;
 - forbid brittle tests that assert whitespace only.
+- add burst/overflow tests or recorded sizing analysis before promoting the
+  prototype RX/TX queue depths from configured values to justified bounds.
 
 **Acceptance criteria:**
 
 ```text
 cargo xtask app generate --profile nucleo-led --check
-cargo xtask app generate --profile nucleo-msp --check
+cargo xtask app generate --profile nucleo-msp-core --check
 ```
 
 both succeed from a clean checkout.
+
+The renderer must also pass a negative architecture test showing that adding a
+new component instance expressible with existing resolved operations does not
+require a new `match`/`if` branch on its component ID.
 
 ---
 
@@ -1834,11 +2928,23 @@ both succeed from a clean checkout.
 
 **Implementation:**
 
+- extract or adapt the existing command runner, framed hashing, application
+  lock, diagnostic capture, failed-candidate retention, and Windows-safe
+  promotion primitives instead of reimplementing them;
+- retain the current fingerprint mechanism, but expand its dependency set:
+  the prototype does not currently hash all path-dependency implementation
+  sources. Include pinned commits or deterministic content-tree hashes for
+  implementation crates plus builder, renderer, backend, template, manifest,
+  lockfile, and toolchain-policy identities;
+- run build tools with a documented allowlisted environment, or record every
+  inherited build-affecting variable as part of `build_input_id`; command
+  provenance includes both explicit overrides and retained inherited values;
 - invoke Cargo with `--message-format=json-diagnostic-rendered-ansi`;
 - stream rendered rustc diagnostics;
 - capture command, status, and generated path;
 - classify as `BLD002` without rewriting the rustc message;
-- preserve failed work tree under an opt-in debug flag or CI artifact;
+- preserve the failed work tree and command diagnostics locally, and upload
+  them as CI artifacts according to retention policy;
 - never update committed generated output after a failed check;
 - add a deterministic “last-known-good” pointer file.
 
@@ -1854,6 +2960,11 @@ Near-term generation may check after major complete checkpoints:
 
 Do not create semantically invalid partial Rust solely to compile after every line. Check complete architectural checkpoints.
 
+The legacy assembler may continue checking feature prefixes while it remains
+available. New resolved-application generation checks only complete,
+semantically valid checkpoints; migration must not force endpoint and consumer
+components into a bundle merely to preserve the old prefix loop.
+
 **Acceptance criteria:**
 
 - an intentionally invalid Rust path surfaces the original rustc diagnostic;
@@ -1861,6 +2972,11 @@ Do not create semantically invalid partial Rust solely to compile after every li
 - failed candidate path is printed;
 - CI can upload failed source as an artifact;
 - builder does not incorrectly blame the last component added.
+- existing promotion/resume tests from the prototype remain green on Windows
+  and Unix CI;
+- new fault-injection tests cover failure of the second rename/restoration,
+  cleanup failure, immutable-key collision, exact-byte reuse, final-path
+  validation, and preservation of the last-known-good pointer.
 
 ---
 
@@ -2058,6 +3174,12 @@ Builder rules:
 
 **Objective:** Generate a meaningful static subset of the handwritten flight application.
 
+**Entry gate:** The task record names the authoritative FerroWasp monorepo
+commit, golden application, board revision, canonical component APIs, and
+available target evidence. If those sources cannot be inspected, N13 remains
+dependency-blocked; completion of the NUCLEO builder-core milestone is not
+blocked.
+
 Minimum candidate:
 
 ```text
@@ -2122,7 +3244,7 @@ catalogue-validation
 determinism-linux
 determinism-windows
 generate-nucleo-led
-generate-nucleo-msp
+generate-nucleo-msp-core
 check-generated-drift
 check-f405-candidate
 ```
@@ -2141,22 +3263,44 @@ Rules:
 
 ## 14. Near-term exit criteria
 
-The near-term reference implementation is complete only when:
+Near-term delivery has two independently reviewable milestones.
+
+### Milestone A — NUCLEO Builder Core v0.1
+
+Complete when:
 
 1. one canonical model resolves LED/button and UART-DMA/MSP applications;
-2. generated source is readable and compiler-checked;
-3. the resolver is deterministic;
-4. diagnostics are source-oriented and actionable;
-5. endpoint and consumer behavior remains outside the builder;
-6. physical ownership conflicts are rejected;
-7. capability cardinality and authority policies are enforced;
-8. one explicit F405 board target exists;
-9. SBUS and one SPI/IMU vertical slice are represented;
-10. a generated parallel F405 candidate exists;
-11. the golden handwritten app has not been implicitly replaced;
-12. architecture reports are generated;
-13. CI detects generated drift;
-14. all limitations are documented.
+2. the renderer contract represents both applications without arbitrary Rust
+   fragments or component-ID branches;
+3. generated source is readable and compiler-checked;
+4. the resolver and semantic composition hash are deterministic across the
+   supported Linux/Windows matrix;
+5. diagnostics are source-oriented and actionable;
+6. endpoint and consumer behavior remains outside the builder;
+7. physical ownership conflicts are rejected;
+8. capability port roles, cardinality, and synthetic authority-policy fixtures
+   are enforced;
+9. architecture reports are generated;
+10. CI detects generated drift;
+11. current hashing/locking/promotion/failure-capture primitives and tests are
+    retained, and the new immutable source/build store, final-path validation,
+    rollback fault tests, and last-known-good pointer contract are complete;
+12. all limitations and compatibility dependencies are documented.
+
+Milestone A does not claim F405 support, flight equivalence, or target evidence.
+
+### Milestone B — Parallel F405 Candidate
+
+Complete when:
+
+1. authoritative FerroWasp sources and the golden application are pinned and
+   inspectable;
+2. one explicit F405 board target exists;
+3. SBUS and one SPI/IMU vertical slice are represented;
+4. a generated output-inhibited parallel F405 candidate exists;
+5. its structure is compared with the pinned golden application;
+6. the golden handwritten app has not been implicitly replaced;
+7. target evidence and untested behavior are stated accurately.
 
 ---
 
@@ -2225,12 +3369,13 @@ Add policy validation:
 Add graph queries:
 
 ```text
-providers_of(type)
-consumers_of(type)
+ports_with_role(type, role)
+connection_sources_of(type)
+connection_destinations_of(type)
 authority_path_to(resource)
 critical_predecessors(component)
 observers_of(snapshot)
-unconnected_requirements()
+unconnected_required_ports()
 ```
 
 These queries shall support reports, tests, and future assurance overlays.
@@ -2239,15 +3384,17 @@ These queries shall support reports, tests, and future assurance overlays.
 
 ### M3 — Deterministic dependency closure
 
-Add a constrained provider-selection mechanism.
+Add a constrained implementation-dependency and service-offer selection
+mechanism. Request handlers and other directed port roles follow their own
+cardinality rules rather than generic provider terminology.
 
 Rules:
 
-1. exact explicit provider wins;
-2. profile policy may name a preferred provider;
-3. one compatible provider may be inferred;
-4. multiple compatible providers are an error;
-5. authority providers are never inferred;
+1. an exact explicit implementation/service selection wins;
+2. profile policy may name a preferred implementation or service offer;
+3. one compatible non-authority service offer may be inferred;
+4. multiple compatible offers are an error;
+5. authority grant/receive connections are never inferred;
 6. resolution reason is recorded;
 7. selected version is exact in the resolved IR;
 8. no network access during resolution;
@@ -2548,7 +3695,7 @@ Authoring guide requires:
 
 - responsibilities;
 - implementation Rust paths;
-- provides/requires;
+- capability class, explicit port role, cardinality, and compatibility;
 - ownership;
 - tasks;
 - capacities;
@@ -2910,7 +4057,7 @@ Store canonical `resolved_application.json` for:
 
 - minimal LED;
 - button/LED;
-- NUCLEO MSP;
+- NUCLEO MSP core;
 - SBUS input;
 - SPI IMU;
 - F405 parallel candidate.
@@ -2990,13 +4137,16 @@ Run generation repeatedly:
 
 Compare:
 
-- canonical IR hash;
+- semantic composition hash;
+- exact input-set hash when fixture bytes are identical;
 - generated source after newline normalization;
-- reports;
+- semantic reports after defined path/newline normalization;
 - Cargo manifest;
-- provenance.
+- the platform-independent fields of build provenance.
 
-Toolchain-dependent binary reproducibility is a separate objective and shall not be assumed.
+Actual toolchain/host fields and the build-provenance hash may differ across
+platforms. Toolchain-dependent binary reproducibility is a separate objective
+and shall not be assumed.
 
 ---
 
@@ -3069,21 +4219,31 @@ A builder release requires:
 
 ### Migration A — Existing LED/button generator
 
+- verify, freeze, and reuse the existing byte-compared
+  `tests/golden/nucleo-f401re-blinky/` migration fixture;
 - identify current generation logic;
+- move LED/button behavior behind normal implementation entrypoints;
 - model component/task/resource metadata;
 - render through central IR;
-- keep old output as fixture;
 - compare generated source;
 - remove old specialized renderer after parity.
 
 ### Migration B — Existing MSP/USART generator
 
+- commit the current generated source and task/resource inventory as a
+  migration fixture;
+- pin the compatibility or canonical FerroWasp implementation source;
 - split endpoint and consumer;
-- define capabilities;
+- define directed RX critical-data and TX request port roles;
 - model DMA buffers/queues;
 - model periodic task and monotonic;
+- model exact resource access, task invocations, outcome actions, and backend
+  initialization operations;
 - resolve explicit connections;
-- render and compile;
+- render and compile a complete valid graph checkpoint;
+- add a separate full-parity fixture for `nucleo-f401re-osd` covering
+  `button_arm_toggle`, debounce/interrupt work, shared telemetry state, and
+  the DisplayPort telemetry read port;
 - retire renderer-specific dispatcher logic.
 
 ### Migration C — SBUS
@@ -3116,7 +4276,10 @@ A builder release requires:
 
 ## 25. Mandatory task preamble for Codex
 
-Every significant Codex task shall begin by writing or updating a task record with:
+Every significant implementation task shall begin by writing or updating one
+task record in the repository's chosen issue/PR system or, for local work,
+under `docs/work/`. Do not introduce a second global active-work file when the
+same record already exists elsewhere. The record contains:
 
 ```text
 Task ID:
@@ -3178,55 +4341,69 @@ Codex shall not infer permission to modify motor mapping, gyro signs, arming, au
 
 ### PR-001 — Inventory and baseline
 
-No behavior changes. Documents current builder and protected flight paths.
+No behavior changes. Documents current builder, external dependencies, and
+protected flight paths; verifies the existing blinky golden and adds the
+missing OSD structural/golden baseline.
 
-### PR-002 — Builder model and diagnostics
+### PR-002 — Architecture contracts
 
-Adds IDs, diagnostics, source references, and canonical serialization.
+Accepts vocabulary, renderer-operation, task-invocation,
+identity/provenance, and external-source ADRs.
 
-### PR-003 — Schema v0.1 and fixtures
+### PR-003 — Reusable orchestration infrastructure
 
-Parses board/profile/component definitions with focused invalid fixtures.
+Extracts/adapts the current runner, hashing, lock, checkpoint, failure
+preservation, and candidate-promotion code without changing legacy behavior.
 
-### PR-004 — Catalogue loader
+### PR-004 — Builder model and diagnostics
 
-Loads exact component versions deterministically.
+Adds IDs, source references, diagnostics, resolved structural operations, and
+canonical semantic serialization.
 
-### PR-005 — Instance expansion and generated names
+### PR-005 — Schema v0.1 and executable fixtures
 
-Adds component instances, template expansion, and collision tests.
+Parses board/profile/component definitions; documentation examples are checked
+against focused valid and invalid fixtures.
 
-### PR-006 — Capability graph v0.1
+### PR-006 — LED/button facade and catalogue loader
 
-Supports explicit connections and cardinality; authority inference prohibited.
+Moves the existing LED/button behavior behind normal Rust entrypoints, loads
+exact component versions, and smoke-validates the first real catalogue paths.
+UART/MSP entries remain schema-only until PR-012 supplies their facades.
 
-### PR-007 — Physical claim validator
+### PR-007 — Instance expansion and generated names
+
+Adds repeated component instances, template expansion, and collision tests.
+
+### PR-008 — Capability graph v0.1
+
+Supports explicit directed port connections and cardinality; authority
+inference is prohibited.
+
+### PR-009 — Physical claim validator
 
 Rejects pin/DMA/peripheral/interrupt conflicts using explicit endpoint slots.
 
-### PR-008 — Scheduling and dispatcher resolver
+### PR-010 — Scheduling, initialization, and resolved output
 
-Uses profile classes and board-provided dispatcher list.
+Resolves priorities, dispatchers, initialization operations, task invocations,
+Cargo plan, canonical `ResolvedApplication`, and semantic/input identities.
 
-### PR-009 — `ResolvedApplication` output
+### PR-011 — Central renderer and blinky
 
-Produces canonical JSON and stable hash.
+Generates and checks the simplest application from resolved IR only, reusing
+the facade and catalogue entry established in PR-006.
 
-### PR-010 — Central LED/button renderer
+### PR-012 — UART/MSP implementation facades
 
-Generates and checks the simplest application.
+Pins canonical or compatibility sources and exposes separately usable
+UART-DMA endpoint and MSP consumer entrypoints.
 
-### PR-011 — UART-DMA endpoint catalogue
+### PR-013 — UART/MSP catalogue and generated app
 
-Represents hardware endpoint independently.
-
-### PR-012 — MSP consumer catalogue and generated app
-
-Generates NUCLEO MSP app and forwards rustc diagnostics.
-
-### PR-013 — Transactional generation
-
-Adds work/committed/failed directories and last-known-good behavior.
+Represents the endpoint and consumer independently, generates the extracted
+NUCLEO MSP core, forwards rustc diagnostics, and uses the adapted
+transactional pipeline.
 
 ### PR-014 — Reports and Mermaid graph
 
@@ -3289,7 +4466,7 @@ cargo xtask app generate \
 
 cargo xtask app generate \
   --board boards/nucleo-f401re.toml \
-  --profile application_profiles/nucleo-msp.toml \
+  --profile application_profiles/nucleo-msp-core.toml \
   --check
 
 # Determinism
@@ -3305,8 +4482,8 @@ cargo xtask app generate \
 
 # Semantic graph difference
 cargo xtask app diff \
-  --old generated/committed/<old>/resolved_application.json \
-  --new generated/work/<new>/resolved_application.json
+  --old generated/committed/source/<app>/<composition>/<input-set>/resolved_application.json \
+  --new <scratch>/resolved_application.json
 
 # Workspace checks
 cargo fmt --all -- --check
@@ -3352,16 +4529,14 @@ These choices should not block the first vertical slice, but must be decided bef
 3. JSON Schema generation approach.
 4. Stable hash serialization format.
 5. Whether generated apps are workspace members or isolated Cargo projects.
-6. Monotonic representation in component metadata.
-7. Exact RTIC 2 periodic scheduling pattern used by generated software tasks.
-8. How implementation Rust paths are compile-validated before full generation.
-9. Whether Cargo dependency versions come from catalogue, workspace dependencies, or a controlled policy file.
-10. Exact snapshot implementation.
-11. Boot-frozen router location and configuration schema.
-12. STM32H7 memory-placement syntax.
-13. Public schema compatibility guarantees before `1.0`.
-14. Conditions for committing generated sources for every app versus reference/release apps only.
-15. Conditions for standalone builder extraction.
+6. How implementation Rust paths are compile-validated before full generation.
+7. Whether Cargo dependency versions come from catalogue, workspace dependencies, or a controlled policy file.
+8. Exact snapshot implementation.
+9. Boot-frozen router location and configuration schema.
+10. STM32H7 memory-placement syntax.
+11. Public schema compatibility guarantees before `1.0`.
+12. Conditions for committing generated sources for every app versus reference/release apps only.
+13. Conditions for standalone builder extraction.
 
 Default choices in this plan are conservative and can be superseded only by an accepted ADR.
 
@@ -3435,7 +4610,8 @@ Done when:
 - deterministic;
 - compiler-checked;
 - no hand edits;
-- provenance embedded;
+- builder/composition/input identity constants embedded, with actual
+  toolchain/command/artifact provenance stored in the immutable build sidecar;
 - reports generated;
 - target validation appropriate to claim completed.
 
@@ -3460,28 +4636,31 @@ Done when:
 
 ```text
 1. Inventory current prototypes and freeze protected baseline.
-2. Adopt ADRs and vocabulary.
-3. Implement deterministic model and diagnostics.
-4. Implement schema v0.1.
-5. Implement exact component catalogue.
-6. Implement resolver and validators.
-7. Implement central renderer.
-8. Generate LED/button app.
-9. Separate UART-DMA endpoint from MSP consumer.
-10. Generate/check NUCLEO MSP app.
-11. Add transactional generation and rustc forwarding.
-12. Add architecture reports and drift CI.
-13. Add explicit F405 board target.
-14. Add SBUS vertical slice.
-15. Add SPI/DMA IMU vertical slice and first platform contract.
-16. Add read-only observation snapshot.
-17. Generate output-inhibited parallel F405 candidate.
-18. Compare generated and handwritten structures.
+2. Verify/freeze the existing blinky golden and add an OSD structural/golden baseline.
+3. Adopt vocabulary, renderer-contract, identity/provenance, and external-source ADRs.
+4. Extract/reuse transactional generation and command-running infrastructure.
+5. Implement deterministic model and structured diagnostics.
+6. Implement schema v0.1 from executable fixtures.
+7. Implement exact component catalogue and validated port roles.
+8. Implement resolver, validators, initialization operations, and task invocations.
+9. Implement the central renderer.
+10. Generate/check the LED/button app.
+11. Establish pinned UART-DMA endpoint and MSP consumer implementation facades.
+12. Generate/check the NUCLEO MSP core.
+13. Add architecture reports and drift CI.
+14. Complete NUCLEO Builder Core v0.1.
+15. After the external-source entry gate, add an explicit F405 board target.
+16. Add SBUS and SPI/DMA IMU vertical slices.
+17. Add a read-only observation snapshot.
+18. Generate an output-inhibited parallel F405 candidate.
+19. Compare generated and handwritten structures.
 ```
 
-Primary exit artifact:
+Independent exit artifacts:
 
-> **RTIC App Builder Vertical Slice v1 plus Generated Parallel F405 Candidate**
+> **NUCLEO Builder Core v0.1**
+>
+> **Parallel F405 Candidate**, only after its external-source and target gates
 
 ---
 
@@ -3539,7 +4718,7 @@ The reference implementation succeeds by making the following visible and reprod
 ```text
 what components exist
 what each instance owns
-what each instance provides and requires
+what each capability port publishes, consumes, emits, handles, grants, or receives
 how capabilities are connected
 what tasks execute
 what priorities and dispatchers are used
@@ -3554,74 +4733,31 @@ It fails if those facts are hidden behind a manifest language, opaque solver, co
 
 ---
 
-## Appendix A — Minimal canonical `ResolvedApplication` example
+## Appendix A — Canonical `ResolvedApplication` fixture
 
-```json
-{
-  "schema_version": "0.1",
-  "builder_version": "0.1.0",
-  "id": "nucleo-msp-reference-nucleo-f401re-a1b2c3d4e5f6",
-  "board": {
-    "id": "nucleo-f401re",
-    "backend": "ferrowasp-stm32f4"
-  },
-  "components": [
-    {
-      "id": "displayport",
-      "component": "msp-displayport",
-      "version": "0.1.0"
-    },
-    {
-      "id": "uart1",
-      "component": "uart-dma-endpoint",
-      "version": "0.1.0"
-    }
-  ],
-  "connections": [
-    {
-      "from": "uart1.rx_bytes",
-      "to": "displayport.rx_bytes",
-      "class": "critical",
-      "reason": "explicit-profile-connection"
-    },
-    {
-      "from": "displayport.tx_frame",
-      "to": "uart1.tx_request",
-      "class": "request",
-      "reason": "explicit-profile-connection"
-    }
-  ],
-  "tasks": [
-    {
-      "name": "uart1__rx_irq",
-      "kind": "hardware",
-      "interrupt": "USART1",
-      "priority": 8
-    },
-    {
-      "name": "displayport__periodic",
-      "kind": "software",
-      "dispatcher": "EXTI2",
-      "priority": 3,
-      "capacity": 1
-    }
-  ],
-  "physical_claims": [
-    {
-      "resource": "USART1",
-      "owner": "uart1"
-    },
-    {
-      "resource": "DMA2_STREAM2_CHANNEL4",
-      "owner": "uart1"
-    },
-    {
-      "resource": "DMA2_STREAM7_CHANNEL4",
-      "owner": "uart1"
-    }
-  ]
-}
+The normative example shall be the complete generated fixture at:
+
+```text
+tests/golden-ir/nucleo-msp-core/resolved_application.json
 ```
+
+PR-010 creates it from the checked section 6 inputs. This plan intentionally
+does not carry an independently edited abridged JSON object, because an
+abridged object easily appears schema-valid while omitting required identity,
+resource-access, initialization, Cargo, or provenance fields.
+
+The fixture review must confirm at least:
+
+- exact component versions `0.1.0`;
+- directed `uart1.rx_chunks -> displayport.rx_chunks` and
+  `displayport.tx_frames -> uart1.tx_frames` connections;
+- USART1 plus DMA2 stream 5 channel 4 RX and stream 7 channel 4 TX ownership;
+- two RX buffers and one TX buffer;
+- all hardware and software tasks, priorities, dispatchers, capacities,
+  resource access, and implementation invocations;
+- semantic composition and exact input-set identities;
+- repository-relative normalized source references;
+- no actual host/toolchain identity inside semantic composition identity.
 
 ---
 
@@ -3635,21 +4771,23 @@ It fails if those facts are hidden behind a manifest language, opaque solver, co
 - Board:
 - Backend:
 - Builder:
-- Resolved hash:
-- Source commit:
-- Toolchain:
+- Semantic composition ID:
+- Exact input-set ID:
+- External source commit(s):
+- Build provenance ID:
+- Actual toolchain/host:
 
 ## Components
 | Instance | Type | Version | Maturity |
 
 ## Capabilities
-| Provider | Capability | Consumer | Class | Reason |
+| Source port/role | Capability | Destination port/role | Class | Reason |
 
 ## Tasks
 | Task | Kind | Interrupt/Dispatcher | Priority | Capacity | Component |
 
 ## Resources
-| Resource | Kind | Owner | Accessors | Capacity |
+| Resource | Storage | Placement | Owner | Accessors | Capacity |
 
 ## Physical ownership
 | Peripheral/pin/DMA/timer/interrupt | Owner |
@@ -3660,7 +4798,7 @@ It fails if those facts are hidden behind a manifest language, opaque solver, co
 3.
 
 ## Policies
-- Authority providers:
+- Authority grant/receive ports:
 - Actuator owner:
 - Experimental restrictions:
 - Observer restrictions:
@@ -3679,16 +4817,17 @@ It fails if those facts are hidden behind a manifest language, opaque solver, co
 ## Appendix C — Codex task example
 
 ```markdown
-# Task APP-N6-002: Generate NUCLEO MSP vertical slice
+# Task APP-N6-002: Generate NUCLEO MSP-core vertical slice
 
 ## Objective
-Generate and compiler-check the NUCLEO USART1 DMA plus MSP DisplayPort application through the central ResolvedApplication renderer.
+Generate and compiler-check the extracted NUCLEO USART1 DMA plus MSP
+DisplayPort core through the central `ResolvedApplication` renderer.
 
 ## Current behavior and evidence
 The repository contains a working prototype with UART DMA ownership, static RX/TX storage, bounded queues, a separate OSD consumer, and periodic software work. Record exact file paths and the current successful command before editing.
 
 ## Required behavior
-The same application shall be expressed through:
+The extracted two-component core shall be expressed through:
 - one explicit board definition;
 - one application profile;
 - two component definitions;
@@ -3720,9 +4859,11 @@ The same application shall be expressed through:
 - invalid Rust path preserving rustc diagnostic.
 
 ## Documentation
-Update implementation inventory, active-work record, component authoring notes, and generated app README.
+Update the implementation inventory, the issue/PR or local work record if one
+is used, component authoring notes, and the generated app README.
 
 ## Non-goals
+- Full parity with the current button/telemetry OSD composition.
 - General pin solver.
 - F405 support.
 - SBUS.
@@ -3757,4 +4898,15 @@ Update implementation inventory, active-work record, component authoring notes, 
 
 ## Source basis
 
-This plan is derived from the canonical `FERROWASP_FERROPILOT_MASTER_SOURCE(1).md`, especially its current baseline, target architecture, RTIC App Builder mission and exclusions, roadmap, immediate execution sequence, definitions of done, repository model, and Codex task-handoff rules. The source remains authoritative where this implementation plan is silent. Repository code, tests, live evidence, and newer explicit project decisions take precedence where they conflict.
+This plan was initially derived from an external FerroWasp/FerroPilot planning
+source supplied during architecture work. That planning source is not checked
+in with a stable path and commit, so it is not a silent dependency or an
+authority for implementation tasks. This checked-in plan is self-contained for
+RTIC App Builder planning.
+
+When work depends on current FerroWasp code, safety policy, golden
+applications, board status, or target evidence, the task must pin and inspect
+the monorepo commit and exact source paths. External FerroPilot sources must be
+pinned separately when applicable. Repository code, tests, accepted ADRs, live
+evidence, and newer explicit project decisions take precedence over this plan
+where they conflict.

@@ -1,18 +1,25 @@
 # RTIC Feature-Assembler MVP Implementation Plan
 
+> **Superseded historical plan:** This document records the original
+> NUCLEO-F401RE blink MVP and is not an active roadmap. It is superseded by
+> `../../RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`. Do not update the
+> body to describe the new architecture; preserving its original assumptions
+> is useful implementation history.
+
 > **Current timing note:** This historical plan predates schema 6. The live
 > examples now derive blink, debounce, and OSD refresh delays from one
 > backend-owned 1 kHz SysTick monotonic; TIM2/TIM3/TIM4 are no longer BSP
-> reservations. See `docs/stm32f4-backend.md` and the checked-in manifests for
+> reservations. See `../stm32f4-backend.md` and the checked-in manifests for
 > current behavior.
 
 > **Scope note:** This is the original NUCLEO-F401RE blink MVP plan. It is not
 > the post-MVP FerroWasp integration architecture or a current FerroWasp board
-> roadmap. The canonical future target/platform-configuration direction is in
-> `docs/betaflight-target-definition-notes.md`; live board priorities and
-> support status remain in the FerroWasp repository. Paths, schemas, and
-> commands below preserve the original plan and are not current usage
-> instructions; use `README.md` for the implemented interface.
+> roadmap. The focused target/platform-configuration model is in
+> `../betaflight-target-definition-notes.md`; sequencing and migration live
+> in the new reference plan. Live board priorities and support status remain at
+> the FerroWasp monorepo root. Paths, schemas, and commands below preserve the
+> original plan and are not current usage instructions; use `../../README.md`
+> for the implemented interface.
 
 ## 1. Purpose
 

@@ -2,7 +2,8 @@
 
 `nucleo-f401re-osd` is an isolated builder application for exercising the
 static serial endpoint plus software consumer architecture. It does not edit,
-link into, or replace the currently flight-tested FerroWasp Foxeer firmware.
+link into, or replace a FerroWasp flight application. Live FerroWasp target
+status and evidence must be checked from the monorepo root at a pinned commit.
 Terminology and the resulting architectural refactor are defined in
 `architecture-observations.md`.
 
@@ -15,8 +16,10 @@ the same endpoint and starts DMA. Queue overflow is counted and drops the new
 chunk rather than allowing unbounded allocation.
 
 In the agreed terminology, the reusable UART-DMA provider is a component and
-this USART1/pin/DMA instantiation is an endpoint. The endpoint provides the
-`SerialRxTx` capability consumed by the OSD component.
+this USART1/pin/DMA instantiation is an endpoint. The current prototype exposes
+one concrete `SerialRxTx` Rust boundary to the OSD component; target metadata
+replaces that bidirectional label with directed RX-publish/consume and
+TX-emit/handle ports.
 
 The OSD software component owns only MSP parser/responder state and its output
 buffer. It consumes `SerialRxTx` and has no USART, pin, DMA, PAC, or interrupt
@@ -50,15 +53,17 @@ configuration selects `msp_displayport`, `sbus`, `crsf`, or another supported
 component at boot. That selection supplies baud/framing/direction/inversion and
 is frozen until reboot; it is not stored in the BSP or application manifest.
 
-The feature is one builder bundle because the generator compiles after every
-inserted feature; splitting its hardware provider and software consumer into
-separately inserted features would leave an intentionally incomplete
-intermediate application. The boundary remains separate inside the bundle.
+The current prototype packages endpoint and consumer in one builder bundle
+because the legacy generator compiles every feature prefix. This is a
+transitional constraint, not a target architecture rule. The resolved-graph
+pipeline will model endpoint and consumer separately and compile complete,
+semantically valid checkpoints.
 
 ## FerroWasp provenance and replacement
 
-This implementation reuses the design and protocol code from the local
-FerroWasp tree at commit `bc26276c5b34e20f96f603d95585893b91784d05`:
+This implementation reuses design and protocol code from an external
+FerroWasp source snapshot at commit
+`bc26276c5b34e20f96f603d95585893b91784d05`:
 
 - `apps/foxeer-f405-v2/src/main.rs` for RTIC task wiring and ownership
 - `crates/ferrowasp-stm32f4/src/uart_dma.rs` for DMA transfer handling
