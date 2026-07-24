@@ -109,12 +109,16 @@ and draw sequence. A complete overlay is committed about 1.5 seconds after
 startup and repeats continuously; MSP request responses continue to share the
 same bounded TX path.
 
-`compat/ferrowasp-mspv1` is an unchanged protocol copy. The standalone
-`compat/ferrowasp-serial-osd` crate is the narrow STM32F401 adapter. Both have
-provenance files and are temporary: when FerroWasp exposes a stable reusable
-crate boundary, point the generated application at those canonical crates and
-delete both compatibility directories. Do not develop a parallel protocol or
-flight stack here.
+The adapter imports MSP parsing and responses directly from the canonical
+`crates/ferrowasp-mspv1` crate; the former builder-local protocol copy has
+been removed. The standalone `compat/ferrowasp-serial-osd` crate remains as a
+narrow STM32F401 adapter. It must not be replaced with
+`ferrowasp-stm32f4` while that crate's ARM dependency graph selects the F405
+HAL/PAC, and its software contracts must not be replaced with
+`ferrowasp-io-core` or `ferrowasp-tasks` until their metadata and task
+semantics are reconciled. See `backend-unification.md` for the exact adopted
+and deferred boundary. Do not develop a parallel protocol or flight stack
+here.
 
 ## Commands and hardware scope
 

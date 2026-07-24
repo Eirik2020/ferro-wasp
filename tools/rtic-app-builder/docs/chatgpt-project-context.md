@@ -243,8 +243,9 @@ The following are directions, not completed functionality:
   validation;
 - instance-safe generation of multiple components of the same kind;
 - deterministic dependency closure instead of feature-specific lockfiles;
-- replacement of temporary compatibility crates with canonical FerroWasp
-  crate boundaries;
+- replacement of the remaining STM32F401 serial/OSD compatibility adapter
+  with canonical FerroWasp crate boundaries; MSP parsing/responding already
+  uses `crates/ferrowasp-mspv1` directly;
 - canonical semantic composition identity, exact input identity, and separate
   build provenance;
 - immutable semantic/input-keyed source artifacts, build-provenance records,

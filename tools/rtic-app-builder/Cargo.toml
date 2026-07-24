@@ -1,5 +1,5 @@
 [workspace]
-members = ["compat/ferrowasp-mspv1", "xtask"]
+members = ["xtask"]
 resolver = "2"
 
 [workspace.package]

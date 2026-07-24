@@ -28,8 +28,10 @@ documented by the backend rather than repeated in either manifest.
 An additional, isolated `nucleo-f401re-osd` application exercises USART1 on
 PA9/PA10 with separate RX/TX DMA streams and an MSP DisplayPort consumer. It
 does not modify or depend directly on any FerroWasp flight application. Its
-temporary compatibility crates are marked for replacement by the canonical
-FerroWasp crates once a stable in-tree interface exists.
+MSP parser/responder dependency is the canonical
+`crates/ferrowasp-mspv1` crate. A narrow STM32F401 compatibility adapter
+remains until the shared serial and STM32F4 crates expose an MCU-neutral
+endpoint boundary that can be adopted without changing handwritten apps.
 Its debounced B1 feature toggles only the displayed demonstration ARM state;
 it cannot arm motors or enter FerroWasp's flight arming path.
 
@@ -144,7 +146,9 @@ topics they document:
 - `docs/betaflight-target-definition-notes.md` records the board-capability and
   boot-frozen platform-configuration model;
 - `docs/stm32f4-backend.md` records the current narrow backend contract;
-- `docs/osd-usart1-dma.md` records the current OSD prototype and provenance.
+- `docs/osd-usart1-dma.md` records the current OSD prototype and provenance;
+- `docs/backend-unification.md` records which canonical FerroWasp crates the
+  prototype uses and which migrations are intentionally deferred.
 
 Current FerroWasp board status, golden applications, and target evidence remain
 owned by the monorepo root. Inspect those sources and the applicable
