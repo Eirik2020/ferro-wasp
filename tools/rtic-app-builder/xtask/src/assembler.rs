@@ -248,6 +248,7 @@ fn generate<R: CommandRunner + ?Sized>(
         )
     })?;
     validate_manifest(&manifest)?;
+    crate::architecture::validate_for_manifest(repository_root, &manifest)?;
     let mcu_profile = mcu::profile(&manifest.bsp.mcu)?;
     let firmware_target = mcu_profile.rust_target;
     diagnostics::pass("Validating BSP and application manifests");
@@ -1157,6 +1158,7 @@ fn read_builder_inputs(repository_root: &Path) -> Result<Vec<(String, Vec<u8>)>>
         repository_root.join("xtask/Cargo.toml"),
     ];
     collect_regular_files(&repository_root.join("xtask/src"), &mut paths)?;
+    collect_regular_files(&repository_root.join("architecture-contracts"), &mut paths)?;
 
     let mut inputs = Vec::with_capacity(paths.len());
     for path in paths {
@@ -1358,6 +1360,7 @@ mod tests {
             "xtask/Cargo.toml",
             "xtask/src",
             "applications/nucleo-f401re-blinky.toml",
+            "architecture-contracts/nucleo-f401re-blinky.toml",
             "bsp/nucleo-f401re.toml",
             "templates/stm32f4-rtic",
             "feature-library/stm32f4/blink-led",

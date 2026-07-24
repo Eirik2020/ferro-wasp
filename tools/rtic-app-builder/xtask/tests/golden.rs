@@ -80,6 +80,44 @@ fn valid_blink_application_matches_golden_bytes_deterministically() {
     }
 }
 
+#[test]
+fn nucleo_osd_renders_divergent_channel_consumers_and_typed_faults() {
+    let rendered = render_application(&repository_root(), "nucleo-f401re-osd");
+    let main = std::str::from_utf8(
+        rendered
+            .files
+            .get(Path::new("src/main.rs"))
+            .expect("rendered OSD main source"),
+    )
+    .expect("rendered OSD main source is UTF-8");
+    let cargo = std::str::from_utf8(
+        rendered
+            .files
+            .get(Path::new("Cargo.toml"))
+            .expect("rendered OSD Cargo manifest"),
+    )
+    .expect("rendered OSD Cargo manifest is UTF-8");
+
+    for required in [
+        "make_channel!(OsdWork<70>, 4)",
+        "async fn osd_displayport",
+        "async fn usart1_tx_worker",
+        "recv().await",
+        "try_send",
+        "OsdFaultId",
+        "telemetry.snapshot()",
+        "process_work(",
+    ] {
+        assert!(
+            main.contains(required),
+            "rendered OSD source is missing `{required}`"
+        );
+    }
+    assert!(!main.contains("SerialRxTx"));
+    assert!(!main.contains(".spawn().ok()"));
+    assert!(cargo.contains("rtic-sync = \"=1.5.0\""));
+}
+
 fn format_rendered_crate(root: &Path) {
     let output = run_cargo_fmt(&ProcessRunner, root, &root.join("Cargo.toml"), None)
         .expect("start pinned cargo fmt for golden candidate");
@@ -91,7 +129,13 @@ fn format_rendered_crate(root: &Path) {
 }
 
 fn render_valid_blink_application(repository_root: &Path) -> RenderedCrate {
-    let manifest_path = repository_root.join("applications/nucleo-f401re-blinky.toml");
+    render_application(repository_root, "nucleo-f401re-blinky")
+}
+
+fn render_application(repository_root: &Path, application: &str) -> RenderedCrate {
+    let manifest_path = repository_root
+        .join("applications")
+        .join(format!("{application}.toml"));
     let bsp_path = repository_root.join("bsp/nucleo-f401re.toml");
     let manifest =
         manifest::load(&manifest_path, &bsp_path).expect("load valid blink manifest set");

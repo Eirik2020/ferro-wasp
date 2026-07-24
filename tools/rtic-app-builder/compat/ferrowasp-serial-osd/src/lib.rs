@@ -2,7 +2,6 @@
 #![forbid(unsafe_code)]
 
 use ferrowasp_mspv1::{MspOsdTelemetry, MspParser, MspResponder, OSD_TX_BUFFER_LEN};
-use heapless::Deque;
 use stm32f4xx_hal::{
     dma::{
         MemoryToPeripheral, PeripheralToMemory, Stream5, Stream7, Transfer,
@@ -46,7 +45,7 @@ impl OsdTelemetryState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SerialChunk<const N: usize> {
     bytes: [u8; N],
     len: usize,
@@ -70,70 +69,174 @@ impl<const N: usize> SerialChunk<N> {
     }
 }
 
-/// HAL-free boundary consumed by the OSD component and produced/consumed by
-/// the fixed USART1 hardware tasks.
-pub struct SerialRxTx<const N: usize, const RX_DEPTH: usize, const TX_DEPTH: usize> {
-    rx: Deque<SerialChunk<N>, RX_DEPTH>,
-    tx: Deque<SerialChunk<N>, TX_DEPTH>,
-    refresh_pending: bool,
-    pub rx_overflows: u32,
-    pub tx_overflows: u32,
+/// One item delivered to the long-lived OSD consumer task.
+///
+/// The generated NUCLEO application transports this over a bounded
+/// `rtic_sync::channel`. Keeping refresh requests in the same MPSC channel as
+/// RX chunks gives the consumer one loss-aware wake-up mechanism instead of
+/// spawning an already-active RTIC software task.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OsdWork<const N: usize> {
+    Rx(SerialChunk<N>),
+    Refresh,
 }
 
-impl<const N: usize, const RX_DEPTH: usize, const TX_DEPTH: usize>
-    SerialRxTx<N, RX_DEPTH, TX_DEPTH>
-{
-    pub const fn new() -> Self {
-        Self {
-            rx: Deque::new(),
-            tx: Deque::new(),
-            refresh_pending: false,
-            rx_overflows: 0,
-            tx_overflows: 0,
-        }
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FaultSeverity {
+    Warning,
+    Error,
+}
 
-    pub fn publish_rx(&mut self, bytes: &[u8]) {
-        let Some(chunk) = SerialChunk::from_slice(bytes) else {
-            return;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArmingEffect {
+    None,
+    Inhibit,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FaultDefinition {
+    pub id: OsdFaultId,
+    pub name: &'static str,
+    pub severity: FaultSeverity,
+    pub latching: bool,
+    pub arming_effect: ArmingEffect,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OsdFaultId {
+    RxDma,
+    RxWorkQueueFull,
+    RxWorkConsumerClosed,
+    WorkProducersClosed,
+    RefreshQueueFull,
+    TxQueueFull,
+    TxConsumerClosed,
+    TxProducerClosed,
+    TxDma,
+    TxCompletionQueueFull,
+    TxCompletionConsumerClosed,
+    TxCompletionProducerClosed,
+    DebounceSpawnFailed,
+}
+
+impl OsdFaultId {
+    pub const fn definition(self) -> FaultDefinition {
+        let (name, severity) = match self {
+            Self::RxDma => ("serial-rx-dma", FaultSeverity::Error),
+            Self::RxWorkQueueFull => ("serial-rx-overflow", FaultSeverity::Warning),
+            Self::RxWorkConsumerClosed => ("serial-rx-consumer-closed", FaultSeverity::Error),
+            Self::WorkProducersClosed => ("osd-work-producers-closed", FaultSeverity::Error),
+            Self::RefreshQueueFull => ("osd-refresh-overflow", FaultSeverity::Warning),
+            Self::TxQueueFull => ("serial-tx-overflow", FaultSeverity::Warning),
+            Self::TxConsumerClosed => ("serial-tx-consumer-closed", FaultSeverity::Error),
+            Self::TxProducerClosed => ("serial-tx-producer-closed", FaultSeverity::Error),
+            Self::TxDma => ("serial-tx-dma", FaultSeverity::Error),
+            Self::TxCompletionQueueFull => {
+                ("serial-tx-completion-overflow", FaultSeverity::Error)
+            }
+            Self::TxCompletionConsumerClosed => {
+                ("serial-tx-completion-consumer-closed", FaultSeverity::Error)
+            }
+            Self::TxCompletionProducerClosed => {
+                ("serial-tx-completion-producer-closed", FaultSeverity::Error)
+            }
+            Self::DebounceSpawnFailed => ("button-debounce-spawn-failed", FaultSeverity::Error),
         };
-        if self.rx.push_back(chunk).is_err() {
-            self.rx_overflows = self.rx_overflows.saturating_add(1);
+        FaultDefinition {
+            id: self,
+            name,
+            severity,
+            latching: false,
+            // This is a validation-only NUCLEO display path. It has no actuator
+            // authority, so these faults cannot themselves make an arming claim.
+            arming_effect: ArmingEffect::None,
         }
-    }
-
-    pub fn take_rx(&mut self) -> Option<SerialChunk<N>> {
-        self.rx.pop_front()
-    }
-
-    pub fn enqueue_tx(&mut self, bytes: &[u8]) {
-        let Some(chunk) = SerialChunk::from_slice(bytes) else {
-            return;
-        };
-        if self.tx.push_back(chunk).is_err() {
-            self.tx_overflows = self.tx_overflows.saturating_add(1);
-        }
-    }
-
-    pub fn take_tx(&mut self) -> Option<SerialChunk<N>> {
-        self.tx.pop_front()
-    }
-
-    pub fn request_refresh(&mut self) {
-        self.refresh_pending = true;
-    }
-
-    fn take_refresh(&mut self) -> bool {
-        core::mem::take(&mut self.refresh_pending)
     }
 }
 
-impl<const N: usize, const RX_DEPTH: usize, const TX_DEPTH: usize> Default
-    for SerialRxTx<N, RX_DEPTH, TX_DEPTH>
-{
-    fn default() -> Self {
-        Self::new()
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct OsdFaultState {
+    rx_dma: u32,
+    rx_work_queue_full: u32,
+    rx_work_consumer_closed: u32,
+    work_producers_closed: u32,
+    refresh_queue_full: u32,
+    tx_queue_full: u32,
+    tx_consumer_closed: u32,
+    tx_producer_closed: u32,
+    tx_dma: u32,
+    tx_completion_queue_full: u32,
+    tx_completion_consumer_closed: u32,
+    tx_completion_producer_closed: u32,
+    debounce_spawn_failed: u32,
+}
+
+impl OsdFaultState {
+    pub fn record(&mut self, fault: OsdFaultId) {
+        let counter = match fault {
+            OsdFaultId::RxDma => &mut self.rx_dma,
+            OsdFaultId::RxWorkQueueFull => &mut self.rx_work_queue_full,
+            OsdFaultId::RxWorkConsumerClosed => &mut self.rx_work_consumer_closed,
+            OsdFaultId::WorkProducersClosed => &mut self.work_producers_closed,
+            OsdFaultId::RefreshQueueFull => &mut self.refresh_queue_full,
+            OsdFaultId::TxQueueFull => &mut self.tx_queue_full,
+            OsdFaultId::TxConsumerClosed => &mut self.tx_consumer_closed,
+            OsdFaultId::TxProducerClosed => &mut self.tx_producer_closed,
+            OsdFaultId::TxDma => &mut self.tx_dma,
+            OsdFaultId::TxCompletionQueueFull => &mut self.tx_completion_queue_full,
+            OsdFaultId::TxCompletionConsumerClosed => {
+                &mut self.tx_completion_consumer_closed
+            }
+            OsdFaultId::TxCompletionProducerClosed => {
+                &mut self.tx_completion_producer_closed
+            }
+            OsdFaultId::DebounceSpawnFailed => &mut self.debounce_spawn_failed,
+        };
+        *counter = counter.saturating_add(1);
     }
+
+    pub const fn count(&self, fault: OsdFaultId) -> u32 {
+        match fault {
+            OsdFaultId::RxDma => self.rx_dma,
+            OsdFaultId::RxWorkQueueFull => self.rx_work_queue_full,
+            OsdFaultId::RxWorkConsumerClosed => self.rx_work_consumer_closed,
+            OsdFaultId::WorkProducersClosed => self.work_producers_closed,
+            OsdFaultId::RefreshQueueFull => self.refresh_queue_full,
+            OsdFaultId::TxQueueFull => self.tx_queue_full,
+            OsdFaultId::TxConsumerClosed => self.tx_consumer_closed,
+            OsdFaultId::TxProducerClosed => self.tx_producer_closed,
+            OsdFaultId::TxDma => self.tx_dma,
+            OsdFaultId::TxCompletionQueueFull => self.tx_completion_queue_full,
+            OsdFaultId::TxCompletionConsumerClosed => self.tx_completion_consumer_closed,
+            OsdFaultId::TxCompletionProducerClosed => self.tx_completion_producer_closed,
+            OsdFaultId::DebounceSpawnFailed => self.debounce_spawn_failed,
+        }
+    }
+
+    pub fn record_n(&mut self, fault: OsdFaultId, count: u32) {
+        for _ in 0..count {
+            self.record(fault);
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RxServiceResult<const N: usize> {
+    NoData,
+    Chunk(SerialChunk<N>),
+    Fault(OsdFaultId),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TxCompletion {
+    Complete,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TxIrqOutcome {
+    pub completion: Option<TxCompletion>,
+    pub fault: Option<OsdFaultId>,
 }
 
 pub struct Usart1RxDma<const N: usize> {
@@ -168,53 +271,46 @@ impl<const N: usize> Usart1RxDma<N> {
         }
     }
 
-    pub fn service_idle<const RX_DEPTH: usize, const TX_DEPTH: usize>(
-        &mut self,
-        endpoint: &mut SerialRxTx<N, RX_DEPTH, TX_DEPTH>,
-    ) -> bool {
+    pub fn service_idle(&mut self) -> RxServiceResult<N> {
         if !self.transfer.is_idle() {
-            return false;
+            return RxServiceResult::NoData;
         }
         let len = N.saturating_sub(self.transfer.number_of_transfers() as usize);
-        let delivered = self.rotate(len, endpoint);
+        let delivered = self.rotate(len);
         self.transfer.clear_idle_interrupt();
         delivered
     }
 
-    pub fn service_dma<const RX_DEPTH: usize, const TX_DEPTH: usize>(
-        &mut self,
-        endpoint: &mut SerialRxTx<N, RX_DEPTH, TX_DEPTH>,
-    ) -> bool {
+    pub fn service_dma(&mut self) -> RxServiceResult<N> {
         let flags = self.transfer.flags();
         if flags.is_transfer_error() || flags.is_direct_mode_error() || flags.is_fifo_error() {
             self.transfer.clear_all_flags();
-            return false;
+            return RxServiceResult::Fault(OsdFaultId::RxDma);
         }
         if !flags.is_transfer_complete() {
-            return false;
+            return RxServiceResult::NoData;
         }
-        let delivered = self.rotate(N, endpoint);
+        let delivered = self.rotate(N);
         self.transfer.clear_all_flags();
         delivered
     }
 
-    fn rotate<const RX_DEPTH: usize, const TX_DEPTH: usize>(
-        &mut self,
-        len: usize,
-        endpoint: &mut SerialRxTx<N, RX_DEPTH, TX_DEPTH>,
-    ) -> bool {
+    fn rotate(&mut self, len: usize) -> RxServiceResult<N> {
         if len == 0 {
-            return false;
+            return RxServiceResult::NoData;
         }
         let Some(spare) = self.spare.take() else {
-            return false;
+            return RxServiceResult::Fault(OsdFaultId::RxDma);
         };
         let Ok((filled, _)) = self.transfer.next_transfer(spare) else {
-            return false;
+            return RxServiceResult::Fault(OsdFaultId::RxDma);
         };
-        endpoint.publish_rx(&filled[..len.min(N)]);
+        let chunk = SerialChunk::from_slice(&filled[..len.min(N)]);
         self.spare = Some(filled);
-        true
+        match chunk {
+            Some(chunk) => RxServiceResult::Chunk(chunk),
+            None => RxServiceResult::Fault(OsdFaultId::RxDma),
+        }
     }
 }
 
@@ -246,18 +342,12 @@ impl<const N: usize> Usart1TxDma<N> {
         }
     }
 
-    pub fn start_next<const RX_DEPTH: usize, const TX_DEPTH: usize>(
-        &mut self,
-        endpoint: &mut SerialRxTx<N, RX_DEPTH, TX_DEPTH>,
-    ) {
+    pub fn start(&mut self, chunk: SerialChunk<N>) -> Result<(), OsdFaultId> {
         if self.busy {
-            return;
+            return Err(OsdFaultId::TxDma);
         }
-        let Some(chunk) = endpoint.take_tx() else {
-            return;
-        };
         let Some(old) = self.transfer.take() else {
-            return;
+            return Err(OsdFaultId::TxDma);
         };
         let (stream, tx, buffer, _) = old.release();
         buffer.fill(0);
@@ -268,28 +358,41 @@ impl<const N: usize> Usart1TxDma<N> {
         transfer.start(|_| {});
         self.transfer = Some(transfer);
         self.busy = true;
+        Ok(())
     }
 
-    pub fn service_irq<const RX_DEPTH: usize, const TX_DEPTH: usize>(
-        &mut self,
-        endpoint: &mut SerialRxTx<N, RX_DEPTH, TX_DEPTH>,
-    ) {
+    pub fn service_irq(&mut self) -> TxIrqOutcome {
         let Some(transfer) = self.transfer.as_mut() else {
-            return;
+            return TxIrqOutcome {
+                completion: Some(TxCompletion::Failed),
+                fault: Some(OsdFaultId::TxDma),
+            };
         };
         let flags = transfer.flags();
-        if !(flags.is_transfer_complete()
-            || flags.is_transfer_error()
-            || flags.is_direct_mode_error())
-        {
-            if flags.is_fifo_error() {
-                transfer.clear_fifo_error();
-            }
-            return;
+        let terminal_fault = flags.is_transfer_error() || flags.is_direct_mode_error();
+        if flags.is_fifo_error() && !flags.is_transfer_complete() && !terminal_fault {
+            transfer.clear_fifo_error();
+            return TxIrqOutcome {
+                completion: None,
+                fault: Some(OsdFaultId::TxDma),
+            };
+        }
+        if !flags.is_transfer_complete() && !terminal_fault {
+            return TxIrqOutcome::default();
         }
         transfer.clear_all_flags();
         self.busy = false;
-        self.start_next(endpoint);
+        if terminal_fault {
+            TxIrqOutcome {
+                completion: Some(TxCompletion::Failed),
+                fault: Some(OsdFaultId::TxDma),
+            }
+        } else {
+            TxIrqOutcome {
+                completion: Some(TxCompletion::Complete),
+                fault: None,
+            }
+        }
     }
 }
 
@@ -313,52 +416,79 @@ impl OsdComponent {
         }
     }
 
-    pub fn process<const N: usize, const RX_DEPTH: usize, const TX_DEPTH: usize>(
+    /// Processes one channel-delivered work item.
+    ///
+    /// Component state and parsing stay local to the divergent OSD task.
+    /// `enqueue` performs a non-blocking send to the separate TX channel, so
+    /// no RTIC shared-resource lock spans parsing or frame rendering.
+    pub fn process_work<const N: usize, F>(
         &mut self,
-        endpoint: &mut SerialRxTx<N, RX_DEPTH, TX_DEPTH>,
-        telemetry: &OsdTelemetryState,
+        work: OsdWork<N>,
+        telemetry: MspOsdTelemetry,
         output: &mut [u8; OSD_TX_BUFFER_LEN],
-    ) -> bool {
-        self.telemetry = telemetry.snapshot();
+        mut enqueue: F,
+    ) -> u32
+    where
+        F: FnMut(SerialChunk<N>) -> bool,
+    {
+        self.telemetry = telemetry;
         let armed_changed = self.telemetry.armed != self.displayed_armed;
-        let mut queued = false;
-        while let Some(chunk) = endpoint.take_rx() {
-            for byte in chunk.as_slice() {
-                if let Ok(Some(packet)) = self.parser.parse(*byte)
-                    && let Some(len) = self.responder.reply(&packet, &self.telemetry, output)
-                {
-                    endpoint.enqueue_tx(&output[..len]);
-                    queued = true;
+        let mut dropped = 0_u32;
+        match work {
+            OsdWork::Rx(chunk) => {
+                for byte in chunk.as_slice() {
+                    if let Ok(Some(packet)) = self.parser.parse(*byte)
+                        && let Some(len) =
+                            self.responder.reply(&packet, &self.telemetry, output)
+                    {
+                        dropped = dropped.saturating_add(enqueue_output(
+                            output,
+                            len,
+                            &mut enqueue,
+                        ));
+                    }
+                }
+            }
+            OsdWork::Refresh => {
+                if let Some(len) = self.responder.heartbeat(output) {
+                    dropped = dropped.saturating_add(enqueue_output(
+                        output,
+                        len,
+                        &mut enqueue,
+                    ));
+                }
+                if armed_changed {
+                    let text: &[u8] = if self.telemetry.armed {
+                        b"ARMED"
+                    } else {
+                        b"DISARMED"
+                    };
+                    if let Some(len) = self.responder.write_string(2, 2, 0, text, output) {
+                        dropped = dropped.saturating_add(enqueue_output(
+                            output,
+                            len,
+                            &mut enqueue,
+                        ));
+                    }
+                    if let Some(len) = self.responder.draw_screen(output) {
+                        dropped = dropped.saturating_add(enqueue_output(
+                            output,
+                            len,
+                            &mut enqueue,
+                        ));
+                    }
+                    self.displayed_armed = self.telemetry.armed;
+                }
+                if let Some(len) = self.next_overlay_frame(output) {
+                    dropped = dropped.saturating_add(enqueue_output(
+                        output,
+                        len,
+                        &mut enqueue,
+                    ));
                 }
             }
         }
-        if endpoint.take_refresh() {
-            if let Some(len) = self.responder.heartbeat(output) {
-                endpoint.enqueue_tx(&output[..len]);
-                queued = true;
-            }
-            if armed_changed {
-                let text: &[u8] = if self.telemetry.armed {
-                    b"ARMED"
-                } else {
-                    b"DISARMED"
-                };
-                if let Some(len) = self.responder.write_string(2, 2, 0, text, output) {
-                    endpoint.enqueue_tx(&output[..len]);
-                    queued = true;
-                }
-                if let Some(len) = self.responder.draw_screen(output) {
-                    endpoint.enqueue_tx(&output[..len]);
-                    queued = true;
-                }
-                self.displayed_armed = self.telemetry.armed;
-            }
-            if let Some(len) = self.next_overlay_frame(output) {
-                endpoint.enqueue_tx(&output[..len]);
-                queued = true;
-            }
-        }
-        queued
+        dropped
     }
 
     // Ported from FerroWasp's OsdTask::next_overlay_frame. One bounded frame
@@ -416,6 +546,20 @@ impl OsdComponent {
         self.overlay_step = (self.overlay_step + 1) % 15;
         len
     }
+}
+
+fn enqueue_output<const N: usize, F>(
+    output: &[u8; OSD_TX_BUFFER_LEN],
+    len: usize,
+    enqueue: &mut F,
+) -> u32
+where
+    F: FnMut(SerialChunk<N>) -> bool,
+{
+    let Some(chunk) = SerialChunk::from_slice(&output[..len.min(output.len())]) else {
+        return 1;
+    };
+    u32::from(!enqueue(chunk))
 }
 
 fn copy_text(output: &mut [u8], text: &[u8]) {
@@ -499,5 +643,68 @@ fn write_u16(output: &mut [u8], value: u16) -> usize {
 impl Default for OsdComponent {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use std::vec::Vec;
+
+    use super::*;
+
+    #[test]
+    fn fault_sink_counts_typed_faults_without_aliasing() {
+        let mut faults = OsdFaultState::default();
+        faults.record(OsdFaultId::RxWorkQueueFull);
+        faults.record(OsdFaultId::RxWorkQueueFull);
+        faults.record(OsdFaultId::TxDma);
+
+        assert_eq!(faults.count(OsdFaultId::RxWorkQueueFull), 2);
+        assert_eq!(faults.count(OsdFaultId::TxDma), 1);
+        assert_eq!(faults.count(OsdFaultId::TxQueueFull), 0);
+        assert_eq!(
+            OsdFaultId::RxWorkQueueFull.definition().arming_effect,
+            ArmingEffect::None
+        );
+    }
+
+    #[test]
+    fn refresh_emits_bounded_frames_without_shared_endpoint_state() {
+        let mut component = OsdComponent::new();
+        let mut output = [0_u8; OSD_TX_BUFFER_LEN];
+        let mut frames = Vec::new();
+
+        let dropped = component.process_work(
+            OsdWork::<OSD_TX_BUFFER_LEN>::Refresh,
+            MspOsdTelemetry::default(),
+            &mut output,
+            |frame| {
+                frames.push(frame);
+                true
+            },
+        );
+
+        assert_eq!(dropped, 0);
+        assert!(!frames.is_empty());
+        assert!(frames
+            .iter()
+            .all(|frame| !frame.as_slice().is_empty() && frame.as_slice().len() <= 70));
+    }
+
+    #[test]
+    fn rejected_tx_frames_are_returned_as_a_bounded_drop_count() {
+        let mut component = OsdComponent::new();
+        let mut output = [0_u8; OSD_TX_BUFFER_LEN];
+
+        let dropped = component.process_work(
+            OsdWork::<OSD_TX_BUFFER_LEN>::Refresh,
+            MspOsdTelemetry::default(),
+            &mut output,
+            |_| false,
+        );
+
+        assert!(dropped > 0);
     }
 }

@@ -343,7 +343,7 @@ The prototype also exposed the next required abstractions:
 - the UART-DMA provider and MSP DisplayPort consumer are internally separated
   but still packaged in one feature bundle;
 - exclusive resource claims and `required_symbols` do not yet express typed
-  capability classes and directed port roles;
+  interaction/safety classifications and directed port roles;
 - the serial queues do not yet carry canonical FerroWasp discontinuity,
   completion, timestamp, generation, and UART-error metadata;
 - TX is protocol-buffer-sized rather than a generic length-aware DMA service;
@@ -409,7 +409,7 @@ this focused model must preserve these dependencies:
   `ResolvedApplication`, not as another board-authoring input;
 - define `PlatformConfigV1`, `ActivePlatformConfig`, stable endpoint IDs, and
   their compatibility/versioning rules before enabling runtime assignment;
-- establish typed capability classes and directed port roles before routing
+- establish typed interaction/safety classifications and directed port roles before routing
   functional consumers;
 - validate configuration, resource conflicts, recovery, and vehicle geometry
   as complete objects;

@@ -22,19 +22,17 @@ canonical migration sequence and target schemas are in
 - **Endpoint** — a concrete hardware-facing instance, such as USART1 on
   PA9/PA10 with DMA2 streams 5/7, USART6 RX DMA, or ADC1 channel 3.
 - **Capability** — a typed semantic contract between components and
-  endpoints. Its class and each port's explicit role describe direction and
-  responsibility without transferring ownership of the underlying
-  peripheral.
+  endpoints. Interaction kind, safety class, and port role are independent;
+  none transfers ownership of the underlying peripheral.
 
 A UART can appear to be both a component and an endpoint, so the level of
 description matters. The reusable UART RX/TX DMA implementation is a
 component. Once instantiated with a peripheral, pins, DMA streams, buffers,
-and interrupts, it is an endpoint. The current prototype exposes that boundary
-through the concrete `SerialRxTx` Rust type; OSD uses it without knowing
-whether a future compatible boundary is backed by USART1, USART6, or another
-endpoint. Target metadata represents the two directions explicitly: RX chunks
-are published/consumed as critical data, while TX requests are emitted/handled
-as requests.
+and interrupts, it is an endpoint. The current compatibility implementation
+is honestly USART1-specific. It exposes separate work, TX, and completion
+channel edges instead of a broad bidirectional shared object. A future generic
+endpoint facade must make its concrete endpoint types recipe outputs before it
+claims multi-UART multiplicity.
 
 Use these terms consistently in manifests and generator diagnostics:
 
@@ -65,10 +63,11 @@ The demonstrated path is:
 
 ```text
 USART1 RX/IDLE and DMA tasks
-    -> bounded SerialRxTx Rust boundary
-        -> MSP/DisplayPort component task
-            -> bounded SerialRxTx Rust boundary
-                -> USART1 TX DMA tasks
+    -> bounded MPSC work channel
+        -> divergent MSP/DisplayPort task
+            -> bounded SPSC TX channel
+                -> divergent TX worker
+                    <- SPSC completion channel <- USART1 TX DMA task
 
 B1 EXTI task -> monotonic debounce task -> OSD telemetry capability
 ```
@@ -167,12 +166,16 @@ limitation, not the target manifest ownership model.
 
 ## Capability contracts
 
-Target component metadata grows from collision-only claims into typed ports:
+The NUCLEO architecture contracts now make the previously prose-only
+concurrency rules executable. Future component metadata grows from
+collision-only claims into the same typed concepts:
 
-- capability class plus explicit role such as publish/consume,
-  emit-request/handle-request, offer/use, or grant/receive authority;
-- type/ABI revision, cardinality, capacity, relevant semantics, and whether the
-  port is mandatory;
+- interaction kind, independent safety classification, and explicit port role;
+- type/ABI revision, logical cardinality, transport producer/consumer
+  cardinality, delivery semantics, and whether the port is mandatory;
+- exact SPSC, MPSC, latest-value, journal, same-task-direct, or service
+  transport semantics;
+- per-edge transport ownership where every consumer must receive a value;
 - exclusive physical claims: pins, peripherals, DMA routes, and interrupts;
 - scheduling requirements: task priorities, dispatchers, timer/monotonic use,
   and maximum critical-section expectations.
@@ -184,8 +187,6 @@ than one instance of the same component.
 
 ## Prototype limitations to resolve
 
-- Split `SerialRxTx` into producer/consumer handles so independent tasks do
-  not share one broad RTIC lock.
 - Carry FerroWasp's RX metadata: completion reason, discontinuity/generation,
   timestamp, and UART error state.
 - Make TX DMA transfers length-aware rather than treating a protocol-sized
@@ -213,11 +214,13 @@ reference. The authoring checklist is recorded in `authoring/README.md`. The
 canonical reference plan owns implementation ordering. The prototype implies
 these migration requirements:
 
-1. Verify/freeze the existing byte-compared blinky golden and add the missing
-   OSD structural/golden migration fixture.
-2. Define the constrained renderer invocation and initialization contract.
+1. Keep the byte-compared blinky golden and add a byte-compared or structural
+   OSD migration fixture.
+2. Lift the checked NUCLEO transport/task contracts into the provisional
+   renderer-facing IR without weakening their semantics.
 3. Model USART1 RX/TX DMA ownership as a self-contained endpoint component.
-4. Model MSP DisplayPort as a software consumer with directed RX/TX ports.
+4. Model MSP DisplayPort as a divergent software consumer with directed RX/TX
+   ports.
 5. Add instance-safe names, exact physical claims, and complete task/resource
    access metadata.
 6. Port canonical FerroWasp chunk metadata, overflow behavior, and fault

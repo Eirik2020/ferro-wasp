@@ -72,9 +72,10 @@ UART-DMA endpoint component
         MSP reads OsdTelemetry observations published by explicit state owners
 ```
 
-The compatibility prototype implements these two directions through one
-concrete `SerialRxTx` Rust type. Target metadata keeps direction and
-responsibility explicit.
+The compatibility prototype implements these directions with separate bounded
+work, TX, and TX-completion channels. Telemetry is a copied latest-value
+snapshot. Target metadata keeps interaction kind, safety classification,
+direction, and transport topology explicit.
 
 ## Configuration ownership
 
@@ -189,7 +190,10 @@ constraints.
 - RX DMA2 stream 5 and TX DMA2 stream 7;
 - separate static DMA buffers and bounded RX/TX queues;
 - hardware tasks own USART1, DMA, buffers, and interrupts;
-- the OSD component consumes `SerialRxTx` and does not own USART1;
+- RX IDLE and RX-DMA tasks publish to one bounded MPSC work channel;
+- divergent OSD and TX-worker tasks are spawned once and await channels;
+- TX-DMA completion uses a separate capacity-one SPSC channel;
+- the OSD component does not own USART1 and processes outside RTIC locks;
 - periodic DisplayPort rendering through the shared monotonic;
 - a debounced button toggles demonstration `ARMED`/`DISARMED` display state.
 
@@ -200,7 +204,10 @@ boot router applies persisted platform configuration.
 ## Architectural invariants
 
 - Every HAL/PAC peripheral and interrupt has one clear static owner.
-- Queues, buffers, and task capacity are statically bounded.
+- Queues and buffers are statically bounded; payload buffering belongs to
+  transports, not RTIC software-task spawn capacity.
+- Destructive queues never imply fan-out; topology and delivery semantics are
+  explicit.
 - Overflow, malformed input, timeout, and hardware-error behavior must be
   explicit.
 - Capabilities should not expose concrete HAL/PAC types to functional
@@ -227,8 +234,8 @@ boot router applies persisted platform configuration.
 
 The following are directions, not completed functionality:
 
-- typed capability classes, directed port roles, cardinality, and
-  compatibility metadata;
+- lifting the checked NUCLEO interaction/safety, directed-port, topology, task,
+  fault, and backend-recipe contracts into the general component schema;
 - splitting the combined UART-DMA/OSD feature bundle into an independently
   valid endpoint provider and software consumer;
 - boot-time endpoint routing from persisted platform configuration;
@@ -254,7 +261,7 @@ ownership, bench-test, and promote only after explicit applicable validation.
 
 When adding SBUS, CRSF, or another protocol, follow the capability, endpoint,
 component, composition, and testing guides established by the canonical plan.
-Every new unit should state ownership, capability classes and port roles, RTIC
+Every new unit should state ownership, interaction and safety classes, port roles, RTIC
 tasks, physical claims, memory bounds, error/overflow behavior, configuration
 ownership, multi-instance behavior, and its automated/hardware tests.
 

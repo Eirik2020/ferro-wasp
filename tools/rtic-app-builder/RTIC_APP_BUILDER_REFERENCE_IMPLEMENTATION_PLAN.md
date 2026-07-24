@@ -8,7 +8,7 @@
 **Document type:** Reference implementation plan  
 **Baseline date:** 24 July 2026  
 **Classification:** Internal project planning source; review before public publication  
-**Status:** Proposed implementation baseline derived from an external planning source and current monorepo evidence
+**Status:** Accepted working baseline; public schema remains provisional pending full NUCLEO renderer-contract proof
 **Primary implementation horizon:** Immediate work through approximately 24 months, followed by long-term product maturation
 
 > This plan is an implementation specification, not evidence that any described feature is already implemented, flight-ready, certified, or assurance-approved. Current repository code, tests, accepted architecture decisions, and target evidence remain authoritative.
@@ -60,7 +60,19 @@ The implementation baseline includes these corrections:
 - define a constrained renderer-facing invocation and initialization contract
   before freezing schema v0.1;
 - keep catalogue files declarative and prohibit arbitrary Rust fragments;
-- distinguish capability semantic class from the role of each port;
+- separate interaction kind, port role, and safety classification;
+- assign destructive transports per edge and prohibit implicit queue fan-out;
+- use precise SPSC/MPSC/latest-value/journal/direct/service transports;
+- model RTIC 2 hardware, divergent consumer, periodic, and delayed one-shot
+  task forms without spawn-queue payload assumptions;
+- delegate wake-up correctness to tested channel adapters;
+- separate build rejection from boot initialization and runtime failures;
+- use typed fault catalogues and typed/versioned backend recipe signatures;
+- separate physical board facts from backend selection/scheduling policy;
+- permit overlapping unselected endpoint alternatives while rejecting
+  conflicts in the resolved application;
+- keep parsing/rendering outside long RTIC shared locks;
+- apply actuator-owner rules according to application safety scope;
 - use exact component versions in the near term;
 - separate semantic composition identity, exact input identity, and build
   provenance;
@@ -72,6 +84,13 @@ The implementation baseline includes these corrections:
 - gate F405 work on pinned access to canonical FerroWasp sources and APIs;
 - deliver the NUCLEO builder core as a milestone independent of the later F405
   candidate.
+
+The current NUCLEO implementation is executable evidence for these corrections,
+not the final general schema. Strict contracts in `architecture-contracts/`
+are validated before rendering. The blinky and USART1 DMA/MSP DisplayPort
+applications compile and link with explicit RTIC 2 task forms, bounded
+channels, latest-value telemetry snapshots, typed runtime faults, explicit
+boot-spawn failure handling, and versioned backend-mechanism declarations.
 
 ---
 
@@ -133,8 +152,14 @@ The builder must therefore reject any resolved graph where:
 - more than one component provides physical actuation authority;
 - a non-approved component receives an `Authority<T>` capability;
 - an observer can provide, mutate, or directly invoke actuation;
-- experimental components claim motor peripherals, safety authority, or critical hardware interrupts;
+- experimental components claim resources protected by the selected profile's
+  explicit `ProtectedResourcePolicy`;
 - a configuration or maintenance component can bypass the safety-owned actuator path.
+
+Maturity alone does not make an interrupt or peripheral protected. The
+profile/backend policy explicitly lists protected motor outputs, authority
+ports, interrupts, and peripherals. Actuator-owner cardinality is enforced
+according to application safety scope, not imposed on validation targets.
 
 ### 2.2 Static ownership
 
@@ -236,7 +261,7 @@ The first vertical slice is deliberately UART-DMA endpoint plus MSP consumer bec
 
 The mid-term implementation shall add:
 
-- complete typed capability classes;
+- complete typed interaction, safety, role, and transport contracts;
 - deterministic dependency closure;
 - repeated component instances;
 - application-wide priority and dispatcher allocation;
@@ -441,7 +466,6 @@ pub struct BoardDefinition {
     pub schema_version: SchemaVersion,
     pub id: BoardId,
     pub family: PlatformFamilyId,
-    pub backend: BackendId,
     pub mcu: McuId,
     pub revision: Option<String>,
     pub clocks: ClockDefinition,
@@ -453,9 +477,16 @@ pub struct BoardDefinition {
     pub timers: BTreeMap<TimerResourceId, TimerDefinition>,
     pub fitted_devices: BTreeMap<DeviceId, FittedDevice>,
     pub endpoint_slots: BTreeMap<EndpointSlotId, EndpointSlot>,
-    pub dispatcher_candidates: Vec<InterruptId>,
     pub reserved_resources: BTreeSet<PhysicalResourceId>,
+    pub unavailable_interrupts: BTreeSet<InterruptId>,
     pub metadata: BoardMetadata,
+}
+
+pub struct BoardBackendTarget {
+    pub board: BoardId,
+    pub backend: BackendId,
+    pub endpoint_realizations: BTreeMap<EndpointSlotId, BackendEndpointRealization>,
+    pub dispatcher_preference: Vec<InterruptId>,
 }
 ```
 
@@ -465,9 +496,14 @@ Important distinction:
 - Application profiles select endpoint/component instances.
 - Platform configuration may later select a boot-frozen protocol role among already compiled compatible roles.
 - Runtime configuration never changes physical ownership.
-- `dispatcher_candidates` is an explicitly ordered allowlist. Every candidate
-  also appears in `interrupts`, and the resolver rejects candidates that are
-  reserved or claimed by hardware tasks.
+- Board validation checks each endpoint slot internally. Alternative slots may
+  overlap pins, peripherals, DMA routes, timer channels, or interrupts because
+  they are not simultaneously selected.
+- Resolved-application validation rejects conflicts among the selected
+  exclusive claims.
+- The board records physical interrupt facts. The selected
+  `BoardBackendTarget` records deterministic dispatcher preference and
+  backend-specific endpoint compatibility.
 
 ### 5.3 Application profile
 
@@ -476,7 +512,8 @@ pub struct ApplicationProfile {
     pub schema_version: SchemaVersion,
     pub id: ApplicationId,
     pub board: BoardId,
-    pub backend: Option<BackendId>,
+    pub backend_target: BoardBackendTargetId,
+    pub safety_scope: ApplicationSafetyScope,
     pub components: Vec<ComponentInstanceRequest>,
     pub explicit_connections: Vec<ConnectionRequest>,
     pub scheduling_classes: BTreeMap<SchedulingClassId, Priority>,
@@ -485,6 +522,13 @@ pub struct ApplicationProfile {
     pub policies: ApplicationPolicies,
     pub feature_flags: BTreeSet<FeatureId>,
     pub build_profile: BuildProfileId,
+}
+
+pub enum ApplicationSafetyScope {
+    Validation,
+    Bench,
+    Flight,
+    Simulator,
 }
 
 pub struct CapacitySelection {
@@ -505,6 +549,11 @@ Application profile owns:
 - policy restrictions.
 
 It does not own board physical facts.
+
+Validation and bench profiles may have no actuator owner. Flight profiles
+require exactly one approved actuator owner and authority path, plus declared
+freshness and safe-state inputs. The two NUCLEO references are explicitly
+`Validation`.
 
 ### 5.4 Component definition
 
@@ -573,28 +622,38 @@ supplies typed component behavior settings. They are separate namespaces;
 unknown, duplicate, missing-required, or wrong-kind entries are errors before
 candidate instantiation.
 
-### 5.5 Capability classes
+### 5.5 Capability interaction, safety, and transport
+
+Interaction semantics and safety classification are independent dimensions.
+A stream may be non-critical OSD traffic or safety-critical RC input; a
+request may also be safety-critical. The canonical IR therefore records both:
 
 ```rust
-pub enum CapabilityClass {
+pub enum InteractionKind {
     Authority,
-    Critical,
+    Stream,
     Request,
-    Observe,
-    ObserveEvent,
+    Snapshot,
+    EventJournal,
     Service,
+}
+
+pub enum SafetyClass {
+    SafetyCritical,
+    SafetyRelated,
+    NonCritical,
+    ObservationOnly,
 }
 ```
 
-A capability class describes semantics, not the direction of a component
-port. Direction and responsibility are represented separately:
+Direction and responsibility are represented separately on each port:
 
 ```rust
 pub enum CapabilityPortRole {
     GrantAuthority,
     ReceiveAuthority,
-    PublishCritical,
-    ConsumeCritical,
+    PublishStream,
+    ConsumeStream,
     EmitRequest,
     HandleRequest,
     PublishObservation,
@@ -612,27 +671,29 @@ pub struct CapabilityPortDefinition {
     pub role: CapabilityPortRole,
     pub cardinality: Cardinality,
     pub required: bool,
-    pub transport: Option<CapabilityTransportTemplate>,
+    pub allowed_transports: BTreeSet<TransportKind>,
 }
 
-pub enum CapabilityTransportTemplate {
-    BoundedQueue {
-        resource: ResourceTemplateId,
-    },
-    Direct,
+pub enum TransportKind {
+    SpscQueue,
+    MpscQueue,
+    LatestValue,
+    EventJournal,
+    SameTaskDirect,
+    SynchronousService,
 }
 ```
 
 A capability key shall include:
 
-- class;
+- interaction kind;
 - semantic type ID;
 - version;
 - optional instance/domain qualifier;
 
 ```rust
 pub struct CapabilityKey {
-    pub class: CapabilityClass,
+    pub interaction: InteractionKind,
     pub type_id: CapabilityTypeId,
     pub version: CapabilityVersion,
     pub domain: Option<String>,
@@ -648,33 +709,66 @@ pub struct CapabilityTypeDefinition {
     pub version: CapabilityVersion,
     pub payload: RustTypeTemplate,
     pub parameters: Vec<TypeParameterDefinition>,
-    pub allowed_transports: BTreeSet<CapabilityTransportKind>,
+    pub allowed_transports: BTreeSet<TransportKind>,
 }
 ```
 
 `RustTypeTemplate` is a validated path plus typed generic/const parameters,
 not a format string. Every resolved capability records the fully instantiated
-payload type, adapter type, transport, capacity/overflow contract, and owner,
-so rendering never looks the semantic ID up again.
+payload type and adapter type. Every `ResolvedConnection` also records its
+safety class and an exact transport instance:
 
-Connection rules:
+```rust
+pub struct ResolvedTransport {
+    pub id: TransportId,
+    pub kind: TransportKind,
+    pub producers: Vec<CapabilityPortId>,
+    pub consumers: Vec<CapabilityPortId>,
+    pub capacity: Option<NonZeroUsize>,
+    pub overflow: Option<OverflowPolicy>,
+    pub wakeup: WakeupSemantics,
+    pub freshness: FreshnessSemantics,
+    pub blocking: BlockingSemantics,
+    pub fault: Option<FaultId>,
+}
 
-| Class | Source role | Destination role | Fan-out | Missing required port |
-|---|---|---|---|---|
-| `Authority<T>` | exactly one `GrantAuthority` unless excluded by policy | normally exactly one approved `ReceiveAuthority` | prohibited by default | error |
-| `Critical<T>` | exactly one `PublishCritical` unless an explicit aggregator exists | one or more explicit `ConsumeCritical` ports | no automatic fan-out | error |
-| `Request<T>` | one or more `EmitRequest` ports | exactly one selected `HandleRequest` owner | explicit | error |
-| `Observe<T>` | exactly one `PublishObservation` writer | zero or more `ReadObservation` readers | allowed | allowed unless reader is required |
-| `ObserveEvent<T>` | exactly one `AppendObservationEvent` journal owner or explicit aggregator | zero or more `ReadObservationEvent` readers | allowed and bounded | allowed unless reader is required |
-| `Service<T>` | exactly one selected `OfferService` provider | one or more `UseService` clients | explicit or uniquely inferred | error |
+pub struct ResolvedConnection {
+    pub source: CapabilityPortId,
+    pub destination: CapabilityPortId,
+    pub interaction: InteractionKind,
+    pub safety: SafetyClass,
+    pub transport: TransportId,
+}
+```
 
-The resolver must never infer an authority connection solely because types match. Authority edges must be explicitly declared or introduced by a narrowly defined core policy that is visible in the resolved graph.
+Transport topology is explicit. One SPSC queue has exactly one producer and
+one consumer. One MPSC queue has one consumer. Destructive queues never imply
+fan-out: multiple consumers require one transport per connection, an explicit
+multicast component, a latest-value snapshot, or a journal with independent
+reader cursors. `SameTaskDirect` is legal only when both endpoints execute in
+the same task invocation and require no RTIC lock or blocking operation.
 
-For the first UART/MSP slice, the role that owns a bounded transport declares
-its backing resource: `PublishCritical` owns the RX queue and `HandleRequest`
-owns the TX queue. Connected consumer/emitter ports reuse that resolved
-transport and must not declare a second queue. Queue capacity, overflow,
-wake-up, and fault behavior therefore have one explicit owner.
+Each transport definition states producer and consumer cardinality, ownership,
+capacity, overflow, wake-up, freshness, blocking, execution-context
+restrictions, and fault propagation. Queue capacity belongs to the transport,
+not an RTIC software-task spawn queue.
+
+The resolver must never infer an authority connection solely because types
+match. Authority edges must be explicitly declared or introduced by a narrowly
+defined core policy that is visible in the resolved graph.
+
+For the implemented NUCLEO OSD slice:
+
+- USART1 IDLE and RX-DMA interrupt tasks are two producers of one MPSC work
+  channel consumed by the divergent OSD task;
+- the OSD task is the sole producer and the divergent TX worker is the sole
+  consumer of an SPSC TX channel;
+- the TX-DMA interrupt task and TX worker use a separate SPSC completion
+  channel;
+- telemetry is a latest-value snapshot, copied under a short RTIC lock before
+  parsing or rendering;
+- every channel has an explicit bounded capacity, overflow policy, wake-up
+  semantics, and typed fault.
 
 Schema fields may use concise names such as `emits`, `handles`, `publishes`, or
 `reads`, but they must deserialize into the explicit port roles above.
@@ -717,30 +811,46 @@ pub struct TaskTemplate {
     pub capability_bindings: Vec<TaskCapabilityBinding>,
     pub lock_groups: Vec<LockGroupTemplate>,
     pub spawn_inputs: Vec<SpawnInput>,
-    pub capacity: Option<CapacityRequirement>,
     pub execution: TaskExecutionTemplate,
 }
 
 pub enum TaskExecutionTemplate {
-    OneShot,
-    AsyncPeriodicLoop {
-        period: DurationRequirement,
-    },
+    HardwareRunToCompletion,
+    AsyncOneShot,
+    AsyncDivergentConsumer { receive_port: CapabilityPortId },
+    AsyncPeriodic { schedule: PeriodicSchedule },
+    AsyncDelayedOneShot { delay: DurationRequirement },
 }
 
-pub enum TaskCapabilityBinding {
-    Adapter {
-        port: CapabilityPortId,
-    },
-    WakeOnDelivery {
-        port: CapabilityPortId,
-        policy: WakePolicy,
-    },
+pub struct PeriodicSchedule {
+    pub period: DurationRequirement,
+    pub phase: Option<DurationRequirement>,
+    pub mode: PeriodicMode,
+    pub missed_release: MissedReleasePolicy,
 }
 
-pub enum WakePolicy {
-    CoalesceWhilePending,
-    FaultOnFull { fault: FaultId },
+pub enum PeriodicMode {
+    FixedRate,
+    FixedDelay,
+}
+
+pub enum MissedReleasePolicy {
+    SkipToNext,
+    RunOnceAndRebase,
+    RecordFaultAndContinue,
+    RecordFaultAndStop,
+}
+
+pub struct TaskCapabilityBinding {
+    pub port: CapabilityPortId,
+    pub transport: TransportId,
+    pub borrow_scope: BorrowScope,
+}
+
+pub enum BorrowScope {
+    Invocation,
+    PreInvokeCopy,
+    PostInvokeCommit,
 }
 
 pub struct LockGroupTemplate {
@@ -754,11 +864,14 @@ pub enum LockMemberTemplate {
 }
 ```
 
-Every one-shot task activation performs exactly one declared implementation
-invocation. An `AsyncPeriodicLoop` performs that same bounded invocation once
-per declared period inside one generated RTIC async loop. Lock acquisition,
-argument borrowing, fixed outcome handling, and spawning are generated from
-typed metadata:
+Hardware tasks run to completion. Divergent consumers are spawned exactly
+once during initialization and await their bounded transport in a loop;
+producers send data through the transport rather than respawning an active
+software task. Periodic tasks define fixed-rate versus fixed-delay timing,
+initial phase, and missed-release behavior. Delayed one-shot tasks model
+debounce and similar work without borrowing RTIC 1 spawn-queue semantics.
+Lock acquisition, argument borrowing, fixed outcome handling, and spawning are
+generated from typed metadata:
 
 ```rust
 pub struct TaskInvocationTemplate {
@@ -785,7 +898,7 @@ pub enum OutcomeActionTemplate {
         outcome: OutcomeVariantId,
         fault: FaultId,
     },
-    WakePortOn {
+    SendPortOn {
         outcome: OutcomeVariantId,
         port: CapabilityPortId,
     },
@@ -809,20 +922,26 @@ actions above. Catalogue metadata cannot contain expressions, statements,
 closure bodies, or arbitrary Rust.
 
 The external schema serializes invocation arguments as tagged records in
-their call order. `Adapter` passes a direction-appropriate generated
-capability adapter to an entrypoint. `WakeOnDelivery` schedules a consumer to
-drain its bounded adapter without putting the payload in the RTIC spawn
-queue. Its `WakePolicy` explicitly distinguishes coalescing an already-pending
-wake-up from a fault. Data loss remains governed by the capability queue's
-overflow contract. A task's declared local/shared resources, capability
+their call order. A task's declared local/shared resources, capability
 bindings, lock groups, and spawn inputs must exactly cover the references used
 by its invocation; unused or undeclared references are schema errors.
 
+The renderer must not synthesize a queue-plus-pending wake protocol.
+Wake-up correctness belongs to a pinned, tested channel or adapter
+implementation. The NUCLEO reference uses divergent `rtic-sync` channel
+receivers; hardware tasks use nonblocking `try_send`, and channel closure or
+overflow is converted to a typed runtime fault. This removes the
+enqueue/drain/pending-clear lost-wakeup race from generated code.
+
 Each lock group is ordered and rendered as one RTIC tuple lock. Every mutable
 shared-resource or capability-adapter argument belongs to exactly one group
-unless its validated type supports independent access. This makes the paired
-locks used by the current UART-DMA wrappers explicit rather than a
-renderer-specific inference.
+unless its validated type supports independent access. Invocation-wide locks
+are permitted only for facade methods whose bounded critical-section duration
+is part of their contract. Prefer `PreInvokeCopy` and `PostInvokeCommit`;
+parsing, protocol handling, and rendering must occur outside RTIC shared
+locks. A `read` declaration is not assumed lock-free: the resolved access is
+classified as immutable, RTIC-shared mutable, copied snapshot, or a verified
+lock-free primitive.
 
 The resolved task contains exact:
 
@@ -832,7 +951,6 @@ The resolved task contains exact:
 - numeric priority;
 - dispatcher if software task;
 - local/shared resource names;
-- capacity;
 - period;
 - spawn edges;
 - resolved implementation entrypoint and ordered arguments;
@@ -969,6 +1087,7 @@ values without introducing hidden backend temporaries.
 pub enum ResolvedInitOperation {
     BackendPrepare {
         recipe: BackendRecipeId,
+        version: BackendRecipeVersion,
         inputs: Vec<ResolvedValueRef>,
         outputs: Vec<ResolvedValueId>,
     },
@@ -976,6 +1095,8 @@ pub enum ResolvedInitOperation {
         function: RustPath,
         arguments: Vec<ResolvedValueRef>,
         outputs: Vec<ResolvedValueId>,
+        return_contract: ConstructorReturnContract,
+        failure: Option<BootInitializationFailure>,
     },
     ConstructValue {
         rust_type: ResolvedRustType,
@@ -989,16 +1110,64 @@ pub enum ResolvedInitOperation {
 }
 ```
 
+Backend recipes have typed, versioned signatures and are restricted to
+backend mechanisms:
+
+```rust
+pub struct BackendRecipeDefinition {
+    pub id: BackendRecipeId,
+    pub version: BackendRecipeVersion,
+    pub mechanism: BackendMechanism,
+    pub inputs: Vec<TypedRecipeSlot>,
+    pub outputs: Vec<TypedRecipeSlot>,
+    pub physical_claims: Vec<PhysicalClaimKind>,
+}
+```
+
+Clock preparation, GPIO-bank splitting, physical UART/DMA construction,
+monotonic construction, DMA-accessible storage, and interrupt/peripheral
+configuration are backend mechanisms. Generic queues, snapshots, journals,
+fault storage, and constants use closed backend-independent operations. A
+recipe ID is never an untyped escape hatch.
+
+Static resolution/generation/compilation failures and boot failures are
+different phases:
+
+```rust
+pub enum BuildFailurePolicy {
+    RejectResolution,
+    RejectGeneration,
+    RejectCompilation,
+}
+
+pub enum BootInitializationFailurePolicy {
+    EnterMaintenanceMode,
+    InhibitArming,
+    RecordFaultAndDegrade,
+    Reset,
+    Panic,
+}
+```
+
+Every fallible constructor records its exact return shape, error conversion,
+fault sink, partial-initialization behavior, continuation policy, and arming
+effect. Infallible initialization spawns in the NUCLEO validation apps use an
+explicit panic/halt if the declared once-at-boot invariant is violated;
+runtime queue, DMA, and delayed-spawn failures are recorded through typed fault
+state instead.
+
 Rules:
 
-- `BackendRecipeId` selects a recipe implemented and tested by the selected
-  platform backend, such as clock preparation, GPIO-bank splitting, or a
-  typed UART-DMA endpoint constructor. It is not a Rust snippet.
+- `BackendRecipeId` and `BackendRecipeVersion` select a typed signature
+  implemented and tested by the selected platform backend. The resolver
+  validates all input/output slots and physical claims before rendering. It is
+  not a Rust snippet.
 - Adding a recipe requires a backend contract change, renderer support,
   focused tests, and a schema/compatibility decision.
 - `CallConstructor` calls a validated normal Rust item using only resolved
   arguments and records all returned values. Its `function` path must come
-  from the component's validated constructor map.
+  from the component's validated constructor map, and its return/failure
+  contract must be complete.
 - `ConstructorKind` is a closed set for mechanically constructible values,
   such as `Default` or a zeroed fixed-size array where the resolved type makes
   that operation valid. Named associated or free constructors use
@@ -1020,6 +1189,34 @@ prototypes. The latter includes the arm-button/debounce tasks, shared
 UART-DMA/MSP core shown in section 6. If the operation set cannot represent
 that topology, extend the closed structural model or improve the
 implementation-crate facade; do not add an escape hatch for arbitrary Rust.
+
+### 5.8.2 Fault model
+
+Fault IDs resolve through a typed catalogue; renderer actions never operate on
+an unvalidated string:
+
+```rust
+pub struct FaultDefinition {
+    pub id: FaultId,
+    pub severity: FaultSeverity,
+    pub latching: bool,
+    pub arming_effect: ArmingEffect,
+    pub payload_type: Option<ResolvedRustType>,
+}
+
+pub struct ResolvedFaultSink {
+    pub owner: ComponentInstanceId,
+    pub storage: ResolvedResourceId,
+    pub saturation: FaultSaturationPolicy,
+}
+```
+
+The catalogue declares ownership, severity, transient/latching semantics,
+saturation behavior, and arming effect. The NUCLEO applications are
+`Validation` scope, so their faults have no actuator authority or arming
+effect. The OSD reference implements typed counters for RX/TX DMA errors,
+channel overflow/closure, TX completion failures, and debounce spawn failure.
+The blinky reference records debounce spawn failure in bounded shared state.
 
 ### 5.9 Scheduling and dispatchers
 
@@ -1154,7 +1351,7 @@ below is the external serialization. The schema uses these explicit mappings:
 | TOML form | Normalized field |
 |---|---|
 | `[[connections]]` | `ApplicationProfile.explicit_connections` |
-| `execution` plus `period_us` or `period_us_from_configuration` | closed `TaskExecutionTemplate` with a typed period |
+| `execution` plus schedule/receive fields | closed `TaskExecutionTemplate` with exact channel or timing semantics |
 | flattened resource shape/placement fields | tagged `ResourceStorageKind` and `ResourcePlacement` |
 | relative implementation item path | complete validated `RustPath` |
 
@@ -1165,15 +1362,22 @@ local resources, no spawn inputs, no constructor entries, or no Cargo
 features; normalization always serializes them explicitly in canonical
 artifacts. Application safety policies, component failure contracts,
 transport overflow behavior, required bindings, and initialization producers
-never receive silent defaults. These examples are intended to be copied from
-or byte-checked against the valid fixture set once schema v0.1 is implemented.
+never receive silent defaults.
+
+Until the provisional public schema exists, the only normative NUCLEO
+concurrency examples are the checked files in `architecture-contracts/` plus
+their rendered applications and tests. The longer TOML listings below are
+non-normative schema design sketches. At schema implementation time they must
+be generated from or byte-checked against fixture files; fields that cannot be
+represented by the checked transport/task contracts are rejected rather than
+grandfathered from these sketches.
 
 ### 6.1 Board definition example
 
 ```toml
 schema_version = "0.1"
-dispatcher_candidates = ["exti0", "exti1", "exti2", "exti3"]
 reserved_resources = []
+unavailable_interrupts = []
 timers = {}
 fitted_devices = {}
 metadata = {}
@@ -1181,7 +1385,6 @@ metadata = {}
 [board]
 id = "nucleo-f401re"
 family = "stm32f4"
-backend = "ferrowasp-stm32f4"
 mcu = "STM32F401"
 revision = "re"
 
@@ -1257,12 +1460,19 @@ tx_pin = "pa9"
 rx_interrupt = "usart1"
 dma_rx = "usart1_rx"
 dma_tx = "usart1_tx"
+
+[backend_target]
+board = "nucleo-f401re"
+backend = "ferrowasp-stm32f4"
+dispatcher_preference = ["exti0", "exti1", "exti2", "exti3"]
 ```
 
 Validation rules include:
 
 - referenced pins/peripherals/routes exist;
-- physical resources are unique unless explicitly shareable;
+- each endpoint alternative is internally valid; unselected alternatives may
+  overlap physical resources;
+- selected resolved endpoint claims are unique unless explicitly shareable;
 - timer and DMA routes are supported by backend metadata;
 - RX/TX direction is derived from the typed `dma_rx`/`dma_tx` endpoint role
   and is not repeated as an independently editable board fact;
@@ -1288,6 +1498,8 @@ warnings_as_errors = true
 [application]
 id = "nucleo-msp-core"
 board = "nucleo-f401re"
+backend_target = "nucleo-f401re/ferrowasp-stm32f4"
+safety_scope = "validation"
 build_profile = "dev"
 
 [timebase]
@@ -1319,17 +1531,13 @@ rationale = "One active TX DMA transfer"
 value = 16
 rationale = "Current prototype configuration; traffic bound not yet justified"
 
-[capacities.uart_tx_service_task]
+[capacities.tx_completion_queue]
 value = 1
-rationale = "One coalesced TX-service wake-up, independent of the data queue"
-
-[capacities.msp_task_queue]
-value = 1
-rationale = "Coalesced consumer wake-up; queue storage remains separately bounded"
+rationale = "One completion for the single active TX DMA transfer"
 
 [[components]]
 id = "uart1"
-component = "uart-dma-endpoint"
+component = "usart1-dma-endpoint"
 version = "0.1.0"
 enabled = true
 
@@ -1341,7 +1549,6 @@ rx_queue_capacity = "uart_rx_queue"
 tx_buffer_bytes = "serial_chunk_bytes"
 tx_buffer_count = "uart_tx_buffers"
 tx_queue_capacity = "uart_tx_queue"
-tx_service_capacity = "uart_tx_service_task"
 
 [components.configuration]
 serial_profile = "msp_displayport"
@@ -1354,7 +1561,6 @@ enabled = true
 
 [components.bind]
 frame_bytes = "serial_chunk_bytes"
-task_capacity = "msp_task_queue"
 
 [components.configuration]
 refresh_period_us = 100_000
@@ -1400,7 +1606,7 @@ schema_version = "0.1"
 id = "serial-rx-chunk"
 version = "1"
 rust_type_path = "ferrowasp_serial_osd_compat::SerialChunk"
-allowed_transports = ["bounded-queue"]
+allowed_transports = ["spsc-queue", "mpsc-queue"]
 
 [[capability_types.parameters]]
 id = "frame_bytes"
@@ -1410,17 +1616,18 @@ kind = "const-usize"
 id = "serial-tx-chunk"
 version = "1"
 rust_type_path = "ferrowasp_serial_osd_compat::SerialChunk"
-allowed_transports = ["bounded-queue"]
+allowed_transports = ["spsc-queue"]
 
 [[capability_types.parameters]]
 id = "frame_bytes"
 kind = "const-usize"
 ```
 
-The checked-in compatibility crate already owns the concrete endpoint,
-transport, and OSD types, but its current APIs are coupled and it does not yet
-contain the `builder_facade` entrypoints named below. The facade migration
-task must add thin behavior-preserving normal Rust wrappers before these
+The checked-in compatibility crate now separates concrete USART1 RX/TX DMA
+mechanisms from OSD work processing, typed faults, and transport ownership.
+The complete generated NUCLEO application compiler-checks those real APIs.
+The future catalogue-shaped `builder_facade` entrypoints named below do not
+yet exist; add thin behavior-preserving wrappers before these provisional
 component definitions enter the compile-smoke-tested catalogue. Schema-only
 fixtures may parse earlier, but must be labelled non-compilable until that
 entry condition is met.
@@ -1430,10 +1637,10 @@ schema_version = "0.1"
 capacities = []
 
 [component]
-id = "uart-dma-endpoint"
+id = "usart1-dma-endpoint"
 version = "0.1.0"
 maturity = "experimental"
-multiplicity = "many"
+multiplicity = "one"
 
 [implementation]
 crate = "ferrowasp-serial-osd-compat"
@@ -1487,12 +1694,6 @@ kind = "capacity"
 unit = "items"
 required = true
 
-[[bindings]]
-id = "tx_service_capacity"
-kind = "capacity"
-unit = "task-slots"
-required = true
-
 [[configuration]]
 id = "serial_profile"
 value_type = "enum"
@@ -1501,115 +1702,112 @@ required = true
 
 [[capability_ports]]
 id = "rx_chunks"
-class = "critical"
-role = "publish-critical"
+interaction = "stream"
+safety = "non-critical"
+role = "publish-stream"
 type = "serial-rx-chunk"
 version = "1"
 type_arguments = { frame_bytes = "rx_buffer_bytes" }
 cardinality = "one-or-more"
 required = true
-transport = { kind = "bounded-queue", resource = "rx_queue" }
+allowed_transports = ["mpsc-queue"]
 
 [[capability_ports]]
 id = "tx_frames"
-class = "request"
+interaction = "request"
+safety = "non-critical"
 role = "handle-request"
 type = "serial-tx-chunk"
 version = "1"
 type_arguments = { frame_bytes = "tx_buffer_bytes" }
 cardinality = "zero-or-more"
 required = false
-transport = { kind = "bounded-queue", resource = "tx_queue" }
+allowed_transports = ["spsc-queue"]
 
 [[tasks]]
 id = "rx_idle"
 kind = "hardware"
-execution = "one-shot"
+execution = "hardware-run-to-completion"
 interrupt_from_binding = "endpoint_slot.rx_interrupt"
 scheduling_class = "serial-hardware"
 shared_resources = [
   { id = "rx_dma_state", access = "exclusive" },
 ]
 capability_bindings = [
-  { kind = "adapter", port = "rx_chunks" },
+  { port = "rx_chunks", transport = "connection:rx_chunks", borrow_scope = "post-invoke-commit" },
 ]
 lock_groups = [
-  { id = "rx_endpoint", members = ["shared:rx_dma_state", "port:rx_chunks"] },
+  { id = "rx_endpoint", members = ["shared:rx_dma_state"] },
 ]
 
 [tasks.invocation]
 entrypoint = "rx_idle"
 arguments = [
   { kind = "shared-resource", id = "rx_dma_state" },
-  { kind = "capability-port", id = "rx_chunks" },
 ]
 outcome_actions = [
-  { kind = "wake-port-on", outcome = "queued-new-work", port = "rx_chunks" },
+  { kind = "send-port-on", outcome = "chunk", port = "rx_chunks" },
 ]
 
 [[tasks]]
 id = "rx_dma"
 kind = "hardware"
-execution = "one-shot"
+execution = "hardware-run-to-completion"
 interrupt_from_binding = "endpoint_slot.dma_rx.interrupt"
 scheduling_class = "serial-hardware"
 shared_resources = [
   { id = "rx_dma_state", access = "exclusive" },
 ]
 capability_bindings = [
-  { kind = "adapter", port = "rx_chunks" },
+  { port = "rx_chunks", transport = "connection:rx_chunks", borrow_scope = "post-invoke-commit" },
 ]
 lock_groups = [
-  { id = "rx_endpoint", members = ["shared:rx_dma_state", "port:rx_chunks"] },
+  { id = "rx_endpoint", members = ["shared:rx_dma_state"] },
 ]
 
 [tasks.invocation]
 entrypoint = "rx_dma"
 arguments = [
   { kind = "shared-resource", id = "rx_dma_state" },
-  { kind = "capability-port", id = "rx_chunks" },
 ]
 outcome_actions = [
-  { kind = "wake-port-on", outcome = "queued-new-work", port = "rx_chunks" },
+  { kind = "send-port-on", outcome = "chunk", port = "rx_chunks" },
 ]
 
 [[tasks]]
 id = "tx_dma"
 kind = "hardware"
-execution = "one-shot"
+execution = "hardware-run-to-completion"
 interrupt_from_binding = "endpoint_slot.dma_tx.interrupt"
 scheduling_class = "serial-hardware"
 shared_resources = [
   { id = "tx_dma_state", access = "exclusive" },
-  { id = "tx_queue", access = "exclusive" },
 ]
 capability_bindings = []
 lock_groups = [
-  { id = "tx_endpoint", members = ["shared:tx_dma_state", "shared:tx_queue"] },
+  { id = "tx_endpoint", members = ["shared:tx_dma_state"] },
 ]
 
 [tasks.invocation]
 entrypoint = "tx_dma"
 arguments = [
   { kind = "shared-resource", id = "tx_dma_state" },
-  { kind = "shared-resource", id = "tx_queue" },
 ]
 outcome_actions = []
 
 [[tasks]]
 id = "tx_service"
 kind = "software"
-execution = "one-shot"
+execution = "async-divergent-consumer"
 scheduling_class = "serial-service"
-capacity_from_binding = "tx_service_capacity"
 shared_resources = [
   { id = "tx_dma_state", access = "exclusive" },
 ]
 capability_bindings = [
-  { kind = "wake-on-delivery", port = "tx_frames", policy = "coalesce-while-pending" },
+  { port = "tx_frames", transport = "connection:tx_frames", borrow_scope = "pre-invoke-copy" },
 ]
 lock_groups = [
-  { id = "tx_endpoint", members = ["shared:tx_dma_state", "port:tx_frames"] },
+  { id = "tx_endpoint", members = ["shared:tx_dma_state"] },
 ]
 
 [tasks.invocation]
@@ -1682,14 +1880,14 @@ constructor = "zeroed-array"
 
 [[initialization.operations]]
 kind = "backend-prepare"
-recipe = "stm32f4/uart-dma-endpoint-v1"
+recipe = "stm32f4/usart1-dma-endpoint-v1"
 inputs = [
   "endpoint_slot",
   "rx_buffers",
   "tx_buffers",
   "configuration.serial_profile",
 ]
-outputs = ["rx_dma_state", "tx_dma_state", "rx_queue", "tx_queue"]
+outputs = ["rx_dma_state", "tx_dma_state"]
 
 [[physical_claims]]
 binding = "endpoint_slot.peripheral"
@@ -1712,7 +1910,8 @@ binding = "endpoint_slot.tx_pin"
 exclusive = true
 
 [failure_contract]
-initialization_failure = "reject-build"
+build_failure = "reject-resolution"
+boot_initialization_failure = "panic"
 unhandled_task_error = "record-component-fault"
 
 [tests]
@@ -1751,12 +1950,6 @@ kind = "capacity"
 unit = "bytes"
 required = true
 
-[[bindings]]
-id = "task_capacity"
-kind = "capacity"
-unit = "task-slots"
-required = true
-
 [[configuration]]
 id = "refresh_period_us"
 value_type = "duration-us"
@@ -1764,8 +1957,9 @@ required = true
 
 [[capability_ports]]
 id = "rx_chunks"
-class = "critical"
-role = "consume-critical"
+interaction = "stream"
+safety = "non-critical"
+role = "consume-stream"
 type = "serial-rx-chunk"
 version = "1"
 type_arguments = { frame_bytes = "frame_bytes" }
@@ -1774,7 +1968,8 @@ required = true
 
 [[capability_ports]]
 id = "tx_frames"
-class = "request"
+interaction = "request"
+safety = "non-critical"
 role = "emit-request"
 type = "serial-tx-chunk"
 version = "1"
@@ -1785,20 +1980,19 @@ required = true
 [[tasks]]
 id = "consume_rx"
 kind = "software"
-execution = "one-shot"
+execution = "async-divergent-consumer"
 scheduling_class = "observer"
-capacity_from_binding = "task_capacity"
 local_resources = ["consume_output"]
 shared_resources = [
   { id = "state", access = "exclusive" },
   { id = "telemetry", access = "read" },
 ]
 capability_bindings = [
-  { kind = "wake-on-delivery", port = "rx_chunks", policy = "coalesce-while-pending" },
-  { kind = "adapter", port = "tx_frames" },
+  { port = "rx_chunks", transport = "connection:rx_chunks", borrow_scope = "pre-invoke-copy" },
+  { port = "tx_frames", transport = "connection:tx_frames", borrow_scope = "post-invoke-commit" },
 ]
 lock_groups = [
-  { id = "displayport", members = ["port:rx_chunks", "shared:state", "shared:telemetry", "port:tx_frames"] },
+  { id = "telemetry_snapshot", members = ["shared:telemetry"] },
 ]
 
 [tasks.invocation]
@@ -1811,26 +2005,27 @@ arguments = [
   { kind = "capability-port", id = "tx_frames" },
 ]
 outcome_actions = [
-  { kind = "wake-port-on", outcome = "queued-new-work", port = "tx_frames" },
+  { kind = "send-port-on", outcome = "tx-frame", port = "tx_frames" },
 ]
 
 [[tasks]]
 id = "periodic"
 kind = "software"
-execution = "async-periodic-loop"
+execution = "async-periodic"
 scheduling_class = "serial-service"
 period_us_from_configuration = "refresh_period_us"
-capacity = 1
+periodic_mode = "fixed-delay"
+missed_release = "skip-to-next"
 local_resources = ["periodic_output"]
 shared_resources = [
   { id = "state", access = "exclusive" },
   { id = "telemetry", access = "read" },
 ]
 capability_bindings = [
-  { kind = "adapter", port = "tx_frames" },
+  { port = "tx_frames", transport = "connection:tx_frames", borrow_scope = "post-invoke-commit" },
 ]
 lock_groups = [
-  { id = "displayport_refresh", members = ["shared:state", "shared:telemetry", "port:tx_frames"] },
+  { id = "telemetry_snapshot", members = ["shared:telemetry"] },
 ]
 
 [tasks.invocation]
@@ -1842,7 +2037,7 @@ arguments = [
   { kind = "capability-port", id = "tx_frames" },
 ]
 outcome_actions = [
-  { kind = "wake-port-on", outcome = "queued-new-work", port = "tx_frames" },
+  { kind = "send-port-on", outcome = "tx-frame", port = "tx_frames" },
 ]
 
 [[resources]]
@@ -1901,7 +2096,8 @@ task = "periodic"
 inputs = []
 
 [failure_contract]
-initialization_failure = "reject-build"
+build_failure = "reject-resolution"
+boot_initialization_failure = "panic"
 unhandled_task_error = "record-component-fault"
 
 [tests]
@@ -2026,9 +2222,10 @@ mechanism are introduced only in M3. That future closure may:
 Resolution order:
 
 1. validate explicit connections;
-2. resolve uniquely inferable non-authority service/observe connections if policy permits;
+2. resolve uniquely inferable non-authority service/snapshot connections if policy permits;
 3. require explicit authority edges;
-4. require explicit critical fan-out;
+4. require explicit per-edge delivery or an explicit multicast/snapshot/journal
+   mechanism for fan-out;
 5. validate class/type/version compatibility;
 6. validate cardinality;
 7. validate prohibited direction or policy;
@@ -2593,7 +2790,7 @@ Create or update ADRs for:
 1. `BoardDefinition` versus backend/BSP terminology;
 2. `ApplicationProfile`;
 3. versioned `ResolvedApplication`;
-4. capability classes;
+4. capability interaction, safety, role, and transport dimensions;
 5. endpoint versus functional consumer;
 6. one central renderer;
 7. transactional generation;
@@ -2682,9 +2879,46 @@ pass on Linux and Windows-compatible path fixtures.
 
 ---
 
-### N3 — Schema v0.1
+### N2A — Transport and RTIC 2 execution contract
 
-**Objective:** Parse explicit board, application, and component definitions.
+**Objective:** Prove the concurrency and lifecycle model before exposing a
+stable public schema.
+
+**Deliverables:**
+
+- independent interaction and safety classifications;
+- SPSC, MPSC, latest-value, journal, same-task-direct, and synchronous-service
+  transport definitions;
+- edge-level transport ownership and explicit fan-out rules;
+- RTIC 2 hardware, divergent consumer, periodic, and delayed one-shot task
+  forms;
+- fixed-rate/fixed-delay and missed-release policies;
+- typed fault catalogue and boot/runtime failure separation;
+- typed/versioned backend recipe signatures;
+- bounded-lock facade rules;
+- host validation tests and complete NUCLEO architecture contracts.
+
+**Exit gate:**
+
+- no renderer-generated queue/pending wake protocol;
+- no destructive queue fan-out;
+- no software-task spawn capacity used as data buffering;
+- complete blinky and NUCLEO OSD applications render and link;
+- the OSD hardware tasks, divergent consumers, channel topology, fault paths,
+  and short-lock behavior are represented without arbitrary Rust escape
+  hatches.
+
+The current prototype evidence for this milestone is checked under
+`architecture-contracts/` and enforced before rendering. It proves the two
+NUCLEO vertical slices only; it is not the future public component schema.
+
+---
+
+### N3 — Provisional schema and executable fixtures
+
+**Objective:** Parse explicit board, application, and component definitions
+after N2A, while keeping the schema provisional until renderer-contract proof
+and deterministic cross-platform fixtures pass.
 
 **Deliverables:**
 
@@ -2733,6 +2967,10 @@ tests/fixtures/invalid/authority-fanout/
 - unknown fields are rejected;
 - schema version is mandatory;
 - diagnostics identify the source path.
+
+Only after the complete blinky and OSD fixture/IR/source triplets render,
+compile, and compare deterministically on supported platforms may this schema
+be labelled the schema v0.1 freeze candidate.
 
 ---
 
@@ -3156,9 +3394,9 @@ Near-term implementation may use RTIC shared state with:
 
 Builder rules:
 
-- exactly one `Observe<T>` provider;
-- automatic fan-out allowed only for `Observe<T>`;
-- observers cannot provide `Authority<T>`;
+- exactly one `Snapshot` writer;
+- snapshot fan-out uses latest-value semantics rather than destructive queues;
+- observation-only components cannot grant `Authority`;
 - observer scheduling classes must not outrank protected critical classes without explicit policy;
 - observer absence does not invalidate critical producer.
 
@@ -3345,22 +3583,15 @@ Do not freeze the schema based on design alone.
 
 ### M2 — General typed capability graph
 
-Complete capability support for:
-
-```text
-Authority<T>
-Critical<T>
-Request<T>
-Observe<T>
-ObserveEvent<T>
-Service<T>
-```
+Complete capability support across the independent interaction kinds
+`Authority`, `Stream`, `Request`, `Snapshot`, `EventJournal`, and `Service`,
+with a separate safety classification on every resolved connection.
 
 Add policy validation:
 
 - authority reachability;
 - protected component classes;
-- prohibited observer-to-critical paths;
+- prohibited observation-to-authority paths;
 - permitted adapters;
 - explicit aggregation components;
 - version compatibility;
@@ -3414,7 +3645,7 @@ Implement:
 - software dispatcher allocation;
 - hardware interrupt inventory;
 - reserved/forbidden interrupt policy;
-- task capacity validation;
+- transport capacity and task-form validation;
 - periodic release metadata;
 - shared-resource access report;
 - preliminary priority-ceiling analysis inputs.
@@ -3433,7 +3664,7 @@ Add diagnostics for:
 - conflicting relative-order constraints;
 - missing dispatcher;
 - hardware/software priority confusion;
-- task capacity less than declared maximum concurrent spawn count where statically derivable.
+- a data-producing edge that attempts to use software-task spawn as buffering.
 
 ---
 
@@ -3485,7 +3716,7 @@ Required semantics:
 - reader missed-update semantics;
 - no authority.
 
-Add `ObserveEvent<T>` only for real event requirements:
+Add `EventJournal` only for real event requirements:
 
 - safety-state transition;
 - failsafe reason;
@@ -3695,7 +3926,8 @@ Authoring guide requires:
 
 - responsibilities;
 - implementation Rust paths;
-- capability class, explicit port role, cardinality, and compatibility;
+- interaction kind, safety class, explicit port role, topology, and
+  compatibility;
 - ownership;
 - tasks;
 - capacities;

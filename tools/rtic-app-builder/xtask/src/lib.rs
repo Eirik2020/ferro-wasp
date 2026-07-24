@@ -1,3 +1,4 @@
+pub mod architecture;
 pub mod assembler;
 pub mod backend;
 pub mod cli;
