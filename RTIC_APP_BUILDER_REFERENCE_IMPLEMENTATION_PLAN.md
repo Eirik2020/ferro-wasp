@@ -32,12 +32,14 @@ Use this precedence when sources disagree:
 The FerroWasp monorepo contains this RTIC App Builder prototype at
 `tools/rtic-app-builder`, alongside the protected applications and canonical
 FerroWasp crates. The builder remains a nested Cargo workspace and is not a
-member of the firmware workspace. Its temporary compatibility crates are still
-transitional; co-location alone does not authorize replacing them or changing
-flight code. Work that depends on golden applications or canonical component
-APIs must record the monorepo commit and exact paths before implementation
-begins. An example Rust path in this document is not evidence that the item
-currently exists.
+member of the firmware workspace. The NUCLEO adapter uses the canonical
+`crates/ferrowasp-mspv1` protocol crate, while its STM32F401 serial/OSD
+compatibility layer remains transitional. Co-location alone does not authorize
+replacing that layer or changing flight code. Work that depends on golden
+applications or canonical component APIs must record the monorepo commit and
+exact paths before implementation begins. An example Rust path in this
+document is not evidence that the item currently exists. The current adopted
+and deferred crate boundary is recorded in `docs/backend-unification.md`.
 
 Document map:
 
@@ -1596,8 +1598,9 @@ neither the board definition nor a hidden backend default chooses it.
 ### 6.3 Component definition example: UART-DMA endpoint
 
 The fixture catalogue first defines the payload shared by the two component
-files. The temporary compatibility path remains provenance-pinned until the
-canonical facade replaces it:
+files. MSP behavior already comes from the canonical protocol crate, but the
+serial payload path remains in the provenance-pinned F401 adapter until a
+compatible canonical facade replaces it:
 
 ```toml
 schema_version = "0.1"
@@ -2105,10 +2108,10 @@ compile_fixtures = ["nucleo-msp-core"]
 host_targets = []
 ```
 
-The checked fixture may use temporary compatibility paths until canonical
-FerroWasp facades exist, but catalogue maturity and provenance must say so.
-Changing from compatibility to canonical paths is an explicit catalogue and
-fixture change.
+The checked fixture may use the remaining compatibility adapter until
+canonical FerroWasp facades exist, but catalogue maturity and provenance must
+say so. Changing from compatibility to canonical paths is an explicit
+catalogue and fixture change.
 
 ---
 
@@ -2983,9 +2986,10 @@ item. Move the current LED/button behavior behind small normal Rust
 entrypoints before cataloguing it. Record a pinned FerroWasp source identity
 for external items and confirm that required endpoint/consumer facade items
 exist. Until then, the checked UART/MSP slice may reference the
-provenance-pinned compatibility crates, with experimental maturity and an
-explicit replacement note. Do not write catalogue entries that claim
-nonexistent canonical Rust paths.
+provenance-pinned F401 compatibility adapter, with experimental maturity and
+an explicit replacement note. MSP parsing/responding must continue to use the
+canonical `crates/ferrowasp-mspv1` crate. Do not write catalogue entries that
+claim nonexistent canonical Rust paths.
 
 Initial catalogue:
 

@@ -201,8 +201,10 @@ than one instance of the same component.
   and Cargo dependencies into validated component requirements.
 - Replace feature-specific lockfile templates with deterministic dependency
   closure generation.
-- Replace compatibility copies with canonical FerroWasp crates once stable
-  in-tree capability boundaries are available.
+- Continue replacing compatibility code with canonical FerroWasp crates when
+  the in-tree capability boundaries are behavior-compatible. MSP already uses
+  `crates/ferrowasp-mspv1`; the remaining F401 serial/OSD adapter is tracked in
+  `backend-unification.md`.
 - Keep the button ARM example explicitly display-only. Real OSD telemetry must
   consume latest-value capabilities published by the safety, battery, RC, and
   IMU components; it must never own or emulate flight arming authority.
