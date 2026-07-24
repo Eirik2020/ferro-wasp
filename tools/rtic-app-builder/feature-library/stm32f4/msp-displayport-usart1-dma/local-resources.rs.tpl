@@ -1,0 +1,2 @@
+{{OSD_COMPONENT_RESOURCE}}: OsdComponent,
+{{OSD_OUTPUT_RESOURCE}}: [u8; {{BUFFER_SIZE}}],

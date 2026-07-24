@@ -1,0 +1,33 @@
+schema_version = 6
+
+[application]
+name = "nucleo-f401re-osd"
+bsp = "nucleo-f401re"
+feature_order = ["osd_displayport", "button_arm_toggle"]
+
+[features.osd_displayport]
+implementation = "stm32f4/msp-displayport-usart1-dma"
+endpoint = "usart1"
+rx_dma = "usart1_rx"
+tx_dma = "usart1_tx"
+rx_buffer_size = 70
+rx_buffer_count = 2
+rx_queue_capacity = 4
+tx_buffer_size = 70
+tx_queue_capacity = 16
+refresh_period_ms = 100
+refresh_task_priority = 3
+uart_irq_priority = 4
+rx_dma_irq_priority = 4
+tx_dma_irq_priority = 4
+tx_worker_priority = 3
+task_name = "osd_displayport"
+task_priority = 2
+
+[features.button_arm_toggle]
+implementation = "stm32f4/button-arm-toggle"
+task_name = "button_arm_toggle"
+task_priority = 5
+debounce_ms = 20
+button = "user_button"
+osd = "osd_displayport"

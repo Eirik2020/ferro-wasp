@@ -1,0 +1,68 @@
+#![allow(dead_code)]
+
+#[derive(Clone, Copy, Debug)]
+pub struct MspOsdTelemetry {
+    pub armed: bool,
+    pub battery_voltage_v10: u8,
+    pub battery_cell_count: u8,
+    pub battery_cell_voltage_v100: u16,
+    pub amperage_ca: i16,
+    pub mah_drawn: u16,
+    pub rssi: u16,
+    pub rc_roll: u16,
+    pub rc_pitch: u16,
+    pub rc_yaw: u16,
+    pub rc_throttle: u16,
+    pub osd_throttle: u16,
+    pub roll_deg10: i16,
+    pub pitch_deg10: i16,
+    pub yaw_deg: i16,
+    pub imu_roll_dps: i16,
+    pub imu_pitch_dps: i16,
+    pub imu_yaw_dps: i16,
+    pub imu_roll_dps10: i16,
+    pub imu_pitch_dps10: i16,
+    pub imu_yaw_dps10: i16,
+    pub imu_raw: [i16; 3],
+    pub imu_sequence: u32,
+    pub imu_stale: bool,
+    pub control_isr_sequence: u32,
+    pub control_sequence: u32,
+    pub control_raw: [i16; 3],
+    pub control_dps10: [i16; 3],
+}
+
+impl Default for MspOsdTelemetry {
+    fn default() -> Self {
+        Self {
+            armed: false,
+            battery_voltage_v10: 0,
+            battery_cell_count: 0,
+            battery_cell_voltage_v100: 0,
+            amperage_ca: 0,
+            mah_drawn: 0,
+            rssi: 1023,
+            rc_roll: 1500,
+            rc_pitch: 1500,
+            rc_yaw: 1500,
+            rc_throttle: 1000,
+            osd_throttle: 0,
+            roll_deg10: 0,
+            pitch_deg10: 0,
+            yaw_deg: 0,
+            imu_roll_dps: 0,
+            imu_pitch_dps: 0,
+            imu_yaw_dps: 0,
+            imu_roll_dps10: 0,
+            imu_pitch_dps10: 0,
+            imu_yaw_dps10: 0,
+            imu_raw: [0; 3],
+            imu_sequence: 0,
+            imu_stale: false,
+            control_isr_sequence: 0,
+            control_sequence: 0,
+            control_raw: [0; 3],
+            control_dps10: [0; 3],
+        }
+    }
+}

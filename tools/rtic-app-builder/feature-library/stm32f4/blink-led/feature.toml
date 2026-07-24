@@ -1,0 +1,24 @@
+schema_version = 2
+id = "blink_led"
+
+imports = "imports.rs.tpl"
+shared_resources = "shared-resources.rs.tpl"
+local_resources = "local-resources.rs.tpl"
+init = "init.rs.tpl"
+shared_constructors = "shared-constructors.rs.tpl"
+local_constructors = "local-constructors.rs.tpl"
+tasks = "tasks.rs.tpl"
+
+required_placeholders = ["LED_RESOURCE_NAME", "LED_RESOURCE_TYPE", "LED_INIT_EXPRESSION", "BLINKER_ENABLED_NAME", "BLINK_PERIOD_MS", "TASK_PRIORITY"]
+
+claimed_symbols = [
+    "blink_led",
+]
+
+required_symbols = []
+
+claimed_resources = ["LED_RESOURCE_NAME", "BLINKER_ENABLED_NAME"]
+
+claimed_interrupts = []
+
+insertion_after = []
