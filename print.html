@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d2fa61b1.js";
+            window.path_to_searchindex_js = "searchindex-606d9a71.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-97755b62.js"></script>
@@ -533,9 +533,12 @@ is not yet a validated estimator.</p>
 <li>mixes quad-X motor commands</li>
 <li>requests actuator output</li>
 </ul>
-<p>The controller is still prototype-level. The default first-hop profile lives
-in <code>crates/ferrowasp-tasks/src/drone_toolbox.rs</code> and is copied/applied by the
-FCU3 app. The local <code>ferrowasp-pid</code> crate exposes more tuning-relevant behavior:</p>
+<p>The controller is still prototype-level. Board-specific initial profiles live
+in <code>crates/ferrowasp-tasks/src/drone_toolbox.rs</code>. FCU3 retains its golden-app
+first-hop profile; Foxeer fresh storage defaults to P-only
+<code>2.5 / 2.5 / 2.0</code> for roll/pitch/yaw with every I and D gain zero. A valid
+persisted configuration remains authoritative across firmware updates. The
+local <code>ferrowasp-pid</code> crate exposes more tuning-relevant behavior:</p>
 <ul>
 <li>loop-time-aware I and D calculations</li>
 <li>D-term on measured gyro rate instead of setpoint error, avoiding D-kick on stick steps</li>
