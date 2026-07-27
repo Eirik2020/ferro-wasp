@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>MVP Next Work - FerroWasp</title>
+        <title>Developer Setup - FerroWasp</title>
 
 
         <!-- Custom HTML head -->
@@ -174,129 +174,149 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="mvp-status-and-next-work"><a class="header" href="#mvp-status-and-next-work">MVP Status and Next Work</a></h1>
-<p>This page records the near-term implementation order for the rapid prototype.
-It replaces the earlier PWM-era MVP plan; completed work remains summarized in
-the changelog and detailed DShot evidence page.</p>
-<p>The MVP is not a complete flight stack. It demonstrates that RC input, IMU
-sampling, control, motor output, telemetry, and visible failure behavior can
-operate together without adding another motor-authority path.</p>
-<h2 id="demonstrated-fcu3-chain"><a class="header" href="#demonstrated-fcu3-chain">Demonstrated FCU3 Chain</a></h2>
-<pre><code class="language-text">SBUS RC input
-  -&gt; safety-qualified arm request
-  -&gt; MPU6500 sample path
-  -&gt; 400 Hz rate controller and Quad X mixer
-  -&gt; bounded fresh MotorCmd queue
-  -&gt; safety-owned 500 Hz DShot600 output
-  -&gt; PA10 legacy ESC telemetry and idle-eRPM qualification (default DShot only)
-  -&gt; DJI O4 OSD / defmt / BB2 visibility
+                        <h1 id="developer-getting-started"><a class="header" href="#developer-getting-started">Developer Getting Started</a></h1>
+<p>This guide is for contributors building or changing FerroWasp from source.
+Users who only want to flash and configure a Foxeer F405 V2 should use the
+<a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer USB Quick Start</a> instead.</p>
+<p>FerroWasp is a safety-oriented experimental flight-control prototype. A
+successful build is not flight evidence. Do not connect actuator power or
+install propellers as part of ordinary software setup.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>Required for hardware-free repository development:</p>
+<ul>
+<li>Git;</li>
+<li><a href="https://rustup.rs/">rustup</a>;</li>
+<li>Python 3 for repository checks and host-side analysis tools.</li>
+</ul>
+<p>The repository’s <code>rust-toolchain.toml</code> pins the Rust nightly, rustfmt, Clippy,
+and active Cortex-M target. Let rustup install that exact environment rather
+than selecting an unrelated toolchain manually.</p>
+<p>Install additional tools only for the work that needs them:</p>
+<ul>
+<li><code>probe-rs</code> for SWD programming and RTT sessions;</li>
+<li>STM32CubeProgrammer for the board-local Foxeer DFU development script;</li>
+<li>mdBook <code>0.5.2</code> and mdbook-mermaid <code>0.17.0</code> for documentation;</li>
+<li>PlotJuggler or another ULog reader for flight-log inspection.</li>
+</ul>
+<p>The ready FerroConfigurator package carries its own reviewed <code>dfu-util</code>; users
+of that package do not need STM32CubeProgrammer.</p>
+<h2 id="clone-and-verify-the-workspace"><a class="header" href="#clone-and-verify-the-workspace">Clone and verify the workspace</a></h2>
+<pre><code class="language-powershell">git clone https://github.com/Eirik2020/ferro-wasp.git
+Set-Location ferro-wasp
+rustup show active-toolchain
 </code></pre>
-<p>The previous PWM backend remains an explicit fallback. DShot600 is the default
-FCU3 output.</p>
-<h2 id="current-evidence-boundary"><a class="header" href="#current-evidence-boundary">Current Evidence Boundary</a></h2>
-<p>Completed target checkpoints include:</p>
-<ul>
-<li>qualified SBUS startup, RC-loss invalidation, and arm-high recovery inhibit;</li>
-<li>guarded DShot arming requiring three fresh 3,000-10,000 eRPM samples from
-every motor;</li>
-<li>an injected physical-output-1 / logical-M4 zero-eRPM failure that remained
-disarmed and returned all lanes to stop;</li>
-<li>logical motor order and direction: M1 rear-right CW, M2 front-right CCW, M3
-rear-left CCW, and M4 front-left CW;</li>
-<li>props-off roll, pitch, and yaw stick mixing plus motion-opposing correction;</li>
-<li>synchronized DShot runtime, throttle response, explicit disarm, restart
-interlock, and BLHeli legacy telemetry.</li>
-</ul>
-<p>On 2026-07-20 the operator reported a successful controlled experimental FCU3
-flight with strong manoeuvres and no recurrence of the previous unwanted
-yawing. Pitch authority felt low. No new BB2 flight capture accompanies that
-report, and electrical waveform/timing and measured stop latency remain open.
-The result does not imply routine flight readiness.</p>
-<h2 id="priority-1-publish-a-clean-experimental-source-repository"><a class="header" href="#priority-1-publish-a-clean-experimental-source-repository">Priority 1: Publish a Clean Experimental Source Repository</a></h2>
-<ul>
-<li>create a sanitized public history after rotating historical credentials;</li>
-<li>omit old large capture branches and private bench material;</li>
-<li>make formatting, host tests, strict Clippy, all application checks, and the
-mdBook build pass from a clean checkout;</li>
-<li>align the public default branch with CI and Pages triggers;</li>
-<li>document setup, support status, limitations, security reporting, licences,
-and third-party attribution;</li>
-<li>pin moving safety-relevant dependencies and the Rust toolchain;</li>
-<li>scan the final public history for secrets and oversized objects.</li>
-</ul>
-<p>Publication is a source-sharing milestone, not a firmware release or safety
-approval.</p>
-<h2 id="priority-2-run-ferrowasp-on-foxeer-f405-v2"><a class="header" href="#priority-2-run-ferrowasp-on-foxeer-f405-v2">Priority 2: Run FerroWasp on Foxeer F405 V2</a></h2>
-<p>The Foxeer image uses default DShot and has evidence for ROM-DFU/SWD, USB,
-ICM42688-P/EXTI, physical orientation, RC interlocks, motor order/direction,
-eRPM-qualified arming, and onboard blackbox recording. Its first prop-on
-departure exposed positive pitch feedback and attempted a forward flip. The
-pre-fix image is withdrawn. The correction has since passed unpowered
-frame-sign and powered normal-mixer props-off opposition checks, corrected
-hops, and a confined-area flight. The operator classifies the current P-only
-setup as flyable but not well tuned.</p>
-<p>Next checks:</p>
-<ol>
-<li>Repeat the flight in calmer conditions and continue one-variable-at-a-time
-tuning from the <code>2.5 / 2.5 / 2.0</code> P-only baseline.</li>
-<li>Add self-describing flight configuration, per-motor eRPM, accelerometer,
-saturation, and crash-analysis evidence to the onboard log.</li>
-<li>Repair and validate bounded I-term behavior before enabling I gains.</li>
-<li>Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.</li>
-</ol>
-<p>The Foxeer app provides an explicit <code>bench_actuator_validation</code> commissioning
-gate for repeated motor checks. It only compiles with a capped equal-motor,
-physical-motor, or logical-motor bench mode and cannot select normal PID/mixer
-flight output. RC qualification,
-arming guards, command freshness, failsafe/disarm handling, and actuator
-ownership remain active. The arming sequence briefly applies PWM idle to all
-four outputs, so the mode is props-off only even when one motor is selected.</p>
-<h2 id="priority-3-add-a-wsldocker-development-environment"><a class="header" href="#priority-3-add-a-wsldocker-development-environment">Priority 3: Add a WSL/Docker Development Environment</a></h2>
-<p>After Foxeer target bring-up, provide a pinned development container that
-runs host tests, strict Clippy, application checks, feature checks, formatting,
-and mdBook validation. Hardware flashing and USB/SWD passthrough should remain
-optional and explicitly documented; a successful container build is not target
-evidence.</p>
-<h2 id="parked-flight-tuning-follow-up"><a class="header" href="#parked-flight-tuning-follow-up">Parked Flight-Tuning Follow-Up</a></h2>
-<p>The current pitch P value is <code>0.25</code>. A future controlled test may raise only
-pitch P to <code>0.30</code>, leaving roll, yaw, I, D, and filtering unchanged. Review
-tracking error and motor headroom first: more P cannot create authority if the
-mixer is already saturated. Stop the progression on rapid oscillation,
-bounce-back, abnormal noise, or motor heating. Capture BB2 when practical.</p>
-<p>This tuning follow-up is intentionally parked behind publication preparation,
-Foxeer bring-up, and the WSL/Docker environment work.</p>
-<h2 id="safety-and-reliability-follow-up"><a class="header" href="#safety-and-reliability-follow-up">Safety and Reliability Follow-Up</a></h2>
-<ul>
-<li>add an actuator deadline that detects complete absence of future motor
-commands, not only stale data observed on a wake;</li>
-<li>make IMU initialization, gyro-bias calibration, and freshness explicit
-pre-arm prerequisites; the current first post-arm stale-IMU check requests
-disarm, but a brief armed transition is still possible;</li>
-<li>complete setpoint and ADC/OSD freshness behavior;</li>
-<li>instrument DShot waveform timing, jitter, cross-timer phase, and stop latency;</li>
-<li>expand duration and fault-injection evidence;</li>
-<li>keep telemetry, OSD, USB, configurators, and experiments outside arming and
-actuator authority.</li>
-</ul>
-<h2 id="later-features"><a class="header" href="#later-features">Later Features</a></h2>
-<ul>
-<li>CRSF/ELRS with SBUS retained as a fallback;</li>
-<li>bidirectional DShot telemetry as a separate path from current legacy UART
-telemetry;</li>
-<li>read-mostly USB telemetry and a small validated configuration interface;</li>
-<li>persistent parameters with validation and rollback;</li>
-<li>board/resource generation and broader MCU targets.</li>
-</ul>
+<p>Run the hardware-free root checks before making changes:</p>
+<pre><code class="language-powershell">cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked
+cargo check --workspace --locked
+cargo test --workspace --locked
+python tools\check_repository_context.py
+</code></pre>
+<p>The root workspace contains reusable crates. Deployable firmware applications
+are isolated because their STM32 peripheral-access configurations are not
+compatible in one Cargo dependency graph:</p>
+<pre><code class="language-text">apps/stm32f405-flight  FerroWasp FCU3 flight app and behavioral reference
+apps/foxeer-f405-v2    Foxeer F405 V2 flight app
+apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
+</code></pre>
+<p>Run embedded commands from the selected application directory. Do not use one
+board’s image, pins, DMA routes, sensor orientation, or motor mapping on
+another board.</p>
+<h2 id="build-the-flight-applications"><a class="header" href="#build-the-flight-applications">Build the flight applications</a></h2>
+<p>FCU3 is the golden flight app for established runtime and safety behavior:</p>
+<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
+cargo check --release --locked
+Set-Location ..\..
+</code></pre>
+<p>Build the normal Foxeer image with onboard configuration and blackbox support:</p>
+<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
+cargo build --release --locked --features flash_blackbox
+Set-Location ..\..
+</code></pre>
+<p>The resulting Foxeer ELF is:</p>
+<pre><code class="language-text">apps/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
+</code></pre>
+<p>Prefer <code>cargo check</code> when target programming is not part of the task. Do not
+assume a debugger, MCU, receiver, ESC power, or safe motor bench is available.
+Hardware execution and powered tests are separate, user-controlled gates.</p>
+<p>Before implementing or bench-testing a Foxeer feature, compare the affected
+behavior and enabled features with the current FCU3 app. Board-specific
+hardware differences remain explicit exceptions, not copied assumptions.</p>
+<h2 id="swd-rtt-and-developer-dfu"><a class="header" href="#swd-rtt-and-developer-dfu">SWD, RTT, and developer DFU</a></h2>
+<p>With the correct board selected and a debugger attached, repository tooling can
+build, program, and retain an RTT transcript:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 `
+  --release `
+  --locked `
+  --features flash_blackbox `
+  --probe-speed-khz 1800 `
+  --connect-under-reset
+</code></pre>
+<p>Use only the selected board’s documented command and test procedure. Keep
+propellers removed, record the exact features and ELF hash, and do not infer a
+successful target test from compilation.</p>
+<p>The Foxeer application also provides <code>flash-dfu.ps1</code> for developer ROM-DFU
+work. The normal user workflow is the manifest-verified configurator package,
+not a locally selected ELF.</p>
+<h2 id="build-ferroconfigurator"><a class="header" href="#build-ferroconfigurator">Build FerroConfigurator</a></h2>
+<p>FerroConfigurator is an isolated host workspace:</p>
+<pre><code class="language-powershell">Set-Location tools\ferro-configurator
+cargo fmt --all --check
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo build --release --locked -p ferro-configurator-cli
+</code></pre>
+<p>Build the exact Foxeer <code>flash_blackbox</code> image before assembling a local Windows
+package, then run:</p>
+<pre><code class="language-powershell">Set-Location tools\ferro-configurator
+.\packaging\build-release.ps1 -Version 0.1.0-dev
+</code></pre>
+<p>Generated packages are written to the Git-ignored
+<a href="../../tools/ferro-configurator/dist/"><code>tools/ferro-configurator/dist</code></a>
+directory. It does not exist in a fresh checkout until packaging succeeds.</p>
+<pre><code class="language-powershell">$Repo = git rev-parse --show-toplevel
+$Dist = Join-Path $Repo "tools\ferro-configurator\dist"
+Get-ChildItem $Dist -Filter "ferrowasp-v*-windows-x86_64.zip"
+explorer $Dist
+</code></pre>
+<p>Validate the package from its extracted folder before using it:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run
+</code></pre>
+<p>The dry run must verify the manifest, firmware hash, board, flash range, and
+vector table without accessing the MCU. See the
+<a href="../../tools/ferro-configurator/README.html">FerroConfigurator README</a> for its
+full development and packaging contract.</p>
+<h2 id="build-the-documentation"><a class="header" href="#build-the-documentation">Build the documentation</a></h2>
+<p>Install the pinned documentation tools when needed:</p>
+<pre><code class="language-powershell">cargo install mdbook --version 0.5.2 --locked
+cargo install mdbook-mermaid --version 0.17.0 --locked
+mdbook build mdbook
+</code></pre>
+<p>Documentation and context changes must also pass:</p>
+<pre><code class="language-powershell">python tools\check_repository_context.py
+python -m unittest tools.tests.test_repository_context -v
+</code></pre>
+<h2 id="contribution-workflow"><a class="header" href="#contribution-workflow">Contribution workflow</a></h2>
+<p>The default branch is <code>main</code>. Keep patches small, preserve unrelated
+worktree changes, and use a non-target branch plus pull request for normal
+publication. Repository rules require passing checks and protect <code>main</code> from
+deletion and force-pushes.</p>
+<p>Read <a href="../../CONTRIBUTING.html">CONTRIBUTING.md</a> before submitting work. For
+safety-relevant changes, record the reason, exact image/configuration,
+verification performed, remaining target gaps, and any timing or unsafe-code
+implications. Never claim certification, airworthiness, or production safety
+from prototype evidence.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="roadmap.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="getting_started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="testing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="current_support.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -306,11 +326,11 @@ telemetry;</li>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="roadmap.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="getting_started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="testing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="current_support.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

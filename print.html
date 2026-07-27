@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-606d9a71.js";
+            window.path_to_searchindex_js = "searchindex-8db23643.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-97755b62.js"></script>
+        <script src="toc-1b1c9912.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -283,6 +283,165 @@ safety-critical use.</p>
     MCU-&gt;&gt;DEV: CS high
 </pre>
 
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>Choose the path that matches what you want to do.</p>
+<h2 id="use-ferrowasp-on-a-foxeer-f405-v2"><a class="header" href="#use-ferrowasp-on-a-foxeer-f405-v2">Use FerroWasp on a Foxeer F405 V2</a></h2>
+<p>Follow the
+<a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer F405 V2 USB Quick Start</a>.
+It uses a ready Windows package to:</p>
+<ul>
+<li>validate and flash the included firmware over STM32 ROM DFU;</li>
+<li>inspect and change disarmed flight parameters;</li>
+<li>selectively download onboard flight logs;</li>
+<li>convert retained FWBB logs to ULog for PlotJuggler.</li>
+</ul>
+<p>This path does not require a source checkout, Rust, Python,
+STM32CubeProgrammer, or an SWD debugger.</p>
+<p>FerroWasp is experimental flight-control firmware. Read the safety warnings,
+remove every propeller before USB or motor bench work, and repeat the specified
+props-off checks after firmware, configuration, wiring, or actuator changes.</p>
+<h2 id="develop-or-contribute-to-ferrowasp"><a class="header" href="#develop-or-contribute-to-ferrowasp">Develop or contribute to FerroWasp</a></h2>
+<p>Use the separate
+<a href="#developer-getting-started">Developer Getting Started</a> guide. It covers the
+source checkout, pinned Rust environment, repository checks, isolated firmware
+apps, documentation build, and local FerroConfigurator release packaging.</p>
+<p>Before contributing, also read <a href="../../CONTRIBUTING.html">CONTRIBUTING.md</a> and the
+repository instructions that apply to the files being changed.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="developer-getting-started"><a class="header" href="#developer-getting-started">Developer Getting Started</a></h1>
+<p>This guide is for contributors building or changing FerroWasp from source.
+Users who only want to flash and configure a Foxeer F405 V2 should use the
+<a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer USB Quick Start</a> instead.</p>
+<p>FerroWasp is a safety-oriented experimental flight-control prototype. A
+successful build is not flight evidence. Do not connect actuator power or
+install propellers as part of ordinary software setup.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>Required for hardware-free repository development:</p>
+<ul>
+<li>Git;</li>
+<li><a href="https://rustup.rs/">rustup</a>;</li>
+<li>Python 3 for repository checks and host-side analysis tools.</li>
+</ul>
+<p>The repository’s <code>rust-toolchain.toml</code> pins the Rust nightly, rustfmt, Clippy,
+and active Cortex-M target. Let rustup install that exact environment rather
+than selecting an unrelated toolchain manually.</p>
+<p>Install additional tools only for the work that needs them:</p>
+<ul>
+<li><code>probe-rs</code> for SWD programming and RTT sessions;</li>
+<li>STM32CubeProgrammer for the board-local Foxeer DFU development script;</li>
+<li>mdBook <code>0.5.2</code> and mdbook-mermaid <code>0.17.0</code> for documentation;</li>
+<li>PlotJuggler or another ULog reader for flight-log inspection.</li>
+</ul>
+<p>The ready FerroConfigurator package carries its own reviewed <code>dfu-util</code>; users
+of that package do not need STM32CubeProgrammer.</p>
+<h2 id="clone-and-verify-the-workspace"><a class="header" href="#clone-and-verify-the-workspace">Clone and verify the workspace</a></h2>
+<pre><code class="language-powershell">git clone https://github.com/Eirik2020/ferro-wasp.git
+Set-Location ferro-wasp
+rustup show active-toolchain
+</code></pre>
+<p>Run the hardware-free root checks before making changes:</p>
+<pre><code class="language-powershell">cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked
+cargo check --workspace --locked
+cargo test --workspace --locked
+python tools\check_repository_context.py
+</code></pre>
+<p>The root workspace contains reusable crates. Deployable firmware applications
+are isolated because their STM32 peripheral-access configurations are not
+compatible in one Cargo dependency graph:</p>
+<pre><code class="language-text">apps/stm32f405-flight  FerroWasp FCU3 flight app and behavioral reference
+apps/foxeer-f405-v2    Foxeer F405 V2 flight app
+apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
+</code></pre>
+<p>Run embedded commands from the selected application directory. Do not use one
+board’s image, pins, DMA routes, sensor orientation, or motor mapping on
+another board.</p>
+<h2 id="build-the-flight-applications"><a class="header" href="#build-the-flight-applications">Build the flight applications</a></h2>
+<p>FCU3 is the golden flight app for established runtime and safety behavior:</p>
+<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
+cargo check --release --locked
+Set-Location ..\..
+</code></pre>
+<p>Build the normal Foxeer image with onboard configuration and blackbox support:</p>
+<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
+cargo build --release --locked --features flash_blackbox
+Set-Location ..\..
+</code></pre>
+<p>The resulting Foxeer ELF is:</p>
+<pre><code class="language-text">apps/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
+</code></pre>
+<p>Prefer <code>cargo check</code> when target programming is not part of the task. Do not
+assume a debugger, MCU, receiver, ESC power, or safe motor bench is available.
+Hardware execution and powered tests are separate, user-controlled gates.</p>
+<p>Before implementing or bench-testing a Foxeer feature, compare the affected
+behavior and enabled features with the current FCU3 app. Board-specific
+hardware differences remain explicit exceptions, not copied assumptions.</p>
+<h2 id="swd-rtt-and-developer-dfu"><a class="header" href="#swd-rtt-and-developer-dfu">SWD, RTT, and developer DFU</a></h2>
+<p>With the correct board selected and a debugger attached, repository tooling can
+build, program, and retain an RTT transcript:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 `
+  --release `
+  --locked `
+  --features flash_blackbox `
+  --probe-speed-khz 1800 `
+  --connect-under-reset
+</code></pre>
+<p>Use only the selected board’s documented command and test procedure. Keep
+propellers removed, record the exact features and ELF hash, and do not infer a
+successful target test from compilation.</p>
+<p>The Foxeer application also provides <code>flash-dfu.ps1</code> for developer ROM-DFU
+work. The normal user workflow is the manifest-verified configurator package,
+not a locally selected ELF.</p>
+<h2 id="build-ferroconfigurator"><a class="header" href="#build-ferroconfigurator">Build FerroConfigurator</a></h2>
+<p>FerroConfigurator is an isolated host workspace:</p>
+<pre><code class="language-powershell">Set-Location tools\ferro-configurator
+cargo fmt --all --check
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo build --release --locked -p ferro-configurator-cli
+</code></pre>
+<p>Build the exact Foxeer <code>flash_blackbox</code> image before assembling a local Windows
+package, then run:</p>
+<pre><code class="language-powershell">Set-Location tools\ferro-configurator
+.\packaging\build-release.ps1 -Version 0.1.0-dev
+</code></pre>
+<p>Generated packages are written to the Git-ignored
+<a href="../../tools/ferro-configurator/dist"><code>tools/ferro-configurator/dist</code></a>
+directory. It does not exist in a fresh checkout until packaging succeeds.</p>
+<pre><code class="language-powershell">$Repo = git rev-parse --show-toplevel
+$Dist = Join-Path $Repo "tools\ferro-configurator\dist"
+Get-ChildItem $Dist -Filter "ferrowasp-v*-windows-x86_64.zip"
+explorer $Dist
+</code></pre>
+<p>Validate the package from its extracted folder before using it:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run
+</code></pre>
+<p>The dry run must verify the manifest, firmware hash, board, flash range, and
+vector table without accessing the MCU. See the
+<a href="../../tools/ferro-configurator/README.html">FerroConfigurator README</a> for its
+full development and packaging contract.</p>
+<h2 id="build-the-documentation"><a class="header" href="#build-the-documentation">Build the documentation</a></h2>
+<p>Install the pinned documentation tools when needed:</p>
+<pre><code class="language-powershell">cargo install mdbook --version 0.5.2 --locked
+cargo install mdbook-mermaid --version 0.17.0 --locked
+mdbook build mdbook
+</code></pre>
+<p>Documentation and context changes must also pass:</p>
+<pre><code class="language-powershell">python tools\check_repository_context.py
+python -m unittest tools.tests.test_repository_context -v
+</code></pre>
+<h2 id="contribution-workflow"><a class="header" href="#contribution-workflow">Contribution workflow</a></h2>
+<p>The default branch is <code>main</code>. Keep patches small, preserve unrelated
+worktree changes, and use a non-target branch plus pull request for normal
+publication. Repository rules require passing checks and protect <code>main</code> from
+deletion and force-pushes.</p>
+<p>Read <a href="../../CONTRIBUTING.html">CONTRIBUTING.md</a> before submitting work. For
+safety-relevant changes, record the reason, exact image/configuration,
+verification performed, remaining target gaps, and any timing or unsafe-code
+implications. Never claim certification, airworthiness, or production safety
+from prototype evidence.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>This page describes what the repository supports right now. FerroWasp is in a
@@ -605,8 +764,10 @@ injected failure named the unproven output, selected sustained four-lane stop,
 and never reported <code>SYSTEM ARMED</code>. The legacy PWM fallback and Foxeer PWM path
 retain the guarded 2.5-second low and 500 ms idle holds.</p>
 <p>The Foxeer BSP flight profile accepts its documented Betaflight voltage
-baseline and Foxeer-published current scale. Fine current zero-offset
-calibration remains open, so displayed current is forced to zero while raw ADC
+baseline and Foxeer-published current scale. The OSD now uses the upstream
+target values directly (VBAT scale 110, current scale 70, current offset zero)
+and latches a Betaflight-style automatically detected cell count until battery
+removal. Fine per-airframe current calibration remains open, while raw ADC
 millivolts remain available. A separate <code>bench_actuator_validation</code>
 commissioning gate selects only a capped
 equal-motor or single physical/logical-motor props-off image. It retains the
@@ -1132,6 +1293,11 @@ loss of confidence.</p>
 <li><a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer F405 V2 USB Quick Start</a> covers ROM-DFU
 release flashing, disarmed parameter changes, selective blackbox download,
 analysis, and ULog conversion.</li>
+<li>Published configurator ZIPs are attached to
+<a href="https://github.com/Eirik2020/ferro-wasp/releases">GitHub Releases</a>. Local
+packaging writes generated ZIPs under
+<a href="../../tools/ferro-configurator/dist"><code>tools/ferro-configurator/dist</code></a>;
+that Git-ignored folder exists only after the package script runs.</li>
 <li>The repository test catalog is in <code>project_docs/testing/README.md</code>.</li>
 <li>The current board-specific procedure is in
 <code>project_docs/testing/targets/foxeer-f405-v2.md</code>.</li>

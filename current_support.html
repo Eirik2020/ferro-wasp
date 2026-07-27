@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-606d9a71.js";
+            window.path_to_searchindex_js = "searchindex-8db23643.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-97755b62.js"></script>
+        <script src="toc-1b1c9912.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -495,8 +495,10 @@ injected failure named the unproven output, selected sustained four-lane stop,
 and never reported <code>SYSTEM ARMED</code>. The legacy PWM fallback and Foxeer PWM path
 retain the guarded 2.5-second low and 500 ms idle holds.</p>
 <p>The Foxeer BSP flight profile accepts its documented Betaflight voltage
-baseline and Foxeer-published current scale. Fine current zero-offset
-calibration remains open, so displayed current is forced to zero while raw ADC
+baseline and Foxeer-published current scale. The OSD now uses the upstream
+target values directly (VBAT scale 110, current scale 70, current offset zero)
+and latches a Betaflight-style automatically detected cell count until battery
+removal. Fine per-airframe current calibration remains open, while raw ADC
 millivolts remain available. A separate <code>bench_actuator_validation</code>
 commissioning gate selects only a capped
 equal-motor or single physical/logical-motor props-off image. It retains the
@@ -748,7 +750,7 @@ logging</li>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="chapter_1.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="developer_getting_started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
@@ -762,7 +764,7 @@ logging</li>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="chapter_1.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="developer_getting_started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
