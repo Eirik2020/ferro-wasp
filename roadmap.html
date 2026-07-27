@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8db23643.js";
+            window.path_to_searchindex_js = "searchindex-b91d52aa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -243,8 +243,8 @@ stick response, and motion-opposing correction.</li>
 <p>FCU3 timer, DMA, motor-map, and DShot assumptions must not be copied to Foxeer
 without target evidence.</p>
 <h2 id="phase-3-reproducible-wsldocker-development-environment"><a class="header" href="#phase-3-reproducible-wsldocker-development-environment">Phase 3: Reproducible WSL/Docker Development Environment</a></h2>
-<p>After the Foxeer checkpoint works on hardware, add a documented WSL-based
-container workflow that can:</p>
+<p>The repository now carries a documented WSL 2/Docker reference environment
+that can:</p>
 <ul>
 <li>build and test reusable crates;</li>
 <li>check each isolated embedded application and supported feature set;</li>
@@ -253,8 +253,10 @@ container workflow that can:</p>
 <li>keep probe/USB passthrough optional so ordinary source checks do not require
 hardware access.</li>
 </ul>
-<p>The container should complement native flashing workflows, not hide target
-assumptions or claim hardware validation from a cross-compile.</p>
+<p>The image is checked only when its environment sources change. Continue
+keeping it aligned with CI and the pinned nested toolchains. It complements
+native flashing workflows; it does not hide target assumptions or claim
+hardware validation from a cross-compile.</p>
 <h2 id="phase-4-safety-and-evidence-hardening"><a class="header" href="#phase-4-safety-and-evidence-hardening">Phase 4: Safety and Evidence Hardening</a></h2>
 <ul>
 <li>add an independent actuator deadline for complete loss of future control-loop

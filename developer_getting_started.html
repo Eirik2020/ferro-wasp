@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8db23643.js";
+            window.path_to_searchindex_js = "searchindex-b91d52aa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -181,16 +181,97 @@ Users who only want to flash and configure a Foxeer F405 V2 should use the
 <p>FerroWasp is a safety-oriented experimental flight-control prototype. A
 successful build is not flight evidence. Do not connect actuator power or
 install propellers as part of ordinary software setup.</p>
-<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<h2 id="preferred-environment-wsl-2-and-docker"><a class="header" href="#preferred-environment-wsl-2-and-docker">Preferred environment: WSL 2 and Docker</a></h2>
+<p>The reference developer environment is an x86-64 Linux container running
+through Docker Desktop’s WSL 2 backend. It pins the repository’s three Rust
+toolchains, Cortex-M target, Python runtime and packages, mdBook, and
+mdbook-mermaid. Cargo lockfiles continue to pin project dependencies.</p>
+<p>The container is for source builds, tests, documentation, log conversion, and
+headless plots. It intentionally has no default MCU, USB, serial-port, SWD, or
+motor access. Use the ready Windows FerroConfigurator package for the normal
+Foxeer USB workflow, and keep debugger-assisted hardware work as an explicit
+host-side procedure.</p>
+<h3 id="install-the-host-prerequisites"><a class="header" href="#install-the-host-prerequisites">Install the host prerequisites</a></h3>
+<p>On Windows 11, open an administrator PowerShell and install WSL if it is not
+already present:</p>
+<pre><code class="language-powershell">wsl --install -d Ubuntu-24.04
+</code></pre>
+<p>After any requested reboot, install Docker Desktop, select its WSL 2 engine,
+and enable integration for the Ubuntu distribution. These host components are
+the only global development prerequisites.</p>
+<p>Clone the repository into the WSL Linux filesystem, not under <code>/mnt/c</code>.
+Linux-native storage avoids slow Cargo metadata and build operations:</p>
+<pre><code class="language-bash">wsl
+mkdir -p ~/src
+cd ~/src
+git clone https://github.com/Eirik2020/ferro-wasp.git
+cd ferro-wasp
+</code></pre>
+<p>If the repository already exists on Windows, make a fresh WSL clone rather
+than copying Windows <code>target</code> directories or virtual environments.</p>
+<h3 id="build-and-verify-the-environment"><a class="header" href="#build-and-verify-the-environment">Build and verify the environment</a></h3>
+<p>From the repository root inside WSL:</p>
+<pre><code class="language-bash">docker compose build dev
+docker compose run --rm dev bash tools/dev/check-environment.sh
+</code></pre>
+<p>The environment check is hardware-free. It verifies exact tool versions,
+Python analysis dependencies, the embedded target, and discovery of every
+isolated Cargo workspace without downloading project dependencies.</p>
+<p>Most WSL distributions use user and group ID <code>1000</code>, which is the container
+default. If <code>id -u</code> or <code>id -g</code> reports another value, build with matching
+values so generated source-tree files remain owned by the WSL user:</p>
+<pre><code class="language-bash">DEV_UID="$(id -u)" DEV_GID="$(id -g)" docker compose build dev
+</code></pre>
+<h3 id="daily-use"><a class="header" href="#daily-use">Daily use</a></h3>
+<p>Start the persistent development service and open a shell:</p>
+<pre><code class="language-bash">docker compose up -d dev
+docker compose exec dev bash
+</code></pre>
+<p>The repository is bind-mounted at <code>/workspace/ferro-wasp</code>. Cargo registry,
+Git dependency, and Linux build-target caches live in named Docker volumes.
+This prevents incompatible Windows and Linux target artifacts from mixing.</p>
+<p>Inside the container, run the normal repository commands directly:</p>
+<pre><code class="language-bash">cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo check --workspace --locked
+cargo test --workspace --locked
+python -m unittest discover -s tools/tests -v
+python tools/check_repository_context.py
+mdbook build mdbook
+</code></pre>
+<p>Stop the service without deleting caches:</p>
+<pre><code class="language-bash">docker compose down
+</code></pre>
+<p><code>docker compose down --volumes</code> also deletes the Cargo caches. It does not
+delete the bind-mounted source tree, but it should only be used when a clean
+container cache is intentional.</p>
+<p>VS Code users may install the Dev Containers extension and open the repository
+with <strong>Dev Containers: Reopen in Container</strong>. The checked-in
+<code>.devcontainer/devcontainer.json</code> uses the same Compose service and image as
+the command-line workflow.</p>
+<h3 id="what-remains-outside-the-container"><a class="header" href="#what-remains-outside-the-container">What remains outside the container</a></h3>
+<ul>
+<li>Windows FerroConfigurator ready-package execution and ROM-DFU flashing;</li>
+<li>Windows release-package assembly through the PowerShell packaging script;</li>
+<li>probe-rs SWD/RTT sessions and other physical target work;</li>
+<li>interactive Tk live views and PlotJuggler desktop use.</li>
+</ul>
+<p>Flight logs stored in the repository’s ignored <code>logs/</code> directory can still be
+converted and analyzed inside the container. USB forwarding through
+<code>usbipd-win</code> and Docker device mappings may be added later as a separate,
+explicit hardware profile; it is not part of the reference software
+environment or a prerequisite for development.</p>
+<h2 id="native-fallback-prerequisites"><a class="header" href="#native-fallback-prerequisites">Native fallback prerequisites</a></h2>
 <p>Required for hardware-free repository development:</p>
 <ul>
 <li>Git;</li>
 <li><a href="https://rustup.rs/">rustup</a>;</li>
 <li>Python 3 for repository checks and host-side analysis tools.</li>
 </ul>
-<p>The repository’s <code>rust-toolchain.toml</code> pins the Rust nightly, rustfmt, Clippy,
-and active Cortex-M target. Let rustup install that exact environment rather
-than selecting an unrelated toolchain manually.</p>
+<p>The repository toolchain files pin the root nightly, the FerroConfigurator
+stable release, the RTIC builder nightly, their components, and active
+Cortex-M targets. Let rustup install those exact environments rather than
+selecting unrelated toolchains manually.</p>
 <p>Install additional tools only for the work that needs them:</p>
 <ul>
 <li><code>probe-rs</code> for SWD programming and RTT sessions;</li>
@@ -200,7 +281,7 @@ than selecting an unrelated toolchain manually.</p>
 </ul>
 <p>The ready FerroConfigurator package carries its own reviewed <code>dfu-util</code>; users
 of that package do not need STM32CubeProgrammer.</p>
-<h2 id="clone-and-verify-the-workspace"><a class="header" href="#clone-and-verify-the-workspace">Clone and verify the workspace</a></h2>
+<h2 id="native-clone-and-verification"><a class="header" href="#native-clone-and-verification">Native clone and verification</a></h2>
 <pre><code class="language-powershell">git clone https://github.com/Eirik2020/ferro-wasp.git
 Set-Location ferro-wasp
 rustup show active-toolchain
@@ -267,8 +348,10 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo build --release --locked -p ferro-configurator-cli
 </code></pre>
-<p>Build the exact Foxeer <code>flash_blackbox</code> image before assembling a local Windows
-package, then run:</p>
+<p>The Rust workspace can be checked in the Linux container. Windows package
+assembly remains a Windows-host or CI operation. Build the exact Foxeer
+<code>flash_blackbox</code> image before assembling a local Windows package, then run
+this from PowerShell:</p>
 <pre><code class="language-powershell">Set-Location tools\ferro-configurator
 .\packaging\build-release.ps1 -Version 0.1.0-dev
 </code></pre>

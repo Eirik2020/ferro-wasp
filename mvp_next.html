@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8db23643.js";
+            window.path_to_searchindex_js = "searchindex-b91d52aa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -251,20 +251,21 @@ flight output. RC qualification,
 arming guards, command freshness, failsafe/disarm handling, and actuator
 ownership remain active. The arming sequence briefly applies PWM idle to all
 four outputs, so the mode is props-off only even when one motor is selected.</p>
-<h2 id="priority-3-add-a-wsldocker-development-environment"><a class="header" href="#priority-3-add-a-wsldocker-development-environment">Priority 3: Add a WSL/Docker Development Environment</a></h2>
-<p>After Foxeer target bring-up, provide a pinned development container that
-runs host tests, strict Clippy, application checks, feature checks, formatting,
-and mdBook validation. Hardware flashing and USB/SWD passthrough should remain
-optional and explicitly documented; a successful container build is not target
-evidence.</p>
+<h2 id="priority-3-maintain-the-wsldocker-development-environment"><a class="header" href="#priority-3-maintain-the-wsldocker-development-environment">Priority 3: Maintain the WSL/Docker Development Environment</a></h2>
+<p>The checked-in Dockerfile, Compose service, Dev Container entry point, and
+environment smoke check now pin the Rust, Python, and documentation tools used
+across the isolated workspaces. A path-filtered CI workflow guards this setup
+without rebuilding the image for unrelated firmware changes. Hardware
+flashing and USB/SWD access remain explicit host workflows; a successful
+container build is not target evidence.</p>
 <h2 id="parked-flight-tuning-follow-up"><a class="header" href="#parked-flight-tuning-follow-up">Parked Flight-Tuning Follow-Up</a></h2>
 <p>The current pitch P value is <code>0.25</code>. A future controlled test may raise only
 pitch P to <code>0.30</code>, leaving roll, yaw, I, D, and filtering unchanged. Review
 tracking error and motor headroom first: more P cannot create authority if the
 mixer is already saturated. Stop the progression on rapid oscillation,
 bounce-back, abnormal noise, or motor heating. Capture BB2 when practical.</p>
-<p>This tuning follow-up is intentionally parked behind publication preparation,
-Foxeer bring-up, and the WSL/Docker environment work.</p>
+<p>This tuning follow-up is intentionally parked behind the remaining publication
+and Foxeer validation work.</p>
 <h2 id="safety-and-reliability-follow-up"><a class="header" href="#safety-and-reliability-follow-up">Safety and Reliability Follow-Up</a></h2>
 <ul>
 <li>add an actuator deadline that detects complete absence of future motor
