@@ -4,6 +4,7 @@ use ferrowasp_core::blackbox::{
     FLASH_PAGE_LEN, FLIGHT_RECORD_FLAG_BOOT_SESSION_START, FlightRecord, RECORDS_PER_PAGE,
     encode_page,
 };
+pub use ferrowasp_core::config::ConfigKey;
 use heapless::String;
 use heapless::spsc::{Consumer, Producer, Queue};
 
@@ -30,6 +31,26 @@ pub const RESPONSE_QUEUE_CAPACITY: usize = 32;
 pub const USB_COMMAND_LINE_CAPACITY: usize = 96;
 pub const USB_RESPONSE_CAPACITY: usize = 64;
 
+/// Format the storage catalogue summary without exceeding one USB response
+/// frame, even when every counter reaches its full `u32` width.
+pub fn format_log_info_response(
+    used_pages: u32,
+    next_flight: u32,
+    total_pages: u32,
+    writable: bool,
+) -> Option<String<USB_RESPONSE_CAPACITY>> {
+    use core::fmt::Write;
+
+    let mut response = String::new();
+    write!(
+        response,
+        "OK u={used_pages} n={next_flight} t={total_pages} w={}\r\n",
+        u8::from(writable)
+    )
+    .ok()?;
+    Some(response)
+}
+
 pub type CommandQueue = Queue<StorageCommand, COMMAND_QUEUE_CAPACITY>;
 pub type CommandProducer = Producer<'static, StorageCommand>;
 pub type CommandConsumer = Consumer<'static, StorageCommand>;
@@ -53,86 +74,6 @@ pub type RpcResponseQueue = Queue<rpc::RpcResponse, RPC_RESPONSE_QUEUE_CAPACITY>
 pub type RpcResponseProducer = Producer<'static, rpc::RpcResponse>;
 #[cfg(feature = "mspv2_configurator")]
 pub type RpcResponseConsumer = Consumer<'static, rpc::RpcResponse>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ConfigKey {
-    RollP,
-    RollI,
-    RollD,
-    PitchP,
-    PitchI,
-    PitchD,
-    YawP,
-    YawI,
-    YawD,
-    ImuLpfAlpha,
-    LogRateDivisor,
-    RcDeadband,
-    RollCenterRate,
-    RollMaxRate,
-    RollExpo,
-    PitchCenterRate,
-    PitchMaxRate,
-    PitchExpo,
-    YawCenterRate,
-    YawMaxRate,
-    YawExpo,
-}
-
-impl ConfigKey {
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::RollP => "roll_p",
-            Self::RollI => "roll_i",
-            Self::RollD => "roll_d",
-            Self::PitchP => "pitch_p",
-            Self::PitchI => "pitch_i",
-            Self::PitchD => "pitch_d",
-            Self::YawP => "yaw_p",
-            Self::YawI => "yaw_i",
-            Self::YawD => "yaw_d",
-            Self::ImuLpfAlpha => "imu_lpf_alpha",
-            Self::LogRateDivisor => "log_rate_divisor",
-            Self::RcDeadband => "rc_deadband",
-            Self::RollCenterRate => "roll_center_rate",
-            Self::RollMaxRate => "roll_max_rate",
-            Self::RollExpo => "roll_expo",
-            Self::PitchCenterRate => "pitch_center_rate",
-            Self::PitchMaxRate => "pitch_max_rate",
-            Self::PitchExpo => "pitch_expo",
-            Self::YawCenterRate => "yaw_center_rate",
-            Self::YawMaxRate => "yaw_max_rate",
-            Self::YawExpo => "yaw_expo",
-        }
-    }
-
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "roll_p" => Some(Self::RollP),
-            "roll_i" => Some(Self::RollI),
-            "roll_d" => Some(Self::RollD),
-            "pitch_p" => Some(Self::PitchP),
-            "pitch_i" => Some(Self::PitchI),
-            "pitch_d" => Some(Self::PitchD),
-            "yaw_p" => Some(Self::YawP),
-            "yaw_i" => Some(Self::YawI),
-            "yaw_d" => Some(Self::YawD),
-            "imu_lpf_alpha" => Some(Self::ImuLpfAlpha),
-            "log_rate_divisor" => Some(Self::LogRateDivisor),
-            "rc_deadband" => Some(Self::RcDeadband),
-            "roll_center_rate" => Some(Self::RollCenterRate),
-            "roll_max_rate" => Some(Self::RollMaxRate),
-            "roll_expo" => Some(Self::RollExpo),
-            "pitch_center_rate" => Some(Self::PitchCenterRate),
-            "pitch_max_rate" => Some(Self::PitchMaxRate),
-            "pitch_expo" => Some(Self::PitchExpo),
-            "yaw_center_rate" => Some(Self::YawCenterRate),
-            "yaw_max_rate" => Some(Self::YawMaxRate),
-            "yaw_expo" => Some(Self::YawExpo),
-            _ => None,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StorageCommand {
@@ -293,7 +234,17 @@ impl StoredConfig {
         }
     }
 
+    pub const fn foxeer_f405_v2_default() -> Self {
+        Self {
+            tuning: TuningProfile::default_foxeer_f405_v2(),
+            log_rate_divisor: 1,
+        }
+    }
+
     pub fn set(&mut self, key: ConfigKey, value: f32) -> bool {
+        if !key.value_spec().accepts(value) {
+            return false;
+        }
         let mut candidate = *self;
         match key {
             ConfigKey::RollP => candidate.tuning.rate_gains.roll.p = value,
@@ -916,5 +867,17 @@ mod tests {
             }
         }
         assert_eq!(result, Some(Ok(StorageCommand::ConfigGet(ConfigKey::YawI))));
+    }
+
+    #[test]
+    fn log_info_response_fits_with_maximum_width_counters() {
+        let response = format_log_info_response(u32::MAX, u32::MAX, u32::MAX, true).unwrap();
+
+        assert!(response.len() <= USB_RESPONSE_CAPACITY);
+        assert!(response.ends_with("\r\n"));
+        assert_eq!(
+            response.as_str(),
+            "OK u=4294967295 n=4294967295 t=4294967295 w=1\r\n"
+        );
     }
 }

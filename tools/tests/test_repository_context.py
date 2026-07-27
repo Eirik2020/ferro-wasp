@@ -72,6 +72,7 @@ class RepositoryContextTests(unittest.TestCase):
             "apps/foxeer-f405-v2/AGENTS.md": 4096,
             "project_docs/AGENTS.md": 4096,
             "tools/AGENTS.md": 4096,
+            "tools/ferro-configurator/AGENTS.md": 4096,
             "tools/rtic-app-builder/AGENTS.md": 5120,
         }
         self.assertEqual(agent_budgets, expected)

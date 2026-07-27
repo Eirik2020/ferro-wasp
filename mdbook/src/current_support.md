@@ -259,9 +259,12 @@ The control loop currently:
 - mixes quad-X motor commands
 - requests actuator output
 
-The controller is still prototype-level. The default first-hop profile lives
-in `crates/ferrowasp-tasks/src/drone_toolbox.rs` and is copied/applied by the
-FCU3 app. The local `ferrowasp-pid` crate exposes more tuning-relevant behavior:
+The controller is still prototype-level. Board-specific initial profiles live
+in `crates/ferrowasp-tasks/src/drone_toolbox.rs`. FCU3 retains its golden-app
+first-hop profile; Foxeer fresh storage defaults to P-only
+`2.5 / 2.5 / 2.0` for roll/pitch/yaw with every I and D gain zero. A valid
+persisted configuration remains authoritative across firmware updates. The
+local `ferrowasp-pid` crate exposes more tuning-relevant behavior:
 
 - loop-time-aware I and D calculations
 - D-term on measured gyro rate instead of setpoint error, avoiding D-kick on stick steps

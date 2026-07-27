@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
@@ -206,10 +207,12 @@ jobs:
 
       - name: Build Foxeer F405 V2 release firmware
         working-directory: apps/foxeer-f405-v2
-        run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
+        run: >
+          cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features flash_blackbox
 
       - name: Upload firmware ELF
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ferrowasp-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
@@ -217,7 +220,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Foxeer F405 V2 firmware ELF
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ferrowasp-foxeer-f405-v2-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
@@ -291,6 +294,86 @@ jobs:
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
           rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4/src/dshot.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' apps/stm32f405-flight/src/main.rs
+
+  configurator:
+    name: FerroConfigurator
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tools/ferro-configurator
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/ferro-configurator
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Check host workspace
+        run: cargo check --workspace --locked
+
+      - name: Test host workspace
+        run: cargo test --workspace --locked
+
+      - name: Lint host workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  windows-release-package:
+    name: Ready Windows package
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs: [firmware, configurator]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download exact Foxeer firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: ferrowasp-foxeer-f405-v2-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
+          path: staging/foxeer-f405-v2
+
+      - name: Install host Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build FerroConfigurator
+        working-directory: tools/ferro-configurator
+        run: cargo build --release --locked -p ferro-configurator-cli
+
+      - name: Assemble manifest-verified ready package
+        shell: pwsh
+        run: |
+          $version = if ("${{ github.ref_type }}" -eq "tag") {
+            "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            "0.1.0-${{ github.run_number }}"
+          }
+          ./tools/ferro-configurator/packaging/build-release.ps1 `
+            -Version $version `
+            -GitCommit "${{ github.sha }}" `
+            -FirmwareElf "$env:GITHUB_WORKSPACE/staging/foxeer-f405-v2/FerroWaspFoxeerF405V2"
+
+      - name: Upload ready package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrowasp-ready-windows-x86_64
+          path: tools/ferro-configurator/dist/*.zip
+          if-no-files-found: error
+
+      - name: Attach ready package to tagged release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tools/ferro-configurator/dist/*.zip
 
   documentation:
     name: Documentation

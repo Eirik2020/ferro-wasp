@@ -525,6 +525,22 @@ python tools\blackbox_analyzer.py logs\remote_probe\pi_20260710_193000_attach.lo
 
 ## Foxeer Onboard Flash CLI
 
+The preferred end-user path is the Rust
+[`ferro-configurator`](ferro-configurator/README.md), which ships with the
+ready Foxeer image and supports all current settings, selective/resumable
+downloads, range downloads, confirmed erase, and ULog conversion without
+Python:
+
+```powershell
+ferro-configurator.exe --port COM7 config show
+ferro-configurator.exe --port COM7 blackbox flights
+ferro-configurator.exe --port COM7 blackbox download `
+  --flight latest --output logs\foxeer-latest.fwbb `
+  --ulog logs\foxeer-latest.ulg
+```
+
+The Python tools below remain lower-level development and analysis references.
+
 `ferrowasp_storage.py` talks to the Foxeer USB CDC storage endpoint. Install
 its only optional host dependency with `python -m pip install pyserial`.
 Start with the read-only `flash_storage` image and identify the actual JEDEC
@@ -612,8 +628,17 @@ BB2 analysis. `--flight-id N` selects an explicit stored flight and
 
 ## FWBB to ULog Converter
 
-`fwbb_to_ulog.py` converts one CRC-validated onboard flight into a compact ULog
-file for PlotJuggler or PyULog. It selects the latest flight by default:
+FerroConfigurator now provides the normal native conversion command:
+
+```powershell
+ferro-configurator.exe convert logs\foxeer-flight.fwbb `
+  --flight latest `
+  --output logs\foxeer-flight-latest.ulg
+```
+
+`fwbb_to_ulog.py` remains the Python reference implementation. It converts one
+CRC-validated onboard flight into the same compact ULog file and selects the
+latest flight by default:
 
 ```powershell
 python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb `

@@ -50,3 +50,14 @@ mdbook-mermaid install mdbook
 ```
 
 Review the resulting asset and license-header diff before committing it.
+
+## FerroConfigurator Windows DFU bundle
+
+`tools/ferro-configurator/third_party` contains reviewed Windows binaries for
+dfu-util `0.11` and libusb `1.0.24`, their license texts, and the corresponding
+upstream source archives required by their redistribution terms.
+
+The release packaging script verifies the vendored executable and DLL against
+pinned SHA-256 values before including them. Detailed component versions,
+upstream locations, and license identifiers are recorded in
+`tools/ferro-configurator/THIRD_PARTY_NOTICES.md`.

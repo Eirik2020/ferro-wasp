@@ -32,6 +32,10 @@ airworthy or production-ready.
 - Optional Foxeer USB CDC status snapshots plus staged onboard SPI-NOR
   discovery, dual-slot whitelisted configuration storage, CRC-protected flight
   logging, download/analyzer tooling, and a reserved-sector write self-test.
+- FerroConfigurator as an isolated in-repository Windows workspace, with a
+  manifest- and SHA-256-verified ready Foxeer release image, ROM-DFU flashing,
+  complete disarmed-only parameter access, flight-selective/resumable blackbox
+  downloads, and native minimal ULog conversion.
 - An opt-in Foxeer MSPv2 configurator endpoint with bounded incremental
   framing, `FWSP` identification, versioned postcard RPC, whole-config
   stage/commit/reset, and disarmed-only CRC-protected blackbox chunks. It is
@@ -42,6 +46,9 @@ airworthy or production-ready.
 
 ### Changed
 
+- Set the Foxeer fresh-storage tuning baseline to roll/pitch/yaw P
+  `2.5 / 2.5 / 2.0`, with all I and D gains zero. Existing valid persisted
+  configuration continues to override these initialization defaults.
 - Moved reusable logic into `ferrowasp-core`, `ferrowasp-drivers`,
   `ferrowasp-io-core`, `ferrowasp-stm32f4`, `ferrowasp-bsp`,
   `ferrowasp-tasks`, and related support crates while keeping concrete RTIC
@@ -49,6 +56,14 @@ airworthy or production-ready.
 - Routed active and diagnostic motor vectors through the bounded SPSC
   `MotorCmd` queue. Actuator output drains to the latest command and rejects
   stale, missing, non-finite, or invalid data.
+
+### Fixed
+
+- Kept the Foxeer USB log-summary response within its 64-byte bounded frame at
+  maximum counter widths. Host tools also recover the unterminated legacy
+  response when a periodic `FWDBG1` record supplied its accidental newline.
+- Kept interactive FerroConfigurator console text ASCII-only so the Windows
+  flash wizard does not display UTF-8 punctuation as mojibake.
 - Added SBUS startup qualification, 100 ms link expiry, immediate invalidation
   on transport/parser/failsafe faults, and an arm-low recovery interlock.
 - Replaced the FCU3 DShot PWM-style pre-arm delay with a guarded 100 ms stop

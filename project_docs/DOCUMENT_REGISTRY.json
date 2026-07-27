@@ -430,6 +430,10 @@
       "max_bytes": 4096
     },
     {
+      "path": "tools/ferro-configurator/AGENTS.md",
+      "max_bytes": 4096
+    },
+    {
       "path": "tools/rtic-app-builder/AGENTS.md",
       "max_bytes": 5120
     },

@@ -58,49 +58,54 @@ cannot isolate actuator power, stop and treat the work as a powered
 props-off test requiring explicit user confirmation.
 
 1. Record the candidate identity and exact features. Set the USB CDC port and
-   capture the initial configuration:
+   capture and export the initial configuration from the extracted ready
+   package:
 
    ```powershell
    $Port = "COM6"
-   python tools\ferrowasp_storage.py --port $Port config-show
+   .\ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run
+   .\ferro-configurator.exe --port $Port config show
+   .\ferro-configurator.exe --port $Port config export foxeer-baseline.toml
    ```
 
 2. Require the initial values to match the reviewed baseline above. Do not
    overwrite an unexplained profile merely to make the check pass.
-3. Verify invalid-value rejection. This command must return
-   `ERR value outside allowed range`, and the subsequent read must still show
-   roll expo `0.5000`:
+3. Verify invalid-value rejection. This command must fail with a nonzero exit
+   code and report that the value is outside the allowed range. The subsequent
+   read must still show roll expo `0.5`:
 
    ```powershell
-   python tools\ferrowasp_storage.py --port $Port config-set roll_expo 1.1
-   python tools\ferrowasp_storage.py --port $Port config-get roll_expo
+   .\ferro-configurator.exe --port $Port config set roll-expo 1.1
+   .\ferro-configurator.exe --port $Port config show
    ```
 
-4. Stage a conservative temporary roll profile, save once, and wait for
-   `OK config saved`:
+4. Apply a conservative temporary roll profile. Every command must report
+   persistent verification by complete readback:
 
    ```powershell
-   python tools\ferrowasp_storage.py --port $Port config-set roll_max_rate 250
-   python tools\ferrowasp_storage.py --port $Port config-set roll_center_rate 60
-   python tools\ferrowasp_storage.py --port $Port config-set roll_expo 0.4
-   python tools\ferrowasp_storage.py --port $Port config-save
+   .\ferro-configurator.exe --port $Port config set roll-max-rate 250
+   .\ferro-configurator.exe --port $Port config set roll-center-rate 60
+   .\ferro-configurator.exe --port $Port config set roll-expo 0.4
    ```
 
-5. Without rebooting or reflashing, run `config-show`. Require roll
-   center/max/expo `60 / 250 / 0.4000` and all unmodified values unchanged.
-   The successful save response plus same-boot runtime readback is the required
-   immediate-application evidence. A staged-only value or a reboot-required
-   response fails this gate.
+5. Without rebooting or reflashing, run `config show`. Require roll
+   center/max/expo `60 / 250 / 0.4` and all unmodified values unchanged. This
+   is the required immediate-application evidence.
 6. Cold-power the FCU without reflashing, hold it stationary through gyro
-   calibration, reconnect USB, and run `config-show` again. Require the same
+   calibration, reconnect USB, and run `config show` again. Require the same
    temporary profile.
-7. Restore the complete reviewed baseline, not only the temporary fields.
-   Set roll center to `70` before raising roll max to `300`; restore roll expo
-   to `0.5`, deadband to `8`, the pitch/yaw rate fields from the table, P gains
-   `2.5 / 2.5 / 2`, and all I/D gains to zero. Save once.
-8. Verify the full baseline with `config-show`, cold-power once more, and
-   verify it again. Retain both snapshots. Do not continue to actuator power
-   if restoration or cold-boot persistence is uncertain.
+7. Restore the complete captured baseline atomically and verify it:
+
+   ```powershell
+   .\ferro-configurator.exe config validate foxeer-baseline.toml
+   .\ferro-configurator.exe --port $Port config apply foxeer-baseline.toml
+   .\ferro-configurator.exe --port $Port config show
+   ```
+
+8. Require the restored file to contain P `2.5 / 2.5 / 2.0`, every I/D gain
+   zero, and every reviewed RC field above. Cold-power once more and run
+   `config show` again. Retain both snapshots. Do not continue to actuator
+   power if restoration or cold-boot persistence is uncertain.
 
 Stop on unexpected motor activity, an armed state, an unknown image or feature
 set, a rejected valid baseline, an accepted invalid value, a persistence

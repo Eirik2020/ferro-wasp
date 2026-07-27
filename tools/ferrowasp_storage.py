@@ -19,9 +19,10 @@ except ImportError:  # pragma: no cover - depends on the host environment
 
 
 PAGE_LINE_RE = re.compile(rb"^PAGE (\d+) (\d{3}) ([0-9a-f]{32})$")
-LIST_RE = re.compile(
+LIST_RE_LONG = re.compile(
     rb"^OK used_pages=(\d+) next_flight=(\d+) total_pages=(\d+) writable=([01])$"
 )
+LIST_RE_SHORT = re.compile(rb"^OK u=(\d+) n=(\d+) t=(\d+) w=([01])$")
 PAGE_SIZE = 256
 PAGE_DATA_SIZE = 240
 RECORD_SIZE = 48
@@ -127,6 +128,8 @@ class Device:
         deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
         while time.monotonic() < deadline:
             line = self.serial.readline().strip()
+            if b"FWDBG1 " in line and not line.startswith(b"FWDBG1 "):
+                line = line.partition(b"FWDBG1 ")[0]
             if line.startswith(prefixes):
                 return line
         raise TimeoutError("timed out waiting for FerroWasp storage response")
@@ -138,7 +141,12 @@ class Device:
 
 def list_logs(device: Device) -> tuple[int, int, int, bool]:
     line = device.one("logs list")
-    match = LIST_RE.match(line)
+    return parse_log_info_line(line)
+
+
+def parse_log_info_line(line: bytes) -> tuple[int, int, int, bool]:
+    response = line.partition(b"FWDBG1 ")[0]
+    match = LIST_RE_LONG.match(response) or LIST_RE_SHORT.match(response)
     if match is None:
         raise RuntimeError(line.decode("ascii", errors="replace"))
     used, next_flight, total, writable = (int(value) for value in match.groups())

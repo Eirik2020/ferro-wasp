@@ -1,0 +1,20 @@
+[package]
+name = "ferro-configurator-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Windows-friendly configuration CLI for FerroWasp"
+
+[[bin]]
+name = "ferro-configurator"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+ferro-configurator-core = { path = "../ferro-configurator-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+

@@ -1,0 +1,29 @@
+schema_version = 2
+imu_lpf_alpha = 0.55
+log_rate_divisor = 1
+rc_deadband = 8
+roll_center_rate = 70.0
+roll_max_rate = 300.0
+roll_expo = 0.5
+pitch_center_rate = 70.0
+pitch_max_rate = 300.0
+pitch_expo = 0.5
+yaw_center_rate = 70.0
+yaw_max_rate = 200.0
+yaw_expo = 0.5
+
+[roll]
+p = 2.5
+i = 0.0
+d = 0.0
+
+[pitch]
+p = 2.5
+i = 0.0
+d = 0.0
+
+[yaw]
+p = 2.0
+i = 0.0
+d = 0.0
+

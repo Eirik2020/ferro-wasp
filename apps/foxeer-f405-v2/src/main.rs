@@ -1172,7 +1172,7 @@ mod app {
         ) = ((), (), (), (), (), (), (), (), (), (), ());
 
         // Init rate controller
-        let tuning_profile = dt::TuningProfile::default_first_hop();
+        let tuning_profile = dt::TuningProfile::default_foxeer_f405_v2();
         let flight_controller = dt::FlightController::new(
             dt::FlightControllerConfig::default(),
             dt::RateController::new(tuning_profile.rate_gains, dt::RATE_CONTROLLER_OUTPUT_LIMIT),
@@ -2205,7 +2205,7 @@ mod app {
                 selected = Some((config, sequence, slot));
             }
         }
-        Ok(selected.unwrap_or((flash_task::StoredConfig::first_hop_default(), 0, 1)))
+        Ok(selected.unwrap_or((flash_task::StoredConfig::foxeer_f405_v2_default(), 0, 1)))
     }
 
     #[cfg(feature = "flash_storage")]
@@ -2467,14 +2467,16 @@ mod app {
             next_page_index: u32 = 0,
             next_flight_id: u32 = 1,
             log_region_writable: bool = false,
-            stored_config: flash_task::StoredConfig = flash_task::StoredConfig::first_hop_default(),
+            stored_config: flash_task::StoredConfig =
+                flash_task::StoredConfig::foxeer_f405_v2_default(),
             config_sequence: u32 = 0,
             config_active_slot: u8 = 1,
             erase_sector_index: Option<u32> = None,
             flash_test_phase: u8 = 0,
             config_save_phase: u8 = 0,
             config_save_slot: u8 = 0,
-            config_save_candidate: flash_task::StoredConfig = flash_task::StoredConfig::first_hop_default(),
+            config_save_candidate: flash_task::StoredConfig =
+                flash_task::StoredConfig::foxeer_f405_v2_default(),
             config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
                 [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
             staged_rpc_config: Option<flash_task::StoredConfig> = None,
@@ -2912,15 +2914,19 @@ mod app {
                             }
                         }
                         flash_task::StorageCommand::LogsList => {
-                            let _ = write!(
-                                response,
-                                "OK used_pages={} next_flight={} total_pages={} writable={}\r\n",
+                            if let Some(response) = flash_task::format_log_info_response(
                                 *next_page_index,
                                 *next_flight_id,
                                 layout.log_page_count,
-                                u8::from(*log_region_writable)
-                            );
-                            queue_storage_response(flash_response_producer, response.as_str());
+                                *log_region_writable,
+                            ) {
+                                queue_storage_response(flash_response_producer, response.as_str());
+                            } else {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR log summary formatting failed\r\n",
+                                );
+                            }
                         }
                         flash_task::StorageCommand::LogsReadPage(page_index) => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
@@ -3171,7 +3177,7 @@ mod app {
                             } else if maintenance_busy {
                                 Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
                             } else {
-                                let candidate = flash_task::StoredConfig::first_hop_default();
+                                let candidate = flash_task::StoredConfig::foxeer_f405_v2_default();
                                 let next_sequence = config_sequence.wrapping_add(1);
                                 match ferrowasp_core::blackbox::encode_config_page(
                                     next_sequence,

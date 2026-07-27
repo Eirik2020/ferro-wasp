@@ -7,6 +7,7 @@ from tools.ferrowasp_storage import (
     FlightSpan,
     boot_session_numbers,
     catalog_flights,
+    parse_log_info_line,
     resolve_flight_span,
     validated_flight_resume_page_count,
     validated_page_metadata,
@@ -50,6 +51,29 @@ class ResumeDownloadTests(unittest.TestCase):
     def test_rejects_trailing_partial_page(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "trailing bytes"):
             validated_resume_page_count_from_bytes(valid_page() + b"x", 4)
+
+
+class LogInfoTests(unittest.TestCase):
+    def test_accepts_bounded_and_legacy_field_names(self) -> None:
+        self.assertEqual(
+            parse_log_info_line(b"OK u=55316 n=38 t=65488 w=1"),
+            (55316, 38, 65488, True),
+        )
+        self.assertEqual(
+            parse_log_info_line(
+                b"OK used_pages=551 next_flight=2 total_pages=65488 writable=0"
+            ),
+            (551, 2, 65488, False),
+        )
+
+    def test_recovers_legacy_response_concatenated_with_status(self) -> None:
+        self.assertEqual(
+            parse_log_info_line(
+                b"OK used_pages=55316 next_flight=38 total_pages=65488 writable=1"
+                b"FWDBG1 ms=44032 imu=icm42688p ready=1"
+            ),
+            (55316, 38, 65488, True),
+        )
 
 
 class FlightSelectionTests(unittest.TestCase):

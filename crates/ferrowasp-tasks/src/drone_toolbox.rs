@@ -699,6 +699,34 @@ impl TuningProfile {
         }
     }
 
+    /// Current Foxeer F405 V2 P-only flight-test fallback.
+    ///
+    /// Persisted board configuration still takes precedence. This fallback is
+    /// used only when no valid stored configuration is available.
+    pub const fn default_foxeer_f405_v2() -> Self {
+        Self {
+            rate_gains: RateControllerGains {
+                roll: PidGains {
+                    p: 2.5,
+                    i: 0.0,
+                    d: 0.0,
+                },
+                pitch: PidGains {
+                    p: 2.5,
+                    i: 0.0,
+                    d: 0.0,
+                },
+                yaw: PidGains {
+                    p: 2.0,
+                    i: 0.0,
+                    d: 0.0,
+                },
+            },
+            imu_lpf_alpha: IMU_GYRO_LPF_ALPHA,
+            rc_rates: RC_RATE_PROFILE,
+        }
+    }
+
     pub const fn default_bench() -> Self {
         Self {
             rate_gains: RateControllerGains {
@@ -1623,6 +1651,21 @@ mod tests {
         assert_close(profile.rate_gains.roll.p, 0.2);
         assert_close(profile.rate_gains.pitch.p, 0.25);
         assert_close(profile.rate_gains.yaw.p, 0.3);
+        assert_close(profile.rate_gains.roll.i, 0.0);
+        assert_close(profile.rate_gains.pitch.i, 0.0);
+        assert_close(profile.rate_gains.yaw.i, 0.0);
+        assert_close(profile.rate_gains.roll.d, 0.0);
+        assert_close(profile.rate_gains.pitch.d, 0.0);
+        assert_close(profile.rate_gains.yaw.d, 0.0);
+    }
+
+    #[test]
+    fn foxeer_f405_v2_fallback_matches_the_approved_p_only_baseline() {
+        let profile = TuningProfile::default_foxeer_f405_v2();
+
+        assert_close(profile.rate_gains.roll.p, 2.5);
+        assert_close(profile.rate_gains.pitch.p, 2.5);
+        assert_close(profile.rate_gains.yaw.p, 2.0);
         assert_close(profile.rate_gains.roll.i, 0.0);
         assert_close(profile.rate_gains.pitch.i, 0.0);
         assert_close(profile.rate_gains.yaw.i, 0.0);

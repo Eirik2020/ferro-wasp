@@ -92,9 +92,10 @@ Current firmware capabilities:
 For the Foxeer F405 V2, start with the repository-facing
 [USB Quick Start](docs/FOXEER_F405_V2_QUICK_START.md). It covers release
 flashing through ROM DFU, disarmed parameter changes, selective onboard-log
-download, validation, and ULog conversion without an SWD debugger.
+download, validation, and ULog conversion using one ready Windows package.
+Normal users do not need to build the firmware or install Rust or Python.
 
-Prerequisites for a fresh checkout:
+Developer prerequisites for a fresh source checkout:
 
 - Git and [rustup](https://rustup.rs/). The repository pins its Rust nightly,
   Clippy, rustfmt, and the active Cortex-M target in `rust-toolchain.toml`.
@@ -172,16 +173,19 @@ diagnostics.
 
 ## Configuration And Tools
 
-FerroWasp has an opt-in, feature-gated native MSPv2 configurator endpoint on
-the Foxeer USB CDC port. It reports `FWSP`, exposes only the existing
-whitelisted tuning object and bounded onboard-blackbox reads, and retains the
-flash manager's disarmed-only write policy. The current stable repository-local
-tools and the ASCII storage endpoint remain available when the MSPv2 gate is
-not selected.
+The Windows-first `ferro-configurator` under `tools/ferro-configurator` is the
+preferred Foxeer USB interface. It uses the bounded ASCII storage endpoint in
+the normal `flash_blackbox` flight image and supports manifest-verified ROM-DFU
+flashing, all whitelisted parameters, per-drone profiles, selective resumable
+flight downloads, confirmed erase, and native FWBB-to-ULog conversion.
+
+The Foxeer app retains an opt-in native MSPv2 endpoint for development, but it
+is not required or enabled by the ready flight image.
 
 Current bring-up and debug workflows are repository-local:
 
 - `tools/README.md` for host and remote debug tooling
+- `tools/ferro-configurator/README.md` for configurator development
 - `docs/FOXEER_F405_V2_QUICK_START.md` for the current Foxeer USB quick start
 - `tools/blackbox_analyzer.py` for compact BB2 log analysis
 - `tools/ferrowasp_storage.py` for Foxeer onboard logs and whitelisted settings

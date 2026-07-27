@@ -3,5 +3,6 @@
 
 pub mod actuator;
 pub mod blackbox;
+pub mod config;
 pub mod frames;
 pub mod safety;

@@ -13,6 +13,7 @@ This file applies repository-wide. Before scoped work, also read:
 - `apps/AGENTS.md` for firmware applications;
 - `apps/foxeer-f405-v2/AGENTS.md` for the Foxeer app;
 - `tools/AGENTS.md` for host tooling;
+- `tools/ferro-configurator/AGENTS.md` for the isolated USB configurator;
 - `tools/rtic-app-builder/AGENTS.md` for the isolated builder workspace;
 - `project_docs/AGENTS.md` for project documentation.
 

@@ -4,6 +4,11 @@ This isolated RTIC 2 application targets the Foxeer F405 V2. It is based on
 the validated FerroWasp FCU3 task wiring but owns a separate board contract,
 Cargo graph, linker configuration, and binary.
 
+Normal users should begin with the repository
+[Foxeer USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md). The
+published Windows package includes a checked release image and does not
+require a Rust toolchain, Python, STM32CubeProgrammer, or an SWD probe.
+
 Implemented board subset:
 
 - 8 MHz HSE and 168 MHz system clock;
@@ -50,6 +55,12 @@ shared RC-link fix ignores arm-low transients received before link
 qualification completes. Its target repeat held arm high across flashing and
 remained disarmed after RC qualification for the full observation window. A
 valid arm-low observation followed by a later high transition is required.
+
+The current fresh-storage Foxeer tuning baseline is P-only:
+roll/pitch/yaw P `2.5 / 2.5 / 2.0`, with every I and D gain set to zero.
+Persisted configuration remains authoritative across firmware updates; these
+defaults apply only when no valid stored configuration exists or the operator
+explicitly restores defaults.
 
 ### Props-off actuator validation
 
@@ -419,9 +430,11 @@ the system arms.
 
 The first two 4 KiB sectors are copy-on-write configuration slots, the third
 is reserved for the destructive self-test, and logs begin at `0x3000`.
-Configuration input is limited to the PID gains, IMU LPF alpha, and log-rate
-divisor already constrained by firmware ranges. A foreign/non-FerroWasp log
-region stays read-only until an explicit confirmed erase.
+Configuration input is limited to the firmware-owned whitelist: PID gains,
+IMU LPF alpha, log-rate divisor, RC deadband, and per-axis Actual Rates
+center/max/expo values. Firmware-owned ranges and cross-field constraints are
+enforced before a disarmed-only atomic save. A foreign/non-FerroWasp log region
+stays read-only until an explicit confirmed erase.
 
 Build the three stages from the repository root:
 

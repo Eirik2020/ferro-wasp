@@ -116,6 +116,17 @@ logs cannot distinguish gust/tumble, contact, or thrust-system failure. Repeat
 in calmer conditions. Roll P `3.0` remains withdrawn after a separate logged
 `10-13 Hz` autonomous oscillation.
 
+The same `2.5/2.5/2.0`, all-I/D-zero profile is now the Foxeer
+fresh-storage/default-reset baseline. Existing valid stored configuration
+continues to win across a firmware update. FCU3 retains its separate golden-app
+initial profile.
+
+The in-repository FerroConfigurator under `tools/ferro-configurator` has no
+actuator or arming authority. It verifies the release manifest/image before
+ROM-DFU, exposes all 21 USB parameters with save readback, selectively resumes
+flight downloads, and converts BB2 to minimal ULog. Its ready
+`flash_blackbox` image still requires final props-off target acceptance.
+
 Flights 12-20 in `logs/foxeer-rear-battery-hop.fwbb` exposed retained
 yaw-integral state across disarm/rearm boundaries. The shared reset fix is now
 implemented, but I must remain zero until target evidence proves that every
@@ -156,14 +167,14 @@ Open logging-format TODO:
   boundary, while a lower-priority owner performs ULog framing and flash I/O.
   Provide host tests with known-good ULog readers and a migration/conversion
   path for retained BB2/`.fwbb` evidence before replacing the current format.
-- The first migration path now exists as `tools/fwbb_to_ulog.py`. It validates
-  every `.fwbb` page through the existing parser, converts exactly one selected
-  flight, and emits schema version 1 of the compact
-  `ferrowasp_rate_control` topic. Synthetic format/timing/dropout tests pass,
-  and PyULog 1.2.3 independently accepted the converted real Foxeer flight 11
-  archive as uncorrupted with all 24,612 samples and its 61.527-second
-  timeline. Native firmware ULog framing, parameters, richer metadata, and
-  replacement of `.fwbb` remain open work.
+- Migration paths now exist in both `tools/fwbb_to_ulog.py` and the packaged
+  native FerroConfigurator. Both validate every `.fwbb` page, convert exactly
+  one selected flight, and emit schema version 1 of the compact
+  `ferrowasp_rate_control` topic. Synthetic format/timing/dropout tests pass;
+  the native output is byte-identical to the Python reference for retained
+  flight 27, and PyULog 1.2.3 previously accepted the reference converter's
+  real Foxeer flight 11 output as uncorrupted. Native firmware ULog framing,
+  parameters, richer metadata, and replacement of `.fwbb` remain open work.
 - Onboard BB2 retrieval is now flight-aware. The USB host tool can catalog
   contiguous flight page ranges, download `--flight-id latest` or a numeric
   ID, and resume only after validating the selected flight ID, per-flight page

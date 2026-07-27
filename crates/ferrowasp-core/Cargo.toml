@@ -14,6 +14,7 @@ heapless = { workspace = true }
 
 [features]
 default = []
+std = ["critical-section/std"]
 bench_motor1_only = []
 bench_motor2_only = []
 bench_motor3_only = []
