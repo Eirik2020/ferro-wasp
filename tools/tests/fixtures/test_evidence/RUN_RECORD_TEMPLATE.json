@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "run_id": "YYYYMMDDTHHMMSSZ__TEST-ID__target__01",
+  "test_id": "TEST-ID",
+  "started_at_utc": "YYYY-MM-DDTHH:MM:SSZ",
+  "completed_at_utc": "YYYY-MM-DDTHH:MM:SSZ",
+  "target": "common",
+  "tier": "software",
+  "result": "inconclusive",
+  "definition": {
+    "catalog_sha256": "",
+    "procedure_path": "",
+    "procedure_heading": "",
+    "procedure_sha256": ""
+  },
+  "execution": {
+    "performed_by": "agent",
+    "user_confirmed": false
+  },
+  "candidate": {
+    "revision": "",
+    "working_tree": "clean",
+    "firmware_sha256": null,
+    "features": [],
+    "target_triple": null,
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "not-applicable",
+    "actuator_power": "not-applicable",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [],
+  "artifacts": [],
+  "measurements": {},
+  "observations": [],
+  "limitations": [],
+  "stop_conditions_triggered": []
+}

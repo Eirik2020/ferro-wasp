@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "run_id": "20260727T161500Z__BENCH-FCU3-001__common__01",
+  "test_id": "BENCH-FCU3-001",
+  "started_at_utc": "2026-07-27T16:10:00Z",
+  "completed_at_utc": "2026-07-27T16:15:00Z",
+  "target": "common",
+  "tier": "flight",
+  "result": "inconclusive",
+  "definition": {
+    "catalog_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "procedure_path": "project_docs/testing/targets/fcu3.md",
+    "procedure_heading": "FCU3 Powered Props-Off DShot Gate",
+    "procedure_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "working_tree": "clean",
+    "firmware_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "features": [
+      "dshot"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "installed",
+    "actuator_power": "connected",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [],
+  "artifacts": [],
+  "measurements": {},
+  "observations": [],
+  "limitations": [],
+  "stop_conditions_triggered": []
+}

@@ -1456,6 +1456,10 @@ mod app {
                 *rates = [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered];
             });
             if !control_armed {
+                // Golden-app invariant: no PID/filter/setpoint/mixer state may
+                // survive an unarmed control tick into a later armed session.
+                fc.reset_control_state();
+
                 let pending_seq = cx.shared.tuning_request_seq.lock(|seq| *seq);
                 if pending_seq != *cx.local.applied_tuning_seq {
                     let profile = cx.shared.tuning_profile.lock(|profile| *profile);
@@ -3766,9 +3770,10 @@ mod app {
             rc_link_frame_writer,
             rc_link_reported_valid: bool = false,
             rc_link_reported_invalidation_seq: u32 = 0
-        ]
+        ],
+        shared = [tuning_profile]
     )]
-    async fn rc_input(cx: rc_input::Context) {
+    async fn rc_input(mut cx: rc_input::Context) {
         use embedded_io_async::Read;
 
         loop {
@@ -3838,11 +3843,13 @@ mod app {
                     continue;
                 }
 
-                let rc_cmd = dt::remap_rc_channels(
+                let rc_rate_profile = cx.shared.tuning_profile.lock(|profile| profile.rc_rates);
+                let rc_cmd = dt::remap_rc_channels_with_profile(
                     pkt.channels[0],
                     pkt.channels[1],
                     pkt.channels[3],
                     pkt.channels[2],
+                    rc_rate_profile,
                 );
                 let arm_high = pkt.channels[8] > safety::ARM_THRESHOLD;
                 let now_us = Mono::now().duration_since_epoch().to_micros();

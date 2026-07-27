@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "run_id": "20260727T154500Z__BENCH-FCU3-001__fcu3__01",
+  "test_id": "BENCH-FCU3-001",
+  "started_at_utc": "2026-07-27T15:40:00Z",
+  "completed_at_utc": "2026-07-27T15:45:00Z",
+  "target": "fcu3",
+  "tier": "bench-powered-props-off",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "procedure_path": "project_docs/testing/targets/fcu3.md",
+    "procedure_heading": "FCU3 Powered Props-Off DShot Gate",
+    "procedure_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+  },
+  "execution": {
+    "performed_by": "agent",
+    "user_confirmed": false
+  },
+  "candidate": {
+    "revision": "dirty working tree",
+    "working_tree": "dirty",
+    "firmware_sha256": null,
+    "features": [
+      "dshot"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "unknown",
+    "actuator_power": "not-applicable",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [],
+  "artifacts": [],
+  "measurements": {
+    "samples": [
+      1,
+      2,
+      3
+    ]
+  },
+  "observations": [],
+  "limitations": [],
+  "stop_conditions_triggered": [
+    "unexpected motor output"
+  ]
+}

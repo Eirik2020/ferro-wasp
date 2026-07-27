@@ -229,7 +229,7 @@ Relevant docs:
 - `project_docs/PUBLICATION_CHECKLIST.md`
 - `project_docs/CODEX_ACTIVE_WORK.md`
 - `mdbook/src/current_support.md`
-- `project_docs/BENCH_TEST_PLAN.md`
+- `project_docs/testing/README.md`
 - `mdbook/src/roadmap.md`
 - `project_docs/CROSS_REPO_SYNC.md`
 

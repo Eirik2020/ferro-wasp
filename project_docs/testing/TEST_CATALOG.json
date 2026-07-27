@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "tests": [
+    {
+      "id": "SW-COMMON-001",
+      "summary": "Run the repository software-only validation baseline.",
+      "target": "common",
+      "tier": "software",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/",
+          "crates/",
+          "project_docs/",
+          "tools/"
+        ],
+        "features": [],
+        "invocations": [
+          "software",
+          "test"
+        ]
+      },
+      "procedure": {
+        "path": "CONTRIBUTING.md",
+        "heading": "Development Workflow"
+      },
+      "prerequisites": [],
+      "requires_user_execution": false,
+      "stop_conditions": [],
+      "evidence": [
+        "commands",
+        "exit status",
+        "failures or skipped checks"
+      ]
+    },
+    {
+      "id": "BUILD-FCU3-001",
+      "summary": "Check the exact FCU3 application and selected feature set.",
+      "target": "fcu3",
+      "tier": "embedded-build",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/stm32f405-flight/",
+          "crates/"
+        ],
+        "features": [
+          "board-ferrowasp-fcu3",
+          "dshot"
+        ],
+        "invocations": [
+          "build",
+          "test"
+        ]
+      },
+      "procedure": {
+        "path": "apps/stm32f405-flight/README.md",
+        "heading": "Build"
+      },
+      "prerequisites": [
+        "SW-COMMON-001"
+      ],
+      "requires_user_execution": false,
+      "stop_conditions": [],
+      "evidence": [
+        "commit or working-tree identity",
+        "exact feature set",
+        "target triple",
+        "command and exit status"
+      ]
+    },
+    {
+      "id": "BUILD-FOX-001",
+      "summary": "Check the exact Foxeer application and selected feature set.",
+      "target": "foxeer-f405-v2",
+      "tier": "embedded-build",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/foxeer-f405-v2/",
+          "crates/"
+        ],
+        "features": [
+          "board-foxeer-f405-v2",
+          "dshot"
+        ],
+        "invocations": [
+          "build",
+          "test"
+        ]
+      },
+      "procedure": {
+        "path": "apps/foxeer-f405-v2/README.md",
+        "heading": "Build"
+      },
+      "prerequisites": [
+        "SW-COMMON-001"
+      ],
+      "requires_user_execution": false,
+      "stop_conditions": [],
+      "evidence": [
+        "commit or working-tree identity",
+        "exact feature set",
+        "target triple",
+        "command and exit status"
+      ]
+    },
+    {
+      "id": "BENCH-COMMON-001",
+      "summary": "Establish common boot, idle, and actuator-inhibit behavior without actuator power.",
+      "target": "common",
+      "tier": "bench-unpowered",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/",
+          "crates/ferrowasp-actuator/",
+          "crates/ferrowasp-core/src/safety.rs",
+          "crates/ferrowasp-tasks/"
+        ],
+        "features": [],
+        "invocations": [
+          "bench",
+          "preflight"
+        ]
+      },
+      "procedure": {
+        "path": "TARGET_VERIFICATION.md",
+        "heading": "Boot and Idle State"
+      },
+      "prerequisites": [
+        "SW-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "unexpected motor output or actuator activity",
+        "boot, panic, health, or arming state cannot be observed",
+        "exact target or feature set is unknown"
+      ],
+      "evidence": [
+        "board identity",
+        "firmware image hash",
+        "exact feature set",
+        "power and propeller state",
+        "boot and idle log"
+      ]
+    },
+    {
+      "id": "BENCH-FOX-USB-001",
+      "summary": "Validate Foxeer disarmed USB RC configuration and restore the reviewed baseline.",
+      "target": "foxeer-f405-v2",
+      "tier": "bench-unpowered",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/foxeer-f405-v2/",
+          "crates/ferrowasp-core/src/blackbox.rs",
+          "crates/ferrowasp-tasks/src/flash_storage.rs",
+          "tools/ferrowasp_storage.py"
+        ],
+        "features": [
+          "flash_blackbox",
+          "usb_serial"
+        ],
+        "invocations": [
+          "bench",
+          "preflight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "heading": "Foxeer USB RC Configuration Gate"
+      },
+      "prerequisites": [
+        "BUILD-FOX-001",
+        "BENCH-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "the exact image, features, propeller state, or actuator-power state is unknown",
+        "the target arms, produces actuator activity, or requires actuator power",
+        "invalid values are accepted or valid values cannot be saved and applied without reboot",
+        "the temporary profile does not persist across cold boot or the reviewed baseline cannot be restored"
+      ],
+      "evidence": [
+        "commit or working-tree identity and firmware image hash",
+        "exact feature set and power/propeller state",
+        "invalid-value rejection and same-boot temporary configuration",
+        "cold-boot temporary configuration",
+        "restored baseline before and after cold boot"
+      ]
+    },
+    {
+      "id": "BENCH-FCU3-DSHOT-001",
+      "summary": "Run the FCU3 powered props-off exact-flight-image DShot gate.",
+      "target": "fcu3",
+      "tier": "bench-powered-props-off",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/stm32f405-flight/",
+          "crates/ferrowasp-bsp/src/stm32f4/ferrowasp_fcu3/",
+          "crates/ferrowasp-stm32f4/src/dshot.rs"
+        ],
+        "features": [
+          "dshot",
+          "blackbox_defmt"
+        ],
+        "invocations": [
+          "bench",
+          "preflight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/fcu3.md",
+        "heading": "FCU3 Powered Props-Off DShot Gate"
+      },
+      "prerequisites": [
+        "BUILD-FCU3-001",
+        "BENCH-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "propellers are installed",
+        "unexpected motor identity, direction, command, or arming behavior",
+        "DShot transport fault, RC loss, stale command, smoke, heat, or rough motor sound"
+      ],
+      "evidence": [
+        "commit or working-tree identity, exact features, and candidate ELF hash",
+        "matching logger ELF hash and retained RTT log",
+        "FCU3 board and IMU identity with power and propeller state",
+        "unpowered DShot counters and mapping evidence when required",
+        "arming, eRPM, telemetry, disarming, and RC-loss evidence",
+        "stick direction, rate limit, and correction-opposition observations"
+      ]
+    },
+    {
+      "id": "BENCH-FOX-001",
+      "summary": "Run the Foxeer powered props-off exact-flight-image gate.",
+      "target": "foxeer-f405-v2",
+      "tier": "bench-powered-props-off",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/foxeer-f405-v2/",
+          "crates/ferrowasp-bsp/src/stm32f4/foxeer_f405_v2/"
+        ],
+        "features": [
+          "dshot",
+          "flash_blackbox"
+        ],
+        "invocations": [
+          "bench",
+          "preflight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "heading": "Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "prerequisites": [
+        "BENCH-FOX-USB-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "propellers are installed",
+        "physical and controller axis signs do not match the reviewed convention",
+        "unexpected motor identity, direction, command, or arming behavior",
+        "transport fault, RC loss, smoke, heat, or rough motor sound"
+      ],
+      "evidence": [
+        "commit or working-tree identity, firmware image hash, and exact feature set",
+        "persisted configuration and power/propeller state",
+        "Foxeer board and IMU identity",
+        "arming, disarming, RC-loss, DShot, and telemetry evidence",
+        "motor identity, RC direction and limit, and correction-opposition observations",
+        "selected onboard flight and log identity"
+      ]
+    },
+    {
+      "id": "PREFLIGHT-FCU3-001",
+      "summary": "Run the final FCU3 exact-image preflight gate.",
+      "target": "fcu3",
+      "tier": "preflight",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/stm32f405-flight/",
+          "crates/"
+        ],
+        "features": [
+          "dshot",
+          "blackbox_defmt"
+        ],
+        "invocations": [
+          "preflight",
+          "flight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/fcu3.md",
+        "heading": "FCU3 Final Preflight Gate"
+      },
+      "prerequisites": [
+        "BENCH-FCU3-DSHOT-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "the exact image, features, configuration, or matching logger ELF is unknown",
+        "motor identity, gyro signs, tilt correction, arming, disarm, or RC-loss behavior is not confirmed",
+        "smoke, heat, abnormal current, vibration, or reinforcing correction is observed"
+      ],
+      "evidence": [
+        "preflight checklist",
+        "commit or working-tree identity, candidate and logger ELF hashes, and exact features",
+        "runtime tuning snapshot",
+        "props-off regression evidence",
+        "logger session and decoded sample",
+        "aircraft, environment, and operator confirmation"
+      ]
+    },
+    {
+      "id": "PREFLIGHT-FOX-001",
+      "summary": "Run the final Foxeer exact-image preflight gate.",
+      "target": "foxeer-f405-v2",
+      "tier": "preflight",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/foxeer-f405-v2/",
+          "crates/"
+        ],
+        "features": [
+          "dshot",
+          "flash_blackbox"
+        ],
+        "invocations": [
+          "preflight",
+          "flight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "heading": "Foxeer Final Preflight Gate"
+      },
+      "prerequisites": [
+        "BENCH-FOX-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "the exact image, persisted configuration, feature set, or flight-log state is unknown",
+        "motor opposition, RC direction, arming, disarm, or RC-loss behavior is not confirmed props-off",
+        "withdrawn gains or a pre-fix image is selected",
+        "smoke, heat, abnormal current, vibration, or reinforcing correction is observed"
+      ],
+      "evidence": [
+        "preflight checklist",
+        "commit or working-tree identity, firmware image hash, and exact features",
+        "persisted configuration snapshot",
+        "props-off regression evidence",
+        "planned flight ID and available onboard-log capacity",
+        "aircraft, environment, and operator confirmation"
+      ]
+    },
+    {
+      "id": "FLIGHT-FCU3-001",
+      "summary": "Run one bounded logged FCU3 characterization flight.",
+      "target": "fcu3",
+      "tier": "flight",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/stm32f405-flight/",
+          "crates/"
+        ],
+        "features": [
+          "dshot",
+          "blackbox_defmt"
+        ],
+        "invocations": [
+          "flight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/fcu3.md",
+        "heading": "FCU3 Bounded Logged Flight Test"
+      },
+      "prerequisites": [
+        "PREFLIGHT-FCU3-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "any preflight prerequisite is incomplete or needs review",
+        "wrong motor or stick response",
+        "roll, pitch, or yaw runaway",
+        "hard oscillation, smoke, heat, rough motor sound, abnormal current, or loss of control confidence"
+      ],
+      "evidence": [
+        "operator and environmental conditions",
+        "candidate and matching logger ELF hashes, exact features, and runtime tuning",
+        "retained RTT flight log and SHA-256",
+        "command tracking, oscillation, mixer headroom, and controller-boundary review",
+        "stop-condition observations",
+        "post-flight inspection"
+      ]
+    },
+    {
+      "id": "FLIGHT-FOX-001",
+      "summary": "Run one conservative logged Foxeer characterization hop.",
+      "target": "foxeer-f405-v2",
+      "tier": "flight",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "apps/foxeer-f405-v2/",
+          "crates/"
+        ],
+        "features": [
+          "dshot",
+          "flash_blackbox"
+        ],
+        "invocations": [
+          "flight"
+        ]
+      },
+      "procedure": {
+        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "heading": "Foxeer Conservative Logged-Hop Flight Test"
+      },
+      "prerequisites": [
+        "PREFLIGHT-FOX-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "any preflight prerequisite is incomplete or needs review",
+        "wrong motor, stick, or tilt-correction response",
+        "roll, pitch, or yaw runaway",
+        "hard oscillation, smoke, heat, rough motor sound, abnormal current, or loss of control confidence"
+      ],
+      "evidence": [
+        "operator and environmental conditions",
+        "firmware image hash, exact features, and persisted configuration",
+        "selected onboard flight ID and CRC-validated downloaded log with SHA-256",
+        "command tracking, oscillation, mixer headroom, and arm-boundary review",
+        "stop-condition observations",
+        "post-flight inspection"
+      ]
+    }
+  ]
+}

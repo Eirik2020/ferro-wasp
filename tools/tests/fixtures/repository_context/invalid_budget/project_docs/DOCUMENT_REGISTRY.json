@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "immutable_archives": [
+    {
+      "path": "CONTEXT.md",
+      "bytes": 1,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "documents": [
+    {
+      "path": "project_docs/README.md",
+      "role": "test-document",
+      "lifecycle": "durable",
+      "context": "targeted"
+    }
+  ],
+  "context_budgets": [
+    {
+      "path": "CONTEXT.md",
+      "max_bytes": 4
+    },
+    {
+      "path": "project_docs/DOCUMENT_REGISTRY.json",
+      "max_bytes": 16000
+    }
+  ]
+}

@@ -1,13 +1,18 @@
 //! Portable state and bounded channels for onboard SPI-NOR storage.
 
-use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, FlightRecord, RECORDS_PER_PAGE, encode_page};
+use ferrowasp_core::blackbox::{
+    FLASH_PAGE_LEN, FLIGHT_RECORD_FLAG_BOOT_SESSION_START, FlightRecord, RECORDS_PER_PAGE,
+    encode_page,
+};
 use heapless::String;
 use heapless::spsc::{Consumer, Producer, Queue};
 
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2::rpc;
 
-use crate::drone_toolbox::{PidGains, RateControllerGains, TuningProfile};
+use crate::drone_toolbox::{
+    ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcRateProfile, TuningProfile,
+};
 
 pub const RECORD_QUEUE_CAPACITY: usize = 64;
 pub const CONFIG_SLOT_COUNT: u32 = 2;
@@ -62,6 +67,16 @@ pub enum ConfigKey {
     YawD,
     ImuLpfAlpha,
     LogRateDivisor,
+    RcDeadband,
+    RollCenterRate,
+    RollMaxRate,
+    RollExpo,
+    PitchCenterRate,
+    PitchMaxRate,
+    PitchExpo,
+    YawCenterRate,
+    YawMaxRate,
+    YawExpo,
 }
 
 impl ConfigKey {
@@ -78,6 +93,16 @@ impl ConfigKey {
             Self::YawD => "yaw_d",
             Self::ImuLpfAlpha => "imu_lpf_alpha",
             Self::LogRateDivisor => "log_rate_divisor",
+            Self::RcDeadband => "rc_deadband",
+            Self::RollCenterRate => "roll_center_rate",
+            Self::RollMaxRate => "roll_max_rate",
+            Self::RollExpo => "roll_expo",
+            Self::PitchCenterRate => "pitch_center_rate",
+            Self::PitchMaxRate => "pitch_max_rate",
+            Self::PitchExpo => "pitch_expo",
+            Self::YawCenterRate => "yaw_center_rate",
+            Self::YawMaxRate => "yaw_max_rate",
+            Self::YawExpo => "yaw_expo",
         }
     }
 
@@ -94,6 +119,16 @@ impl ConfigKey {
             "yaw_d" => Some(Self::YawD),
             "imu_lpf_alpha" => Some(Self::ImuLpfAlpha),
             "log_rate_divisor" => Some(Self::LogRateDivisor),
+            "rc_deadband" => Some(Self::RcDeadband),
+            "roll_center_rate" => Some(Self::RollCenterRate),
+            "roll_max_rate" => Some(Self::RollMaxRate),
+            "roll_expo" => Some(Self::RollExpo),
+            "pitch_center_rate" => Some(Self::PitchCenterRate),
+            "pitch_max_rate" => Some(Self::PitchMaxRate),
+            "pitch_expo" => Some(Self::PitchExpo),
+            "yaw_center_rate" => Some(Self::YawCenterRate),
+            "yaw_max_rate" => Some(Self::YawMaxRate),
+            "yaw_expo" => Some(Self::YawExpo),
             _ => None,
         }
     }
@@ -240,7 +275,9 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
     }
 }
 
-pub const STORED_CONFIG_LEN: usize = 44;
+pub const LEGACY_STORED_CONFIG_LEN: usize = 44;
+pub const STORED_CONFIG_LEN: usize = 84;
+const STORED_CONFIG_SCHEMA_VERSION: u16 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StoredConfig {
@@ -276,6 +313,28 @@ impl StoredConfig {
                 }
                 candidate.log_rate_divisor = integer;
             }
+            ConfigKey::RcDeadband => {
+                let integer = value as u16;
+                if !(0.0..=100.0).contains(&value) || integer as f32 != value {
+                    return false;
+                }
+                candidate.tuning.rc_rates.deadband = integer;
+            }
+            ConfigKey::RollCenterRate => {
+                candidate.tuning.rc_rates.roll.center_sensitivity_dps = value
+            }
+            ConfigKey::RollMaxRate => candidate.tuning.rc_rates.roll.max_rate_dps = value,
+            ConfigKey::RollExpo => candidate.tuning.rc_rates.roll.expo = value,
+            ConfigKey::PitchCenterRate => {
+                candidate.tuning.rc_rates.pitch.center_sensitivity_dps = value
+            }
+            ConfigKey::PitchMaxRate => candidate.tuning.rc_rates.pitch.max_rate_dps = value,
+            ConfigKey::PitchExpo => candidate.tuning.rc_rates.pitch.expo = value,
+            ConfigKey::YawCenterRate => {
+                candidate.tuning.rc_rates.yaw.center_sensitivity_dps = value
+            }
+            ConfigKey::YawMaxRate => candidate.tuning.rc_rates.yaw.max_rate_dps = value,
+            ConfigKey::YawExpo => candidate.tuning.rc_rates.yaw.expo = value,
         }
         if candidate.tuning.sanitized() != candidate.tuning {
             return false;
@@ -297,6 +356,16 @@ impl StoredConfig {
             ConfigKey::YawD => self.tuning.rate_gains.yaw.d,
             ConfigKey::ImuLpfAlpha => self.tuning.imu_lpf_alpha,
             ConfigKey::LogRateDivisor => self.log_rate_divisor as f32,
+            ConfigKey::RcDeadband => self.tuning.rc_rates.deadband as f32,
+            ConfigKey::RollCenterRate => self.tuning.rc_rates.roll.center_sensitivity_dps,
+            ConfigKey::RollMaxRate => self.tuning.rc_rates.roll.max_rate_dps,
+            ConfigKey::RollExpo => self.tuning.rc_rates.roll.expo,
+            ConfigKey::PitchCenterRate => self.tuning.rc_rates.pitch.center_sensitivity_dps,
+            ConfigKey::PitchMaxRate => self.tuning.rc_rates.pitch.max_rate_dps,
+            ConfigKey::PitchExpo => self.tuning.rc_rates.pitch.expo,
+            ConfigKey::YawCenterRate => self.tuning.rc_rates.yaw.center_sensitivity_dps,
+            ConfigKey::YawMaxRate => self.tuning.rc_rates.yaw.max_rate_dps,
+            ConfigKey::YawExpo => self.tuning.rc_rates.yaw.expo,
         }
     }
 
@@ -319,11 +388,28 @@ impl StoredConfig {
             output[start..start + 4].copy_from_slice(&value.to_bits().to_le_bytes());
         }
         output[40..42].copy_from_slice(&self.log_rate_divisor.to_le_bytes());
+        output[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION.to_le_bytes());
+        let rate_values = [
+            self.tuning.rc_rates.roll.center_sensitivity_dps,
+            self.tuning.rc_rates.roll.max_rate_dps,
+            self.tuning.rc_rates.roll.expo,
+            self.tuning.rc_rates.pitch.center_sensitivity_dps,
+            self.tuning.rc_rates.pitch.max_rate_dps,
+            self.tuning.rc_rates.pitch.expo,
+            self.tuning.rc_rates.yaw.center_sensitivity_dps,
+            self.tuning.rc_rates.yaw.max_rate_dps,
+            self.tuning.rc_rates.yaw.expo,
+        ];
+        for (index, value) in rate_values.iter().enumerate() {
+            let start = 44 + index * 4;
+            output[start..start + 4].copy_from_slice(&value.to_bits().to_le_bytes());
+        }
+        output[80..82].copy_from_slice(&self.tuning.rc_rates.deadband.to_le_bytes());
         output
     }
 
     pub fn decode(input: &[u8]) -> Option<Self> {
-        if input.len() != STORED_CONFIG_LEN {
+        if input.len() != LEGACY_STORED_CONFIG_LEN && input.len() != STORED_CONFIG_LEN {
             return None;
         }
         let mut values = [0.0f32; 10];
@@ -336,6 +422,29 @@ impl StoredConfig {
                 input[start + 3],
             ]));
         }
+        let rc_rates = if input.len() == LEGACY_STORED_CONFIG_LEN {
+            RC_RATE_PROFILE
+        } else {
+            if u16::from_le_bytes([input[42], input[43]]) != STORED_CONFIG_SCHEMA_VERSION {
+                return None;
+            }
+            let mut rate_values = [0.0f32; 9];
+            for (index, value) in rate_values.iter_mut().enumerate() {
+                let start = 44 + index * 4;
+                *value = f32::from_bits(u32::from_le_bytes([
+                    input[start],
+                    input[start + 1],
+                    input[start + 2],
+                    input[start + 3],
+                ]));
+            }
+            RcRateProfile {
+                roll: ActualRateAxis::new(rate_values[0], rate_values[1], rate_values[2]),
+                pitch: ActualRateAxis::new(rate_values[3], rate_values[4], rate_values[5]),
+                yaw: ActualRateAxis::new(rate_values[6], rate_values[7], rate_values[8]),
+                deadband: u16::from_le_bytes([input[80], input[81]]),
+            }
+        };
         let candidate = Self {
             tuning: TuningProfile {
                 rate_gains: RateControllerGains {
@@ -356,6 +465,7 @@ impl StoredConfig {
                     },
                 },
                 imu_lpf_alpha: values[9],
+                rc_rates,
             },
             log_rate_divisor: u16::from_le_bytes([input[40], input[41]]),
         };
@@ -388,7 +498,13 @@ impl StoredConfig {
 
     #[cfg(feature = "mspv2_configurator")]
     pub fn from_rpc(config: rpc::ConfigV1) -> Result<Self, rpc::ConfigFieldId> {
-        let mut stored = Self::first_hop_default();
+        Self::first_hop_default().apply_rpc(config)
+    }
+
+    /// Applies the legacy configurator schema without discarding newer fields
+    /// that are currently available through the USB text CLI only.
+    #[cfg(feature = "mspv2_configurator")]
+    pub fn apply_rpc(mut self, config: rpc::ConfigV1) -> Result<Self, rpc::ConfigFieldId> {
         let fields = [
             (ConfigKey::RollP, config.roll_p, rpc::ConfigFieldId::RollP),
             (ConfigKey::RollI, config.roll_i, rpc::ConfigFieldId::RollI),
@@ -423,11 +539,11 @@ impl StoredConfig {
             ),
         ];
         for (key, value, field) in fields {
-            if !stored.set(key, value) {
+            if !self.set(key, value) {
                 return Err(field);
             }
         }
-        Ok(stored)
+        Ok(self)
     }
 
     #[cfg(feature = "mspv2_configurator")]
@@ -486,6 +602,7 @@ pub struct PageAssembler {
     flight_id: u32,
     page_sequence: u32,
     recording: bool,
+    boot_session_start_pending: bool,
     ready_page: [u8; FLASH_PAGE_LEN],
     page_ready: bool,
 }
@@ -509,16 +626,18 @@ impl PageAssembler {
             flight_id: 0,
             page_sequence: 0,
             recording: false,
+            boot_session_start_pending: false,
             ready_page: [0xff; FLASH_PAGE_LEN],
             page_ready: false,
         }
     }
 
-    pub fn start(&mut self, flight_id: u32) {
+    pub fn start(&mut self, flight_id: u32, boot_session_start: bool) {
         self.record_count = 0;
         self.flight_id = flight_id;
         self.page_sequence = 0;
         self.recording = true;
+        self.boot_session_start_pending = boot_session_start;
         self.page_ready = false;
     }
 
@@ -529,12 +648,16 @@ impl PageAssembler {
     /// Returns `true` when a complete page is available through
     /// [`Self::take_ready_page`]. The caller must consume that page before
     /// submitting another record.
-    pub fn push(&mut self, record: FlightRecord) -> Result<bool, AssembleError> {
+    pub fn push(&mut self, mut record: FlightRecord) -> Result<bool, AssembleError> {
         if !self.recording {
             return Err(AssembleError::NotRecording);
         }
         if self.page_ready {
             return Err(AssembleError::PageNotConsumed);
+        }
+        if self.boot_session_start_pending {
+            record.flags |= FLIGHT_RECORD_FLAG_BOOT_SESSION_START;
+            self.boot_session_start_pending = false;
         }
         self.records[self.record_count] = record;
         self.record_count += 1;
@@ -620,7 +743,7 @@ mod tests {
     #[test]
     fn assembler_emits_every_five_records_and_flushes_partial_page() {
         let mut assembler = PageAssembler::new();
-        assembler.start(12);
+        assembler.start(12, false);
         for sequence in 0..4 {
             assert_eq!(assembler.push(record(sequence)), Ok(false));
         }
@@ -633,6 +756,35 @@ mod tests {
         assert!(assembler.stop().unwrap());
         let partial = assembler.take_ready_page().unwrap();
         assert_eq!(decode_page(&partial).unwrap().record_count, 1);
+    }
+
+    #[test]
+    fn assembler_marks_only_first_record_of_first_flight_after_boot() {
+        let mut assembler = PageAssembler::new();
+        assembler.start(12, true);
+        for sequence in 0..5 {
+            assembler.push(record(sequence)).unwrap();
+        }
+        let first_page = assembler.take_ready_page().unwrap();
+        assert_ne!(
+            record_from_page(&first_page, 0).unwrap().flags & FLIGHT_RECORD_FLAG_BOOT_SESSION_START,
+            0
+        );
+        assert_eq!(
+            record_from_page(&first_page, 1).unwrap().flags & FLIGHT_RECORD_FLAG_BOOT_SESSION_START,
+            0
+        );
+        assembler.stop().unwrap();
+
+        assembler.start(13, false);
+        assembler.push(record(5)).unwrap();
+        assembler.stop().unwrap();
+        let second_flight = assembler.take_ready_page().unwrap();
+        assert_eq!(
+            record_from_page(&second_flight, 0).unwrap().flags
+                & FLIGHT_RECORD_FLAG_BOOT_SESSION_START,
+            0
+        );
     }
 
     #[test]
@@ -676,6 +828,14 @@ mod tests {
             Ok(StorageCommand::ConfigSet(ConfigKey::PitchP, 0.30))
         );
         assert_eq!(
+            parse_command("config set roll_expo 0.50"),
+            Ok(StorageCommand::ConfigSet(ConfigKey::RollExpo, 0.50))
+        );
+        assert_eq!(
+            parse_command("config get rc_deadband"),
+            Ok(StorageCommand::ConfigGet(ConfigKey::RcDeadband))
+        );
+        assert_eq!(
             parse_command("config get motor_authority"),
             Err(CommandParseError::InvalidArgument)
         );
@@ -686,11 +846,23 @@ mod tests {
         let mut config = StoredConfig::first_hop_default();
         assert!(config.set(ConfigKey::PitchP, 0.30));
         assert!(config.set(ConfigKey::LogRateDivisor, 2.0));
+        assert!(config.set(ConfigKey::RcDeadband, 12.0));
+        assert!(config.set(ConfigKey::RollMaxRate, 600.0));
+        assert!(config.set(ConfigKey::RollCenterRate, 120.0));
+        assert!(config.set(ConfigKey::RollExpo, 0.6));
         assert!(!config.set(ConfigKey::RollP, 100.0));
+        assert!(!config.set(ConfigKey::RcDeadband, 12.5));
+        assert!(!config.set(ConfigKey::RollCenterRate, 700.0));
+        assert!(!config.set(ConfigKey::RollMaxRate, 100.0));
+        assert!(!config.set(ConfigKey::RollExpo, 1.1));
         let encoded = config.encode();
         let decoded = StoredConfig::decode(&encoded).unwrap();
         assert_eq!(decoded.get(ConfigKey::PitchP), 0.30);
         assert_eq!(decoded.log_rate_divisor, 2);
+        assert_eq!(decoded.get(ConfigKey::RcDeadband), 12.0);
+        assert_eq!(decoded.get(ConfigKey::RollCenterRate), 120.0);
+        assert_eq!(decoded.get(ConfigKey::RollMaxRate), 600.0);
+        assert_eq!(decoded.get(ConfigKey::RollExpo), 0.6);
 
         let mut corrupt = encoded;
         corrupt[40] = 0;
@@ -698,11 +870,32 @@ mod tests {
         assert_eq!(StoredConfig::decode(&corrupt), None);
     }
 
+    #[test]
+    fn legacy_stored_config_migrates_with_current_rc_defaults() {
+        let current = StoredConfig::first_hop_default().encode();
+        let mut legacy = [0u8; LEGACY_STORED_CONFIG_LEN];
+        legacy.copy_from_slice(&current[..LEGACY_STORED_CONFIG_LEN]);
+        legacy[42..44].fill(0);
+
+        let migrated = StoredConfig::decode(&legacy).unwrap();
+
+        assert_eq!(migrated.tuning.rc_rates, RC_RATE_PROFILE);
+        assert_eq!(migrated.log_rate_divisor, 1);
+    }
+
     #[cfg(feature = "mspv2_configurator")]
     #[test]
     fn rpc_config_round_trips_and_reports_the_invalid_field() {
         let stored = StoredConfig::first_hop_default();
         assert_eq!(StoredConfig::from_rpc(stored.to_rpc()), Ok(stored));
+
+        let mut with_usb_rates = stored;
+        assert!(with_usb_rates.set(ConfigKey::YawMaxRate, 350.0));
+        let mut rpc_update = with_usb_rates.to_rpc();
+        rpc_update.roll_p = 0.8;
+        let updated = with_usb_rates.apply_rpc(rpc_update).unwrap();
+        assert_eq!(updated.get(ConfigKey::RollP), 0.8);
+        assert_eq!(updated.get(ConfigKey::YawMaxRate), 350.0);
 
         let mut invalid = stored.to_rpc();
         invalid.imu_lpf_alpha = 1.1;

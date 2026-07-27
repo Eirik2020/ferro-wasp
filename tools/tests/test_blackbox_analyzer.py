@@ -1,13 +1,18 @@
 import unittest
 import binascii
+import math
 import struct
+from dataclasses import replace
 
 from tools.blackbox_analyzer import (
     BlackboxSample,
+    centered_drift_stats,
     flash_log_stats,
+    longest_flight_window,
     samples_from_flash_bytes,
     select_flight_samples,
     sequence_stats,
+    strongest_frequency,
     timestamp_stats,
     u32_forward_delta,
 )
@@ -159,6 +164,112 @@ class SequenceStatsTests(unittest.TestCase):
     def test_rejects_non_page_data_in_onboard_flash_download(self) -> None:
         with self.assertRaisesRegex(OSError, "invalid flash page magic"):
             samples_from_flash_bytes(bytes(256))
+
+    def test_centered_drift_reports_signed_mean_rate(self) -> None:
+        base = replace(
+            sample(1, 10, 0),
+            flags=3,
+            throttle=600,
+            gyro_dps=(-2.0, 4.0, 1.0),
+            flight_id=7,
+        )
+        samples = [
+            base,
+            replace(
+                base,
+                seq=2,
+                timestamp_us=2_500,
+                gyro_dps=(-4.0, 6.0, 3.0),
+            ),
+            replace(
+                base,
+                seq=3,
+                timestamp_us=5_000,
+                gyro_dps=(-6.0, 8.0, 5.0),
+            ),
+        ]
+
+        stats = centered_drift_stats(samples, settle_seconds=0.0)
+
+        self.assertIsNotNone(stats)
+        assert stats is not None
+        self.assertEqual(stats.sample_count, 3)
+        self.assertAlmostEqual(stats.axes[0].mean_dps, -4.0)
+        self.assertAlmostEqual(stats.axes[1].mean_dps, 6.0)
+        self.assertAlmostEqual(stats.axes[2].mean_dps, 3.0)
+        self.assertAlmostEqual(stats.integrated_duration_s, 0.005)
+        self.assertAlmostEqual(stats.axes[0].signed_rotation_degrees, -0.02)
+
+    def test_centered_drift_rejects_commands_and_low_throttle(self) -> None:
+        eligible = replace(
+            sample(1, 10, 0),
+            flags=3,
+            throttle=600,
+            gyro_dps=(1.0, 2.0, 3.0),
+        )
+        samples = [
+            eligible,
+            replace(eligible, seq=2, command_dps=(0.0, 0.0, 1.0)),
+            replace(eligible, seq=3, throttle=499),
+            replace(eligible, seq=4, flags=2),
+        ]
+
+        stats = centered_drift_stats(samples, settle_seconds=0.0)
+
+        self.assertIsNotNone(stats)
+        assert stats is not None
+        self.assertEqual(stats.sample_count, 1)
+        self.assertEqual(stats.axes[0].mean_dps, 1.0)
+
+    def test_centered_drift_waits_after_command_returns_to_center(self) -> None:
+        base = replace(
+            sample(1, 10, 0),
+            flags=3,
+            throttle=600,
+            gyro_dps=(10.0, 0.0, 0.0),
+        )
+        samples = [
+            replace(base, command_dps=(1.0, 0.0, 0.0)),
+            replace(base, seq=2, timestamp_us=2_500),
+            replace(base, seq=3, timestamp_us=5_000),
+            replace(base, seq=4, timestamp_us=7_500, gyro_dps=(1.0, 0.0, 0.0)),
+        ]
+
+        stats = centered_drift_stats(samples, settle_seconds=2.0 / 400.0)
+
+        self.assertIsNotNone(stats)
+        assert stats is not None
+        self.assertEqual(stats.sample_count, 1)
+        self.assertEqual(stats.axes[0].mean_dps, 1.0)
+
+    def test_longest_flight_window_excludes_ground_and_short_throttle_runs(self) -> None:
+        base = replace(sample(1, 10, 0), flags=3, throttle=600, flight_id=4)
+        samples = [
+            replace(base, seq=1, flags=2, throttle=0),
+            replace(base, seq=2),
+            replace(base, seq=3),
+            replace(base, seq=4, throttle=400),
+            replace(base, seq=5),
+            replace(base, seq=6),
+            replace(base, seq=7),
+        ]
+
+        selected = longest_flight_window(samples, 500)
+
+        self.assertEqual([value.seq for value in selected], [5, 6, 7])
+
+    def test_frequency_search_retains_high_frequency_coverage_on_long_logs(self) -> None:
+        sample_rate_hz = 400.0
+        values = [
+            math.sin(2.0 * math.pi * 12.0 * index / sample_rate_hz)
+            for index in range(8_000)
+        ]
+
+        peak = strongest_frequency(values, sample_rate_hz)
+
+        self.assertIsNotNone(peak)
+        assert peak is not None
+        self.assertAlmostEqual(peak[0], 12.0, delta=0.3)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ pub use ferrowasp_pid::{ControlOutput, Pid};
 pub const RC_CHANNEL_MIN: u16 = 192;
 pub const RC_CHANNEL_CENTER: u16 = 992;
 pub const RC_CHANNEL_MAX: u16 = 1792;
-pub const RC_RATE_MAX_DPS: f32 = 1000.0;
 pub const RC_THROTTLE_MAX: u32 = 2000;
 pub const RC_RATE_DEADBAND: i32 = 8;
 pub const RC_INVERT_ROLL: bool = false;
@@ -26,6 +25,83 @@ pub const RATE_CONTROLLER_OUTPUT_LIMIT: f32 = 2000.0;
 const RAD_TO_DEG: f32 = 57.295_78;
 
 pub type GyroAxisMap = FrameRotation;
+
+/// One axis of the deliberately small FerroWasp RC-rate model.
+///
+/// This follows Betaflight Actual Rates: center sensitivity and maximum rate
+/// are independently expressed in degrees per second, while expo moves the
+/// transition between them without changing either endpoint.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ActualRateAxis {
+    pub center_sensitivity_dps: f32,
+    pub max_rate_dps: f32,
+    pub expo: f32,
+}
+
+impl ActualRateAxis {
+    pub const fn new(center_sensitivity_dps: f32, max_rate_dps: f32, expo: f32) -> Self {
+        Self {
+            center_sensitivity_dps,
+            max_rate_dps,
+            expo,
+        }
+    }
+
+    fn sanitized(self) -> Self {
+        let center_sensitivity_dps = if self.center_sensitivity_dps.is_finite() {
+            self.center_sensitivity_dps.clamp(10.0, 500.0)
+        } else {
+            10.0
+        };
+        let max_rate_dps = if self.max_rate_dps.is_finite() {
+            self.max_rate_dps.clamp(center_sensitivity_dps, 1200.0)
+        } else {
+            center_sensitivity_dps
+        };
+        let expo = if self.expo.is_finite() {
+            self.expo.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+
+        Self {
+            center_sensitivity_dps,
+            max_rate_dps,
+            expo,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RcRateProfile {
+    pub roll: ActualRateAxis,
+    pub pitch: ActualRateAxis,
+    pub yaw: ActualRateAxis,
+    pub deadband: u16,
+}
+
+impl RcRateProfile {
+    pub fn sanitized(self) -> Self {
+        Self {
+            roll: self.roll.sanitized(),
+            pitch: self.pitch.sanitized(),
+            yaw: self.yaw.sanitized(),
+            deadband: self.deadband.min(100),
+        }
+    }
+}
+
+/// Conservative first-flight Actual Rates shared by FCU3 and Foxeer.
+///
+/// The curve is intentionally much less aggressive than the former linear
+/// +/-1000 deg/s mapping. USB persistence is deferred until the versioned
+/// configuration schema can be migrated explicitly.
+pub const RC_RATE_PROFILE: RcRateProfile = RcRateProfile {
+    roll: ActualRateAxis::new(70.0, 300.0, 0.50),
+    pitch: ActualRateAxis::new(70.0, 300.0, 0.50),
+    yaw: ActualRateAxis::new(70.0, 200.0, 0.50),
+    deadband: RC_RATE_DEADBAND as u16,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct GyroBiasUpdate {
@@ -158,15 +234,43 @@ pub struct RcCommand {
     pub throttle: u32,
 }
 
-pub fn remap_rc_rate_channel(channel: u16) -> f32 {
+fn normalized_rc_stick(channel: u16, deadband: u16) -> f32 {
     let channel = channel.clamp(RC_CHANNEL_MIN, RC_CHANNEL_MAX);
     let centered = channel as i32 - RC_CHANNEL_CENTER as i32;
+    let deadband = i32::from(deadband.min(100));
 
-    if centered.abs() <= RC_RATE_DEADBAND {
+    if centered.abs() <= deadband {
         return 0.0;
     }
 
-    centered as f32 * RC_RATE_MAX_DPS / (RC_CHANNEL_MAX - RC_CHANNEL_CENTER) as f32
+    let usable_half_span = (RC_CHANNEL_MAX - RC_CHANNEL_CENTER) as i32 - deadband;
+    let magnitude = (centered.abs() - deadband) as f32 / usable_half_span as f32;
+
+    if centered < 0 { -magnitude } else { magnitude }
+}
+
+/// Applies the Betaflight Actual Rates curve to a normalized stick value.
+///
+/// Reference implementation:
+/// <https://github.com/betaflight/betaflight/blob/master/src/main/fc/rc.c>
+pub fn apply_actual_rate(normalized_stick: f32, rate: ActualRateAxis) -> f32 {
+    let stick = if normalized_stick.is_finite() {
+        normalized_stick.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    };
+    let rate = rate.sanitized();
+    let stick_abs = stick.abs();
+    let stick_squared = stick * stick;
+    let stick_fifth = stick_squared * stick_squared * stick;
+    let transition = stick_abs * (stick_fifth * rate.expo + stick * (1.0 - rate.expo));
+    let edge_authority = rate.max_rate_dps - rate.center_sensitivity_dps;
+
+    stick * rate.center_sensitivity_dps + edge_authority * transition
+}
+
+pub fn remap_rc_rate_channel(channel: u16, rate: ActualRateAxis, deadband: u16) -> f32 {
+    apply_actual_rate(normalized_rc_stick(channel, deadband), rate)
 }
 
 pub fn maybe_invert_rate(value: f32, invert: bool) -> f32 {
@@ -186,19 +290,42 @@ pub fn remap_rc_throttle_channel(channel: u16) -> u32 {
 }
 
 pub fn remap_rc_channels(roll: u16, pitch: u16, yaw: u16, throttle: u16) -> RcCommand {
+    remap_rc_channels_with_profile(roll, pitch, yaw, throttle, RC_RATE_PROFILE)
+}
+
+pub fn remap_rc_channels_with_profile(
+    roll: u16,
+    pitch: u16,
+    yaw: u16,
+    throttle: u16,
+    profile: RcRateProfile,
+) -> RcCommand {
     let channels = [roll, pitch, yaw];
+    let profile = profile.sanitized();
 
     RcCommand {
         roll_dps: maybe_invert_rate(
-            remap_rc_rate_channel(channels[RC_ROLL_CHANNEL_INDEX]),
+            remap_rc_rate_channel(
+                channels[RC_ROLL_CHANNEL_INDEX],
+                profile.roll,
+                profile.deadband,
+            ),
             RC_INVERT_ROLL,
         ),
         pitch_dps: maybe_invert_rate(
-            remap_rc_rate_channel(channels[RC_PITCH_CHANNEL_INDEX]),
+            remap_rc_rate_channel(
+                channels[RC_PITCH_CHANNEL_INDEX],
+                profile.pitch,
+                profile.deadband,
+            ),
             RC_INVERT_PITCH,
         ),
         yaw_dps: maybe_invert_rate(
-            remap_rc_rate_channel(channels[RC_YAW_CHANNEL_INDEX]),
+            remap_rc_rate_channel(
+                channels[RC_YAW_CHANNEL_INDEX],
+                profile.yaw,
+                profile.deadband,
+            ),
             RC_INVERT_YAW,
         ),
         throttle: remap_rc_throttle_channel(throttle),
@@ -544,6 +671,7 @@ pub struct PidGains {
 pub struct TuningProfile {
     pub rate_gains: RateControllerGains,
     pub imu_lpf_alpha: f32,
+    pub rc_rates: RcRateProfile,
 }
 
 impl TuningProfile {
@@ -562,11 +690,12 @@ impl TuningProfile {
                 },
                 yaw: PidGains {
                     p: 0.3,
-                    i: 0.04,
+                    i: 0.0,
                     d: 0.0,
                 },
             },
             imu_lpf_alpha: IMU_GYRO_LPF_ALPHA,
+            rc_rates: RC_RATE_PROFILE,
         }
     }
 
@@ -590,6 +719,7 @@ impl TuningProfile {
                 },
             },
             imu_lpf_alpha: IMU_GYRO_LPF_ALPHA,
+            rc_rates: RC_RATE_PROFILE,
         }
     }
 
@@ -598,6 +728,7 @@ impl TuningProfile {
         self.rate_gains.pitch = sanitize_pid_gains(self.rate_gains.pitch);
         self.rate_gains.yaw = sanitize_pid_gains(self.rate_gains.yaw);
         self.imu_lpf_alpha = clamp_unit_interval(self.imu_lpf_alpha);
+        self.rc_rates = self.rc_rates.sanitized();
         self
     }
 }
@@ -695,6 +826,12 @@ impl RateController {
             .i_relax_setpoint_rate(RATE_CONTROLLER_I_RELAX_SETPOINT_RATE_DPS);
 
         Self { roll, pitch, yaw }
+    }
+
+    pub fn reset(&mut self) {
+        self.roll.reset();
+        self.pitch.reset();
+        self.yaw.reset();
     }
 }
 
@@ -921,6 +1058,20 @@ impl FlightController {
             RateController::new(profile.rate_gains, RATE_CONTROLLER_OUTPUT_LIMIT);
         self.rate_controller_output = RateControllerOutput::default();
         self.rate_controller_contributions = RateControllerContributions::default();
+    }
+
+    /// Clears every value that must not survive a disarm/rearm boundary.
+    ///
+    /// This includes PID integrals, derivative/filter history, previous
+    /// measurements and setpoints, requested throttle, and mixed outputs.
+    pub fn reset_control_state(&mut self) {
+        self.rate_controllers.reset();
+        self.throttle = 0.0;
+        self.rate_setpoint = RateSetpoint::default();
+        self.rate_measured = RateMeasured::default();
+        self.rate_controller_output = RateControllerOutput::default();
+        self.rate_controller_contributions = RateControllerContributions::default();
+        self.motor_commands = MotorCommands::default();
     }
     /// Updates setpoint for the roll, pitch and yaw rate.
     pub fn update_attitude_rate_setpoint(&mut self, roll: f32, pitch: f32, yaw: f32) {
@@ -1155,13 +1306,70 @@ mod tests {
     }
 
     #[test]
-    fn rc_mapping_clamps_centers_and_applies_axis_inversion() {
-        assert_close(remap_rc_rate_channel(RC_CHANNEL_CENTER), 0.0);
-        assert_close(remap_rc_rate_channel(RC_CHANNEL_CENTER + 5), 0.0);
-        assert_close(remap_rc_rate_channel(RC_CHANNEL_CENTER - 5), 0.0);
-        assert_close(remap_rc_rate_channel(RC_CHANNEL_MAX), RC_RATE_MAX_DPS);
-        assert_close(remap_rc_rate_channel(RC_CHANNEL_MIN), -RC_RATE_MAX_DPS);
-        assert_close(remap_rc_rate_channel(u16::MAX), RC_RATE_MAX_DPS);
+    fn actual_rates_keep_center_sensitivity_and_max_rate_independent() {
+        let no_expo = ActualRateAxis::new(70.0, 300.0, 0.0);
+        let full_expo = ActualRateAxis::new(70.0, 300.0, 1.0);
+
+        assert_close(apply_actual_rate(0.0, no_expo), 0.0);
+        assert_close(apply_actual_rate(1.0, no_expo), 300.0);
+        assert_close(apply_actual_rate(-1.0, full_expo), -300.0);
+        assert_close(apply_actual_rate(0.5, no_expo), 92.5);
+        assert_close(apply_actual_rate(0.5, full_expo), 38.59375);
+
+        let near_center = 0.001;
+        assert_close(apply_actual_rate(near_center, no_expo) / near_center, 70.23);
+        assert_close(
+            apply_actual_rate(near_center, full_expo) / near_center,
+            70.0,
+        );
+    }
+
+    #[test]
+    fn rc_mapping_clamps_deadbands_and_uses_axis_profiles() {
+        assert_close(
+            remap_rc_rate_channel(
+                RC_CHANNEL_CENTER,
+                RC_RATE_PROFILE.roll,
+                RC_RATE_PROFILE.deadband,
+            ),
+            0.0,
+        );
+        assert_close(
+            remap_rc_rate_channel(
+                RC_CHANNEL_CENTER + 5,
+                RC_RATE_PROFILE.roll,
+                RC_RATE_PROFILE.deadband,
+            ),
+            0.0,
+        );
+        assert_close(
+            remap_rc_rate_channel(
+                RC_CHANNEL_CENTER - 5,
+                RC_RATE_PROFILE.roll,
+                RC_RATE_PROFILE.deadband,
+            ),
+            0.0,
+        );
+        assert_close(
+            remap_rc_rate_channel(
+                RC_CHANNEL_MAX,
+                RC_RATE_PROFILE.roll,
+                RC_RATE_PROFILE.deadband,
+            ),
+            300.0,
+        );
+        assert_close(
+            remap_rc_rate_channel(
+                RC_CHANNEL_MIN,
+                RC_RATE_PROFILE.roll,
+                RC_RATE_PROFILE.deadband,
+            ),
+            -300.0,
+        );
+        assert_close(
+            remap_rc_rate_channel(u16::MAX, RC_RATE_PROFILE.yaw, RC_RATE_PROFILE.deadband),
+            200.0,
+        );
         assert_eq!(remap_rc_throttle_channel(RC_CHANNEL_MIN), 0);
         assert_eq!(remap_rc_throttle_channel(RC_CHANNEL_MAX), RC_THROTTLE_MAX);
 
@@ -1172,10 +1380,39 @@ mod tests {
             RC_CHANNEL_CENTER,
         );
 
-        assert_close(cmd.roll_dps, 100.0);
-        assert_close(cmd.pitch_dps, 200.0);
-        assert_close(cmd.yaw_dps, 300.0);
+        assert_close(cmd.roll_dps, 7.314114);
+        assert_close(cmd.pitch_dps, 17.675882);
+        assert_close(cmd.yaw_dps, 26.12361);
         assert_eq!(cmd.throttle, 1000);
+    }
+
+    #[test]
+    fn runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits() {
+        let profile = RcRateProfile {
+            roll: ActualRateAxis::new(120.0, 600.0, 0.25),
+            pitch: RC_RATE_PROFILE.pitch,
+            yaw: RC_RATE_PROFILE.yaw,
+            deadband: 20,
+        };
+
+        let inside_deadband = remap_rc_channels_with_profile(
+            RC_CHANNEL_CENTER + 15,
+            RC_CHANNEL_CENTER,
+            RC_CHANNEL_CENTER,
+            RC_CHANNEL_MIN,
+            profile,
+        );
+        assert_close(inside_deadband.roll_dps, 0.0);
+
+        let full_stick = remap_rc_channels_with_profile(
+            RC_CHANNEL_MAX,
+            RC_CHANNEL_CENTER,
+            RC_CHANNEL_MAX,
+            RC_CHANNEL_MIN,
+            profile,
+        );
+        assert_close(full_stick.roll_dps, 600.0);
+        assert_close(full_stick.yaw_dps, 200.0);
     }
 
     #[test]
@@ -1192,10 +1429,11 @@ mod tests {
         controller.update_attitude_rate_setpoint(roll_right.roll_dps, 0.0, 0.0);
         controller.update_rate_measured(0.0, 0.0, 0.0);
         controller.update_motor_commands();
-        assert_eq!(
-            controller.get_motor_commands(),
-            [1100.0, 1100.0, 900.0, 900.0]
-        );
+        let motors = controller.get_motor_commands();
+        assert_close(motors[0], 1000.0 + roll_right.roll_dps);
+        assert_close(motors[1], 1000.0 + roll_right.roll_dps);
+        assert_close(motors[2], 1000.0 - roll_right.roll_dps);
+        assert_close(motors[3], 1000.0 - roll_right.roll_dps);
 
         let pitch_forward = remap_rc_channels(
             RC_CHANNEL_CENTER,
@@ -1205,10 +1443,11 @@ mod tests {
         );
         controller.update_attitude_rate_setpoint(0.0, pitch_forward.pitch_dps, 0.0);
         controller.update_motor_commands();
-        assert_eq!(
-            controller.get_motor_commands(),
-            [900.0, 1100.0, 1100.0, 900.0]
-        );
+        let motors = controller.get_motor_commands();
+        assert_close(motors[0], 1000.0 - pitch_forward.pitch_dps);
+        assert_close(motors[1], 1000.0 + pitch_forward.pitch_dps);
+        assert_close(motors[2], 1000.0 + pitch_forward.pitch_dps);
+        assert_close(motors[3], 1000.0 - pitch_forward.pitch_dps);
 
         let yaw_right = remap_rc_channels(
             RC_CHANNEL_CENTER,
@@ -1218,10 +1457,61 @@ mod tests {
         );
         controller.update_attitude_rate_setpoint(0.0, 0.0, yaw_right.yaw_dps);
         controller.update_motor_commands();
-        assert_eq!(
-            controller.get_motor_commands(),
-            [900.0, 1100.0, 900.0, 1100.0]
+        let motors = controller.get_motor_commands();
+        assert_close(motors[0], 1000.0 - yaw_right.yaw_dps);
+        assert_close(motors[1], 1000.0 + yaw_right.yaw_dps);
+        assert_close(motors[2], 1000.0 - yaw_right.yaw_dps);
+        assert_close(motors[3], 1000.0 + yaw_right.yaw_dps);
+    }
+
+    #[test]
+    fn reset_control_state_clears_pid_history_setpoints_and_outputs() {
+        let gains = PidGains {
+            p: 1.0,
+            i: 2.0,
+            d: 3.0,
+        };
+        let mut controller = FlightController::new(
+            FlightControllerConfig::default(),
+            RateController::new(
+                RateControllerGains {
+                    roll: gains,
+                    pitch: gains,
+                    yaw: gains,
+                },
+                2000.0,
+            ),
         );
+
+        controller.update_throttle_setpoint(1000.0);
+        controller.update_attitude_rate_setpoint(100.0, 0.0, 0.0);
+        controller.update_rate_measured(0.0, 0.0, 0.0);
+        controller.update_motor_commands_dt(0.01);
+        controller.update_rate_measured(10.0, 0.0, 0.0);
+        controller.update_motor_commands_dt(0.01);
+        let before_reset = controller.blackbox_sample();
+        assert!(before_reset.i[0] > 0.0);
+        assert!(before_reset.d[0] < 0.0);
+        assert_ne!(before_reset.motors, [0.0; 4]);
+
+        controller.reset_control_state();
+        let reset = controller.blackbox_sample();
+        assert_eq!(reset.setpoint, [0.0; 3]);
+        assert_eq!(reset.measurement, [0.0; 3]);
+        assert_eq!(reset.p, [0.0; 3]);
+        assert_eq!(reset.i, [0.0; 3]);
+        assert_eq!(reset.d, [0.0; 3]);
+        assert_eq!(reset.pid, [0.0; 3]);
+        assert_eq!(reset.motors, [0.0; 4]);
+        assert_eq!(reset.throttle, 0.0);
+
+        controller.update_attitude_rate_setpoint(25.0, 0.0, 0.0);
+        controller.update_rate_measured(25.0, 0.0, 0.0);
+        controller.update_motor_commands_dt(0.01);
+        let fresh_session = controller.blackbox_sample();
+        assert_eq!(fresh_session.i, [0.0; 3]);
+        assert_eq!(fresh_session.d, [0.0; 3]);
+        assert_eq!(fresh_session.pid, [0.0; 3]);
     }
 
     #[test]
@@ -1327,7 +1617,7 @@ mod tests {
     }
 
     #[test]
-    fn first_hop_profile_uses_conservative_yaw_integral() {
+    fn first_hop_profile_disables_integral_during_p_only_tuning() {
         let profile = TuningProfile::default_first_hop();
 
         assert_close(profile.rate_gains.roll.p, 0.2);
@@ -1335,7 +1625,7 @@ mod tests {
         assert_close(profile.rate_gains.yaw.p, 0.3);
         assert_close(profile.rate_gains.roll.i, 0.0);
         assert_close(profile.rate_gains.pitch.i, 0.0);
-        assert_close(profile.rate_gains.yaw.i, 0.04);
+        assert_close(profile.rate_gains.yaw.i, 0.0);
         assert_close(profile.rate_gains.roll.d, 0.0);
         assert_close(profile.rate_gains.pitch.d, 0.0);
         assert_close(profile.rate_gains.yaw.d, 0.0);

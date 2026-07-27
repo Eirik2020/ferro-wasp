@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "tests": [
+    {
+      "id": "SW-COMMON-001",
+      "target": "common",
+      "tier": "software"
+    },
+    {
+      "id": "BENCH-FCU3-001",
+      "target": "fcu3",
+      "tier": "bench-powered-props-off"
+    }
+  ]
+}

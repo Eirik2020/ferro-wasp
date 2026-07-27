@@ -5,6 +5,7 @@
 - [Publication and Licence Status](./publication_status.md)
 - [Roadmap](./roadmap.md)
 - [MVP Next Work](./mvp_next.md)
+- [Testing](./testing.md)
 - [Communication Protocols](./communication_protocols.md)
     - [SBUS](./SBUS.md)
     - [MSPv1 DJI O4 OSD](./msp_osd.md)

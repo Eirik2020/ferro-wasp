@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "documents": [
+    {
+      "path": "project_docs/README.md",
+      "role": "test-document",
+      "lifecycle": "historical",
+      "context": "default",
+      "max_current_state_headings": 1
+    }
+  ],
+  "context_budgets": []
+}

@@ -128,7 +128,8 @@ The mdBook is the intended public documentation surface:
 - DShot notes: [mdbook/src/dshot.md](mdbook/src/dshot.md)
 - Roadmap: [mdbook/src/roadmap.md](mdbook/src/roadmap.md)
 - RTT/debug tools: [mdbook/src/rtt_debug_tools.md](mdbook/src/rtt_debug_tools.md)
-- Target verification checklist: [TARGET_VERIFICATION.md](TARGET_VERIFICATION.md)
+- Common unpowered verification gate:
+  [TARGET_VERIFICATION.md](TARGET_VERIFICATION.md)
 - Publication checklist:
   [project_docs/PUBLICATION_CHECKLIST.md](project_docs/PUBLICATION_CHECKLIST.md)
 
@@ -176,8 +177,7 @@ not selected.
 Current bring-up and debug workflows are repository-local:
 
 - `tools/README.md` for host and remote debug tooling
-- `project_docs/FLIGHT_TEST_QUICK_COMMANDS.md` for current FCU3 bench/field
-  commands
+- `mdbook/src/testing.md` for the current Foxeer USB field cheatsheet
 - `tools/blackbox_analyzer.py` for compact BB2 log analysis
 - `tools/ferrowasp_storage.py` for Foxeer onboard logs and whitelisted settings
 - `tools/imu_live_view.py` for live IMU/control observation
@@ -254,7 +254,7 @@ For current implementation state, start with:
 
 - [project_docs/CODEX_PROJECT_CONTEXT.md](project_docs/CODEX_PROJECT_CONTEXT.md)
 - [project_docs/CODEX_ACTIVE_WORK.md](project_docs/CODEX_ACTIVE_WORK.md)
-- [project_docs/BENCH_TEST_PLAN.md](project_docs/BENCH_TEST_PLAN.md)
+- [project_docs/testing/README.md](project_docs/testing/README.md)
 
 ## Developers
 

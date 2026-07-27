@@ -40,6 +40,7 @@ normal source-only baseline is:
 cargo fmt --all --check
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
+python tools/check_repository_context.py
 mdbook build mdbook
 ```
 

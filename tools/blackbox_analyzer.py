@@ -13,7 +13,7 @@ import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from statistics import mean, pstdev
+from statistics import mean, median, pstdev
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -111,6 +111,23 @@ class TimestampStats:
     intervals_over_3000_us: int
 
 
+@dataclass(frozen=True)
+class RateBiasAxisStats:
+    mean_dps: float
+    median_dps: float
+    std_dps: float
+    mean_abs_dps: float
+    signed_rotation_degrees: float
+
+
+@dataclass(frozen=True)
+class CenteredDriftStats:
+    sample_count: int
+    observed_duration_s: float
+    integrated_duration_s: float
+    axes: tuple[RateBiasAxisStats, RateBiasAxisStats, RateBiasAxisStats]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Analyze FerroWasp BB1/BB2 blackbox logs for gyro filtering and control chatter."
@@ -151,6 +168,15 @@ def parse_args() -> argparse.Namespace:
         help="Discard this many seconds from the end of the parsed blackbox log.",
     )
     parser.add_argument(
+        "--flight-window-throttle-min",
+        type=int,
+        metavar="VALUE",
+        help=(
+            "Analyze only the longest contiguous armed/fresh-IMU interval at or "
+            "above this throttle. Useful for excluding takeoff, motor cut, and ground impacts."
+        ),
+    )
+    parser.add_argument(
         "--mode",
         choices=("auto", "rest", "swing"),
         default="auto",
@@ -167,6 +193,41 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=3.0,
         help="Filtered gyro standard deviation at or above this is treated as noisy.",
+    )
+    parser.add_argument(
+        "--drift-report",
+        action="store_true",
+        help=(
+            "Report signed mean gyro rate while armed, throttle-on, and all rate "
+            "commands are centered. This is the useful drift metric for assessing I-term need."
+        ),
+    )
+    parser.add_argument(
+        "--drift-throttle-min",
+        type=int,
+        default=500,
+        metavar="VALUE",
+        help="Minimum logged throttle included by --drift-report (default: 500).",
+    )
+    parser.add_argument(
+        "--drift-command-threshold-dps",
+        type=float,
+        default=0.5,
+        metavar="DPS",
+        help=(
+            "Maximum absolute command on every axis included by --drift-report "
+            "(default: 0.5 dps)."
+        ),
+    )
+    parser.add_argument(
+        "--drift-settle-seconds",
+        type=float,
+        default=0.5,
+        metavar="SECONDS",
+        help=(
+            "Require commands and throttle to satisfy the drift filter continuously "
+            "for this long before including samples (default: 0.5 s)."
+        ),
     )
     return parser.parse_args()
 
@@ -361,6 +422,42 @@ def trim_samples_by_seconds(
     return samples[start_count:end_index], start_count, end_count
 
 
+def longest_flight_window(
+    samples: list[BlackboxSample], throttle_min: int
+) -> list[BlackboxSample]:
+    """Return the longest contiguous armed, fresh-IMU, throttle-on run."""
+
+    best_start = 0
+    best_end = 0
+    run_start: int | None = None
+    previous: BlackboxSample | None = None
+
+    for index, sample in enumerate(samples):
+        contiguous = (
+            previous is not None
+            and previous.flight_id == sample.flight_id
+            and u32_forward_delta(previous.seq, sample.seq) == 1
+        )
+        eligible = (
+            sample.armed and sample.imu_fresh and sample.throttle >= throttle_min
+        )
+
+        if eligible:
+            if run_start is None or not contiguous:
+                run_start = index
+        elif run_start is not None:
+            if index - run_start > best_end - best_start:
+                best_start, best_end = run_start, index
+            run_start = None
+
+        previous = sample
+
+    if run_start is not None and len(samples) - run_start > best_end - best_start:
+        best_start, best_end = run_start, len(samples)
+
+    return samples[best_start:best_end]
+
+
 def timestamp_stats(samples: list[BlackboxSample]) -> TimestampStats | None:
     intervals: list[int] = []
     for previous, current in zip(samples, samples[1:]):
@@ -383,6 +480,169 @@ def timestamp_stats(samples: list[BlackboxSample]) -> TimestampStats | None:
         max_interval_us=max(intervals),
         p99_abs_jitter_us=absolute_jitter[p99_index],
         intervals_over_3000_us=sum(interval > 3000 for interval in intervals),
+    )
+
+
+def centered_drift_stats(
+    samples: list[BlackboxSample],
+    throttle_min: int = 500,
+    command_threshold_dps: float = 0.5,
+    settle_seconds: float = 0.5,
+) -> CenteredDriftStats | None:
+    """Measure rate bias with sticks centered and enough throttle for flight.
+
+    All three commands must be centered so pilot input on one axis cannot be
+    mistaken for passive drift on another. The signed mean rate is the primary
+    I-term diagnostic. The signed rotation is integrated only across adjacent
+    selected samples, so command/throttle gaps and flight boundaries are not
+    bridged.
+    """
+
+    settle_samples = max(0, math.ceil(settle_seconds * CONTROL_RATE_HZ))
+    selected: list[BlackboxSample] = []
+    qualifying_run = 0
+    previous: BlackboxSample | None = None
+    for sample in samples:
+        contiguous = (
+            previous is not None
+            and previous.flight_id == sample.flight_id
+            and u32_forward_delta(previous.seq, sample.seq) == 1
+        )
+        qualifies = (
+            sample.armed
+            and sample.imu_fresh
+            and sample.throttle >= throttle_min
+            and all(
+                abs(command) <= command_threshold_dps
+                for command in sample.command_dps
+            )
+        )
+        if not qualifies:
+            qualifying_run = 0
+        else:
+            qualifying_run = qualifying_run + 1 if contiguous else 1
+            if qualifying_run > settle_samples:
+                selected.append(sample)
+        previous = sample
+
+    if not selected:
+        return None
+
+    signed_rotation = [0.0, 0.0, 0.0]
+    integrated_duration_s = 0.0
+    for previous, current in zip(selected, selected[1:]):
+        if previous.flight_id != current.flight_id:
+            continue
+        if u32_forward_delta(previous.seq, current.seq) != 1:
+            continue
+
+        if previous.timestamp_us is not None and current.timestamp_us is not None:
+            interval_us = u32_forward_delta(previous.timestamp_us, current.timestamp_us)
+            if interval_us == 0 or interval_us > 10_000:
+                continue
+            interval_s = interval_us / 1_000_000.0
+        else:
+            interval_s = 1.0 / CONTROL_RATE_HZ
+
+        integrated_duration_s += interval_s
+        for axis in range(3):
+            signed_rotation[axis] += (
+                (previous.gyro_dps[axis] + current.gyro_dps[axis])
+                * 0.5
+                * interval_s
+            )
+
+    axis_stats_values: list[RateBiasAxisStats] = []
+    for axis in range(3):
+        values = [sample.gyro_dps[axis] for sample in selected]
+        axis_stats_values.append(
+            RateBiasAxisStats(
+                mean_dps=mean(values),
+                median_dps=median(values),
+                std_dps=pstdev(values),
+                mean_abs_dps=mean(abs(value) for value in values),
+                signed_rotation_degrees=signed_rotation[axis],
+            )
+        )
+
+    return CenteredDriftStats(
+        sample_count=len(selected),
+        observed_duration_s=len(selected) / CONTROL_RATE_HZ,
+        integrated_duration_s=integrated_duration_s,
+        axes=tuple(axis_stats_values),
+    )
+
+
+def print_centered_drift_report(
+    samples: list[BlackboxSample],
+    throttle_min: int,
+    command_threshold_dps: float,
+    settle_seconds: float,
+) -> None:
+    print()
+    print("Centered-command throttle-on rate bias:")
+    print(
+        f"  filter: armed, fresh IMU, throttle >= {throttle_min}, "
+        f"all |commands| <= {command_threshold_dps:.2f} dps, "
+        f"settled >= {settle_seconds:.2f} s"
+    )
+    print(
+        "  flight  samples  time_s   roll mean/std   pitch mean/std    yaw mean/std"
+    )
+    print(
+        "  ------  -------  ------   -------------   --------------   -------------"
+    )
+
+    flight_ids = sorted(
+        {sample.flight_id for sample in samples if sample.flight_id is not None}
+    )
+    groups: list[tuple[str, list[BlackboxSample]]] = []
+    if len(flight_ids) > 1:
+        groups.extend(
+            (
+                str(flight_id),
+                [sample for sample in samples if sample.flight_id == flight_id],
+            )
+            for flight_id in flight_ids
+        )
+    groups.append(("all", samples))
+
+    overall: CenteredDriftStats | None = None
+    for label, group_samples in groups:
+        stats = centered_drift_stats(
+            group_samples,
+            throttle_min=throttle_min,
+            command_threshold_dps=command_threshold_dps,
+            settle_seconds=settle_seconds,
+        )
+        if stats is None:
+            print(f"  {label:>6}        0     0.0   insufficient centered samples")
+            continue
+        if label == "all":
+            overall = stats
+        roll, pitch, yaw = stats.axes
+        print(
+            f"  {label:>6}  {stats.sample_count:7d}  {stats.observed_duration_s:6.2f}   "
+            f"{roll.mean_dps:+6.2f}/{roll.std_dps:5.2f}   "
+            f"{pitch.mean_dps:+7.2f}/{pitch.std_dps:5.2f}   "
+            f"{yaw.mean_dps:+6.2f}/{yaw.std_dps:5.2f}"
+        )
+
+    if overall is None:
+        print("  No samples passed the drift filter; lower the thresholds only if justified.")
+        return
+
+    roll, pitch, yaw = overall.axes
+    print(
+        "  signed integrated rotation over contiguous selected intervals "
+        f"({overall.integrated_duration_s:.2f} s): "
+        f"roll {roll.signed_rotation_degrees:+.1f} deg, "
+        f"pitch {pitch.signed_rotation_degrees:+.1f} deg, "
+        f"yaw {yaw.signed_rotation_degrees:+.1f} deg"
+    )
+    print(
+        "  Positive/negative values follow logged gyro signs. With a centered "
+        "setpoint, the corresponding mean PID error has the opposite sign."
     )
 
 
@@ -545,26 +805,59 @@ def best_lag_correlation(
     return best_lag, best_corr
 
 
-def strongest_frequency(values: list[float], sample_rate_hz: float) -> tuple[float, float] | None:
+def strongest_frequency(
+    values: list[float],
+    sample_rate_hz: float,
+    min_frequency_hz: float = 0.5,
+    max_frequency_hz: float = 100.0,
+) -> tuple[float, float] | None:
+    """Find the strongest frequency across bounded representative windows.
+
+    The previous whole-log DFT capped the bin number rather than frequency, so
+    a long flight could silently restrict the search to only a few hertz. A
+    bounded 1024-sample window keeps runtime predictable while retaining
+    coverage through 100 Hz at the 400 Hz control rate.
+    """
+
     count = len(values)
     if count < 16:
         return None
-    center = mean(values)
-    centered = [value - center for value in values]
-    max_bin = min(count // 2, 220)
+
+    window_count = min(count, 1024)
+    if count == window_count:
+        starts = [0]
+    else:
+        candidate_count = min(8, max(2, math.ceil(count / window_count)))
+        starts = [
+            round(index * (count - window_count) / (candidate_count - 1))
+            for index in range(candidate_count)
+        ]
+
+    min_bin = max(1, math.ceil(min_frequency_hz * window_count / sample_rate_hz))
+    max_bin = min(
+        window_count // 2,
+        math.floor(max_frequency_hz * window_count / sample_rate_hz),
+    )
+    if min_bin > max_bin:
+        return None
+
     best_frequency = 0.0
     best_magnitude = 0.0
-    for bin_index in range(1, max_bin):
-        real = 0.0
-        imag = 0.0
-        for sample_index, value in enumerate(centered):
-            phase = 2.0 * math.pi * bin_index * sample_index / count
-            real += value * math.cos(phase)
-            imag -= value * math.sin(phase)
-        magnitude = math.sqrt(real * real + imag * imag) / count
-        if magnitude > best_magnitude:
-            best_magnitude = magnitude
-            best_frequency = bin_index * sample_rate_hz / count
+    for start in starts:
+        window = values[start : start + window_count]
+        center = mean(window)
+        centered = [value - center for value in window]
+        for bin_index in range(min_bin, max_bin + 1):
+            real = 0.0
+            imag = 0.0
+            for sample_index, value in enumerate(centered):
+                phase = 2.0 * math.pi * bin_index * sample_index / window_count
+                real += value * math.cos(phase)
+                imag -= value * math.sin(phase)
+            magnitude = math.sqrt(real * real + imag * imag) / window_count
+            if magnitude > best_magnitude:
+                best_magnitude = magnitude
+                best_frequency = bin_index * sample_rate_hz / window_count
     return best_frequency, best_magnitude
 
 
@@ -774,6 +1067,17 @@ def main() -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
+    flight_window_input_count = len(samples)
+    if args.flight_window_throttle_min is not None:
+        samples = longest_flight_window(samples, args.flight_window_throttle_min)
+        if not samples:
+            print(
+                "error: no contiguous armed/fresh-IMU samples meet "
+                f"--flight-window-throttle-min {args.flight_window_throttle_min}.",
+                file=sys.stderr,
+            )
+            return 1
+
     if len(samples) < 5:
         print("error: fewer than 5 BB1/BB2 samples found. Capture a longer blackbox log.", file=sys.stderr)
         return 1
@@ -797,10 +1101,21 @@ def main() -> int:
         )
     if selected_flight_id is not None:
         print(f"Selected flight ID: {selected_flight_id}")
+    elif len({sample.flight_id for sample in samples if sample.flight_id is not None}) > 1:
+        print(
+            "Warning: multiple flight IDs are combined; select --flight-id latest "
+            "or a numeric ID for timing and missing-frame conclusions."
+        )
     print(f"Format: BB{max(sample.version for sample in samples)} blackbox")
     print(f"Samples: {len(samples)}  seq: {first_seq}..{last_seq}  estimated rate: {sample_rate_hz:.1f} Hz")
     if trimmed_start or trimmed_end:
         print(f"Trimmed samples: start={trimmed_start}, end={trimmed_end}")
+    if args.flight_window_throttle_min is not None:
+        print(
+            "Flight window: "
+            f"{len(samples)}/{flight_window_input_count} samples in longest contiguous "
+            f"armed/fresh interval with throttle >= {args.flight_window_throttle_min}"
+        )
     print(f"Armed samples: {sum(1 for sample in samples if sample.armed)}")
     print(f"Fresh IMU samples: {sum(1 for sample in samples if sample.imu_fresh)}")
     timing = timestamp_stats(samples)
@@ -826,6 +1141,13 @@ def main() -> int:
     )
     print_sequence_report(samples)
     print_control_report(samples)
+    if args.drift_report:
+        print_centered_drift_report(
+            samples,
+            throttle_min=args.drift_throttle_min,
+            command_threshold_dps=args.drift_command_threshold_dps,
+            settle_seconds=args.drift_settle_seconds,
+        )
 
     print()
     if noisy_axes:

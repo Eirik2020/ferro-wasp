@@ -255,6 +255,9 @@ jobs:
       - name: Test Python analysis tools
         run: python -m unittest discover -s tools/tests -v
 
+      - name: Check repository context budgets and document routing
+        run: python tools/check_repository_context.py
+
       - name: Report embedded duplicate dependency versions
         run: cargo tree --workspace --duplicates --locked --target ${{ env.FIRMWARE_TARGET }}
 

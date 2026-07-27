@@ -574,6 +574,28 @@ missing frames:
 python tools\blackbox_analyzer.py logs\foxeer-props-off.fwbb --flight-id latest --mode auto --csv logs\foxeer-latest.csv
 ```
 
+For routine downloads, inspect the flight catalog and transfer only the desired
+contiguous page range:
+
+```powershell
+python tools\ferrowasp_storage.py --port COM7 flights
+python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
+```
+
+`--flight-id` also accepts a numeric ID. The host finds the range with bounded
+page probes instead of downloading older flights. `--resume` validates every
+existing page against the selected flight ID, page sequence, and CRC before
+continuing:
+
+```powershell
+python tools\ferrowasp_storage.py --port COM7 read --flight-id 12 --resume --output logs\foxeer-flight12.fwbb
+```
+
+New firmware marks the first stored flight after each MCU boot. The `flights`
+view groups subsequent flights beneath that boot heading. Pre-marker pages are
+reported as `boot unknown`; no timestamp heuristic is used to invent historical
+power-cycle boundaries.
+
 `erase --confirm` erases every sector in the log partition, not the
 configuration slots or scratch sector. Storage reads and all writes are
 rejected while armed; in-progress erase/config/self-test maintenance is
@@ -587,6 +609,28 @@ prints the CRC-valid page count, record count, flight IDs, page-sequence
 endpoints, partial-page count, and final-page record count before its normal
 BB2 analysis. `--flight-id N` selects an explicit stored flight and
 `--flight-id latest` selects the highest available ID.
+
+## FWBB to ULog Converter
+
+`fwbb_to_ulog.py` converts one CRC-validated onboard flight into a compact ULog
+file for PlotJuggler or PyULog. It selects the latest flight by default:
+
+```powershell
+python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb `
+  --flight-id latest `
+  --output logs\foxeer-flight-latest.ulg
+```
+
+The single `ferrowasp_rate_control` topic contains the BB2 raw/filtered gyro
+rates, rate setpoints, PID effort, throttle, four motor commands, sequence
+counters, and safety/freshness flags. Its timestamp is elapsed microseconds
+from the first selected sample. Sequence gaps are represented with standard
+ULog dropout messages. The conversion is deterministic and never combines
+separate flight IDs.
+
+This is a host-side migration/visualization path. Firmware continues to record
+the existing fixed-size `.fwbb` pages until a bounded native ULog storage path
+is designed and verified.
 
 ## Flight Reports
 
@@ -611,6 +655,46 @@ logs\remote_probe\reports\<source-name>\report.md
 
 The generated plots include setpoint-vs-measured rate, rate tracking error, PID
 output, motor output, and zooms around the worst tracking-error events.
+
+## App Context Router
+
+`app_context.py` is a deterministic, read-only map for the large FCU3 and
+Foxeer RTIC app shells. It reports relevant task/helper ranges, priorities,
+interrupt bindings, feature gates, resource-block anchors, companion files,
+and potential test-catalog routes without printing the complete source.
+Foxeer topics include the matching FCU3 golden-app anchors.
+
+Run it from the repository root:
+
+```powershell
+python tools\app_context.py --list-topics
+python tools\app_context.py --board fcu3 --topic control
+python tools\app_context.py --board foxeer-f405-v2 --topic arming
+python tools\app_context.py --validate
+```
+
+Output is capped at 8 KiB. Route validation fails on missing source symbols,
+companion paths, test IDs, unassigned RTIC tasks, or budget growth. A route
+selects context only; it does not change firmware, operate hardware, determine
+which tests ultimately apply, or claim that a test passed.
+
+## Test Evidence Metadata
+
+New test results use bounded JSON metadata records described in
+`project_docs/testing/evidence/README.md`. Raw logs and reports remain under
+ignored `logs/` paths.
+
+Validate the record layout, catalog identity, hardware execution boundary,
+artifact metadata, and size limits with:
+
+```powershell
+python tools\test_evidence.py
+```
+
+The repository-wide `python tools\check_repository_context.py` command runs
+the same evidence checks and also validates document registration, immutable
+archives, context budgets, and the ADR index/record relationships. Neither
+command decides that a test passed or that hardware is safe to operate.
 
 ## Troubleshooting
 

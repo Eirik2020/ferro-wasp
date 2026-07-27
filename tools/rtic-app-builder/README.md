@@ -7,10 +7,13 @@ isolated nested Cargo workspace: FerroWasp's root workspace does not include it,
 so builder dependency and toolchain changes cannot alter firmware builds
 implicitly. Run builder commands from this directory.
 
-Current commands and behavior are documented here. The canonical forward roadmap is
-[`RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`](RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md);
-the [older feature-assembler plan](docs/archive/rtic_feature_assembler_mvp_implementation_plan.md)
-is retained only as historical context.
+Current commands and behavior are documented here. The bounded current roadmap
+is [`RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md`](RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md).
+The complete accepted 2026-07-24 baseline is retained byte-for-byte under
+[`docs/archive/`](docs/archive/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN_FULL_BASELINE_2026-07-24.md),
+and the
+[older feature-assembler plan](docs/archive/rtic_feature_assembler_mvp_implementation_plan.md)
+is historical context.
 
 This repository builds a deterministic RTIC application for the
 NUCLEO-F401RE from separate strict BSP and application manifests plus a

@@ -2461,6 +2461,7 @@ mod app {
             flash_rpc_command_consumer,
             flash_rpc_response_producer,
             assembler: flash_task::PageAssembler = flash_task::PageAssembler::new(),
+            boot_session_start_pending: bool = true,
             pending_page: Option<[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN]> = None,
             initialized: bool = false,
             next_page_index: u32 = 0,
@@ -2491,6 +2492,7 @@ mod app {
             flash_rpc_command_consumer,
             flash_rpc_response_producer,
             assembler,
+            boot_session_start_pending,
             pending_page,
             initialized,
             next_page_index,
@@ -3079,7 +3081,7 @@ mod app {
                             } else if maintenance_busy {
                                 Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
                             } else {
-                                match flash_task::StoredConfig::from_rpc(config) {
+                                match stored_config.apply_rpc(config) {
                                     Ok(candidate) => {
                                         let crc = candidate.crc32();
                                         *staged_rpc_config = Some(candidate);
@@ -3318,7 +3320,8 @@ mod app {
                 } else if let Some(record) = flash_record_consumer.dequeue() {
                     let armed = record.flags & 1 != 0;
                     if armed && !assembler.recording() {
-                        assembler.start(*next_flight_id);
+                        assembler.start(*next_flight_id, *boot_session_start_pending);
+                        *boot_session_start_pending = false;
                         *next_flight_id = next_flight_id.wrapping_add(1).max(1);
                     }
                     if armed {
@@ -3435,6 +3438,10 @@ mod app {
                 *rates = body_rates;
             });
             if !control_armed {
+                // Keep Foxeer aligned with the FCU3 golden app: no
+                // PID/filter/setpoint/mixer state crosses an arming boundary.
+                fc.reset_control_state();
+
                 let pending_seq = cx.shared.tuning_request_seq.lock(|seq| *seq);
                 if pending_seq != *cx.local.applied_tuning_seq {
                     let profile = cx.shared.tuning_profile.lock(|profile| *profile);
@@ -5731,9 +5738,10 @@ mod app {
             rc_link_frame_writer,
             rc_link_reported_valid: bool = false,
             rc_link_reported_invalidation_seq: u32 = 0
-        ]
+        ],
+        shared = [tuning_profile]
     )]
-    async fn rc_input(cx: rc_input::Context) {
+    async fn rc_input(mut cx: rc_input::Context) {
         use embedded_io_async::Read;
 
         loop {
@@ -5803,11 +5811,13 @@ mod app {
                     continue;
                 }
 
-                let rc_cmd = dt::remap_rc_channels(
+                let rc_rate_profile = cx.shared.tuning_profile.lock(|profile| profile.rc_rates);
+                let rc_cmd = dt::remap_rc_channels_with_profile(
                     pkt.channels[0],
                     pkt.channels[1],
                     pkt.channels[3],
                     pkt.channels[2],
+                    rc_rate_profile,
                 );
                 let arm_high = pkt.channels[8] > safety::ARM_THRESHOLD;
                 let now_us = Mono::now().duration_since_epoch().to_micros();

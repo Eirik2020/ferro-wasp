@@ -11,6 +11,11 @@ pub const RECORDS_PER_PAGE: usize = 5;
 pub const PAGE_DATA_LEN: usize = RECORD_LEN * RECORDS_PER_PAGE;
 pub const PAGE_TRAILER_LEN: usize = FLASH_PAGE_LEN - PAGE_DATA_LEN;
 pub const CONFIG_PAYLOAD_MAX: usize = 224;
+/// Marks the first stored record of the first recorded flight after MCU boot.
+///
+/// Bits 0 and 1 retain their BB2 armed and fresh-IMU meanings. This additional
+/// bit is metadata only and grants no runtime or actuator authority.
+pub const FLIGHT_RECORD_FLAG_BOOT_SESSION_START: u16 = 1 << 2;
 
 const PAGE_MAGIC: [u8; 2] = *b"FB";
 const PAGE_VERSION: u8 = 1;

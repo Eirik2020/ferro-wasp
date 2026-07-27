@@ -396,7 +396,7 @@ When repository access is available, consult:
 - `mdbook/src/current_support.md` — current target and feature matrix;
 - `project_docs/ARCHITECTURE_DECISIONS.md` — durable decisions and
   supersession;
-- `project_docs/BENCH_TEST_PLAN.md` — verification gates;
+- `project_docs/testing/README.md` — test selection and verification gates;
 - `project_docs/CROSS_REPO_SYNC.md` — repository authority boundaries;
 - `AGENTS.md` — contributor and coding-agent safety rules;
 - the README and selected app README for supported commands.

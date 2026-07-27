@@ -31,6 +31,18 @@ be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
 
 ## Bug List
 
+- ESC-only power-cycle recovery is incorrectly permanent when USB keeps the
+  FCU alive. The PA10 legacy-telemetry manager associates a request with an
+  ESC response; when the ESC rail is removed it correctly times out and
+  fail-closes, but presently latches telemetry off until an FCU reboot. A later
+  arm request therefore permits temporary DShot idle, receives no fresh eRPM
+  evidence, and aborts after the 1.2-second all-motor qualification timeout.
+  Add an explicit disarmed recovery path: require a fresh ARM-low transition,
+  clear pending association/parser/sample state, reapply the five-second ESC
+  boot delay, and require a new four-ESC idle qualification. Never recover
+  automatically while armed or while ARM remains high. Reproduce props-off
+  with USB power retained and an ESC-only battery power cycle; verify the first
+  arm fails closed and a later explicit recovery arms only after fresh evidence.
 - Independent actuator-deadline detection for a total loss of future motor
   commands is not yet implemented.
 - IMU initialization, gyro-bias calibration, and freshness are pre-arm
