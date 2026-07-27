@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66d8ea88.js";
+            window.path_to_searchindex_js = "searchindex-83fb6440.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-97755b62.js"></script>
@@ -232,12 +232,16 @@ ICM42688-P/EXTI, physical orientation, RC interlocks, motor order/direction,
 eRPM-qualified arming, and onboard blackbox recording. Its first prop-on
 departure exposed positive pitch feedback and attempted a forward flip. The
 pre-fix image is withdrawn. The correction has since passed unpowered
-frame-sign and powered normal-mixer props-off opposition checks.</p>
+frame-sign and powered normal-mixer props-off opposition checks, corrected
+hops, and a confined-area flight. The operator classifies the current P-only
+setup as flyable but not well tuned.</p>
 <p>Next checks:</p>
 <ol>
-<li>Inspect the airframe and propellers, then repeat a bounded controlled-field
-hop with immediate abort criteria.</li>
-<li>Review the new flight record before expanding the envelope.</li>
+<li>Repeat the flight in calmer conditions and continue one-variable-at-a-time
+tuning from the <code>2.5 / 2.5 / 2.0</code> P-only baseline.</li>
+<li>Add self-describing flight configuration, per-motor eRPM, accelerometer,
+saturation, and crash-analysis evidence to the onboard log.</li>
+<li>Repair and validate bounded I-term behavior before enabling I gains.</li>
 <li>Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.</li>
 </ol>
 <p>The Foxeer app provides an explicit <code>bench_actuator_validation</code> commissioning
