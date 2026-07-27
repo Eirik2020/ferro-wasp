@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-83fb6440.js";
+            window.path_to_searchindex_js = "searchindex-d2fa61b1.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-97755b62.js"></script>
@@ -179,107 +179,28 @@
 bounded flight change at a time. The user operates powered hardware. Stop on
 any unexpected motor response, oscillation, heat, smoke, loss of RC/video, or
 loss of confidence.</p>
-<p>Current test definitions and stop conditions are in the
-<a href="../../project_docs/testing/README.html">test catalog</a>. This page is the current
-Foxeer F405 V2 USB field cheatsheet; it deliberately excludes flashing,
-debugger, and remote-Pi workflows.</p>
-<h2 id="foxeer-usb-field-cheatsheet"><a class="header" href="#foxeer-usb-field-cheatsheet">Foxeer USB Field Cheatsheet</a></h2>
-<p>Run from the repository root. The aircraft must be disarmed for USB
-configuration, log maintenance, and download operations.</p>
-<pre><code class="language-powershell">Set-Location C:\ws\ferro-wasp
-$Port = "COM6"
-</code></pre>
-<p>If the port is missing, connect the FCU USB cable and ensure the debugger is
-not holding reset low.</p>
-<h3 id="check-storage-and-flights"><a class="header" href="#check-storage-and-flights">Check storage and flights</a></h3>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port info
-python tools\ferrowasp_storage.py --port $Port list
-python tools\ferrowasp_storage.py --port $Port flights
-</code></pre>
-<p>New captures are grouped by MCU boot session. Older recordings made before
-boot markers are shown under <code>boot unknown</code>.</p>
-<h3 id="verify-or-restore-the-current-tuning-baseline"><a class="header" href="#verify-or-restore-the-current-tuning-baseline">Verify or restore the current tuning baseline</a></h3>
-<p>The current Foxeer P-only baseline is roll/pitch/yaw P <code>2.5 / 2.5 / 2</code>, all I/D
-terms <code>0</code>, LPF alpha <code>0.55</code>, and RC deadband <code>8</code>.</p>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port config-show
-
-python tools\ferrowasp_storage.py --port $Port config-set roll_p 2.5
-python tools\ferrowasp_storage.py --port $Port config-set pitch_p 2.5
-python tools\ferrowasp_storage.py --port $Port config-set yaw_p 2
-python tools\ferrowasp_storage.py --port $Port config-set roll_i 0
-python tools\ferrowasp_storage.py --port $Port config-set pitch_i 0
-python tools\ferrowasp_storage.py --port $Port config-set yaw_i 0
-python tools\ferrowasp_storage.py --port $Port config-set roll_d 0
-python tools\ferrowasp_storage.py --port $Port config-set pitch_d 0
-python tools\ferrowasp_storage.py --port $Port config-set yaw_d 0
-python tools\ferrowasp_storage.py --port $Port config-save
-python tools\ferrowasp_storage.py --port $Port config-show
-</code></pre>
-<p>Make one tuning change per flight and retain I/D at zero until separate target
-evidence supports them.</p>
-<h3 id="adjust-rc-stick-feel-without-reflashing"><a class="header" href="#adjust-rc-stick-feel-without-reflashing">Adjust RC stick feel without reflashing</a></h3>
-<p>FerroWasp uses a small Betaflight Actual Rates-style curve. Configuration is
-accepted only while disarmed; changes are staged until <code>config-save</code>.</p>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port config-set rc_deadband 8
-python tools\ferrowasp_storage.py --port $Port config-set roll_center_rate 70
-python tools\ferrowasp_storage.py --port $Port config-set roll_max_rate 300
-python tools\ferrowasp_storage.py --port $Port config-set roll_expo 0.5
-python tools\ferrowasp_storage.py --port $Port config-set pitch_center_rate 70
-python tools\ferrowasp_storage.py --port $Port config-set pitch_max_rate 300
-python tools\ferrowasp_storage.py --port $Port config-set pitch_expo 0.5
-python tools\ferrowasp_storage.py --port $Port config-set yaw_center_rate 70
-python tools\ferrowasp_storage.py --port $Port config-set yaw_max_rate 200
-python tools\ferrowasp_storage.py --port $Port config-set yaw_expo 0.5
-python tools\ferrowasp_storage.py --port $Port config-save
-python tools\ferrowasp_storage.py --port $Port config-show
-</code></pre>
-<p>Allowed values: deadband <code>0..100</code>; center rate <code>10..500 deg/s</code>; maximum rate
-from its center rate through <code>1200 deg/s</code>; expo <code>0.0..1.0</code>. Set a higher
-maximum before raising center rate; lower center rate before lowering maximum.</p>
-<h3 id="download-analyze-graph-and-convert-one-flight"><a class="header" href="#download-analyze-graph-and-convert-one-flight">Download, analyze, graph, and convert one flight</a></h3>
-<p>After landing, disarm and wait at least two seconds for the final flash page.</p>
-<pre><code class="language-powershell">$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$Blackbox = "logs\foxeer-flight-$Stamp.fwbb"
-$Csv = "logs\foxeer-flight-$Stamp.csv"
-$Ulog = "logs\foxeer-flight-$Stamp.ulg"
-$Report = "logs\reports\foxeer-flight-$Stamp"
-
-python tools\ferrowasp_storage.py --port $Port flights
-python tools\ferrowasp_storage.py --port $Port read --flight-id latest --output $Blackbox
-python tools\blackbox_analyzer.py $Blackbox --flight-id latest --mode swing --flight-window-throttle-min 500 --drift-report --csv $Csv
-python tools\fwbb_to_ulog.py $Blackbox --flight-id latest --output $Ulog
-python tools\flight_report.py $Csv --out-dir $Report
-</code></pre>
-<p>If a transfer times out, resume the same selected flight rather than beginning
-again:</p>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port read --flight-id latest --output $Blackbox --resume
-</code></pre>
-<p>Open the <code>.ulg</code> in PlotJuggler and inspect <code>ferrowasp_rate_control</code>. Open
-<code>$Report\report.md</code> for setpoint-versus-measured, PID/error/motor, and
-worst-error plots. <code>flight_report.py</code> requires Matplotlib:</p>
-<pre><code class="language-powershell">python -m pip install matplotlib
-</code></pre>
-<h3 id="clear-logs"><a class="header" href="#clear-logs">Clear logs</a></h3>
-<p>Only erase after the required flight has downloaded and passed analysis.</p>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port erase --confirm
-python tools\ferrowasp_storage.py --port $Port list
-</code></pre>
-<p>The expected empty result is <code>used pages: 0; next flight: 1</code>.</p>
-<h2 id="final-preflight-and-first-hop"><a class="header" href="#final-preflight-and-first-hop">Final preflight and first hop</a></h2>
-<p>Use the active <a href="../../project_docs/testing/targets/foxeer-f405-v2.html">Foxeer target procedure</a>
-for the exact preflight and controlled-hop gates. For the current candidate:</p>
+<h2 id="operator-guides"><a class="header" href="#operator-guides">Operator guides</a></h2>
 <ul>
-<li>Verify the persisted <code>2.5 / 2.5 / 2</code> P-only baseline, I/D zero, and writable
-log store before flight.</li>
-<li>Power the FCU and ESCs together from the flight battery; keep it still during
-gyro calibration. Do not use USB as FCU power for flight.</li>
-<li>Confirm a disarmed healthy boot, correct battery/OSD indication, motor and
-propeller condition/orientation, CG, battery retention, RC/video link, clear
-area, and immediate abort plan.</li>
-<li>Start with a low, brief hover/hop and gentle separated inputs. Land, disarm,
-wait two seconds, then download and analyze that one flight before changing
-any tune value.</li>
+<li><a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer F405 V2 USB Quick Start</a> covers ROM-DFU
+release flashing, disarmed parameter changes, selective blackbox download,
+analysis, and ULog conversion.</li>
+<li>The repository test catalog is in <code>project_docs/testing/README.md</code>.</li>
+<li>The current board-specific procedure is in
+<code>project_docs/testing/targets/foxeer-f405-v2.md</code>.</li>
 </ul>
+<p>The Quick Start is an operating guide, not flight authorization. A newly built
+image still requires checks proportional to its changes, and hardware,
+configuration, wiring, or airframe changes can invalidate prior evidence.</p>
+<h2 id="current-foxeer-flight-status"><a class="header" href="#current-foxeer-flight-status">Current Foxeer flight status</a></h2>
+<p>The current experimental P-only baseline is roll/pitch/yaw
+<code>2.5 / 2.5 / 2.0</code>, with all I and D gains zero. The operator has classified
+this setup as flyable in a confined area, but not well tuned. Verify the
+persisted configuration before every later session and change only one tuning
+variable at a time.</p>
+<p>Before flight, power the FCU and ESCs together from the flight battery, keep
+the aircraft still through gyro calibration, and complete the active preflight
+procedure. After landing, disarm and wait at least two seconds for the final
+blackbox page before removing power.</p>
 
                     </main>
 
