@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>SBUS - FerroWasp</title>
+        <title>Testing - FerroWasp</title>
 
 
         <!-- Custom HTML head -->
@@ -174,66 +174,122 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="sbus"><a class="header" href="#sbus">SBUS</a></h1>
-<p>SBUS is the active FerroWasp RC input path. The FCU3 and Foxeer profiles route
-it to USART2 RX on PA3; PA2 is the corresponding TX pin but is not required for
-receive-only SBUS.</p>
-<h2 id="uart-configuration"><a class="header" href="#uart-configuration">UART Configuration</a></h2>
+                        <h1 id="testing"><a class="header" href="#testing">Testing</a></h1>
+<p>FerroWasp testing is staged: static checks, props-off bench checks, then one
+bounded flight change at a time. The user operates powered hardware. Stop on
+any unexpected motor response, oscillation, heat, smoke, loss of RC/video, or
+loss of confidence.</p>
+<p>Current test definitions and stop conditions are in the
+<a href="../../project_docs/testing/README.html">test catalog</a>. This page is the current
+Foxeer F405 V2 USB field cheatsheet; it deliberately excludes flashing,
+debugger, and remote-Pi workflows.</p>
+<h2 id="foxeer-usb-field-cheatsheet"><a class="header" href="#foxeer-usb-field-cheatsheet">Foxeer USB Field Cheatsheet</a></h2>
+<p>Run from the repository root. The aircraft must be disarmed for USB
+configuration, log maintenance, and download operations.</p>
+<pre><code class="language-powershell">Set-Location C:\ws\ferro-wasp
+$Port = "COM6"
+</code></pre>
+<p>If the port is missing, connect the FCU USB cable and ensure the debugger is
+not holding reset low.</p>
+<h3 id="check-storage-and-flights"><a class="header" href="#check-storage-and-flights">Check storage and flights</a></h3>
+<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port info
+python tools\ferrowasp_storage.py --port $Port list
+python tools\ferrowasp_storage.py --port $Port flights
+</code></pre>
+<p>New captures are grouped by MCU boot session. Older recordings made before
+boot markers are shown under <code>boot unknown</code>.</p>
+<h3 id="verify-or-restore-the-current-tuning-baseline"><a class="header" href="#verify-or-restore-the-current-tuning-baseline">Verify or restore the current tuning baseline</a></h3>
+<p>The current Foxeer P-only baseline is roll/pitch/yaw P <code>1 / 1 / 2</code>, all I/D
+terms <code>0</code>, LPF alpha <code>0.55</code>, and RC deadband <code>8</code>.</p>
+<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port config-show
+
+python tools\ferrowasp_storage.py --port $Port config-set roll_p 1
+python tools\ferrowasp_storage.py --port $Port config-set pitch_p 1
+python tools\ferrowasp_storage.py --port $Port config-set yaw_p 2
+python tools\ferrowasp_storage.py --port $Port config-set roll_i 0
+python tools\ferrowasp_storage.py --port $Port config-set pitch_i 0
+python tools\ferrowasp_storage.py --port $Port config-set yaw_i 0
+python tools\ferrowasp_storage.py --port $Port config-set roll_d 0
+python tools\ferrowasp_storage.py --port $Port config-set pitch_d 0
+python tools\ferrowasp_storage.py --port $Port config-set yaw_d 0
+python tools\ferrowasp_storage.py --port $Port config-save
+python tools\ferrowasp_storage.py --port $Port config-show
+</code></pre>
+<p>Make one tuning change per flight and retain I/D at zero until separate target
+evidence supports them.</p>
+<h3 id="adjust-rc-stick-feel-without-reflashing"><a class="header" href="#adjust-rc-stick-feel-without-reflashing">Adjust RC stick feel without reflashing</a></h3>
+<p>FerroWasp uses a small Betaflight Actual Rates-style curve. Configuration is
+accepted only while disarmed; changes are staged until <code>config-save</code>.</p>
+<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port config-set rc_deadband 8
+python tools\ferrowasp_storage.py --port $Port config-set roll_center_rate 70
+python tools\ferrowasp_storage.py --port $Port config-set roll_max_rate 300
+python tools\ferrowasp_storage.py --port $Port config-set roll_expo 0.5
+python tools\ferrowasp_storage.py --port $Port config-set pitch_center_rate 70
+python tools\ferrowasp_storage.py --port $Port config-set pitch_max_rate 300
+python tools\ferrowasp_storage.py --port $Port config-set pitch_expo 0.5
+python tools\ferrowasp_storage.py --port $Port config-set yaw_center_rate 70
+python tools\ferrowasp_storage.py --port $Port config-set yaw_max_rate 200
+python tools\ferrowasp_storage.py --port $Port config-set yaw_expo 0.5
+python tools\ferrowasp_storage.py --port $Port config-save
+python tools\ferrowasp_storage.py --port $Port config-show
+</code></pre>
+<p>Allowed values: deadband <code>0..100</code>; center rate <code>10..500 deg/s</code>; maximum rate
+from its center rate through <code>1200 deg/s</code>; expo <code>0.0..1.0</code>. Set a higher
+maximum before raising center rate; lower center rate before lowering maximum.</p>
+<h3 id="download-analyze-graph-and-convert-one-flight"><a class="header" href="#download-analyze-graph-and-convert-one-flight">Download, analyze, graph, and convert one flight</a></h3>
+<p>After landing, disarm and wait at least two seconds for the final flash page.</p>
+<pre><code class="language-powershell">$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$Blackbox = "logs\foxeer-flight-$Stamp.fwbb"
+$Csv = "logs\foxeer-flight-$Stamp.csv"
+$Ulog = "logs\foxeer-flight-$Stamp.ulg"
+$Report = "logs\reports\foxeer-flight-$Stamp"
+
+python tools\ferrowasp_storage.py --port $Port flights
+python tools\ferrowasp_storage.py --port $Port read --flight-id latest --output $Blackbox
+python tools\blackbox_analyzer.py $Blackbox --flight-id latest --mode swing --flight-window-throttle-min 500 --drift-report --csv $Csv
+python tools\fwbb_to_ulog.py $Blackbox --flight-id latest --output $Ulog
+python tools\flight_report.py $Csv --out-dir $Report
+</code></pre>
+<p>If a transfer times out, resume the same selected flight rather than beginning
+again:</p>
+<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port read --flight-id latest --output $Blackbox --resume
+</code></pre>
+<p>Open the <code>.ulg</code> in PlotJuggler and inspect <code>ferrowasp_rate_control</code>. Open
+<code>$Report\report.md</code> for setpoint-versus-measured, PID/error/motor, and
+worst-error plots. <code>flight_report.py</code> requires Matplotlib:</p>
+<pre><code class="language-powershell">python -m pip install matplotlib
+</code></pre>
+<h3 id="clear-logs"><a class="header" href="#clear-logs">Clear logs</a></h3>
+<p>Only erase after the required flight has downloaded and passed analysis.</p>
+<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port $Port erase --confirm
+python tools\ferrowasp_storage.py --port $Port list
+</code></pre>
+<p>The expected empty result is <code>used pages: 0; next flight: 1</code>.</p>
+<h2 id="final-preflight-and-first-hop"><a class="header" href="#final-preflight-and-first-hop">Final preflight and first hop</a></h2>
+<p>Use the active <a href="../../project_docs/testing/targets/foxeer-f405-v2.html">Foxeer target procedure</a>
+for the exact preflight and controlled-hop gates. For the current candidate:</p>
 <ul>
-<li>Baud rate: 100 000 bps</li>
-<li>Word length: 9 bits</li>
-<li>Parity: Even</li>
-<li>Stop bits: 2</li>
-<li>Logic: Inverted</li>
+<li>Verify the persisted <code>1 / 1 / 2</code> P-only baseline, I/D zero, and writable
+log store before flight.</li>
+<li>Power the FCU and ESCs together from the flight battery; keep it still during
+gyro calibration. Do not use USB as FCU power for flight.</li>
+<li>Confirm a disarmed healthy boot, correct battery/OSD indication, motor and
+propeller condition/orientation, CG, battery retention, RC/video link, clear
+area, and immediate abort plan.</li>
+<li>Start with a low, brief hover/hop and gentle separated inputs. Land, disarm,
+wait two seconds, then download and analyze that one flight before changing
+any tune value.</li>
 </ul>
-<h2 id="frame-structure"><a class="header" href="#frame-structure">Frame Structure</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Byte</th><th>Description</th><th>Content</th></tr>
-</thead>
-<tbody>
-<tr><td>0</td><td>Header</td><td><code>0x0F</code></td></tr>
-<tr><td>1-22</td><td>RC channel data</td><td>16 channels, 11 bits each *</td></tr>
-<tr><td>23</td><td>Flags</td><td>Channel 17 and 18, Frame lost and Failsafe **</td></tr>
-<tr><td>24</td><td>Footer</td><td><code>0x00</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>* See bit-packing below. <br>** Digital channels and link-status flags.</p>
-<h2 id="bit-packing-map"><a class="header" href="#bit-packing-map">Bit-Packing Map</a></h2>
-<p>Sixteen 11-bit channels occupy 176 bits, exactly 22 bytes. The fields are
-packed contiguously, least-significant bit first, across bytes 1 through 22.</p>
-<h3 id="channel-bytes"><a class="header" href="#channel-bytes">Channel Bytes</a></h3>
-<ul>
-<li>Byte 1: Channel 1 bits 0-7</li>
-<li>Byte 2: Channel 1 bits 8-10, then Channel 2 bits 0-4</li>
-<li>Byte 3: Channel 2 bits 5-10, then Channel 3 bits 0-1</li>
-<li>Byte 4: Channel 3 bits 2-9</li>
-<li>The same contiguous packing continues through Channel 16 in byte 22.</li>
-</ul>
-<h3 id="flags-byte-23"><a class="header" href="#flags-byte-23">Flags (Byte 23)</a></h3>
-<ul>
-<li>Bit 0: Channel 17 (digital)</li>
-<li>Bit 1: Channel 18 (digital)</li>
-<li>Bit 2: Frame lost</li>
-<li>Bit 3: Failsafe active</li>
-<li>Bits 4-7: Reserved</li>
-</ul>
-<p>FerroWasp treats either frame-lost or failsafe as an immediate RC-link
-invalidation. It also expires the link after 100 ms without a healthy frame,
-and recovery requires three healthy frames plus a newly observed low arm state
-before a later high transition may request arming.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="communication_protocols.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="mvp_next.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="msp_osd.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="communication_protocols.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -243,11 +299,11 @@ before a later high transition may request arming.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="communication_protocols.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="mvp_next.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="msp_osd.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="communication_protocols.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
