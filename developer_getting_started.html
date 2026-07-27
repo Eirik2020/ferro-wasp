@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b91d52aa.js";
+            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -200,13 +200,24 @@ already present:</p>
 and enable integration for the Ubuntu distribution. These host components are
 the only global development prerequisites.</p>
 <p>Clone the repository into the WSL Linux filesystem, not under <code>/mnt/c</code>.
-Linux-native storage avoids slow Cargo metadata and build operations:</p>
-<pre><code class="language-bash">wsl
+Linux-native storage avoids slow Cargo metadata and build operations. Enter
+the installed distribution from PowerShell:</p>
+<pre><code class="language-powershell">wsl -d Ubuntu-24.04
+</code></pre>
+<p>Only after the prompt changes to a Linux shell, run:</p>
+<pre><code class="language-bash">pwd
 mkdir -p ~/src
 cd ~/src
 git clone https://github.com/Eirik2020/ferro-wasp.git
 cd ferro-wasp
+pwd
 </code></pre>
+<p>After <code>wsl -d Ubuntu-24.04</code>, the prompt must be a Linux shell rather than
+<code>PS C:\...</code>, and the first <code>pwd</code> should report a path under <code>/home/&lt;user&gt;</code>.
+The final <code>pwd</code> should resemble <code>/home/&lt;user&gt;/src/ferro-wasp</code>. Do not continue
+if either path begins with <code>/mnt/c</code>, or if PowerShell reports a <code>C:\...</code>
+location: PowerShell’s <code>mkdir</code> alias would create another Windows-hosted
+checkout.</p>
 <p>If the repository already exists on Windows, make a fresh WSL clone rather
 than copying Windows <code>target</code> directories or virtual environments.</p>
 <h3 id="build-and-verify-the-environment"><a class="header" href="#build-and-verify-the-environment">Build and verify the environment</a></h3>
