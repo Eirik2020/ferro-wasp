@@ -28,8 +28,10 @@ unless that ownership and permission has been explicitly cleared.
 
 ## Development Workflow
 
-Install the pinned Rust toolchain from `rust-toolchain.toml` and follow the
-prerequisites and target-specific commands in `README.md`. The root workspace
+Use the reference WSL 2/Docker environment in the
+[Developer Getting Started guide](mdbook/src/developer_getting_started.md)
+unless the change specifically requires a native or hardware-attached host.
+The guide also documents the pinned native fallback. The root workspace
 contains reusable crates; each deployable firmware app under `apps/` has an
 isolated Cargo graph and must be checked separately.
 

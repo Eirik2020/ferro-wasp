@@ -14,7 +14,8 @@ be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
    supported target/CI check.
 2. Repeat the corrected Foxeer F405 V2 conservative controlled hop; both
    corrective props-off gates and the clean-image boot check have passed.
-3. Add a reproducible WSL/Docker development environment.
+3. Validate the checked-in WSL 2/Docker reference environment on Docker
+   Desktop and keep its pinned tool versions aligned with CI.
 4. Resume FCU3 tuning with the isolated pitch P `0.25 -> 0.30` experiment.
 
 ## Recently Closed

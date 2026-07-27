@@ -14,6 +14,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   FIRMWARE_TARGET: thumbv7em-none-eabihf
+  HOST_RUST_TOOLCHAIN: 1.93.1
   RUST_TOOLCHAIN: nightly-2026-07-13
 
 jobs:
@@ -307,6 +308,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: ${{ env.HOST_RUST_TOOLCHAIN }}
           components: clippy,rustfmt
 
       - name: Cache Cargo
@@ -344,6 +346,8 @@ jobs:
 
       - name: Install host Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.HOST_RUST_TOOLCHAIN }}
 
       - name: Build FerroConfigurator
         working-directory: tools/ferro-configurator

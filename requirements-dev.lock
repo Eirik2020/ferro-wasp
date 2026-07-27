@@ -1,0 +1,14 @@
+# Direct and transitive Python dependencies used by the repository's USB and
+# plotting tools. Keep this file version-pinned with the reference container.
+contourpy==1.3.1
+cycler==0.12.1
+fonttools==4.55.3
+kiwisolver==1.4.8
+matplotlib==3.10.0
+numpy==2.2.1
+packaging==24.2
+pillow==11.0.0
+pyparsing==3.2.0
+pyserial==3.5
+python-dateutil==2.9.0.post0
+six==1.17.0

@@ -1,0 +1,49 @@
+name: Development environment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - ".dockerignore"
+      - ".github/workflows/dev-environment.yml"
+      - "Dockerfile"
+      - "compose.yaml"
+      - "requirements-dev.lock"
+      - "rust-toolchain.toml"
+      - "tools/dev/**"
+      - "tools/ferro-configurator/rust-toolchain.toml"
+      - "tools/rtic-app-builder/rust-toolchain.toml"
+  push:
+    branches: [main]
+    paths:
+      - ".devcontainer/**"
+      - ".dockerignore"
+      - ".github/workflows/dev-environment.yml"
+      - "Dockerfile"
+      - "compose.yaml"
+      - "requirements-dev.lock"
+      - "rust-toolchain.toml"
+      - "tools/dev/**"
+      - "tools/ferro-configurator/rust-toolchain.toml"
+      - "tools/rtic-app-builder/rust-toolchain.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    name: Build and inspect reference image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build reference development image
+        run: docker build --tag ferrowasp-dev:ci .
+
+      - name: Verify pinned tools and workspace discovery
+        run: >
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/workspace/ferro-wasp"
+          ferrowasp-dev:ci
+          bash tools/dev/check-environment.sh

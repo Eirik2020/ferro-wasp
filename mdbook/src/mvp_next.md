@@ -88,13 +88,14 @@ arming guards, command freshness, failsafe/disarm handling, and actuator
 ownership remain active. The arming sequence briefly applies PWM idle to all
 four outputs, so the mode is props-off only even when one motor is selected.
 
-## Priority 3: Add a WSL/Docker Development Environment
+## Priority 3: Maintain the WSL/Docker Development Environment
 
-After Foxeer target bring-up, provide a pinned development container that
-runs host tests, strict Clippy, application checks, feature checks, formatting,
-and mdBook validation. Hardware flashing and USB/SWD passthrough should remain
-optional and explicitly documented; a successful container build is not target
-evidence.
+The checked-in Dockerfile, Compose service, Dev Container entry point, and
+environment smoke check now pin the Rust, Python, and documentation tools used
+across the isolated workspaces. A path-filtered CI workflow guards this setup
+without rebuilding the image for unrelated firmware changes. Hardware
+flashing and USB/SWD access remain explicit host workflows; a successful
+container build is not target evidence.
 
 ## Parked Flight-Tuning Follow-Up
 
@@ -104,8 +105,8 @@ tracking error and motor headroom first: more P cannot create authority if the
 mixer is already saturated. Stop the progression on rapid oscillation,
 bounce-back, abnormal noise, or motor heating. Capture BB2 when practical.
 
-This tuning follow-up is intentionally parked behind publication preparation,
-Foxeer bring-up, and the WSL/Docker environment work.
+This tuning follow-up is intentionally parked behind the remaining publication
+and Foxeer validation work.
 
 ## Safety and Reliability Follow-Up
 

@@ -170,8 +170,8 @@ Near-term FCU work:
   mixer headroom
 - pass the Foxeer corrective props-off pitch-opposition gate and repeat the
   controlled-field first hop with a new retained image
-- establish a reproducible WSL/Docker development environment after Foxeer
-  bring-up
+- maintain and CI-check the pinned WSL 2/Docker reference development
+  environment
 - preserve the target-validated arming, disarm, RC-loss, and actuator-gating
   behavior
 - target-validate stale motor-command rejection and add an independent actuator

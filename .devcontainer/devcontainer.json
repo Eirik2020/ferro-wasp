@@ -1,0 +1,9 @@
+{
+  "name": "FerroWasp",
+  "dockerComposeFile": "../compose.yaml",
+  "service": "dev",
+  "workspaceFolder": "/workspace/ferro-wasp",
+  "remoteUser": "ferrowasp",
+  "overrideCommand": false,
+  "shutdownAction": "stopCompose"
+}

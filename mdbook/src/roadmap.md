@@ -82,8 +82,8 @@ without target evidence.
 
 ## Phase 3: Reproducible WSL/Docker Development Environment
 
-After the Foxeer checkpoint works on hardware, add a documented WSL-based
-container workflow that can:
+The repository now carries a documented WSL 2/Docker reference environment
+that can:
 
 - build and test reusable crates;
 - check each isolated embedded application and supported feature set;
@@ -92,8 +92,10 @@ container workflow that can:
 - keep probe/USB passthrough optional so ordinary source checks do not require
   hardware access.
 
-The container should complement native flashing workflows, not hide target
-assumptions or claim hardware validation from a cross-compile.
+The image is checked only when its environment sources change. Continue
+keeping it aligned with CI and the pinned nested toolchains. It complements
+native flashing workflows; it does not hide target assumptions or claim
+hardware validation from a cross-compile.
 
 ## Phase 4: Safety and Evidence Hardening
 

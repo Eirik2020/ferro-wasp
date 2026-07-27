@@ -1,0 +1,28 @@
+name: ferrowasp
+
+services:
+  dev:
+    build:
+      context: .
+      args:
+        DEV_UID: ${DEV_UID:-1000}
+        DEV_GID: ${DEV_GID:-1000}
+    image: ferrowasp-dev:local
+    working_dir: /workspace/ferro-wasp
+    command: sleep infinity
+    init: true
+    stdin_open: true
+    tty: true
+    environment:
+      CARGO_TARGET_DIR: /home/ferrowasp/.cache/ferrowasp-target
+      MPLBACKEND: Agg
+    volumes:
+      - .:/workspace/ferro-wasp
+      - cargo-registry:/home/ferrowasp/.cargo/registry
+      - cargo-git:/home/ferrowasp/.cargo/git
+      - cargo-target:/home/ferrowasp/.cache/ferrowasp-target
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  cargo-target:

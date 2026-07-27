@@ -117,8 +117,8 @@ order is:
 3. Repeat the corrected Foxeer controlled-field first hop. Both props-off gates
    and the clean-image programming/boot check passed; the pre-fix image remains
    withdrawn from flight use.
-4. Establish a reproducible WSL/Docker development environment after Foxeer
-   target bring-up.
+4. Validate and maintain the pinned WSL 2/Docker reference development
+   environment; hardware access remains an explicit host-side workflow.
 5. Return to FCU3 flight characterization with the isolated pitch P
    `0.25 -> 0.30` experiment and a BB2 capture where practical.
 6. Validate the standard DShot backend independently with a logic analyzer;

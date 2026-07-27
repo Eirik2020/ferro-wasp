@@ -8,7 +8,121 @@ FerroWasp is a safety-oriented experimental flight-control prototype. A
 successful build is not flight evidence. Do not connect actuator power or
 install propellers as part of ordinary software setup.
 
-## Prerequisites
+## Preferred environment: WSL 2 and Docker
+
+The reference developer environment is an x86-64 Linux container running
+through Docker Desktop's WSL 2 backend. It pins the repository's three Rust
+toolchains, Cortex-M target, Python runtime and packages, mdBook, and
+mdbook-mermaid. Cargo lockfiles continue to pin project dependencies.
+
+The container is for source builds, tests, documentation, log conversion, and
+headless plots. It intentionally has no default MCU, USB, serial-port, SWD, or
+motor access. Use the ready Windows FerroConfigurator package for the normal
+Foxeer USB workflow, and keep debugger-assisted hardware work as an explicit
+host-side procedure.
+
+### Install the host prerequisites
+
+On Windows 11, open an administrator PowerShell and install WSL if it is not
+already present:
+
+```powershell
+wsl --install -d Ubuntu-24.04
+```
+
+After any requested reboot, install Docker Desktop, select its WSL 2 engine,
+and enable integration for the Ubuntu distribution. These host components are
+the only global development prerequisites.
+
+Clone the repository into the WSL Linux filesystem, not under `/mnt/c`.
+Linux-native storage avoids slow Cargo metadata and build operations:
+
+```bash
+wsl
+mkdir -p ~/src
+cd ~/src
+git clone https://github.com/Eirik2020/ferro-wasp.git
+cd ferro-wasp
+```
+
+If the repository already exists on Windows, make a fresh WSL clone rather
+than copying Windows `target` directories or virtual environments.
+
+### Build and verify the environment
+
+From the repository root inside WSL:
+
+```bash
+docker compose build dev
+docker compose run --rm dev bash tools/dev/check-environment.sh
+```
+
+The environment check is hardware-free. It verifies exact tool versions,
+Python analysis dependencies, the embedded target, and discovery of every
+isolated Cargo workspace without downloading project dependencies.
+
+Most WSL distributions use user and group ID `1000`, which is the container
+default. If `id -u` or `id -g` reports another value, build with matching
+values so generated source-tree files remain owned by the WSL user:
+
+```bash
+DEV_UID="$(id -u)" DEV_GID="$(id -g)" docker compose build dev
+```
+
+### Daily use
+
+Start the persistent development service and open a shell:
+
+```bash
+docker compose up -d dev
+docker compose exec dev bash
+```
+
+The repository is bind-mounted at `/workspace/ferro-wasp`. Cargo registry,
+Git dependency, and Linux build-target caches live in named Docker volumes.
+This prevents incompatible Windows and Linux target artifacts from mixing.
+
+Inside the container, run the normal repository commands directly:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo check --workspace --locked
+cargo test --workspace --locked
+python -m unittest discover -s tools/tests -v
+python tools/check_repository_context.py
+mdbook build mdbook
+```
+
+Stop the service without deleting caches:
+
+```bash
+docker compose down
+```
+
+`docker compose down --volumes` also deletes the Cargo caches. It does not
+delete the bind-mounted source tree, but it should only be used when a clean
+container cache is intentional.
+
+VS Code users may install the Dev Containers extension and open the repository
+with **Dev Containers: Reopen in Container**. The checked-in
+`.devcontainer/devcontainer.json` uses the same Compose service and image as
+the command-line workflow.
+
+### What remains outside the container
+
+- Windows FerroConfigurator ready-package execution and ROM-DFU flashing;
+- Windows release-package assembly through the PowerShell packaging script;
+- probe-rs SWD/RTT sessions and other physical target work;
+- interactive Tk live views and PlotJuggler desktop use.
+
+Flight logs stored in the repository's ignored `logs/` directory can still be
+converted and analyzed inside the container. USB forwarding through
+`usbipd-win` and Docker device mappings may be added later as a separate,
+explicit hardware profile; it is not part of the reference software
+environment or a prerequisite for development.
+
+## Native fallback prerequisites
 
 Required for hardware-free repository development:
 
@@ -16,9 +130,10 @@ Required for hardware-free repository development:
 - [rustup](https://rustup.rs/);
 - Python 3 for repository checks and host-side analysis tools.
 
-The repository's `rust-toolchain.toml` pins the Rust nightly, rustfmt, Clippy,
-and active Cortex-M target. Let rustup install that exact environment rather
-than selecting an unrelated toolchain manually.
+The repository toolchain files pin the root nightly, the FerroConfigurator
+stable release, the RTIC builder nightly, their components, and active
+Cortex-M targets. Let rustup install those exact environments rather than
+selecting unrelated toolchains manually.
 
 Install additional tools only for the work that needs them:
 
@@ -30,7 +145,7 @@ Install additional tools only for the work that needs them:
 The ready FerroConfigurator package carries its own reviewed `dfu-util`; users
 of that package do not need STM32CubeProgrammer.
 
-## Clone and verify the workspace
+## Native clone and verification
 
 ```powershell
 git clone https://github.com/Eirik2020/ferro-wasp.git
@@ -129,8 +244,10 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo build --release --locked -p ferro-configurator-cli
 ```
 
-Build the exact Foxeer `flash_blackbox` image before assembling a local Windows
-package, then run:
+The Rust workspace can be checked in the Linux container. Windows package
+assembly remains a Windows-host or CI operation. Build the exact Foxeer
+`flash_blackbox` image before assembling a local Windows package, then run
+this from PowerShell:
 
 ```powershell
 Set-Location tools\ferro-configurator
@@ -188,4 +305,3 @@ safety-relevant changes, record the reason, exact image/configuration,
 verification performed, remaining target gaps, and any timing or unsafe-code
 implications. Never claim certification, airworthiness, or production safety
 from prototype evidence.
-
