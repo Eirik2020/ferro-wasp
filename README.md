@@ -89,46 +89,17 @@ Current firmware capabilities:
 
 ## Getting Started
 
-For the Foxeer F405 V2, start with the repository-facing
-[USB Quick Start](docs/FOXEER_F405_V2_QUICK_START.md). It covers release
-flashing through ROM DFU, disarmed parameter changes, selective onboard-log
-download, validation, and ULog conversion using one ready Windows package.
-Normal users do not need to build the firmware or install Rust or Python.
-
-Developer prerequisites for a fresh source checkout:
-
-- Git and [rustup](https://rustup.rs/). The repository pins its Rust nightly,
-  Clippy, rustfmt, and the active Cortex-M target in `rust-toolchain.toml`.
-- Python 3 for the repository's host-side logging and analysis tools.
-- `probe-rs` for FCU3 SWD flashing and RTT sessions.
-- STM32CubeProgrammer for Foxeer F405 V2 ROM-DFU flashing.
-- mdBook `0.5.2` and mdbook-mermaid `0.17.0` to build the public book.
-
-After cloning, install/confirm the pinned toolchain and run the hardware-free
-workspace checks:
-
-```powershell
-rustup show active-toolchain
-cargo test --workspace --locked
-cargo check --workspace --locked --target thumbv7em-none-eabihf
-```
-
-Install the documentation tools when needed:
-
-```powershell
-cargo install mdbook --version 0.5.2 --locked
-cargo install mdbook-mermaid --version 0.17.0 --locked
-mdbook build mdbook
-```
-
-The default branch is `main`. CI and documentation deployment are configured
-against it, and repository rules require pull requests, passing checks, linear
-history, and protection from deletion and force-pushes.
+Start with the [Getting Started guide](mdbook/src/getting_started.md). It
+routes Foxeer users to the ready USB workflow and contributors to the separate
+developer setup guide.
 
 ## Documentation
 
 The mdBook is the intended public documentation surface:
 
+- Getting started: [mdbook/src/getting_started.md](mdbook/src/getting_started.md)
+- Developer setup:
+  [mdbook/src/developer_getting_started.md](mdbook/src/developer_getting_started.md)
 - Overview: [mdbook/src/chapter_1.md](mdbook/src/chapter_1.md)
 - Current support matrix: [mdbook/src/current_support.md](mdbook/src/current_support.md)
 - DShot notes: [mdbook/src/dshot.md](mdbook/src/dshot.md)
@@ -138,38 +109,6 @@ The mdBook is the intended public documentation surface:
   [TARGET_VERIFICATION.md](TARGET_VERIFICATION.md)
 - Publication checklist:
   [project_docs/PUBLICATION_CHECKLIST.md](project_docs/PUBLICATION_CHECKLIST.md)
-
-## Firmware Apps
-
-The repository root is a workspace for reusable crates. Deployable firmware
-images are isolated so incompatible STM32 PAC features cannot be unified:
-
-```text
-apps/stm32f405-flight  RTIC 2 flight app; FerroWasp FCU3 by default
-apps/stm32f401-bringup Minimal F401 RTIC LED/USART bring-up app
-apps/foxeer-f405-v2    RTIC 2 Foxeer flight app; default DShot flight candidate
-```
-
-Run firmware commands from the selected app directory.
-
-For FCU3:
-
-```powershell
-cd apps/stm32f405-flight
-cargo build --locked
-```
-
-For Foxeer F405 V2:
-
-```powershell
-cd apps/foxeer-f405-v2
-.\flash-dfu.ps1 -BuildOnly
-```
-
-With an SWD retrofit connected, `cargo run --release --locked` uses `probe-rs`
-to program and run the Foxeer target. ROM-DFU recovery remains available
-through `flash-dfu.ps1`; add `-UsbDebug` there for the opt-in read-only USB CDC
-diagnostics.
 
 ## Configuration And Tools
 
@@ -264,22 +203,6 @@ For current implementation state, start with:
 - [project_docs/CODEX_PROJECT_CONTEXT.md](project_docs/CODEX_PROJECT_CONTEXT.md)
 - [project_docs/CODEX_ACTIVE_WORK.md](project_docs/CODEX_ACTIVE_WORK.md)
 - [project_docs/testing/README.md](project_docs/testing/README.md)
-
-## Developers
-
-Before changing setup, inspect the root workspace and the selected isolated app
-package. Useful commands:
-
-```powershell
-cargo fmt --all --check
-cargo clippy --workspace --all-targets
-cargo check --workspace
-cargo test --workspace
-```
-
-Firmware commands should usually run from one of the app directories under
-`apps/`. Prefer `cargo check` for embedded targets unless the target setup is
-known. Do not assume a probe, ESC power, or target board is available in CI.
 
 ## Contributing
 

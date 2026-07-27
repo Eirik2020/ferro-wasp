@@ -43,22 +43,28 @@ const _: () = {
 pub struct AdcObservationProfile {
     pub vbat_divider_ratio: f32,
     pub current_betaflight_scale: u32,
-    pub battery_cell_count: u8,
+    pub current_offset_ma: i32,
+    pub battery_max_cell_mv: u16,
+    pub battery_detect_cell_mv: u16,
+    pub battery_max_cells: u8,
     pub documented_baseline_verified: bool,
-    pub current_offset_calibrated: bool,
 }
 
 // The upstream FOXEERF405V2 Betaflight target uses the default VBAT scale
 // (110, represented here as an 11.0 divider ratio) and explicitly selects
 // current scale 70. Foxeer also publishes scale 70 for the bundled Reaper 55A
-// ESC. Powered bring-up consistently reported a plausible 23.2..24.0 V pack.
-// This is sufficient as a provisional flight baseline, not fine calibration.
+// ESC. It does not override Betaflight's default zero current offset or its
+// 4.30 V cell-count detection threshold. Powered bring-up consistently
+// reported a plausible 23.2..25.1 V pack. These are the published target
+// values, not a fine per-airframe calibration.
 pub const ADC_OBSERVATION_PROFILE: AdcObservationProfile = AdcObservationProfile {
     vbat_divider_ratio: 11.0,
     current_betaflight_scale: 70,
-    battery_cell_count: 0,
+    current_offset_ma: 0,
+    battery_max_cell_mv: 4_300,
+    battery_detect_cell_mv: 3_000,
+    battery_max_cells: 8,
     documented_baseline_verified: true,
-    current_offset_calibrated: false,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -150,7 +156,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn documented_adc_baseline_allows_flight_without_claiming_fine_current_calibration() {
+    fn documented_adc_baseline_uses_the_foxeer_betaflight_target_values() {
         let verification_flags = [
             ADC_OBSERVATION_PROFILE.documented_baseline_verified,
             IMU_CONTROL_AXIS_PROFILE.sensor_identity_verified,
@@ -158,15 +164,15 @@ mod tests {
             M4_COMPLEMENTARY_POLARITY_VERIFIED,
             MOTOR_OUTPUT_ORDER_VERIFIED,
             FLIGHT_ARMING_ENABLED,
-            ADC_OBSERVATION_PROFILE.current_offset_calibrated,
         ];
 
-        assert_eq!(
-            verification_flags,
-            [true, true, true, true, true, true, false]
-        );
+        assert_eq!(verification_flags, [true; 6]);
         assert_eq!(ADC_OBSERVATION_PROFILE.vbat_divider_ratio, 11.0);
         assert_eq!(ADC_OBSERVATION_PROFILE.current_betaflight_scale, 70);
+        assert_eq!(ADC_OBSERVATION_PROFILE.current_offset_ma, 0);
+        assert_eq!(ADC_OBSERVATION_PROFILE.battery_max_cell_mv, 4_300);
+        assert_eq!(ADC_OBSERVATION_PROFILE.battery_detect_cell_mv, 3_000);
+        assert_eq!(ADC_OBSERVATION_PROFILE.battery_max_cells, 8);
     }
 
     #[test]
@@ -254,8 +260,8 @@ mod tests {
     }
 
     #[test]
-    fn unknown_battery_cell_count_does_not_invent_airframe_configuration() {
-        assert_eq!(ADC_OBSERVATION_PROFILE.battery_cell_count, 0);
+    fn battery_cell_detection_matches_the_foxeer_eight_s_limit() {
+        assert_eq!(ADC_OBSERVATION_PROFILE.battery_max_cells, 8);
     }
 
     #[test]

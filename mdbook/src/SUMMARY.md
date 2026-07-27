@@ -1,6 +1,8 @@
 # Summary
 
 - [Overview](./chapter_1.md)
+- [Getting Started](./getting_started.md)
+    - [Developer Setup](./developer_getting_started.md)
 - [Current Support](./current_support.md)
 - [Publication and Licence Status](./publication_status.md)
 - [Roadmap](./roadmap.md)

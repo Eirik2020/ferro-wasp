@@ -18,8 +18,16 @@ unpowered throughout USB maintenance.
 
 ## Download and extract
 
-Download the current `ferrowasp-v*-windows-x86_64.zip` release and extract the
-complete folder. Do not run the executable from inside the ZIP.
+Published packages are attached to the repository's
+[GitHub Releases](https://github.com/Eirik2020/ferro-wasp/releases). Download
+the current `ferrowasp-v*-windows-x86_64.zip` release and extract the complete
+folder. Do not run the executable from inside the ZIP.
+
+Developers building local packages or selecting their own ELF should use the
+[Developer Getting Started](../mdbook/src/developer_getting_started.md) guide.
+It documents the generated
+[`tools/ferro-configurator/dist`](../tools/ferro-configurator/dist/) directory,
+which is intentionally absent from a fresh checkout.
 
 The folder contains the configurator, the reviewed DFU utility and licenses,
 and a manifest-verified Foxeer firmware image:
@@ -263,20 +271,6 @@ converted successfully:
 
 Erase is destructive, explicitly confirmed, firmware-gated while disarmed,
 and verified by reading the empty catalogue.
-
-## Developer image override
-
-Developers may validate or flash an explicit locally built ELF by supplying it
-as the positional argument:
-
-```powershell
-.\ferro-configurator.exe flash .\FerroWaspFoxeerF405V2 `
-  --board foxeer-f405-v2 `
-  --dry-run
-```
-
-This bypasses selection of the bundled release image. End users should omit
-the path and use the manifest-verified image shipped in the release folder.
 
 ## Before flight
 

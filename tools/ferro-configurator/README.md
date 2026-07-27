@@ -6,8 +6,21 @@ serial and DFU dependencies remain separate from the embedded Cargo workspace.
 
 End users should follow the
 [Foxeer F405 V2 USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md) and
-download the ready Windows release package. They do not need a source checkout,
-Rust, Python, STM32CubeProgrammer, or an SWD debugger.
+download the ready Windows package from
+[GitHub Releases](https://github.com/Eirik2020/ferro-wasp/releases). They do
+not need a source checkout, Rust, Python, STM32CubeProgrammer, or an SWD
+debugger.
+
+Locally built ZIPs are generated under this workspace's
+[`dist`](dist/) folder:
+
+```powershell
+Get-ChildItem .\dist -Filter "ferrowasp-v*-windows-x86_64.zip"
+explorer (Resolve-Path .\dist)
+```
+
+`dist` is intentionally ignored by Git and is absent until the packaging
+script completes.
 
 ## Supported workflow
 
@@ -112,6 +125,14 @@ The packaging script:
   SHA-256;
 - includes the exact image, licenses, and corresponding third-party source;
 - produces `dist/ferrowasp-v0.1.0-windows-x86_64.zip`.
+
+The complete output folder is
+[`tools/ferro-configurator/dist`](dist/). List or open it with:
+
+```powershell
+Get-ChildItem .\dist
+explorer (Resolve-Path .\dist)
+```
 
 CI builds the exact `flash_blackbox` image and creates the ready Windows
 package for tags or a manual workflow run.

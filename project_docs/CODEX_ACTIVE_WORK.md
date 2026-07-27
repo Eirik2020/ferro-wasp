@@ -121,11 +121,14 @@ fresh-storage/default-reset baseline. Existing valid stored configuration
 continues to win across a firmware update. FCU3 retains its separate golden-app
 initial profile.
 
-The in-repository FerroConfigurator under `tools/ferro-configurator` has no
-actuator or arming authority. It verifies the release manifest/image before
-ROM-DFU, exposes all 21 USB parameters with save readback, selectively resumes
-flight downloads, and converts BB2 to minimal ULog. Its ready
-`flash_blackbox` image still requires final props-off target acceptance.
+The 2026-07-28 Foxeer OSD report found zero current and no cell voltage. The
+next candidate uses target values (VBAT 110, current 70/offset zero) and
+latched 4.30 V cell detection. Target comparison remains required.
+
+FerroConfigurator has no actuator/arming authority. It verifies ROM-DFU
+images, exposes 21 USB parameters with readback, resumes selected downloads,
+and converts BB2 to minimal ULog. Its bundled image requires exact-image
+props-off acceptance.
 
 Flights 12-20 in `logs/foxeer-rear-battery-hop.fwbb` exposed retained
 yaw-integral state across disarm/rearm boundaries. The shared reset fix is now

@@ -475,8 +475,10 @@ mod app {
     static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
     const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
     const ADC_CURRENT_BETAFLIGHT_SCALE: u32 = ADC_OBSERVATION_PROFILE.current_betaflight_scale;
-    const ADC_CURRENT_DISPLAY_ENABLED: bool = ADC_OBSERVATION_PROFILE.current_offset_calibrated;
-    const BATTERY_CELL_COUNT: u8 = ADC_OBSERVATION_PROFILE.battery_cell_count;
+    const ADC_CURRENT_OFFSET_MA: i32 = ADC_OBSERVATION_PROFILE.current_offset_ma;
+    const BATTERY_MAX_CELL_MV: u16 = ADC_OBSERVATION_PROFILE.battery_max_cell_mv;
+    const BATTERY_DETECT_CELL_MV: u16 = ADC_OBSERVATION_PROFILE.battery_detect_cell_mv;
+    const BATTERY_MAX_CELLS: u8 = ADC_OBSERVATION_PROFILE.battery_max_cells;
     const FOXEER_DSHOT_IDLE_COMMAND: f32 = DSHOT_IDLE_THROTTLE_COMMAND as f32;
     #[cfg(feature = "dshot")]
     const DSHOT_IDLE_QUALIFICATION_CONFIG: esc::EscIdleQualificationConfig =
@@ -1242,7 +1244,7 @@ mod app {
             warn!("Flight arming inhibited: {}", ARMING_INHIBIT_REASON);
         } else {
             info!("Foxeer flight arming enabled with runtime IMU health checks");
-            warn!("Foxeer current display disabled pending zero-offset calibration");
+            info!("Foxeer ADC uses Betaflight target voltage/current values");
         }
         #[cfg(feature = "esc_telemetry")]
         info!("Foxeer BLHeli telemetry-qualified DShot arming active on PA10 USART1 RX");
@@ -5880,6 +5882,12 @@ mod app {
         local = [
             adc1_buffer,
             adc1_planner: stm32_adc::AdcDmaIrqPlanner = stm32_adc::AdcDmaIrqPlanner::new(),
+            battery_cell_detector: osd::BatteryCellDetector =
+                osd::BatteryCellDetector::new(
+                    BATTERY_MAX_CELL_MV,
+                    BATTERY_DETECT_CELL_MV,
+                    BATTERY_MAX_CELLS,
+                ),
             battery_voltage_init_logged: bool = false
         ]
     )]
@@ -5918,12 +5926,16 @@ mod app {
 
         let _temperature = (110.0 - 30.0) * ((raw_temp as f32) - cal30) / (cal110 - cal30) + 30.0;
         let pack_mv = ((sample.voltage_mv as f32) * ADC_VBAT_DIVIDER_RATIO) as u32;
-        let cell_count = BATTERY_CELL_COUNT;
+        let cell_count = cx.local.battery_cell_detector.update(pack_mv);
         let cell_voltage_v100 = osd::pack_millivolts_to_cell_centivolts(pack_mv, cell_count);
-        let current_ca = if ADC_CURRENT_DISPLAY_ENABLED {
-            osd::current_sample_to_centiamps(sample.current_mv as u32, ADC_CURRENT_BETAFLIGHT_SCALE)
-        } else {
+        let current_ca = if cell_count == 0 {
             0
+        } else {
+            osd::current_sample_to_centiamps_with_offset(
+                sample.current_mv as u32,
+                ADC_CURRENT_BETAFLIGHT_SCALE,
+                ADC_CURRENT_OFFSET_MA,
+            )
         };
 
         let battery_voltage_v10 = ((pack_mv + 50) / 100).min(u8::MAX as u32) as u8;

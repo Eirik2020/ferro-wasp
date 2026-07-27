@@ -10,6 +10,11 @@ loss of confidence.
 - [Foxeer F405 V2 USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md) covers ROM-DFU
   release flashing, disarmed parameter changes, selective blackbox download,
   analysis, and ULog conversion.
+- Published configurator ZIPs are attached to
+  [GitHub Releases](https://github.com/Eirik2020/ferro-wasp/releases). Local
+  packaging writes generated ZIPs under
+  [`tools/ferro-configurator/dist`](../../tools/ferro-configurator/dist/);
+  that Git-ignored folder exists only after the package script runs.
 - The repository test catalog is in `project_docs/testing/README.md`.
 - The current board-specific procedure is in
   `project_docs/testing/targets/foxeer-f405-v2.md`.

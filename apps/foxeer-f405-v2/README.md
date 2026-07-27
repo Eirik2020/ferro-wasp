@@ -34,9 +34,10 @@ motor order/direction, functional M4 polarity, DShot/PA10 eRPM qualification,
 and onboard blackbox path have been confirmed on the target. Exact electrical
 waveforms remain unmeasured because the logic-analyzer checkpoint was skipped.
 The BSP now permits the normal flight path using the documented Betaflight
-voltage baseline and Foxeer current scale. Fine PC0/PC1 calibration remains a
-TODO; uncalibrated current is suppressed from the OSD/status value while raw
-PC1 millivolts remain observable.
+voltage baseline and Foxeer current scale. The ADC/OSD path uses the upstream
+target values directly: VBAT scale 110, current scale 70, and current offset
+zero. Cell count is detected from Betaflight's 4.30 V maximum-cell threshold
+and latched until battery removal. Fine PC0/PC1 calibration remains a TODO.
 
 The first prop-on departure on 2026-07-22 attempted an immediate forward flip.
 Onboard records established that the physically correct Foxeer pitch rate was
@@ -368,11 +369,11 @@ FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 r
 
 The fields report uptime, selected IMU and transport state, raw gyro and IMU
 sequence, control sequence, RC qualification/throttle/arm switch, system arm
-state, pack voltage in decivolts, and current in centiamps. Until PC1 zero-offset
-calibration is complete, `current_cA` is deliberately zero. The stream is
-read-only. `adc_v_mV` and `adc_i_mV` are the pre-scale ADC observations used
-for Foxeer voltage/current calibration. Received USB bytes are drained and
-ignored, and the USB task owns
+state, pack voltage in decivolts, and current in centiamps. `current_cA` uses
+the Foxeer/Betaflight scale 70 and zero offset. The stream is read-only.
+`adc_v_mV` and `adc_i_mV` are the pre-scale ADC observations retained for
+future fine calibration. Received USB bytes are drained and ignored, and the
+USB task owns
 no safety or actuator handle.
 
 Build the diagnostic image without flashing:

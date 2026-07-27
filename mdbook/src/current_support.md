@@ -342,8 +342,10 @@ and never reported `SYSTEM ARMED`. The legacy PWM fallback and Foxeer PWM path
 retain the guarded 2.5-second low and 500 ms idle holds.
 
 The Foxeer BSP flight profile accepts its documented Betaflight voltage
-baseline and Foxeer-published current scale. Fine current zero-offset
-calibration remains open, so displayed current is forced to zero while raw ADC
+baseline and Foxeer-published current scale. The OSD now uses the upstream
+target values directly (VBAT scale 110, current scale 70, current offset zero)
+and latches a Betaflight-style automatically detected cell count until battery
+removal. Fine per-airframe current calibration remains open, while raw ADC
 millivolts remain available. A separate `bench_actuator_validation`
 commissioning gate selects only a capped
 equal-motor or single physical/logical-motor props-off image. It retains the

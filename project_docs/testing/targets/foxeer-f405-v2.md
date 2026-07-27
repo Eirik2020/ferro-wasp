@@ -132,7 +132,12 @@ available, and keep an immediate disarm/power-removal path.
 2. Boot stationary. Require healthy IMU calibration, RC qualification,
    DShot/telemetry status, no panic or latched transport fault, and a disarmed
    state. Verify `config-show` still matches the reviewed baseline and record
-   the next onboard flight ID/log capacity.
+   the next onboard flight ID/log capacity. With the flight battery connected,
+   require total voltage to remain consistent with a multimeter, cell voltage
+   to equal total voltage divided by the detected cell count, and current to
+   respond in the expected direction as motor load increases. Treat current as
+   provisional until fine calibration; stop on implausible idle or loaded
+   readings.
 3. While disarmed, observe the controller setpoints. Require centered sticks
    inside the configured deadband to command zero. Require right roll, forward
    pitch, and right yaw to use the current positive controller directions.

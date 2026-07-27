@@ -363,12 +363,89 @@ pub fn pack_millivolts_to_cell_centivolts(pack_mv: u32, cell_count: u8) -> u16 {
     ((cell_mv + 5) / 10).min(u16::MAX as u32) as u16
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BatteryCellDetector {
+    max_cell_mv: u16,
+    detect_cell_mv: u16,
+    max_cells: u8,
+    cell_count: u8,
+}
+
+impl BatteryCellDetector {
+    pub const fn new(max_cell_mv: u16, detect_cell_mv: u16, max_cells: u8) -> Self {
+        Self {
+            max_cell_mv,
+            detect_cell_mv,
+            max_cells,
+            cell_count: 0,
+        }
+    }
+
+    pub const fn cell_count(self) -> u8 {
+        self.cell_count
+    }
+
+    /// Detects a newly connected pack and latches its cell count until the
+    /// pack is removed. The thresholds follow Betaflight's battery-presence
+    /// and maximum-cell-voltage model while avoiding changes caused by
+    /// in-flight voltage sag.
+    pub fn update(&mut self, pack_mv: u32) -> u8 {
+        let present = battery_is_present(
+            pack_mv,
+            u32::from(self.max_cell_mv),
+            u32::from(self.detect_cell_mv),
+        );
+        if !present {
+            self.cell_count = 0;
+            return 0;
+        }
+
+        if self.cell_count == 0 {
+            self.cell_count = auto_detect_cell_count(pack_mv, self.max_cell_mv, self.max_cells);
+        }
+        self.cell_count
+    }
+}
+
+pub const fn battery_is_present(pack_mv: u32, max_cell_mv: u32, detect_cell_mv: u32) -> bool {
+    if max_cell_mv == 0 || detect_cell_mv == 0 {
+        return false;
+    }
+
+    (pack_mv >= detect_cell_mv && pack_mv <= max_cell_mv)
+        || pack_mv > detect_cell_mv.saturating_mul(2)
+}
+
+pub fn auto_detect_cell_count(pack_mv: u32, max_cell_mv: u16, max_cells: u8) -> u8 {
+    if pack_mv == 0 || max_cell_mv == 0 || max_cells == 0 {
+        return 0;
+    }
+
+    let max_cell_mv = max_cell_mv as u32;
+    let cells = pack_mv
+        .saturating_add(max_cell_mv - 1)
+        .checked_div(max_cell_mv)
+        .unwrap_or(0);
+    cells.clamp(1, max_cells as u32) as u8
+}
+
 pub fn current_sample_to_centiamps(adc_mv: u32, betaflight_scale: u32) -> i16 {
+    current_sample_to_centiamps_with_offset(adc_mv, betaflight_scale, 0)
+}
+
+pub fn current_sample_to_centiamps_with_offset(
+    adc_mv: u32,
+    betaflight_scale: u32,
+    offset_ma: i32,
+) -> i16 {
     if betaflight_scale == 0 {
         return 0;
     }
 
-    ((adc_mv * 100 + (betaflight_scale / 2)) / betaflight_scale).min(i16::MAX as u32) as i16
+    // Betaflight current scale is expressed in mV per 10 A. Apply its
+    // configured offset in mA, then convert the result to centiamps.
+    let scaled = i64::from(adc_mv) * 10_000 / i64::from(betaflight_scale);
+    ((scaled + i64::from(offset_ma)) / 10).clamp(0, i64::from(i16::MAX)) as i16
 }
 
 fn adjust_menu_value(tuning: &mut TuningProfile, row: u8, direction: i8) {
@@ -533,8 +610,31 @@ mod tests {
     fn adc_values_pack_to_osd_units() {
         assert_eq!(pack_millivolts_to_cell_centivolts(25_200, 6), 420);
         assert_eq!(pack_millivolts_to_cell_centivolts(0, 0), 0);
-        assert_eq!(current_sample_to_centiamps(700, 70), 1000);
+        assert_eq!(current_sample_to_centiamps(700, 70), 10_000);
+        assert_eq!(
+            current_sample_to_centiamps_with_offset(700, 70, -1_000),
+            9_900
+        );
         assert_eq!(current_sample_to_centiamps(700, 0), 0);
+    }
+
+    #[test]
+    fn battery_cell_detection_latches_until_pack_removal() {
+        let mut detector = BatteryCellDetector::new(4_300, 3_000, 8);
+
+        assert_eq!(detector.update(100), 0);
+        assert_eq!(detector.update(25_050), 6);
+        assert_eq!(detector.update(20_000), 6);
+        assert_eq!(detector.update(100), 0);
+        assert_eq!(detector.update(16_800), 4);
+    }
+
+    #[test]
+    fn battery_cell_detection_rejects_usb_gap_and_clamps_board_limit() {
+        assert!(!battery_is_present(5_000, 4_300, 3_000));
+        assert_eq!(auto_detect_cell_count(4_300, 4_300, 8), 1);
+        assert_eq!(auto_detect_cell_count(36_000, 4_300, 8), 8);
+        assert_eq!(auto_detect_cell_count(25_200, 0, 8), 0);
     }
 
     #[test]
