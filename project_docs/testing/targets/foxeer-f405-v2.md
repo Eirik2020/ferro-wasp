@@ -2,8 +2,8 @@
 
 This is the current operator procedure for the Foxeer F405 V2 flight app.
 Historical measurements and dated passes are routed through
-`../EVIDENCE_INDEX.md`; `../../../mdbook/src/testing.md` retains the public
-USB field cheatsheet. Historical evidence is not a substitute for running
+`../EVIDENCE_INDEX.md`; `../../../docs/FOXEER_F405_V2_QUICK_START.md`
+retains the public USB field cheatsheet. Historical evidence is not a substitute for running
 the gates below on the proposed image.
 
 An `active` catalog entry means that its definition may be selected. It does

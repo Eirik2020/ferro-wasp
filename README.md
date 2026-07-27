@@ -48,10 +48,10 @@ prototype evidence rather than an airworthiness or production-safety claim.
 
 The Foxeer F405 V2 first-hop attempt on 2026-07-22 exposed positive pitch
 feedback and attempted a forward flip. The blackbox-backed polarity correction
-has passed both the unpowered frame-sign check and powered normal-mixer
-props-off opposition check. The pre-fix image is withdrawn from flight use; a
-clean logged image is now programmed and boot-verified, leaving the
-conservative controlled hop as the remaining field step.
+then passed unpowered, powered props-off, controlled-hop, and confined-area
+flight checks. The operator classifies the current P-only setup as a flyable
+prototype, not a well-tuned or validated flight-control system. The pre-fix
+image remains withdrawn.
 
 ## Features
 
@@ -88,6 +88,11 @@ Current firmware capabilities:
 - Isolated firmware app packages for FCU3, Foxeer F405 V2, and F401 bring-up
 
 ## Getting Started
+
+For the Foxeer F405 V2, start with the repository-facing
+[USB Quick Start](docs/FOXEER_F405_V2_QUICK_START.md). It covers release
+flashing through ROM DFU, disarmed parameter changes, selective onboard-log
+download, validation, and ULog conversion without an SWD debugger.
 
 Prerequisites for a fresh checkout:
 
@@ -177,7 +182,7 @@ not selected.
 Current bring-up and debug workflows are repository-local:
 
 - `tools/README.md` for host and remote debug tooling
-- `mdbook/src/testing.md` for the current Foxeer USB field cheatsheet
+- `docs/FOXEER_F405_V2_QUICK_START.md` for the current Foxeer USB quick start
 - `tools/blackbox_analyzer.py` for compact BB2 log analysis
 - `tools/ferrowasp_storage.py` for Foxeer onboard logs and whitelisted settings
 - `tools/imu_live_view.py` for live IMU/control observation
