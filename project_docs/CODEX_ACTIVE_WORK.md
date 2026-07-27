@@ -30,7 +30,7 @@ Last updated: 2026-07-27
   and restoration of the documented baseline before flight.
 - [x] Props-off verify RC directions, full-stick limits, arming/disarming, and
   motor opposition on the exact Foxeer flight image before another hop.
-- [ ] Perform one conservative logged hop with the new RC curve and inspect
+- [x] Perform one conservative logged hop with the new RC curve and inspect
   command tracking, oscillation frequency, and mixer headroom before changing
   gains again.
 
@@ -106,12 +106,15 @@ and official
 [`applyActualRates`](https://github.com/betaflight/betaflight/blob/master/src/main/fc/rc.c)
 implementation.
 
-Foxeer controlled-hop tuning remains under a temporary P-only policy. The
-useful baseline is roll P `1.0`, pitch P `1.0`, and yaw P `2.0`, with every I
-and D gain zero. Roll P `3.0` produced an autonomous approximately `10-13 Hz`
-roll oscillation and is withdrawn. The most recent long flight at `1/1/2`
-showed a contiguous 400 Hz control stream with no missing BB2 frames and no
-mixer rescaling; it is the baseline, not evidence that the tune is finished.
+Foxeer remains P-only: roll/pitch/yaw `2.5/2.5/2.0`, all I/D zero. A
+2026-07-27 confined-area hop and flight handled substantially better at `2.5`;
+the operator classifies it flyable, not well tuned. BB2 `PID/error` identifies
+flights 29-32 as `1/1/2` and 33-34 as `2.5/2.5/2`. Flight 34 had no mixer
+rescaling or high-frequency oscillation. Flight 33 ended in a 1.09-second
+authority-exhausting event the operator attributes to a strong gust; current
+logs cannot distinguish gust/tumble, contact, or thrust-system failure. Repeat
+in calmer conditions. Roll P `3.0` remains withdrawn after a separate logged
+`10-13 Hz` autonomous oscillation.
 
 Flights 12-20 in `logs/foxeer-rear-battery-hop.fwbb` exposed retained
 yaw-integral state across disarm/rearm boundaries. The shared reset fix is now
@@ -133,6 +136,17 @@ Open IMU-calibration TODO:
 
 Open logging-format TODO:
 
+- Record every fresh per-motor legacy-UART eRPM observation at its actual
+  bounded rate, including time/age, identity, freshness, and transport health;
+  never present repeated stale values as new control-rate data.
+- Log timestamped body-frame accelerometer data, range/clipping, and bounded
+  peaks for offline crash-detector development. Validate against landings,
+  maneuvers, gusts, and impacts before allowing any safety-state effect.
+- Make every recorded flight self-describing by storing the exact active
+  configuration at its flight boundary and after any accepted runtime change.
+  In the 2026-07-27 session, BB2 `PID/error` identifies flights 29-32 as P
+  `1/1/2` and 33-34 as `2.5/2.5/2`; future readers must expose configuration
+  directly and warn when it is absent.
 - Adopt ULog as FerroWasp's standard persisted flight-log format so recorded
   data can use the existing PX4 logging, telemetry, visualization, and analysis
   ecosystem. Define stable FerroWasp message schemas and units, board/firmware

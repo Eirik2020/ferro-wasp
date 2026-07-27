@@ -61,9 +61,42 @@ be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
     torque bias and windup
   - log actuator saturation/clamp flags per motor and per update, instead of
     inferring saturation from motor output values after the fact
-  - emit the active tune/config at boot and after any runtime change: roll,
-    pitch, yaw P/I/D, filter alpha, RC deadband, motor map, gyro axis/sign map,
-    and output limits
+  - log each fresh legacy-UART ESC observation with physical/logical motor
+    identity, eRPM, observation time/age, request sequence, freshness, and
+    parser/association health. Use the maximum bounded rate delivered by the
+    sequential telemetry manager; do not copy one stale value into every
+    control-rate record without marking it stale
+  - build an offline per-motor command-to-eRPM characterization pipeline from
+    synchronized motor command, fresh eRPM, battery voltage, and steady-state
+    qualifiers. Convert electrical RPM to mechanical RPM when motor pole-pair
+    count is known. Fit a bounded monotonic LUT, retain its source-flight and
+    configuration provenance, and validate it across pack voltage, propeller
+    load, temperature, and maneuvering before using it as motor feedforward
+    linearization. Do not close a fast RPM feedback loop around sequential
+    low-rate legacy telemetry
+  - log body-frame accelerometer data for crash-detector development. Prefer
+    raw or minimally filtered per-axis samples with timestamp/sequence,
+    configured scale, and clipping state; if storage cannot sustain that rate,
+    retain bounded per-window peaks plus enough surrounding samples to replay
+    impacts. Develop and validate detection offline before granting it any
+    disarm or safety-state effect
+  - prototype crash/stall classification from a causal sequence: an armed
+    acceleration impulse followed by a sufficiently commanded motor producing
+    fresh, valid eRPM below its voltage-aware LUT expectation for a bounded
+    duration. Treat missing/stale telemetry separately from a valid low-eRPM
+    response. Use the later pilot/failsafe DISARM event as an offline label and
+    validation signal only, never as an input to the detector that would have
+    to request that disarm. Cover throttle cuts, low-command motors during
+    attitude control, hard landings, prop unloading, ESC desync, and telemetry
+    loss in false-positive tests
+  - embed a versioned configuration snapshot in every flight log at the flight
+    boundary, and emit another record after any accepted runtime change: roll,
+    pitch, yaw P/I/D, filter alpha, RC deadband and per-axis rates/expo, motor
+    map, gyro axis/sign map, output limits, board/firmware identity, and the
+    persisted configuration sequence. Host tools and ULog conversion must
+    expose this metadata and warn if a flight lacks it; a boot-only print is
+    insufficient because several flights and tune changes can share one boot
+    session
   - add RC link quality and freshness fields: frame age, dropped/error frames,
     failsafe status, and channel decode health
   - add IMU freshness and bias-calibration fields: bias ready, calibration

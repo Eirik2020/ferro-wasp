@@ -27,7 +27,7 @@ The reviewed configuration is:
 
 | Field | Roll | Pitch | Yaw |
 |---|---:|---:|---:|
-| P | 1.0 | 1.0 | 2.0 |
+| P | 2.5 | 2.5 | 2.0 |
 | I | 0.0 | 0.0 | 0.0 |
 | D | 0.0 | 0.0 | 0.0 |
 | center rate | 70 deg/s | 70 deg/s | 70 deg/s |
@@ -38,6 +38,10 @@ The shared RC deadband is `8` raw channel counts. Roll P `3.0` is withdrawn
 after a logged autonomous approximately `10-13 Hz` oscillation. Do not select
 it. Keep every I and D gain at zero until separate target evidence establishes
 clean controller state across disarm, RC loss, aborted arming, and rearm.
+The `2.5 / 2.5 / 2.0` baseline is supported by the 2026-07-27 confined-area
+flight session, but its transition is inferred from P-only `PID/error` because
+BB2 does not yet embed configuration. Capture `config-show` before the next
+flight and do not describe the tune as complete.
 
 Do not fly the pre-pitch-fix image with SHA-256
 `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
@@ -93,7 +97,7 @@ props-off test requiring explicit user confirmation.
 7. Restore the complete reviewed baseline, not only the temporary fields.
    Set roll center to `70` before raising roll max to `300`; restore roll expo
    to `0.5`, deadband to `8`, the pitch/yaw rate fields from the table, P gains
-   `1 / 1 / 2`, and all I/D gains to zero. Save once.
+   `2.5 / 2.5 / 2`, and all I/D gains to zero. Save once.
 8. Verify the full baseline with `config-show`, cold-power once more, and
    verify it again. Retain both snapshots. Do not continue to actuator power
    if restoration or cold-boot persistence is uncertain.

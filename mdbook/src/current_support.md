@@ -34,8 +34,10 @@ Telemetry-qualified arming has passed its positive and injected-failure
 props-off target checks. Its first prop-on departure exposed positive pitch
 feedback and attempted a forward flip. The controller-polarity correction is
 implemented and passed repeated unpowered-orientation and powered normal-mixer
-props-off opposition checks. It is still a bring-up target, not a
-flight-validated target; the corrected controlled hop remains.
+props-off opposition checks. Corrected controlled hops and a confined-area
+flight have since passed by operator report. The current `2.5 / 2.5 / 2.0`
+P-only configuration is classified as a flyable prototype, not a well-tuned or
+validated flight-control system.
 
 ## Status Summary
 
@@ -57,7 +59,7 @@ flight-validated target; the corrected controlled hop remains.
 | ESC telemetry | FCU3 default DShot image: target-validated BLHeli legacy UART telemetry on PA10 / USART1 RX. Foxeer: target-validated request association, eRPM, positive idle qualification, and injected missing-evidence rejection on the same bounded manager/route |
 | MSP / OSD | MSPv1 DJI O4 OSD path on UART4 with DisplayPort text frames and status responses |
 | Secondary target | NUCLEO-F401RE RTIC LED/USART bring-up; static checks and target smoke pass |
-| Additional target | Foxeer F405 V2 isolated RTIC app; ROM-DFU/SWD, USB, ICM42688-P/EXTI, RC, PWM, default DShot, legacy eRPM, telemetry-qualified arming, onboard blackbox, and corrected props-off axis opposition have target evidence; a corrected controlled hop remains |
+| Additional target | Foxeer F405 V2 isolated RTIC app; ROM-DFU/SWD, USB, ICM42688-P/EXTI, RC, PWM, default DShot, legacy eRPM, telemetry-qualified arming, onboard blackbox, corrected axis opposition, controlled hops, and confined-area prototype flight have target evidence |
 
 ## Board and Pin Assumptions
 
@@ -583,16 +585,17 @@ These are expected at the current stage:
   evidence. The final normal-mixer/OSD props-off handoff passed, but the first
   prop-on departure exposed positive pitch feedback and attempted a forward
   flip. Its code correction passed new unpowered and powered props-off
-  opposition checks. The clean corrected image is programmed and
-  boot-verified; the controlled hop remains. Fine ADC calibration and exact
-  waveforms remain open
-- no validated estimator or tuned flight-control loop yet
-- Foxeer onboard SPI-NOR blackbox recording has a CRC-valid props-off
-  DShot/armed/throttle/disarm capture with a final partial-page flush and zero
-  reported drops/write faults. Recorded timestamps were bounded to the 1 ms
-  clock's expected 2/3 ms cadence with no interval above 3 ms; live OSD
-  coexistence remains to be observed before flight use. FCU3 still relies on
-  RTT logging
+  opposition checks, followed by corrected hops and confined-area flight. The
+  current P-only tune is operator-classified flyable but not well tuned. Fine
+  ADC calibration and exact waveforms remain open
+- the prototype estimator and P-only rate loop have flight evidence, but are
+  not fully tuned or validated; I/D remain disabled
+- Foxeer onboard SPI-NOR blackbox recording has multiple CRC-valid props-off
+  and flight captures with final partial-page flushes and no reported timing
+  loss in the selected records. Recorded timestamps retain the expected 2/3 ms
+  cadence with no interval above 3 ms. Per-flight configuration, per-motor
+  eRPM, and accelerometer/crash evidence remain open. FCU3 still relies on RTT
+  logging
 - no evidence package or formal traceability yet
 
 That is acceptable for rapid prototyping. The main rule is to keep learning fast while preserving the big safety boundary: only the actuator-output path should touch motor hardware.

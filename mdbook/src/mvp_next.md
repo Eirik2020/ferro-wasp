@@ -67,13 +67,17 @@ ICM42688-P/EXTI, physical orientation, RC interlocks, motor order/direction,
 eRPM-qualified arming, and onboard blackbox recording. Its first prop-on
 departure exposed positive pitch feedback and attempted a forward flip. The
 pre-fix image is withdrawn. The correction has since passed unpowered
-frame-sign and powered normal-mixer props-off opposition checks.
+frame-sign and powered normal-mixer props-off opposition checks, corrected
+hops, and a confined-area flight. The operator classifies the current P-only
+setup as flyable but not well tuned.
 
 Next checks:
 
-1. Inspect the airframe and propellers, then repeat a bounded controlled-field
-   hop with immediate abort criteria.
-2. Review the new flight record before expanding the envelope.
+1. Repeat the flight in calmer conditions and continue one-variable-at-a-time
+   tuning from the `2.5 / 2.5 / 2.0` P-only baseline.
+2. Add self-describing flight configuration, per-motor eRPM, accelerometer,
+   saturation, and crash-analysis evidence to the onboard log.
+3. Repair and validate bounded I-term behavior before enabling I gains.
 4. Fine-calibrate PC0/PC1 later; current display remains disabled meanwhile.
 
 The Foxeer app provides an explicit `bench_actuator_validation` commissioning

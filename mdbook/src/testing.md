@@ -36,14 +36,14 @@ boot markers are shown under `boot unknown`.
 
 ### Verify or restore the current tuning baseline
 
-The current Foxeer P-only baseline is roll/pitch/yaw P `1 / 1 / 2`, all I/D
+The current Foxeer P-only baseline is roll/pitch/yaw P `2.5 / 2.5 / 2`, all I/D
 terms `0`, LPF alpha `0.55`, and RC deadband `8`.
 
 ```powershell
 python tools\ferrowasp_storage.py --port $Port config-show
 
-python tools\ferrowasp_storage.py --port $Port config-set roll_p 1
-python tools\ferrowasp_storage.py --port $Port config-set pitch_p 1
+python tools\ferrowasp_storage.py --port $Port config-set roll_p 2.5
+python tools\ferrowasp_storage.py --port $Port config-set pitch_p 2.5
 python tools\ferrowasp_storage.py --port $Port config-set yaw_p 2
 python tools\ferrowasp_storage.py --port $Port config-set roll_i 0
 python tools\ferrowasp_storage.py --port $Port config-set pitch_i 0
@@ -131,7 +131,7 @@ The expected empty result is `used pages: 0; next flight: 1`.
 Use the active [Foxeer target procedure](../../project_docs/testing/targets/foxeer-f405-v2.md)
 for the exact preflight and controlled-hop gates. For the current candidate:
 
-- Verify the persisted `1 / 1 / 2` P-only baseline, I/D zero, and writable
+- Verify the persisted `2.5 / 2.5 / 2` P-only baseline, I/D zero, and writable
   log store before flight.
 - Power the FCU and ESCs together from the flight battery; keep it still during
   gyro calibration. Do not use USB as FCU power for flight.
