@@ -35,15 +35,30 @@ and enable integration for the Ubuntu distribution. These host components are
 the only global development prerequisites.
 
 Clone the repository into the WSL Linux filesystem, not under `/mnt/c`.
-Linux-native storage avoids slow Cargo metadata and build operations:
+Linux-native storage avoids slow Cargo metadata and build operations. Enter
+the installed distribution from PowerShell:
+
+```powershell
+wsl -d Ubuntu-24.04
+```
+
+Only after the prompt changes to a Linux shell, run:
 
 ```bash
-wsl
+pwd
 mkdir -p ~/src
 cd ~/src
 git clone https://github.com/Eirik2020/ferro-wasp.git
 cd ferro-wasp
+pwd
 ```
+
+After `wsl -d Ubuntu-24.04`, the prompt must be a Linux shell rather than
+`PS C:\...`, and the first `pwd` should report a path under `/home/<user>`.
+The final `pwd` should resemble `/home/<user>/src/ferro-wasp`. Do not continue
+if either path begins with `/mnt/c`, or if PowerShell reports a `C:\...`
+location: PowerShell's `mkdir` alias would create another Windows-hosted
+checkout.
 
 If the repository already exists on Windows, make a fresh WSL clone rather
 than copying Windows `target` directories or virtual environments.

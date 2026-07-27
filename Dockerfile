@@ -53,7 +53,7 @@ RUN curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
         "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init" \
         --output /tmp/rustup-init \
     && chmod +x /tmp/rustup-init \
-    && /tmp/rustup-init --yes --no-modify-path --profile minimal \
+    && /tmp/rustup-init -y --no-modify-path --profile minimal \
         --default-toolchain none \
     && rm /tmp/rustup-init \
     && rustup toolchain install nightly-2026-07-13 \
