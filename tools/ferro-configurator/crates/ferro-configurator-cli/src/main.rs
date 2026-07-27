@@ -622,7 +622,24 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                     ));
                 }
                 let mut client = connect(cli, timeout)?;
-                client.erase_logs()?;
+                let before = client.log_info()?;
+                let human_output = cli.format == OutputFormat::Human;
+                client.erase_logs_with_progress(|elapsed| {
+                    if !human_output {
+                        return;
+                    }
+                    if elapsed.is_zero() {
+                        eprintln!(
+                            "Onboard erase started for {} used pages. Keep USB connected; this may take several minutes.",
+                            before.used_pages
+                        );
+                    } else {
+                        eprintln!(
+                            "Still erasing onboard logs ({} seconds elapsed)...",
+                            elapsed.as_secs()
+                        );
+                    }
+                })?;
                 let info = client.log_info()?;
                 if info.used_pages != 0 {
                     return Err(FerroError::VerificationFailed {

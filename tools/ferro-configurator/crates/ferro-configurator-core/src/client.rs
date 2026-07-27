@@ -171,6 +171,10 @@ impl<T: LineTransport> FerroClient<T> {
     }
 
     pub fn erase_logs(&mut self) -> Result<()> {
+        self.erase_logs_with_progress(|_| {})
+    }
+
+    pub fn erase_logs_with_progress(&mut self, mut progress: impl FnMut(Duration)) -> Result<()> {
         let response = self.request("logs erase CONFIRM", 1)?;
         if response == "OK logs erased" {
             return Ok(());
@@ -181,11 +185,45 @@ impl<T: LineTransport> FerroClient<T> {
                 response,
             });
         }
-        self.wait_for_response("log erase completion", Duration::from_secs(600), |line| {
-            line == "OK logs erased" || line.starts_with("ERR ")
+        let started = Instant::now();
+        let deadline = started + Duration::from_secs(600);
+        let update_interval = Duration::from_secs(10);
+        let mut next_update = update_interval;
+        progress(Duration::ZERO);
+
+        while Instant::now() < deadline {
+            let elapsed = started.elapsed();
+            if elapsed >= next_update {
+                progress(elapsed);
+                next_update = next_update.saturating_add(update_interval);
+                continue;
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let until_update = next_update.saturating_sub(elapsed);
+            let Some(line) = self.transport.read_line(remaining.min(until_update))? else {
+                continue;
+            };
+            let (line, status) = split_status_suffix(&line);
+            if let Some(status) = status {
+                self.last_status = Some(status);
+            }
+            if line.is_empty() {
+                continue;
+            }
+            if let Some(status) = parse_status(line) {
+                self.last_status = Some(status);
+                continue;
+            }
+            if line == "OK logs erased" || line.starts_with("ERR ") {
+                return self
+                    .accept_response("logs erase CONFIRM", line.to_owned())
+                    .map(|_| ());
+            }
+        }
+        Err(FerroError::Timeout {
+            operation: "log erase completion".to_owned(),
+            attempts: 1,
         })
-        .and_then(|line| self.accept_response("logs erase CONFIRM", line))
-        .map(|_| ())
     }
 
     /// Stage every whitelisted setting. The current firmware validates each
@@ -619,5 +657,23 @@ mod tests {
         let mut client = FerroClient::new(mock, Duration::from_millis(20));
         let error = client.stage_config(&FerroConfig::default()).unwrap_err();
         assert!(error.to_string().contains("while armed"));
+    }
+
+    #[test]
+    fn erase_reports_start_and_waits_for_verified_completion() {
+        let mock = MockTransport::with_lines([
+            "OK log erase started",
+            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9 gyro=0,0,0 stale=0 ctl=4 rc=0 armable=0 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=0 adc_v_mV=0 adc_i_mV=0",
+            "OK logs erased",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        let mut progress = Vec::new();
+
+        client
+            .erase_logs_with_progress(|elapsed| progress.push(elapsed))
+            .unwrap();
+
+        assert_eq!(progress, vec![Duration::ZERO]);
+        assert_eq!(client.into_transport().writes, vec!["logs erase CONFIRM"]);
     }
 }

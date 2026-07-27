@@ -64,6 +64,9 @@ airworthy or production-ready.
   response when a periodic `FWDBG1` record supplied its accidental newline.
 - Kept interactive FerroConfigurator console text ASCII-only so the Windows
   flash wizard does not display UTF-8 punctuation as mojibake.
+- Reported immediate acknowledgement and ten-second elapsed updates during
+  the multi-minute onboard log erase instead of waiting silently for final
+  verification.
 - Added SBUS startup qualification, 100 ms link expiry, immediate invalidation
   on transport/parser/failsafe faults, and an arm-low recovery interlock.
 - Replaced the FCU3 DShot PWM-style pre-arm delay with a guarded 100 ms stop
