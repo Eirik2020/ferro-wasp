@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Project Structure - FerroWasp</title>
+        <title>Foxeer F405 V2 - FerroWasp</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="favicon-8114d1fc.png">
-        <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
-        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1c6da85b.js";
+            window.path_to_searchindex_js = "../searchindex-1c6da85b.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-6dd9b586.js"></script>
+        <script src="../toc-6dd9b586.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">FerroWasp</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -174,85 +174,218 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="project-structure"><a class="header" href="#project-structure">Project Structure</a></h1>
-<p>The repository is currently a rapid prototype, not yet the final multi-crate layout.</p>
-<p>Current important paths:</p>
-<pre><code class="language-text">.
-|-- apps/
-|   |-- stm32f405-flight/        # FCU3 board support and thin F405 RTIC shell
-|   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
-|   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
-|       |-- src/board/           # Immutable board facts and typed construction
-|       |-- src/lib.rs           # Internal app-support facade
-|       `-- src/main.rs          # RTIC declarations and wiring only
-|-- crates/
-|   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
-|   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
-|   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
-|   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
-|   |-- ferrowasp-stm32f4/       # STM32F4 UART/SPI/ADC/PWM/DShot mechanisms
-|   |-- ferrowasp-tasks/         # Control, OSD, and ESC-manager task logic
-|   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
-|   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
-|   `-- rc-pwm/                  # Local PWM controller crate
-|-- mdbook/
-|   `-- src/                     # This documentation book
-|-- CONTRIBUTING.md              # Current contribution boundary
-|-- DISCLAIMER.md                # Experimental flight-control disclaimer
-|-- LICENSE.md                   # Apache License, Version 2.0
-|-- NOTICE.md                    # Copyright, naming, and status notice
-|-- THIRD_PARTY_NOTICES.md        # Licences for vendored documentation assets
-`-- SECURITY.md                  # Security reporting expectations
-</code></pre>
-<h2 id="current-reality"><a class="header" href="#current-reality">Current Reality</a></h2>
-<p>Each deployable board has an independent Cargo/PAC graph. Its <code>src/main.rs</code>
-contains the RTIC resource and task declarations, locking, scheduling, and
-concrete initialization wiring. Board declarations and constructors live in
-the same package’s support library; reusable behavior remains in shared crates.
-Foxeer is the golden flight app.</p>
-<p>The code already contains early signs of the future shape:</p>
+                        <h1 id="foxeer-f405-v2-usb-quick-start"><a class="header" href="#foxeer-f405-v2-usb-quick-start">Foxeer F405 V2 USB Quick Start</a></h1>
+<p>This is the normal Windows workflow for the Foxeer F405 V2. The ready release
+package can:</p>
 <ul>
-<li>reusable safety, signal, and actuator conversion types in <code>crates/ferrowasp-core/</code></li>
-<li>board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
-construction policy under each app’s <code>src/board/</code></li>
-<li>isolated FCU3 flight, Foxeer flight/bring-up, and NUCLEO-F401RE bring-up
-apps with independent Cargo and RTIC resource contracts</li>
-<li>reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
-<code>crates/ferrowasp-stm32f4/</code></li>
-<li>software-driver and control helpers, including the BLHeli parser and bounded
-ESC manager, under <code>crates/ferrowasp-drivers/</code> and <code>crates/ferrowasp-tasks/</code></li>
-<li>local support crates for <code>rc-pwm</code>, <code>ferrowasp-pid</code>, <code>ferrowasp-mspv1</code>, and <code>ferrowasp-waveform</code></li>
-<li>active MSPv1 / DJI O4 OSD support under <code>crates/ferrowasp-mspv1/</code> and <code>crates/ferrowasp-tasks/</code></li>
-<li>host-testable pure logic for safety, RC mapping, filters, PID, mixer, DShot,
-BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers</li>
+<li>flash the included FerroWasp image through the STM32 ROM DFU bootloader;</li>
+<li>read, change, export, and restore flight parameters while disarmed;</li>
+<li>list and selectively download onboard flights;</li>
+<li>convert downloaded FWBB evidence to ULog for PlotJuggler.</li>
 </ul>
-<h2 id="target-direction"><a class="header" href="#target-direction">Target Direction</a></h2>
-<p>The long-term layout is expected to move toward:</p>
-<pre><code class="language-text">ferrowasp-core       reusable types, units, safety state, queues
-ferrowasp-mcu        family-neutral MCU contracts
-ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
-ferrowasp-tasks      reusable task logic
-app src/board        board pin maps, clocks, DMA/timer assignments
-app src/lib.rs       board composition and internal support facade
-app src/main.rs      thin RTIC shell
-ferrowasp-gen        optional source generation for task/resource wiring
-manifest/            optional board, task, resource, and policy descriptions
+<p>Users do not need Rust, Python, STM32CubeProgrammer, an SWD debugger, or a
+source checkout.</p>
+<p>FerroWasp remains experimental flight-control firmware. Flashing replaces
+firmware already installed in STM32 internal flash, including Betaflight.
+Remove every propeller, disconnect the flight battery, and keep the ESCs
+unpowered throughout USB maintenance.</p>
+<h2 id="download-and-extract"><a class="header" href="#download-and-extract">Download and extract</a></h2>
+<p>Published packages are attached to the repository’s
+<a href="https://github.com/Eirik2020/ferro-wasp/releases">GitHub Releases</a>. Download
+the current <code>ferrowasp-v*-windows-x86_64.zip</code> release and extract the complete
+folder. Do not run the executable from inside the ZIP.</p>
+<p>Developers building local packages or selecting their own ELF should use the
+<a href="../developer_getting_started.html">Developer Getting Started</a> guide.
+It documents the generated
+<code>tools/ferro-configurator/dist</code> directory,
+which is intentionally absent from a fresh checkout.</p>
+<p>The folder contains the configurator, the reviewed DFU utility and licenses,
+and a manifest-verified Foxeer firmware image:</p>
+<pre><code class="language-text">ferro-configurator.exe
+dfu-util.exe
+libusb-1.0.dll
+firmware/
+README-WINDOWS.txt
+licenses/
+sources/
 </code></pre>
-<p>Boards use isolated app packages so their PAC features and RTIC resource
-contracts cannot be accidentally unified.</p>
-<p>Reusable behavior moves outward only when its ownership and bounded execution
-are explicit; custom macros are not used to hide runtime work.</p>
+<p>Open PowerShell in that folder and inspect the host:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe doctor
+</code></pre>
+<p>The STM32 ROM bootloader may require a one-time Windows WinUSB association.
+If DFU detection fails, check that the <code>STM32 BOOTLOADER</code> device with USB
+identity <code>0483:DF11</code> is using WinUSB, then rerun:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe dfu list
+</code></pre>
+<h2 id="validate-the-ready-image"><a class="header" href="#validate-the-ready-image">Validate the ready image</a></h2>
+<p>This command verifies the release manifest, image SHA-256, board identity,
+memory range, and vector table without accessing USB or changing the board:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run
+</code></pre>
+<p>Require output naming the bundled release and Foxeer F405 V2, with a valid
+flash base of <code>0x08000000</code>. Do not continue if manifest, hash, board, or ELF
+validation fails.</p>
+<h2 id="flash-through-usb-dfu"><a class="header" href="#flash-through-usb-dfu">Flash through USB DFU</a></h2>
+<p>Start the guided flasher:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe flash --board foxeer-f405-v2
+</code></pre>
+<p>Follow its prompts:</p>
+<ol>
+<li>Disconnect USB.</li>
+<li>Hold the board’s BOOT button.</li>
+<li>Reconnect USB, wait approximately one second, and release BOOT.</li>
+<li>Allow the configurator to detect exactly one STM32 ROM DFU device.</li>
+<li>Type the requested confirmation only after checking the selected board and
+image.</li>
+<li>Do not disconnect USB during programming.</li>
+</ol>
+<p>The command must reach its final successful completion message and exit with
+code zero. Detection or programming progress is not, by itself, proof that
+the flash completed.</p>
+<p>If the normal FerroWasp COM port does not return after programming, disconnect
+and reconnect USB normally without holding BOOT.</p>
+<p>ROM DFU updates internal MCU flash. It does not intentionally erase the
+external SPI-NOR configuration or flight-log store. Verify both after every
+flash.</p>
+<h2 id="connect-to-ferrowasp"><a class="header" href="#connect-to-ferrowasp">Connect to FerroWasp</a></h2>
+<p>List the known USB controller:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe device list
+.\ferro-configurator.exe device info
+</code></pre>
+<p>If automatic selection is unavailable or more than one controller is
+connected, select the intended COM port explicitly:</p>
+<pre><code class="language-powershell">$Port = "COM6"
+.\ferro-configurator.exe --port $Port device info
+</code></pre>
+<p>Require a ready Winbond-compatible external flash, a ready IMU, and plausible
+status. Close RTT readers, serial terminals, and other programs holding the
+same COM port.</p>
+<h2 id="back-up-and-inspect-configuration"><a class="header" href="#back-up-and-inspect-configuration">Back up and inspect configuration</a></h2>
+<p>Keep the aircraft disarmed. The firmware rejects configuration writes while
+armed.</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config show
+.\ferro-configurator.exe --port $Port config export foxeer-backup.toml
+.\ferro-configurator.exe --port $Port config store my-foxeer
+</code></pre>
+<p>Named profiles are stored under
+<code>%APPDATA%\FerroConfigurator\profiles</code> and survive replacement of the release
+folder.</p>
+<p>The fresh-storage Foxeer fallback is:</p>
+<pre><code class="language-text">roll/pitch/yaw P: 2.5 / 2.5 / 2.0
+all I and D:       0
+IMU LPF alpha:    0.55
+log divisor:      1
+RC deadband:      8
+roll/pitch rates: center 70, maximum 300, expo 0.50
+yaw rates:        center 70, maximum 200, expo 0.50
+</code></pre>
+<p>This is a flyable experimental baseline, not a universal tune.</p>
+<h2 id="change-parameters"><a class="header" href="#change-parameters">Change parameters</a></h2>
+<p>Change one value and require persistent readback verification:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config set roll.p 2.5
+.\ferro-configurator.exe --port $Port config set pitch.p 2.5
+.\ferro-configurator.exe --port $Port config set yaw.p 2.0
+</code></pre>
+<p>RC response is configurable in the same way:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config set rc-deadband 8
+.\ferro-configurator.exe --port $Port config set roll-center-rate 70
+.\ferro-configurator.exe --port $Port config set roll-max-rate 300
+.\ferro-configurator.exe --port $Port config set roll-expo 0.5
+</code></pre>
+<p>List every accepted field and scalar range:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe config keys
+</code></pre>
+<p>For a complete profile:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe config validate foxeer-profile.toml
+.\ferro-configurator.exe --port $Port config apply foxeer-profile.toml
+.\ferro-configurator.exe --port $Port config show
+</code></pre>
+<p>Legacy schema-v1 profiles contain only the original eleven fields. Applying
+one overlays those fields onto the connected board and preserves its current
+RC-rate settings.</p>
+<p>PID changes can cause violent oscillation. Change one controlled variable at a
+time, verify the entire configuration, and repeat relevant props-off checks
+before flight.</p>
+<h2 id="list-and-download-flights"><a class="header" href="#list-and-download-flights">List and download flights</a></h2>
+<p>After landing, disarm and leave the FCU powered for at least two seconds so the
+last partial flash page can be committed.</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port blackbox flights
+</code></pre>
+<p>Download only the newest flight and create a ULog beside the retained raw
+evidence:</p>
+<pre><code class="language-powershell">$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$Raw = "foxeer-$Stamp.fwbb"
+$Ulog = "foxeer-$Stamp.ulg"
+
+.\ferro-configurator.exe --port $Port blackbox download `
+  --flight latest `
+  --output $Raw `
+  --ulog $Ulog
+</code></pre>
+<p>Download a known flight:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port blackbox download `
+  --flight 34 `
+  --output flight-34.fwbb `
+  --ulog flight-34.ulg
+</code></pre>
+<p>Downloads use a separate <code>.part</code> file. If USB is interrupted, repeat the exact
+command with <code>--resume</code>. Existing pages are accepted only after CRC, flight
+identity, and per-flight page-sequence validation:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port blackbox download `
+  --flight 34 `
+  --output flight-34.fwbb `
+  --resume `
+  --ulog flight-34.ulg
+</code></pre>
+<p>Download a range without retrieving earlier flights:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port blackbox download-range `
+  --from 29 `
+  --to latest `
+  --directory .\flights `
+  --ulog
+</code></pre>
+<p>Keep each <code>.fwbb</code> file. It is the CRC-protected acquisition evidence; ULog is
+a derived analysis file.</p>
+<h2 id="convert-an-existing-fwbb-file"><a class="header" href="#convert-an-existing-fwbb-file">Convert an existing FWBB file</a></h2>
+<pre><code class="language-powershell">.\ferro-configurator.exe convert flight-34.fwbb `
+  --flight latest `
+  --output flight-34.ulg
+</code></pre>
+<p>Open the <code>.ulg</code> file in PlotJuggler and select
+<code>ferrowasp_rate_control</code>. The current topic includes raw and filtered gyro
+rates, rate setpoints, PID effort, throttle, four motor commands, sequences,
+and armed/fresh-IMU flags.</p>
+<h2 id="erase-logs"><a class="header" href="#erase-logs">Erase logs</a></h2>
+<p>Erase only after every required flight has been downloaded, retained, and
+converted successfully:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port blackbox erase --confirm
+.\ferro-configurator.exe --port $Port blackbox flights
+</code></pre>
+<p>Erase is destructive, explicitly confirmed, firmware-gated while disarmed,
+and verified by reading the empty catalogue.</p>
+<h2 id="before-flight"><a class="header" href="#before-flight">Before flight</a></h2>
+<p>After any firmware or parameter change:</p>
+<ol>
+<li>verify device information and the complete saved configuration;</li>
+<li>cold-boot stationary and require healthy IMU, RC, DShot, ESC telemetry, and
+OSD;</li>
+<li>repeat props-off motor direction, correction direction, disarm, and RC-loss
+checks when firmware, gains, wiring, motor/ESC hardware, or the airframe
+changed;</li>
+<li>inspect propellers, motors, frame, wiring, battery retention, antennas, and
+center of gravity;</li>
+<li>expand the flight envelope only after reviewing the latest log.</li>
+</ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="development.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../user/getting_started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="testing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../user/ferro_configurator.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -262,11 +395,11 @@ are explicit; custom macros are not used to hide runtime work.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="development.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../user/getting_started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="testing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../user/ferro_configurator.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -286,17 +419,17 @@ are explicit; custom macros are not used to hide runtime work.</p>
         </script>
 
 
-        <script src="elasticlunr-ef4e11c1.min.js"></script>
-        <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
 
-        <script src="clipboard-1626706a.min.js"></script>
-        <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="mermaid-eefea253.min.js"></script>
-        <script src="mermaid-init-ccf746f1.js"></script>
+        <script src="../mermaid-eefea253.min.js"></script>
+        <script src="../mermaid-init-ccf746f1.js"></script>
 
 
 

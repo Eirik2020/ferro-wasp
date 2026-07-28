@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Developer Setup - FerroWasp</title>
+        <title>For Developers - FerroWasp</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
+            window.path_to_searchindex_js = "searchindex-1c6da85b.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1b1c9912.js"></script>
+        <script src="toc-6dd9b586.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -177,10 +177,9 @@
                         <h1 id="developer-getting-started"><a class="header" href="#developer-getting-started">Developer Getting Started</a></h1>
 <p>This guide is for contributors building or changing FerroWasp from source.
 Users who only want to flash and configure a Foxeer F405 V2 should use the
-<a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer USB Quick Start</a> instead.</p>
-<p>FerroWasp is a safety-oriented experimental flight-control prototype. A
-successful build is not flight evidence. Do not connect actuator power or
-install propellers as part of ordinary software setup.</p>
+<a href="user/foxeer_f405_v2.html">Foxeer USB Quick Start</a> instead.</p>
+<p>A successful build is not target or flight evidence. Ordinary software setup
+does not require actuator power or installed propellers.</p>
 <h2 id="preferred-environment-wsl-2-and-docker"><a class="header" href="#preferred-environment-wsl-2-and-docker">Preferred environment: WSL 2 and Docker</a></h2>
 <p>The reference developer environment is an x86-64 Linux container running
 through Docker Desktop’s WSL 2 backend. It pins the repository’s three Rust
@@ -366,7 +365,7 @@ this from PowerShell:</p>
 .\packaging\build-release.ps1 -Version 0.1.0-dev
 </code></pre>
 <p>Generated packages are written to the Git-ignored
-<a href="../../tools/ferro-configurator/dist/"><code>tools/ferro-configurator/dist</code></a>
+<code>tools/ferro-configurator/dist</code>
 directory. It does not exist in a fresh checkout until packaging succeeds.</p>
 <pre><code class="language-powershell">$Repo = git rev-parse --show-toplevel
 $Dist = Join-Path $Repo "tools\ferro-configurator\dist"
@@ -405,7 +404,7 @@ from prototype evidence.</p>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="getting_started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="user/ferro_configurator.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
@@ -419,7 +418,7 @@ from prototype evidence.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="getting_started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="user/ferro_configurator.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 

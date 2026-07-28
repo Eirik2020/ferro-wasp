@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
+            window.path_to_searchindex_js = "searchindex-1c6da85b.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1b1c9912.js"></script>
+        <script src="toc-6dd9b586.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -175,47 +175,56 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="testing"><a class="header" href="#testing">Testing</a></h1>
-<p>FerroWasp testing is staged: static checks, props-off bench checks, then one
-bounded flight change at a time. The user operates powered hardware. Stop on
-any unexpected motor response, oscillation, heat, smoke, loss of RC/video, or
+<p>FerroWasp verification is staged so a successful software check is never
+mistaken for target or flight evidence.</p>
+<h2 id="software-checks"><a class="header" href="#software-checks">Software Checks</a></h2>
+<p>From the repository root, contributors normally run:</p>
+<pre><code class="language-text">cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo check --workspace --locked
+cargo test --workspace --locked
+python -m unittest discover -s tools/tests -v
+python tools/check_repository_context.py
+mdbook build mdbook
+</code></pre>
+<p>Embedded applications are isolated Cargo workspaces. Check the selected app
+from its own directory with the exact board features being reviewed. A build
+proves source compatibility only; it does not prove pin routing, timing,
+sensor orientation, or actuator behavior.</p>
+<h2 id="target-verification"><a class="header" href="#target-verification">Target Verification</a></h2>
+<p>Hardware work progresses through explicit gates:</p>
+<ol>
+<li>unpowered boot and idle observation;</li>
+<li>unpowered peripheral and signal checks;</li>
+<li>powered props-off actuator checks;</li>
+<li>injected fault and recovery checks;</li>
+<li>bounded flight changes after the earlier gates pass.</li>
+</ol>
+<p>Record the board, source revision, firmware hash, features, configuration,
+power state, procedure, observations, and unresolved limitations. Stop on any
+unexpected motor response, oscillation, heat, smoke, loss of RC or video, or
 loss of confidence.</p>
-<h2 id="operator-guides"><a class="header" href="#operator-guides">Operator guides</a></h2>
-<ul>
-<li><a href="../../docs/FOXEER_F405_V2_QUICK_START.html">Foxeer F405 V2 USB Quick Start</a> covers ROM-DFU
-release flashing, disarmed parameter changes, selective blackbox download,
-analysis, and ULog conversion.</li>
-<li>Published configurator ZIPs are attached to
-<a href="https://github.com/Eirik2020/ferro-wasp/releases">GitHub Releases</a>. Local
-packaging writes generated ZIPs under
-<a href="../../tools/ferro-configurator/dist/"><code>tools/ferro-configurator/dist</code></a>;
-that Git-ignored folder exists only after the package script runs.</li>
-<li>The repository test catalog is in <code>project_docs/testing/README.md</code>.</li>
-<li>The current board-specific procedure is in
-<code>project_docs/testing/targets/foxeer-f405-v2.md</code>.</li>
-</ul>
-<p>The Quick Start is an operating guide, not flight authorization. A newly built
-image still requires checks proportional to its changes, and hardware,
-configuration, wiring, or airframe changes can invalidate prior evidence.</p>
-<h2 id="current-foxeer-flight-status"><a class="header" href="#current-foxeer-flight-status">Current Foxeer flight status</a></h2>
-<p>The current experimental P-only baseline is roll/pitch/yaw
-<code>2.5 / 2.5 / 2.0</code>, with all I and D gains zero. The operator has classified
-this setup as flyable in a confined area, but not well tuned. Verify the
-persisted configuration before every later session and change only one tuning
-variable at a time.</p>
-<p>Before flight, power the FCU and ESCs together from the flight battery, keep
-the aircraft still through gyro calibration, and complete the active preflight
-procedure. After landing, disarm and wait at least two seconds for the final
-blackbox page before removing power.</p>
+<p>The user operates powered hardware and decides when to advance between gates.
+A result applies only to the recorded image, hardware, configuration, and
+airframe.</p>
+<h2 id="foxeer-user-workflow"><a class="header" href="#foxeer-user-workflow">Foxeer User Workflow</a></h2>
+<p>The <a href="user/foxeer_f405_v2.html">Foxeer F405 V2 guide</a> covers release-image
+validation, USB DFU flashing, disarmed configuration changes, blackbox
+download, and post-change props-off checks. It is an operating guide, not
+flight authorization.</p>
+<p>Machine-enforced test selection, retained run evidence, and historical
+engineering records are maintained as internal repository metadata rather
+than duplicated in the public documentation.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="mvp_next.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="project_structure.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="communication_protocols.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="rtt_debug_tools.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -225,11 +234,11 @@ blackbox page before removing power.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="mvp_next.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="project_structure.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="communication_protocols.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="rtt_debug_tools.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

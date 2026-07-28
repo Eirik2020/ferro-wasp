@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
+            window.path_to_searchindex_js = "searchindex-1c6da85b.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1b1c9912.js"></script>
+        <script src="toc-6dd9b586.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -175,132 +175,71 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="roadmap"><a class="header" href="#roadmap">Roadmap</a></h1>
-<p>This roadmap covers the current FerroWasp technology demonstrator. It is not a
-certification, production, or airworthiness plan.</p>
-<h2 id="standing-rule"><a class="header" href="#standing-rule">Standing Rule</a></h2>
-<pre><code class="language-text">Outer layers may request actuation.
-Only the safety / actuator-output path may command motor hardware.
-</code></pre>
-<p>Every board port, telemetry path, experiment, and development tool must
-preserve that boundary.</p>
-<h2 id="current-baseline-ferrowasp-fcu3"><a class="header" href="#current-baseline-ferrowasp-fcu3">Current Baseline: FerroWasp FCU3</a></h2>
-<p>The FCU3 prototype now provides:</p>
-<ul>
-<li>SBUS input over owned USART2 RX DMA;</li>
-<li>MPU6500 sampling over the bounded SPI1 DMA transport;</li>
-<li>FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling and a 400 Hz
-rate-control/mixer update;</li>
-<li>standard, safety-owned four-lane DShot600 at 500 frame sets per second;</li>
-<li>PA10 / USART1 RX BLHeli legacy telemetry managed outside actuator authority;</li>
-<li>idle arming qualification using fresh eRPM evidence from all four ESCs;</li>
-<li>DJI O4 MSP DisplayPort OSD and <code>defmt</code>/BB2 logging;</li>
-<li>shared RC PWM infrastructure retained for servo and auxiliary outputs.</li>
-</ul>
-<p>The recorded props-off gates cover motor identity and direction, mixed-command
-signs, motion-opposing correction, telemetry, qualified arming, injected
-stalled-motor behavior, RC loss, arm-high recovery inhibition, explicit
-disarm, and restart behavior. Logic-analyzer timing and measured stop latency
-remain open.</p>
-<p>The operator reports that the first controlled outdoor flight on the standard
-DShot image went well, allowed strong manoeuvres, and did not reproduce the
-earlier yawing. Pitch authority felt low. The next tuning experiment should
-change pitch P in small increments while leaving the other axes unchanged and
-checking blackbox data for tracking error, oscillation, motor saturation, and
-thermal effects. This is prototype characterization, not a validated tune.</p>
-<h2 id="phase-1-prepare-the-source-repository-for-publication"><a class="header" href="#phase-1-prepare-the-source-repository-for-publication">Phase 1: Prepare the Source Repository for Publication</a></h2>
-<p>Immediate work:</p>
-<ul>
-<li>publish only a sanitized history after rotating any credential that appeared
-in earlier commits;</li>
-<li>exclude old raw capture branches and large private bench artifacts;</li>
-<li>make all application builds, formatting checks, and documentation builds
-pass from a clean checkout;</li>
-<li>align the default branch name with CI and documentation deployment triggers;</li>
-<li>update public status, security-reporting, setup, licence, and attribution
-information;</li>
-<li>pin safety-relevant build inputs closely enough to reproduce a known source
-state;</li>
-<li>run a final secret and large-object scan against the exact public history.</li>
-</ul>
-<p>Source publication does not imply that a firmware binary is flight-qualified.</p>
-<h2 id="phase-2-foxeer-f405-v2-target-validation"><a class="header" href="#phase-2-foxeer-f405-v2-target-validation">Phase 2: Foxeer F405 V2 Target Validation</a></h2>
-<p>The Foxeer app already has ROM-DFU, USB enumeration, status, ICM42688-P
-runtime evidence, and staged onboard-flash support. Flight arming remains
-compile-time inhibited; the flash path is implemented but lacks target evidence.</p>
-<p>The next hardware sequence is:</p>
-<ol>
-<li>Re-establish a clean build and boot checkpoint on the intended Foxeer board.</li>
-<li>Validate the fitted IMU identity, body-axis mapping, sample freshness, and
-startup behavior.</li>
-<li>Identify the SPI2 NOR, pass the isolated scratch-sector self-test, and
-validate persistent config/log recovery plus control-loop timing.</li>
-<li>Calibrate ADC voltage/current scaling.</li>
-<li>Measure all four DShot outputs, including TIM1_CH3N polarity on M4.</li>
-<li>With propellers removed, verify logical motor order, rotation direction,
-stick response, and motion-opposing correction.</li>
-<li>Review the evidence before removing the board-specific arming inhibit.</li>
-</ol>
-<p>FCU3 timer, DMA, motor-map, and DShot assumptions must not be copied to Foxeer
-without target evidence.</p>
-<h2 id="phase-3-reproducible-wsldocker-development-environment"><a class="header" href="#phase-3-reproducible-wsldocker-development-environment">Phase 3: Reproducible WSL/Docker Development Environment</a></h2>
-<p>The repository now carries a documented WSL 2/Docker reference environment
-that can:</p>
-<ul>
-<li>build and test reusable crates;</li>
-<li>check each isolated embedded application and supported feature set;</li>
-<li>run formatting, strict Clippy, and mdBook validation;</li>
-<li>pin the Rust/tool versions used by CI;</li>
-<li>keep probe/USB passthrough optional so ordinary source checks do not require
-hardware access.</li>
-</ul>
-<p>The image is checked only when its environment sources change. Continue
-keeping it aligned with CI and the pinned nested toolchains. It complements
-native flashing workflows; it does not hide target assumptions or claim
-hardware validation from a cross-compile.</p>
-<h2 id="phase-4-safety-and-evidence-hardening"><a class="header" href="#phase-4-safety-and-evidence-hardening">Phase 4: Safety and Evidence Hardening</a></h2>
+<p>This roadmap records product and engineering direction. Current board support
+belongs in <a href="current_support.html">Current Support</a>; dated test results and active
+work logs do not belong here.</p>
+<h2 id="flight-robustness"><a class="header" href="#flight-robustness">Flight Robustness</a></h2>
 <ul>
 <li>add an independent actuator deadline for complete loss of future control-loop
 commands;</li>
-<li>make IMU initialization, gyro-bias calibration, and freshness explicit
-pre-arm prerequisites; the current first post-arm stale-IMU check requests
-disarm, but a brief armed transition remains possible;</li>
-<li>complete setpoint and ADC/OSD freshness policies;</li>
-<li>capture DShot pulse timing, jitter, polarity margin, and TIM1/TIM8 phase with
-suitable instrumentation;</li>
-<li>measure RC-loss and explicit-disarm stop latency;</li>
-<li>expand fault-injection and duration evidence;</li>
-<li>keep a small, sanitized evidence bundle tied to source and firmware hashes.</li>
+<li>expand IMU freshness, calibration, RC-loss, and actuator fault injection;</li>
+<li>measure DShot timing, cross-timer phase, jitter, and physical stop latency;</li>
+<li>finish bounded I-term behavior, estimator validation, and systematic flight
+tuning;</li>
+<li>extend blackbox records with self-describing configuration, per-motor eRPM,
+accelerometer, saturation, and crash-analysis fields.</li>
 </ul>
-<h2 id="phase-5-protocols-and-developer-tools"><a class="header" href="#phase-5-protocols-and-developer-tools">Phase 5: Protocols and Developer Tools</a></h2>
+<h2 id="foxeer-user-experience"><a class="header" href="#foxeer-user-experience">Foxeer User Experience</a></h2>
 <ul>
-<li>retain SBUS as the proven baseline while adding CRSF/ELRS;</li>
-<li>keep the BLHeli legacy UART manager non-authoritative and bounded: missing
-evidence may block DShot pre-arm qualification, while post-arm telemetry loss
-remains observational and does not itself disarm;</li>
-<li>consider bidirectional DShot telemetry separately from the current UART path;</li>
-<li>grow USB/configuration interfaces as validated request paths with no direct
-arming or motor authority;</li>
-<li>add persistent parameters only after validation and rollback policy exist.</li>
+<li>keep USB, DShot, ESC telemetry, blackbox, and persistent configuration as
+standard Foxeer capabilities;</li>
+<li>improve guided FerroConfigurator workflows while preserving firmware-owned
+validation;</li>
+<li>make release images and configuration migrations reproducible and easy to
+verify;</li>
+<li>calibrate voltage and current sensing for supported airframes.</li>
 </ul>
-<h2 id="longer-term-work"><a class="header" href="#longer-term-work">Longer-Term Work</a></h2>
+<h2 id="protocols-and-interfaces"><a class="header" href="#protocols-and-interfaces">Protocols and Interfaces</a></h2>
 <ul>
-<li>thinner RTIC app shells and more reusable task logic;</li>
-<li>generated board/resource policy where it improves auditability;</li>
-<li>STM32H7 and Pixhawk-class exploration;</li>
-<li>formalized hazard, requirement, timing, and traceability evidence.</li>
+<li>add CRSF/ELRS while retaining SBUS;</li>
+<li>evaluate bidirectional DShot telemetry separately from the current legacy
+UART telemetry path;</li>
+<li>mature configuration and telemetry protocols only after their bounds,
+recovery behavior, and compatibility policy are explicit;</li>
+<li>keep RC-PWM available for servos and auxiliary devices rather than ESCs.</li>
 </ul>
-<p>Fixed-wing, VTOL, autonomy, payload control, and broad feature parity with
-larger flight stacks are outside the current demonstrator scope.</p>
+<h2 id="platform-architecture"><a class="header" href="#platform-architecture">Platform Architecture</a></h2>
+<ul>
+<li>continue thinning RTIC apps so they contain resource declarations, task
+bindings, scheduling, and board composition rather than reusable logic;</li>
+<li>move reusable STM32F4 initialization and mechanisms into
+<code>ferrowasp-stm32f4</code> without hiding runtime work behind custom macros;</li>
+<li>keep physical pins, DMA routes, timer assignments, sensor orientation, and
+other board facts in each app support module;</li>
+<li>add boards only when their explicit hardware contract and verification path
+are maintainable;</li>
+<li>explore STM32H7 and Pixhawk-class targets after the STM32F4 architecture is
+stable.</li>
+</ul>
+<h2 id="engineering-assurance"><a class="header" href="#engineering-assurance">Engineering Assurance</a></h2>
+<ul>
+<li>keep the development container, CI, and pinned toolchains reproducible;</li>
+<li>grow host tests, bounded target procedures, and compact evidence generation;</li>
+<li>make timing, unsafe-code, fault-containment, and actuator-authority changes
+straightforward to audit;</li>
+<li>maintain the mdBook as the single public user and developer documentation
+set.</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="publication_status.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="documentation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="mvp_next.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="publication_status.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -310,11 +249,11 @@ larger flight stacks are outside the current demonstrator scope.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="publication_status.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="documentation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="mvp_next.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="publication_status.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

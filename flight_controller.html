@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>RTT Debug Tools - FerroWasp</title>
+        <title>Flight Controller - FerroWasp</title>
 
 
         <!-- Custom HTML head -->
@@ -174,315 +174,29 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="rtt-debug-tools"><a class="header" href="#rtt-debug-tools">RTT Debug Tools</a></h1>
-<p>The current bench workflow includes Python tools for flashing the STM32F405
-target, decoding <code>defmt-rtt</code> output through <code>probe-rs</code>, logging terminal output,
-and live-viewing IMU data.</p>
-<p>These tools are for bring-up and bench analysis. They are not safety authority,
-and they do not command motors.</p>
-<h2 id="terminal-embed"><a class="header" href="#terminal-embed">Terminal Embed</a></h2>
-<p>Run from the repository root:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py
-</code></pre>
-<p>FCU3 is the default. Select the isolated Foxeer app after fitting its SWD
-connection:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
-</code></pre>
-<p>The Foxeer board support leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
-must be unpowered at the ESC side; USB DFU remains the recovery path.</p>
-<p>Release and feature-selected images use the same logger:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
-</code></pre>
-<p>The script performs a quiet firmware build, runs:</p>
-<pre><code class="language-text">probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps
-</code></pre>
-<p>and prints decoded <code>defmt</code> RTT lines in the terminal.</p>
-<p>Successful build warnings are hidden to keep the terminal readable. If the build
-fails, compiler output is shown.</p>
-<p>Every line printed by the tool is also written to:</p>
-<pre><code class="language-text">logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log
-</code></pre>
-<p>Each line is flushed immediately, so an interrupted run retains all output
-received up to that point. Prefer this wrapper over piping cargo-embed through
-<code>Tee-Object</code>; cargo-embed’s interactive terminal stream may include cursor and
-ANSI control sequences rather than a clean line-oriented log. Default
-build-and-run mode records the firmware ELF path and SHA-256 before flashing,
-so a retained target log identifies its exact artifact.</p>
-<p>Use <code>--log-file</code> to choose a specific output path:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --log-file logs\bench_rtt.log
-</code></pre>
-<h2 id="remote-pi-probe"><a class="header" href="#remote-pi-probe">Remote Pi Probe</a></h2>
-<p>The bench setup can also use a Raspberry Pi as a network-connected SWD/RTT
-gateway. In the current workshop setup:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Role</th><th>Value</th></tr>
-</thead>
-<tbody>
-<tr><td>Pi host</td><td>configured in FerroDebugger or local config</td></tr>
-<tr><td>probe-rs server</td><td>configured in FerroDebugger or local config</td></tr>
-<tr><td>probe selector</td><td><code>0:0:/dev/spidev0.0</code></td></tr>
-<tr><td>target chip</td><td><code>STM32F405RG</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>Most helper scripts also accept a named link:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Link</th><th>Use When</th><th>Host Choice</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Cable</code></td><td>Laptop stays on normal internet Wi-Fi and is cabled to the Pi</td><td>link details live in FerroDebugger/local config</td></tr>
-<tr><td><code>Mobile</code></td><td>Laptop and Pi are both on the configured mobile router</td><td>SSH alias from FerroDebugger config</td></tr>
-<tr><td><code>Zero</code></td><td>Raspberry Pi Zero 2 W gateway on bench Wi-Fi</td><td>link details live in FerroDebugger/local config</td></tr>
-<tr><td><code>ZeroMobile</code></td><td>Zero 2 W gateway on the mobile router</td><td>link details live in FerroDebugger/local config</td></tr>
-</tbody>
-</table>
-</div>
-<p>Examples:</p>
-<pre><code class="language-powershell">.\tools\remote_info.ps1 -Link Cable
-.\tools\remote_info.ps1 -Link Mobile
-.\tools\remote_info.ps1 -Link Zero
-.\tools\remote_info.ps1 -Link ZeroMobile
-.\tools\pi_log_fetch.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Mobile
-python tools\imu_live_view.py --remote --link cable
-python tools\imu_live_view.py --remote --link mobile
-python tools\imu_live_view.py --remote --link zero
-python tools\imu_live_view.py --remote --link zeromobile
-</code></pre>
-<p>Start <code>probe-rs serve</code> on the Pi before using the Windows-side helpers. The
-server must have at least one configured user/token; otherwise remote clients
-connect and then fail authentication.</p>
-<p>From the repository root on Windows:</p>
-<pre><code class="language-powershell">.\tools\remote_info.ps1 -Link Cable
-.\tools\remote_run.ps1 -Link Cable -Build
-.\tools\remote_attach.ps1 -Link Cable
-.\tools\remote_attach_log.ps1 -Link Cable
-.\tools\pi_log_start.ps1 -Link Cable
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-</code></pre>
-<p>Command meaning:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Command</th><th>Purpose</th></tr>
-</thead>
-<tbody>
-<tr><td><code>remote_info.ps1</code></td><td>Checks the remote SWD connection through the Pi. It does not flash or reset the FCU.</td></tr>
-<tr><td><code>remote_run.ps1</code></td><td>Optionally builds, flashes the ELF, resets/runs the STM32, and streams RTT/defmt output. Pass <code>-Features blackbox_defmt</code> to build the 400 Hz compact blackbox frames.</td></tr>
-<tr><td><code>remote_attach.ps1</code></td><td>Attaches to already-running firmware and streams RTT/defmt output without reflashing.</td></tr>
-<tr><td><code>remote_attach_log.ps1</code></td><td>Attach-only RTT/defmt session that also writes full terminal output to a log file.</td></tr>
-<tr><td><code>pi_log_start.ps1</code></td><td>Starts a detached attach logger on the Pi so logging survives SSH disconnects.</td></tr>
-<tr><td><code>pi_log_stop.ps1</code></td><td>Stops the detached Pi-side logger.</td></tr>
-<tr><td><code>pi_log_fetch.ps1</code></td><td>Copies the latest Pi-side log into this repository under <code>logs\remote_probe</code>.</td></tr>
-<tr><td><code>pi_elf_sync.ps1</code></td><td>Copies the current local ELF to the Pi path used by <code>pi_log_start.ps1</code> for <code>defmt</code> decoding.</td></tr>
-</tbody>
-</table>
-</div>
-<p>The helpers default to the current bench host, token, probe path, and chip. Use
-environment variables to avoid putting a shared token in command history:</p>
-<pre><code class="language-powershell">$env:FERROWASP_PROBE_HOST = "ws://your-probe-host.local:3000"
-$env:FERROWASP_PROBE_TOKEN = "your-token"
-</code></pre>
-<p>For onboard use, install <code>probe-rs serve</code> as a boot-starting <code>systemd</code> service
-on the Pi:</p>
-<pre><code class="language-powershell">.\tools\install_probe_rs_service.ps1 -Token "your-token"
-</code></pre>
-<p>The service starts after network-online and restarts if it exits. Useful Pi-side
-checks:</p>
-<pre><code class="language-powershell">ssh your-pi-host 'systemctl status probe-rs-serve --no-pager'
-ssh your-pi-host 'ss -ltnp | grep probe-rs'
-ssh your-pi-host 'sudo systemctl stop probe-rs-serve'
-</code></pre>
-<p><code>remote_attach.ps1</code> needs a local ELF matching the firmware running on the FCU
-so <code>defmt</code> decoding uses the correct metadata.</p>
-<p>By default, <code>remote_attach_log.ps1</code> writes logs under:</p>
-<pre><code class="language-text">logs\remote_probe\YYYYMMDD_HHMMSS_attach.log
-</code></pre>
-<p>Choose a specific log path with:</p>
-<pre><code class="language-powershell">.\tools\remote_attach_log.ps1 -Link Cable -LogFile logs\bench_attach.log
-</code></pre>
-<p>For onboard or disconnected logging, start the logger on the Pi, disconnect as
-needed, then reconnect later to stop and fetch the log:</p>
-<pre><code class="language-powershell">.\tools\pi_log_start.ps1 -Link Cable
-# disconnect/reconnect later
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-</code></pre>
-<p>The Pi-side logger writes under:</p>
-<pre><code class="language-text">/home/pi/logs/ferrowasp-rtt
-</code></pre>
-<p>Fetched logs are copied into:</p>
-<pre><code class="language-text">logs\remote_probe
-</code></pre>
-<h2 id="400-hz-blackbox-frames"><a class="header" href="#400-hz-blackbox-frames">400 Hz Blackbox Frames</a></h2>
-<p>The current firmware uses <code>defmt-rtt</code> 1.2. That backend owns the SEGGER RTT
-control block and one RTT up-channel, so the MVP logger does not link
-<code>rtt-target</code> beside it. Instead, blackbox data is emitted as compact fixed-point
-<code>defmt</code> frames over the existing RTT stream.</p>
-<p>Build and flash the blackbox-enabled firmware:</p>
-<pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
-</code></pre>
-<p>For the Foxeer F405 V2 over its retrofitted local SWD connection:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features blackbox_defmt
-</code></pre>
-<p>Begin with ESC power disconnected and hold the board stationary for at least
-ten seconds. The offline analyzer’s <code>Sequence/timing</code> section should estimate
-about <code>1000 Hz</code> for the EXTI-driven Foxeer IMU, with contiguous IMU sequence
-deltas normally alternating between <code>2</code> and <code>3</code> at the unchanged 400 Hz control
-rate. Repeated IMU samples should be zero. Missing BB2 frames indicate RTT
-transport loss and are reported independently from IMU progress.</p>
-<p>For a clean motor-vibration check that disables the PID/mixer and commands all
-four motors equally through the normal actuator-output task, build with:</p>
-<pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features "blackbox_defmt bench_equal_motors"
-</code></pre>
-<p>The craft must still be armed normally. This mode caps requested throttle to
-<code>250</code> PWM-style units, emits <code>BB2</code> frames with PID set to zero, and logs motors
-as <code>[throttle; 4]</code>. Use propellers removed only. If any motor or ESC smokes,
-smells hot, jitters abnormally, or heats rapidly, stop the test and inspect the
-hardware before running again.</p>
-<p>The 400 Hz control loop emits <code>BB2</code> frames. Disarmed frames still include raw
-gyro, filtered gyro, command, throttle, and freshness flags; PID and motor
-fields are zeroed until the craft is armed.</p>
-<pre><code class="language-text">BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Field</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>seq</code></td><td>Control-rate sample sequence</td></tr>
-<tr><td><code>imu</code></td><td>IMU sample sequence used by this control update</td></tr>
-<tr><td><code>flags</code></td><td>Bit 0 armed, bit 1 IMU fresh</td></tr>
-<tr><td><code>raw10</code></td><td>Unfiltered roll, pitch, yaw gyro rates in 0.1 deg/s</td></tr>
-<tr><td><code>gyro10</code></td><td>Filtered roll, pitch, yaw gyro rates in 0.1 deg/s</td></tr>
-<tr><td><code>cmd10</code></td><td>Commanded roll, pitch, yaw rates in 0.1 deg/s</td></tr>
-<tr><td><code>pid</code></td><td>Total PID output per axis in controller output units</td></tr>
-<tr><td><code>thr</code></td><td>Throttle setpoint in PWM-style command units</td></tr>
-<tr><td><code>motors</code></td><td>Mixed motor commands in PWM-style command units</td></tr>
-</tbody>
-</table>
-</div>
-<p>Future work: replace the RTT backend deliberately so channel 0 can carry
-<code>defmt</code> and channel 1 can carry raw binary blackbox samples.</p>
-<p>The live viewer auto-detects <code>BB1</code> and <code>BB2</code> frames:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable
-</code></pre>
-<p>When blackbox frames appear, it shows control-loop plots for gyro-vs-command
-rates, PID output, throttle, and motors.
-The viewer suppresses raw RTT echo by default to avoid lag with 400 Hz frames.
-Use <code>--echo-rtt</code> only when raw terminal output is more important than smooth
-plotting. If the PC still struggles, lower the UI refresh rate:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable --ui-hz 15
-</code></pre>
-<p>For offline analysis after a Pi-side recording:</p>
-<p>If you rebuilt/flashed from the PC and plan to log on the Pi, sync the matching
-ELF first so <code>defmt</code> decoding uses the right metadata:</p>
-<pre><code class="language-powershell">.\tools\pi_elf_sync.ps1 -Link Cable
-</code></pre>
-<pre><code class="language-powershell">.\tools\pi_log_start.ps1 -Link Cable -Restart
-# run the bench test
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
-</code></pre>
-<p>After a local <code>terminal_embed.py</code> capture, the analyzer selects the newest RTT
-log automatically:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
-</code></pre>
-<p>For deliberate hand-motion/swing tests, the default <code>--mode auto</code> should classify
-large low-frequency gyro movement as motion. Use <code>--mode rest</code> for stationary
-noise-floor or motor-vibration checks where large filtered gyro standard
-deviation should be treated as noise:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest
-</code></pre>
-<p>For a hand-swing recording, trim the pickup and place-down sections by time:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode swing --trim-start 6 --trim-end 6 --csv logs\remote_probe\swing_trimmed.csv
-</code></pre>
-<p>With no log argument, the analyzer uses the newest <code>.log</code> in <code>logs\remote_probe</code>
-or <code>logs\terminal_embed</code>. You can also pass a specific fetched log:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\remote_probe\pi_20260710_193000_attach.log --csv logs\remote_probe\swing_test.csv
-</code></pre>
-<h2 id="heartbeat"><a class="header" href="#heartbeat">Heartbeat</a></h2>
-<p>The default firmware heartbeat logs once at startup and then alternates the
-red/green debug LEDs about once per second as a visible liveness indicator.
-High-rate IMU and control-loop observation is handled by BB2 frames when the
-<code>blackbox_defmt</code> feature is enabled.</p>
-<h2 id="imu-live-view"><a class="header" href="#imu-live-view">IMU Live View</a></h2>
-<p>Run:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py
-</code></pre>
-<p>The viewer launches <code>terminal_embed.py</code> or attaches through the remote probe
-helpers. With <code>blackbox_defmt</code> firmware it parses BB2 frames and shows:</p>
+                        <h1 id="flight-controller"><a class="header" href="#flight-controller">Flight Controller</a></h1>
+<p>This section documents the reusable flight-control and actuator paths:</p>
 <ul>
-<li>measured roll/pitch/yaw gyro-rate history,</li>
-<li>commanded roll/pitch/yaw rates,</li>
-<li>PID output, throttle, and motor commands.</li>
+<li><a href="imu.html">IMU</a> covers supported sensors, sampling, orientation, and
+freshness.</li>
+<li><a href="arming.html">Arming Sequence</a> covers the guarded transition from disarmed to
+active output.</li>
+<li><a href="dshot.html">DShot</a> covers the standard ESC protocol and four-lane STM32F4
+backend.</li>
+<li><a href="priority.html">Priority and Scheduling</a> describes the RTIC priority model.</li>
 </ul>
-<p>Older heartbeat-IMU firmware can still use the attitude-view options. The
-default attitude mode seeds roll and pitch once from accelerometer gravity, then
-integrates gyro rates only:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --attitude gyro
-</code></pre>
-<p>For a bench view that continuously nudges roll and pitch back toward gravity:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --attitude accel
-</code></pre>
-<p>To attach through the remote Pi probe-rs server and live-view already-running
-firmware:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable
-</code></pre>
-<p>The remote viewer defaults to the cable link, <code>0:0:/dev/spidev0.0</code>, and
-<code>STM32F405RG</code>. It honors the same <code>FERROWASP_PROBE_HOST</code> and
-<code>FERROWASP_PROBE_TOKEN</code> environment variables as the PowerShell helpers when
-<code>--link auto</code> is used. Pass <code>--link mobile</code> on the mobile-router network.</p>
-<p>Yaw remains gyro-only in both modes and will drift.</p>
-<h2 id="imu-noise-analyzer"><a class="header" href="#imu-noise-analyzer">IMU Noise Analyzer</a></h2>
-<p>The noise analyzer gives a quick bench answer to:</p>
-<pre><code class="language-text">Is the filtered gyro signal quiet enough for the PID to use?
-</code></pre>
-<p>Analyze the newest RTT log:</p>
-<pre><code class="language-powershell">python tools\imu_noise_analyzer.py --latest
-</code></pre>
-<p>Or capture a still FCU/IMU run directly:</p>
-<pre><code class="language-powershell">python tools\imu_noise_analyzer.py --capture 30
-</code></pre>
-<p>The analyzer:</p>
-<ul>
-<li>parses BB2 or older heartbeat IMU lines,</li>
-<li>remaps raw gyro sensor axes into the current PID roll/pitch/yaw convention,</li>
-<li>compares raw gyro noise against filtered control-axis rates,</li>
-<li>reports standard deviation, peak-to-peak noise, attenuation, drift, and a
-rough quiet/watch/noisy verdict.</li>
-</ul>
-<p>Use this as a rest-noise screen only. It does not replace props-off motor output
-checks, motor-temperature checks, or later vibration/frequency analysis.</p>
-<h2 id="safety-notes"><a class="header" href="#safety-notes">Safety Notes</a></h2>
-<ul>
-<li>Run motor/axis checks with props removed.</li>
-<li><code>remote_run.ps1</code> flashes, resets, and starts firmware. Keep ESC power in the
-intended bench-safe state before using it.</li>
-<li>Do not leave <code>probe-rs serve</code> exposed on an untrusted network; the remote
-server provides debug-level control of the FCU.</li>
-<li>Treat BB2 <code>raw10</code> as unfiltered control-axis gyro data and <code>gyro10</code> as
-PID-convention measured data.</li>
-<li>The Python tools are observation tools only; motor authority must remain in
-the firmware safety/actuator-output path.</li>
-</ul>
+<p>Board availability and limitations are tracked in
+<a href="current_support.html">Current Support</a>.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="testing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="current_support.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="documentation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="imu.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -492,11 +206,11 @@ the firmware safety/actuator-output path.</li>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="testing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="current_support.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="documentation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="imu.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
