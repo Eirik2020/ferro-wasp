@@ -70,11 +70,12 @@ RUN curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
         --target thumbv7em-none-eabihf \
         --profile minimal \
         --no-self-update \
-    && rustup default nightly-2026-07-13 \
-    && cargo +1.93.1 install mdbook --version 0.5.2 --locked \
-    && cargo +1.93.1 install mdbook-mermaid --version 0.17.0 --locked \
-    && rustup self update disable \
-    && rm -rf "${CARGO_TARGET_DIR}" "${CARGO_HOME}/registry" "${CARGO_HOME}/git" \
+    && rustup default nightly-2026-07-13
+
+RUN cargo +1.93.1 install mdbook --version 0.5.2 --locked \
+    && cargo +1.93.1 install mdbook-mermaid --version 0.17.0 --locked
+
+RUN rm -rf "${CARGO_TARGET_DIR}" "${CARGO_HOME}/registry" "${CARGO_HOME}/git" \
     && mkdir -p "${CARGO_TARGET_DIR}" "${CARGO_HOME}/registry" "${CARGO_HOME}/git"
 
 WORKDIR /workspace/ferro-wasp
