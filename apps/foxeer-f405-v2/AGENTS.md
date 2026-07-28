@@ -9,9 +9,9 @@ flight applications.
 Before Foxeer runtime, motor, configuration, logging, or test work, read:
 
 - `README.md` and `Cargo.toml`;
-- `../../project_docs/CODEX_ACTIVE_WORK.md`;
+- `../../project_meta/CODEX_ACTIVE_WORK.md`;
 - the current Foxeer implementation and relevant retained FCU3 evidence;
-- `../../project_docs/testing/targets/foxeer-f405-v2.md` when selecting target
+- `../../project_meta/testing/targets/foxeer-f405-v2.md` when selecting target
   testing.
 
 Use current code and the target procedure for live defaults. Treat dated hashes,

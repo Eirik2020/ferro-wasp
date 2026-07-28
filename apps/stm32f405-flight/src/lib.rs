@@ -280,7 +280,7 @@ pub const fn inject_idle_qualification_fault(
 }
 
 #[cfg(feature = "bench_dshot_unequal_motors")]
-pub const _: () = {
+const _: () = {
     assert!(DSHOT_IDLE_THROTTLE_COMMAND <= dt::DSHOT_UNEQUAL_BENCH_MIN_COMMAND);
 };
 pub const IMU_GYRO_RAW_TO_DPS: f32 = IMU_CONTROL_AXIS_PROFILE.gyro_raw_to_dps as f32 / 10.0;

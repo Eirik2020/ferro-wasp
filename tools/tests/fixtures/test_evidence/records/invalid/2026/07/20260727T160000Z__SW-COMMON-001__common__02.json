@@ -9,7 +9,7 @@
   "result": "fail",
   "definition": {
     "catalog_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "procedure_path": "CONTRIBUTING.md",
+    "procedure_path": "mdbook/src/contributing.md",
     "procedure_heading": "Development Workflow",
     "procedure_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
   },

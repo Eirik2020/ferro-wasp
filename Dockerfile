@@ -10,6 +10,8 @@ ARG DEV_USER=ferrowasp
 ARG DEV_UID=1000
 ARG DEV_GID=1000
 ARG RUSTUP_VERSION=1.29.0
+ARG CODEX_VERSION=0.143.0
+ARG CODEX_INSTALLER_SHA256=0e477619f3d4a2ae4b706ffa39b9aa82fef0dac86e999bf605cbbaf55bf6504b
 
 ENV CARGO_HOME=/home/${DEV_USER}/.cargo \
     RUSTUP_HOME=/home/${DEV_USER}/.rustup \
@@ -23,20 +25,39 @@ ENV CARGO_HOME=/home/${DEV_USER}/.cargo \
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         bash-completion \
+        bubblewrap \
         build-essential \
         ca-certificates \
         curl \
         file \
         git \
         less \
+        libcap2-bin \
         libudev-dev \
         libusb-1.0-0-dev \
+        openssh-client \
         pkg-config \
+        procps \
         ripgrep \
+        strace \
         unzip \
+        util-linux \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-dev.lock /tmp/requirements-dev.lock
+RUN curl --proto "=https" --tlsv1.2 --fail --location --silent --show-error \
+        "https://raw.githubusercontent.com/openai/codex/rust-v${CODEX_VERSION}/scripts/install/install.sh" \
+        --output /tmp/install-codex.sh \
+    && printf "%s  %s\n" "${CODEX_INSTALLER_SHA256}" /tmp/install-codex.sh \
+        | sha256sum --check --strict \
+    && CODEX_HOME=/opt/codex \
+        CODEX_INSTALL_DIR=/usr/local/bin \
+        CODEX_NON_INTERACTIVE=1 \
+        CODEX_RELEASE="${CODEX_VERSION}" \
+        sh /tmp/install-codex.sh \
+    && rm /tmp/install-codex.sh \
+    && test "$(codex --version)" = "codex-cli ${CODEX_VERSION}"
+
+COPY .devcontainer/requirements.lock /tmp/requirements-dev.lock
 
 RUN python -m pip install --no-cache-dir --requirement /tmp/requirements-dev.lock \
     && rm /tmp/requirements-dev.lock \

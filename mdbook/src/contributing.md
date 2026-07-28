@@ -29,7 +29,7 @@ unless that ownership and permission has been explicitly cleared.
 ## Development Workflow
 
 Use the reference WSL 2/Docker environment in the
-[Developer Getting Started guide](mdbook/src/developer_getting_started.md)
+[Developer Getting Started guide](developer_getting_started.md)
 unless the change specifically requires a native or hardware-attached host.
 The guide also documents the pinned native fallback. The root workspace
 contains reusable crates; each deployable firmware app under `apps/` has an

@@ -20,8 +20,20 @@ unpowered throughout USB maintenance.
 
 Published packages are attached to the repository's
 [GitHub Releases](https://github.com/Eirik2020/ferro-wasp/releases). Download
-the current `ferrowasp-v*-windows-x86_64.zip` release and extract the complete
-folder. Do not run the executable from inside the ZIP.
+the current `ferrowasp-v*-windows-x86_64.zip` release and its matching
+`.zip.sha256` file.
+
+Verify the archive before extracting it:
+
+```powershell
+$Zip = Get-Item .\ferrowasp-v*-windows-x86_64.zip
+$Expected = (Get-Content "$($Zip.FullName).sha256").Split()[0]
+$Actual = (Get-FileHash $Zip.FullName -Algorithm SHA256).Hash
+if ($Actual -ne $Expected) { throw "Release ZIP checksum mismatch" }
+```
+
+Extract the complete folder after the hashes match. Do not run the executable
+from inside the ZIP.
 
 Developers building local packages or selecting their own ELF should use the
 [Developer Getting Started](../developer_getting_started.md) guide.

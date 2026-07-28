@@ -11,7 +11,7 @@
         "paths": [
           "apps/",
           "crates/",
-          "project_docs/",
+          "project_meta/",
           "tools/"
         ],
         "features": [],
@@ -21,7 +21,7 @@
         ]
       },
       "procedure": {
-        "path": "CONTRIBUTING.md",
+        "path": "mdbook/src/contributing.md",
         "heading": "Development Workflow"
       },
       "prerequisites": [],
@@ -125,7 +125,7 @@
         ]
       },
       "procedure": {
-        "path": "TARGET_VERIFICATION.md",
+        "path": "project_meta/testing/targets/common-boot-idle.md",
         "heading": "Boot and Idle State"
       },
       "prerequisites": [
@@ -167,7 +167,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "path": "project_meta/testing/targets/foxeer-f405-v2.md",
         "heading": "Foxeer USB RC Configuration Gate"
       },
       "prerequisites": [
@@ -211,7 +211,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/fcu3.md",
+        "path": "project_meta/testing/targets/fcu3.md",
         "heading": "FCU3 Powered Props-Off DShot Gate"
       },
       "prerequisites": [
@@ -253,7 +253,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "path": "project_meta/testing/targets/foxeer-f405-v2.md",
         "heading": "Foxeer Powered Props-Off Exact-Image Gate"
       },
       "prerequisites": [
@@ -296,7 +296,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/fcu3.md",
+        "path": "project_meta/testing/targets/fcu3.md",
         "heading": "FCU3 Final Preflight Gate"
       },
       "prerequisites": [
@@ -337,7 +337,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "path": "project_meta/testing/targets/foxeer-f405-v2.md",
         "heading": "Foxeer Final Preflight Gate"
       },
       "prerequisites": [
@@ -379,7 +379,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/fcu3.md",
+        "path": "project_meta/testing/targets/fcu3.md",
         "heading": "FCU3 Bounded Logged Flight Test"
       },
       "prerequisites": [
@@ -420,7 +420,7 @@
         ]
       },
       "procedure": {
-        "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+        "path": "project_meta/testing/targets/foxeer-f405-v2.md",
         "heading": "Foxeer Conservative Logged-Hop Flight Test"
       },
       "prerequisites": [

@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
-REGISTRY_PATH = PurePosixPath("project_docs/DOCUMENT_REGISTRY.json")
+REGISTRY_PATH = PurePosixPath("project_meta/DOCUMENT_REGISTRY.json")
 MAX_ALLOWED_RECORD_BYTES = 8192
 MAX_STRING_CHARS = 2048
 MAX_LIST_ITEMS = 32

@@ -30,16 +30,37 @@ wsl --install -d Ubuntu-24.04
 ```
 
 After any requested reboot, install Docker Desktop, select its WSL 2 engine,
-and enable integration for the Ubuntu distribution. These host components are
-the only global development prerequisites.
+and enable integration for the Ubuntu distribution.
 
-Clone the repository into the WSL Linux filesystem, not under `/mnt/c`.
-Linux-native storage avoids slow Cargo metadata and build operations. Enter
-the installed distribution from PowerShell:
+Enter the installed distribution from PowerShell:
 
 ```powershell
 wsl -d Ubuntu-24.04
 ```
+
+The repository uses an SSH GitHub remote. In the WSL shell, make sure the SSH
+client is installed, start an agent, and load a key registered with GitHub:
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes openssh-client
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+ssh-add -l
+ssh -T git@github.com
+```
+
+Use the actual path of the registered key when it is not `id_ed25519`. On the
+first connection, compare the displayed host-key fingerprint with the
+[GitHub SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/testing-your-ssh-connection)
+before accepting it. GitHub reports successful authentication but exits with
+status 1 because it does not provide shell access. Keep this WSL shell open so
+its `SSH_AUTH_SOCK` remains available to Docker Compose, or launch VS Code from
+this shell with `code .`. Never copy a private key into the image or
+repository.
+
+Clone the repository into the WSL Linux filesystem, not under `/mnt/c`.
+Linux-native storage avoids slow Cargo metadata and build operations.
 
 Only after the prompt changes to a Linux shell, run:
 
@@ -47,7 +68,7 @@ Only after the prompt changes to a Linux shell, run:
 pwd
 mkdir -p ~/src
 cd ~/src
-git clone https://github.com/Eirik2020/ferro-wasp.git
+git clone git@github.com:Eirik2020/ferro-wasp.git
 cd ferro-wasp
 pwd
 ```
@@ -71,9 +92,11 @@ docker compose build dev
 docker compose run --rm dev bash tools/dev/check-environment.sh
 ```
 
-The environment check is hardware-free. It verifies exact tool versions,
-Python analysis dependencies, the embedded target, and discovery of every
-isolated Cargo workspace without downloading project dependencies.
+The environment check is hardware-free. It verifies exact tool versions, the
+pinned Codex CLI, Git and OpenSSH clients, namespace diagnostic tools, Python
+analysis dependencies, the embedded target, and discovery of every isolated
+Cargo workspace without downloading project dependencies. Authenticated Git access and
+nested-userns execution are checked after the recreated container starts.
 
 Most WSL distributions use user and group ID `1000`, which is the container
 default. If `id -u` or `id -g` reports another value, build with matching
@@ -83,14 +106,67 @@ values so generated source-tree files remain owned by the WSL user:
 DEV_UID="$(id -u)" DEV_GID="$(id -g)" docker compose build dev
 ```
 
-### Daily use
+### Preserve Codex sessions
 
-Start the persistent development service and open a shell:
+Codex stores local session rollouts, its session index, configuration, and
+login state under `/home/ferrowasp/.codex`. The reference environment mounts
+that complete directory from the external Docker volume
+`ferrowasp-codex-home`, so container recreation does not discard chats or
+settings. The CLI package itself is installed outside that mount under
+`/opt/codex`, so mounting retained state cannot hide the executable supplied
+by the image.
+
+If an existing FerroWasp container was created before this volume was added,
+migrate it exactly once before recreating the container:
 
 ```bash
-docker compose up -d dev
-docker compose exec dev bash
+bash tools/dev/migrate-codex-state.sh
 ```
+
+The migration pauses the running container while taking a bounded snapshot,
+refuses to overwrite a non-empty target volume, verifies the copied file
+count, and removes its temporary host copy. The volume includes authentication
+material; never copy it into the repository or a shared archive. Run migration
+as the final action before recreation because later messages written to the
+old container are not part of the snapshot.
+
+After recreation, the Codex UI can reopen its retained threads. The installed
+CLI also supports:
+
+```bash
+codex resume
+codex resume --last
+codex resume --all
+```
+
+### Daily use
+
+Start the persistent development service with the host SSH agent mounted,
+then open a shell:
+
+```bash
+bash tools/dev/compose-with-ssh-agent.sh up -d dev
+bash tools/dev/compose-with-ssh-agent.sh exec dev bash
+```
+
+The development service currently disables the Docker default seccomp profile
+because that profile blocks the unprivileged `unshare --user` operation
+required by the Codex/Bubblewrap sandbox. It also enables
+`no-new-privileges` and grants no additional Linux capabilities. This policy remains under
+review for replacement with a narrower custom seccomp profile.
+
+The helper refuses to create the service when the host agent socket is absent
+or has no loaded identity. Inside the container, verify the forwarded agent
+and the configured remote before relying on pull or push:
+
+```bash
+bash tools/dev/check-git-ssh.sh --require-agent
+ssh -T git@github.com
+git ls-remote --exit-code origin HEAD
+```
+
+As on the host, the GitHub SSH test reports success with exit status 1. The
+`git ls-remote` command must exit successfully.
 
 The repository is bind-mounted at `/workspace/ferro-wasp`. Cargo registry,
 Git dependency, and Linux build-target caches live in named Docker volumes.
@@ -114,14 +190,20 @@ Stop the service without deleting caches:
 docker compose down
 ```
 
-`docker compose down --volumes` also deletes the Cargo caches. It does not
-delete the bind-mounted source tree, but it should only be used when a clean
-container cache is intentional.
+`docker compose down --volumes` deletes the Cargo cache volumes but not the
+external `ferrowasp-codex-home` volume. Docker manages that volume outside the
+Compose application lifecycle so ordinary teardown and recreation preserve
+Codex sessions. Removing the external volume is a separate destructive action
+that also removes its retained chats, configuration, and login state.
 
-VS Code users may install the Dev Containers extension and open the repository
-with **Dev Containers: Reopen in Container**. The checked-in
-`.devcontainer/devcontainer.json` uses the same Compose service and image as
-the command-line workflow.
+VS Code users may install the Dev Containers extension, verify `ssh-add -l` in
+the host shell, and open the repository with **Dev Containers: Reopen in
+Container**. The extension automatically forwards a running host SSH agent,
+and the checked-in post-start check rejects a missing client, socket, or loaded
+identity. The checked-in `.devcontainer/devcontainer.json` uses the same
+Compose service and image as the command-line workflow. See the
+[VS Code credential-sharing documentation](https://code.visualstudio.com/remote/advancedcontainers/sharing-git-credentials)
+for the upstream behavior.
 
 ### What remains outside the container
 
@@ -278,6 +360,9 @@ Get-ChildItem $Dist -Filter "ferrowasp-v*-windows-x86_64.zip"
 explorer $Dist
 ```
 
+Package assembly also writes a sibling `.zip.sha256` file. Publish and retain
+the ZIP and checksum together.
+
 Validate the package from its extracted folder before using it:
 
 ```powershell
@@ -313,7 +398,7 @@ worktree changes, and use a non-target branch plus pull request for normal
 publication. Repository rules require passing checks and protect `main` from
 deletion and force-pushes.
 
-Read [CONTRIBUTING.md](../../CONTRIBUTING.md) before submitting work. For
+Read the [contribution guide](contributing.md) before submitting work. For
 safety-relevant changes, record the reason, exact image/configuration,
 verification performed, remaining target gaps, and any timing or unsafe-code
 implications. Never claim certification, airworthiness, or production safety

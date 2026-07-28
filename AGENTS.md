@@ -12,19 +12,20 @@ This file applies repository-wide. Before scoped work, also read:
 
 - `apps/AGENTS.md` for firmware applications;
 - `apps/foxeer-f405-v2/AGENTS.md` for the Foxeer app;
+- `mdbook/AGENTS.md` for documentation;
 - `tools/AGENTS.md` for host tooling;
 - `tools/ferro-configurator/AGENTS.md` for the isolated USB configurator;
 - `tools/rtic-app-builder/AGENTS.md` for the isolated builder workspace;
-- `project_docs/AGENTS.md` for project documentation.
+- `project_meta/AGENTS.md` for project metadata.
 
 Nested instructions add local rules and never weaken this file. Load only the
 documents routed by the applicable instructions:
 
-- architectural change: `project_docs/CODEX_PROJECT_CONTEXT.md`;
+- architectural change: `project_meta/CODEX_PROJECT_CONTEXT.md`;
 - live bench, motor, logging, or test-plan work:
-  `project_docs/CODEX_ACTIVE_WORK.md`;
-- test selection or execution: `project_docs/testing/README.md`;
-- cross-repository movement: `project_docs/CROSS_REPO_SYNC.md`.
+  `project_meta/CODEX_ACTIVE_WORK.md`;
+- test selection or execution: `project_meta/testing/README.md`;
+- cross-repository movement: `project_meta/CROSS_REPO_SYNC.md`.
 
 ## Documentation boundary
 
@@ -37,6 +38,10 @@ guides, status summaries, setup instructions, or roadmap content.
 Keep agent instructions, internal context, machine-enforced test/evidence
 metadata, decision provenance, and archives outside the public book. Do not
 point users or ordinary contributors to agent-context documents.
+
+Root legal files and GitHub metadata under `.github/` are repository metadata,
+not documentation. Keep their guidance minimal and link to the canonical
+mdBook chapter when details belong in the book.
 
 ## Non-negotiable safety rules
 

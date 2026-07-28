@@ -11,12 +11,13 @@ Use the following boundaries:
   testing concepts, and the roadmap belong in this book.
 - Crate, app, and tool READMEs may document a narrow package contract, but
   should link here instead of duplicating general guides.
-- `project_docs` is reserved for agent context, machine-enforced test and
+- `project_meta` is reserved for agent context, machine-enforced test and
   evidence metadata, design-decision provenance, internal work tracking, and
   archives. It is not a user or developer entry point.
 - Agent instructions remain next to the files they govern.
-- Legal, security, contribution, and release-governance files remain at the
-  repository root where hosting and tooling expect them.
+- Legal distribution files remain at the repository root. GitHub-recognized
+  policy pointers and per-tag release-delivery metadata live under `.github/`.
+  Canonical contribution guidance and release history remain in this book.
 
 When a public behavior, workflow, or supported feature changes, update the
 relevant chapter and the Summary in the same change. Do not add a second

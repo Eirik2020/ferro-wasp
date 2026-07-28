@@ -1,0 +1,5 @@
+version = "0.1.0"
+tag = "v0.1.0"
+github_prerelease = true
+release_notes = ".github/releases/v0.1.0.md"
+maximum_public_blob_bytes = 5242880

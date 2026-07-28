@@ -155,7 +155,7 @@ topics they document:
 
 Current FerroWasp board status, golden applications, and target evidence remain
 owned by the monorepo root. Inspect those sources and the applicable
-`../../project_docs` guidance at a pinned commit when a task depends on them;
+`../../project_meta` guidance at a pinned commit when a task depends on them;
 do not duplicate their status in builder documentation.
 
 The agreed vocabulary and lessons from the complete UART RX/TX DMA plus OSD

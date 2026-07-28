@@ -22,24 +22,24 @@ class RepositoryContextTests(unittest.TestCase):
     def test_architecture_decisions_are_bounded_and_consistent(self) -> None:
         self.assertEqual(validate_architecture_decisions(REPOSITORY_ROOT), [])
 
-        registry_path = REPOSITORY_ROOT / "project_docs" / "DOCUMENT_REGISTRY.json"
+        registry_path = REPOSITORY_ROOT / "project_meta" / "DOCUMENT_REGISTRY.json"
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
         documents = {entry["path"]: entry for entry in registry["documents"]}
         adr_entries = {
             path: entry
             for path, entry in documents.items()
-            if path.startswith("project_docs/decisions/ADR-")
+            if path.startswith("project_meta/decisions/ADR-")
         }
 
         discovered_adrs = {
             path.relative_to(REPOSITORY_ROOT).as_posix()
-            for path in (REPOSITORY_ROOT / "project_docs" / "decisions").glob(
+            for path in (REPOSITORY_ROOT / "project_meta" / "decisions").glob(
                 "ADR-*.md"
             )
         }
         self.assertEqual(set(adr_entries), discovered_adrs)
         self.assertEqual(
-            documents["project_docs/ARCHITECTURE_DECISIONS.md"]["max_bytes"],
+            documents["project_meta/ARCHITECTURE_DECISIONS.md"]["max_bytes"],
             8192,
         )
         self.assertTrue(
@@ -59,7 +59,7 @@ class RepositoryContextTests(unittest.TestCase):
         self.assertTrue(any("supersession target must not be itself" in e for e in errors))
 
     def test_agent_instruction_tree_is_budgeted_and_root_routed(self) -> None:
-        registry_path = REPOSITORY_ROOT / "project_docs" / "DOCUMENT_REGISTRY.json"
+        registry_path = REPOSITORY_ROOT / "project_meta" / "DOCUMENT_REGISTRY.json"
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
         agent_budgets = {
             entry["path"]: entry["max_bytes"]
@@ -70,7 +70,8 @@ class RepositoryContextTests(unittest.TestCase):
             "AGENTS.md": 5120,
             "apps/AGENTS.md": 5120,
             "apps/foxeer-f405-v2/AGENTS.md": 4096,
-            "project_docs/AGENTS.md": 4096,
+            "mdbook/AGENTS.md": 4096,
+            "project_meta/AGENTS.md": 4096,
             "tools/AGENTS.md": 4096,
             "tools/ferro-configurator/AGENTS.md": 4096,
             "tools/rtic-app-builder/AGENTS.md": 5120,
@@ -101,7 +102,7 @@ class RepositoryContextTests(unittest.TestCase):
     def test_reports_unregistered_document_and_budget_overflow(self) -> None:
         errors = validate_repository(FIXTURES / "invalid_budget")
         self.assertTrue(
-            any("unregistered project document: project_docs/EXTRA.md" in e for e in errors)
+            any("unregistered project document: project_meta/EXTRA.md" in e for e in errors)
         )
         self.assertTrue(
             any("CONTEXT.md:" in e and "exceeds budget 4" in e for e in errors)
@@ -150,13 +151,13 @@ class RepositoryContextTests(unittest.TestCase):
         self.assertTrue(
             any(
                 "active target hardware procedure must use "
-                "project_docs/testing/targets/" in error
+                "project_meta/testing/targets/" in error
                 for error in errors
             )
                 )
 
     def test_common_bench_gate_remains_active_and_routed(self) -> None:
-        catalog_path = REPOSITORY_ROOT / "project_docs" / "testing" / "TEST_CATALOG.json"
+        catalog_path = REPOSITORY_ROOT / "project_meta" / "testing" / "TEST_CATALOG.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         definitions = {entry["id"]: entry for entry in catalog["tests"]}
         entry = definitions["BENCH-COMMON-001"]
@@ -165,11 +166,14 @@ class RepositoryContextTests(unittest.TestCase):
         self.assertEqual(entry["target"], "common")
         self.assertEqual(entry["tier"], "bench-unpowered")
         self.assertEqual(entry["prerequisites"], ["SW-COMMON-001"])
-        self.assertEqual(entry["procedure"]["path"], "TARGET_VERIFICATION.md")
+        self.assertEqual(
+            entry["procedure"]["path"],
+            "project_meta/testing/targets/common-boot-idle.md",
+        )
         self.assertEqual(entry["procedure"]["heading"], "Boot and Idle State")
 
     def test_evidence_policy_remains_bounded_and_artifact_only(self) -> None:
-        registry_path = REPOSITORY_ROOT / "project_docs" / "DOCUMENT_REGISTRY.json"
+        registry_path = REPOSITORY_ROOT / "project_meta" / "DOCUMENT_REGISTRY.json"
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
         policy = registry["test_evidence"]
 
@@ -177,15 +181,15 @@ class RepositoryContextTests(unittest.TestCase):
         self.assertEqual(policy["artifact_roots"], ["logs"])
         self.assertEqual(
             policy["records_root"],
-            "project_docs/testing/evidence/runs",
+            "project_meta/testing/evidence/runs",
         )
         self.assertEqual(
             policy["template"],
-            "project_docs/testing/evidence/RUN_RECORD_TEMPLATE.json",
+            "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
         )
 
     def test_foxeer_rollout_remains_active_and_ordered(self) -> None:
-        catalog_path = REPOSITORY_ROOT / "project_docs" / "testing" / "TEST_CATALOG.json"
+        catalog_path = REPOSITORY_ROOT / "project_meta" / "testing" / "TEST_CATALOG.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         definitions = {entry["id"]: entry for entry in catalog["tests"]}
         expected_prerequisite = {
@@ -202,11 +206,11 @@ class RepositoryContextTests(unittest.TestCase):
                 self.assertIn(prerequisite, entry["prerequisites"])
                 self.assertEqual(
                     entry["procedure"]["path"],
-                    "project_docs/testing/targets/foxeer-f405-v2.md",
+                    "project_meta/testing/targets/foxeer-f405-v2.md",
                 )
 
     def test_fcu3_rollout_remains_active_and_ordered(self) -> None:
-        catalog_path = REPOSITORY_ROOT / "project_docs" / "testing" / "TEST_CATALOG.json"
+        catalog_path = REPOSITORY_ROOT / "project_meta" / "testing" / "TEST_CATALOG.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         definitions = {entry["id"]: entry for entry in catalog["tests"]}
         expected_prerequisite = {
@@ -222,7 +226,7 @@ class RepositoryContextTests(unittest.TestCase):
                 self.assertIn(prerequisite, entry["prerequisites"])
                 self.assertEqual(
                     entry["procedure"]["path"],
-                    "project_docs/testing/targets/fcu3.md",
+                    "project_meta/testing/targets/fcu3.md",
                 )
 
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="FerroWasp_logo_transparent.png" alt="FerroWasp logo" width="760">
+  <img src="project_meta/FerroWasp_logo_transparent.png" alt="FerroWasp logo" width="760">
 </p>
 
 FerroWasp is a safety-focused Rust/RTIC flight-controller firmware project for
@@ -67,15 +67,17 @@ mdBook for usage and development details.
 
 Issues, hardware observations, and focused design feedback are welcome through
 [GitHub Issues](https://github.com/Eirik2020/ferro-wasp/issues). Report
-security-sensitive findings privately as described in [SECURITY.md](SECURITY.md).
+security-sensitive findings privately as described in
+[SECURITY.md](.github/SECURITY.md).
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+Contributions are welcome. See the [contribution guide](mdbook/src/contributing.md)
+and the
 [Developer Setup](mdbook/src/developer_getting_started.md) guide.
 
 ## Licence
 
 FerroWasp is licensed under the Apache License, Version 2.0. See
-[LICENSE.md](LICENSE.md), [NOTICE.md](NOTICE.md), and
+[LICENSE](LICENSE), [NOTICE](NOTICE), and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

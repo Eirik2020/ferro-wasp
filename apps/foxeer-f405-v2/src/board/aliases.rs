@@ -21,10 +21,8 @@ pub type Spi2FlashMosiPin = PC3<Input>;
 pub type Spi2FlashBus = Spi<SPI2>;
 pub type Spi2FlashCs = PB12<Output<PushPull>>;
 pub type Spi2Flash = ferrowasp_drivers::spi_nor::SpiNor<Spi2FlashBus, Spi2FlashCs>;
-pub type Spi2FlashError = ferrowasp_drivers::spi_nor::Error<
-    stm32f4xx_hal::spi::Error,
-    core::convert::Infallible,
->;
+pub type Spi2FlashError =
+    ferrowasp_drivers::spi_nor::Error<stm32f4xx_hal::spi::Error, core::convert::Infallible>;
 
 pub type Motor1Pin = PA8<Input>;
 pub type Motor2Pin = PC9<Input>;

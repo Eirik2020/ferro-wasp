@@ -50,10 +50,15 @@ jobs:
         run: cargo fmt --manifest-path Cargo.toml --check
 
       - name: Check embedded workspace
-        run: cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
+        run: >
+          cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features ferrowasp-stm32f4/stm32f405
 
       - name: Lint embedded workspace
-        run: cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+        run: >
+          cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features ferrowasp-stm32f4/stm32f405
+          -- -D warnings
 
       - name: Check standard STM32F405 DShot flight firmware
         working-directory: apps/stm32f405-flight
@@ -187,6 +192,9 @@ jobs:
       - name: Enforce thin RTIC and board-support boundaries
         run: python tools/check_rtic_boundaries.py
 
+      - name: Validate release metadata
+        run: python tools/release/check_release.py
+
       - name: Report embedded duplicate dependency versions
         run: cargo tree --workspace --duplicates --locked --target ${{ env.FIRMWARE_TARGET }}
 
@@ -220,6 +228,39 @@ jobs:
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
           rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4/src/dshot.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' apps/stm32f405-flight/src/main.rs
+
+  publication-security:
+    name: Publication security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check public-history object sizes and suffixes
+        run: python tools/release/check_public_history.py
+
+      - name: Install checksum-verified Gitleaks
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output /tmp/gitleaks.tar.gz
+          printf '%s  %s\n' \
+            551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb \
+            /tmp/gitleaks.tar.gz | sha256sum --check --strict
+          tar --extract --gzip --file /tmp/gitleaks.tar.gz \
+            --directory /tmp gitleaks
+          /tmp/gitleaks version
+
+      - name: Scan complete reachable Git history
+        run: >
+          /tmp/gitleaks git
+          --no-banner
+          --redact
+          --max-archive-depth 1
+          --log-opts=--all
+          .
 
   configurator:
     name: FerroConfigurator
@@ -256,7 +297,7 @@ jobs:
   windows-release-package:
     name: Ready Windows package
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-    needs: [firmware, configurator]
+    needs: [firmware, host-tests, publication-security, configurator, documentation]
     runs-on: windows-latest
     permissions:
       contents: write
@@ -278,6 +319,15 @@ jobs:
         working-directory: tools/ferro-configurator
         run: cargo build --release --locked -p ferro-configurator-cli
 
+      - name: Validate release metadata
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            python tools/release/check_release.py --tag "${{ github.ref_name }}"
+          } else {
+            python tools/release/check_release.py
+          }
+
       - name: Assemble manifest-verified ready package
         shell: pwsh
         run: |
@@ -295,14 +345,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ferrowasp-ready-windows-x86_64
-          path: tools/ferro-configurator/dist/*.zip
+          path: tools/ferro-configurator/dist/*.zip*
           if-no-files-found: error
 
-      - name: Attach ready package to tagged release
+      - name: Publish tagged GitHub pre-release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: tools/ferro-configurator/dist/*.zip
+          name: FerroWasp ${{ github.ref_name }} — Experimental Foxeer F405 V2 Prototype
+          body_path: .github/releases/${{ github.ref_name }}.md
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: |
+            tools/ferro-configurator/dist/*.zip
+            tools/ferro-configurator/dist/*.zip.sha256
 
   documentation:
     name: Documentation

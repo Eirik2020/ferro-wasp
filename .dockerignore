@@ -1,2 +1,4 @@
 *
-!requirements-dev.lock
+!.devcontainer/
+.devcontainer/*
+!.devcontainer/requirements.lock

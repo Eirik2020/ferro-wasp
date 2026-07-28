@@ -24,9 +24,9 @@ create a path around arming, actuator gating, or target health checks.
 - Preserve retained logs and input files. Use unique outputs or require
   explicit overwrite intent.
 
-Read `../project_docs/CODEX_ACTIVE_WORK.md` before changing current logging,
+Read `../project_meta/CODEX_ACTIVE_WORK.md` before changing current logging,
 download, analyzer, remote-debug, or configuration workflows. Read
-`../project_docs/CROSS_REPO_SYNC.md` before changing ownership between
+`../project_meta/CROSS_REPO_SYNC.md` before changing ownership between
 FerroWasp and FerroDebugger.
 
 ## Implementation rules

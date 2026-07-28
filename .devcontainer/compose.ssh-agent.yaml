@@ -1,0 +1,9 @@
+# Host-only Compose overlay used by tools/dev/compose-with-ssh-agent.sh.
+services:
+  dev:
+    environment:
+      SSH_AUTH_SOCK: /run/ferrowasp-host-ssh-agent.sock
+    volumes:
+      - type: bind
+        source: ${SSH_AUTH_SOCK:?Start the host SSH agent and load a GitHub key first}
+        target: /run/ferrowasp-host-ssh-agent.sock

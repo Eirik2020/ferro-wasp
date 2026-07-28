@@ -242,7 +242,7 @@ Step 6 and the normal uncapped-mixer props-off flight handoff passed on
 2026-07-22. The final run confirmed the IMU pre-arm gate, live OSD voltage,
 DShot/eRPM health, motor response, explicit disarm, RC-loss stop, and the
 arm-low-before-rearm latch. The exact evidence and hashes are routed through
-`../../project_docs/testing/EVIDENCE_INDEX.md`.
+`../../project_meta/testing/EVIDENCE_INDEX.md`.
 
 To repeat the deterministic IMU integration fault test:
 
@@ -321,7 +321,7 @@ the powered normal-mixer image was
 `FF6606EFACC55C9C88CCDE5EC044C0CB3B3881A5229319C26820621654DD136F`.
 The powered capture produced the correct PID and motor-pair polarity for every
 selected pitch, roll, and yaw motion sample. See
-`../../project_docs/testing/EVIDENCE_INDEX.md` for the retained logs and exact
+`../../project_meta/testing/EVIDENCE_INDEX.md` for the retained logs and exact
 counts.
 
 Continue the already completed archive so only pages added by this test cross

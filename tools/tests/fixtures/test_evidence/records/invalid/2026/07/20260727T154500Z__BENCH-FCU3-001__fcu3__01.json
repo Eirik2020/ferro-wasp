@@ -9,7 +9,7 @@
   "result": "pass",
   "definition": {
     "catalog_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "procedure_path": "project_docs/testing/targets/fcu3.md",
+    "procedure_path": "project_meta/testing/targets/fcu3.md",
     "procedure_heading": "FCU3 Powered Props-Off DShot Gate",
     "procedure_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
   },

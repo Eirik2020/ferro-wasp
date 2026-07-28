@@ -2526,9 +2526,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-                    enqueue_flash_record(
-                        cx.local.flash_record_producer,
-                        dt::CompactRateBlackboxSample::from_fields(dt::CompactRateBlackboxFields {
+                    enqueue_flash_record(dt::CompactRateBlackboxSample::from_fields(
+                        dt::CompactRateBlackboxFields {
                             seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                             imu_seq: imu_sequence,
                             armed: control_armed,
@@ -2547,8 +2546,8 @@ mod app {
                             pid: [0.0; 3],
                             throttle: bench_throttle,
                             motors: motor_commands,
-                        }),
-                    );
+                        },
+                    ));
                     {
                         publish_motor_command(
                             motor_commands,

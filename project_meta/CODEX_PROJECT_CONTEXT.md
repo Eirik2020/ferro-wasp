@@ -5,12 +5,12 @@ This document is compact project memory for coding agents working in the
 
 For cross-repo boundaries, also read:
 
-- `project_docs/CROSS_REPO_SYNC.md`
+- `project_meta/CROSS_REPO_SYNC.md`
 
 Before changing current bench/debug workflows, motor-output behavior, logging
 tools, or test plans, also read:
 
-- `project_docs/CODEX_ACTIVE_WORK.md`
+- `project_meta/CODEX_ACTIVE_WORK.md`
 
 ## Repository Role
 
@@ -84,7 +84,7 @@ The detailed support matrix lives in:
 
 The current bench/flight handoff lives in:
 
-- `project_docs/CODEX_ACTIVE_WORK.md`
+- `project_meta/CODEX_ACTIVE_WORK.md`
 
 ## Core Safety Boundary
 
@@ -225,12 +225,12 @@ For safety-relevant changes, record:
 
 Relevant docs:
 
-- `project_docs/PUBLICATION_CHECKLIST.md`
-- `project_docs/CODEX_ACTIVE_WORK.md`
+- `project_meta/PUBLICATION_CHECKLIST.md`
+- `project_meta/CODEX_ACTIVE_WORK.md`
 - `mdbook/src/current_support.md`
-- `project_docs/testing/README.md`
+- `project_meta/testing/README.md`
 - `mdbook/src/roadmap.md`
-- `project_docs/CROSS_REPO_SYNC.md`
+- `project_meta/CROSS_REPO_SYNC.md`
 
 ## Assurance Language
 

@@ -703,7 +703,7 @@ which tests ultimately apply, or claim that a test passed.
 ## Test Evidence Metadata
 
 New test results use bounded JSON metadata records described in
-`project_docs/testing/evidence/README.md`. Raw logs and reports remain under
+`project_meta/testing/evidence/README.md`. Raw logs and reports remain under
 ignored `logs/` paths.
 
 Validate the record layout, catalog identity, hardware execution boundary,

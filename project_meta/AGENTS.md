@@ -1,12 +1,12 @@
-# Project Documentation Instructions
+# Project Metadata Instructions
 
-These instructions apply under `project_docs/` in addition to the repository
+These instructions apply under `project_meta/` in addition to the repository
 root rules.
 
 ## Routing and authority
 
 Public user and developer documentation belongs under `mdbook/src/`. Keep
-`project_docs/` limited to agent context, test/evidence metadata, decision
+`project_meta/` limited to agent context, test/evidence metadata, decision
 provenance, internal work tracking, and archives. Do not add a public guide or
 competing feature summary here.
 
@@ -24,7 +24,7 @@ Do not load every project document for a localized task.
 - Preserve dates, hashes, feature sets, artifact identities, and limitations
   when moving evidence.
 
-Every added, moved, or removed Markdown document under `project_docs/` must be
+Every added, moved, or removed Markdown document under `project_meta/` must be
 reconciled with `DOCUMENT_REGISTRY.json`. Give high-context entry points a
 reviewed byte budget.
 

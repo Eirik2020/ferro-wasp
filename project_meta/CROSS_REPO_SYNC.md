@@ -31,9 +31,9 @@ current implementation state.
 
 Before changing safety-relevant firmware behavior, verify this repo's current:
 
-- `project_docs/CODEX_PROJECT_CONTEXT.md`
-- `project_docs/CODEX_ACTIVE_WORK.md`
-- `project_docs/testing/README.md` and the catalog-selected procedure
+- `project_meta/CODEX_PROJECT_CONTEXT.md`
+- `project_meta/CODEX_ACTIVE_WORK.md`
+- `project_meta/testing/README.md` and the catalog-selected procedure
 - relevant code and logs
 
 Before changing remote probe or Pi logging behavior, verify the owning files in

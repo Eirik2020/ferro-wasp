@@ -15,12 +15,13 @@ firmware release, airworthiness statement, or recommendation to fly.
   publication terms are not being offered as part of the public repository.
 - [x] Ensure obsolete refs containing raw `python_sandbox` CSV and Saleae
   captures are not present in the public repository.
-- [x] Consolidate the intended source files into an intentional publication
-  commit and require a clean worktree.
+- [ ] Consolidate the `v0.1.0` source and release metadata into an intentional
+  publication commit and require a clean worktree.
 - [x] Publish through Git from the reviewed index, not by uploading a workspace
   archive containing ignored local logs, captures, or configuration.
-- [x] Run a history-aware secret scan on the proposed public `main`. Gitleaks
-  scanned the single reachable commit with no findings.
+- [x] Run a history-aware secret scan on the proposed public refs. Gitleaks
+  8.30.1 scanned the locally reachable history and the candidate worktree on
+  2026-07-28 with no findings.
 
 History rewriting, remote-ref deletion, and credential rotation are explicit
 maintainer operations. Do not perform them as an incidental cleanup step.
@@ -36,6 +37,21 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 - [x] mdBook is included in pull-request CI and builds locally.
 - [x] Workflow push/deploy branches match the final default branch (`main`).
 - [x] The Rust toolchain and safety-critical HAL revision are pinned.
+
+## v0.1.0 pre-release
+
+- [x] Keep the release version aligned at `0.1.0` across reusable crates,
+  isolated firmware apps, and FerroConfigurator.
+- [x] Record `v0.1.0` as a GitHub pre-release in machine-checked release
+  metadata and prepare the per-tag release notes.
+- [x] Generate a standalone SHA-256 file for the ready Windows ZIP and attach
+  both files to the tagged release.
+- [x] Require firmware, host, configurator, documentation, public-history, and
+  secret-scan jobs before the tagged package can publish.
+- [ ] Commit the reviewed candidate, rerun the release gate with
+  `--require-clean`, and create the annotated `v0.1.0` tag.
+- [ ] Confirm the tagged workflow publishes a GitHub pre-release containing
+  the ZIP and matching `.zip.sha256` asset.
 
 ## Public documentation
 
@@ -61,7 +77,8 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 ## Security, licensing, and repository hygiene
 
 - [ ] Enable GitHub private vulnerability reporting after the repository is
-  public. `SECURITY.md` already links the intended private reporting path.
+  public. `.github/SECURITY.md` already links the intended private reporting
+  path.
 - [x] Apache-2.0 project licensing and third-party Mermaid notices are clear.
 - [x] The maintainer selected `Kaldstrand` as the public copyright/author
   identity used by LICENSE, NOTICE, Cargo metadata, and documentation.
@@ -73,11 +90,14 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 
 ## Final clean-room check
 
-- [x] Clone the proposed public repository into a new directory.
-- [x] Follow only the published prerequisites and build instructions.
-- [x] Run formatting, tests, strict Clippy, all supported firmware checks, and
-  mdBook.
-- [ ] Re-run secret and large-object scans against all public refs.
+- [ ] Clone the committed `v0.1.0` candidate into a new directory.
+- [ ] Follow only the published prerequisites and build instructions from that
+  clone.
+- [ ] Run formatting, tests, strict Clippy, all supported firmware checks, and
+  mdBook in that clone.
+- [x] Re-run secret and large-object scans against all locally reachable refs.
+  The 2026-07-28 scan found no Gitleaks findings, prohibited artifact suffixes,
+  or blobs over 5 MiB; the largest reachable blob was 2,667,011 bytes.
 - [x] Confirm `main` as the default branch and configure the repository
   description, topics, and recognized Apache-2.0 license.
 - [x] Protect `main` with pull requests, required CI checks, conversation

@@ -127,7 +127,7 @@ TOPIC_ROUTES = {
     "init": TopicRoute(
         summary="Board construction, resource ownership, startup, and heartbeat.",
         common_symbols=("init", "heartbeat"),
-        companions=(PurePosixPath("project_docs/CODEX_PROJECT_CONTEXT.md"),),
+        companions=(PurePosixPath("project_meta/CODEX_PROJECT_CONTEXT.md"),),
     ),
     "arming": TopicRoute(
         summary="Safety events, live guards, guarded holds, and actuator handoff.",
@@ -137,7 +137,7 @@ TOPIC_ROUTES = {
             "actuator_output",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/esc_manager.rs"),
         ),
@@ -148,7 +148,7 @@ TOPIC_ROUTES = {
             "control_loop",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
         ),
@@ -165,7 +165,7 @@ TOPIC_ROUTES = {
             "actuator_output",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
             PurePosixPath("crates/ferrowasp-waveform/src/dshot.rs"),
@@ -182,7 +182,7 @@ TOPIC_ROUTES = {
             "actuator_output",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/esc_manager.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
             PurePosixPath("crates/ferrowasp-waveform/src/dshot.rs"),
@@ -197,7 +197,7 @@ TOPIC_ROUTES = {
             "dshot_service",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-drivers/src/blheli_telemetry.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/esc_manager.rs"),
         ),
@@ -214,7 +214,7 @@ TOPIC_ROUTES = {
         ),
         foxeer_symbols=("imu_data_ready",),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-drivers/src/mpu6500.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/icm42688p.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/spi_dma.rs"),
@@ -228,7 +228,7 @@ TOPIC_ROUTES = {
             "rc_input",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/uart_dma.rs"),
@@ -244,7 +244,7 @@ TOPIC_ROUTES = {
             "uart4_tx_dma_transfer",
         ),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/osd.rs"),
             PurePosixPath("crates/ferrowasp-mspv1/src/lib.rs"),
         ),
@@ -262,7 +262,7 @@ TOPIC_ROUTES = {
         common_symbols=("usb_fs",),
         golden_symbols=("usb_fs", "safety_master", "actuator_output"),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/usb_debug.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/flash_storage.rs"),
         ),
@@ -275,7 +275,7 @@ TOPIC_ROUTES = {
         ),
         golden_symbols=("safety_master", "control_loop", "actuator_output"),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/spi_nor.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/flash_storage.rs"),
@@ -287,7 +287,7 @@ TOPIC_ROUTES = {
         foxeer_symbols=("flash_manager_task",),
         golden_symbols=("control_loop", "safety_master", "actuator_output"),
         companions=(
-            PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/flash_storage.rs"),
@@ -538,8 +538,8 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
             lines.append(f"Golden routed source: {_selected_bytes(golden)} B")
 
     companion_paths = (
-        PurePosixPath("project_docs/testing/README.md"),
-        PurePosixPath("project_docs/testing/TEST_CATALOG.json"),
+        PurePosixPath("project_meta/testing/README.md"),
+        PurePosixPath("project_meta/testing/TEST_CATALOG.json"),
         target.support,
         target.board_directory,
         *topic.companions,
@@ -587,7 +587,7 @@ def validate_routes(root: Path = REPOSITORY_ROOT) -> list[str]:
 
     root = root.resolve()
     errors: list[str] = []
-    catalog_path = root / "project_docs" / "testing" / "TEST_CATALOG.json"
+    catalog_path = root / "project_meta" / "testing" / "TEST_CATALOG.json"
     try:
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         test_ids = {

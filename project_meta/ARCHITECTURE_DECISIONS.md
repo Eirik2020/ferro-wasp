@@ -64,7 +64,7 @@ Its immutable size and SHA-256 are enforced through
 
 ## Adding Or Changing A Decision
 
-1. Add the next sequential `project_docs/decisions/ADR-NNNN.md` record with one
+1. Add the next sequential `project_meta/decisions/ADR-NNNN.md` record with one
    matching H1 heading and one non-empty `Status:` line.
 2. Add the matching index row and document-registry entry.
 3. Record supersession explicitly in the affected status or decision body;

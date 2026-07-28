@@ -27,9 +27,9 @@ without changing live motor behavior.
 # Files Changed
 
 - `Cargo.toml`
-- `project_docs/ARCHITECTURE_DECISIONS.md`
-- `project_docs/UNIFIED_IO_DMA_HANDOFF.md`
-- `project_docs/CODEX_ACTIVE_WORK.md`
+- `project_meta/ARCHITECTURE_DECISIONS.md`
+- `project_meta/UNIFIED_IO_DMA_HANDOFF.md`
+- `project_meta/CODEX_ACTIVE_WORK.md`
 - `mdbook/src/current_support.md`
 - `crates/ferrowasp-io-core/**`
 - `crates/ferrowasp-stm32f4/**`
@@ -1492,7 +1492,8 @@ with the F405 image. PWM/DShot DMA remains deferred.
 
 The two bullets above describe the earlier bring-up checkpoint. They are
 superseded by the 2026-07-22 default-DShot flight-candidate state recorded in
-`CODEX_ACTIVE_WORK.md` and `TARGET_VERIFICATION.md`.
+`CODEX_ACTIVE_WORK.md` and
+`project_meta/testing/targets/common-boot-idle.md`.
 
 # Continuation Notes - Foxeer Read-Only USB Debug
 

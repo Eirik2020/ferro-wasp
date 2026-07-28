@@ -11,6 +11,9 @@ services:
     working_dir: /workspace/ferro-wasp
     command: sleep infinity
     init: true
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=unconfined
     stdin_open: true
     tty: true
     environment:
@@ -21,8 +24,12 @@ services:
       - cargo-registry:/home/ferrowasp/.cargo/registry
       - cargo-git:/home/ferrowasp/.cargo/git
       - cargo-target:/home/ferrowasp/.cache/ferrowasp-target
+      - codex-home:/home/ferrowasp/.codex
 
 volumes:
+  codex-home:
+    external: true
+    name: ferrowasp-codex-home
   cargo-registry:
   cargo-git:
   cargo-target:

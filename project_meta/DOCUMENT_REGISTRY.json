@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "test_catalog": "project_docs/testing/TEST_CATALOG.json",
+  "test_catalog": "project_meta/testing/TEST_CATALOG.json",
   "test_evidence": {
-    "records_root": "project_docs/testing/evidence/runs",
-    "template": "project_docs/testing/evidence/RUN_RECORD_TEMPLATE.json",
+    "records_root": "project_meta/testing/evidence/runs",
+    "template": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
     "max_record_bytes": 8192,
     "artifact_roots": [
       "logs"
@@ -16,303 +16,303 @@
       "sha256": "1DB2C24B4595C290589E757D4F0A398944CC20DD9B20BF8AF4CE5DCE2D4C8846"
     },
     {
-      "path": "project_docs/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
+      "path": "project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
       "bytes": 64435,
       "sha256": "E88DC3F56C7020A3D559A576DD9BB6DC201FCB89D1A916E0E71387E850394B10"
     },
     {
-      "path": "project_docs/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
+      "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
       "bytes": 61010,
       "sha256": "ADB7FAF0ABB66907D9316B8CB845EFB4F93CABAAC663861315BD78101EA424C9"
     },
     {
-      "path": "project_docs/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
+      "path": "project_meta/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
       "bytes": 47486,
       "sha256": "0976CD2A8660BD8377F61D8DCBC1EA8AFD30D3C884E483F4798DD992EE869730"
     }
   ],
   "documents": [
     {
-      "path": "project_docs/AGENTS.md",
-      "role": "documentation-scope-instructions",
+      "path": "project_meta/AGENTS.md",
+      "role": "project-metadata-scope-instructions",
       "lifecycle": "durable",
       "context": "default",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/README.md",
-      "role": "documentation-index",
+      "path": "project_meta/README.md",
+      "role": "project-metadata-index",
       "lifecycle": "durable",
       "context": "default",
       "max_bytes": 12000
     },
     {
-      "path": "project_docs/ARCHITECTURE_DECISIONS.md",
+      "path": "project_meta/ARCHITECTURE_DECISIONS.md",
       "role": "architecture-decision-index",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 8192
     },
     {
-      "path": "project_docs/decisions/ADR-0001.md",
+      "path": "project_meta/decisions/ADR-0001.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0002.md",
+      "path": "project_meta/decisions/ADR-0002.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0003.md",
+      "path": "project_meta/decisions/ADR-0003.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0004.md",
+      "path": "project_meta/decisions/ADR-0004.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0005.md",
+      "path": "project_meta/decisions/ADR-0005.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0006.md",
+      "path": "project_meta/decisions/ADR-0006.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0007.md",
+      "path": "project_meta/decisions/ADR-0007.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0008.md",
+      "path": "project_meta/decisions/ADR-0008.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0009.md",
+      "path": "project_meta/decisions/ADR-0009.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0010.md",
+      "path": "project_meta/decisions/ADR-0010.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0011.md",
+      "path": "project_meta/decisions/ADR-0011.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0012.md",
+      "path": "project_meta/decisions/ADR-0012.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0013.md",
+      "path": "project_meta/decisions/ADR-0013.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0014.md",
+      "path": "project_meta/decisions/ADR-0014.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0015.md",
+      "path": "project_meta/decisions/ADR-0015.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0016.md",
+      "path": "project_meta/decisions/ADR-0016.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0017.md",
+      "path": "project_meta/decisions/ADR-0017.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0018.md",
+      "path": "project_meta/decisions/ADR-0018.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0019.md",
+      "path": "project_meta/decisions/ADR-0019.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0020.md",
+      "path": "project_meta/decisions/ADR-0020.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0021.md",
+      "path": "project_meta/decisions/ADR-0021.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0022.md",
+      "path": "project_meta/decisions/ADR-0022.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0023.md",
+      "path": "project_meta/decisions/ADR-0023.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0024.md",
+      "path": "project_meta/decisions/ADR-0024.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0025.md",
+      "path": "project_meta/decisions/ADR-0025.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0026.md",
+      "path": "project_meta/decisions/ADR-0026.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0027.md",
+      "path": "project_meta/decisions/ADR-0027.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0028.md",
+      "path": "project_meta/decisions/ADR-0028.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0029.md",
+      "path": "project_meta/decisions/ADR-0029.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0030.md",
+      "path": "project_meta/decisions/ADR-0030.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0031.md",
+      "path": "project_meta/decisions/ADR-0031.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0032.md",
+      "path": "project_meta/decisions/ADR-0032.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0033.md",
+      "path": "project_meta/decisions/ADR-0033.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0034.md",
+      "path": "project_meta/decisions/ADR-0034.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/decisions/ADR-0035.md",
+      "path": "project_meta/decisions/ADR-0035.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/BENCH_TEST_PLAN.md",
+      "path": "project_meta/BENCH_TEST_PLAN.md",
       "role": "legacy-test-router",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/CHATGPT_PROJECT_CONTEXT.md",
+      "path": "project_meta/CHATGPT_PROJECT_CONTEXT.md",
       "role": "external-upload-context",
       "lifecycle": "live",
       "context": "exclude"
     },
     {
-      "path": "project_docs/CODEX_ACTIVE_WORK.md",
+      "path": "project_meta/CODEX_ACTIVE_WORK.md",
       "role": "current-work-handoff",
       "lifecycle": "live",
       "context": "targeted",
@@ -320,120 +320,127 @@
       "max_current_state_headings": 1
     },
     {
-      "path": "project_docs/CODEX_PROJECT_CONTEXT.md",
+      "path": "project_meta/CODEX_PROJECT_CONTEXT.md",
       "role": "agent-project-context",
       "lifecycle": "live",
       "context": "targeted"
     },
     {
-      "path": "project_docs/CROSS_REPO_SYNC.md",
+      "path": "project_meta/CROSS_REPO_SYNC.md",
       "role": "repository-authority-boundary",
       "lifecycle": "durable",
       "context": "targeted"
     },
     {
-      "path": "project_docs/FLIGHT_TEST_QUICK_COMMANDS.md",
+      "path": "project_meta/FLIGHT_TEST_QUICK_COMMANDS.md",
       "role": "flight-cheatsheet-compatibility-redirect",
       "lifecycle": "live",
       "context": "targeted"
     },
     {
-      "path": "project_docs/INTERNAL_TODO.md",
+      "path": "project_meta/INTERNAL_TODO.md",
       "role": "development-backlog",
       "lifecycle": "live",
       "context": "targeted"
     },
     {
-      "path": "project_docs/PUBLICATION_CHECKLIST.md",
+      "path": "project_meta/PUBLICATION_CHECKLIST.md",
       "role": "publication-workflow",
       "lifecycle": "live",
       "context": "targeted"
     },
     {
-      "path": "project_docs/testing/README.md",
+      "path": "project_meta/testing/README.md",
       "role": "test-system-index",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 12000
     },
     {
-      "path": "project_docs/testing/EVIDENCE_INDEX.md",
+      "path": "project_meta/testing/EVIDENCE_INDEX.md",
       "role": "historical-test-evidence-index",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 12000
     },
     {
-      "path": "project_docs/testing/evidence/README.md",
+      "path": "project_meta/testing/evidence/README.md",
       "role": "test-run-evidence-workflow",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 8192
     },
     {
-      "path": "project_docs/testing/targets/fcu3.md",
+      "path": "project_meta/testing/targets/common-boot-idle.md",
+      "role": "target-test-procedure",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/testing/targets/fcu3.md",
       "role": "target-test-procedure",
       "lifecycle": "live",
       "context": "targeted",
       "max_bytes": 16384
     },
     {
-      "path": "project_docs/testing/targets/foxeer-f405-v2.md",
+      "path": "project_meta/testing/targets/foxeer-f405-v2.md",
       "role": "target-test-procedure",
       "lifecycle": "live",
       "context": "targeted",
       "max_bytes": 16384
     },
     {
-      "path": "project_docs/UNIFIED_IO_DMA_HANDOFF.md",
+      "path": "project_meta/UNIFIED_IO_DMA_HANDOFF.md",
       "role": "historical-implementation-handoff",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md",
+      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md",
       "role": "historical-work-handoff",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
+      "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
       "role": "historical-test-evidence",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
+      "path": "project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
       "role": "historical-target-verification",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
+      "path": "project_meta/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
       "role": "historical-architecture-decisions",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/foxeer_f405v2_ferrowasp_hardware_map.md",
+      "path": "project_meta/archive/foxeer_f405v2_ferrowasp_hardware_map.md",
       "role": "historical-board-research",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/foxeer_f405v2_windows_dfu_cargo_flashing.md",
+      "path": "project_meta/archive/foxeer_f405v2_windows_dfu_cargo_flashing.md",
       "role": "historical-developer-workflow",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/stm32f405_rtic2_dshot_implementation.md",
+      "path": "project_meta/archive/stm32f405_rtic2_dshot_implementation.md",
       "role": "historical-implementation-plan",
       "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_docs/archive/stm32f4_rtic2_unified_io_dma_implementation_plan_codex_ready.md",
+      "path": "project_meta/archive/stm32f4_rtic2_unified_io_dma_implementation_plan_codex_ready.md",
       "role": "historical-implementation-plan",
       "lifecycle": "historical",
       "context": "exclude"
@@ -453,7 +460,11 @@
       "max_bytes": 4096
     },
     {
-      "path": "project_docs/AGENTS.md",
+      "path": "mdbook/AGENTS.md",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/AGENTS.md",
       "max_bytes": 4096
     },
     {
@@ -473,19 +484,15 @@
       "max_bytes": 16384
     },
     {
-      "path": "TARGET_VERIFICATION.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_docs/DOCUMENT_REGISTRY.json",
+      "path": "project_meta/DOCUMENT_REGISTRY.json",
       "max_bytes": 16000
     },
     {
-      "path": "project_docs/testing/TEST_CATALOG.json",
+      "path": "project_meta/testing/TEST_CATALOG.json",
       "max_bytes": 32768
     },
     {
-      "path": "project_docs/testing/evidence/RUN_RECORD_TEMPLATE.json",
+      "path": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
       "max_bytes": 4096
     }
   ]

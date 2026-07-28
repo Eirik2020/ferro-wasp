@@ -25,12 +25,12 @@ Current important paths:
 |   `-- rc-pwm/                  # Local PWM controller crate
 |-- mdbook/
 |   `-- src/                     # This documentation book
-|-- CONTRIBUTING.md              # Current contribution boundary
-|-- DISCLAIMER.md                # Experimental flight-control disclaimer
-|-- LICENSE.md                   # Apache License, Version 2.0
-|-- NOTICE.md                    # Copyright, naming, and status notice
-|-- THIRD_PARTY_NOTICES.md        # Licences for vendored documentation assets
-`-- SECURITY.md                  # Security reporting expectations
+|-- .github/
+|   |-- CONTRIBUTING.md          # GitHub pointer to the canonical guide
+|   `-- SECURITY.md              # Private security-reporting policy
+|-- LICENSE                      # Apache License, Version 2.0
+|-- NOTICE                       # Copyright, naming, and status notice
+`-- THIRD_PARTY_NOTICES.md       # Licences for vendored assets
 ```
 
 ## Current Reality

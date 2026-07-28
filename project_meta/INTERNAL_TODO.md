@@ -1,7 +1,7 @@
 # Internal Development Backlog
 
 This is maintainer/session backlog material. Public roadmap-level items should
-be reflected in `mdbook/src/roadmap.md``.
+be reflected in `mdbook/src/roadmap.md`.
 
 ## MVP Focus
 - Narrow scope to a simple MVP that flies.
@@ -20,31 +20,36 @@ be reflected in `mdbook/src/roadmap.md``.
 
 ## Development Environment TODO
 
-- [ ] Fix nested user-namespace support in the WSL2/Docker development
-  container. The current environment runs with seccomp filtering enabled and
-  no effective capabilities; `unshare --user --map-root-user true` fails with
-  `Operation not permitted` even though `/proc/sys/user/max_user_namespaces` is
-  nonzero. This prevents the Bubblewrap-backed patch helper from starting.
-- [ ] Determine the least-privilege container policy required by Bubblewrap.
-  Use `--security-opt=seccomp=unconfined` only as a diagnostic baseline, then
-  prefer a reviewed custom seccomp profile that permits the required namespace
-  operations. Do not make `--privileged` the normal development configuration.
-- [ ] Apply the selected policy consistently in `compose.yaml` and the VS Code
-  dev-container launch configuration, then recreate the container; the running
-  container cannot loosen its own seccomp policy.
-- [ ] Add the packages needed for direct diagnosis and reproducibility inside
-  the reference image, including Bubblewrap and the tools providing `sysctl`
-  and `unshare`, if the final workflow depends on them.
-- [ ] Add a bounded environment check that requires
-  `unshare --user --map-root-user true` to succeed and, when Bubblewrap is
-  installed, runs a minimal no-write Bubblewrap smoke test. Exercise the same
-  check on Docker Desktop with WSL2 and in the development-environment CI job.
-- [ ] Verify that the normal patch helper works after container recreation.
-  Repository-scoped escalated Perl edits are a temporary workaround, not proof
-  that the sandbox is healthy.
-- [ ] Document recovery steps: update WSL, run `wsl --shutdown`, rebuild the
-  image without cache when required, recreate the dev container, and rerun the
-  namespace/environment checks.
+Completed in the rebuilt reference container:
+
+- [x] Git, OpenSSH, Bubblewrap, `unshare`, capability diagnostics, the pinned
+  Codex CLI, and the pinned Rust/Python/mdBook tools are installed by the
+  image.
+- [x] Codex state is stored in the external `ferrowasp-codex-home` volume. The
+  UI thread picker retains sessions across recreation; treat the volume as
+  private because it also contains login state.
+- [x] Compose uses `no-new-privileges` with the reviewed
+  `seccomp=unconfined` namespace baseline and does not add capabilities.
+- [x] Nested user namespaces and the bounded Bubblewrap smoke test pass in the
+  rebuilt container.
+- [x] Host SSH-agent forwarding is fail-closed and does not copy private keys
+  into the image or repository.
+- [x] Hardware-free CI checks the pinned toolchain and non-network Git/SSH and
+  namespace prerequisites.
+
+Remaining host acceptance:
+
+- [ ] After the `.devcontainer` file relocation, run
+  `bash tools/dev/compose-with-ssh-agent.sh config`, recreate the service if
+  required, and run `bash tools/dev/check-rebuilt-container.sh`.
+- [ ] Confirm that the rebuilt VS Code and Compose entry points can both use
+  the forwarded identity for GitHub authentication and `git fetch`. A managed
+  Codex sandbox may be unable to access the agent socket, so perform this check
+  in the ordinary container terminal.
+- [ ] Replace `seccomp=unconfined` with a reviewed minimal seccomp profile if
+  Docker/WSL support permits the required user-namespace syscalls reliably.
+- [ ] Add concise recovery guidance for WSL/Docker upgrades, recreation, and
+  rerunning the environment acceptance checks.
 
 ## Recently Closed
 

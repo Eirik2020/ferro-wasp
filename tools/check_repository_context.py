@@ -20,7 +20,7 @@ else:
     from test_evidence import validate_evidence_records
 
 
-REGISTRY_PATH = PurePosixPath("project_docs/DOCUMENT_REGISTRY.json")
+REGISTRY_PATH = PurePosixPath("project_meta/DOCUMENT_REGISTRY.json")
 ALLOWED_LIFECYCLES = {"live", "durable", "historical", "generated"}
 ALLOWED_CONTEXTS = {"default", "targeted", "exclude"}
 CURRENT_STATE_HEADING = re.compile(r"^## Current State(?:\s|$)", re.MULTILINE)
@@ -42,7 +42,7 @@ USER_EXECUTION_TIERS = {
     "preflight",
     "flight",
 }
-TARGET_TEST_PROCEDURE_PREFIX = "project_docs/testing/targets/"
+TARGET_TEST_PROCEDURE_PREFIX = "project_meta/testing/targets/"
 ARCHIVE_DIRECTORY_NAME = "archive"
 FORBIDDEN_TEST_RUN_FIELDS = {
     "artifact",
@@ -64,8 +64,8 @@ AGENT_DISCOVERY_IGNORED_DIRS = {
     "venv",
 }
 SHA256_HEX = re.compile(r"^[0-9A-Fa-f]{64}$")
-ADR_INDEX_PATH = PurePosixPath("project_docs/ARCHITECTURE_DECISIONS.md")
-ADR_DIRECTORY = PurePosixPath("project_docs/decisions")
+ADR_INDEX_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS.md")
+ADR_DIRECTORY = PurePosixPath("project_meta/decisions")
 ADR_FILENAME = re.compile(r"^(ADR-\d{4})\.md$")
 ADR_H1 = re.compile(r"^# (.+?)\s*$", re.MULTILINE)
 ADR_STATUS_LINE = re.compile(r"^Status:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
@@ -626,8 +626,8 @@ def validate_repository(root: Path) -> list[str]:
             errors.append(f"duplicate document registration: {raw_path}")
         registered.add(raw_path)
 
-        if not raw_path.startswith("project_docs/") or not raw_path.endswith(".md"):
-            errors.append(f"registered document must be project_docs/**/*.md: {raw_path}")
+        if not raw_path.startswith("project_meta/") or not raw_path.endswith(".md"):
+            errors.append(f"registered document must be project_meta/**/*.md: {raw_path}")
 
         role = entry.get("role")
         if not isinstance(role, str) or not role.strip():
@@ -696,7 +696,7 @@ def validate_repository(root: Path) -> list[str]:
                         f"limit {max_headings}"
                     )
 
-    docs_root = root / "project_docs"
+    docs_root = root / "project_meta"
     discovered = {
         path.relative_to(root).as_posix()
         for path in docs_root.rglob("*.md")
@@ -752,7 +752,7 @@ def validate_repository(root: Path) -> list[str]:
         errors.append(f"unbudgeted agent instruction file: {raw_path}")
 
     test_catalog = registry.get("test_catalog")
-    has_testing_docs = any(path.startswith("project_docs/testing/") for path in registered)
+    has_testing_docs = any(path.startswith("project_meta/testing/") for path in registered)
     if has_testing_docs and not isinstance(test_catalog, str):
         errors.append("document registry must identify test_catalog")
     elif isinstance(test_catalog, str):
@@ -760,7 +760,7 @@ def validate_repository(root: Path) -> list[str]:
 
     test_evidence = registry.get("test_evidence")
     has_evidence_docs = any(
-        path.startswith("project_docs/testing/evidence/") for path in registered
+        path.startswith("project_meta/testing/evidence/") for path in registered
     )
     if has_evidence_docs and test_evidence is None:
         errors.append("document registry must identify test_evidence")

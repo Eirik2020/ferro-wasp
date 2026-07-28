@@ -1,10 +1,10 @@
-# Internal Project Context
+# Internal Project Metadata
 
 Public user and developer documentation lives in the
 [mdBook](../mdbook/src/SUMMARY.md). This directory is not a documentation entry
 point for users or contributors.
 
-`project_docs` retains information needed for agent routing, engineering
+`project_meta` retains information needed for agent routing, engineering
 continuity, machine-enforced test selection, evidence provenance, and internal
 work tracking. `DOCUMENT_REGISTRY.json` is the machine-readable inventory. Its
 lifecycle and context fields are enforced by
@@ -29,6 +29,10 @@ When repository information conflicts, use this order:
 
 Historical evidence can remain technically useful without describing current
 defaults.
+
+Immutable archives may retain the former `project_docs` path when it was part
+of the recorded source tree. Those strings are historical provenance, not live
+routing; current references must use `project_meta`.
 
 ## Agent Task Routing
 

@@ -124,7 +124,8 @@ The packaging script:
 - creates `firmware/manifest.json` with commit, target, features, size, and
   SHA-256;
 - includes the exact image, licenses, and corresponding third-party source;
-- produces `dist/ferrowasp-v0.1.0-windows-x86_64.zip`.
+- produces `dist/ferrowasp-v0.1.0-windows-x86_64.zip` and its standalone
+  `.zip.sha256` checksum.
 
 The complete output folder is
 [`tools/ferro-configurator/dist`](dist/). List or open it with:
@@ -153,6 +154,6 @@ conflicting segments, and oversized files before USB access.
 ## License
 
 FerroConfigurator is part of FerroWasp and is licensed under Apache-2.0. See
-the repository [license](../../LICENSE.md) and [notice](../../NOTICE.md).
+the repository [license](../../LICENSE) and [notice](../../NOTICE).
 Bundled DFU components retain their own licenses and corresponding-source
 archives.

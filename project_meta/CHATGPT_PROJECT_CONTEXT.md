@@ -7,7 +7,7 @@ individual source files.
 
 FerroWasp changes rapidly. This document deliberately avoids becoming the
 authority for live bench or flight status. When current state matters, verify
-it against `project_docs/CODEX_ACTIVE_WORK.md`,
+it against `project_meta/CODEX_ACTIVE_WORK.md`,
 `mdbook/src/current_support.md`, the selected app, and the current board support.
 
 ## Project identity
@@ -285,7 +285,7 @@ At the time this upload brief was created, the repository contains:
 
 This is a context snapshot, not a flight authorization. For the latest board
 status, withdrawn images, required props-off gates, hashes, and next field
-step, use `project_docs/CODEX_ACTIVE_WORK.md` and
+step, use `project_meta/CODEX_ACTIVE_WORK.md` and
 `mdbook/src/current_support.md`.
 
 ## Known architectural and assurance gaps
@@ -378,11 +378,11 @@ When information conflicts, use this order:
 1. The user's latest explicit decision and safety instruction.
 2. The current selected app and board support, shared crates, feature configuration, and
    tests.
-3. `project_docs/CODEX_ACTIVE_WORK.md` and
+3. `project_meta/CODEX_ACTIVE_WORK.md` and
    `mdbook/src/current_support.md` for live state and evidence.
 4. Accepted, non-superseded entries in
-   `project_docs/ARCHITECTURE_DECISIONS.md`.
-5. `project_docs/CODEX_PROJECT_CONTEXT.md`, the mdBook architecture pages,
+   `project_meta/ARCHITECTURE_DECISIONS.md`.
+5. `project_meta/CODEX_PROJECT_CONTEXT.md`, the mdBook architecture pages,
    and this upload brief for durable context.
 6. Historical implementation plans and chronological checkpoint sections.
 7. Sibling-repository planning summaries.
@@ -394,12 +394,12 @@ defaults. Check dates, feature gates, and whether a later ADR supersedes it.
 
 When repository access is available, consult:
 
-- `project_docs/CODEX_ACTIVE_WORK.md` — live bench/flight handoff;
+- `project_meta/CODEX_ACTIVE_WORK.md` — live bench/flight handoff;
 - `mdbook/src/current_support.md` — current target and feature matrix;
-- `project_docs/ARCHITECTURE_DECISIONS.md` — durable decisions and
+- `project_meta/ARCHITECTURE_DECISIONS.md` — durable decisions and
   supersession;
-- `project_docs/testing/README.md` — test selection and verification gates;
-- `project_docs/CROSS_REPO_SYNC.md` — repository authority boundaries;
+- `project_meta/testing/README.md` — test selection and verification gates;
+- `project_meta/CROSS_REPO_SYNC.md` — repository authority boundaries;
 - `AGENTS.md` — contributor and coding-agent safety rules;
 - the README and selected app README for supported commands.
 

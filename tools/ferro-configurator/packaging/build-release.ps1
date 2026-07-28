@@ -13,11 +13,15 @@ $distRoot = Join-Path $configRoot "dist"
 $releaseName = "ferrowasp-v$Version-windows-x86_64"
 $releaseRoot = Join-Path $distRoot $releaseName
 $archivePath = "$releaseRoot.zip"
+$checksumPath = "$archivePath.sha256"
 $app = Join-Path $configRoot "target\release\ferro-configurator.exe"
 $thirdParty = Join-Path $configRoot "third_party\dfu-util\windows-x86_64"
 $dfu = Join-Path $thirdParty "dfu-util.exe"
 $libusb = Join-Path $thirdParty "libusb-1.0.dll"
 
+if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
+    throw "Version must be a SemVer release or pre-release without a leading v."
+}
 if (-not $FirmwareElf) {
     $FirmwareElf = Join-Path $repoRoot (
         "apps\foxeer-f405-v2\target\thumbv7em-none-eabihf\" +
@@ -66,6 +70,13 @@ if (Test-Path -LiteralPath $archivePath) {
         throw "Refusing to replace an archive outside dist."
     }
     Remove-Item -LiteralPath $resolvedArchive -Force
+}
+if (Test-Path -LiteralPath $checksumPath) {
+    $resolvedChecksum = (Resolve-Path $checksumPath).Path
+    if (-not $resolvedChecksum.StartsWith($resolvedDist)) {
+        throw "Refusing to replace a checksum outside dist."
+    }
+    Remove-Item -LiteralPath $resolvedChecksum -Force
 }
 
 $licenseRoot = Join-Path $releaseRoot "licenses"
@@ -127,8 +138,8 @@ New-Item -ItemType Directory -Force -Path (
     $dfuLicense,
     $libusbLicense
 ) | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE.md") -Destination $ferroLicense
-Copy-Item -LiteralPath (Join-Path $repoRoot "NOTICE.md") -Destination $ferroLicense
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination $ferroLicense
+Copy-Item -LiteralPath (Join-Path $repoRoot "NOTICE") -Destination $ferroLicense
 Copy-Item -LiteralPath (Join-Path $thirdParty "COPYING") -Destination $dfuLicense
 Copy-Item -LiteralPath (Join-Path $thirdParty "AUTHORS") -Destination $dfuLicense
 Copy-Item -LiteralPath (
@@ -143,7 +154,18 @@ Copy-Item -LiteralPath (
 
 Compress-Archive -Path (Join-Path $releaseRoot "*") `
     -DestinationPath $archivePath -CompressionLevel Optimal
+$archiveHash = (
+    Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
+).Hash.ToLowerInvariant()
+$archiveName = Split-Path -Leaf $archivePath
+[System.IO.File]::WriteAllText(
+    $checksumPath,
+    "$archiveHash  $archiveName`n",
+    [System.Text.UTF8Encoding]::new($false)
+)
 
 Write-Host "Release folder: $releaseRoot"
 Write-Host "Release archive: $archivePath"
+Write-Host "Release checksum: $checksumPath"
+Write-Host "Archive SHA-256: $archiveHash"
 Write-Host "Firmware SHA-256: $firmwareHash"

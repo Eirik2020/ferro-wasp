@@ -6,9 +6,9 @@ rules.
 ## Required context
 
 Read the selected app's `README.md`, `Cargo.toml`, and relevant code before
-changing it. Read `../project_docs/CODEX_ACTIVE_WORK.md` before altering live
+changing it. Read `../project_meta/CODEX_ACTIVE_WORK.md` before altering live
 motor, logging, bench, or debug behavior. For test work, start at
-`../project_docs/testing/README.md` and load only the catalog-selected target
+`../project_meta/testing/README.md` and load only the catalog-selected target
 procedure.
 
 For localized work, route source context from the repository root before

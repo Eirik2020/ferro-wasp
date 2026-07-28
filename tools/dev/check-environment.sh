@@ -23,6 +23,10 @@ expect_line "rustc 1.93.1 (01f6ddf75 2026-02-11)" \
     rustc +1.93.1 --version
 expect_line "mdbook v0.5.2" mdbook --version
 expect_line "mdbook-mermaid 0.17.0" mdbook-mermaid --version
+expect_line "codex-cli 0.143.0" codex --version
+
+bash tools/dev/check-git-ssh.sh --client-only
+bash tools/dev/check-namespaces.sh --tools-only
 
 rustup toolchain list | grep --quiet '^nightly-2025-12-13-'
 rustup target list --toolchain nightly-2026-07-13 --installed \

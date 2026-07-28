@@ -2,7 +2,7 @@
   "schema_version": 1,
   "documents": [
     {
-      "path": "project_docs/README.md",
+      "path": "project_meta/README.md",
       "role": "test-document",
       "lifecycle": "historical",
       "context": "default",
