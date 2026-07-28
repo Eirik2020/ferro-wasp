@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -185,7 +185,7 @@
 <tbody>
 <tr><td>SBUS</td><td>Active prototype RC input over USART2 RX DMA</td></tr>
 <tr><td>BLHeli legacy ESC telemetry</td><td>Active only in the default FCU3 DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
-<tr><td>USB CDC serial</td><td>Optional <code>usb_serial</code>; Foxeer emits bounded read-only <code>FWDBG1</code> status lines</td></tr>
+<tr><td>USB CDC serial</td><td>Mandatory on Foxeer; optional on FCU3 via <code>usb_serial</code>; Foxeer emits bounded read-only <code>FWDBG1</code> status lines</td></tr>
 <tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames</td></tr>
 <tr><td>MAVLink</td><td>UART mode placeholder/config values exist, no active MAVLink implementation yet</td></tr>
 <tr><td>CRSF/ELRS</td><td>Intended preferred RC path, not implemented yet</td></tr>
@@ -234,8 +234,8 @@ is drained and discarded; there is intentionally no USB command parser,
 parameter writer, arming request, or actuator resource.</p>
 <h2 id="fcu3-esc-telemetry"><a class="header" href="#fcu3-esc-telemetry">FCU3 ESC Telemetry</a></h2>
 <p>The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud only in the default FCU3 DShot image. The explicit PWM fallback
-does not run the ESC manager or issue telemetry-bit requests. Since the
+115,200 baud in the standard FCU3 flight image. The ESC manager issues
+bounded telemetry-bit requests through the actuator-owned DShot service. Since the
 ten-byte wire frame does not identify a motor, a low-priority ESC manager
 rotates physical-output requests. Both directions use bounded SPSC queues.</p>
 <p>The safety-owned DShot service acknowledges an exact sequence/output request

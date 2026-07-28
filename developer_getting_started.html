@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -307,22 +307,22 @@ python tools\check_repository_context.py
 <p>The root workspace contains reusable crates. Deployable firmware applications
 are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
-<pre><code class="language-text">apps/stm32f405-flight  FerroWasp FCU3 flight app and behavioral reference
-apps/foxeer-f405-v2    Foxeer F405 V2 flight app
+<pre><code class="language-text">apps/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
+apps/stm32f405-flight  FerroWasp FCU3 secondary flight app
 apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
 board’s image, pins, DMA routes, sensor orientation, or motor mapping on
 another board.</p>
 <h2 id="build-the-flight-applications"><a class="header" href="#build-the-flight-applications">Build the flight applications</a></h2>
-<p>FCU3 is the golden flight app for established runtime and safety behavior:</p>
-<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
-cargo check --release --locked
+<p>Foxeer is the golden flight app for established runtime and safety behavior:</p>
+<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
+cargo build --release --locked
 Set-Location ..\..
 </code></pre>
-<p>Build the normal Foxeer image with onboard configuration and blackbox support:</p>
-<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
-cargo build --release --locked --features flash_blackbox
+<p>Check the FCU3 secondary app independently:</p>
+<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
+cargo check --release --locked
 Set-Location ..\..
 </code></pre>
 <p>The resulting Foxeer ELF is:</p>
@@ -331,16 +331,15 @@ Set-Location ..\..
 <p>Prefer <code>cargo check</code> when target programming is not part of the task. Do not
 assume a debugger, MCU, receiver, ESC power, or safe motor bench is available.
 Hardware execution and powered tests are separate, user-controlled gates.</p>
-<p>Before implementing or bench-testing a Foxeer feature, compare the affected
-behavior and enabled features with the current FCU3 app. Board-specific
-hardware differences remain explicit exceptions, not copied assumptions.</p>
+<p>Before implementing or bench-testing a secondary-board feature, compare the
+affected behavior and enabled features with the current Foxeer app.
+Board-specific hardware differences remain explicit, not copied assumptions.</p>
 <h2 id="swd-rtt-and-developer-dfu"><a class="header" href="#swd-rtt-and-developer-dfu">SWD, RTT, and developer DFU</a></h2>
 <p>With the correct board selected and a debugger attached, repository tooling can
 build, program, and retain an RTT transcript:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 `
   --release `
   --locked `
-  --features flash_blackbox `
   --probe-speed-khz 1800 `
   --connect-under-reset
 </code></pre>
@@ -361,7 +360,7 @@ cargo build --release --locked -p ferro-configurator-cli
 </code></pre>
 <p>The Rust workspace can be checked in the Linux container. Windows package
 assembly remains a Windows-host or CI operation. Build the exact Foxeer
-<code>flash_blackbox</code> image before assembling a local Windows package, then run
+standard Foxeer image before assembling a local Windows package, then run
 this from PowerShell:</p>
 <pre><code class="language-powershell">Set-Location tools\ferro-configurator
 .\packaging\build-release.ps1 -Version 0.1.0-dev

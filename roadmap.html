@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -190,11 +190,11 @@ preserve that boundary.</p>
 <li>MPU6500 sampling over the bounded SPI1 DMA transport;</li>
 <li>FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling and a 400 Hz
 rate-control/mixer update;</li>
-<li>default, safety-owned four-lane DShot600 at 500 frame sets per second;</li>
+<li>standard, safety-owned four-lane DShot600 at 500 frame sets per second;</li>
 <li>PA10 / USART1 RX BLHeli legacy telemetry managed outside actuator authority;</li>
 <li>idle arming qualification using fresh eRPM evidence from all four ESCs;</li>
 <li>DJI O4 MSP DisplayPort OSD and <code>defmt</code>/BB2 logging;</li>
-<li>an explicit four-channel RC PWM fallback.</li>
+<li>shared RC PWM infrastructure retained for servo and auxiliary outputs.</li>
 </ul>
 <p>The recorded props-off gates cover motor identity and direction, mixed-command
 signs, motion-opposing correction, telemetry, qualified arming, injected
@@ -235,7 +235,7 @@ startup behavior.</li>
 <li>Identify the SPI2 NOR, pass the isolated scratch-sector self-test, and
 validate persistent config/log recovery plus control-loop timing.</li>
 <li>Calibrate ADC voltage/current scaling.</li>
-<li>Measure all four PWM outputs, including TIM1_CH3N polarity on M4.</li>
+<li>Measure all four DShot outputs, including TIM1_CH3N polarity on M4.</li>
 <li>With propellers removed, verify logical motor order, rotation direction,
 stick response, and motion-opposing correction.</li>
 <li>Review the evidence before removing the board-specific arming inhibit.</li>

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -188,10 +188,10 @@ and they do not command motors.</p>
 connection:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 </code></pre>
-<p>The Foxeer BSP leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
+<p>The Foxeer board support leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
 must be unpowered at the ESC side; USB DFU remains the recovery path.</p>
 <p>Release and feature-selected images use the same logger:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 </code></pre>
 <p>The script performs a quiet firmware build, runs:</p>
 <pre><code class="language-text">probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps

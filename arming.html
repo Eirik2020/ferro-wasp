@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -271,7 +271,7 @@ observational and does not itself disarm.</p>
 <p>ESC-manager identity is physical-output identity: output 1 is logical
 M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right, and output
 4 is M2/front-right. The default DShot image runs this PA10 legacy telemetry
-path; the explicit PWM fallback does not.</p>
+path.</p>
 <pre class="mermaid">sequenceDiagram
     participant RC as RC Input
     participant SM as Safety Master
@@ -293,22 +293,13 @@ path; the explicit PWM fallback does not.</p>
     SM-&gt;&gt;AO: system armed
 </pre>
 
-<p>The core event remains named <code>ActuatorIdling</code> for compatibility. Its current
-meaning is protocol-specific preparation complete: PWM finished its guarded
-idle sequence, while DShot qualified all four idle RPMs. It is not itself an
+<p>The core event remains named <code>ActuatorIdling</code> for compatibility. It means that
+DShot qualified all four idle RPMs under the temporary preparation permit. It is not itself an
 armed signal.</p>
-<h2 id="pwm-fallback-and-foxeer-sequence"><a class="header" href="#pwm-fallback-and-foxeer-sequence">PWM Fallback and Foxeer Sequence</a></h2>
-<p>The explicit FCU3 PWM fallback and current Foxeer PWM path retain the legacy
-guarded sequence:</p>
-<ol>
-<li>2.5 seconds at low output;</li>
-<li>500 ms at idle output;</li>
-<li>preparation-complete report;</li>
-<li>final Safety Master guard before <code>Armed</code>.</li>
-</ol>
-<p>Foxeer adds a compile-time board gate. Its actuator output remains inhibited
-until board-specific IMU orientation, ADC calibration, motor order, and pulse
-polarity evidence is reviewed.</p>
+<h2 id="standard-dshot-preparation"><a class="header" href="#standard-dshot-preparation">Standard DShot Preparation</a></h2>
+<p>Both flight boards use the guarded DShot sequence: a 100 ms stop-frame dwell,
+then telemetry-qualified idle under a temporary permit, followed by the safety
+master’s final guard. There is no app-level PWM ESC sequence.</p>
 <h2 id="normal-motor-command-path"><a class="header" href="#normal-motor-command-path">Normal Motor-Command Path</a></h2>
 <pre><code class="language-text">Control Loop -&gt; bounded SPSC MotorCmd queue -&gt; Actuator Output -&gt; motor hardware
 </code></pre>

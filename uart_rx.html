@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -250,8 +250,7 @@ independent. USART2 wakes one persistent async SBUS parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.</p>
 <p>In the default FCU3 DShot image, USART1 feeds the low-priority ESC manager’s
-ten-byte BLHeli legacy parser. This service is inactive in the explicit PWM
-fallback. The manager owns framing, CRC validation, response association,
+ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
 samples, and timeouts. UART transport or parser state cannot command motors:
 telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator
 service. A CRC-valid frame that arrives while its request is still queued can

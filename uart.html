@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -181,7 +181,7 @@ default FCU3 DShot image’s legacy ESC telemetry.</p>
 <p>The reusable STM32F4 UART DMA mechanism lives in
 <code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. FerroWasp FCU3 pin conversion,
 storage shape, and device construction live in
-<code>crates/ferrowasp-bsp/src/stm32f4/ferrowasp_fcu3/</code>.</p>
+<code>apps/stm32f405-flight/src/board/</code>.</p>
 <p>It provides:</p>
 <ul>
 <li>mode-specific UART configuration</li>
@@ -202,7 +202,7 @@ storage shape, and device construction live in
 <tbody>
 <tr><td><code>Sbus</code></td><td>100000 baud, even parity, 2 stop bits, RX DMA</td><td>Active RC input path</td></tr>
 <tr><td><code>Msp</code></td><td>115200 baud, TX/RX DMA</td><td>Active DJI O4 OSD path on UART4</td></tr>
-<tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Active FCU3 BLHeli legacy telemetry path on USART1 in the default DShot image; inactive in the PWM fallback</td></tr>
+<tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Standard flight-board BLHeli legacy telemetry path on USART1</td></tr>
 <tr><td><code>Mavlink</code></td><td>57600 baud, RX DMA</td><td>Future telemetry/config subset</td></tr>
 </tbody>
 </table>
@@ -223,8 +223,7 @@ telemetry wire:</p>
 <pre><code class="language-text">PA10 USART1 RX DMA -&gt; bounded chunks -&gt; ESC manager parser/association
     -&gt; timestamped per-motor observations
 </code></pre>
-<p>PA9/USART1 TX is not configured. The explicit PWM fallback does not run the ESC
-manager. In the DShot image, the manager sends typed telemetry requests through
+<p>PA9/USART1 TX is not configured. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output

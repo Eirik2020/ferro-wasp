@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -195,17 +195,16 @@ F405 V2 bring-up target, and a non-actuating NUCLEO-F401RE bring-up target.</p>
 <li>FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling with a
 400 Hz control update</li>
 <li>simple rate controller and quad mixer</li>
-<li>default four-lane DShot600 output on FCU3, with explicit RC PWM fallback</li>
+<li>standard four-lane DShot600 output on FCU3 and Foxeer</li>
 <li>safety-owned DShot output, command freshness checks, leases, and fault
 containment</li>
 <li>guarded arming that qualifies fresh idle eRPM from all four ESCs before the
 system becomes armed</li>
-<li>BLHeli legacy ESC telemetry on PA10 / USART1 RX in the default DShot image,
-parsed and associated by a low-priority ESC manager; inactive in the PWM
-fallback</li>
+<li>BLHeli legacy ESC telemetry on PA10 / USART1 RX, parsed and associated
+by a low-priority ESC manager</li>
 <li>ADC DMA for temperature/voltage measurement</li>
 <li>DJI O4 MSPv1 OSD over UART4</li>
-<li>optional Foxeer USB CDC status and staged onboard flash log/config access</li>
+<li>standard Foxeer USB CDC status and onboard flash blackbox/config access</li>
 <li><code>defmt</code>/RTT and compact BB2 control-loop logging</li>
 </ul>
 <p>FCU3 has completed the recorded DShot bench gates and an operator-reported
@@ -442,22 +441,22 @@ python tools\check_repository_context.py
 <p>The root workspace contains reusable crates. Deployable firmware applications
 are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
-<pre><code class="language-text">apps/stm32f405-flight  FerroWasp FCU3 flight app and behavioral reference
-apps/foxeer-f405-v2    Foxeer F405 V2 flight app
+<pre><code class="language-text">apps/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
+apps/stm32f405-flight  FerroWasp FCU3 secondary flight app
 apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
 board’s image, pins, DMA routes, sensor orientation, or motor mapping on
 another board.</p>
 <h2 id="build-the-flight-applications"><a class="header" href="#build-the-flight-applications">Build the flight applications</a></h2>
-<p>FCU3 is the golden flight app for established runtime and safety behavior:</p>
-<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
-cargo check --release --locked
+<p>Foxeer is the golden flight app for established runtime and safety behavior:</p>
+<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
+cargo build --release --locked
 Set-Location ..\..
 </code></pre>
-<p>Build the normal Foxeer image with onboard configuration and blackbox support:</p>
-<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
-cargo build --release --locked --features flash_blackbox
+<p>Check the FCU3 secondary app independently:</p>
+<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
+cargo check --release --locked
 Set-Location ..\..
 </code></pre>
 <p>The resulting Foxeer ELF is:</p>
@@ -466,16 +465,15 @@ Set-Location ..\..
 <p>Prefer <code>cargo check</code> when target programming is not part of the task. Do not
 assume a debugger, MCU, receiver, ESC power, or safe motor bench is available.
 Hardware execution and powered tests are separate, user-controlled gates.</p>
-<p>Before implementing or bench-testing a Foxeer feature, compare the affected
-behavior and enabled features with the current FCU3 app. Board-specific
-hardware differences remain explicit exceptions, not copied assumptions.</p>
+<p>Before implementing or bench-testing a secondary-board feature, compare the
+affected behavior and enabled features with the current Foxeer app.
+Board-specific hardware differences remain explicit, not copied assumptions.</p>
 <h2 id="swd-rtt-and-developer-dfu"><a class="header" href="#swd-rtt-and-developer-dfu">SWD, RTT, and developer DFU</a></h2>
 <p>With the correct board selected and a debugger attached, repository tooling can
 build, program, and retain an RTT transcript:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 `
   --release `
   --locked `
-  --features flash_blackbox `
   --probe-speed-khz 1800 `
   --connect-under-reset
 </code></pre>
@@ -496,7 +494,7 @@ cargo build --release --locked -p ferro-configurator-cli
 </code></pre>
 <p>The Rust workspace can be checked in the Linux container. Windows package
 assembly remains a Windows-host or CI operation. Build the exact Foxeer
-<code>flash_blackbox</code> image before assembling a local Windows package, then run
+standard Foxeer image before assembling a local Windows package, then run
 this from PowerShell:</p>
 <pre><code class="language-powershell">Set-Location tools\ferro-configurator
 .\packaging\build-release.ps1 -Version 0.1.0-dev
@@ -544,10 +542,10 @@ snapshot rather than a stable product matrix.</p>
 <p>FerroWasp is open source under Apache-2.0. It is experimental firmware and is
 not suitable for operational or safety-critical use.</p>
 <h2 id="board-targets"><a class="header" href="#board-targets">Board Targets</a></h2>
-<p>The active flight BSP target is <code>ferrowasp_fcu3</code>, board name <strong>FerroWasp FCU3</strong>. It
+<p>The FCU3 flight board-support target is <code>ferrowasp_fcu3</code>, board name <strong>FerroWasp FCU3</strong>. It
 uses an STM32F405RGT6 in LQFP64. Its pin, DMA, timer, serial, ADC, IMU-axis,
 and actuator policy are frozen in
-<code>ferrowasp-bsp::stm32f4::ferrowasp_fcu3</code>.
+<code>apps/stm32f405-flight/src/board</code>.
 The RTIC shell lives in <code>apps/stm32f405-flight</code> and selects FCU3 through its
 default <code>board-ferrowasp-fcu3</code> feature.</p>
 <p>The first non-flight bring-up target is <code>nucleo_f401re</code>, board name
@@ -558,11 +556,11 @@ Its capability manifest declares no attached IMU and no actuator outputs. The
 isolated app contains one persistent async heartbeat task and lives in
 <code>apps/stm32f401-bringup</code>, which selects Nucleo through its default
 <code>board-nucleo-f401re</code> feature.</p>
-<p>The second flight-shaped BSP target is <code>foxeer_f405_v2</code>, board name
+<p>The golden flight board-support target is <code>foxeer_f405_v2</code>, board name
 <strong>Foxeer F405 V2</strong>. Its independent app lives in <code>apps/foxeer-f405-v2</code>.
 The current image probes the fitted SPI1 IMU and supports either MPU6500 or
-ICM42688-P, SBUS, MSP DisplayPort, ADC, a four-channel conventional RC PWM
-service set, gated four-lane DShot600, and BLHeli legacy telemetry on PA10.
+ICM42688-P, SBUS, MSP DisplayPort, ADC, standard four-lane DShot600,
+BLHeli legacy telemetry on PA10, mandatory USB, and onboard SPI-NOR blackbox storage.
 Telemetry-qualified arming has passed its positive and injected-failure
 props-off target checks. Its first prop-on departure exposed positive pitch
 feedback and attempted a forward flip. The controller-polarity correction is
@@ -580,21 +578,21 @@ validated flight-control system.</p>
 <tbody>
 <tr><td>Main target</td><td>STM32F405-class flight-controller hardware</td></tr>
 <tr><td>Runtime model</td><td>Isolated <code>no_std</code>, <code>no_main</code>, RTIC 2 app shells for FCU3, Foxeer F405 V2, and F401 bring-up</td></tr>
-<tr><td>Logging/debug</td><td><code>defmt</code>, RTT, optional BB2 frames, Python tools, and staged Foxeer SPI-NOR blackbox/config storage over USB CDC ASCII or feature-gated MSPv2 RPC</td></tr>
+<tr><td>Logging/debug</td><td><code>defmt</code>, RTT, optional defmt BB2 frames, Python tools, and standard Foxeer SPI-NOR blackbox/config storage over USB CDC ASCII or feature-gated MSPv2 RPC</td></tr>
 <tr><td>RC input</td><td>SBUS over USART2 RX DMA</td></tr>
 <tr><td>IMU</td><td>FCU3 MPU6500; Foxeer runtime-selected MPU6500/ICM42688-P; blocking init, async <code>SpiDevice</code> DMA samples, 250 us transport deadline</td></tr>
 <tr><td>Control loop</td><td>Timer-driven 400 Hz control; FCU3 retains 800 Hz IMU polling, while Foxeer samples from PC4/EXTI4 data-ready events</td></tr>
 <tr><td>Estimation</td><td>Simple gyro low-pass plus accel-assisted roll/pitch complementary integration</td></tr>
 <tr><td>Mixer/control</td><td>Quad rate controller, PID/FF contributions, and mixer in <code>crates/ferrowasp-tasks/src/drone_toolbox.rs</code></td></tr>
-<tr><td>Motor output</td><td>FCU3 and Foxeer: default four-lane DShot600 with capped bench modes and explicit four-channel PWM fallbacks</td></tr>
+<tr><td>Motor output</td><td>FCU3 and Foxeer: standard four-lane DShot600 with capped bench modes; RC PWM retained only for servo/auxiliary use</td></tr>
 <tr><td>Safety gate</td><td>Prototype safety master, arm qualification, telemetry-qualified DShot idle, guarded disarm and RC-loss paths</td></tr>
 <tr><td>ADC</td><td>ADC1 DMA path for internal temperature, battery voltage, and current-sense input</td></tr>
-<tr><td>USB</td><td>Optional <code>usb_serial</code>; Foxeer emits <code>FWDBG1</code> status and bounded ASCII storage commands, or selects the opt-in <code>mspv2_configurator</code> native endpoint</td></tr>
-<tr><td>DShot</td><td>FCU3 defaults to four-motor DShot600; unpowered, powered props-off, fault-injection, and initial operator-reported flight checkpoints have passed; electrical timing/jitter and measured stop latency remain open</td></tr>
+<tr><td>USB</td><td>Mandatory on Foxeer; optional on FCU3 via <code>usb_serial</code>. Foxeer emits <code>FWDBG1</code> status and bounded ASCII storage commands, or selects the opt-in <code>mspv2_configurator</code> native endpoint</td></tr>
+<tr><td>DShot</td><td>FCU3 and Foxeer use four-motor DShot600; unpowered, powered props-off, fault-injection, and initial operator-reported flight checkpoints have passed; electrical timing/jitter and measured stop latency remain open</td></tr>
 <tr><td>ESC telemetry</td><td>FCU3 default DShot image: target-validated BLHeli legacy UART telemetry on PA10 / USART1 RX. Foxeer: target-validated request association, eRPM, positive idle qualification, and injected missing-evidence rejection on the same bounded manager/route</td></tr>
 <tr><td>MSP / OSD</td><td>MSPv1 DJI O4 OSD path on UART4 with DisplayPort text frames and status responses</td></tr>
 <tr><td>Secondary target</td><td>NUCLEO-F401RE RTIC LED/USART bring-up; static checks and target smoke pass</td></tr>
-<tr><td>Additional target</td><td>Foxeer F405 V2 isolated RTIC app; ROM-DFU/SWD, USB, ICM42688-P/EXTI, RC, PWM, default DShot, legacy eRPM, telemetry-qualified arming, onboard blackbox, corrected axis opposition, controlled hops, and confined-area prototype flight have target evidence</td></tr>
+<tr><td>Additional target</td><td>Foxeer F405 V2 isolated RTIC app; ROM-DFU/SWD, USB, ICM42688-P/EXTI, RC, standard DShot, legacy eRPM, telemetry-qualified arming, onboard blackbox, corrected axis opposition, controlled hops, and confined-area prototype flight have target evidence</td></tr>
 </tbody>
 </table>
 </div>
@@ -611,10 +609,10 @@ validated flight-control system.</p>
 <tr><td>BLHeli legacy ESC telemetry RX</td><td>USART1 RX on PA10; PA9 TX is not configured</td></tr>
 <tr><td>IMU SPI</td><td>SPI1 on PA5/PA6/PA7</td></tr>
 <tr><td>IMU chip select</td><td>PA4</td></tr>
-<tr><td>Physical output 1, PWM / DShot600</td><td>TIM1 CH1 on PA8</td></tr>
-<tr><td>Physical output 2, PWM / DShot600</td><td>TIM3 CH4 / TIM8 CH4 on PC9</td></tr>
-<tr><td>Physical output 3, PWM / DShot600</td><td>TIM3 CH3 / TIM8 CH3 on PC8</td></tr>
-<tr><td>Physical output 4, PWM / DShot600</td><td>TIM12 CH2 / TIM1 CH3N on PB15</td></tr>
+<tr><td>Physical output 1, DShot600</td><td>TIM1 CH1 on PA8</td></tr>
+<tr><td>Physical output 2, DShot600</td><td>TIM8 CH4 on PC9</td></tr>
+<tr><td>Physical output 3, DShot600</td><td>TIM8 CH3 on PC8</td></tr>
+<tr><td>Physical output 4, DShot600</td><td>TIM1 CH3N on PB15</td></tr>
 <tr><td>Control scheduler</td><td>TIM4, pinless, 800 Hz interrupt source</td></tr>
 <tr><td>I/O timebase</td><td>TIM2, pinless, 1 MHz free-running counter</td></tr>
 <tr><td>I/O watchdog</td><td>TIM6, pinless, 8 kHz deadline check</td></tr>
@@ -626,8 +624,8 @@ validated flight-control system.</p>
 </tbody>
 </table>
 </div>
-<p>These mappings are the frozen FerroWasp FCU3 BSP policy. The RTIC app owns the
-concrete peripheral instances, while FCU3 BSP constructors assemble them
+<p>These mappings are the frozen FerroWasp FCU3 board support policy. The RTIC app owns the
+concrete peripheral instances, while FCU3 board support constructors assemble them
 according to this manifest.</p>
 <p>Shared flight logic uses Betaflight Quad X logical motor numbering: motor 1 is
 rear-right, motor 2 is front-right, motor 3 is rear-left, and motor 4 is
@@ -650,19 +648,19 @@ M1/rear-right, and output 4 is M2/front-right.</p>
 </thead>
 <tbody>
 <tr><td>SBUS RX/TX</td><td>USART2 on PA3/PA2</td></tr>
-<tr><td>Optional BLHeli legacy ESC telemetry RX</td><td>USART1 RX on PA10 with <code>esc_telemetry</code>; PA9 TX is unused</td></tr>
+<tr><td>BLHeli legacy ESC telemetry RX</td><td>USART1 RX on PA10; PA9 TX is unused</td></tr>
 <tr><td>IMU SPI / CS</td><td>SPI1 on PA5/PA6/PA7, CS PA4, mode 3</td></tr>
-<tr><td>Physical output 1 PWM</td><td>TIM1 CH1 on PA8</td></tr>
-<tr><td>Physical output 2 PWM</td><td>TIM8 CH4 on PC9</td></tr>
-<tr><td>Physical output 3 PWM</td><td>TIM8 CH3 on PC8</td></tr>
-<tr><td>Physical output 4 PWM</td><td>TIM1 CH3N complementary output on PB15</td></tr>
+<tr><td>Physical output 1 DShot600</td><td>TIM1 CH1 on PA8</td></tr>
+<tr><td>Physical output 2 DShot600</td><td>TIM8 CH4 on PC9</td></tr>
+<tr><td>Physical output 3 DShot600</td><td>TIM8 CH3 on PC8</td></tr>
+<tr><td>Physical output 4 DShot600</td><td>TIM1 CH3N complementary output on PB15</td></tr>
 <tr><td>Control scheduler</td><td>TIM4, pinless, 800 Hz interrupt source</td></tr>
 <tr><td>I/O timebase</td><td>TIM2, pinless, 1 MHz free-running counter</td></tr>
 <tr><td>I/O watchdog</td><td>TIM6, pinless, 8 kHz deadline check</td></tr>
 <tr><td>DJI O4 MSP OSD</td><td>UART4 on PA0/PA1</td></tr>
 <tr><td>ADC voltage/current</td><td>PC0/PC1</td></tr>
-<tr><td>Optional USB debug</td><td>OTG FS on PA11/PA12 with <code>usb_serial</code></td></tr>
-<tr><td>Optional onboard flash</td><td>SPI2 mode 0 on PB13/PC2/PC3 with CS PB12; CPU-driven at 10 MHz</td></tr>
+<tr><td>USB FS</td><td>Always active on OTG FS PA11/PA12</td></tr>
+<tr><td>Onboard flash</td><td>SPI2 mode 0 on PB13/PC2/PC3 with CS PB12; CPU-driven at 10 MHz</td></tr>
 <tr><td>Debug</td><td>SWD/RTT; PA13/PA14 status LEDs are not claimed</td></tr>
 </tbody>
 </table>
@@ -674,9 +672,8 @@ It now feeds the bounded actuator-owned pre-arm qualification path matching
 FCU3; positive and injected missing-evidence target checks passed. Target
 testing has confirmed the
 fitted ICM42688-P, body-axis map, <code>[1, 2, 3, 4]</code> logical-to-physical motor map,
-expected motor directions, and functional M4 <code>TIM1_CH3N</code> polarity. Exact PWM
-timing remains unmeasured because the logic-analyzer checkpoint was skipped.
-ADC scale calibration remains the BSP’s normal-flight arming inhibit. The
+expected motor directions, and functional M4 <code>TIM1_CH3N</code> polarity. Exact DShot electrical timing remains unmeasured because the logic-analyzer checkpoint was skipped.
+ADC scale calibration remains the board support’s normal-flight arming inhibit. The
 NUCLEO-F401RE bring-up target has no actuator outputs.</p>
 <h2 id="rc-input"><a class="header" href="#rc-input">RC Input</a></h2>
 <p>SBUS is the currently wired RC path.</p>
@@ -692,7 +689,7 @@ NUCLEO-F401RE bring-up target has no actuator outputs.</p>
 Reusable STM32F4 UART/SPI/ADC DMA bridges, static PWM mechanisms, and the HAL
 prelude live in <code>ferrowasp-stm32f4</code>. FCU3 route conversion, target aliases,
 device construction, and safe static-storage shaping live in
-<code>ferrowasp-bsp::stm32f4::ferrowasp_fcu3</code>. The RTIC app declares the concrete
+<code>apps/stm32f405-flight/src/board</code>. The RTIC app declares the concrete
 board DMA storage through <code>#[init(local = [...])]</code>.</p>
 <p>The portable serial RX API uses owned, bounded chunks and implements
 <code>embedded_io_async::Read</code>. Continuity and queue-health events are exposed
@@ -761,7 +758,7 @@ open.</p>
 angle estimate. Raw gyro values remain sensor-axis data, while the shared
 <code>imu_rates</code> tuple is mapped into measured roll, pitch, and yaw for the rate PID.
 The standard drone body frame is forward/right/down: +X forward, +Y right, and
-+Z down, with angular rates following the right-hand rule. BSP profiles describe
++Z down, with angular rates following the right-hand rule. board support profiles describe
 orientation as two signed-axis rotations: IMU sensor frame to board frame, then
 board frame to drone body frame. FCU3’s composed IMU-to-drone mapping preserves
 the current bench/flight evidence; Foxeer’s orientation is target-verified from
@@ -787,9 +784,9 @@ is not yet a validated estimator.</p>
 <li>requests actuator output</li>
 </ul>
 <p>The controller is still prototype-level. Board-specific initial profiles live
-in <code>crates/ferrowasp-tasks/src/drone_toolbox.rs</code>. FCU3 retains its golden-app
-first-hop profile; Foxeer fresh storage defaults to P-only
-<code>2.5 / 2.5 / 2.0</code> for roll/pitch/yaw with every I and D gain zero. A valid
+in <code>crates/ferrowasp-tasks/src/drone_toolbox.rs</code>. Foxeer is the golden app and
+fresh storage defaults to P-only <code>2.5 / 2.5 / 2.0</code> for roll/pitch/yaw with
+every I and D gain zero. FCU3 retains its separate legacy profile. A valid
 persisted configuration remains authoritative across firmware updates. The
 local <code>ferrowasp-pid</code> crate exposes more tuning-relevant behavior:</p>
 <ul>
@@ -855,9 +852,8 @@ still required as negative evidence.</p>
 <p>The telemetry-qualified positive path and an injected physical-output-1 /
 logical-M4 zero-eRPM failure have powered props-off target evidence. The
 injected failure named the unproven output, selected sustained four-lane stop,
-and never reported <code>SYSTEM ARMED</code>. The legacy PWM fallback and Foxeer PWM path
-retain the guarded 2.5-second low and 500 ms idle holds.</p>
-<p>The Foxeer BSP flight profile accepts its documented Betaflight voltage
+and never reported <code>SYSTEM ARMED</code>.</p>
+<p>The Foxeer board support flight profile accepts its documented Betaflight voltage
 baseline and Foxeer-published current scale. The OSD now uses the upstream
 target values directly (VBAT scale 110, current scale 70, current offset zero)
 and latches a Betaflight-style automatically detected cell count until battery
@@ -893,18 +889,10 @@ Static verification and the stale-command fault-injection checkpoint pass.</p>
 actuator deadline watchdog for total loss of future control-loop wakes remains
 future work.</p>
 <h2 id="motor-output"><a class="header" href="#motor-output">Motor Output</a></h2>
-<p>The standard FCU3 and Foxeer motor-output paths are four-lane DShot600. Their
-RC-PWM backends remain available through explicit no-default-features fallback
-builds. Foxeer’s complementary physical output 4 (<code>TIM1_CH3N</code>) and all four
+<p>The standard FCU3 and Foxeer motor-output paths are four-lane DShot600.
+Reusable RC PWM code remains in shared crates for servo and auxiliary outputs,
+not as an ESC fallback. Foxeer’s complementary physical output 4 (<code>TIM1_CH3N</code>) and all four
 motor identities have powered props-off evidence.</p>
-<p>Current PWM configuration:</p>
-<ul>
-<li>400 Hz PWM</li>
-<li>1000..2000 us pulse range</li>
-<li>0..2000 command range</li>
-<li>4 motor outputs</li>
-<li>optional <code>pwm_cal</code> feature for a single-motor calibration flow</li>
-</ul>
 <p>DShot packet creation and encoding helpers live in <code>ferrowasp-waveform</code>.
 The integrated FCU3 backend uses the existing external pins:</p>
 <div class="table-wrapper">
@@ -938,16 +926,13 @@ four DMA streams are enabled before either timer can emit a pulse. A frame set
 is complete only after every lane reports transfer completion. Any lane error,
 unexpected interrupt, or completion timeout faults the bank, closes both
 advanced-timer output gates, forces all four pads low, and requests disarm.</p>
-<p>The capped bench build requires the base feature pair
-<code>dshot bench_equal_motors</code>. It keeps ordinary RC qualification and arming,
+<p>The capped bench build enables <code>bench_equal_motors</code> on the board-standard DShot backend. It keeps ordinary RC qualification and arming,
 sends the same authorized throttle to all four motors, and retains the
 250-count cap. Exactly one optional <code>bench_logical_motorN_only</code> feature may
 instead select a capped logical motor for mapping validation.</p>
 <p>The normal PID/mixer path is the default FCU3 DShot build and has no 250-count
 bench cap. It uses the bounded fresh <code>MotorCmd</code> queue, safety-owned actuator
-owner, 20 ms lease, and synchronized 500 Hz service; normal mixed commands
-still require the system armed state. The former
-<code>dshot_mixed_control</code> candidate feature remains a compatibility alias.
+owner, 20 ms lease, and synchronized 500 Hz service; normal mixed commands still require the system armed state.
 The standard image has passed corrected 500 Hz unpowered runtime with 12,000
 synchronized four-stop frame sets and zero backend faults. Props-off
 mixed-control arming, idle, throttle, explicit disarm, and active-command
@@ -964,7 +949,6 @@ safety master’s final guard can set <code>SYSTEM ARMED</code>. Any guard or qu
 failure selects four stop values. Value <code>112</code> remains the accepted prototype
 idle; continued cold-start and temperature-margin characterization remains
 prudent.
-PWM behavior is unchanged.
 The synchronized four-motor image passed its unpowered 12,000-frame runtime
 checkpoint with equal lane counters and no backend faults. Its first powered
 attempt spun physical output lanes 1-3 but not lane 4/front-right; the healthy
@@ -1003,13 +987,12 @@ tracking questions and does not imply routine flight readiness.</p>
 <h2 id="telemetry-and-configuration"><a class="header" href="#telemetry-and-configuration">Telemetry and Configuration</a></h2>
 <p>The current firmware has early communication and display pieces:</p>
 <ul>
-<li>optional USB CDC serial device via <code>usb_serial</code></li>
+<li>USB CDC serial: mandatory on Foxeer and optional on FCU3 via <code>usb_serial</code></li>
 <li>Foxeer <code>FWDBG1</code> status every roughly two seconds, including IMU, control,
 RC, arming, voltage, and current snapshots</li>
-<li>staged Foxeer SPI-NOR support: read-only identity/log access with
-<code>flash_storage</code>, disarmed-only maintenance and dual-slot whitelisted tuning
-storage with <code>flash_writes</code>, and CRC-protected armed-flight logging with
-<code>flash_blackbox</code></li>
+<li>standard Foxeer SPI-NOR support: identity/log access, disarmed-only
+maintenance and dual-slot whitelisted tuning storage, and CRC-protected
+armed-flight logging</li>
 <li>opt-in Foxeer <code>mspv2_configurator</code>: bounded native framing, standard <code>FWSP</code>
 identity/status commands, versioned whole-config stage/commit/reset, and
 disarmed-only 512-byte CRC-protected blackbox reads over function <code>0x7A00</code></li>
@@ -1018,12 +1001,10 @@ disarmed-only 512-byte CRC-protected blackbox reads over function <code>0x7A00</
 <li>DJI O4 MSP OSD task using UART4 TX/RX DMA</li>
 <li>DisplayPort frames for clear, write string, draw, and heartbeat</li>
 <li>OSD values for armed state, pack voltage, cell voltage, current, and throttle</li>
-<li>BLHeli legacy ESC telemetry on PA10 / USART1 RX DMA at 115,200 baud in the
-default FCU3 DShot image; inactive in the explicit PWM fallback</li>
+<li>BLHeli legacy ESC telemetry on PA10 / USART1 RX DMA at 115,200 baud</li>
 <li>UART modes for SBUS, MSP, and MAVLink configuration values</li>
 </ul>
-<p>The base Foxeer USB-status image discards input; ordinary flash-enabled images
-parse only the bounded ASCII storage/config command set. The opt-in MSPv2 image
+<p>The standard Foxeer USB/storage image parses the bounded ASCII storage/config command set. The opt-in MSPv2 image
 uses the same low-priority flash owner and whitelist. Configuration keys and
 ranges remain explicit, persistence and blackbox reads require a disarmed
 state, active logs are not downloadable, and unsupported erase/reboot requests
@@ -1059,7 +1040,7 @@ path is functionally target-validated on the current FCU and DJI O4 link.</p>
 <ul>
 <li>crate/workspace split is in progress; the live RTIC app correctly retains
 concrete runtime ownership while its board construction policy comes from
-the FCU3 BSP</li>
+the FCU3 board support</li>
 <li>the FCU3 manifest is active policy and conflict-test input, but there is no
 source generator for RTIC resource declarations or interrupt bindings yet</li>
 <li>no CRSF/ELRS implementation yet</li>
@@ -1084,7 +1065,7 @@ remain incomplete</li>
 interoperability evidence and is not enabled in normal flight images</li>
 <li>OSD data freshness is not complete yet</li>
 <li>battery cell count, ADC scale assumptions, and current-board IMU axis mapping
-now live in the FCU3 BSP profile, but still need real board-specific
+now live in the FCU3 board support profile, but still need real board-specific
 calibration before becoming validated configuration</li>
 <li>Foxeer has unvalidated dual-slot persistent tuning storage; FCU3 and general
 parameter persistence remain open</li>
@@ -1163,11 +1144,11 @@ preserve that boundary.</p>
 <li>MPU6500 sampling over the bounded SPI1 DMA transport;</li>
 <li>FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling and a 400 Hz
 rate-control/mixer update;</li>
-<li>default, safety-owned four-lane DShot600 at 500 frame sets per second;</li>
+<li>standard, safety-owned four-lane DShot600 at 500 frame sets per second;</li>
 <li>PA10 / USART1 RX BLHeli legacy telemetry managed outside actuator authority;</li>
 <li>idle arming qualification using fresh eRPM evidence from all four ESCs;</li>
 <li>DJI O4 MSP DisplayPort OSD and <code>defmt</code>/BB2 logging;</li>
-<li>an explicit four-channel RC PWM fallback.</li>
+<li>shared RC PWM infrastructure retained for servo and auxiliary outputs.</li>
 </ul>
 <p>The recorded props-off gates cover motor identity and direction, mixed-command
 signs, motion-opposing correction, telemetry, qualified arming, injected
@@ -1208,7 +1189,7 @@ startup behavior.</li>
 <li>Identify the SPI2 NOR, pass the isolated scratch-sector self-test, and
 validate persistent config/log recovery plus control-loop timing.</li>
 <li>Calibrate ADC voltage/current scaling.</li>
-<li>Measure all four PWM outputs, including TIM1_CH3N polarity on M4.</li>
+<li>Measure all four DShot outputs, including TIM1_CH3N polarity on M4.</li>
 <li>With propellers removed, verify logical motor order, rotation direction,
 stick response, and motion-opposing correction.</li>
 <li>Review the evidence before removing the board-specific arming inhibit.</li>
@@ -1424,7 +1405,7 @@ blackbox page before removing power.</p>
 <tbody>
 <tr><td>SBUS</td><td>Active prototype RC input over USART2 RX DMA</td></tr>
 <tr><td>BLHeli legacy ESC telemetry</td><td>Active only in the default FCU3 DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
-<tr><td>USB CDC serial</td><td>Optional <code>usb_serial</code>; Foxeer emits bounded read-only <code>FWDBG1</code> status lines</td></tr>
+<tr><td>USB CDC serial</td><td>Mandatory on Foxeer; optional on FCU3 via <code>usb_serial</code>; Foxeer emits bounded read-only <code>FWDBG1</code> status lines</td></tr>
 <tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames</td></tr>
 <tr><td>MAVLink</td><td>UART mode placeholder/config values exist, no active MAVLink implementation yet</td></tr>
 <tr><td>CRSF/ELRS</td><td>Intended preferred RC path, not implemented yet</td></tr>
@@ -1473,8 +1454,8 @@ is drained and discarded; there is intentionally no USB command parser,
 parameter writer, arming request, or actuator resource.</p>
 <h2 id="fcu3-esc-telemetry"><a class="header" href="#fcu3-esc-telemetry">FCU3 ESC Telemetry</a></h2>
 <p>The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud only in the default FCU3 DShot image. The explicit PWM fallback
-does not run the ESC manager or issue telemetry-bit requests. Since the
+115,200 baud in the standard FCU3 flight image. The ESC manager issues
+bounded telemetry-bit requests through the actuator-owned DShot service. Since the
 ten-byte wire frame does not identify a motor, a low-priority ESC manager
 rotates physical-output requests. Both directions use bounded SPSC queues.</p>
 <p>The safety-owned DShot service acknowledges an exact sequence/output request
@@ -1723,7 +1704,7 @@ default FCU3 DShot image’s legacy ESC telemetry.</p>
 <p>The reusable STM32F4 UART DMA mechanism lives in
 <code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. FerroWasp FCU3 pin conversion,
 storage shape, and device construction live in
-<code>crates/ferrowasp-bsp/src/stm32f4/ferrowasp_fcu3/</code>.</p>
+<code>apps/stm32f405-flight/src/board/</code>.</p>
 <p>It provides:</p>
 <ul>
 <li>mode-specific UART configuration</li>
@@ -1744,7 +1725,7 @@ storage shape, and device construction live in
 <tbody>
 <tr><td><code>Sbus</code></td><td>100000 baud, even parity, 2 stop bits, RX DMA</td><td>Active RC input path</td></tr>
 <tr><td><code>Msp</code></td><td>115200 baud, TX/RX DMA</td><td>Active DJI O4 OSD path on UART4</td></tr>
-<tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Active FCU3 BLHeli legacy telemetry path on USART1 in the default DShot image; inactive in the PWM fallback</td></tr>
+<tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Standard flight-board BLHeli legacy telemetry path on USART1</td></tr>
 <tr><td><code>Mavlink</code></td><td>57600 baud, RX DMA</td><td>Future telemetry/config subset</td></tr>
 </tbody>
 </table>
@@ -1765,8 +1746,7 @@ telemetry wire:</p>
 <pre><code class="language-text">PA10 USART1 RX DMA -&gt; bounded chunks -&gt; ESC manager parser/association
     -&gt; timestamped per-motor observations
 </code></pre>
-<p>PA9/USART1 TX is not configured. The explicit PWM fallback does not run the ESC
-manager. In the DShot image, the manager sends typed telemetry requests through
+<p>PA9/USART1 TX is not configured. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output
@@ -1786,11 +1766,13 @@ acknowledgement arrives.</p>
 <p>Current important paths:</p>
 <pre><code class="language-text">.
 |-- apps/
-|   |-- stm32f405-flight/        # F405 flight RTIC shell; FCU3 selected by default
-|   |-- stm32f401-bringup/       # F401 RTIC LED/USART multi-target bring-up app
-|   `-- foxeer-f405-v2/          # Separate Foxeer F405 V2 RTIC flight/bring-up app
+|   |-- stm32f405-flight/        # FCU3 board support and thin F405 RTIC shell
+|   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
+|   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
+|       |-- src/board/           # Immutable board facts and typed construction
+|       |-- src/lib.rs           # Internal app-support facade
+|       `-- src/main.rs          # RTIC declarations and wiring only
 |-- crates/
-|   |-- ferrowasp-bsp/           # FCU3, Foxeer, and Nucleo board contracts
 |   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
 |   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
 |   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
@@ -1810,18 +1792,19 @@ acknowledgement arrives.</p>
 `-- SECURITY.md                  # Security reporting expectations
 </code></pre>
 <h2 id="current-reality"><a class="header" href="#current-reality">Current Reality</a></h2>
-<p>Most active flight-firmware wiring still lives in
-<code>apps/stm32f405-flight/src/main.rs</code>. That is acceptable for the current
-bring-up phase because it keeps hardware iteration fast while giving each
-deployable image an independent Cargo/PAC graph.</p>
+<p>Each deployable board has an independent Cargo/PAC graph. Its <code>src/main.rs</code>
+contains the RTIC resource and task declarations, locking, scheduling, and
+concrete initialization wiring. Board declarations and constructors live in
+the same package’s support library; reusable behavior remains in shared crates.
+Foxeer is the golden flight app.</p>
 <p>The code already contains early signs of the future shape:</p>
 <ul>
 <li>reusable safety, signal, and actuator conversion types in <code>crates/ferrowasp-core/</code></li>
 <li>board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
-construction policy in <code>crates/ferrowasp-bsp/</code></li>
+construction policy under each app’s <code>src/board/</code></li>
 <li>isolated FCU3 flight, Foxeer flight/bring-up, and NUCLEO-F401RE bring-up
 apps with independent Cargo and RTIC resource contracts</li>
-<li>reusable STM32F4 UART/SPI/ADC/static PWM and DShot mechanisms under
+<li>reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
 <code>crates/ferrowasp-stm32f4/</code></li>
 <li>software-driver and control helpers, including the BLHeli parser and bounded
 ESC manager, under <code>crates/ferrowasp-drivers/</code> and <code>crates/ferrowasp-tasks/</code></li>
@@ -1832,20 +1815,21 @@ BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers</li>
 </ul>
 <h2 id="target-direction"><a class="header" href="#target-direction">Target Direction</a></h2>
 <p>The long-term layout is expected to move toward:</p>
-<pre><code class="language-text">ferrowasp-core     reusable types, units, safety state, queues
-ferrowasp-mcu      chip-family MCU support
-ferrowasp-drivers  IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-bsp      board pin maps, clocks, DMA/timer assignments
-ferrowasp-tasks    reusable task logic
-ferrowasp-apps     thin RTIC app shells
-ferrowasp-gen      optional source generation for task/resource wiring
-manifest/          board, task, resource, and policy descriptions
+<pre><code class="language-text">ferrowasp-core       reusable types, units, safety state, queues
+ferrowasp-mcu        family-neutral MCU contracts
+ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
+ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
+ferrowasp-tasks      reusable task logic
+app src/board        board pin maps, clocks, DMA/timer assignments
+app src/lib.rs       board composition and internal support facade
+app src/main.rs      thin RTIC shell
+ferrowasp-gen        optional source generation for task/resource wiring
+manifest/            optional board, task, resource, and policy descriptions
 </code></pre>
-<p>An app may serve multiple boards only when their BSPs satisfy the same
-compile-time RTIC resource contract. A different MCU interrupt model or
-firmware role gets another thin app package.</p>
-<p>The migration should remain gradual. First make FerroWasp FCU3 work well, then
-pull stable logic into cleaner modules.</p>
+<p>Boards use isolated app packages so their PAC features and RTIC resource
+contracts cannot be accidentally unified.</p>
+<p>Reusable behavior moves outward only when its ownership and bounded execution
+are explicit; custom macros are not used to hide runtime work.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="imu"><a class="header" href="#imu">IMU</a></h1>
 <p>FerroWasp currently supports MPU6500 and ICM42688-P devices over SPI1.</p>
@@ -1921,13 +1905,13 @@ edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
 their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.</p>
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
-<p>Raw values remain in sensor-axis order. Each BSP supplies the axis indices and
+<p>Raw values remain in sensor-axis order. Each board support supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.</p>
 <p>The Foxeer-only <code>imu_orientation_rtt</code> feature adds one low-rate, coherent
 sensor-frame snapshot to the existing heartbeat. It reports acceleration in
 mg, uncorrected gyro in tenths of a degree per second, and temperature in
 tenths of a degree Celsius without changing the USB protocol or taking a
-shared RTIC lock. A second line reports the BSP-mapped drone-frame gravity
+shared RTIC lock. A second line reports the board support-mapped drone-frame gravity
 vector and gyro rates for direct implementation validation:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features imu_orientation_rtt --probe-speed-khz 1800 --connect-under-reset
 </code></pre>
@@ -1984,10 +1968,10 @@ and they do not command motors.</p>
 connection:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 </code></pre>
-<p>The Foxeer BSP leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
+<p>The Foxeer board support leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
 must be unpowered at the ESC side; USB DFU remains the recovery path.</p>
 <p>Release and feature-selected images use the same logger:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 </code></pre>
 <p>The script performs a quiet firmware build, runs:</p>
 <pre><code class="language-text">probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps
@@ -2346,8 +2330,7 @@ independent. USART2 wakes one persistent async SBUS parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.</p>
 <p>In the default FCU3 DShot image, USART1 feeds the low-priority ESC manager’s
-ten-byte BLHeli legacy parser. This service is inactive in the explicit PWM
-fallback. The manager owns framing, CRC validation, response association,
+ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
 samples, and timeouts. UART transport or parser state cannot command motors:
 telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator
 service. A CRC-valid frame that arrives while its request is still queued can
@@ -2522,7 +2505,7 @@ observational and does not itself disarm.</p>
 <p>ESC-manager identity is physical-output identity: output 1 is logical
 M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right, and output
 4 is M2/front-right. The default DShot image runs this PA10 legacy telemetry
-path; the explicit PWM fallback does not.</p>
+path.</p>
 <pre class="mermaid">sequenceDiagram
     participant RC as RC Input
     participant SM as Safety Master
@@ -2544,22 +2527,13 @@ path; the explicit PWM fallback does not.</p>
     SM-&gt;&gt;AO: system armed
 </pre>
 
-<p>The core event remains named <code>ActuatorIdling</code> for compatibility. Its current
-meaning is protocol-specific preparation complete: PWM finished its guarded
-idle sequence, while DShot qualified all four idle RPMs. It is not itself an
+<p>The core event remains named <code>ActuatorIdling</code> for compatibility. It means that
+DShot qualified all four idle RPMs under the temporary preparation permit. It is not itself an
 armed signal.</p>
-<h2 id="pwm-fallback-and-foxeer-sequence"><a class="header" href="#pwm-fallback-and-foxeer-sequence">PWM Fallback and Foxeer Sequence</a></h2>
-<p>The explicit FCU3 PWM fallback and current Foxeer PWM path retain the legacy
-guarded sequence:</p>
-<ol>
-<li>2.5 seconds at low output;</li>
-<li>500 ms at idle output;</li>
-<li>preparation-complete report;</li>
-<li>final Safety Master guard before <code>Armed</code>.</li>
-</ol>
-<p>Foxeer adds a compile-time board gate. Its actuator output remains inhibited
-until board-specific IMU orientation, ADC calibration, motor order, and pulse
-polarity evidence is reviewed.</p>
+<h2 id="standard-dshot-preparation"><a class="header" href="#standard-dshot-preparation">Standard DShot Preparation</a></h2>
+<p>Both flight boards use the guarded DShot sequence: a 100 ms stop-frame dwell,
+then telemetry-qualified idle under a temporary permit, followed by the safety
+master’s final guard. There is no app-level PWM ESC sequence.</p>
 <h2 id="normal-motor-command-path"><a class="header" href="#normal-motor-command-path">Normal Motor-Command Path</a></h2>
 <pre><code class="language-text">Control Loop -&gt; bounded SPSC MotorCmd queue -&gt; Actuator Output -&gt; motor hardware
 </code></pre>
@@ -2619,20 +2593,16 @@ not measure the electrical stop latency. DShot pulse timing/jitter and precise
 stop latency remain instrumented checkpoints.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="dshot"><a class="header" href="#dshot">DShot</a></h1>
-<p>FerroWasp uses a four-motor DShot600 backend by default on <strong>FerroWasp FCU3</strong>.
-It supports isolated capped bench images and the normal mixed-control path.
-The PA10 legacy BLHeli telemetry service is active only with this default
-DShot backend; it is inactive in the explicit PWM fallback.
-The previous four-channel 400 Hz RC PWM backend remains an explicit fallback:</p>
-<pre><code class="language-powershell">cd apps/stm32f405-flight
-cargo build --locked --no-default-features --features board-ferrowasp-fcu3
-</code></pre>
+<p>FerroWasp uses four-motor DShot600 as the standard ESC protocol on FCU3 and
+Foxeer. It supports isolated capped bench images and the normal mixed-control
+path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
+RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
+it is not a flight-app ESC fallback.</p>
 <p>The capped bench image remains behind the existing equal-motor gate:</p>
 <pre><code class="language-powershell">cd apps/stm32f405-flight
-cargo build --locked --features "dshot bench_equal_motors"
+cargo build --locked --features "bench_equal_motors"
 </code></pre>
-<p>Physical selected-motor modes, multiple logical-motor selections, and PWM
-calibration are compile-time errors in a DShot image. The base bench image
+<p>Physical selected-motor modes and multiple logical-motor selections are compile-time errors. The base bench image
 sends the same requested throttle to all four lanes. For props-off mapping
 validation, exactly one <code>bench_logical_motorN_only</code> feature may be added.
 Those modes retain the 250 PWM-style command cap and normal RC, arming,
@@ -2640,8 +2610,6 @@ freshness, lease, and actuator-output validation.</p>
 <p>The normal controller and mixer use DShot in the default build:</p>
 <pre><code class="language-powershell">cargo build --release --locked
 </code></pre>
-<p>The former <code>dshot_mixed_control</code> feature remains a compatibility alias for
-existing commands.</p>
 <h2 id="fcu3-routes"><a class="header" href="#fcu3-routes">FCU3 Routes</a></h2>
 <p>The external motor pads are unchanged. The DShot image selects alternate
 timer functions that provide independent compare DMA requests:</p>
@@ -2663,8 +2631,7 @@ is disabled. RM0090 Table 96 therefore defines the pad as
 <code>OC3N = OC3REF xor CC3NP</code>. The backend selects the PAC’s active-high setting,
 <code>CC3NP=0</code>, so PB15 follows the same active-high pulse reference as the ordinary
 timer outputs. This still requires physical waveform validation.</p>
-<p>All four DMA2 streams are separate from the active ADC1 and SPI1 streams. The
-PWM fallback retains its existing routes and alternate functions.</p>
+<p>All four DMA2 streams are separate from the active ADC1 and SPI1 streams.</p>
 <h2 id="waveform"><a class="header" href="#waveform">Waveform</a></h2>
 <p>A DShot packet contains 16 bits:</p>
 <pre><code class="language-text">[ 11-bit value ][ telemetry bit ][ 4-bit checksum ]
@@ -2679,10 +2646,9 @@ special commands. After the ESC boot window, its service sets the telemetry bit
 on one lane at a time for legacy UART telemetry. Requests are limited to one
 every 20 ms and a new request cannot overlap an outstanding response.</p>
 <h2 id="blheli-legacy-uart-telemetry"><a class="header" href="#blheli-legacy-uart-telemetry">BLHeli Legacy UART Telemetry</a></h2>
-<p>The default FCU3 DShot image receives the combined ESC telemetry wire on
+<p>The FCU3 flight image receives the combined ESC telemetry wire on
 <strong>PA10 / USART1 RX AF7</strong> at 115,200 baud, 8N1. USART1 RX uses DMA2 Stream 5
-Channel 4; PA9 is not configured or claimed. The explicit PWM fallback does
-not run the ESC manager or request legacy telemetry. A frame has ten bytes:
+Channel 4; PA9 is not configured or claimed. A frame has ten bytes:
 temperature, big-endian voltage/current, consumption, eRPM/100, and CRC-8. The
 bounded parser validates CRC polynomial <code>0x07</code> and advances one byte after
 failure to regain framing without a sync byte.</p>
@@ -3118,7 +3084,7 @@ expiry, timeout, and fault counts remained zero.</p>
 <p>The operator subsequently confirmed that every motor remained physically
 stopped until <code>SYSTEM ARMED</code>, all four idled at value <code>112</code>, and motors ran
 only while armed. Command <code>65</code> / DShot value <code>112</code> is therefore retained as
-the current FCU3 prototype idle without a BSP tuning change. Continued
+the current FCU3 prototype idle without a board support tuning change. Continued
 cold-start and temperature-margin testing remains necessary before treating
 the initial flight result as broad readiness.</p>
 <h2 id="unsafe-boundary"><a class="header" href="#unsafe-boundary">Unsafe Boundary</a></h2>
@@ -3142,7 +3108,7 @@ with an earlier smoke report on 2026-07-20 and reports that it appears normal,
 closing that inspection blocker. Continue to stop immediately on heat, smell,
 roughness, jitter, or abnormal current.</p>
 <p>First flash with actuator power disconnected:</p>
-<pre><code class="language-powershell">cargo embed --release --features "dshot bench_equal_motors"
+<pre><code class="language-powershell">cargo embed --release --features "bench_equal_motors"
 </code></pre>
 <p>Expected RTT begins with:</p>
 <pre><code class="language-text">DShot600 four-motor equal-throttle bench backend active
@@ -3297,10 +3263,10 @@ requires separate timestamped or logic-analyzer evidence.</p>
 RC-loss/recovery checkpoint passed on 2026-07-18. This stage validates the
 committed logical-to-physical map without enabling full mixed control.</p>
 <p>For each logical motor, flash one image:</p>
-<pre><code class="language-powershell">cargo embed --release --features "dshot bench_equal_motors bench_logical_motor1_only"
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor2_only"
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor3_only"
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor4_only"
+<pre><code class="language-powershell">cargo embed --release --features "bench_equal_motors bench_logical_motor1_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor2_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor3_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor4_only"
 </code></pre>
 <p>The 2026-07-18 release candidates built from commit <code>c4eeb90</code> plus the current
 working-tree changes are:</p>
@@ -3379,7 +3345,7 @@ evidence</strong>. This stage proves that all four lanes can carry different pac
 in the same synchronized frame set. It does not enable the PID mixer or
 authorize flight output.</p>
 <p>Build and flash:</p>
-<pre><code class="language-powershell">cargo embed --release --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+<pre><code class="language-powershell">cargo embed --release --features "bench_equal_motors bench_dshot_unequal_motors"
 </code></pre>
 <p>The 2026-07-18 source-side release candidate built from commit <code>c4eeb90</code> plus
 the current working-tree changes has ELF SHA-256
@@ -3454,7 +3420,7 @@ or stop latency.</p>
 <p>Run this only after Part A and the DShot-specific arming checkpoint pass.</p>
 <p>From the repository root, build, flash, display decoded RTT, and retain a
 clean timestamped log with:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 </code></pre>
 <p>The wrapper uses <code>probe-rs run</code>, shows decoded <code>defmt</code> lines in the terminal,
 and flushes each line to
@@ -3515,8 +3481,9 @@ prerequisite; the present first post-arm stale-IMU check disarms instead;</li>
 <li>DShot special-command policy;</li>
 <li>a reviewed pitch-authority tuning progression.</li>
 </ul>
-<p>The Foxeer F405 V2 backend remains conventional RC PWM. FCU3 timer and DMA
-routes must not be assumed valid for that board.</p>
+<p>The Foxeer F405 V2 backend is standard four-lane DShot600 using its own
+board-declared timer and DMA routes. FCU3 routes must not be assumed valid for
+that board.</p>
 
                     </main>
 

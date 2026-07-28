@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5b41a8e0.js";
+            window.path_to_searchindex_js = "searchindex-3d4e509e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1b1c9912.js"></script>
@@ -248,13 +248,13 @@ edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
 their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.</p>
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
-<p>Raw values remain in sensor-axis order. Each BSP supplies the axis indices and
+<p>Raw values remain in sensor-axis order. Each board support supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.</p>
 <p>The Foxeer-only <code>imu_orientation_rtt</code> feature adds one low-rate, coherent
 sensor-frame snapshot to the existing heartbeat. It reports acceleration in
 mg, uncorrected gyro in tenths of a degree per second, and temperature in
 tenths of a degree Celsius without changing the USB protocol or taking a
-shared RTIC lock. A second line reports the BSP-mapped drone-frame gravity
+shared RTIC lock. A second line reports the board support-mapped drone-frame gravity
 vector and gyro rates for direct implementation validation:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features imu_orientation_rtt --probe-speed-khz 1800 --connect-under-reset
 </code></pre>
