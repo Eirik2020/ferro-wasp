@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1c6da85b.js";
+            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-6dd9b586.js"></script>
+        <script src="toc-0cbe97ab.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -185,12 +185,13 @@ index.</p>
 testing concepts, and the roadmap belong in this book.</li>
 <li>Crate, app, and tool READMEs may document a narrow package contract, but
 should link here instead of duplicating general guides.</li>
-<li><code>project_docs</code> is reserved for agent context, machine-enforced test and
+<li><code>project_meta</code> is reserved for agent context, machine-enforced test and
 evidence metadata, design-decision provenance, internal work tracking, and
 archives. It is not a user or developer entry point.</li>
 <li>Agent instructions remain next to the files they govern.</li>
-<li>Legal, security, contribution, and release-governance files remain at the
-repository root where hosting and tooling expect them.</li>
+<li>Legal distribution files remain at the repository root. GitHub-recognized
+policy pointers and per-tag release-delivery metadata live under <code>.github/</code>.
+Canonical contribution guidance and release history remain in this book.</li>
 </ul>
 <p>When a public behavior, workflow, or supported feature changes, update the
 relevant chapter and the Summary in the same change. Do not add a second

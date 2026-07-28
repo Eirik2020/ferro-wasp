@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-1c6da85b.js";
+            window.path_to_searchindex_js = "../searchindex-d65f0ef9.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-6dd9b586.js"></script>
+        <script src="../toc-0cbe97ab.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,8 +192,16 @@ unpowered throughout USB maintenance.</p>
 <h2 id="download-and-extract"><a class="header" href="#download-and-extract">Download and extract</a></h2>
 <p>Published packages are attached to the repository’s
 <a href="https://github.com/Eirik2020/ferro-wasp/releases">GitHub Releases</a>. Download
-the current <code>ferrowasp-v*-windows-x86_64.zip</code> release and extract the complete
-folder. Do not run the executable from inside the ZIP.</p>
+the current <code>ferrowasp-v*-windows-x86_64.zip</code> release and its matching
+<code>.zip.sha256</code> file.</p>
+<p>Verify the archive before extracting it:</p>
+<pre><code class="language-powershell">$Zip = Get-Item .\ferrowasp-v*-windows-x86_64.zip
+$Expected = (Get-Content "$($Zip.FullName).sha256").Split()[0]
+$Actual = (Get-FileHash $Zip.FullName -Algorithm SHA256).Hash
+if ($Actual -ne $Expected) { throw "Release ZIP checksum mismatch" }
+</code></pre>
+<p>Extract the complete folder after the hashes match. Do not run the executable
+from inside the ZIP.</p>
 <p>Developers building local packages or selecting their own ELF should use the
 <a href="../developer_getting_started.html">Developer Getting Started</a> guide.
 It documents the generated
