@@ -5,7 +5,7 @@ the validated FerroWasp FCU3 task wiring but owns a separate board contract,
 Cargo graph, linker configuration, and binary.
 
 Normal users should begin with the repository
-[Foxeer USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md). The
+[Foxeer USB Quick Start](../../mdbook/src/user/foxeer_f405_v2.md). The
 published Windows package includes a checked release image and does not
 require a Rust toolchain, Python, STM32CubeProgrammer, or an SWD probe.
 
@@ -49,6 +49,47 @@ as `B85DB4F43897EF628EFF0C368CF0670F34FEEDB3FC59C895F21ECFB91D3E6FC4`.
 This does not itself validate flight. Do not fly the
 pre-fix image with SHA-256
 `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
+
+## Initialization Audit TODO
+
+The RTIC `#[init]` path still performs more construction than intended. Keep
+pin, peripheral, DMA, and board-profile selection visible in the app, but move
+reusable construction and service-state initialization into the narrowest
+shared crate without introducing custom macros.
+
+- [ ] Investigate and correct the ADC1 clock before further ADC calibration.
+  ADC1 is currently initialized before the final 168 MHz clock tree is frozen,
+  and the HAL default ADC prescaler is APB2 divided by two. With the resulting
+  84 MHz APB2 clock this appears to drive ADC1 at 42 MHz, above the STM32F405
+  36 MHz maximum at normal board voltage. Freeze clocks before ADC
+  initialization and select an explicit safe prescaler, preferably through
+  `ferrowasp-stm32f4::adc`. Treat this as a functional clock-spec risk, not
+  merely cleanup.
+- [ ] Add TIM5, used by the blocking initialization delay, to the board timer
+  groups and active resource claims. No current TIM5 conflict or timer failure
+  has been identified, but the omission prevents the manifest from detecting a
+  future conflicting owner. Treat this as an auditability and future
+  resource-collision risk.
+- [ ] Add a shared STM32F405 foundation initializer for RCC/clock freeze, GPIO
+  and DMA decomposition, and standard timer construction. Keep the RTIC
+  monotonic start and concrete Foxeer resource selection in the app.
+- [ ] Change DShot initialization to accept raw TIM1/TIM8 peripherals and
+  construct the HAL timers inside shared STM32F4 support. The app should only
+  provide timers, pins, DMA streams, storage, and the board route/profile.
+- [ ] Let the IMU data-ready initializer own SYSCFG constraint and EXTI setup;
+  the app should provide SYSCFG, EXTI, PC4, and the selected edge/profile.
+- [ ] Move the SPI-NOR JEDEC probe, capability derivation, and flash queue
+  endpoint assembly into a reusable flash-service initializer.
+- [ ] Bundle the duplicated ESC-manager queues, owned UART channels, and safety
+  signal endpoints in `ferrowasp-tasks`, `ferrowasp-io-core`, and
+  `ferrowasp-core`, respectively.
+- [ ] Replace the unused generic `tele_uart` and `gps_uart` routing
+  placeholders with a fixed, typed Foxeer flight-UART routing result.
+- [ ] Move reusable SPI mode/frequency profiles and IMU/NOR construction out of
+  board support into `ferrowasp-stm32f4`; retain only Foxeer hardware facts and
+  resource selection locally.
+- [ ] Remove stale wording that describes standard Foxeer ESC telemetry as
+  optional, including legacy subset-claim descriptions.
 
 The 2026-07-22 individual motor-output test also exposed an arm-high reset defect. The
 shared RC-link fix ignores arm-low transients received before link

@@ -1,5 +1,8 @@
 # Flashing FerroWasp to the FOXEER F405 V2 over USB DFU on Windows
 
+> Historical developer workflow. The supported user workflow now lives in
+> `mdbook/src/user/foxeer_f405_v2.md`.
+
 This guide shows how to flash Rust firmware directly to the FOXEER F405 V2 without WSL and without exposed SWD pads.
 
 The workflow is:

@@ -413,6 +413,30 @@
       "role": "historical-architecture-decisions",
       "lifecycle": "historical",
       "context": "exclude"
+    },
+    {
+      "path": "project_docs/archive/foxeer_f405v2_ferrowasp_hardware_map.md",
+      "role": "historical-board-research",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_docs/archive/foxeer_f405v2_windows_dfu_cargo_flashing.md",
+      "role": "historical-developer-workflow",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_docs/archive/stm32f405_rtic2_dshot_implementation.md",
+      "role": "historical-implementation-plan",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_docs/archive/stm32f4_rtic2_unified_io_dma_implementation_plan_codex_ready.md",
+      "role": "historical-implementation-plan",
+      "lifecycle": "historical",
+      "context": "exclude"
     }
   ],
   "context_budgets": [

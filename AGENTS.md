@@ -26,6 +26,18 @@ documents routed by the applicable instructions:
 - test selection or execution: `project_docs/testing/README.md`;
 - cross-repository movement: `project_docs/CROSS_REPO_SYNC.md`.
 
+## Documentation boundary
+
+The mdBook under `mdbook/src/` is the canonical user and developer
+documentation set; keep `mdbook/src/SUMMARY.md` as its only maintained index.
+Keep the root README as a concise landing page. Package READMEs may describe a
+narrow local contract, but must link to the book instead of duplicating public
+guides, status summaries, setup instructions, or roadmap content.
+
+Keep agent instructions, internal context, machine-enforced test/evidence
+metadata, decision provenance, and archives outside the public book. Do not
+point users or ordinary contributors to agent-context documents.
+
 ## Non-negotiable safety rules
 
 - Only the safety kernel and safety-owned actuator-output path may command

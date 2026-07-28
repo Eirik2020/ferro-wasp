@@ -2,11 +2,10 @@
 
 This guide is for contributors building or changing FerroWasp from source.
 Users who only want to flash and configure a Foxeer F405 V2 should use the
-[Foxeer USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md) instead.
+[Foxeer USB Quick Start](user/foxeer_f405_v2.md) instead.
 
-FerroWasp is a safety-oriented experimental flight-control prototype. A
-successful build is not flight evidence. Do not connect actuator power or
-install propellers as part of ordinary software setup.
+A successful build is not target or flight evidence. Ordinary software setup
+does not require actuator power or installed propellers.
 
 ## Preferred environment: WSL 2 and Docker
 
@@ -269,7 +268,7 @@ Set-Location tools\ferro-configurator
 ```
 
 Generated packages are written to the Git-ignored
-[`tools/ferro-configurator/dist`](../../tools/ferro-configurator/dist/)
+`tools/ferro-configurator/dist`
 directory. It does not exist in a fresh checkout until packaging succeeds.
 
 ```powershell

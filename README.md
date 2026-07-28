@@ -2,242 +2,80 @@
   <img src="FerroWasp_logo_transparent.png" alt="FerroWasp logo" width="760">
 </p>
 
-FerroWasp is an experimental Rust/RTIC flight-control firmware prototype for
-multicopter UAVs.
+FerroWasp is a safety-focused Rust/RTIC flight-controller firmware project for
+multicopter UAVs. It builds a small, inspectable flight stack around explicit
+resource ownership, deterministic scheduling, and bounded hardware interfaces.
 
-It is focused on a small, understandable STM32 flight-control stack where RC
-input, IMU sampling, control loops, motor mixing, arming, failsafe behavior,
-and actuator authority are easy to inspect.
+The firmware is experimental and intended for development, research, and
+careful prototype testing. It is not a stable or production flight stack.
 
-FerroWasp is not a PX4, ArduPilot, or Betaflight clone. It is not certified,
-airworthy, production-ready, or suitable for operational use. The current goal
-is fast bench learning and cautious prototype flight testing while preserving
-one central safety boundary:
+## Current State
 
-```text
-Outer layers may request actuation.
-Only the safety / actuator-output path may command motor hardware.
-```
+Foxeer F405 V2 is the golden flight target and the reference for supported
+runtime behavior. The matrix is intentionally short; the complete matrix and
+board-specific limitations live in the
+[Current Support](mdbook/src/current_support.md) chapter.
 
-## Project Status
-
-FerroWasp is in rapid prototyping.
-
-| Area | Current state |
+| Capability | Foxeer F405 V2 |
 |---|---|
-| Primary target | FerroWasp FCU3, STM32F405-class hardware |
-| Secondary targets | Foxeer F405 V2 bring-up, NUCLEO-F401RE RTIC heartbeat |
-| Runtime | `no_std`, `no_main`, RTIC 2 |
-| RC input | SBUS over USART2 RX DMA |
-| IMU | MPU6500 on FCU3; runtime-selected MPU6500/ICM42688-P on Foxeer |
-| Control | FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling, 400 Hz control update, prototype rate loop |
-| Motor output | Safety-gated four-lane DShot600 by default on FCU3 and Foxeer; explicit RC PWM fallbacks |
-| ESC telemetry | Default DShot images: BLHeli/KISS legacy UART telemetry on PA10/USART1 RX; eRPM validated on all four ESCs on both boards |
-| Logging/debug | `defmt`/RTT, compact BB2 frames, and opt-in Foxeer SPI-NOR blackbox/config storage with USB CLI or native MSPv2 RPC |
-| OSD/telemetry | DJI O4 MSPv1 OSD on UART4 and Foxeer USB CDC status/storage/configurator access |
+| Status | Golden flight app; boots, arms, controls, logs, and has completed controlled prototype flights |
+| Platform | STM32F405, allocation-free embedded Rust, RTIC 2 |
+| RC and sensing | SBUS, MPU6500 or ICM42688-P, data-ready IMU sampling, voltage/current ADC |
+| Flight control | 400 Hz rate controller, filtering, gyro calibration, Quad X mixer |
+| Motors | Four-lane DShot600 with guarded arming and fresh-command containment |
+| ESC feedback | BLHeli legacy UART telemetry with four-motor eRPM qualification |
+| Pilot interfaces | DJI O4 MSP DisplayPort OSD and USB CDC |
+| Configuration and logging | Persistent tuning plus onboard SPI-NOR blackbox access through FerroConfigurator |
 
-More detail lives in the current support matrix:
-[mdbook/src/current_support.md](mdbook/src/current_support.md).
-
-On 2026-07-20, the standard FCU3 DShot600 image completed a controlled
-experimental outdoor flight. The pilot reported strong maneuvering performance
-and no recurrence of the prior yawing behavior. Pitch authority appeared low;
-incremental pitch-P testing is the next tuning follow-up. DShot electrical
-waveform timing and phase measurements remain open, and this flight is
-prototype evidence rather than an airworthiness or production-safety claim.
-
-The Foxeer F405 V2 first-hop attempt on 2026-07-22 exposed positive pitch
-feedback and attempted a forward flip. The blackbox-backed polarity correction
-then passed unpowered, powered props-off, controlled-hop, and confined-area
-flight checks. The operator classifies the current P-only setup as a flyable
-prototype, not a well-tuned or validated flight-control system. The pre-fix
-image remains withdrawn.
-
-## Features
-
-Current firmware capabilities:
-
-- Embedded Rust flight firmware using RTIC 2 scheduling
-- Safety-owned actuator path for arming, idle, armed output, and disarm
-- SBUS RC parsing with link qualification, timeout invalidation, and rearm latch
-- SPI IMU sampling through bounded DMA transport
-- Standard drone body frame using forward/right/down axes, with board profiles
-  rotating IMU sensor axes into the board frame and then into the drone frame
-- Gyro filtering, startup gyro-bias calibration, and prototype complementary
-  roll/pitch estimate
-- PID/feedforward rate controller with quad-X motor mixing
-- Betaflight Quad X logical motor numbering:
-  motor 1 rear-right, motor 2 front-right, motor 3 rear-left, motor 4
-  front-left
-- Board-specific logical-to-physical motor output maps
-- Four-lane synchronized DShot600 as the standard FCU3 motor protocol
-- Explicit four-channel 400 Hz RC PWM fallback build
-- Opt-in, capped FCU3 DShot600 bench backend for equal-motor,
-  logical-motor, and fixed unequal-vector validation
-- Normal PID/mixer output through the fresh, leased, safety-owned DShot path
-- Dedicated bounded ESC-manager queues that request telemetry through the
-  actuator owner rather than gaining direct motor authority
-- Legacy UART ESC telemetry decoding on PA10/USART1 RX in the default DShot
-  image, with fresh eRPM used by the actuator-owned idle-spin arming
-  qualification; inactive in the PWM fallback
-- ADC DMA observation for voltage, current, and internal temperature
-- DJI O4 MSPv1 DisplayPort OSD output
-- Compact BB2 control-loop logging over `defmt-rtt`
-- Opt-in Foxeer onboard SPI-NOR logging and dual-slot persistent tuning storage
-- Python RTT logger, analyzer, and IMU live-view tools
-- Isolated firmware app packages for FCU3, Foxeer F405 V2, and F401 bring-up
+FerroWasp FCU3 remains a supported secondary STM32F405 flight target.
+NUCLEO-F401RE is a non-actuating development target. Additional boards can be
+added to the matrix as their support becomes meaningful.
 
 ## Getting Started
 
-Start with the [Getting Started guide](mdbook/src/getting_started.md). It
-routes Foxeer users to the ready USB workflow and contributors to the separate
-developer setup guide.
+### Users
+
+Use the [User Guide](mdbook/src/user/getting_started.md) to install the packaged
+FerroConfigurator, flash a Foxeer F405 V2 over USB, manage configuration, and
+download flight logs. The packaged workflow does not require a Rust toolchain
+or source checkout.
+
+### Developers
+
+Use the [Developer Setup](mdbook/src/developer_getting_started.md) guide for the
+pinned WSL2/Docker environment, native setup, workspace checks, embedded app
+builds, and documentation workflow.
 
 ## Documentation
 
-The mdBook is the intended public documentation surface:
+The mdBook is the canonical home for user and developer documentation. Its
+maintained [Summary](mdbook/src/SUMMARY.md) is the documentation index; the
+same book is published through GitHub Pages.
 
-- Getting started: [mdbook/src/getting_started.md](mdbook/src/getting_started.md)
-- Developer setup:
-  [mdbook/src/developer_getting_started.md](mdbook/src/developer_getting_started.md)
-- Overview: [mdbook/src/chapter_1.md](mdbook/src/chapter_1.md)
-- Current support matrix: [mdbook/src/current_support.md](mdbook/src/current_support.md)
-- DShot notes: [mdbook/src/dshot.md](mdbook/src/dshot.md)
-- Roadmap: [mdbook/src/roadmap.md](mdbook/src/roadmap.md)
-- RTT/debug tools: [mdbook/src/rtt_debug_tools.md](mdbook/src/rtt_debug_tools.md)
-- Common unpowered verification gate:
-  [TARGET_VERIFICATION.md](TARGET_VERIFICATION.md)
-- Publication checklist:
-  [project_docs/PUBLICATION_CHECKLIST.md](project_docs/PUBLICATION_CHECKLIST.md)
+The root README stays intentionally brief. Internal agent context, retained
+evidence records, and machine-readable test metadata are not user entry points
+and remain outside the public documentation flow.
 
-## Configuration And Tools
+## Configuration and Tools
 
-The Windows-first `ferro-configurator` under `tools/ferro-configurator` is the
-preferred Foxeer USB interface. It uses the bounded ASCII storage endpoint in
-the normal `flash_blackbox` flight image and supports manifest-verified ROM-DFU
-flashing, all whitelisted parameters, per-drone profiles, selective resumable
-flight downloads, confirmed erase, and native FWBB-to-ULog conversion.
-
-The Foxeer app retains an opt-in native MSPv2 endpoint for development, but it
-is not required or enabled by the ready flight image.
-
-Current bring-up and debug workflows are repository-local:
-
-- `tools/README.md` for host and remote debug tooling
-- `tools/ferro-configurator/README.md` for configurator development
-- `docs/FOXEER_F405_V2_QUICK_START.md` for the current Foxeer USB quick start
-- `tools/blackbox_analyzer.py` for compact BB2 log analysis
-- `tools/ferrowasp_storage.py` for Foxeer onboard logs and whitelisted settings
-- `tools/imu_live_view.py` for live IMU/control observation
-- `apps/foxeer-f405-v2/README.md` for the `mspv2_configurator` build contract
-
-Telemetry and configuration interfaces are intentionally limited at this stage.
-USB, OSD, logging, and analyzer paths must not gain motor authority or change
-safety state.
-
-## Motor Numbering And Safety
-
-Shared flight logic uses Betaflight Quad X logical motor numbering:
-
-| Logical motor | Corner |
-|---:|---|
-| 1 | Rear-right |
-| 2 | Front-right |
-| 3 | Rear-left |
-| 4 | Front-left |
-
-Each board profile maps those logical motors to physical output pads. Re-test
-motor order, motor direction, and stick/tilt response with propellers removed
-before any flight on every actuator-capable board, including FCU3 after mapping
-changes, Foxeer before its first flight, and any future
-actuator-capable target. The F401 bring-up board declares no actuator outputs.
-
-Important rule for contributors: do not add a path that can command motors
-outside the safety/actuator-output path.
-
-Arming now requires a supported IMU that has produced data, completed startup
-gyro-bias calibration, and remains fresh. The same health guard is rechecked
-during actuator preparation. This is implemented in both FCU3 and Foxeer app
-shells; negative target fault-injection evidence remains a follow-up.
-
-## Roadmap
-
-Near-term FCU work:
-
-- complete the remaining visibility-dependent launch checks and publish the
-  prepared sanitized `main` baseline
-- increment pitch P cautiously while checking commanded-rate tracking and
-  mixer headroom
-- pass the Foxeer corrective props-off pitch-opposition gate and repeat the
-  controlled-field first hop with a new retained image
-- maintain and CI-check the pinned WSL 2/Docker reference development
-  environment
-- preserve the target-validated arming, disarm, RC-loss, and actuator-gating
-  behavior
-- target-validate stale motor-command rejection and add an independent actuator
-  deadline watchdog
-- target-validate the healthy/calibrated/fresh IMU pre-arm prerequisite and
-  complete ADC/OSD freshness handling
-- capture more short flight and characterization logs
-- validate DShot timing and synchronization with a logic analyzer
-- add CRSF/ELRS after the SBUS/F405 path is stable
-
-Longer-term direction:
-
-- cleaner board profiles and generated task/resource policy checks
-- STM32H7 reference target
-- BMI088 support and deeper ICM42688-P validation
-- target-validate and harden the new Foxeer persistent blackbox/config path
-- SIL/HIL tests, fault-injection tests, timing reports, and traceability
+[FerroConfigurator](mdbook/src/user/ferro_configurator.md) is the primary
+Foxeer companion application. It provides guided USB flashing, safe parameter
+management, selective blackbox downloads, and FWBB-to-ULog conversion. See the
+mdBook for usage and development details.
 
 ## Support
 
-Issues, bug reports, bench-test notes, hardware observations, and design
-feedback are welcome.
-
-Report security-sensitive findings through the private process in
-[SECURITY.md](SECURITY.md), not through a detailed public issue.
-
-For current implementation state, start with:
-
-- [project_docs/CODEX_PROJECT_CONTEXT.md](project_docs/CODEX_PROJECT_CONTEXT.md)
-- [project_docs/CODEX_ACTIVE_WORK.md](project_docs/CODEX_ACTIVE_WORK.md)
-- [project_docs/testing/README.md](project_docs/testing/README.md)
+Issues, hardware observations, and focused design feedback are welcome through
+[GitHub Issues](https://github.com/Eirik2020/ferro-wasp/issues). Report
+security-sensitive findings privately as described in [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
-Code, documentation, test notes, and careful issue reports are welcome under the
-Apache-2.0 contribution terms described in [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Developer Setup](mdbook/src/developer_getting_started.md) guide.
 
-For safety-relevant changes, include the reason, test evidence where feasible,
-and any remaining bench or target-validation gaps. Do not claim SIL, DAL,
-DO-178C, airworthiness, or production safety for this prototype.
-
-## Hardware
-
-FerroWasp FCU3 is the current flight-tested baseline. Foxeer F405 V2 is a WIP
-flight candidate with default DShot600, target-verified motor/RC/IMU/eRPM and
-blackbox paths, and runtime IMU pre-arm checks. Its first-hop pitch-polarity
-failure is corrected and the repeated props-off opposition gate passed; a clean
-logged image is programmed, and a conservative hop remains before flight
-validation.
-NUCLEO-F401RE is a dev-board scheduler and USART-heartbeat target with no
-actuator outputs.
-
-If hardware behaves unexpectedly, stop testing and inspect the board, wiring,
-ESCs, and motors. Propellers must be removed for motor-order, motor-direction,
-waveform, arming, and actuator bench tests.
-
-## Releases
-
-There is no stable FerroWasp release yet. Treat this repository as prototype
-source and evidence, not as a released flight stack.
-
-## Open Source
+## Licence
 
 FerroWasp is licensed under the Apache License, Version 2.0. See
-[LICENSE.md](LICENSE.md).
-
-See also [DISCLAIMER.md](DISCLAIMER.md), [NOTICE.md](NOTICE.md),
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[LICENSE.md](LICENSE.md), [NOTICE.md](NOTICE.md), and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

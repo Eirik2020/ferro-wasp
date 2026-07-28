@@ -12,7 +12,7 @@ Use these sources for current work:
 - `README.md` and `TEST_CATALOG.json` for test selection and prerequisites;
 - `targets/fcu3.md` for the current FCU3 operator procedure;
 - `targets/foxeer-f405-v2.md` for the current Foxeer F405 V2 procedure;
-- `../../docs/FOXEER_F405_V2_QUICK_START.md` for the current USB field
+- `../../mdbook/src/user/foxeer_f405_v2.md` for the current USB field
   cheatsheet.
 
 Current code, manifests, features, and tests outrank historical prose. An

@@ -1,7 +1,7 @@
 # Internal Development Backlog
 
 This is maintainer/session backlog material. Public roadmap-level items should
-be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
+be reflected in `mdbook/src/roadmap.md``.
 
 ## MVP Focus
 - Narrow scope to a simple MVP that flies.
@@ -17,6 +17,34 @@ be reflected in `mdbook/src/roadmap.md` or `mdbook/src/mvp_next.md`.
 3. Validate the checked-in WSL 2/Docker reference environment on Docker
    Desktop and keep its pinned tool versions aligned with CI.
 4. Resume FCU3 tuning with the isolated pitch P `0.25 -> 0.30` experiment.
+
+## Development Environment TODO
+
+- [ ] Fix nested user-namespace support in the WSL2/Docker development
+  container. The current environment runs with seccomp filtering enabled and
+  no effective capabilities; `unshare --user --map-root-user true` fails with
+  `Operation not permitted` even though `/proc/sys/user/max_user_namespaces` is
+  nonzero. This prevents the Bubblewrap-backed patch helper from starting.
+- [ ] Determine the least-privilege container policy required by Bubblewrap.
+  Use `--security-opt=seccomp=unconfined` only as a diagnostic baseline, then
+  prefer a reviewed custom seccomp profile that permits the required namespace
+  operations. Do not make `--privileged` the normal development configuration.
+- [ ] Apply the selected policy consistently in `compose.yaml` and the VS Code
+  dev-container launch configuration, then recreate the container; the running
+  container cannot loosen its own seccomp policy.
+- [ ] Add the packages needed for direct diagnosis and reproducibility inside
+  the reference image, including Bubblewrap and the tools providing `sysctl`
+  and `unshare`, if the final workflow depends on them.
+- [ ] Add a bounded environment check that requires
+  `unshare --user --map-root-user true` to succeed and, when Bubblewrap is
+  installed, runs a minimal no-write Bubblewrap smoke test. Exercise the same
+  check on Docker Desktop with WSL2 and in the development-environment CI job.
+- [ ] Verify that the normal patch helper works after container recreation.
+  Repository-scoped escalated Perl edits are a temporary workaround, not proof
+  that the sandbox is healthy.
+- [ ] Document recovery steps: update WSL, run `wsl --shutdown`, rebuild the
+  image without cache when required, recreate the dev container, and rerun the
+  namespace/environment checks.
 
 ## Recently Closed
 

@@ -1,32 +1,15 @@
 # Getting Started
 
-Choose the path that matches what you want to do.
+Choose the guide that matches how you want to use FerroWasp.
 
-## Use FerroWasp on a Foxeer F405 V2
+## For Users
 
-Follow the
-[Foxeer F405 V2 USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md).
-It uses a ready Windows package to:
+The [User Guide](user/getting_started.md) covers the packaged Foxeer F405 V2
+workflow: USB flashing, configuration, blackbox downloads, and log conversion.
+It does not require a source checkout or Rust toolchain.
 
-- validate and flash the included firmware over STM32 ROM DFU;
-- inspect and change disarmed flight parameters;
-- selectively download onboard flight logs;
-- convert retained FWBB logs to ULog for PlotJuggler.
+## For Developers
 
-This path does not require a source checkout, Rust, Python,
-STM32CubeProgrammer, or an SWD debugger.
-
-FerroWasp is experimental flight-control firmware. Read the safety warnings,
-remove every propeller before USB or motor bench work, and repeat the specified
-props-off checks after firmware, configuration, wiring, or actuator changes.
-
-## Develop or contribute to FerroWasp
-
-Use the separate
-[Developer Getting Started](developer_getting_started.md) guide. It covers the
-source checkout, pinned Rust environment, repository checks, isolated firmware
-apps, documentation build, and local FerroConfigurator release packaging.
-
-Before contributing, also read [CONTRIBUTING.md](../../CONTRIBUTING.md) and the
-repository instructions that apply to the files being changed.
-
+The [Developer Setup](developer_getting_started.md) covers the reference
+environment, workspace checks, isolated embedded applications, hardware-aware
+workflows, documentation builds, and contribution setup.

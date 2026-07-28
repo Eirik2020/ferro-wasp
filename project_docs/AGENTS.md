@@ -5,6 +5,11 @@ root rules.
 
 ## Routing and authority
 
+Public user and developer documentation belongs under `mdbook/src/`. Keep
+`project_docs/` limited to agent context, test/evidence metadata, decision
+provenance, internal work tracking, and archives. Do not add a public guide or
+competing feature summary here.
+
 Read `README.md` first. It defines authority order, task routing, lifecycle,
 and context policy. `DOCUMENT_REGISTRY.json` is the machine-readable inventory.
 Do not load every project document for a localized task.

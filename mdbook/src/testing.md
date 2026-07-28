@@ -1,37 +1,53 @@
 # Testing
 
-FerroWasp testing is staged: static checks, props-off bench checks, then one
-bounded flight change at a time. The user operates powered hardware. Stop on
-any unexpected motor response, oscillation, heat, smoke, loss of RC/video, or
+FerroWasp verification is staged so a successful software check is never
+mistaken for target or flight evidence.
+
+## Software Checks
+
+From the repository root, contributors normally run:
+
+```text
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo check --workspace --locked
+cargo test --workspace --locked
+python -m unittest discover -s tools/tests -v
+python tools/check_repository_context.py
+mdbook build mdbook
+```
+
+Embedded applications are isolated Cargo workspaces. Check the selected app
+from its own directory with the exact board features being reviewed. A build
+proves source compatibility only; it does not prove pin routing, timing,
+sensor orientation, or actuator behavior.
+
+## Target Verification
+
+Hardware work progresses through explicit gates:
+
+1. unpowered boot and idle observation;
+2. unpowered peripheral and signal checks;
+3. powered props-off actuator checks;
+4. injected fault and recovery checks;
+5. bounded flight changes after the earlier gates pass.
+
+Record the board, source revision, firmware hash, features, configuration,
+power state, procedure, observations, and unresolved limitations. Stop on any
+unexpected motor response, oscillation, heat, smoke, loss of RC or video, or
 loss of confidence.
 
-## Operator guides
+The user operates powered hardware and decides when to advance between gates.
+A result applies only to the recorded image, hardware, configuration, and
+airframe.
 
-- [Foxeer F405 V2 USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md) covers ROM-DFU
-  release flashing, disarmed parameter changes, selective blackbox download,
-  analysis, and ULog conversion.
-- Published configurator ZIPs are attached to
-  [GitHub Releases](https://github.com/Eirik2020/ferro-wasp/releases). Local
-  packaging writes generated ZIPs under
-  [`tools/ferro-configurator/dist`](../../tools/ferro-configurator/dist/);
-  that Git-ignored folder exists only after the package script runs.
-- The repository test catalog is in `project_docs/testing/README.md`.
-- The current board-specific procedure is in
-  `project_docs/testing/targets/foxeer-f405-v2.md`.
+## Foxeer User Workflow
 
-The Quick Start is an operating guide, not flight authorization. A newly built
-image still requires checks proportional to its changes, and hardware,
-configuration, wiring, or airframe changes can invalidate prior evidence.
+The [Foxeer F405 V2 guide](user/foxeer_f405_v2.md) covers release-image
+validation, USB DFU flashing, disarmed configuration changes, blackbox
+download, and post-change props-off checks. It is an operating guide, not
+flight authorization.
 
-## Current Foxeer flight status
-
-The current experimental P-only baseline is roll/pitch/yaw
-`2.5 / 2.5 / 2.0`, with all I and D gains zero. The operator has classified
-this setup as flyable in a confined area, but not well tuned. Verify the
-persisted configuration before every later session and change only one tuning
-variable at a time.
-
-Before flight, power the FCU and ESCs together from the flight battery, keep
-the aircraft still through gyro calibration, and complete the active preflight
-procedure. After landing, disarm and wait at least two seconds for the final
-blackbox page before removing power.
+Machine-enforced test selection, retained run evidence, and historical
+engineering records are maintained as internal repository metadata rather
+than duplicated in the public documentation.

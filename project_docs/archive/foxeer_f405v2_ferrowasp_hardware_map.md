@@ -1,5 +1,8 @@
 # FOXEER F405 V2 Hardware Map for FerroWasp
 
+> Historical research baseline. Current supported behavior lives in
+> `mdbook/src/current_support.md`; current board facts live with the Foxeer app.
+
 **Purpose:** Reverse-engineered board support reference for implementing the FOXEER F405 V2 flight controller in a Rust/RTIC FerroWasp target.
 
 **Board target:** `FOXEERF405V2`  

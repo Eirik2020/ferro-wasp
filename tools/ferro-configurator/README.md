@@ -5,7 +5,7 @@ It is maintained in this repository as an isolated Rust workspace so host
 serial and DFU dependencies remain separate from the embedded Cargo workspace.
 
 End users should follow the
-[Foxeer F405 V2 USB Quick Start](../../docs/FOXEER_F405_V2_QUICK_START.md) and
+[Foxeer F405 V2 USB Quick Start](../../mdbook/src/user/foxeer_f405_v2.md) and
 download the ready Windows package from
 [GitHub Releases](https://github.com/Eirik2020/ferro-wasp/releases). They do
 not need a source checkout, Rust, Python, STM32CubeProgrammer, or an SWD

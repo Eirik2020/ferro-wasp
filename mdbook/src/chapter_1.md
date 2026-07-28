@@ -1,80 +1,25 @@
 # FerroWasp
 
-FerroWasp is a Rust/RTIC flight-control firmware prototype for multicopter UAVs.
+FerroWasp is a safety-focused Rust/RTIC flight-controller firmware project for
+multicopter UAVs. It favors explicit resource ownership, deterministic
+scheduling, bounded interfaces, and a small codebase that can be inspected as
+a whole.
 
-FerroWasp is open source under the Apache License, Version 2.0. See
-[Publication and Licence Status](./publication_status.md).
+The Foxeer F405 V2 is the golden flight target. FerroWasp FCU3 remains a
+supported secondary flight target, while NUCLEO-F401RE provides a
+non-actuating STM32F4 development target. See [Current Support](current_support.md)
+for the board and feature matrix.
 
-The project is currently in a rapid-prototyping phase. The immediate goal is
-to learn quickly on real STM32F4-class hardware while keeping motor authority,
-failure behavior, and test evidence explicit.
+## Where to Begin
 
-FerroWasp is not trying to clone PX4, ArduPilot, or Betaflight. The current
-repository is about making one demonstrator honest, observable, and auditable.
+- To install and operate a packaged Foxeer image, use the
+  [User Guide](user/getting_started.md).
+- To build, test, or contribute from source, use the
+  [Developer Setup](developer_getting_started.md).
+- To understand the current implementation, browse the flight-controller,
+  interface, and development chapters in the [Summary](SUMMARY.md).
 
-## Current Prototype Shape
-
-The repository contains reusable crates and three isolated RTIC application
-graphs: the flight-tested FerroWasp FCU3 prototype, an arming-inhibited Foxeer
-F405 V2 bring-up target, and a non-actuating NUCLEO-F401RE bring-up target.
-
-Supported today:
-
-- SBUS RC input over owned USART2 DMA buffers
-- MPU6500 and ICM42688-P drivers with a bounded SPI1 DMA sample path
-- FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling with a
-  400 Hz control update
-- simple rate controller and quad mixer
-- standard four-lane DShot600 output on FCU3 and Foxeer
-- safety-owned DShot output, command freshness checks, leases, and fault
-  containment
-- guarded arming that qualifies fresh idle eRPM from all four ESCs before the
-  system becomes armed
-- BLHeli legacy ESC telemetry on PA10 / USART1 RX, parsed and associated
-  by a low-priority ESC manager
-- ADC DMA for temperature/voltage measurement
-- DJI O4 MSPv1 OSD over UART4
-- standard Foxeer USB CDC status and onboard flash blackbox/config access
-- `defmt`/RTT and compact BB2 control-loop logging
-
-FCU3 has completed the recorded DShot bench gates and an operator-reported
-controlled outdoor flight. The flight supported strong manoeuvres and did not
-show the earlier yawing; pitch authority remains a tuning item. This is useful
-prototype evidence, not an airworthiness or production-readiness claim.
-
-See [Current Support](./current_support.md) for the detailed support matrix.
-
-## Safety and Release Status
-
-FerroWasp is experimental flight-control software. It is not certified, airworthy,
-qualified, assured, validated, production-ready, or suitable for operational,
-safety-critical use.
-
-The current public release posture is:
-
-- open source under Apache-2.0
-- focused external contributions are welcome
-- no operational, safety-critical, production, certification, or airworthiness claims
-
-## Core Safety Boundary
-
-The most important design rule is:
-
-```text
-Outer layers may request actuation, but only the safety/actuator-output path may command motor hardware.
-```
-
-In practical terms:
-
-- RC input parses pilot intent.
-- The safety master decides whether arming is allowed.
-- The control loop computes requested motor outputs.
-- The actuator-output task owns motor peripherals and applies the final gate.
-- Telemetry, USB, configurators, experiments, and labs code must never directly command motors.
-
-This boundary matters even during rapid prototyping. The process can stay lightweight, but motor authority should stay boring and explicit.
-
-## Prototype Data Flow
+## Runtime Shape
 
 ```mermaid
 flowchart LR
@@ -83,9 +28,9 @@ flowchart LR
     safety[Safety Master]
     control[400 Hz<br/>Control Loop]
     escmgr[ESC Manager<br/>legacy telemetry]
-    actuator[Actuator Output<br/>DShot600 default]
+    actuator[Actuator Output<br/>DShot600]
     motors[ESCs / Motors]
-    debug[defmt / BB2 / USB status]
+    debug[RTT / blackbox / USB]
 
     rc --> safety
     rc --> control
@@ -96,31 +41,12 @@ flowchart LR
     actuator --> motors
     escmgr -->|bounded request| actuator
     actuator -->|started-frame ack| escmgr
-    motors -->|PA10 UART telemetry| escmgr
+    motors -->|UART telemetry| escmgr
     control --> debug
     safety --> debug
 ```
 
-## SPI Bring-Up Example
-
-```mermaid
-sequenceDiagram
-    participant MCU
-    participant SPI
-    participant DEV as SPI Device
-
-    MCU->>DEV: RESET low
-    MCU->>DEV: RESET high
-    MCU->>SPI: Configure mode, clock, bit order
-    MCU->>DEV: CS low
-    MCU->>SPI: Write config register 1
-    SPI->>DEV: Command + data
-    MCU->>SPI: Write config register 2
-    SPI->>DEV: Command + data
-    MCU->>DEV: CS high
-    MCU->>DEV: CS low
-    MCU->>SPI: Read device ID / status
-    SPI->>DEV: Read command
-    DEV-->>SPI: ID / status
-    MCU->>DEV: CS high
-```
+FerroWasp is open source under the Apache License, Version 2.0. The firmware is
+experimental and is not a stable or production flight stack. See
+[Publication and Licence](publication_status.md) for the complete status and
+disclaimer links.

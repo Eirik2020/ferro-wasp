@@ -24,9 +24,9 @@ the current `ferrowasp-v*-windows-x86_64.zip` release and extract the complete
 folder. Do not run the executable from inside the ZIP.
 
 Developers building local packages or selecting their own ELF should use the
-[Developer Getting Started](../mdbook/src/developer_getting_started.md) guide.
+[Developer Getting Started](../developer_getting_started.md) guide.
 It documents the generated
-[`tools/ferro-configurator/dist`](../tools/ferro-configurator/dist/) directory,
+`tools/ferro-configurator/dist` directory,
 which is intentionally absent from a fresh checkout.
 
 The folder contains the configurator, the reviewed DFU utility and licenses,

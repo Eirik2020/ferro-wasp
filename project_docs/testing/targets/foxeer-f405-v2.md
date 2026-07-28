@@ -2,7 +2,7 @@
 
 This is the current operator procedure for the Foxeer F405 V2 flight app.
 Historical measurements and dated passes are routed through
-`../EVIDENCE_INDEX.md`; `../../../docs/FOXEER_F405_V2_QUICK_START.md`
+`../EVIDENCE_INDEX.md`; `../../../mdbook/src/user/foxeer_f405_v2.md`
 retains the public USB field cheatsheet. Historical evidence is not a substitute for running
 the gates below on the proposed image.
 
