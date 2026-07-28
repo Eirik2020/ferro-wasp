@@ -25,17 +25,16 @@ Supported today:
 - FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling with a
   400 Hz control update
 - simple rate controller and quad mixer
-- default four-lane DShot600 output on FCU3, with explicit RC PWM fallback
+- standard four-lane DShot600 output on FCU3 and Foxeer
 - safety-owned DShot output, command freshness checks, leases, and fault
   containment
 - guarded arming that qualifies fresh idle eRPM from all four ESCs before the
   system becomes armed
-- BLHeli legacy ESC telemetry on PA10 / USART1 RX in the default DShot image,
-  parsed and associated by a low-priority ESC manager; inactive in the PWM
-  fallback
+- BLHeli legacy ESC telemetry on PA10 / USART1 RX, parsed and associated
+  by a low-priority ESC manager
 - ADC DMA for temperature/voltage measurement
 - DJI O4 MSPv1 OSD over UART4
-- optional Foxeer USB CDC status and staged onboard flash log/config access
+- standard Foxeer USB CDC status and onboard flash blackbox/config access
 - `defmt`/RTT and compact BB2 control-loop logging
 
 FCU3 has completed the recorded DShot bench gates and an operator-reported

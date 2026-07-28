@@ -18,8 +18,7 @@ Use one exact flight candidate and record:
 - commit plus dirty-working-tree identity;
 - release ELF or binary SHA-256;
 - target `foxeer-f405-v2`;
-- the exact feature set, including `board-foxeer-f405-v2`, `dshot`, and
-  `flash_blackbox`;
+- the exact feature set, including `board-foxeer-f405-v2` and any opt-in diagnostic features;
 - propeller and actuator-power state;
 - the complete persisted configuration from `config-show`.
 
@@ -128,7 +127,7 @@ available, and keep an immediate disarm/power-removal path.
 
 1. Confirm the powered image has the same commit, dirty-tree identity, feature
    set, and SHA-256 recorded at the USB gate. Reject bench-only motor selector,
-   smoke lockout, PWM fallback, withdrawn-gain, and pre-fix images.
+   smoke lockout, retired PWM-output, withdrawn-gain, and pre-fix images.
 2. Boot stationary. Require healthy IMU calibration, RC qualification,
    DShot/telemetry status, no panic or latched transport fault, and a disarmed
    state. Verify `config-show` still matches the reviewed baseline and record

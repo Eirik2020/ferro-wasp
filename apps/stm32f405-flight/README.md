@@ -1,12 +1,12 @@
 # STM32F405 Flight App
 
 This is the RTIC 2 flight-runtime contract for STM32F405-class flight
-controllers. It currently selects the FerroWasp FCU3 BSP by default.
+controllers. It currently selects the FerroWasp FCU3 board support by default.
 
 The app shell owns scheduling, priorities, RTIC resources, and task wiring.
-Board pin maps, connected devices, DMA/timer routes, and construction belong
-to `ferrowasp-bsp`. Reusable runtime logic belongs to the crates under
-`../../crates`.
+Board pin maps, connected devices, DMA/timer routes, and construction live in
+`src/board` and are exposed by `src/lib.rs`. Reusable runtime logic belongs to
+the crates under `../../crates`.
 
 The FCU3 safety boundary is unchanged: only the safety-owned actuator
 subsystem may command motor peripherals.
@@ -21,13 +21,9 @@ cd apps/stm32f405-flight
 cargo build --locked
 ```
 
-The default features select `board-ferrowasp-fcu3` and the normal
-controller/mixer over four-lane DShot600. The legacy four-channel PWM backend
-is an explicit fallback:
-
-```powershell
-cargo build --locked --no-default-features --features board-ferrowasp-fcu3
-```
+The board selection enables the normal controller/mixer over four-lane
+DShot600. DShot is the only flight-motor backend; RC PWM remains available in
+shared crates for servo and auxiliary outputs.
 
 Bench and diagnostic features remain available:
 
@@ -43,7 +39,7 @@ synchronized TIM1/TIM8 frame sets. It is the standard FCU3 output backend.
 Build the equal-motor image with:
 
 ```powershell
-cargo build --locked --features "dshot bench_equal_motors"
+cargo build --locked --features "bench_equal_motors"
 ```
 
 The equal-motor RC-loss checkpoint and logical-to-physical identity checks
@@ -51,22 +47,21 @@ passed on FCU3 on 2026-07-18. One capped logical motor can be selected for
 props-off mapping regression:
 
 ```powershell
-cargo build --locked --features "dshot bench_equal_motors bench_logical_motor1_only"
-cargo build --locked --features "dshot bench_equal_motors bench_logical_motor2_only"
-cargo build --locked --features "dshot bench_equal_motors bench_logical_motor3_only"
-cargo build --locked --features "dshot bench_equal_motors bench_logical_motor4_only"
+cargo build --locked --features "bench_equal_motors bench_logical_motor1_only"
+cargo build --locked --features "bench_equal_motors bench_logical_motor2_only"
+cargo build --locked --features "bench_equal_motors bench_logical_motor3_only"
+cargo build --locked --features "bench_equal_motors bench_logical_motor4_only"
 ```
 
 The next staged image applies one fixed unequal four-motor vector without
 enabling the flight mixer:
 
 ```powershell
-cargo build --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+cargo build --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 ```
 
 Select either one logical-motor feature or the unequal-vector feature, never
-both. Physical selected-motor features, multiple logical selections,
-`pwm_cal`, and unequal-vector mode without DShot remain compile-time errors.
+both. Physical selected-motor features and multiple logical selections remain compile-time errors.
 Those capped modes continue to exclude the normal PID/mixer output.
 
 The existing arming, RC-loss, stale-command, and throttle-cap rules still
@@ -79,7 +74,7 @@ every ESC between 3,000 and 10,000 eRPM. Missing/stalled telemetry times out
 after 1.2 seconds; overspeed aborts immediately after the 250 ms spin-up grace.
 Either failure selects four stop values. Only successful qualification is
 reported to the safety master, which performs the final guard check before
-marking the system armed. The legacy PWM arming timing is unchanged.
+marking the system armed.
 
 Only the dedicated service starts DMA frame sets, preserving the fixed 500 Hz
 cadence. All four motors receive the same command in the base equal-motor
@@ -95,11 +90,6 @@ four-lane DShot owner:
 ```powershell
 cargo build --release --locked
 ```
-
-The old `dshot_mixed_control` feature remains as a compatibility alias for
-existing scripts. When named explicitly, it cannot be combined with
-equal-motor, selected-motor, unequal-vector, stale-command, SPI-timeout, or
-PWM-calibration features.
 
 The candidate uses the normal 400 Hz controller path:
 
@@ -117,7 +107,7 @@ Startup must identify it with:
 DShot600 standard motor output active
 ```
 
-The default image also enables read-only BLHeli legacy telemetry on PA10
+The standard image also runs read-only BLHeli legacy telemetry on PA10
 (USART1 RX, 115200 baud). A low-priority ESC manager owns parsing, per-ESC
 state, request cadence, response association, and timeouts. It passes typed
 operations to the DShot actuator owner through a bounded SPSC queue; a second
@@ -160,7 +150,7 @@ cargo embed
 For the four-motor DShot bench image:
 
 ```powershell
-cargo embed --release --features "dshot bench_equal_motors"
+cargo embed --release --features "bench_equal_motors"
 ```
 
 For standard mixed-control DShot:
@@ -174,7 +164,7 @@ the repository root. It builds, flashes, displays decoded RTT, and writes to
 `logs\terminal_embed`:
 
 ```powershell
-python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors"
+python tools\terminal_embed.py --release --locked --features "bench_equal_motors"
 ```
 
 Start with propellers removed and ESC power disconnected. Confirm advancing

@@ -264,7 +264,6 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-io-async",
- "ferrowasp-bsp",
  "ferrowasp-core",
  "ferrowasp-drivers",
  "ferrowasp-io-core",
@@ -276,24 +275,10 @@ dependencies = [
  "heapless 0.9.2",
  "nb 1.1.0",
  "panic-probe",
- "rc-pwm",
  "rtic",
  "rtic-monotonics",
  "sbus-rs",
  "stm32f4xx-hal",
- "usb-device",
- "usbd-serial",
-]
-
-[[package]]
-name = "ferrowasp-bsp"
-version = "0.1.0"
-dependencies = [
- "ferrowasp-core",
- "ferrowasp-drivers",
- "ferrowasp-io-core",
- "ferrowasp-mspv1",
- "ferrowasp-stm32f4",
 ]
 
 [[package]]
@@ -335,12 +320,16 @@ version = "0.1.0"
 name = "ferrowasp-stm32f4"
 version = "0.1.0"
 dependencies = [
+ "cortex-m",
+ "defmt 1.0.1",
  "embedded-hal 1.0.0",
  "ferrowasp-io-core",
  "ferrowasp-waveform",
  "heapless 0.9.2",
  "rc-pwm",
  "stm32f4xx-hal",
+ "usb-device",
+ "usbd-serial",
 ]
 
 [[package]]

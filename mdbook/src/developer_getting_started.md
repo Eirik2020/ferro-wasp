@@ -183,8 +183,8 @@ are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:
 
 ```text
-apps/stm32f405-flight  FerroWasp FCU3 flight app and behavioral reference
-apps/foxeer-f405-v2    Foxeer F405 V2 flight app
+apps/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
+apps/stm32f405-flight  FerroWasp FCU3 secondary flight app
 apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 ```
 
@@ -194,19 +194,19 @@ another board.
 
 ## Build the flight applications
 
-FCU3 is the golden flight app for established runtime and safety behavior:
+Foxeer is the golden flight app for established runtime and safety behavior:
+
+```powershell
+Set-Location apps\foxeer-f405-v2
+cargo build --release --locked
+Set-Location ..\..
+```
+
+Check the FCU3 secondary app independently:
 
 ```powershell
 Set-Location apps\stm32f405-flight
 cargo check --release --locked
-Set-Location ..\..
-```
-
-Build the normal Foxeer image with onboard configuration and blackbox support:
-
-```powershell
-Set-Location apps\foxeer-f405-v2
-cargo build --release --locked --features flash_blackbox
 Set-Location ..\..
 ```
 
@@ -220,9 +220,9 @@ Prefer `cargo check` when target programming is not part of the task. Do not
 assume a debugger, MCU, receiver, ESC power, or safe motor bench is available.
 Hardware execution and powered tests are separate, user-controlled gates.
 
-Before implementing or bench-testing a Foxeer feature, compare the affected
-behavior and enabled features with the current FCU3 app. Board-specific
-hardware differences remain explicit exceptions, not copied assumptions.
+Before implementing or bench-testing a secondary-board feature, compare the
+affected behavior and enabled features with the current Foxeer app.
+Board-specific hardware differences remain explicit, not copied assumptions.
 
 ## SWD, RTT, and developer DFU
 
@@ -233,7 +233,6 @@ build, program, and retain an RTT transcript:
 python tools\terminal_embed.py --board foxeer-f405-v2 `
   --release `
   --locked `
-  --features flash_blackbox `
   --probe-speed-khz 1800 `
   --connect-under-reset
 ```
@@ -261,7 +260,7 @@ cargo build --release --locked -p ferro-configurator-cli
 
 The Rust workspace can be checked in the Linux container. Windows package
 assembly remains a Windows-host or CI operation. Build the exact Foxeer
-`flash_blackbox` image before assembling a local Windows package, then run
+standard Foxeer image before assembling a local Windows package, then run
 this from PowerShell:
 
 ```powershell

@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/ferrowasp-actuator",
-    "crates/ferrowasp-bsp",
     "crates/ferrowasp-core",
     "crates/ferrowasp-drivers",
     "crates/ferrowasp-io-core",

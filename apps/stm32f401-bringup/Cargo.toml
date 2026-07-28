@@ -17,14 +17,14 @@ bench = false
 
 [features]
 default = ["board-nucleo-f401re"]
-board-nucleo-f401re = ["ferrowasp-bsp/nucleo-f401re"]
+board-nucleo-f401re = ["ferrowasp-stm32f4/stm32f401"]
 
 [dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.5"
 defmt = "1.0.1"
 defmt-rtt = { version = "1.2.0", features = ["disable-blocking-mode"] }
-ferrowasp-bsp = { path = "../../crates/ferrowasp-bsp", default-features = false }
+ferrowasp-stm32f4 = { path = "../../crates/ferrowasp-stm32f4", features = ["stm32f401"] }
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 rtic = { version = "2.2.0", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick"] }

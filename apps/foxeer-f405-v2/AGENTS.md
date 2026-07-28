@@ -1,8 +1,8 @@
 # Foxeer F405 V2 Application Instructions
 
 These instructions apply with `../AGENTS.md` and the repository root rules.
-This is a secondary flight app; the current FCU3 app remains the behavioral
-reference.
+This is the golden flight app and the behavioral reference for the other
+flight applications.
 
 ## Context and authority
 
@@ -10,7 +10,7 @@ Before Foxeer runtime, motor, configuration, logging, or test work, read:
 
 - `README.md` and `Cargo.toml`;
 - `../../project_docs/CODEX_ACTIVE_WORK.md`;
-- the current FCU3 implementation for the affected behavior;
+- the current Foxeer implementation and relevant retained FCU3 evidence;
 - `../../project_docs/testing/targets/foxeer-f405-v2.md` when selecting target
   testing.
 
@@ -22,8 +22,9 @@ current configuration.
 
 - Do not transplant FCU3 pins, timers, DMA streams, IMU orientation, motor
   output mapping, electrical assumptions, or storage behavior.
-- Keep Foxeer hardware facts in its BSP and document every intentional
-  divergence from FCU3 behavior.
+- Keep Foxeer hardware facts under `src/board/`; expose composed support through
+  `src/lib.rs`, and document every intentional divergence from FCU3 behavior.
+- Move any mechanism usable by another STM32F4 board to a shared crate.
 - Preserve the explicit physical-body/controller-frame pitch compatibility
   boundary. Do not hide sign changes in an unrelated sensor or mixer layer.
 - The normal digital-motor path uses the reviewed DShot/eRPM-qualified safety
@@ -38,7 +39,7 @@ safety sequence, storage layout, or configuration schema.
 ## Verification
 
 Build with an explicit target and feature set. Before powered work, compare the
-exact image with FCU3 behavior and the Foxeer test catalog chain. Preserve
+exact image with the golden Foxeer contract and its test catalog chain. Preserve
 image/configuration hashes and log identity.
 
 All Foxeer hardware operation is user-executed. Propellers remain removed

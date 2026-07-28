@@ -159,8 +159,7 @@
           "tools/ferrowasp_storage.py"
         ],
         "features": [
-          "flash_blackbox",
-          "usb_serial"
+          "board-foxeer-f405-v2"
         ],
         "invocations": [
           "bench",
@@ -199,7 +198,7 @@
       "triggers": {
         "paths": [
           "apps/stm32f405-flight/",
-          "crates/ferrowasp-bsp/src/stm32f4/ferrowasp_fcu3/",
+          "apps/stm32f405-flight/src/board/",
           "crates/ferrowasp-stm32f4/src/dshot.rs"
         ],
         "features": [
@@ -243,11 +242,10 @@
       "triggers": {
         "paths": [
           "apps/foxeer-f405-v2/",
-          "crates/ferrowasp-bsp/src/stm32f4/foxeer_f405_v2/"
+          "apps/foxeer-f405-v2/src/board/"
         ],
         "features": [
-          "dshot",
-          "flash_blackbox"
+          "board-foxeer-f405-v2"
         ],
         "invocations": [
           "bench",
@@ -331,8 +329,7 @@
           "crates/"
         ],
         "features": [
-          "dshot",
-          "flash_blackbox"
+          "board-foxeer-f405-v2"
         ],
         "invocations": [
           "preflight",
@@ -416,8 +413,7 @@
           "crates/"
         ],
         "features": [
-          "dshot",
-          "flash_blackbox"
+          "board-foxeer-f405-v2"
         ],
         "invocations": [
           "flight"

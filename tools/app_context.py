@@ -34,11 +34,12 @@ class RouteError(RuntimeError):
 class AppTarget:
     name: str
     source: PurePosixPath
+    support: PurePosixPath
     readme: PurePosixPath
     cargo_toml: PurePosixPath
     instructions: tuple[PurePosixPath, ...]
     test_chain: tuple[str, ...]
-    bsp_directory: PurePosixPath
+    board_directory: PurePosixPath
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ APP_TARGETS = {
     "fcu3": AppTarget(
         name="fcu3",
         source=PurePosixPath("apps/stm32f405-flight/src/main.rs"),
+        support=PurePosixPath("apps/stm32f405-flight/src/lib.rs"),
         readme=PurePosixPath("apps/stm32f405-flight/README.md"),
         cargo_toml=PurePosixPath("apps/stm32f405-flight/Cargo.toml"),
         instructions=(PurePosixPath("AGENTS.md"), PurePosixPath("apps/AGENTS.md")),
@@ -86,13 +88,14 @@ APP_TARGETS = {
             "PREFLIGHT-FCU3-001",
             "FLIGHT-FCU3-001",
         ),
-        bsp_directory=PurePosixPath(
-            "crates/ferrowasp-bsp/src/stm32f4/ferrowasp_fcu3"
+        board_directory=PurePosixPath(
+            "apps/stm32f405-flight/src/board"
         ),
     ),
     "foxeer-f405-v2": AppTarget(
         name="foxeer-f405-v2",
         source=PurePosixPath("apps/foxeer-f405-v2/src/main.rs"),
+        support=PurePosixPath("apps/foxeer-f405-v2/src/lib.rs"),
         readme=PurePosixPath("apps/foxeer-f405-v2/README.md"),
         cargo_toml=PurePosixPath("apps/foxeer-f405-v2/Cargo.toml"),
         instructions=(
@@ -109,8 +112,8 @@ APP_TARGETS = {
             "PREFLIGHT-FOX-001",
             "FLIGHT-FOX-001",
         ),
-        bsp_directory=PurePosixPath(
-            "crates/ferrowasp-bsp/src/stm32f4/foxeer_f405_v2"
+        board_directory=PurePosixPath(
+            "apps/foxeer-f405-v2/src/board"
         ),
     ),
 }
@@ -129,11 +132,7 @@ TOPIC_ROUTES = {
     "arming": TopicRoute(
         summary="Safety events, live guards, guarded holds, and actuator handoff.",
         common_symbols=(
-            "warn_arming_abort",
             "safety_master",
-            "validate_live_arming_guard",
-            "current_arming_guard",
-            "wait_arming_hold",
             "actuator_idle_notify",
             "actuator_output",
         ),
@@ -146,11 +145,8 @@ TOPIC_ROUTES = {
     "control": TopicRoute(
         summary="Control-loop scheduling, setpoints, state reset, mixing, and publication.",
         common_symbols=(
-            "motor_command_timestamp",
-            "publish_motor_command",
             "control_loop",
         ),
-        foxeer_symbols=("enqueue_flash_record",),
         companions=(
             PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/drone_toolbox.rs"),
@@ -160,19 +156,14 @@ TOPIC_ROUTES = {
     "actuator": TopicRoute(
         summary="Fresh-command validation, actuator ownership, DShot service, and DMA completion.",
         common_symbols=(
-            "validate_live_arming_guard",
-            "current_arming_guard",
-            "wait_arming_hold",
             "actuator_idle_notify",
             "dshot_service",
             "dshot_motor1_dma_complete",
             "dshot_motor2_dma_complete",
             "dshot_motor3_dma_complete",
             "dshot_motor4_dma_complete",
-            "take_fresh_motor_outputs",
             "actuator_output",
         ),
-        foxeer_symbols=("service_dshot_dma_irq",),
         companions=(
             PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
@@ -183,20 +174,12 @@ TOPIC_ROUTES = {
     "dshot": TopicRoute(
         summary="DShot mapping, qualification fault injection, service, and lane IRQs.",
         common_symbols=(
-            "logical_motor_for_esc_output",
-            "inject_idle_qualification_fault",
             "dshot_service",
             "dshot_motor1_dma_complete",
             "dshot_motor2_dma_complete",
             "dshot_motor3_dma_complete",
             "dshot_motor4_dma_complete",
-            "take_fresh_motor_outputs",
             "actuator_output",
-        ),
-        foxeer_symbols=(
-            "dshot_motor_for_output",
-            "logical_motor_for_physical_index",
-            "service_dshot_dma_irq",
         ),
         companions=(
             PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
@@ -223,14 +206,13 @@ TOPIC_ROUTES = {
         summary="IMU triggering, SPI ownership, DMA completion, timeout, and parsing.",
         common_symbols=(
             "spi1_poll",
-            "pend_spi1_owner",
             "spi1_owner_service",
             "spi1_rx_dma",
             "io_watchdog",
             "spi1_timeout",
             "spi1_parser",
         ),
-        foxeer_symbols=("imu_orientation_snapshot", "imu_data_ready"),
+        foxeer_symbols=("imu_data_ready",),
         companions=(
             PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-drivers/src/mpu6500.rs"),
@@ -241,12 +223,8 @@ TOPIC_ROUTES = {
     "rc": TopicRoute(
         summary="SBUS DMA/peripheral ingress, discontinuity handling, link state, and commands.",
         common_symbols=(
-            "record_uart2_discontinuity",
-            "publish_uart2_owned",
-            "record_uart2_dma_error",
             "usart2_rx_dma_transfer",
             "usart2_rx_peripheral",
-            "neutralize_rc_input",
             "rc_input",
         ),
         companions=(
@@ -259,7 +237,6 @@ TOPIC_ROUTES = {
     "osd": TopicRoute(
         summary="MSP OSD receive, refresh, transmit queue, and DMA completion.",
         common_symbols=(
-            "osd_write",
             "uart4_rx_dma_transfer",
             "uart4_rx_peripheral",
             "osd_refresh",
@@ -283,15 +260,6 @@ TOPIC_ROUTES = {
     "usb": TopicRoute(
         summary="USB task plus Foxeer debug/configurator request handling.",
         common_symbols=("usb_fs",),
-        foxeer_symbols=(
-            "active_usb_debug_imu_kind",
-            "device_uid",
-            "fixed_bytes",
-            "msp_common_info",
-            "rpc_device_info",
-            "stage_rpc_response",
-            "handle_msp_packet",
-        ),
         golden_symbols=("usb_fs", "safety_master", "actuator_output"),
         companions=(
             PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
@@ -303,19 +271,6 @@ TOPIC_ROUTES = {
         summary="Foxeer flash discovery, configuration, blackbox access, and manager state.",
         common_symbols=(),
         foxeer_symbols=(
-            "enqueue_flash_record",
-            "scan_flash_log",
-            "load_flash_config",
-            "queue_storage_response",
-            "queue_rpc_response",
-            "finish_config_rpc_error",
-            "blackbox_flight_id_at",
-            "blackbox_bounds",
-            "blackbox_info",
-            "list_blackboxes",
-            "read_blackbox_chunk",
-            "queue_page_hex",
-            "flash_scratch_test_page",
             "flash_manager_task",
         ),
         golden_symbols=("safety_master", "control_loop", "actuator_output"),
@@ -329,7 +284,7 @@ TOPIC_ROUTES = {
     "logging": TopicRoute(
         summary="Control-record production and Foxeer persisted-log ownership.",
         common_symbols=("control_loop",),
-        foxeer_symbols=("enqueue_flash_record", "flash_manager_task"),
+        foxeer_symbols=("flash_manager_task",),
         golden_symbols=("control_loop", "safety_master", "actuator_output"),
         companions=(
             PurePosixPath("project_docs/CODEX_ACTIVE_WORK.md"),
@@ -542,7 +497,7 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
         "",
         "Required routing files:",
     ]
-    for path in (*target.instructions, target.readme, target.cargo_toml):
+    for path in (*target.instructions, target.readme, target.cargo_toml, target.support):
         lines.append(f"- {path.as_posix()}")
 
     lines.extend(
@@ -561,8 +516,8 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
     lines.extend(_describe_symbol(target.source, symbol) for symbol in primary)
     lines.append(f"Primary routed source: {_selected_bytes(primary)} B")
 
-    if board == "foxeer-f405-v2" and topic_name != "overview":
-        golden_target = APP_TARGETS["fcu3"]
+    if board == "fcu3" and topic_name != "overview":
+        golden_target = APP_TARGETS["foxeer-f405-v2"]
         golden_symbols, _ = discover_symbols(root, golden_target)
         golden_index = _index_symbols(golden_symbols)
         golden_names = (
@@ -573,10 +528,10 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
         golden = _select_symbols(
             golden_index,
             golden_names,
-            label=f"fcu3 golden comparison/{topic_name}",
+            label=f"foxeer golden comparison/{topic_name}",
         )
         if golden:
-            lines.extend(["", "FCU3 golden-app comparison anchors:"])
+            lines.extend(["", "Foxeer golden-app comparison anchors:"])
             lines.extend(
                 _describe_symbol(golden_target.source, symbol) for symbol in golden
             )
@@ -585,7 +540,8 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
     companion_paths = (
         PurePosixPath("project_docs/testing/README.md"),
         PurePosixPath("project_docs/testing/TEST_CATALOG.json"),
-        target.bsp_directory,
+        target.support,
+        target.board_directory,
         *topic.companions,
     )
     lines.extend(["", "Companion context:"])
@@ -647,9 +603,10 @@ def validate_routes(root: Path = REPOSITORY_ROOT) -> list[str]:
     for board, target in APP_TARGETS.items():
         required_paths = (
             target.source,
+            target.support,
             target.readme,
             target.cargo_toml,
-            target.bsp_directory,
+            target.board_directory,
             *target.instructions,
         )
         for path in required_paths:
@@ -708,7 +665,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--board",
         choices=tuple(APP_TARGETS),
         default="fcu3",
-        help="App to route. Foxeer topics include FCU3 golden-app anchors.",
+        help="App to route. FCU3 topics include Foxeer golden-app anchors.",
     )
     parser.add_argument(
         "--topic",

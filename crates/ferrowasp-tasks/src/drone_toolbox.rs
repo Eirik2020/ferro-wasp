@@ -333,20 +333,7 @@ pub fn remap_rc_channels_with_profile(
 }
 
 pub fn remap_motor_outputs(logical: [f32; 4]) -> [f32; 4] {
-    let mut physical = [0.0; 4];
-    let mut logical_index = 0;
-
-    while logical_index < 4 {
-        let physical_output = MOTOR_OUTPUT_MAP[logical_index];
-
-        if (1..=4).contains(&physical_output) {
-            physical[physical_output - 1] = logical[logical_index];
-        }
-
-        logical_index += 1;
-    }
-
-    physical
+    ferrowasp_core::actuator::remap_motor_outputs(logical, MOTOR_OUTPUT_MAP)
 }
 
 pub fn dshot_unequal_bench_motor_outputs(requested_throttle: f32) -> [f32; 4] {
@@ -1011,6 +998,35 @@ impl CompactRateBlackboxSample {
             motors: sample.motors,
         })
     }
+}
+
+#[cfg(feature = "blackbox_defmt")]
+pub fn emit_compact_blackbox(
+    seq: u32,
+    imu_seq: u32,
+    armed: bool,
+    imu_fresh: bool,
+    raw_gyro_dps: [f32; 3],
+    filtered_gyro_dps: [f32; 3],
+    command_dps: [f32; 3],
+    pid: [f32; 3],
+    throttle: f32,
+    motors: [f32; 4],
+) {
+    emit_rate_blackbox(CompactRateBlackboxSample::from_fields(
+        CompactRateBlackboxFields {
+            seq,
+            imu_seq,
+            armed,
+            imu_fresh,
+            raw_gyro_dps,
+            filtered_gyro_dps,
+            command_dps,
+            pid,
+            throttle,
+            motors,
+        },
+    ));
 }
 
 #[cfg(feature = "blackbox_defmt")]

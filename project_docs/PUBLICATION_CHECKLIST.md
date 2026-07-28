@@ -29,7 +29,7 @@ maintainer operations. Do not perform them as an incidental cleanup step.
 
 - [x] All reusable-crate host tests and doc tests pass with `--locked`.
 - [x] Workspace Clippy passes with warnings denied.
-- [x] FCU3 default DShot, explicit PWM fallback, and fault-injection checks
+- [x] FCU3 standard DShot and fault-injection checks
   pass.
 - [x] Foxeer F405 V2 and NUCLEO-F401RE release checks pass.
 - [x] Every isolated firmware package passes its own rustfmt check.

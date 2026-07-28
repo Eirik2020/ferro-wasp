@@ -56,29 +56,26 @@ The active bench target is an STM32F405-class RTIC firmware prototype with:
   control/output update;
 - prototype complementary roll/pitch estimate;
 - rate controller and Quad-X mixer;
-- safety-gated four-lane DShot600 ESC output by default, with an explicit
-  four-channel PWM fallback;
-- PA10 / USART1 legacy BLHeli telemetry in the default DShot image only, with
+- safety-gated four-lane DShot600 ESC output as the standard flight protocol;
+- PA10 / USART1 legacy BLHeli telemetry in flight images, with
   bounded ESC-manager association and actuator-owned idle-eRPM qualification;
 - DJI O4 MSPv1 OSD over UART4;
 - ADC DMA observation for voltage/current/temperature;
 - `defmt`/RTT logging and compact BB2 control-loop frames;
-- optional Foxeer USB CDC status plus staged onboard SPI-NOR log/config access;
+- board-standard Foxeer USB CDC status plus SPI-NOR blackbox/config access;
 - capped FCU3 DShot600 bench modes separate from the default mixed-control
   DShot output.
 
-FerroWasp FCU3 is the validated flight baseline. Foxeer F405 V2 has a separate
-RTIC app and BSP with the same supported flight-service subset, ICM42688-P/EXTI
-sampling, default DShot600/eRPM-qualified arming, and an explicit four-channel
-RC PWM fallback. Its normal flight profile and final normal-mixer/OSD
+Foxeer F405 V2 is the golden behavioral reference. FerroWasp FCU3 retains its
+validated target evidence and has separate RTIC and board-support modules in its isolated app, with the same supported flight-service subset, ICM42688-P/EXTI
+sampling, standard DShot600/eRPM-qualified arming. Its normal flight profile and final normal-mixer/OSD
 props-off handoff passed, but its first prop-on departure exposed positive
 pitch feedback and attempted a forward flip. A physical-body/controller pitch
 compatibility correction is implemented and passed new unpowered-orientation
 and powered normal-mixer props-off checks. The clean logged image is programmed
-and boot-verified; the controlled hop remains. Its base `usb_serial` path
+and boot-verified; the controlled hop remains. Its board-mandatory USB CDC and onboard flash paths
 reports bounded status only.
-Flash-enabled variants
-accept a bounded, whitelisted storage/config command set while disarmed; USB
+The standard Foxeer image accepts a bounded, whitelisted storage/config command set while disarmed; USB
 cannot request arming, alter safety state, or command actuators.
 
 The detailed support matrix lives in:
@@ -193,9 +190,11 @@ a broad refactor before the prototype is stable:
 ferrowasp-core    pure types, units, actuator commands, safety states
 ferrowasp-mcu     chip-family peripheral support
 ferrowasp-drivers IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-bsp     board pin maps, connected devices, DMA/timer assignments
+ferrowasp-stm32f4 reusable STM32F4 mechanisms and configuration types
 ferrowasp-tasks   reusable task logic
-ferrowasp-apps    thin RTIC app shells
+app src/board     board pin maps, connected devices, DMA/timer assignments
+app src/lib.rs    board composition and internal support facade
+app src/main.rs   thin RTIC shell
 ferrowasp-gen     optional manifest/generator layer
 ```
 

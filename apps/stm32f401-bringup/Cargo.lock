@@ -260,28 +260,11 @@ dependencies = [
  "cortex-m-rt",
  "defmt 1.0.1",
  "defmt-rtt",
- "ferrowasp-bsp",
+ "ferrowasp-stm32f4",
  "panic-probe",
  "rtic",
  "rtic-monotonics",
  "stm32f4xx-hal",
-]
-
-[[package]]
-name = "ferrowasp-bsp"
-version = "0.1.0"
-dependencies = [
- "ferrowasp-core",
- "ferrowasp-io-core",
- "stm32f4xx-hal",
-]
-
-[[package]]
-name = "ferrowasp-core"
-version = "0.1.0"
-dependencies = [
- "critical-section",
- "heapless",
 ]
 
 [[package]]
@@ -293,7 +276,22 @@ dependencies = [
  "embedded-hal-async",
  "embedded-io 0.7.1",
  "embedded-io-async",
- "heapless",
+ "heapless 0.9.2",
+]
+
+[[package]]
+name = "ferrowasp-stm32f4"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "defmt 1.0.1",
+ "embedded-hal 1.0.0",
+ "ferrowasp-io-core",
+ "heapless 0.9.2",
+ "rc-pwm",
+ "stm32f4xx-hal",
+ "usb-device",
+ "usbd-serial",
 ]
 
 [[package]]
@@ -359,6 +357,16 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
+name = "heapless"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+dependencies = [
+ "hash32",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "heapless"
@@ -483,6 +491,16 @@ name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+
+[[package]]
+name = "rc-pwm"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "defmt-rtt",
+ "embedded-hal 1.0.0",
+ "nb 1.1.0",
+]
 
 [[package]]
 name = "rtic"
@@ -680,6 +698,28 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "usb-device"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98816b1accafbb09085168b90f27e93d790b4bfa19d883466b5e53315b5f06a6"
+dependencies = [
+ "heapless 0.8.0",
+ "portable-atomic",
+]
+
+[[package]]
+name = "usbd-serial"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065e4eaf93db81d5adac82d9cef8f8da314cb640fa7f89534b972383f1cf80fc"
+dependencies = [
+ "embedded-hal 0.2.7",
+ "embedded-io 0.6.1",
+ "nb 1.1.0",
+ "usb-device",
+]
 
 [[package]]
 name = "vcell"

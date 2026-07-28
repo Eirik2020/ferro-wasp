@@ -13,15 +13,7 @@ use crate::{
 
 const MANIFEST_VERSION: u16 = 1;
 const MANIFEST_RELATIVE_PATH: &str = "firmware/manifest.json";
-const FOXEER_REQUIRED_FEATURES: &[&str] = &[
-    "board-foxeer-f405-v2",
-    "dshot",
-    "esc_telemetry",
-    "flash_storage",
-    "flash_writes",
-    "flash_blackbox",
-    "usb_serial",
-];
+const FOXEER_REQUIRED_FEATURES: &[&str] = &["board-foxeer-f405-v2"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -17,8 +17,8 @@
     },
     {
       "path": "project_docs/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
-      "bytes": 64546,
-      "sha256": "86E29BB3FBE491D99C2AFBD61F360403552F68714C405933BBB9F5300E6F3134"
+      "bytes": 64435,
+      "sha256": "E88DC3F56C7020A3D559A576DD9BB6DC201FCB89D1A916E0E71387E850394B10"
     },
     {
       "path": "project_docs/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
@@ -286,6 +286,13 @@
     },
     {
       "path": "project_docs/decisions/ADR-0034.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_docs/decisions/ADR-0035.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",

@@ -73,7 +73,7 @@ Use `--format json` for machine-readable output.
 
 ## Architecture
 
-The normal Foxeer `flash_blackbox` image exposes a bounded ASCII USB protocol.
+The standard Foxeer image exposes a bounded ASCII USB protocol.
 FerroConfigurator uses that proven contract. The experimental MSPv2 endpoint
 is intentionally not required by this workspace.
 
@@ -107,7 +107,7 @@ Build the exact Foxeer image first:
 
 ```powershell
 Set-Location ..\..\apps\foxeer-f405-v2
-cargo build --release --locked --features flash_blackbox
+cargo build --release --locked
 Set-Location ..\..\tools\ferro-configurator
 ```
 
@@ -134,7 +134,7 @@ Get-ChildItem .\dist
 explorer (Resolve-Path .\dist)
 ```
 
-CI builds the exact `flash_blackbox` image and creates the ready Windows
+CI builds the exact standard Foxeer image and creates the ready Windows
 package for tags or a manual workflow run.
 
 ## Developer ELF override

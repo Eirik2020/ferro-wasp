@@ -79,14 +79,14 @@ their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.
 
 ## Axis And Rate Convention
 
-Raw values remain in sensor-axis order. Each BSP supplies the axis indices and
+Raw values remain in sensor-axis order. Each board support supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.
 
 The Foxeer-only `imu_orientation_rtt` feature adds one low-rate, coherent
 sensor-frame snapshot to the existing heartbeat. It reports acceleration in
 mg, uncorrected gyro in tenths of a degree per second, and temperature in
 tenths of a degree Celsius without changing the USB protocol or taking a
-shared RTIC lock. A second line reports the BSP-mapped drone-frame gravity
+shared RTIC lock. A second line reports the board support-mapped drone-frame gravity
 vector and gyro rates for direct implementation validation:
 
 ```powershell

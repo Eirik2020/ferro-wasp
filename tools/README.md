@@ -26,7 +26,7 @@ python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 
 This builds `apps/foxeer-f405-v2`, flashes its own
 `FerroWaspFoxeerF405V2` ELF through `probe-rs`, and decodes RTT. PA13/SWDIO and
-PA14/SWCLK are reserved by the Foxeer BSP and are not configured as LEDs.
+PA14/SWCLK are reserved by the Foxeer board support and are not configured as LEDs.
 The host prints explicit milestones so a quiet or slow probe cannot be mistaken
 for a stalled command:
 
@@ -63,7 +63,7 @@ Use `--board`, `--release`, `--locked`, and `--features` to build and run a spec
 bench image. For example:
 
 ```powershell
-python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 ```
 
 Expected first useful lines include boot, IMU detection, battery, and heartbeat
@@ -543,30 +543,27 @@ The Python tools below remain lower-level development and analysis references.
 
 `ferrowasp_storage.py` talks to the Foxeer USB CDC storage endpoint. Install
 its only optional host dependency with `python -m pip install pyserial`.
-Start with the read-only `flash_storage` image and identify the actual JEDEC
-device before enabling writes:
+Start with the standard image and identify the actual JEDEC device before any destructive command:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_storage
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 python tools\ferrowasp_storage.py --port COM7 info
 python tools\ferrowasp_storage.py --port COM7 list
 ```
 
 The expected capacity code for 16 MiB is `18`. Do not assume the manufacturer
-or memory-type bytes; record what the fitted device reports. For the first
-destructive verification, build `flash_writes` and test only the permanently
-reserved scratch sector:
+or memory-type bytes; record what the fitted device reports. For the first destructive verification, remain disarmed and test only the permanently reserved scratch sector:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_writes
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 python tools\ferrowasp_storage.py --port COM7 test --confirm
 ```
 
-After `flash_blackbox` has recorded a props-off armed/disarmed session,
+After the standard blackbox service has recorded a props-off armed/disarmed session,
 download its CRC-protected raw pages and analyze them with the existing tool:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_blackbox --probe-speed-khz 1800 --connect-under-reset
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --probe-speed-khz 1800 --connect-under-reset
 python tools\ferrowasp_storage.py --port COM7 list
 python tools\ferrowasp_storage.py --port COM7 erase --confirm
 python tools\ferrowasp_storage.py --port COM7 list
@@ -720,6 +717,11 @@ The repository-wide `python tools\check_repository_context.py` command runs
 the same evidence checks and also validates document registration, immutable
 archives, context budgets, and the ADR index/record relationships. Neither
 command decides that a test passed or that hardware is safe to operate.
+
+The python tools/check_rtic_boundaries.py command enforces the mechanical
+thin-app rules: internal-only RTIC imports, RTIC-only declarations, shared
+board data models, no direct timer-register sequencing in board support, and
+no exact cross-board Rust source copies.
 
 ## Troubleshooting
 

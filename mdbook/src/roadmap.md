@@ -21,11 +21,11 @@ The FCU3 prototype now provides:
 - MPU6500 sampling over the bounded SPI1 DMA transport;
 - FCU3 800 Hz IMU polling or Foxeer PC4/EXTI4 data-ready sampling and a 400 Hz
   rate-control/mixer update;
-- default, safety-owned four-lane DShot600 at 500 frame sets per second;
+- standard, safety-owned four-lane DShot600 at 500 frame sets per second;
 - PA10 / USART1 RX BLHeli legacy telemetry managed outside actuator authority;
 - idle arming qualification using fresh eRPM evidence from all four ESCs;
 - DJI O4 MSP DisplayPort OSD and `defmt`/BB2 logging;
-- an explicit four-channel RC PWM fallback.
+- shared RC PWM infrastructure retained for servo and auxiliary outputs.
 
 The recorded props-off gates cover motor identity and direction, mixed-command
 signs, motion-opposing correction, telemetry, qualified arming, injected
@@ -72,7 +72,7 @@ The next hardware sequence is:
 3. Identify the SPI2 NOR, pass the isolated scratch-sector self-test, and
    validate persistent config/log recovery plus control-loop timing.
 4. Calibrate ADC voltage/current scaling.
-5. Measure all four PWM outputs, including TIM1_CH3N polarity on M4.
+5. Measure all four DShot outputs, including TIM1_CH3N polarity on M4.
 6. With propellers removed, verify logical motor order, rotation direction,
    stick response, and motion-opposing correction.
 7. Review the evidence before removing the board-specific arming inhibit.

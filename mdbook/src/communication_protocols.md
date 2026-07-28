@@ -8,7 +8,7 @@ FerroWasp currently has early support for several communication paths. Only SBUS
 |---|---|
 | SBUS | Active prototype RC input over USART2 RX DMA |
 | BLHeli legacy ESC telemetry | Active only in the default FCU3 DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated |
-| USB CDC serial | Optional `usb_serial`; Foxeer emits bounded read-only `FWDBG1` status lines |
+| USB CDC serial | Mandatory on Foxeer; optional on FCU3 via `usb_serial`; Foxeer emits bounded read-only `FWDBG1` status lines |
 | MSPv1 / DJI O4 OSD | Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames |
 | MAVLink | UART mode placeholder/config values exist, no active MAVLink implementation yet |
 | CRSF/ELRS | Intended preferred RC path, not implemented yet |
@@ -63,8 +63,8 @@ parameter writer, arming request, or actuator resource.
 ## FCU3 ESC Telemetry
 
 The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud only in the default FCU3 DShot image. The explicit PWM fallback
-does not run the ESC manager or issue telemetry-bit requests. Since the
+115,200 baud in the standard FCU3 flight image. The ESC manager issues
+bounded telemetry-bit requests through the actuator-owned DShot service. Since the
 ten-byte wire frame does not identify a motor, a low-priority ESC manager
 rotates physical-output requests. Both directions use bounded SPSC queues.
 

@@ -2,13 +2,7 @@
 #![no_main]
 #![no_std]
 
-use core::fmt::Write;
-use defmt::{info, warn};
-use defmt_rtt as _;
-use ferrowasp_bsp::stm32f4::nucleo_f401re as board;
-use panic_probe as _;
-use rtic_monotonics::systick::prelude::*;
-use stm32f4xx_hal::{pac, prelude::*};
+use ferrowasp_app_stm32f401_bringup::internal::*;
 
 #[rtic::app(device = pac, peripherals = true, dispatchers = [EXTI0])]
 mod app {
@@ -21,22 +15,34 @@ mod app {
 
     #[local]
     struct Local {
-        led: board::aliases::UserLed,
-        heartbeat_tx: board::aliases::HeartbeatTx,
-        sequence: u32,
+        heartbeat: HeartbeatResources,
     }
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local) {
         let device = cx.device;
-        let mut rcc = board::init::init_clocks(device.RCC);
+        let mut rcc = stm32_clocks::freeze_hsi(
+            device.RCC.constrain(),
+            stm32_clocks::STM32F401_SYSTEM_CLOCK_HZ,
+            false,
+        );
         let gpioa = device.GPIOA.split(&mut rcc);
-        let mut led = board::init::init_user_led(gpioa.pa5);
-        let heartbeat_tx = board::init::init_heartbeat_tx(device.USART2, gpioa.pa2, &mut rcc)
-            .expect("USART2 heartbeat configuration must be valid");
+        let heartbeat = init_heartbeat_resources(
+            HeartbeatResourceInputs {
+                usart: device.USART2,
+                led_pin: gpioa.pa5,
+                tx_pin: gpioa.pa2,
+            },
+            &mut rcc,
+            HeartbeatConfig::new(
+                stm32_clocks::STM32F401_SYSTEM_CLOCK_HZ,
+                board::HEARTBEAT_BAUD,
+                BRINGUP_HEARTBEAT_PERIOD_MS,
+            ),
+        )
+        .expect("NUCLEO-F401RE heartbeat configuration must be valid");
 
-        Mono::start(cx.core.SYST, board::SYSTEM_CLOCK_HZ);
-        led.set_low();
+        Mono::start(cx.core.SYST, heartbeat.system_clock_hz);
 
         info!(
             "FerroWasp {} RTIC bring-up started",
@@ -44,36 +50,14 @@ mod app {
         );
         heartbeat::spawn().unwrap();
 
-        (
-            Shared {},
-            Local {
-                led,
-                heartbeat_tx,
-                sequence: 0,
-            },
-        )
+        (Shared {}, Local { heartbeat })
     }
 
-    #[task(priority = 1, local = [led, heartbeat_tx, sequence])]
+    #[task(priority = 1, local = [heartbeat])]
     async fn heartbeat(cx: heartbeat::Context) {
-        info!("Running RTIC heartbeat!");
-
         loop {
-            cx.local.led.toggle();
-
-            if write!(
-                cx.local.heartbeat_tx,
-                "FerroWasp NUCLEO-F401RE heartbeat {}\r\n",
-                *cx.local.sequence
-            )
-            .is_err()
-            {
-                warn!("USART2 heartbeat write failed");
-            }
-
-            info!("NUCLEO-F401RE RTIC heartbeat {}", *cx.local.sequence);
-            *cx.local.sequence = cx.local.sequence.wrapping_add(1);
-            Mono::delay(1_000.millis()).await;
+            run_heartbeat(cx.local.heartbeat);
+            Mono::delay(cx.local.heartbeat.period_ms.millis()).await;
         }
     }
 }

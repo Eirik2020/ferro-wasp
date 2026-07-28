@@ -8,7 +8,7 @@ individual source files.
 FerroWasp changes rapidly. This document deliberately avoids becoming the
 authority for live bench or flight status. When current state matters, verify
 it against `project_docs/CODEX_ACTIVE_WORK.md`,
-`mdbook/src/current_support.md`, the selected app, and the current BSP.
+`mdbook/src/current_support.md`, the selected app, and the current board support.
 
 ## Project identity
 
@@ -31,7 +31,7 @@ without inheriting their complete software architecture.
 The `ferro-wasp` repository is authoritative for:
 
 - embedded firmware and build configuration;
-- active board assumptions and typed BSP contracts;
+- active board assumptions and typed board contracts;
 - motor mapping, orientation, RC mapping, gains, rates, and enabled features;
 - arming, failsafe, watchdog, and actuator-output behavior;
 - firmware-side telemetry, logging, and configuration contracts;
@@ -94,9 +94,9 @@ ferrowasp-drivers
 ferrowasp-stm32f4
     STM32F4 clocks, UART/SPI/ADC DMA, timers, PWM, DShot, and memory mechanisms
 
-ferrowasp-bsp
+app src/board and src/lib.rs
     board pins, clocks, peripherals, DMA/timer routes, orientation, profiles,
-    storage shape, and construction policy
+    storage shape, construction policy, and internal support facade
 
 ferrowasp-tasks
     reusable control, OSD, ESC-manager, storage, and service task logic
@@ -120,19 +120,19 @@ different PAC features and RTIC resource contracts must not be unified:
 
 ```text
 apps/stm32f405-flight
-    FerroWasp FCU3 flight application and golden runtime baseline
+    FerroWasp FCU3 secondary flight application with retained target evidence
 
 apps/foxeer-f405-v2
-    Foxeer F405 V2 flight/bring-up application with its own BSP contract
+    Foxeer F405 V2 golden flight application and runtime baseline
 
 apps/stm32f401-bringup
     NUCLEO-F401RE bring-up application with no actuator outputs
 ```
 
-Treat `apps/stm32f405-flight` as the golden reference for established runtime
+Treat `apps/foxeer-f405-v2` as the golden reference for established runtime
 behavior and safety policy. Before implementing a feature in a secondary app,
-inspect the corresponding FCU3 behavior and identify the invariants that must
-remain synchronized. Hardware differences must come from the target BSP, not
+inspect the corresponding Foxeer behavior and identify the invariants that must
+remain synchronized. Hardware differences must come from the target board support, not
 from copying FCU3 pin, DMA, timer, orientation, or sensor assumptions.
 
 Do not alter either flight-tested application during unrelated architectural
@@ -194,15 +194,17 @@ The current repository already contains reusable bounded I/O contracts and
 hardware mechanisms, but a final general component/capability manifest and
 board-application generator are not implemented here yet.
 
-## BSP, application, platform, and backend ownership
+## Board support, application, platform, and backend ownership
 
 These concerns must remain separate:
 
-### BSP
+### App-local board support
 
-The BSP owns immutable physical facts: board pins, connected devices,
-peripheral instances, clock constraints, DMA and timer routes, interrupts,
-memory/storage shape, electrical properties, and sensor-to-board orientation.
+Each isolated app owns immutable physical facts under `src/board/`: board pins,
+connected devices, peripheral instances, clock constraints, DMA and timer
+routes, interrupts, memory/storage shape, electrical properties, and
+sensor-to-board orientation. `src/lib.rs` exposes the internal support facade.
+Reusable mechanisms do not remain board-local.
 
 ### Application
 
@@ -215,7 +217,7 @@ contract compiled into a binary.
 The longer-term platform configuration assigns generic compiled endpoints to
 user-selected profiles at boot. Examples include OSD, SBUS, CRSF, GPS, motor
 ordering, motor direction, and FCU orientation. UART baud/framing/inversion
-belong to the selected protocol profile rather than the BSP.
+belong to the selected protocol profile rather than immutable board support.
 
 The active platform configuration is validated and frozen for the boot.
 Changes take effect only after persistence and reboot; runtime routing does not
@@ -270,11 +272,11 @@ At the time this upload brief was created, the repository contains:
 
 - `no_std`, `no_main` RTIC 2 STM32F4 applications;
 - an FCU3 flight-tested prototype baseline;
-- a separate Foxeer F405 V2 app and BSP under active target verification;
+- a separate Foxeer F405 V2 app and board support under active target verification;
 - SBUS input over bounded UART DMA;
 - MPU6500 and ICM42688-P support through bounded SPI paths;
 - prototype estimation, rate control, Quad-X mixing, and typed frame rotation;
-- safety-gated four-lane DShot600 with explicit PWM fallbacks;
+- safety-gated four-lane DShot600 as the standard ESC protocol;
 - bounded legacy ESC telemetry and arming-qualification support;
 - DJI MSPv1 DisplayPort OSD;
 - ADC observation, RTT/defmt diagnostics, and BB2 logging;
@@ -333,13 +335,13 @@ inspect rather than iterating blindly.
    safety-relevant behavior change.
 2. Label claims as **implemented**, **transitional**, **planned**, or
    **aspirational**.
-3. Verify volatile status in the active handoff and selected app/BSP before
+3. Verify volatile status in the active handoff and selected app/board-support before
    reasoning from it.
 4. State which layer owns every new type, resource, task, configuration field,
    and failure response.
 5. Preserve the sole actuator-authority boundary and bounded-memory model.
-6. Compare secondary-board runtime behavior against the FCU3 golden app while
-   preserving genuine BSP differences.
+6. Compare secondary-board runtime behavior against the Foxeer golden app while
+   preserving genuine board differences.
 7. Reuse existing FerroWasp crates and proven paths; do not create parallel
    drivers, protocols, safety state machines, or control stacks without a
    concrete reason.
@@ -374,7 +376,7 @@ readiness. Each claim needs evidence at the appropriate level.
 When information conflicts, use this order:
 
 1. The user's latest explicit decision and safety instruction.
-2. The current selected app, BSP, shared crates, feature configuration, and
+2. The current selected app and board support, shared crates, feature configuration, and
    tests.
 3. `project_docs/CODEX_ACTIVE_WORK.md` and
    `mdbook/src/current_support.md` for live state and evidence.

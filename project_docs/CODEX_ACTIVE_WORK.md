@@ -116,9 +116,9 @@ logs cannot distinguish gust/tumble, contact, or thrust-system failure. Repeat
 in calmer conditions. Roll P `3.0` remains withdrawn after a separate logged
 `10-13 Hz` autonomous oscillation.
 
-The same `2.5/2.5/2.0`, all-I/D-zero profile is now the Foxeer
+The same `2.5/2.5/2.0`, all-I/D-zero profile is now the golden Foxeer
 fresh-storage/default-reset baseline. Existing valid stored configuration
-continues to win across a firmware update. FCU3 retains its separate golden-app
+continues to win across a firmware update. FCU3 retains its separate legacy
 initial profile.
 
 The 2026-07-28 Foxeer OSD report found zero current and no cell voltage. The

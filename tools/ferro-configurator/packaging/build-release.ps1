@@ -103,13 +103,7 @@ $manifest = [ordered]@{
             board = "foxeer-f405-v2"
             target = "thumbv7em-none-eabihf"
             features = @(
-                "board-foxeer-f405-v2",
-                "dshot",
-                "esc_telemetry",
-                "flash_storage",
-                "flash_writes",
-                "flash_blackbox",
-                "usb_serial"
+                "board-foxeer-f405-v2"
             )
             file = "foxeer-f405-v2/FerroWaspFoxeerF405V2.elf"
             sha256 = $firmwareHash

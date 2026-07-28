@@ -1,6 +1,6 @@
 # FerroWasp Architecture Decisions
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 This is the bounded index for FerroWasp architecture decision records (ADRs).
 Open only the decisions relevant to the task. The standalone records preserve
@@ -32,7 +32,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0004](decisions/ADR-0004.md) | PWM DMA And DShot Timer DMA Are Deferred | accepted |
 | [ADR-0005](decisions/ADR-0005.md) | Workspace Split Starts With Contracts | accepted |
 | [ADR-0006](decisions/ADR-0006.md) | STM32F4 Backend Starts As Compile-Shaped Metadata | superseded by ADR-0007 |
-| [ADR-0007](decisions/ADR-0007.md) | BSP Owns Board Policy, MCU Backend Owns HAL Mechanisms | accepted |
+| [ADR-0007](decisions/ADR-0007.md) | BSP Owns Board Policy, MCU Backend Owns HAL Mechanisms | superseded by ADR-0035 |
 | [ADR-0008](decisions/ADR-0008.md) | Control Scheduling Is Board-Selected And TIM2 Is The I/O Timebase | accepted |
 | [ADR-0009](decisions/ADR-0009.md) | TIM6 Watchdog Posts Recovery To The SPI Owner Priority | accepted |
 | [ADR-0010](decisions/ADR-0010.md) | SPI1 Uses One Owned Async Mailbox Between Task And IRQ Owner | accepted |
@@ -41,7 +41,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0013](decisions/ADR-0013.md) | USART2 RC Validity Is Separate From Parsed Setpoints | accepted |
 | [ADR-0014](decisions/ADR-0014.md) | The Actuator Owner Guards Long Arming Holds | accepted |
 | [ADR-0015](decisions/ADR-0015.md) | Active Motor Values Cross One SPSC Authority Boundary | accepted |
-| [ADR-0016](decisions/ADR-0016.md) | FCU3 Is An Explicit BSP Target Without An App Adapter | accepted; application-location clause superseded by ADR-0018 |
+| [ADR-0016](decisions/ADR-0016.md) | FCU3 Is An Explicit BSP Target Without An App Adapter | superseded by ADR-0035; historical board facts retained |
 | [ADR-0017](decisions/ADR-0017.md) | The First Multi-Target Proof Is An Isolated Nucleo Bring-Up App | accepted |
 | [ADR-0018](decisions/ADR-0018.md) | Deployable Firmware Uses Isolated App Packages | accepted |
 | [ADR-0019](decisions/ADR-0019.md) | The F401 Bring-Up App Uses A Minimal RTIC 2 Shell | accepted |
@@ -60,6 +60,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0032](decisions/ADR-0032.md) | Foxeer Uses A Separate Capped Actuator-Validation Gate | accepted for commissioning; original flight-inhibit premise superseded |
 | [ADR-0033](decisions/ADR-0033.md) | Foxeer IMU Sampling Is Triggered By PC4/EXTI4 | accepted, pending target validation |
 | [ADR-0034](decisions/ADR-0034.md) | Foxeer Onboard Flash Uses A Low-Priority CPU-Driven SPI2 Owner | accepted, pending target validation |
+| [ADR-0035](decisions/ADR-0035.md) | Board Support Lives With Each Isolated App | accepted |
 
 ## Adding Or Changing A Decision
 

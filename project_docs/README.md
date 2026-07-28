@@ -29,7 +29,7 @@ defaults.
 | Software, target, bench, preflight, or flight testing | `testing/README.md`, then only the catalog-selected procedures |
 | Localized reusable-crate work | Selected crate code and tests; use `CODEX_PROJECT_CONTEXT.md` only when architecture is affected |
 | Flight app, motor output, logging, or bench workflow | `CODEX_ACTIVE_WORK.md`, selected app README/code, and the catalog-selected procedure |
-| Board pins, timers, DMA, orientation, or hardware policy | `ARCHITECTURE_DECISIONS.md`, then only the relevant linked ADRs, selected BSP manifest, and current target evidence |
+| Board pins, timers, DMA, orientation, or hardware policy | `ARCHITECTURE_DECISIONS.md`, then only the relevant linked ADRs, selected app's `src/board/` support, and current target evidence |
 | Cross-repository movement or ownership | `CROSS_REPO_SYNC.md` |
 | Publication work | `PUBLICATION_CHECKLIST.md` and current public documentation |
 | Historical provenance | The specifically relevant file under `archive/` or another registry entry marked `historical` |

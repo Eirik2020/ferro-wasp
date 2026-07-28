@@ -44,13 +44,20 @@ documents routed by the applicable instructions:
 ## Architecture boundary
 
 Keep reusable types and safety state in `ferrowasp-core`; MCU support in
-`ferrowasp-mcu`; protocols and devices in `ferrowasp-drivers`; physical board
-facts in `ferrowasp-bsp`; reusable task logic in `ferrowasp-tasks`; and RTIC
-wiring in thin app shells. Optional generation belongs in `ferrowasp-gen`,
-manifests, or the isolated builder.
+`ferrowasp-mcu`; protocols and devices in `ferrowasp-drivers`; reusable task
+logic in `ferrowasp-tasks`; and RTIC wiring in thin app shells. Keep each
+board's physical facts in that isolated app's `src/board/` support module.
+Reusable STM32F4 mechanisms and configuration types belong in
+`ferrowasp-stm32f4`, not in board support. Optional generation belongs in
+`ferrowasp-gen`, manifests, or the isolated builder.
 
 Keep HAL-specific types out of core logic. Put reusable behavior in shared
 crates rather than duplicating it between boards.
+
+Treat each app's src/board directory as hardware data and narrow adaptation,
+not as a general implementation layer. If code remains useful after
+substituting pins, peripherals, routes, or configuration values, move it to
+the narrowest shared crate before adding another board copy.
 
 ## Engineering rules
 

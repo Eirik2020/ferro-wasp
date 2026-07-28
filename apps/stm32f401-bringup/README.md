@@ -1,7 +1,7 @@
 # STM32F401 Bring-Up App
 
 This is the deliberately minimal STM32F401 bring-up runtime contract. It
-currently selects the NUCLEO-F401RE BSP by default and owns only:
+currently selects the NUCLEO-F401RE board support by default and owns only:
 
 - PA5: onboard LD2 user LED;
 - PA2 / USART2 TX: ST-LINK virtual COM port;

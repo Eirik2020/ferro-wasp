@@ -7,11 +7,13 @@ Current important paths:
 ```text
 .
 |-- apps/
-|   |-- stm32f405-flight/        # F405 flight RTIC shell; FCU3 selected by default
-|   |-- stm32f401-bringup/       # F401 RTIC LED/USART multi-target bring-up app
-|   `-- foxeer-f405-v2/          # Separate Foxeer F405 V2 RTIC flight/bring-up app
+|   |-- stm32f405-flight/        # FCU3 board support and thin F405 RTIC shell
+|   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
+|   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
+|       |-- src/board/           # Immutable board facts and typed construction
+|       |-- src/lib.rs           # Internal app-support facade
+|       `-- src/main.rs          # RTIC declarations and wiring only
 |-- crates/
-|   |-- ferrowasp-bsp/           # FCU3, Foxeer, and Nucleo board contracts
 |   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
 |   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
 |   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
@@ -33,19 +35,20 @@ Current important paths:
 
 ## Current Reality
 
-Most active flight-firmware wiring still lives in
-`apps/stm32f405-flight/src/main.rs`. That is acceptable for the current
-bring-up phase because it keeps hardware iteration fast while giving each
-deployable image an independent Cargo/PAC graph.
+Each deployable board has an independent Cargo/PAC graph. Its `src/main.rs`
+contains the RTIC resource and task declarations, locking, scheduling, and
+concrete initialization wiring. Board declarations and constructors live in
+the same package's support library; reusable behavior remains in shared crates.
+Foxeer is the golden flight app.
 
 The code already contains early signs of the future shape:
 
 - reusable safety, signal, and actuator conversion types in `crates/ferrowasp-core/`
 - board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
-  construction policy in `crates/ferrowasp-bsp/`
+  construction policy under each app's `src/board/`
 - isolated FCU3 flight, Foxeer flight/bring-up, and NUCLEO-F401RE bring-up
   apps with independent Cargo and RTIC resource contracts
-- reusable STM32F4 UART/SPI/ADC/static PWM and DShot mechanisms under
+- reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
   `crates/ferrowasp-stm32f4/`
 - software-driver and control helpers, including the BLHeli parser and bounded
   ESC manager, under `crates/ferrowasp-drivers/` and `crates/ferrowasp-tasks/`
@@ -59,19 +62,20 @@ The code already contains early signs of the future shape:
 The long-term layout is expected to move toward:
 
 ```text
-ferrowasp-core     reusable types, units, safety state, queues
-ferrowasp-mcu      chip-family MCU support
-ferrowasp-drivers  IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-bsp      board pin maps, clocks, DMA/timer assignments
-ferrowasp-tasks    reusable task logic
-ferrowasp-apps     thin RTIC app shells
-ferrowasp-gen      optional source generation for task/resource wiring
-manifest/          board, task, resource, and policy descriptions
+ferrowasp-core       reusable types, units, safety state, queues
+ferrowasp-mcu        family-neutral MCU contracts
+ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
+ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
+ferrowasp-tasks      reusable task logic
+app src/board        board pin maps, clocks, DMA/timer assignments
+app src/lib.rs       board composition and internal support facade
+app src/main.rs      thin RTIC shell
+ferrowasp-gen        optional source generation for task/resource wiring
+manifest/            optional board, task, resource, and policy descriptions
 ```
 
-An app may serve multiple boards only when their BSPs satisfy the same
-compile-time RTIC resource contract. A different MCU interrupt model or
-firmware role gets another thin app package.
+Boards use isolated app packages so their PAC features and RTIC resource
+contracts cannot be accidentally unified.
 
-The migration should remain gradual. First make FerroWasp FCU3 work well, then
-pull stable logic into cleaner modules.
+Reusable behavior moves outward only when its ownership and bounded execution
+are explicit; custom macros are not used to hide runtime work.

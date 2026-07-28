@@ -8,7 +8,7 @@ default FCU3 DShot image's legacy ESC telemetry.
 The reusable STM32F4 UART DMA mechanism lives in
 `crates/ferrowasp-stm32f4/src/uart_dma.rs`. FerroWasp FCU3 pin conversion,
 storage shape, and device construction live in
-`crates/ferrowasp-bsp/src/stm32f4/ferrowasp_fcu3/`.
+`apps/stm32f405-flight/src/board/`.
 
 It provides:
 
@@ -27,7 +27,7 @@ Current UART modes:
 |---|---|---|
 | `Sbus` | 100000 baud, even parity, 2 stop bits, RX DMA | Active RC input path |
 | `Msp` | 115200 baud, TX/RX DMA | Active DJI O4 OSD path on UART4 |
-| `EscTelemetry` | 115200 baud, 8N1, RX DMA | Active FCU3 BLHeli legacy telemetry path on USART1 in the default DShot image; inactive in the PWM fallback |
+| `EscTelemetry` | 115200 baud, 8N1, RX DMA | Standard flight-board BLHeli legacy telemetry path on USART1 |
 | `Mavlink` | 57600 baud, RX DMA | Future telemetry/config subset |
 
 ## Active Use
@@ -58,8 +58,7 @@ PA10 USART1 RX DMA -> bounded chunks -> ESC manager parser/association
     -> timestamped per-motor observations
 ```
 
-PA9/USART1 TX is not configured. The explicit PWM fallback does not run the ESC
-manager. In the DShot image, the manager sends typed telemetry requests through
+PA9/USART1 TX is not configured. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output

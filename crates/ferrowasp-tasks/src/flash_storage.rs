@@ -26,6 +26,42 @@ pub type RecordQueue = Queue<FlightRecord, RECORD_QUEUE_CAPACITY>;
 pub type RecordProducer = Producer<'static, FlightRecord>;
 pub type RecordConsumer = Consumer<'static, FlightRecord>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecordEnqueueOutcome {
+    Skipped,
+    Enqueued,
+    Full,
+}
+
+pub fn enqueue_rate_record(
+    producer: &mut RecordProducer,
+    sample: crate::drone_toolbox::CompactRateBlackboxSample,
+    timestamp_us: u32,
+    divisor: u32,
+) -> RecordEnqueueOutcome {
+    let divisor = divisor.clamp(1, 16);
+    if !sample.seq.is_multiple_of(divisor) {
+        return RecordEnqueueOutcome::Skipped;
+    }
+    let record = FlightRecord {
+        timestamp_us,
+        control_sequence: sample.seq,
+        imu_sequence: sample.imu_seq,
+        flags: u16::from(sample.flags),
+        raw_gyro_dps10: sample.raw_gyro_dps10,
+        filtered_gyro_dps10: sample.gyro_dps10,
+        command_dps10: sample.command_dps10,
+        pid: sample.pid,
+        throttle: sample.throttle,
+        motors: sample.motors,
+    };
+    if producer.enqueue(record).is_ok() {
+        RecordEnqueueOutcome::Enqueued
+    } else {
+        RecordEnqueueOutcome::Full
+    }
+}
+
 pub const COMMAND_QUEUE_CAPACITY: usize = 8;
 pub const RESPONSE_QUEUE_CAPACITY: usize = 32;
 pub const USB_COMMAND_LINE_CAPACITY: usize = 96;
@@ -86,6 +122,106 @@ pub enum StorageCommand {
     ConfigGet(ConfigKey),
     ConfigSet(ConfigKey, f32),
     ConfigSave,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StorageReadError<E> {
+    InvalidLayout,
+    Device(E),
+}
+
+/// Finds the append point and next flight identifier in an append-only log.
+pub fn scan_log<E, Read>(
+    layout: StorageLayout,
+    mut read: Read,
+) -> Result<(u32, u32, bool), StorageReadError<E>>
+where
+    Read: FnMut(u32, &mut [u8]) -> Result<(), E>,
+{
+    use ferrowasp_core::blackbox::decode_page;
+
+    let mut low = 0u32;
+    let mut high = layout.log_page_count;
+    let mut page = [0xff; FLASH_PAGE_LEN];
+    while low < high {
+        let middle = low + (high - low) / 2;
+        let address = layout
+            .log_page_address(middle)
+            .ok_or(StorageReadError::InvalidLayout)?;
+        read(address, &mut page).map_err(StorageReadError::Device)?;
+        if decode_page(&page).is_ok() {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+
+    let last_valid_page = low.checked_sub(1);
+    let mut next_page = low;
+    let mut writable = false;
+    if next_page < layout.log_page_count {
+        let address = layout
+            .log_page_address(next_page)
+            .ok_or(StorageReadError::InvalidLayout)?;
+        read(address, &mut page).map_err(StorageReadError::Device)?;
+        if page.iter().all(|byte| *byte == 0xff) {
+            writable = true;
+        } else if last_valid_page.is_some() {
+            let following = next_page.saturating_add(1);
+            if let Some(address) = layout.log_page_address(following) {
+                read(address, &mut page).map_err(StorageReadError::Device)?;
+                if page.iter().all(|byte| *byte == 0xff) {
+                    next_page = following;
+                    writable = true;
+                }
+            }
+        }
+    }
+
+    let next_flight_id = if let Some(previous) = last_valid_page {
+        let address = layout
+            .log_page_address(previous)
+            .ok_or(StorageReadError::InvalidLayout)?;
+        read(address, &mut page).map_err(StorageReadError::Device)?;
+        decode_page(&page)
+            .map(|metadata| metadata.flight_id.wrapping_add(1).max(1))
+            .unwrap_or(1)
+    } else {
+        1
+    };
+    Ok((next_page, next_flight_id, writable))
+}
+
+/// Loads the newest valid copy-on-write configuration slot.
+pub fn load_config<E, Read>(
+    layout: StorageLayout,
+    default: StoredConfig,
+    mut read: Read,
+) -> Result<(StoredConfig, u32, u8), StorageReadError<E>>
+where
+    Read: FnMut(u32, &mut [u8]) -> Result<(), E>,
+{
+    use ferrowasp_core::blackbox::decode_config_page;
+
+    let mut selected: Option<(StoredConfig, u32, u8)> = None;
+    for slot in 0..2u8 {
+        let mut page = [0xff; FLASH_PAGE_LEN];
+        read(layout.config_slot_addresses[slot as usize], &mut page)
+            .map_err(StorageReadError::Device)?;
+        let Ok((sequence, payload)) = decode_config_page(&page) else {
+            continue;
+        };
+        let Some(config) = StoredConfig::decode(payload) else {
+            continue;
+        };
+        if selected
+            .as_ref()
+            .is_none_or(|(_, current, _)| sequence_is_newer(sequence, *current))
+        {
+            selected = Some((config, sequence, slot));
+        }
+    }
+    Ok(selected.unwrap_or((default, 0, 1)))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -663,6 +799,48 @@ impl Default for PageAssembler {
 /// Sequence comparison for two copy-on-write configuration slots.
 pub const fn sequence_is_newer(candidate: u32, current: u32) -> bool {
     candidate != current && candidate.wrapping_sub(current) < 0x8000_0000
+}
+
+/// Emits one bounded text line for each 16-byte slice of a flash page.
+pub fn emit_page_hex_lines<Emit>(
+    page_index: u32,
+    page: &[u8; FLASH_PAGE_LEN],
+    mut emit: Emit,
+) -> bool
+where
+    Emit: FnMut(&str) -> bool,
+{
+    use core::fmt::Write;
+
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for chunk_index in 0..16 {
+        let offset = chunk_index * 16;
+        let mut line = String::<USB_RESPONSE_CAPACITY>::new();
+        if write!(line, "PAGE {} {:03} ", page_index, offset).is_err() {
+            return false;
+        }
+        for byte in &page[offset..offset + 16] {
+            if line.push(HEX[(byte >> 4) as usize] as char).is_err()
+                || line.push(HEX[(byte & 0x0f) as usize] as char).is_err()
+            {
+                return false;
+            }
+        }
+        if line.push_str("\r\n").is_err() || !emit(line.as_str()) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Produces the deterministic pattern used by destructive scratch-sector tests.
+pub fn scratch_test_page() -> [u8; FLASH_PAGE_LEN] {
+    let mut page = [0u8; FLASH_PAGE_LEN];
+    for (index, byte) in page.iter_mut().enumerate() {
+        *byte = (index as u8).rotate_left(1) ^ 0xa5;
+    }
+    page[..8].copy_from_slice(b"FWTEST01");
+    page
 }
 
 #[cfg(test)]

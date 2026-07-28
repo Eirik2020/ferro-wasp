@@ -739,8 +739,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 dfu,
                 dfu_error,
                 guidance: vec![
-                    "Build FerroWasp with flash_storage to expose read-only configuration.",
-                    "Build with flash_writes to enable disarmed-only persistence.",
+                    "Foxeer firmware includes onboard storage and disarmed-only persistence by default.",
                     "Use --port COMx when USB metadata is unavailable or ambiguous.",
                     "ROM DFU mode is 0483:df11 and may require a one-time WinUSB driver association.",
                 ],
@@ -1118,11 +1117,11 @@ fn error_hint(error: &FerroError) -> &'static str {
         FerroError::DeviceRejected { message, .. } if message.contains("armed") => {
             "Disarm the vehicle, remove propellers for bench work, then retry."
         }
-        FerroError::DeviceRejected { message, .. } if message.contains("flash_writes") => {
-            "Install a FerroWasp firmware build with the flash_writes feature."
+        FerroError::DeviceRejected { message, .. } if message.contains("storage") => {
+            "Reconnect the standard Foxeer firmware and confirm onboard flash initialized successfully."
         }
         FerroError::Timeout { .. } => {
-            "Check the COM port, close other serial tools, and confirm firmware includes flash_storage."
+            "Check the COM port, close other serial tools, and confirm the standard Foxeer firmware booted."
         }
         FerroError::VerificationFailed { .. } => {
             "Do not fly with an unverified change; reconnect and run `config show`."

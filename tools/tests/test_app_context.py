@@ -73,14 +73,13 @@ mod app {
     def test_current_routes_have_no_drift(self) -> None:
         self.assertEqual(validate_routes(), [])
 
-    def test_foxeer_arming_route_is_bounded_and_includes_golden_app(self) -> None:
-        route = build_route("foxeer-f405-v2", "arming")
+    def test_fcu3_arming_route_is_bounded_and_includes_foxeer_golden_app(self) -> None:
+        route = build_route("fcu3", "arming")
 
-        self.assertIn("apps/foxeer-f405-v2/AGENTS.md", route)
         self.assertIn("actuator_output [task priority=15]", route)
-        self.assertIn("FCU3 golden-app comparison anchors:", route)
-        self.assertIn("apps/stm32f405-flight/src/main.rs", route)
-        self.assertIn("BENCH-FOX-001", route)
+        self.assertIn("Foxeer golden-app comparison anchors:", route)
+        self.assertIn("apps/foxeer-f405-v2/src/main.rs", route)
+        self.assertIn("BENCH-FCU3-DSHOT-001", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
 
     def test_overview_reports_interrupt_and_resource_anchors(self) -> None:
@@ -89,7 +88,7 @@ mod app {
         self.assertIn("control_loop [task priority=14 binds=TIM4]", route)
         self.assertIn("Shared:", route)
         self.assertIn("Local:", route)
-        self.assertNotIn("FCU3 golden-app comparison anchors:", route)
+        self.assertNotIn("Foxeer golden-app comparison anchors:", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
 
 

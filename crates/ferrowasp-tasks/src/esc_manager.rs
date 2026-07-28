@@ -376,6 +376,23 @@ impl EscIdleQualificationConfig {
     }
 }
 
+// Target-proven on both FCU3 and Foxeer F405 V2. A board that cannot use this
+// policy must provide a separately qualified profile rather than silently
+// changing one field.
+pub const DSHOT_PREARM_STOP_HOLD_MS: u32 = 100;
+pub const DSHOT_IDLE_THROTTLE_COMMAND: u16 = 65;
+pub const DSHOT_IDLE_QUALIFICATION_CONFIG: EscIdleQualificationConfig =
+    EscIdleQualificationConfig {
+        min_erpm_div100: 30,
+        max_erpm_div100: 100,
+        spinup_grace_ms: 250,
+        timeout_ms: 1_200,
+        max_sample_age_ms: 200,
+        required_consecutive_samples: 3,
+    };
+
+const _: () = assert!(DSHOT_IDLE_QUALIFICATION_CONFIG.is_valid());
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EscIdleQualificationFailure {
     InvalidConfig,
@@ -527,14 +544,7 @@ mod tests {
     }
 
     fn idle_qualification_config() -> EscIdleQualificationConfig {
-        EscIdleQualificationConfig {
-            min_erpm_div100: 30,
-            max_erpm_div100: 100,
-            spinup_grace_ms: 250,
-            timeout_ms: 1_200,
-            max_sample_age_ms: 200,
-            required_consecutive_samples: 3,
-        }
+        DSHOT_IDLE_QUALIFICATION_CONFIG
     }
 
     #[test]

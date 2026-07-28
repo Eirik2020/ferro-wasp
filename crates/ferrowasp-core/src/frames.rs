@@ -91,6 +91,38 @@ impl FrameRotation {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ImuControlAxisProfile {
+    pub gyro_raw_to_dps: u32,
+    pub drone_body_frame: DroneBodyFrame,
+    pub imu_to_board_rotation: FrameRotation,
+    pub board_to_drone_rotation: FrameRotation,
+    pub bias_calibration_samples: u32,
+    pub bias_calibration_max_raw: i32,
+}
+
+impl ImuControlAxisProfile {
+    pub const fn imu_to_drone_rotation(self) -> FrameRotation {
+        self.imu_to_board_rotation
+            .then(self.board_to_drone_rotation)
+    }
+
+    /// Maps sensor angular rates into the established FCU3 rate/mixer sign
+    /// convention. This remains distinct from the physical sensor-to-body
+    /// rotation used by acceleration and orientation reporting.
+    pub const fn imu_to_rate_controller_map(self) -> FrameRotation {
+        self.imu_to_drone_rotation()
+            .then(BODY_RATE_TO_RATE_CONTROLLER_MAP)
+    }
+
+    /// Converts sensor specific force into the drone-frame gravity direction
+    /// consumed by the current complementary attitude estimator.
+    pub fn sensor_accel_to_drone_gravity(self, sensor_accel: [f32; 3]) -> [f32; 3] {
+        let specific_force = self.imu_to_drone_rotation().map_f32(sensor_accel);
+        [-specific_force[0], -specific_force[1], -specific_force[2]]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,6 +175,31 @@ mod tests {
         assert_eq!(
             BODY_RATE_TO_RATE_CONTROLLER_MAP.then(RATE_CONTROLLER_TO_BODY_MAP),
             FrameRotation::IDENTITY
+        );
+    }
+
+    #[test]
+    fn imu_profile_composes_board_and_controller_frames() {
+        let profile = ImuControlAxisProfile {
+            gyro_raw_to_dps: 164,
+            drone_body_frame: DroneBodyFrame::ForwardRightDown,
+            imu_to_board_rotation: FrameRotation::new([1, 0, 2], [-1, -1, -1]),
+            board_to_drone_rotation: FrameRotation::IDENTITY,
+            bias_calibration_samples: 800,
+            bias_calibration_max_raw: 1_000,
+        };
+
+        assert_eq!(
+            profile.imu_to_drone_rotation().map_raw([10, 20, -30]),
+            [-20, -10, 30]
+        );
+        assert_eq!(
+            profile.imu_to_rate_controller_map().map_raw([10, 20, -30]),
+            [-20, 10, 30]
+        );
+        assert_eq!(
+            profile.sensor_accel_to_drone_gravity([0.0, 0.0, 1.0]),
+            [0.0, 0.0, 1.0]
         );
     }
 }

@@ -15,8 +15,8 @@ airworthy or production-ready.
 - Allocation-free MPU6500 and ICM42688-P drivers over the bounded asynchronous
   SPI DMA transport.
 - Owned, bounded UART RX/TX paths for SBUS and DJI O4 MSP DisplayPort traffic.
-- Default four-lane DShot600 output on FerroWasp FCU3, plus capped diagnostic
-  images and an explicit four-channel RC PWM fallback.
+- Standard four-lane DShot600 output on the flight boards, plus capped diagnostic
+  images. Reusable RC PWM support remains available for servo and auxiliary outputs.
 - A synchronized TIM1/TIM8 DShot bank with per-lane DMA completion accounting,
   a command lease, an in-flight deadline, and whole-bank fault containment.
 - BLHeli legacy ESC telemetry on PA10 / USART1 RX using DMA, a fixed-storage
@@ -29,7 +29,7 @@ airworthy or production-ready.
   idle eRPM observations from each ESC in the configured 3,000-10,000 eRPM
   window before the safety master can declare the system armed.
 - Compact `BB2` rate-control logging and host-side analysis tools.
-- Optional Foxeer USB CDC status snapshots plus staged onboard SPI-NOR
+- Board-mandatory Foxeer USB CDC status snapshots plus standard onboard SPI-NOR
   discovery, dual-slot whitelisted configuration storage, CRC-protected flight
   logging, download/analyzer tooling, and a reserved-sector write self-test.
 - FerroConfigurator as an isolated in-repository Windows workspace, with a
@@ -49,13 +49,20 @@ airworthy or production-ready.
 - Set the Foxeer fresh-storage tuning baseline to roll/pitch/yaw P
   `2.5 / 2.5 / 2.0`, with all I and D gains zero. Existing valid persisted
   configuration continues to override these initialization defaults.
-- Moved reusable logic into `ferrowasp-core`, `ferrowasp-drivers`,
-  `ferrowasp-io-core`, `ferrowasp-stm32f4`, `ferrowasp-bsp`,
-  `ferrowasp-tasks`, and related support crates while keeping concrete RTIC
-  ownership in the isolated application shells.
+- Made Foxeer the golden flight app and reduced every `src/main.rs` to one
+  internal import plus RTIC resource, initialization, task, and scheduling
+  declarations. Reusable arming, actuator, blackbox, serial-routing, USB, and
+  STM32F4 support moved to normal functions in shared crates.
+- Moved each board's immutable facts and typed composition under its isolated
+  app's `src/board/` and `src/lib.rs` support surface.
 - Routed active and diagnostic motor vectors through the bounded SPSC
   `MotorCmd` queue. Actuator output drains to the latest command and rejects
   stale, missing, non-finite, or invalid data.
+
+### Removed
+
+- Removed the standalone `ferrowasp-bsp` crate; app-local board support now
+  depends on reusable `ferrowasp-stm32f4` mechanisms.
 
 ### Fixed
 

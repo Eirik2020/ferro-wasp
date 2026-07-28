@@ -12,8 +12,15 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = []
 dshot = ["dep:ferrowasp-waveform"]
+stm32f401 = ["stm32f4xx-hal/stm32f401"]
+stm32f405 = [
+    "stm32f4xx-hal/stm32f405",
+    "stm32f4xx-hal/uart4",
+    "stm32f4xx-hal/usb_fs",
+]
 
 [dependencies]
+defmt = "1.0.1"
 embedded-hal = { workspace = true }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-waveform = { path = "../ferrowasp-waveform", optional = true }
@@ -21,4 +28,7 @@ heapless = { workspace = true }
 rc-pwm = { path = "../rc-pwm" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
-stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["stm32f405", "rtic2", "defmt", "usb_fs", "uart4"] }
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["rtic2", "defmt"] }
+usb-device = "0.3.2"
+usbd-serial = "0.2.2"

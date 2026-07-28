@@ -105,7 +105,7 @@ observational and does not itself disarm.
 ESC-manager identity is physical-output identity: output 1 is logical
 M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right, and output
 4 is M2/front-right. The default DShot image runs this PA10 legacy telemetry
-path; the explicit PWM fallback does not.
+path.
 
 ```mermaid
 sequenceDiagram
@@ -129,24 +129,15 @@ sequenceDiagram
     SM->>AO: system armed
 ```
 
-The core event remains named `ActuatorIdling` for compatibility. Its current
-meaning is protocol-specific preparation complete: PWM finished its guarded
-idle sequence, while DShot qualified all four idle RPMs. It is not itself an
+The core event remains named `ActuatorIdling` for compatibility. It means that
+DShot qualified all four idle RPMs under the temporary preparation permit. It is not itself an
 armed signal.
 
-## PWM Fallback and Foxeer Sequence
+## Standard DShot Preparation
 
-The explicit FCU3 PWM fallback and current Foxeer PWM path retain the legacy
-guarded sequence:
-
-1. 2.5 seconds at low output;
-2. 500 ms at idle output;
-3. preparation-complete report;
-4. final Safety Master guard before `Armed`.
-
-Foxeer adds a compile-time board gate. Its actuator output remains inhibited
-until board-specific IMU orientation, ADC calibration, motor order, and pulse
-polarity evidence is reviewed.
+Both flight boards use the guarded DShot sequence: a 100 ms stop-frame dwell,
+then telemetry-qualified idle under a temporary permit, followed by the safety
+master's final guard. There is no app-level PWM ESC sequence.
 
 ## Normal Motor-Command Path
 

@@ -1,7 +1,8 @@
 # FerroWasp FCU3 Test Procedure
 
 This is the current operator procedure for `apps/stm32f405-flight` on the
-FerroWasp FCU3. The FCU3 app is the golden flight app for established runtime
+FerroWasp FCU3. FCU3 retains its own target evidence and is a secondary flight
+app; the Foxeer F405 V2 app is the golden reference for established runtime
 and safety behavior.
 
 Historical measurements and dated passes are routed through
@@ -84,8 +85,7 @@ source where available, and keep an immediate disarm/power-removal path.
 
 1. Record the exact commit/working tree, feature set, release ELF SHA-256,
    propeller state, and power state. Reject `bench_equal_motors`,
-   selected-motor, unequal-vector, `pwm_cal`, PWM fallback,
-   `dshot_mixed_control`, smoke/diagnostic, and fault-injection features for
+   selected-motor, unequal-vector, smoke/diagnostic, and fault-injection features for
    the final exact-image run.
 2. With ESC power disconnected, boot the candidate and keep the FCU stationary
    through gyro-bias calibration. Require the expected FCU3 board and IMU,

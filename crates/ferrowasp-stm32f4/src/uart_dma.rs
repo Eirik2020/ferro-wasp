@@ -24,12 +24,13 @@ use stm32f4xx_hal::{
 
 pub const UART_RX_BUFFER_SIZE: usize = Mode::max_frame_size();
 pub const UART_RX_QUEUE_CAPACITY: usize = 4;
+pub const UART4_TX_BUFFER_SIZE: usize = MSP_V1_MAX_FRAME_LEN;
 
 pub type UartRxBuf = &'static mut [u8; UART_RX_BUFFER_SIZE];
 pub type Uart1RxIrq = UartRxIrqSide<Stream5<DMA2>, USART1, 4>;
 pub type Uart2RxIrq = UartRxIrqSide<Stream5<DMA1>, USART2, 4>;
 pub type Uart4RxIrq = UartRxIrqSide<Stream2<DMA1>, UART4, 4>;
-pub type Uart4TxBuf = &'static mut [u8; MSP_V1_MAX_FRAME_LEN];
+pub type Uart4TxBuf = &'static mut [u8; UART4_TX_BUFFER_SIZE];
 pub type Uart4TxTransfer =
     Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, Uart4TxBuf>;
 
@@ -794,4 +795,51 @@ pub fn init_uart4_msp_rx_dma_with_tx(
         Mode::Msp,
         storage,
     )
+}
+
+pub fn init_usart2_sbus(
+    resources: Usart2SbusResources,
+    rcc: &mut Rcc,
+    storage: crate::app_storage::UartRxStorageResources,
+) -> UartRxParts<Stream5<DMA1>, USART2, 4> {
+    init_usart2_sbus_rx_dma(resources, rcc, storage.into_backend())
+}
+
+pub fn init_usart1_esc_telemetry(
+    resources: Usart1EscTelemetryResources,
+    rcc: &mut Rcc,
+    storage: crate::app_storage::UartRxStorageResources,
+) -> UartRxParts<Stream5<DMA2>, USART1, 4> {
+    init_usart1_esc_telemetry_rx_dma(resources, rcc, storage.into_backend())
+}
+
+pub fn init_uart4_msp_osd(
+    resources: Uart4MspResources,
+    rcc: &mut Rcc,
+    rx_storage: crate::app_storage::UartRxStorageResources,
+    tx_buffer: Uart4TxBuf,
+) -> Uart4MspParts {
+    let Uart4MspResources {
+        tx_pin,
+        rx_pin,
+        uart,
+        rx_dma,
+        tx_dma,
+    } = resources;
+    let uart4 = init_uart4_msp_rx_dma_with_tx(
+        Uart4MspRxResources {
+            tx_pin,
+            rx_pin,
+            uart,
+            rx_dma,
+        },
+        rcc,
+        rx_storage.into_backend(),
+    );
+
+    Uart4MspParts {
+        rx_irq: uart4.irq,
+        parser: uart4.parser,
+        tx_dma: init_uart4_tx_dma(tx_dma, uart4.tx, tx_buffer),
+    }
 }

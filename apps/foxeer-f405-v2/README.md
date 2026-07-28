@@ -18,14 +18,13 @@ Implemented board subset:
 - USART2 SBUS receiver path on PA2/PA3;
 - UART4 DJI MSP DisplayPort path on PA0/PA1;
 - ADC1 battery/current observation on PC0/PC1;
-- default four-lane DShot600 on PA8, PC9, PC8, and PB15;
-- explicit conventional 400 Hz RC PWM fallback on those same outputs;
-- optional BLHeli legacy telemetry RX on PA10 / USART1;
-- optional read-only USB CDC diagnostics on PA11/PA12;
-- opt-in 16 MiB-class SPI2 NOR storage on PB12/PB13/PC2/PC3;
+- standard four-lane DShot600 on PA8, PC9, PC8, and PB15;
+- standard BLHeli legacy telemetry RX on PA10 / USART1;
+- standard USB CDC diagnostics on PA11/PA12;
+- standard 16 MiB-class SPI2 NOR blackbox/configuration storage on PB12/PB13/PC2/PC3;
 - SWD/RTT diagnostics with PA13/PA14 left untouched.
 
-M4 is the complementary `TIM1_CH3N` output. The BSP configures it explicitly;
+M4 is the complementary `TIM1_CH3N` output. The board support configures it explicitly;
 powered props-off PWM selection has functionally validated the chosen polarity.
 No electrical waveform measurement has been taken.
 
@@ -33,7 +32,7 @@ The fitted IMU identity, body-axis map, PC4/EXTI4 runtime cadence, physical
 motor order/direction, functional M4 polarity, DShot/PA10 eRPM qualification,
 and onboard blackbox path have been confirmed on the target. Exact electrical
 waveforms remain unmeasured because the logic-analyzer checkpoint was skipped.
-The BSP now permits the normal flight path using the documented Betaflight
+The board support now permits the normal flight path using the documented Betaflight
 voltage baseline and Foxeer current scale. The ADC/OSD path uses the upstream
 target values directly: VBAT scale 110, current scale 70, and current offset
 zero. Cell count is detected from Betaflight's 4.30 V maximum-cell threshold
@@ -51,7 +50,7 @@ This does not itself validate flight. Do not fly the
 pre-fix image with SHA-256
 `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
 
-The 2026-07-22 individual PWM test also exposed an arm-high reset defect. The
+The 2026-07-22 individual motor-output test also exposed an arm-high reset defect. The
 shared RC-link fix ignores arm-low transients received before link
 qualification completes. Its target repeat held arm high across flashing and
 remained disarmed after RC qualification for the full observation window. A
@@ -67,11 +66,10 @@ explicitly restores defaults.
 
 The compile-time `bench_actuator_validation` gate selects capped commissioning
 behavior instead of the normal mixer. It must be
-combined with a capped equal-motor, physical-motor, or logical-motor bench
-feature; it cannot build a normal PID/mixer flight image. For example:
+combined with a capped equal-motor or logical-motor bench feature; it cannot build a normal PID/mixer flight image. For example:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --no-default-features --features "board-foxeer-f405-v2 bench_actuator_validation bench_motor1_only"
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --no-default-features --features "board-foxeer-f405-v2 bench_actuator_validation bench_logical_motor1_only"
 ```
 
 Use `bench_motor1_only` through `bench_motor4_only` for physical output
@@ -84,7 +82,7 @@ command requirement, RC-loss/disarm behavior, and 250-command bench cap remain
 active.
 
 This is a commissioning mode, not a flight-ready setting. It applies the
-existing all-motor PWM idle stage during arming before the selected/capped
+existing all-motor DShot idle stage during arming before the selected/capped
 command begins, so every motor must be treated as potentially live. Remove
 propellers and verify the selected feature string before powering ESCs.
 
@@ -97,14 +95,10 @@ telemetry/eRPM qualification path:
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --probe-speed-khz 1800 --connect-under-reset
 ```
 
-Feature `dshot` includes `esc_telemetry`; a Foxeer digital-motor image
-cannot silently omit the PA10 qualification path.
-
 It owns TIM1/TIM8 and DMA2 Streams 1, 7, 2, and 6 as one synchronized fault
 domain. The 500 Hz actuator service continuously emits frames, enforces the
 bounded nonzero-command lease, and requests disarm on lease expiry, DMA fault,
-spurious completion, or frame timeout. RC PWM remains available only through
-an explicit `--no-default-features --features board-foxeer-f405-v2` build.
+spurious completion, or frame timeout.
 
 DShot arming is protocol-specific. It keeps continuous stop frames selected
 through a guarded 100 ms pre-arm dwell, then applies idle under a temporary
@@ -119,7 +113,7 @@ ESC preparation.
 Run the capped positive qualification candidate with:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "dshot bench_actuator_validation bench_equal_motors" --probe-speed-khz 1800 --connect-under-reset
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "bench_actuator_validation bench_equal_motors" --probe-speed-khz 1800 --connect-under-reset
 ```
 
 The pre-bench positive candidate produced ELF SHA-256
@@ -129,7 +123,7 @@ The negative candidate forces only the observed eRPM for physical output 1 /
 logical M1 rear-right to zero; it does not stop that physical motor directly:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "dshot bench_actuator_validation bench_equal_motors bench_dshot_idle_output1_not_running" --probe-speed-khz 1800 --connect-under-reset
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "bench_actuator_validation bench_equal_motors bench_dshot_idle_output1_not_running" --probe-speed-khz 1800 --connect-under-reset
 ```
 
 Its pre-bench ELF SHA-256 is
@@ -217,7 +211,7 @@ python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --featu
 
 After the ordinary startup bias-calibration message, request arm at zero
 throttle. Require `Arming aborted: IMU sample is stale`, no temporary motor
-idle, and no `SYSTEM ARMED`. Then reflash the normal `flash_blackbox` candidate;
+idle, and no `SYSTEM ARMED`. Then reflash the normal candidate;
 never use the fault-injection image for flight.
 
 An unsupported or failed IMU identity/configuration is nonfatal: firmware
@@ -252,7 +246,7 @@ four seconds per motion so a two-second snapshot lands during each movement;
 hold and pause between motions. The feature does not alter the USB
 status protocol, IMU scheduling, control rate, safety state, or actuator gate.
 The `sensor` line remains uncorrected input evidence; the `body` line validates
-the BSP's measured signed-axis mapping, while the `control` line exposes the
+the board support's measured signed-axis mapping, while the `control` line exposes the
 rates actually passed to the rate PID.
 
 ### Corrective pitch-opposition gate
@@ -262,7 +256,7 @@ power and run the combined physical/controller diagnostic and onboard logger
 from the repository root:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "flash_blackbox imu_orientation_rtt" --probe-speed-khz 1800 --connect-under-reset
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "imu_orientation_rtt" --probe-speed-khz 1800 --connect-under-reset
 ```
 
 Keep ARM low and slowly pitch the airframe in both directions. Nose-up must be
@@ -301,9 +295,9 @@ python tools\blackbox_analyzer.py logs\foxeer-hop-front-flip.fwbb --flight-id 23
 
 Replace the COM port and flight ID with the values observed on the target.
 
-The RC PWM implementation uses a board-local TIM1/TIM8 owner because M4 is
-the complementary `TIM1_CH3N` output. The DShot implementation uses the same
-pins through board-declared timer/DMA routes and remains commissioning-gated.
+The standard DShot implementation uses board-declared TIM1/TIM8 timer and DMA
+routes, including the complementary `TIM1_CH3N` output for M4. Motor actuation
+remains safety-owned; only the capped bench selectors are commissioning-gated.
 M5-M8, analog OSD, I2C barometer, buzzer, camera
 control, LED strip, and additional UARTs are not part of this application.
 
@@ -319,7 +313,7 @@ binary on this board.
 
 ## SWD and RTT
 
-The BSP permanently reserves PA13 for SWDIO and PA14 for SWCLK. It does not
+The board support permanently reserves PA13 for SWDIO and PA14 for SWCLK. It does not
 claim the board LEDs that share those MCU signals. Connect the debugger's
 SWDIO, SWCLK, target-reference voltage, and ground; connect NRST as well when
 the retrofit exposes it. The debugger must use the board voltage only as a
@@ -359,7 +353,7 @@ From this app directory, `cargo run --release --locked` also uses
 
 ## USB Debug And Onboard Storage
 
-The opt-in `usb_serial` feature exposes a CDC ACM device named
+The board-mandatory USB FS route exposes a CDC ACM device named
 `FerroWasp Foxeer Debug`. It writes a header after enumeration and one bounded
 ASCII status line with each roughly two-second firmware heartbeat:
 
@@ -379,7 +373,7 @@ no safety or actuator handle.
 Build the diagnostic image without flashing:
 
 ```powershell
-.\flash-dfu.ps1 -BuildOnly -UsbDebug
+.\flash-dfu.ps1 -BuildOnly
 ```
 
 After flashing and normal boot, find the new Windows COM port and read it:
@@ -397,25 +391,21 @@ For a bounded five-minute capture that closes the port automatically:
 The nominal 115200 baud value is USB CDC line coding; USB transfer timing does
 not depend on a physical UART baud clock.
 
-The staged onboard-storage features extend the same CDC endpoint with bounded
-ASCII commands:
-
-- `flash_storage` probes JEDEC identity and permits read-only log/config access;
-- `flash_writes` adds disarmed-only configuration saves, log erase, and a
-  dedicated scratch-sector erase/program/readback self-test;
-- `flash_blackbox` records fixed-size CRC-protected control snapshots while
-  armed and flushes the final partial page on disarm.
+The standard onboard-storage service extends the same CDC endpoint with bounded
+ASCII commands. It probes JEDEC identity, records fixed-size CRC-protected
+control snapshots while armed, flushes the final partial page on disarm, and
+permits disarmed-only configuration saves, confirmed log erase, and a dedicated
+scratch-sector erase/program/readback self-test.
 
 The separate `mspv2_configurator` gate replaces the ASCII/status stream on the
-CDC endpoint with bounded native MSPv2 frames. It implies `flash_storage` and
+CDC endpoint with bounded native MSPv2 frames. It uses the same standard storage owner and
 implements the common read-only `MSP_API_VERSION`, `MSP_FC_VARIANT` (`FWSP`),
 `MSP_FC_VERSION`, `MSP_BOARD_INFO`, `MSP_BUILD_INFO`, `MSP_STATUS`, and
 `MSP_UID` commands. FerroWasp-native requests use function `0x7A00` and a
 version-1 postcard envelope. Supported native operations are hello/capability
 discovery, whole-config read/stage/CRC-checked commit, defaults restore,
 bounded blackbox listing/info, and CRC-protected reads of at most 512 bytes.
-The endpoint advertises config-write/reset capabilities only when
-`flash_writes` is also selected. Individual-log erase and software reboot are
+The endpoint advertises config-write and reset capabilities; firmware still rejects mutation while armed. Individual-log erase and software reboot are
 not advertised or implemented.
 
 MSPv2 config staging and persistence are rejected while armed. Blackbox access
@@ -437,21 +427,17 @@ center/max/expo values. Firmware-owned ranges and cross-field constraints are
 enforced before a disarmed-only atomic save. A foreign/non-FerroWasp log region
 stays read-only until an explicit confirmed erase.
 
-Build the three stages from the repository root:
+Build the standard image from the repository root:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_storage
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_writes
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_blackbox
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features "mspv2_configurator flash_writes"
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features mspv2_configurator
 ```
 
-The first props-off capture used the capped DShot commissioning gate. For the
-normal-mixer flight candidate, DShot is already a default feature; add only
-`flash_blackbox`:
+The normal-mixer flight image includes DShot and flash blackbox recording:
 
 ```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features flash_blackbox --probe-speed-khz 1800 --connect-under-reset
+python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --probe-speed-khz 1800 --connect-under-reset
 ```
 
 The first blackbox run requires one explicit log-partition erase because the
@@ -527,12 +513,6 @@ Build and flash the normal image through the explicit DFU helper:
 .\flash-dfu.ps1
 ```
 
-Build and flash with read-only USB diagnostics:
-
-```powershell
-.\flash-dfu.ps1 -UsbDebug
-```
-
 If multiple STM32 DFU devices are connected, select one before running Cargo:
 
 ```powershell
@@ -549,18 +529,13 @@ discovery:
 
 ```powershell
 $env:FERROWASP_DFU_DRY_RUN = "1"
-.\flash-dfu.ps1 -UsbDebug
+.\flash-dfu.ps1
 Remove-Item Env:FERROWASP_DFU_DRY_RUN
 ```
 
 The helper also creates a raw `.bin` artifact before invoking the
-CubeProgrammer runner:
-
-```powershell
-.\flash-dfu.ps1
-.\flash-dfu.ps1 -UsbDebug
-.\flash-dfu.ps1 -BuildOnly -UsbDebug
-```
+CubeProgrammer runner. Use `.\flash-dfu.ps1 -BuildOnly` to create both
+artifacts without flashing.
 
 Direct flashing at `0x08000000` overwrites any installed Betaflight image but
 does not overwrite the STM32 factory ROM bootloader. Keep motors and

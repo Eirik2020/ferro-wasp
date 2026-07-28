@@ -4,376 +4,18 @@
 #![no_main]
 #![no_std]
 
-#[cfg(all(
-    feature = "dshot_mixed_control",
-    any(
-        feature = "bench_equal_motors",
-        feature = "bench_motor1_only",
-        feature = "bench_motor2_only",
-        feature = "bench_motor3_only",
-        feature = "bench_motor4_only",
-        feature = "bench_logical_motor1_only",
-        feature = "bench_logical_motor2_only",
-        feature = "bench_logical_motor3_only",
-        feature = "bench_logical_motor4_only",
-        feature = "bench_dshot_unequal_motors",
-        feature = "bench_dshot_idle_output1_not_running",
-        feature = "bench_motor_cmd_stale_rejection",
-        feature = "bench_spi_timeout_recovery",
-        feature = "pwm_cal"
-    )
-))]
-compile_error!(
-    "The legacy `dshot_mixed_control` alias cannot be combined with bench, fault-injection, selected-motor, equal-motor, unequal-vector, or PWM-calibration features."
-);
-#[cfg(all(
-    feature = "bench_dshot_idle_output1_not_running",
-    not(feature = "dshot")
-))]
-compile_error!("Feature `bench_dshot_idle_output1_not_running` requires the DShot backend.");
-#[cfg(all(
-    feature = "dshot",
-    not(feature = "dshot_mixed_control"),
-    any(
-        feature = "bench_motor1_only",
-        feature = "bench_motor2_only",
-        feature = "bench_motor3_only",
-        feature = "bench_motor4_only",
-        feature = "pwm_cal"
-    )
-))]
-compile_error!(
-    "The FCU3 DShot bench image supports equal-motor, logical-motor, or unequal-vector validation only; remove physical selected-motor or PWM calibration features."
-);
-#[cfg(all(
-    feature = "dshot",
-    feature = "bench_dshot_unequal_motors",
-    any(
-        feature = "bench_logical_motor1_only",
-        feature = "bench_logical_motor2_only",
-        feature = "bench_logical_motor3_only",
-        feature = "bench_logical_motor4_only"
-    )
-))]
-compile_error!("The DShot unequal-vector test cannot be combined with a logical-motor selection.");
-#[cfg(all(feature = "bench_dshot_unequal_motors", not(feature = "dshot")))]
-compile_error!("Feature `bench_dshot_unequal_motors` requires the DShot backend.");
-#[cfg(all(
-    feature = "bench_dshot_unequal_motors",
-    not(feature = "bench_equal_motors")
-))]
-compile_error!("Feature `bench_dshot_unequal_motors` requires `bench_equal_motors`.");
-#[cfg(all(
-    feature = "dshot",
-    not(feature = "bench_equal_motors"),
-    any(
-        feature = "bench_logical_motor1_only",
-        feature = "bench_logical_motor2_only",
-        feature = "bench_logical_motor3_only",
-        feature = "bench_logical_motor4_only"
-    )
-))]
-compile_error!("A DShot logical-motor selection requires the capped `bench_equal_motors` gate.");
-#[cfg(all(
-    feature = "dshot",
-    any(
-        all(
-            feature = "bench_logical_motor1_only",
-            any(
-                feature = "bench_logical_motor2_only",
-                feature = "bench_logical_motor3_only",
-                feature = "bench_logical_motor4_only"
-            )
-        ),
-        all(
-            feature = "bench_logical_motor2_only",
-            any(
-                feature = "bench_logical_motor3_only",
-                feature = "bench_logical_motor4_only"
-            )
-        ),
-        all(
-            feature = "bench_logical_motor3_only",
-            feature = "bench_logical_motor4_only"
-        )
-    )
-))]
-compile_error!("Select at most one `bench_logical_motorN_only` feature for DShot validation.");
+use ferrowasp_app_stm32f405_flight::internal::*;
 
-use core::cell::RefCell;
-use core::sync::atomic::Ordering;
-use critical_section::Mutex;
-use defmt::{info, warn};
-use defmt_rtt as _;
-use ferrowasp_bsp::stm32f4::ferrowasp_fcu3 as board;
-use ferrowasp_core::actuator::throttle_to_u16;
-use ferrowasp_core::safety;
-use ferrowasp_drivers::mpu6500 as imu;
-use ferrowasp_io_core::serial::{UART2_CONSUMER, UART4_CONSUMER, route_uart_to_task};
-use ferrowasp_io_core::spi::{
-    AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
-    SpiRequestMailbox,
-};
-use ferrowasp_io_core::{
-    serial::{Discontinuity, RxChunk, SerialFault},
-    time::TimestampMicros,
-};
-use ferrowasp_mspv1 as mspv1;
-use ferrowasp_stm32f4::adc as stm32_adc;
-use ferrowasp_stm32f4::hal_prelude::*;
-use ferrowasp_stm32f4::memory as stm32_memory;
-use ferrowasp_stm32f4::scheduler as stm32_scheduler;
-use ferrowasp_stm32f4::spi_dma as stm32_spi;
-use ferrowasp_stm32f4::spi_dma::*;
-#[cfg(not(feature = "dshot"))]
-use ferrowasp_stm32f4::static_pwm as stm32_static_pwm;
-use ferrowasp_stm32f4::timebase as stm32_timebase;
-use ferrowasp_stm32f4::uart_dma as stm32_uart;
-use ferrowasp_stm32f4::watchdog as stm32_watchdog;
-use ferrowasp_tasks::drone_toolbox as dt;
-use ferrowasp_tasks::esc_manager as esc;
-use ferrowasp_tasks::osd;
-use fugit::Rate;
-use panic_probe as _;
-use rtic_monotonics::systick::prelude::*;
-use sbus_rs::StreamingParser;
-#[cfg(feature = "usb_serial")]
-use stm32f4xx_hal::otg_fs::USB;
-use stm32f4xx_hal::otg_fs::UsbBusType;
-use usb_device::device::UsbDevice;
-#[cfg(feature = "usb_serial")]
-use usb_device::{
-    bus::UsbBusAllocator,
-    device::{StringDescriptors, UsbDeviceBuilder, UsbVidPid},
-};
-use usbd_serial::SerialPort;
-
-type AdcTransfer = stm32_adc::Adc1ObservationTransfer;
-type ControlScheduler = board::aliases::ControlScheduler;
-type IoTimebase = stm32_timebase::MicrosecondTimebase<board::aliases::IoTimebaseTimer>;
-type IoWatchdog = board::aliases::IoWatchdog;
-type Uart4OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
-type Uart4OwnedRxProducer = stm32_memory::UartOwnedRxProducer<'static>;
-type Uart4OwnedReader = stm32_memory::UartOwnedReader<'static>;
-type Uart4Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-type Uart2OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
-type Uart2OwnedReader = stm32_memory::UartOwnedReader<'static>;
-type Uart2Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-type Uart2OwnedRxBridge = stm32_uart::UartOwnedRxBridge<
-    'static,
-    { stm32_memory::UART_RX_BUFFER_BYTES },
-    { stm32_memory::OWNED_UART_RX_QUEUE_DEPTH },
->;
-type Uart4OwnedTxChannel = stm32_memory::UartOwnedTxChannel;
-type Uart4OwnedWriter = stm32_memory::UartOwnedWriter<'static>;
-type Uart4OwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
-type Uart4OwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
-
-#[cfg(not(feature = "dshot"))]
-struct MotorOutputs {
-    m1: ferrowasp_stm32f4::static_pwm::Motor1Pwm,
-    m2: ferrowasp_stm32f4::static_pwm::Motor2Pwm,
-    m3: ferrowasp_stm32f4::static_pwm::Motor3Pwm,
-    m4: ferrowasp_stm32f4::static_pwm::Motor4Pwm,
-}
-
-#[cfg(feature = "dshot")]
-struct MotorOutputs;
-
-#[cfg(not(feature = "dshot"))]
-pub struct DshotSharedDisabled;
-
-#[cfg(not(feature = "dshot"))]
-impl DshotSharedDisabled {
-    const fn new() -> Self {
-        Self
-    }
-}
-
-#[cfg(feature = "dshot")]
-type DshotShared = board::init::DshotMotorBank;
-#[cfg(not(feature = "dshot"))]
-type DshotShared = DshotSharedDisabled;
-#[cfg(feature = "dshot")]
-type EscTelemetryUartIrq = stm32_uart::Uart1RxIrq;
-#[cfg(not(feature = "dshot"))]
-type EscTelemetryUartIrq = ();
-#[cfg(feature = "dshot")]
-type EscTelemetryUartParser = stm32_uart::UartRxParserSide;
-#[cfg(not(feature = "dshot"))]
-type EscTelemetryUartParser = ();
-
-use board::profiles::{ADC_OBSERVATION_PROFILE, IMU_CONTROL_AXIS_PROFILE};
-#[cfg(feature = "dshot")]
-use board::profiles::{DSHOT_FOUR_MOTOR_PROFILE, DSHOT_IDLE_TUNING_MAX_COMMAND};
 #[rtic::app(device = pac, peripherals = true, dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN])]
 mod app {
     use super::*; // Import everything from parent module
 
     // SAFETY CRITICAL SECTION
     //------------------------------------------------------------------------
-    use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU32};
-    use embedded_hal::spi::Operation;
-    use embedded_hal_async::spi::SpiDevice;
-    use ferrowasp_core::safety::signals::{
-        self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
-    };
-
-    static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
-    static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
-    static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
-    static IMU_STALE: AtomicBool = AtomicBool::new(true);
-    static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
-    static CONTROL_RATE_SEQ: AtomicU32 = AtomicU32::new(0);
-    static CONTROL_ISR_SEQ: AtomicU32 = AtomicU32::new(0);
-    static CONTROL_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
-    static CONTROL_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
-    static CONTROL_YAW_RAW: AtomicI32 = AtomicI32::new(0);
-    static CONTROL_ROLL_DPS10: AtomicI32 = AtomicI32::new(0);
-    static CONTROL_PITCH_DPS10: AtomicI32 = AtomicI32::new(0);
-    static CONTROL_YAW_DPS10: AtomicI32 = AtomicI32::new(0);
-    static IMU_LATEST_SEQ: AtomicU32 = AtomicU32::new(0);
-    static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
-    static IMU_LATEST_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
-    static IMU_LATEST_YAW_RAW: AtomicI32 = AtomicI32::new(0);
-    #[cfg(feature = "dshot")]
-    static ESC_TELEMETRY_DISCONTINUITY: AtomicBool = AtomicBool::new(false);
-    type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-    type Spi1Executor =
-        CriticalSectionSpiExecutor<'static, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-    type Spi1Device = AsyncSpiDevice<Spi1Executor, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-    static SPI1_MAILBOX: Spi1Mailbox =
-        critical_section::Mutex::new(core::cell::RefCell::new(SpiRequestMailbox::new()));
-    static RC_RATES: Mutex<RefCell<safety::RcRates>> = Mutex::new(RefCell::new(safety::RcRates {
-        roll: 0,
-        pitch: 0,
-        yaw: 0,
-    }));
-    static RC_LINK: Mutex<RefCell<safety::RcLinkState>> =
-        Mutex::new(RefCell::new(safety::RcLinkState::new()));
-    static ACTUATOR_ARM_DONE: AtomicBool = AtomicBool::new(false);
-    static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
-    const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
-    const ADC_CURRENT_BETAFLIGHT_SCALE: u32 = ADC_OBSERVATION_PROFILE.current_betaflight_scale;
-    const BATTERY_CELL_COUNT: u8 = ADC_OBSERVATION_PROFILE.battery_cell_count;
-    #[cfg(feature = "dshot")]
-    const ESC_MANAGER_PERIOD_MS: u32 = 2;
-    #[cfg(feature = "dshot")]
-    const DSHOT_PREARM_STOP_HOLD_MS: u32 = DSHOT_FOUR_MOTOR_PROFILE.prearm_stop_hold_ms;
-    #[cfg(feature = "dshot")]
-    const DSHOT_IDLE_THROTTLE_COMMAND: u16 = DSHOT_FOUR_MOTOR_PROFILE.idle_throttle_command;
-    #[cfg(feature = "dshot")]
-    const DSHOT_IDLE_QUALIFICATION_CONFIG: esc::EscIdleQualificationConfig =
-        esc::EscIdleQualificationConfig {
-            min_erpm_div100: DSHOT_FOUR_MOTOR_PROFILE.idle_qualification_min_erpm_div100,
-            max_erpm_div100: DSHOT_FOUR_MOTOR_PROFILE.idle_qualification_max_erpm_div100,
-            spinup_grace_ms: DSHOT_FOUR_MOTOR_PROFILE.idle_qualification_spinup_grace_ms,
-            timeout_ms: DSHOT_FOUR_MOTOR_PROFILE.idle_qualification_timeout_ms,
-            max_sample_age_ms: DSHOT_FOUR_MOTOR_PROFILE.idle_qualification_max_sample_age_ms,
-            required_consecutive_samples: DSHOT_FOUR_MOTOR_PROFILE
-                .idle_qualification_consecutive_samples,
-        };
-    #[cfg(feature = "dshot")]
-    const ACTUATOR_IDLE_THROTTLE: f32 = DSHOT_IDLE_THROTTLE_COMMAND as f32;
-    /// Inverse of the FCU3 logical-to-physical `MOTOR_OUTPUT_MAP`.
-    #[cfg(feature = "dshot")]
-    const ESC_OUTPUT_TO_LOGICAL_MOTOR: [u8; 4] = [4, 3, 1, 2];
-    #[cfg(not(feature = "dshot"))]
-    const ACTUATOR_IDLE_THROTTLE: f32 = safety::ESC_IDLE_THROTTLE;
-    #[cfg(feature = "dshot")]
-    const _: () = {
-        assert!(DSHOT_PREARM_STOP_HOLD_MS > 0);
-        assert!(DSHOT_IDLE_THROTTLE_COMMAND > 0);
-        assert!(DSHOT_IDLE_THROTTLE_COMMAND <= DSHOT_IDLE_TUNING_MAX_COMMAND);
-        assert!(DSHOT_IDLE_QUALIFICATION_CONFIG.is_valid());
-        assert!(dt::MOTOR_OUTPUT_MAP[0] == 3);
-        assert!(dt::MOTOR_OUTPUT_MAP[1] == 4);
-        assert!(dt::MOTOR_OUTPUT_MAP[2] == 2);
-        assert!(dt::MOTOR_OUTPUT_MAP[3] == 1);
-    };
-
-    #[cfg(feature = "dshot")]
-    const fn logical_motor_for_esc_output(output: esc::EscOutput) -> u8 {
-        ESC_OUTPUT_TO_LOGICAL_MOTOR[output.index()]
-    }
-
-    #[cfg(feature = "bench_dshot_idle_output1_not_running")]
-    fn inject_idle_qualification_fault(
-        mut update: esc::EscTelemetryUpdate,
-    ) -> esc::EscTelemetryUpdate {
-        if update.output == esc::EscOutput::Output1 {
-            update.observation.sample.erpm_div100 = 0;
-        }
-        update
-    }
-
-    #[cfg(all(
-        feature = "dshot",
-        not(feature = "bench_dshot_idle_output1_not_running")
-    ))]
-    const fn inject_idle_qualification_fault(
-        update: esc::EscTelemetryUpdate,
-    ) -> esc::EscTelemetryUpdate {
-        update
-    }
-
-    #[cfg(all(feature = "dshot", feature = "bench_dshot_unequal_motors"))]
-    const _: () = {
-        assert!(DSHOT_IDLE_THROTTLE_COMMAND <= dt::DSHOT_UNEQUAL_BENCH_MIN_COMMAND);
-    };
-    #[cfg(any(
-        feature = "bench_equal_motors",
-        feature = "bench_motor1_only",
-        feature = "bench_motor2_only",
-        feature = "bench_motor3_only",
-        feature = "bench_motor4_only",
-        feature = "bench_logical_motor1_only",
-        feature = "bench_logical_motor2_only",
-        feature = "bench_logical_motor3_only",
-        feature = "bench_logical_motor4_only",
-        feature = "bench_dshot_unequal_motors"
-    ))]
-    const BENCH_EQUAL_MOTOR_MAX_THROTTLE: f32 = 250.0;
-    const IMU_GYRO_RAW_TO_DPS: f32 = IMU_CONTROL_AXIS_PROFILE.gyro_raw_to_dps as f32 / 10.0;
-    const CONTROL_IMU_TO_DRONE_ROTATION: dt::FrameRotation =
-        IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation();
-    const GYRO_BIAS_CALIBRATION_SAMPLES: u32 = IMU_CONTROL_AXIS_PROFILE.bias_calibration_samples;
-    const GYRO_BIAS_CALIBRATION_MAX_RAW: i32 = IMU_CONTROL_AXIS_PROFILE.bias_calibration_max_raw;
     //------------------------------------------------------------------------
 
     // Monotonicss
     systick_monotonic!(Mono, 1000); // Set mono timer to 1ms resolution
-
-    #[cfg(feature = "blackbox_defmt")]
-    macro_rules! emit_compact_blackbox {
-        (
-            $seq:expr,
-            $imu_seq:expr,
-            $armed:expr,
-            $imu_fresh:expr,
-            $raw_gyro_dps:expr,
-            $filtered_gyro_dps:expr,
-            $command_dps:expr,
-            $pid:expr,
-            $throttle:expr,
-            $motors:expr $(,)?
-        ) => {
-            dt::emit_rate_blackbox(dt::CompactRateBlackboxSample::from_fields(
-                dt::CompactRateBlackboxFields {
-                    seq: $seq,
-                    imu_seq: $imu_seq,
-                    armed: $armed,
-                    imu_fresh: $imu_fresh,
-                    raw_gyro_dps: $raw_gyro_dps,
-                    filtered_gyro_dps: $filtered_gyro_dps,
-                    command_dps: $command_dps,
-                    pid: $pid,
-                    throttle: $throttle,
-                    motors: $motors,
-                },
-            ));
-        };
-    }
 
     #[shared]
     struct Shared {
@@ -404,17 +46,13 @@ mod app {
         spi1_owner: stm32_spi::Spi1Mpu6500Owner,
         io_timebase: IoTimebase,
 
-        // The safety-owned actuator backend. In normal PWM builds this is a
-        // zero-sized placeholder so the RTIC ownership shape stays stable.
+        // Safety-owned DShot actuator backend.
         dshot_motors: DshotShared,
     }
     #[local]
     struct Local {
         // Safety
         arm_qualifier: safety::ArmQualifier,
-
-        // Safety-owned ESC output resources.
-        motor_outputs: MotorOutputs,
 
         // UART
         sbus: StreamingParser,
@@ -510,41 +148,39 @@ mod app {
         rc_rates_writer: RcRatesWriter,
         rc_rates_reader: RcRatesReader,
 
-        calibrated: bool,
-
         // USB CDC serial
-        usb_dev: Option<UsbDevice<'static, UsbBusType>>,
-        usb_serial: Option<SerialPort<'static, UsbBusType>>,
+        usb_dev: Option<UsbDebugDevice>,
+        usb_serial: Option<UsbDebugSerial>,
         usb_hello_sent: bool,
     }
     #[init(local = [
-        uart1_rx_buffers: board::storage::UartRxBufferBank =
-            board::storage::new_uart_rx_buffer_bank(),
-        uart1_free_queue: board::storage::UartRxFreeQueue =
-            board::storage::UartRxFreeQueue::new(),
-        uart1_filled_queue: board::storage::UartRxFilledQueue =
-            board::storage::UartRxFilledQueue::new(),
-        uart2_rx_buffers: board::storage::UartRxBufferBank =
-            board::storage::new_uart_rx_buffer_bank(),
-        uart2_free_queue: board::storage::UartRxFreeQueue =
-            board::storage::UartRxFreeQueue::new(),
-        uart2_filled_queue: board::storage::UartRxFilledQueue =
-            board::storage::UartRxFilledQueue::new(),
-        uart4_rx_buffers: board::storage::UartRxBufferBank =
-            board::storage::new_uart_rx_buffer_bank(),
-        uart4_free_queue: board::storage::UartRxFreeQueue =
-            board::storage::UartRxFreeQueue::new(),
-        uart4_filled_queue: board::storage::UartRxFilledQueue =
-            board::storage::UartRxFilledQueue::new(),
-        uart4_tx_buffer: board::storage::Uart4TxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
-        spi1_dma_buffers: board::storage::SpiDmaBufferBank =
-            board::storage::new_spi_dma_buffer_bank(),
-        spi1_free_queue: board::storage::SpiFreeQueue =
-            board::storage::SpiFreeQueue::new(),
-        spi1_filled_queue: board::storage::SpiFilledQueue =
-            board::storage::SpiFilledQueue::new(),
-        adc1_buffers: board::storage::AdcBufferBank =
-            board::storage::new_adc_buffer_bank(),
+        uart1_rx_buffers: stm32_storage::UartRxBufferBank =
+            stm32_storage::new_uart_rx_buffer_bank(),
+        uart1_free_queue: stm32_storage::UartRxFreeQueue =
+            stm32_storage::UartRxFreeQueue::new(),
+        uart1_filled_queue: stm32_storage::UartRxFilledQueue =
+            stm32_storage::UartRxFilledQueue::new(),
+        uart2_rx_buffers: stm32_storage::UartRxBufferBank =
+            stm32_storage::new_uart_rx_buffer_bank(),
+        uart2_free_queue: stm32_storage::UartRxFreeQueue =
+            stm32_storage::UartRxFreeQueue::new(),
+        uart2_filled_queue: stm32_storage::UartRxFilledQueue =
+            stm32_storage::UartRxFilledQueue::new(),
+        uart4_rx_buffers: stm32_storage::UartRxBufferBank =
+            stm32_storage::new_uart_rx_buffer_bank(),
+        uart4_free_queue: stm32_storage::UartRxFreeQueue =
+            stm32_storage::UartRxFreeQueue::new(),
+        uart4_filled_queue: stm32_storage::UartRxFilledQueue =
+            stm32_storage::UartRxFilledQueue::new(),
+        uart4_tx_buffer: stm32_storage::Uart4TxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
+        spi1_dma_buffers: stm32_storage::SpiDmaBufferBank =
+            stm32_storage::new_spi_dma_buffer_bank(),
+        spi1_free_queue: stm32_storage::SpiFreeQueue =
+            stm32_storage::SpiFreeQueue::new(),
+        spi1_filled_queue: stm32_storage::SpiFilledQueue =
+            stm32_storage::SpiFilledQueue::new(),
+        adc1_buffers: stm32_storage::AdcBufferBank =
+            stm32_storage::new_adc_buffer_bank(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         info!("Begin system init..");
@@ -559,12 +195,7 @@ mod app {
         let gpiob = dp.GPIOB.split(&mut rcc);
         let gpioc = dp.GPIOC.split(&mut rcc);
         let tim1 = Timer::new(dp.TIM1, &mut rcc);
-        #[cfg(feature = "dshot")]
         let tim8 = Timer::new(dp.TIM8, &mut rcc);
-        #[cfg(not(feature = "dshot"))]
-        let tim3 = Timer::new(dp.TIM3, &mut rcc);
-        #[cfg(not(feature = "dshot"))]
-        let tim12 = Timer::new(dp.TIM12, &mut rcc);
 
         // Poll the IMU at 800 Hz and run the PID/motor update at 400 Hz.
         let sampling_rate = dt::IMU_POLL_RATE_HZ.Hz();
@@ -579,30 +210,25 @@ mod app {
                 dma: dma2.0,
             },
             &mut rcc,
-            board::storage::AdcStorageResources {
+            stm32_storage::AdcStorageResources {
                 buffers: cx.local.adc1_buffers,
             },
         );
 
-        // Configure Clocks and start monotimer.
-        let system_clock_frequency: Rate<u32, 1, 1> = 168.MHz();
-        const DELAY_HZ: u32 = 1_000_000;
-        #[cfg(feature = "usb_serial")]
-        let mut clocks = rcc.freeze(
-            rcc_cfg::hsi()
-                .sysclk(system_clock_frequency)
-                .require_pll48clk(),
+        // Configure clocks through the shared STM32F4 mechanism.
+        let mut clocks = stm32_clocks::freeze_hsi(
+            rcc,
+            stm32_clocks::SYSTEM_CLOCK_HZ,
+            cfg!(feature = "usb_serial"),
         );
-        #[cfg(not(feature = "usb_serial"))]
-        let mut clocks = rcc.freeze(rcc_cfg::hsi().sysclk(system_clock_frequency));
         #[cfg(feature = "usb_serial")]
         info!(
             "PLL48 valid: {}, PLL48: {} Hz",
             clocks.clocks.is_pll48clk_valid(),
             clocks.clocks.pll48clk().map(|clk| clk.raw()).unwrap_or(0)
         );
-        Mono::start(cx.core.SYST, system_clock_frequency.to_Hz());
-        let mut delay = dp.TIM5.delay::<DELAY_HZ>(&mut clocks);
+        Mono::start(cx.core.SYST, stm32_clocks::SYSTEM_CLOCK_HZ);
+        let mut delay = dp.TIM5.delay::<DELAY_TIMER_HZ>(&mut clocks);
         //let mut syscfg = dp.SYSCFG.constrain(&mut clocks);
 
         let control_loop_scheduler =
@@ -622,28 +248,13 @@ mod app {
 
         #[cfg(feature = "usb_serial")]
         let (usb_dev, usb_serial) = {
-            let usb = USB::new(
+            let (usb_dev, usb_serial) = stm32_usb::init_usb_cdc_serial(
                 (dp.OTG_FS_GLOBAL, dp.OTG_FS_DEVICE, dp.OTG_FS_PWRCLK),
                 (gpioa.pa11, gpioa.pa12),
                 &clocks.clocks,
-            );
-            let usb_bus = cortex_m::singleton!(
-                : UsbBusAllocator<UsbBusType> = UsbBusType::new(
-                    usb,
-                    cortex_m::singleton!(: [u32; 1024] = [0; 1024]).unwrap()
-                )
+                board::USB_CDC_IDENTITY,
             )
             .unwrap();
-            let usb_serial = SerialPort::new(usb_bus);
-            let usb_dev = UsbDeviceBuilder::new(usb_bus, UsbVidPid(0x16c0, 0x27dd))
-                .strings(&[StringDescriptors::default()
-                    .manufacturer("FerroWasp")
-                    .product("FerroWasp USB Serial")
-                    .serial_number("FW-0001")])
-                .unwrap()
-                .device_class(usbd_serial::USB_CLASS_CDC)
-                .build();
-
             (Some(usb_dev), Some(usb_serial))
         };
         #[cfg(not(feature = "usb_serial"))]
@@ -657,16 +268,15 @@ mod app {
 
         // ------------  USART1 / BLHeli legacy ESC telemetry  ------------
         // Board connection: ESC TLM -> PA10 USART1_RX. PA9 remains untouched.
-        #[cfg(feature = "dshot")]
         let (uart1_rx, esc_telemetry_uart) = {
-            let uart1 = board::init::init_usart1_esc_telemetry(
-                board::init::Usart1EscTelemetryResources {
+            let uart1 = stm32_uart::init_usart1_esc_telemetry(
+                stm32_uart::Usart1EscTelemetryResources {
                     rx_pin: gpioa.pa10,
                     usart: dp.USART1,
                     rx_dma: dma2.5,
                 },
                 &mut clocks,
-                board::storage::UartRxStorageResources {
+                stm32_storage::UartRxStorageResources {
                     buffers: cx.local.uart1_rx_buffers,
                     free_queue: cx.local.uart1_free_queue,
                     filled_queue: cx.local.uart1_filled_queue,
@@ -674,19 +284,17 @@ mod app {
             );
             (uart1.irq, uart1.parser)
         };
-        #[cfg(not(feature = "dshot"))]
-        let (uart1_rx, esc_telemetry_uart) = ((), ());
 
         // ------------  USART2 / SBUS RC  ------------
-        let uart2 = board::init::init_usart2_sbus(
-            board::init::Usart2SbusResources {
+        let uart2 = stm32_uart::init_usart2_sbus(
+            stm32_uart::Usart2SbusResources {
                 tx_pin: gpioa.pa2,
                 rx_pin: gpioa.pa3,
                 usart: dp.USART2,
                 rx_dma: dma1.5,
             },
             &mut clocks,
-            board::storage::UartRxStorageResources {
+            stm32_storage::UartRxStorageResources {
                 buffers: cx.local.uart2_rx_buffers,
                 free_queue: cx.local.uart2_free_queue,
                 filled_queue: cx.local.uart2_filled_queue,
@@ -702,8 +310,8 @@ mod app {
         );
         // ------------  UART4 / DJI O4 MSP OSD  ------------
         // Board connection: PA0 UART4_TX -> DJI O4 RX, PA1 UART4_RX <- DJI O4 TX.
-        let uart4 = board::init::init_uart4_msp_osd(
-            board::init::Uart4MspResources {
+        let uart4 = stm32_uart::init_uart4_msp_osd(
+            stm32_uart::Uart4MspResources {
                 tx_pin: gpioa.pa0,
                 rx_pin: gpioa.pa1,
                 uart: dp.UART4,
@@ -711,7 +319,7 @@ mod app {
                 tx_dma: dma1.4,
             },
             &mut clocks,
-            board::storage::UartRxStorageResources {
+            stm32_storage::UartRxStorageResources {
                 buffers: cx.local.uart4_rx_buffers,
                 free_queue: cx.local.uart4_free_queue,
                 filled_queue: cx.local.uart4_filled_queue,
@@ -728,7 +336,7 @@ mod app {
         );
         let rc_input_uart = rc_input_uart
             .take()
-            .expect("BSP must route USART2 to the RC input task");
+            .expect("board support must route USART2 to the RC input task");
         let uart2_owned_rx =
             cortex_m::singleton!(: Uart2OwnedRxChannel = Uart2OwnedRxChannel::new()).unwrap();
         let (rc_rx_producer, rc_rx_reader, rc_rx_discontinuities) = uart2_owned_rx.split();
@@ -753,40 +361,13 @@ mod app {
         let (esc_telemetry_update_producer, esc_telemetry_update_consumer) =
             esc_telemetry_update_queue.split();
 
-        #[cfg(not(feature = "dshot"))]
-        let (motor_outputs, dshot_motors) = {
-            let esc_pwm = stm32_static_pwm::init_esc_pwm(
-                stm32_static_pwm::EscPwmResources {
-                    tim1,
-                    tim3,
-                    tim12,
-                    motor1_pin: gpioa.pa8,
-                    motor2_pin: gpioc.pc9,
-                    motor3_pin: gpioc.pc8,
-                    motor4_pin: gpiob.pb15,
-                },
-                &clocks.clocks,
-            );
-
-            (
-                MotorOutputs {
-                    m1: esc_pwm.m1,
-                    m2: esc_pwm.m2,
-                    m3: esc_pwm.m3,
-                    m4: esc_pwm.m4,
-                },
-                DshotSharedDisabled::new(),
-            )
-        };
-
-        #[cfg(feature = "dshot")]
-        let (motor_outputs, dshot_motors) = {
+        let dshot_motors = {
             board::aliases::assert_four_motor_dshot_routes_compile();
             let storage = cortex_m::singleton!(
                 : board::init::DshotDmaStorage = board::init::DshotDmaStorage::new()
             )
             .expect("FCU3 four-motor DShot storage allocated twice");
-            let dshot_motors = board::init::init_dshot_motor_bank(
+            board::init::init_dshot_motor_bank(
                 board::init::DshotMotorBankResources {
                     tim1,
                     tim8,
@@ -802,9 +383,7 @@ mod app {
                 &clocks.clocks,
                 storage,
             )
-            .expect("FCU3 TIM1/TIM8 clock cannot produce DShot600 timing");
-
-            (MotorOutputs, dshot_motors)
+            .expect("FCU3 TIM1/TIM8 clock cannot produce DShot600 timing")
         };
 
         // Minimum Throttle
@@ -822,7 +401,7 @@ mod app {
             },
             &mut clocks,
             &mut delay,
-            board::storage::SpiDmaStorageResources {
+            stm32_storage::SpiDmaStorageResources {
                 buffers: cx.local.spi1_dma_buffers,
                 free_queue: cx.local.spi1_free_queue,
                 filled_queue: cx.local.spi1_filled_queue,
@@ -831,7 +410,9 @@ mod app {
         let spi1_device = AsyncSpiDevice::new(CriticalSectionSpiExecutor::new(
             &SPI1_MAILBOX,
             SpiDeadlineUs(SPI1_IMU_DEADLINE_US),
-            pend_spi1_owner,
+            || {
+                let _ = spi1_owner_service::spawn();
+            },
         ));
 
         // Init rate controller
@@ -862,20 +443,16 @@ mod app {
         // --- Boot-strap program ---
         info!("System init successful!");
         info!("FerroWasp RTT hello from drone");
-        #[cfg(all(
-            feature = "dshot",
-            not(any(
-                feature = "bench_equal_motors",
-                feature = "bench_logical_motor1_only",
-                feature = "bench_logical_motor2_only",
-                feature = "bench_logical_motor3_only",
-                feature = "bench_logical_motor4_only",
-                feature = "bench_dshot_unequal_motors"
-            ))
-        ))]
+        #[cfg(not(any(
+            feature = "bench_equal_motors",
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only",
+            feature = "bench_dshot_unequal_motors"
+        )))]
         info!("DShot600 standard motor output active");
         #[cfg(all(
-            feature = "dshot",
             feature = "bench_equal_motors",
             not(any(
                 feature = "bench_logical_motor1_only",
@@ -886,15 +463,15 @@ mod app {
             ))
         ))]
         info!("DShot600 four-motor equal-throttle bench backend active");
-        #[cfg(all(feature = "dshot", feature = "bench_logical_motor1_only"))]
+        #[cfg(feature = "bench_logical_motor1_only")]
         info!("DShot600 capped logical-motor 1 bench backend active");
-        #[cfg(all(feature = "dshot", feature = "bench_logical_motor2_only"))]
+        #[cfg(feature = "bench_logical_motor2_only")]
         info!("DShot600 capped logical-motor 2 bench backend active");
-        #[cfg(all(feature = "dshot", feature = "bench_logical_motor3_only"))]
+        #[cfg(feature = "bench_logical_motor3_only")]
         info!("DShot600 capped logical-motor 3 bench backend active");
-        #[cfg(all(feature = "dshot", feature = "bench_logical_motor4_only"))]
+        #[cfg(feature = "bench_logical_motor4_only")]
         info!("DShot600 capped logical-motor 4 bench backend active");
-        #[cfg(all(feature = "dshot", feature = "bench_dshot_unequal_motors"))]
+        #[cfg(feature = "bench_dshot_unequal_motors")]
         info!("DShot600 capped unequal-vector bench backend active");
         #[cfg(feature = "bench_dshot_idle_output1_not_running")]
         warn!(
@@ -902,32 +479,24 @@ mod app {
         );
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
-        #[cfg(feature = "dshot")]
         info!(
             "DShot arming profile: {} ms stop dwell, idle command {} -> value {}",
             DSHOT_PREARM_STOP_HOLD_MS,
             DSHOT_IDLE_THROTTLE_COMMAND,
             ferrowasp_waveform::dshot::throttle_to_dshot(DSHOT_IDLE_THROTTLE_COMMAND)
         );
-        #[cfg(feature = "dshot")]
         info!(
             "BLHeli legacy telemetry RX active on PA10 USART1 at 115200 baud; physical outputs 1/2/3/4 = logical M4/M3/M1/M2"
         );
-        #[cfg(not(feature = "dshot"))]
-        info!("BLHeli telemetry request manager inactive in the PWM fallback image");
         heartbeat::spawn().unwrap();
         adc1_polling::spawn().ok();
         uart4_tx_worker::spawn().unwrap();
         rc_input::spawn().unwrap();
         osd_refresh::spawn().ok();
-        #[cfg(feature = "dshot")]
         {
             esc_manager_task::spawn().unwrap();
             dshot_service::spawn().unwrap();
         }
-        #[cfg(feature = "pwm_cal")]
-        actuator_output::spawn(safety::ActuatorCmd::Calibrate).ok();
-
         (
             Shared {
                 uart1_rx,
@@ -959,9 +528,6 @@ mod app {
             Local {
                 // Safety
                 arm_qualifier: safety::ArmQualifier::default(),
-
-                // ESC output owner
-                motor_outputs,
 
                 // UART
                 sbus: StreamingParser::new(),
@@ -1061,8 +627,6 @@ mod app {
                 rc_rates_writer,
                 rc_rates_reader,
 
-                calibrated: false,
-
                 // USB CDC serial
                 usb_dev,
                 usb_serial,
@@ -1071,46 +635,6 @@ mod app {
         )
     }
 
-    fn warn_arming_abort(reason: safety::ArmingAbortReason) {
-        match reason {
-            safety::ArmingAbortReason::PermitRevoked => {
-                warn!("Arming aborted: actuator permission revoked")
-            }
-            safety::ArmingAbortReason::RcLinkInvalid => {
-                warn!("Arming aborted: RC link is not armable")
-            }
-            safety::ArmingAbortReason::ArmSwitchLow => {
-                warn!("Arming aborted: arm switch is low")
-            }
-            safety::ArmingAbortReason::ThrottleHigh => warn!(
-                "Arming aborted: throttle exceeds {}",
-                safety::ARMING_MAX_THROTTLE
-            ),
-            safety::ArmingAbortReason::ImuUnavailable => {
-                warn!("Arming aborted: IMU has not produced a valid sample")
-            }
-            safety::ArmingAbortReason::ImuBiasUncalibrated => {
-                warn!("Arming aborted: gyro bias calibration is incomplete")
-            }
-            safety::ArmingAbortReason::ImuStale => {
-                warn!("Arming aborted: IMU sample is stale")
-            }
-            safety::ArmingAbortReason::EscIdleTelemetryTimeout => {
-                warn!("Arming aborted: ESC idle telemetry qualification timed out")
-            }
-            safety::ArmingAbortReason::EscIdleRpmOutOfRange => {
-                warn!("Arming aborted: ESC idle eRPM outside the permitted range")
-            }
-            safety::ArmingAbortReason::EscIdleQualificationInvalid => {
-                warn!("Arming aborted: invalid ESC idle qualification profile")
-            }
-            safety::ArmingAbortReason::CompletionDeliveryFailed => {
-                warn!("Arming aborted: idle completion delivery failed")
-            }
-        }
-    }
-
-    // ----  SAFETY MASTER  ----
     //---------------------------------------------------------------------------------------------------------------------------
     #[task(
     priority = 16,
@@ -1146,9 +670,6 @@ mod app {
                 );
                 if guard.is_ok() {
                     arm_permit.allow();
-                    #[cfg(not(feature = "dshot"))]
-                    info!("Attempting BLHeli PWM arming!");
-                    #[cfg(feature = "dshot")]
                     info!("Attempting DShot safety arming on four motor outputs!");
 
                     if actuator_output::spawn(safety::ActuatorCmd::EnterIdle).is_err() {
@@ -1243,31 +764,6 @@ mod app {
     }
     //---------------------------------------------------------------------------------------------------------------------------
 
-    async fn osd_write(writer: &mut Uart4OwnedWriter, healthy: &mut bool, bytes: &[u8]) {
-        use embedded_io_async::Write;
-
-        if !*healthy {
-            return;
-        }
-
-        if let Err(error) = writer.write_all(bytes).await {
-            *healthy = false;
-            match error {
-                SerialFault::DmaTransfer => warn!("UART4 TX writer stopped after DMA fault"),
-                SerialFault::Disabled => {
-                    warn!("UART4 TX writer stopped because stream is disabled")
-                }
-                SerialFault::InvalidChunk => warn!("UART4 TX writer rejected invalid MSP frame"),
-                SerialFault::InvalidState => warn!("UART4 TX writer found invalid transport state"),
-                SerialFault::QueueOverflow => warn!("UART4 TX writer queue overflowed"),
-                SerialFault::Timeout => warn!("UART4 TX writer timed out"),
-                SerialFault::UnsupportedProtocol => {
-                    warn!("UART4 TX writer rejected unsupported protocol")
-                }
-            }
-        }
-    }
-
     // ---- USB CDC SERIAL ----
     #[task(
         binds = OTG_FS,
@@ -1294,7 +790,7 @@ mod app {
                 Ok(_) => {
                     *cx.local.usb_hello_sent = true;
                 }
-                Err(usb_device::UsbError::WouldBlock) => {}
+                Err(UsbError::WouldBlock) => {}
                 Err(_) => {}
             }
         }
@@ -1330,48 +826,6 @@ mod app {
         }
     }
 
-    #[cfg(not(feature = "pwm_cal"))]
-    fn motor_command_timestamp(now_ms: u32, _sequence: u32) -> u32 {
-        #[cfg(feature = "bench_motor_cmd_stale_rejection")]
-        if _sequence == 1 {
-            return now_ms.wrapping_sub(safety::MOTOR_CMD_MAX_AGE_MS + 1);
-        }
-
-        now_ms
-    }
-
-    #[cfg(not(feature = "pwm_cal"))]
-    fn publish_motor_command(
-        writer: &mut safety::signals::MotorCmdWriter,
-        sequence: &mut u32,
-        motors: [f32; 4],
-        wake: safety::ActuatorCmd,
-    ) {
-        let next_sequence = sequence.wrapping_add(1);
-        let now_ms = Mono::now().duration_since_epoch().to_millis();
-        let command = safety::MotorCmd {
-            motors,
-            seq: next_sequence,
-            issued_at_ms: motor_command_timestamp(now_ms, next_sequence),
-        };
-
-        if writer.enqueue(command).is_err() {
-            warn!("Motor command queue full; requesting disarm");
-            if safety_master::spawn(safety::SafetyEvent::DisarmRequested).is_err() {
-                warn!("Failed to report motor command queue overflow");
-            }
-            return;
-        }
-
-        *sequence = next_sequence;
-        if actuator_output::spawn(wake).is_err() {
-            warn!("Actuator command wake rejected; requesting disarm");
-            if safety_master::spawn(safety::SafetyEvent::DisarmRequested).is_err() {
-                warn!("Failed to report rejected actuator command wake");
-            }
-        }
-    }
-
     // ---- MAIN CONTROL LOOP ----
     #[task(binds = TIM4, priority=14,
         local = [
@@ -1392,6 +846,32 @@ mod app {
         stm32_scheduler::acknowledge_control_tick(cx.local.control_loop_scheduler);
         let cnt = cx.local.control_loop_cnt;
         let samples_per_control_loop = cx.local.samples_per_control_loop;
+        let mut publish_motor_command = |motors, wake| {
+            let outcome = actuator_task::publish_motor_command(
+                cx.local.motor_cmd_writer,
+                cx.local.motor_cmd_seq,
+                motors,
+                Mono::now().duration_since_epoch().to_millis(),
+                wake,
+                motor_command_timestamp,
+                |command| actuator_output::spawn(command).is_ok(),
+            );
+            match outcome {
+                actuator_task::PublishOutcome::Published => {}
+                actuator_task::PublishOutcome::QueueFull => {
+                    warn!("Motor command queue full; requesting disarm");
+                    if safety_master::spawn(safety::SafetyEvent::DisarmRequested).is_err() {
+                        warn!("Failed to report motor command queue overflow");
+                    }
+                }
+                actuator_task::PublishOutcome::WakeRejected => {
+                    warn!("Actuator command wake rejected; requesting disarm");
+                    if safety_master::spawn(safety::SafetyEvent::DisarmRequested).is_err() {
+                        warn!("Failed to report rejected actuator command wake");
+                    }
+                }
+            }
+        };
 
         // Incremet Counter
         *cnt += 1;
@@ -1474,7 +954,7 @@ mod app {
                 #[cfg(feature = "blackbox_defmt")]
                 {
                     let rc_raw = cx.local.rc_rates_reader.read();
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         false,
@@ -1566,7 +1046,7 @@ mod app {
                     let motor_commands = [bench_throttle, 0.0, 0.0, 0.0];
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1578,12 +1058,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1599,7 +1075,7 @@ mod app {
                     let motor_commands = [0.0, bench_throttle, 0.0, 0.0];
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1611,12 +1087,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1632,7 +1104,7 @@ mod app {
                     let motor_commands = [0.0, 0.0, bench_throttle, 0.0];
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1644,12 +1116,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1665,7 +1133,7 @@ mod app {
                     let motor_commands = [0.0, 0.0, 0.0, bench_throttle];
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1677,12 +1145,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1698,7 +1162,7 @@ mod app {
                     let motor_commands = dt::remap_motor_outputs([bench_throttle, 0.0, 0.0, 0.0]);
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1710,12 +1174,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1731,7 +1191,7 @@ mod app {
                     let motor_commands = dt::remap_motor_outputs([0.0, bench_throttle, 0.0, 0.0]);
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1743,12 +1203,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1764,7 +1220,7 @@ mod app {
                     let motor_commands = dt::remap_motor_outputs([0.0, 0.0, bench_throttle, 0.0]);
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1776,12 +1232,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1797,7 +1249,7 @@ mod app {
                     let motor_commands = dt::remap_motor_outputs([0.0, 0.0, 0.0, bench_throttle]);
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1809,12 +1261,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1830,7 +1278,7 @@ mod app {
                     let motor_commands = dt::dshot_unequal_bench_motor_outputs(bench_throttle);
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1842,12 +1290,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyBenchSelectedMotor,
                         );
@@ -1876,7 +1320,7 @@ mod app {
                     let motor_commands = [bench_throttle; 4];
 
                     #[cfg(feature = "blackbox_defmt")]
-                    emit_compact_blackbox!(
+                    dt::emit_compact_blackbox(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,
                         control_armed,
@@ -1888,12 +1332,8 @@ mod app {
                         bench_throttle,
                         motor_commands,
                     );
-
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         publish_motor_command(
-                            cx.local.motor_cmd_writer,
-                            cx.local.motor_cmd_seq,
                             motor_commands,
                             safety::ActuatorCmd::ApplyLatestThrottle,
                         );
@@ -1927,9 +1367,7 @@ mod app {
                         imu_pitch_filtered,
                         imu_yaw_filtered,
                     ); // filtered gyro rates
-                    #[cfg(any(feature = "blackbox_defmt", not(feature = "pwm_cal")))]
                     fc.update_motor_commands();
-                    #[cfg(not(feature = "pwm_cal"))]
                     let motor_commands = fc.get_motor_commands();
 
                     #[cfg(feature = "blackbox_defmt")]
@@ -1943,12 +1381,9 @@ mod app {
                     ));
 
                     // Apply throttle
-                    #[cfg(not(any(feature = "pwm_cal")))]
                     {
                         if control_armed {
                             publish_motor_command(
-                                cx.local.motor_cmd_writer,
-                                cx.local.motor_cmd_seq,
                                 motor_commands,
                                 safety::ActuatorCmd::ApplyLatestThrottle,
                             );
@@ -1957,59 +1392,6 @@ mod app {
                 }
             }
         }
-    }
-
-    const ARMING_GUARD_POLL_MS: u32 = 10;
-    #[cfg(feature = "dshot")]
-    const _: () = assert!(ARMING_GUARD_POLL_MS < safety::MOTOR_CMD_MAX_AGE_MS);
-
-    fn validate_live_arming_guard(
-        permit: bool,
-        rc_link_armable: bool,
-        arm_high: bool,
-        throttle: u32,
-    ) -> Result<(), safety::ArmingAbortReason> {
-        safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
-        safety::validate_prearm_health(safety::PreArmHealth {
-            imu_ready: IMU_LATEST_SEQ.load(Ordering::Acquire) != 0,
-            imu_bias_calibrated: IMU_BIAS_CALIBRATED.load(Ordering::Acquire),
-            imu_fresh: !cfg!(feature = "bench_prearm_imu_stale")
-                && !IMU_STALE.load(Ordering::Acquire),
-        })
-    }
-
-    fn current_arming_guard(
-        permit: &ActuatorArmPermitReader,
-        rc_link: &signals::RcLinkReader,
-        arm_high: &signals::RcArmHighReader,
-        throttle: &signals::RcThrottleReader,
-    ) -> Result<(), safety::ArmingAbortReason> {
-        let now_us = Mono::now().duration_since_epoch().to_micros();
-        validate_live_arming_guard(
-            permit.read(),
-            rc_link.is_armable(now_us),
-            arm_high.read(),
-            throttle.read(),
-        )
-    }
-
-    async fn wait_arming_hold(
-        permit: &ActuatorArmPermitReader,
-        rc_link: &signals::RcLinkReader,
-        arm_high: &signals::RcArmHighReader,
-        throttle: &signals::RcThrottleReader,
-        hold_ms: u32,
-    ) -> Result<(), safety::ArmingAbortReason> {
-        let mut remaining_ms = hold_ms;
-
-        while remaining_ms != 0 {
-            current_arming_guard(permit, rc_link, arm_high, throttle)?;
-            let delay_ms = remaining_ms.min(ARMING_GUARD_POLL_MS);
-            Mono::delay(delay_ms.millis()).await;
-            remaining_ms -= delay_ms;
-        }
-
-        current_arming_guard(permit, rc_link, arm_high, throttle)
     }
 
     #[task(priority = 13)]
@@ -2038,7 +1420,6 @@ mod app {
         ]
     )]
     async fn dshot_service(mut cx: dshot_service::Context) {
-        #[cfg(feature = "dshot")]
         {
             loop {
                 let release = Mono::now();
@@ -2157,11 +1538,6 @@ mod app {
                 Mono::delay_until(next_release).await;
             }
         }
-
-        #[cfg(not(feature = "dshot"))]
-        {
-            let _ = &mut cx;
-        }
     }
 
     #[task(
@@ -2171,7 +1547,6 @@ mod app {
         local = [spurious_reported: bool = false]
     )]
     fn dshot_motor1_dma_complete(mut cx: dshot_motor1_dma_complete::Context) {
-        #[cfg(feature = "dshot")]
         {
             let event = cx
                 .shared
@@ -2183,11 +1558,6 @@ mod app {
                 warn!("DShot M1 received a spurious DMA2 Stream1 interrupt");
             }
         }
-
-        #[cfg(not(feature = "dshot"))]
-        {
-            let _ = &mut cx;
-        }
     }
 
     #[task(
@@ -2197,7 +1567,6 @@ mod app {
         local = [spurious_reported: bool = false]
     )]
     fn dshot_motor2_dma_complete(mut cx: dshot_motor2_dma_complete::Context) {
-        #[cfg(feature = "dshot")]
         {
             let event = cx
                 .shared
@@ -2209,11 +1578,6 @@ mod app {
                 warn!("DShot M2 received a spurious DMA2 Stream7 interrupt");
             }
         }
-
-        #[cfg(not(feature = "dshot"))]
-        {
-            let _ = &mut cx;
-        }
     }
 
     #[task(
@@ -2223,7 +1587,6 @@ mod app {
         local = [spurious_reported: bool = false]
     )]
     fn dshot_motor3_dma_complete(mut cx: dshot_motor3_dma_complete::Context) {
-        #[cfg(feature = "dshot")]
         {
             let event = cx
                 .shared
@@ -2235,11 +1598,6 @@ mod app {
                 warn!("DShot M3 received a spurious DMA2 Stream4 interrupt");
             }
         }
-
-        #[cfg(not(feature = "dshot"))]
-        {
-            let _ = &mut cx;
-        }
     }
 
     #[task(
@@ -2249,7 +1607,6 @@ mod app {
         local = [spurious_reported: bool = false]
     )]
     fn dshot_motor4_dma_complete(mut cx: dshot_motor4_dma_complete::Context) {
-        #[cfg(feature = "dshot")]
         {
             let event = cx
                 .shared
@@ -2261,37 +1618,12 @@ mod app {
                 warn!("DShot M4 received a spurious DMA2 Stream6 interrupt");
             }
         }
-
-        #[cfg(not(feature = "dshot"))]
-        {
-            let _ = &mut cx;
-        }
-    }
-
-    fn take_fresh_motor_outputs(reader: &mut safety::signals::MotorCmdReader) -> Option<[f32; 4]> {
-        let now_ms = Mono::now().duration_since_epoch().to_millis();
-
-        match reader.take_latest_fresh(now_ms, safety::MOTOR_CMD_MAX_AGE_MS) {
-            Ok(command) => Some(command.motors),
-            Err(safety::MotorCmdReadError::Missing) => {
-                warn!("Actuator command refused: motor command queue empty");
-                None
-            }
-            Err(safety::MotorCmdReadError::Stale { seq, age_ms }) => {
-                warn!(
-                    "Actuator command refused: stale motor command seq {}, age {} ms",
-                    seq, age_ms
-                );
-                None
-            }
-        }
     }
 
     #[task(
     priority = 15,
     shared = [dshot_motors],
     local = [
-        motor_outputs,
         actuator_safety_arm_reader,
         actuator_arm_permit_reader,
         actuator_rc_arm_high_reader,
@@ -2300,116 +1632,12 @@ mod app {
         actuator_arm_done_writer,
         motor_cmd_reader,
         esc_telemetry_update_consumer,
-        calibrated,
 
     ]
     )]
     #[allow(unused_mut)]
     async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::ActuatorCmd) {
-        #[cfg(not(feature = "dshot"))]
-        macro_rules! set_motor {
-            ($motor:expr, $value:expr, $name:expr) => {
-                //info!("{}: {}",$name, $value);
-                match $motor.set_throttle(throttle_to_u16($value)) {
-                    Ok(()) => {}
-                    Err(_) => warn!("{}: motor output error", $name),
-                }
-            };
-        }
-
-        #[cfg(not(feature = "dshot"))]
-        macro_rules! apply_all_with_lease {
-            ($values:expr, $lease_ms:expr) => {{
-                let _ = $lease_ms;
-                set_motor!(cx.local.motor_outputs.m1, $values[0], "M1");
-                set_motor!(cx.local.motor_outputs.m2, $values[1], "M2");
-                set_motor!(cx.local.motor_outputs.m3, $values[2], "M3");
-                set_motor!(cx.local.motor_outputs.m4, $values[3], "M4");
-            }};
-        }
-
-        #[cfg(feature = "dshot")]
-        macro_rules! apply_all_with_lease {
-            ($values:expr, $lease_ms:expr) => {{
-                let values = $values;
-                let now_ms = Mono::now().duration_since_epoch().to_millis();
-                let invalid = values.iter().any(|value| {
-                    !value.is_finite()
-                        || *value < safety::ESC_LOW_THROTTLE
-                        || *value > safety::ESC_MAX_THROTTLE
-                });
-                let commands = values.map(throttle_to_u16);
-
-                if invalid {
-                    warn!("DShot motor command refused: invalid throttle vector");
-                }
-
-                cx.shared.dshot_motors.lock(|dshot| {
-                    if invalid || commands.iter().all(|command| *command == 0) {
-                        dshot.command_stop();
-                    } else {
-                        match dshot.command_throttles(commands, now_ms, $lease_ms) {
-                            Ok(()) => {}
-                            Err(board::init::DshotCommandError::ThrottleOutOfRange) => {
-                                warn!("DShot motor command refused: throttle out of range");
-                                dshot.command_stop();
-                            }
-                            Err(board::init::DshotCommandError::Faulted) => {
-                                dshot.command_stop();
-                            }
-                        }
-                    }
-                });
-            }};
-        }
-
-        macro_rules! apply_all {
-            ($values:expr) => {{
-                apply_all_with_lease!($values, safety::MOTOR_CMD_MAX_AGE_MS);
-            }};
-        }
-
-        #[cfg(feature = "dshot")]
-        macro_rules! abort_dshot_arming {
-            ($reason:expr, $message:expr) => {{
-                cx.local.actuator_arm_done_writer.clear();
-                apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                warn!($message);
-                if safety_master::spawn(safety::SafetyEvent::ArmingAborted($reason)).is_err() {
-                    warn!("Failed to report aborted DShot idle qualification");
-                }
-                return;
-            }};
-        }
-
-        #[cfg(all(feature = "pwm_cal", not(feature = "dshot")))]
-        macro_rules! selected_motor_pulse_width_us {
-            () => {
-                match safety::PWM_CAL_MOTOR {
-                    1 => cx.local.motor_outputs.m1.last_pulse_width_us(),
-                    2 => cx.local.motor_outputs.m2.last_pulse_width_us(),
-                    3 => cx.local.motor_outputs.m3.last_pulse_width_us(),
-                    4 => cx.local.motor_outputs.m4.last_pulse_width_us(),
-                    _ => None,
-                }
-            };
-        }
-
-        #[cfg(all(feature = "pwm_cal", not(feature = "dshot")))]
-        fn selected_cal_motor_outputs(throttle: f32) -> [f32; 4] {
-            let mut outputs = [safety::ESC_LOW_THROTTLE; 4];
-
-            if safety::PWM_CAL_MOTOR >= 1 && safety::PWM_CAL_MOTOR <= 4 {
-                outputs[safety::PWM_CAL_MOTOR - 1] = throttle;
-            }
-
-            outputs
-        }
-
-        #[cfg(not(feature = "dshot"))]
-        fn idle_motor_outputs() -> [f32; 4] {
-            [ACTUATOR_IDLE_THROTTLE; 4]
-        }
+        let mut actuator = ActuatorHardware::new(&mut cx.shared.dshot_motors);
 
         let safety_armed = cx.local.actuator_safety_arm_reader.read();
         let output = match cmd {
@@ -2421,88 +1649,49 @@ mod app {
 
             safety::ActuatorCmd::EnterIdle => {
                 cx.local.motor_cmd_reader.discard_all();
-                if let Err(reason) = current_arming_guard(
+                if let Err(reason) = current_live_arming_guard(
                     cx.local.actuator_arm_permit_reader,
                     cx.local.actuator_rc_link_reader,
                     cx.local.actuator_rc_arm_high_reader,
                     cx.local.actuator_rc_throttle_reader,
+                    Mono::now().duration_since_epoch().to_micros(),
                 ) {
                     cx.local.actuator_arm_done_writer.clear();
-                    apply_all!([safety::ESC_LOW_THROTTLE; 4]);
+                    actuator.apply(
+                        [safety::ESC_LOW_THROTTLE; 4],
+                        Mono::now().duration_since_epoch().to_millis(),
+                    );
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
                         warn!("Failed to report rejected actuator preparation");
                     }
                     return;
                 }
-
-                #[cfg(not(feature = "dshot"))]
-                let prepared_output = {
-                    info!("Arming BLHeli ESCs with PWM low throttle");
-                    cx.local.actuator_arm_done_writer.clear();
-
-                    info!("Applying low throttle");
-                    apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                    if let Err(reason) = wait_arming_hold(
-                        cx.local.actuator_arm_permit_reader,
-                        cx.local.actuator_rc_link_reader,
-                        cx.local.actuator_rc_arm_high_reader,
-                        cx.local.actuator_rc_throttle_reader,
-                        safety::BLHELI_ARM_LOW_HOLD_MS,
-                    )
-                    .await
-                    {
-                        cx.local.actuator_arm_done_writer.clear();
-                        apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                        if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
-                        {
-                            warn!("Failed to report aborted BLHeli low-throttle hold");
-                        }
-                        return;
-                    }
-
-                    info!("Applying idle throttle");
-                    apply_all!(idle_motor_outputs());
-                    if let Err(reason) = wait_arming_hold(
-                        cx.local.actuator_arm_permit_reader,
-                        cx.local.actuator_rc_link_reader,
-                        cx.local.actuator_rc_arm_high_reader,
-                        cx.local.actuator_rc_throttle_reader,
-                        safety::BLHELI_ARM_IDLE_HOLD_MS,
-                    )
-                    .await
-                    {
-                        cx.local.actuator_arm_done_writer.clear();
-                        apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                        if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
-                        {
-                            warn!("Failed to report aborted BLHeli idle hold");
-                        }
-                        return;
-                    }
-
-                    info!("BLHeli ESCs idling");
-                    idle_motor_outputs()
-                };
-
-                #[cfg(feature = "dshot")]
                 let prepared_output = {
                     info!(
                         "Preparing DShot actuators with {} ms of stop frames",
                         DSHOT_PREARM_STOP_HOLD_MS
                     );
                     cx.local.actuator_arm_done_writer.clear();
-                    apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                    if let Err(reason) = wait_arming_hold(
+                    actuator.apply(
+                        [safety::ESC_LOW_THROTTLE; 4],
+                        Mono::now().duration_since_epoch().to_millis(),
+                    );
+                    if let Err(reason) = wait_live_arming_hold(
                         cx.local.actuator_arm_permit_reader,
                         cx.local.actuator_rc_link_reader,
                         cx.local.actuator_rc_arm_high_reader,
                         cx.local.actuator_rc_throttle_reader,
                         DSHOT_PREARM_STOP_HOLD_MS,
+                        || Mono::now().duration_since_epoch().to_micros(),
+                        |delay_ms| Mono::delay(delay_ms.millis()),
                     )
                     .await
                     {
                         cx.local.actuator_arm_done_writer.clear();
-                        apply_all!([safety::ESC_LOW_THROTTLE; 4]);
+                        actuator.apply(
+                            [safety::ESC_LOW_THROTTLE; 4],
+                            Mono::now().duration_since_epoch().to_millis(),
+                        );
                         if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
                         {
                             warn!("Failed to report aborted DShot pre-arm stop hold");
@@ -2527,24 +1716,33 @@ mod app {
                     );
 
                     loop {
-                        if let Err(reason) = current_arming_guard(
+                        if let Err(reason) = current_live_arming_guard(
                             cx.local.actuator_arm_permit_reader,
                             cx.local.actuator_rc_link_reader,
                             cx.local.actuator_rc_arm_high_reader,
                             cx.local.actuator_rc_throttle_reader,
+                            Mono::now().duration_since_epoch().to_micros(),
                         ) {
-                            abort_dshot_arming!(
+                            actuator.abort_arming(
+                                cx.local.actuator_arm_done_writer,
                                 reason,
-                                "DShot idle qualification aborted by arming guard"
+                                "DShot idle qualification aborted by arming guard",
+                                |reason| {
+                                    safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason))
+                                        .is_ok()
+                                },
+                                Mono::now().duration_since_epoch().to_millis(),
                             );
+                            return;
                         }
 
                         // This nonzero output remains under the temporary
                         // actuator arm permit. Renew its short lease while the
                         // system itself is still disarmed.
-                        apply_all_with_lease!(
+                        actuator.apply_with_lease(
                             [ACTUATOR_IDLE_THROTTLE; 4],
-                            safety::MOTOR_CMD_MAX_AGE_MS
+                            Mono::now().duration_since_epoch().to_millis(),
+                            safety::MOTOR_CMD_MAX_AGE_MS,
                         );
                         let now_ms = Mono::now().duration_since_epoch().to_millis();
                         let mut status = esc::EscIdleQualificationStatus::Pending;
@@ -2571,10 +1769,17 @@ mod app {
                                     logical_motor_for_esc_output(output),
                                     erpm_div100
                                 );
-                                abort_dshot_arming!(
-                                    safety::ArmingAbortReason::EscIdleRpmOutOfRange,
-                                    "DShot idle qualification rejected an overspeed physical output"
-                                );
+                                actuator.abort_arming(
+                                cx.local.actuator_arm_done_writer,
+                                safety::ArmingAbortReason::EscIdleRpmOutOfRange,
+                                "DShot idle qualification rejected an overspeed physical output",
+                                |reason| {
+                                    safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason))
+                                        .is_ok()
+                                },
+                                Mono::now().duration_since_epoch().to_millis(),
+                            );
+                                return;
                             }
                             esc::EscIdleQualificationStatus::Failed(
                                 esc::EscIdleQualificationFailure::Timeout {
@@ -2605,18 +1810,34 @@ mod app {
                                         );
                                     }
                                 }
-                                abort_dshot_arming!(
-                                    safety::ArmingAbortReason::EscIdleTelemetryTimeout,
-                                    "DShot idle qualification did not prove all physical outputs turning"
-                                );
+                                actuator.abort_arming(
+                                cx.local.actuator_arm_done_writer,
+                                safety::ArmingAbortReason::EscIdleTelemetryTimeout,
+                                "DShot idle qualification did not prove all physical outputs turning",
+                                |reason| {
+                                    safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason))
+                                        .is_ok()
+                                },
+                                Mono::now().duration_since_epoch().to_millis(),
+                            );
+                                return;
                             }
                             esc::EscIdleQualificationStatus::Failed(
                                 esc::EscIdleQualificationFailure::InvalidConfig,
                             ) => {
-                                abort_dshot_arming!(
+                                actuator.abort_arming(
+                                    cx.local.actuator_arm_done_writer,
                                     safety::ArmingAbortReason::EscIdleQualificationInvalid,
-                                    "DShot idle qualification profile is invalid"
+                                    "DShot idle qualification profile is invalid",
+                                    |reason| {
+                                        safety_master::spawn(safety::SafetyEvent::ArmingAborted(
+                                            reason,
+                                        ))
+                                        .is_ok()
+                                    },
+                                    Mono::now().duration_since_epoch().to_millis(),
                                 );
+                                return;
                             }
                         }
 
@@ -2637,7 +1858,10 @@ mod app {
 
                 if actuator_idle_notify::spawn().is_err() {
                     cx.local.actuator_arm_done_writer.clear();
-                    apply_all!([safety::ESC_LOW_THROTTLE; 4]);
+                    actuator.apply(
+                        [safety::ESC_LOW_THROTTLE; 4],
+                        Mono::now().duration_since_epoch().to_millis(),
+                    );
                     if safety_master::spawn(safety::SafetyEvent::ArmingAborted(
                         safety::ArmingAbortReason::CompletionDeliveryFailed,
                     ))
@@ -2652,7 +1876,10 @@ mod app {
             }
 
             safety::ActuatorCmd::ApplyLatestThrottle if safety_armed => {
-                match take_fresh_motor_outputs(cx.local.motor_cmd_reader) {
+                match take_fresh_motor_outputs(
+                    cx.local.motor_cmd_reader,
+                    Mono::now().duration_since_epoch().to_millis(),
+                ) {
                     Some(throttles) => {
                         match safety::validate_active_motor_outputs_with_idle(
                             throttles,
@@ -2683,7 +1910,10 @@ mod app {
             safety::ActuatorCmd::ApplyBenchSelectedMotor if safety_armed => {
                 let mut outputs = [safety::ESC_LOW_THROTTLE; 4];
 
-                if let Some(throttles) = take_fresh_motor_outputs(cx.local.motor_cmd_reader) {
+                if let Some(throttles) = take_fresh_motor_outputs(
+                    cx.local.motor_cmd_reader,
+                    Mono::now().duration_since_epoch().to_millis(),
+                ) {
                     for index in 0..4 {
                         if !throttles[index].is_finite() {
                             warn!("Bench motor-vector command refused: invalid motor output");
@@ -2701,75 +1931,13 @@ mod app {
                 outputs
             }
 
-            #[cfg(feature = "pwm_cal")]
-            safety::ActuatorCmd::Calibrate => {
-                if *cx.local.calibrated == false {
-                    info!("PWM ESC calibration mode");
-                    info!("PROPS OFF. Keep ESC battery disconnected.");
-                    cx.local.actuator_arm_done_writer.clear();
-
-                    if safety::PWM_CAL_MOTOR < 1 || safety::PWM_CAL_MOTOR > 4 {
-                        warn!(
-                            "Invalid PWM_CAL_MOTOR: {}. Use 1, 2, 3, or 4.",
-                            safety::PWM_CAL_MOTOR
-                        );
-                        return apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                    }
-
-                    info!("Calibration target: motor {}", safety::PWM_CAL_MOTOR);
-                    info!(
-                        "Only motor {} will receive MAX throttle. Other motors stay at MIN.",
-                        safety::PWM_CAL_MOTOR
-                    );
-                    info!("Calibration: setting selected motor to MAX throttle now");
-                    apply_all!(selected_cal_motor_outputs(safety::ESC_MAX_THROTTLE));
-                    if let Some(pulse_width_us) = selected_motor_pulse_width_us!() {
-                        info!(
-                            "Motor {} MAX pulse width: {} us",
-                            safety::PWM_CAL_MOTOR,
-                            pulse_width_us
-                        );
-                    }
-                    info!(
-                        "PLUG IN ESC BATTERY FOR MOTOR {} NOW. Waiting for ESC calibration tones.",
-                        safety::PWM_CAL_MOTOR
-                    );
-                    let mut max_hold_remaining_s = safety::PWM_CAL_MAX_HOLD_MS / 1_000;
-                    while max_hold_remaining_s > 0 {
-                        info!("MAX throttle hold: {}s remaining", max_hold_remaining_s);
-                        Mono::delay(1000.millis()).await;
-                        max_hold_remaining_s -= 1;
-                    }
-
-                    info!("Calibration: switching selected motor to MIN throttle now");
-                    apply_all!([safety::ESC_LOW_THROTTLE; 4]);
-                    if let Some(pulse_width_us) = selected_motor_pulse_width_us!() {
-                        info!(
-                            "Motor {} MIN pulse width: {} us",
-                            safety::PWM_CAL_MOTOR,
-                            pulse_width_us
-                        );
-                    }
-                    info!(
-                        "Keep ESC battery connected. Waiting for low-throttle confirmation tones."
-                    );
-                    Mono::delay(safety::PWM_CAL_LOW_HOLD_MS.millis()).await;
-
-                    info!("PWM ESC calibration complete. Outputs are held at MIN throttle.");
-                    info!("Disconnect ESC battery, then reboot without the pwm_cal feature.");
-                    *cx.local.calibrated = true;
-                }
-
-                [safety::ESC_LOW_THROTTLE; 4]
-            }
-
             _ => {
                 warn!("Actuator command refused");
                 [safety::ESC_LOW_THROTTLE; 4]
             }
         };
 
-        apply_all!(output);
+        actuator.apply(output, Mono::now().duration_since_epoch().to_millis());
     }
 
     // ########### SPI 1 ###################################
@@ -2819,10 +1987,6 @@ mod app {
                 warn!("SPI1 transaction backend error");
             }
         }
-    }
-
-    fn pend_spi1_owner() {
-        let _ = spi1_owner_service::spawn();
     }
 
     #[task(priority = 13, shared = [spi1_owner, io_timebase])]
@@ -3037,80 +2201,9 @@ mod app {
         }
     }
 
-    fn record_uart2_discontinuity(
-        bridge: &mut Uart2OwnedRxBridge,
-        cause: Discontinuity,
-        generation: ferrowasp_io_core::serial::StreamGeneration,
-        reason: safety::RcLinkInvalidation,
-    ) {
-        let timestamp = TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
-        bridge.record_discontinuity(cause, generation, timestamp);
-        let _ = safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(reason));
-    }
-
-    fn publish_uart2_owned(
-        bridge: &mut Uart2OwnedRxBridge,
-        generation: ferrowasp_io_core::serial::StreamGeneration,
-    ) {
-        let timestamp = TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
-        match bridge.publish_next(timestamp) {
-            stm32_uart::UartOwnedRxBridgeOutcome::Published => {}
-            stm32_uart::UartOwnedRxBridgeOutcome::NoChunk => {
-                warn!("USART2 delivered IRQ had no detached RX chunk");
-                record_uart2_discontinuity(
-                    bridge,
-                    Discontinuity::TransportReset,
-                    generation,
-                    safety::RcLinkInvalidation::TransportDiscontinuity,
-                );
-            }
-            stm32_uart::UartOwnedRxBridgeOutcome::InvalidChunk => {
-                warn!("USART2 produced an invalid owned RX chunk");
-                record_uart2_discontinuity(
-                    bridge,
-                    Discontinuity::FramingError,
-                    generation,
-                    safety::RcLinkInvalidation::TransportDiscontinuity,
-                );
-            }
-            stm32_uart::UartOwnedRxBridgeOutcome::QueueOverflow => {
-                warn!("USART2 owned RX queue overflowed");
-                // The portable producer records QueueOverflow before returning.
-                let _ = safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(
-                    safety::RcLinkInvalidation::TransportDiscontinuity,
-                ));
-            }
-            stm32_uart::UartOwnedRxBridgeOutcome::Disabled => {
-                warn!("USART2 owned RX channel is disabled");
-                record_uart2_discontinuity(
-                    bridge,
-                    Discontinuity::TransportReset,
-                    generation,
-                    safety::RcLinkInvalidation::TransportDiscontinuity,
-                );
-            }
-            stm32_uart::UartOwnedRxBridgeOutcome::RecycleFailed => {
-                panic!("USART2 detached DMA buffer could not be recycled");
-            }
-        }
-    }
-
-    fn record_uart2_dma_error(
-        bridge: &mut Uart2OwnedRxBridge,
-        generation: ferrowasp_io_core::serial::StreamGeneration,
-    ) {
-        record_uart2_discontinuity(
-            bridge,
-            Discontinuity::DmaError,
-            generation,
-            safety::RcLinkInvalidation::DmaError,
-        );
-    }
-
     // ########### USART1 / BLHeli legacy ESC telemetry #####################
     #[task(binds = DMA2_STREAM5, priority = 5, shared = [uart1_rx])]
     fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context) {
-        #[cfg(feature = "dshot")]
         {
             let outcome = cx.shared.uart1_rx.service_dma_irq();
             match outcome {
@@ -3123,13 +2216,10 @@ mod app {
                 }
             }
         }
-        #[cfg(not(feature = "dshot"))]
-        let _ = cx;
     }
 
     #[task(binds = USART1, priority = 5, shared = [uart1_rx])]
     fn usart1_rx_peripheral(cx: usart1_rx_peripheral::Context) {
-        #[cfg(feature = "dshot")]
         {
             let outcome = cx.shared.uart1_rx.service_idle_irq();
             match outcome {
@@ -3142,8 +2232,6 @@ mod app {
                 }
             }
         }
-        #[cfg(not(feature = "dshot"))]
-        let _ = cx;
     }
 
     #[task(
@@ -3158,7 +2246,6 @@ mod app {
         ]
     )]
     async fn esc_manager_task(cx: esc_manager_task::Context) {
-        #[cfg(feature = "dshot")]
         loop {
             let release = Mono::now();
             let next_release = release + ESC_MANAGER_PERIOD_MS.millis();
@@ -3264,8 +2351,6 @@ mod app {
 
             Mono::delay_until(next_release).await;
         }
-        #[cfg(not(feature = "dshot"))]
-        let _ = cx;
     }
 
     // ########### UART 2 ###################################
@@ -3276,14 +2361,17 @@ mod app {
     )]
     fn usart2_rx_dma_transfer(mut cx: usart2_rx_dma_transfer::Context) {
         let uart = cx.shared.uart2_rx;
+        let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
+        let invalidate =
+            |reason| safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(reason)).is_ok();
         let delivered = match uart.service_dma_irq() {
             stm32_uart::UartRxIrqOutcome::Delivered => true,
             stm32_uart::UartRxIrqOutcome::Ignored | stm32_uart::UartRxIrqOutcome::NoChunk => false,
             stm32_uart::UartRxIrqOutcome::DmaError => {
                 warn!("USART2 RX DMA error");
-                cx.shared
-                    .uart2_bridge
-                    .lock(|bridge| record_uart2_dma_error(bridge, uart.rx_generation()));
+                cx.shared.uart2_bridge.lock(|bridge| {
+                    record_uart2_dma_error(bridge, uart.rx_generation(), timestamp(), invalidate)
+                });
                 false
             }
             stm32_uart::UartRxIrqOutcome::DeliveryError(
@@ -3300,7 +2388,9 @@ mod app {
                         bridge,
                         Discontinuity::TransportReset,
                         uart.rx_generation(),
+                        timestamp(),
                         safety::RcLinkInvalidation::TransportDiscontinuity,
+                        invalidate,
                     )
                 });
                 false
@@ -3318,7 +2408,9 @@ mod app {
                         bridge,
                         Discontinuity::TransportReset,
                         uart.rx_generation(),
+                        timestamp(),
                         safety::RcLinkInvalidation::TransportDiscontinuity,
+                        invalidate,
                     )
                 });
                 false
@@ -3329,7 +2421,7 @@ mod app {
             let generation = uart.rx_generation();
             cx.shared
                 .uart2_bridge
-                .lock(|bridge| publish_uart2_owned(bridge, generation));
+                .lock(|bridge| publish_uart2_owned(bridge, generation, timestamp(), invalidate));
         }
     }
 
@@ -3340,14 +2432,17 @@ mod app {
     )]
     fn usart2_rx_peripheral(mut cx: usart2_rx_peripheral::Context) {
         let uart = cx.shared.uart2_rx;
+        let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
+        let invalidate =
+            |reason| safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(reason)).is_ok();
 
         let delivered = match uart.service_idle_irq() {
             stm32_uart::UartRxIrqOutcome::Delivered => true,
             stm32_uart::UartRxIrqOutcome::Ignored | stm32_uart::UartRxIrqOutcome::NoChunk => false,
             stm32_uart::UartRxIrqOutcome::DmaError => {
-                cx.shared
-                    .uart2_bridge
-                    .lock(|bridge| record_uart2_dma_error(bridge, uart.rx_generation()));
+                cx.shared.uart2_bridge.lock(|bridge| {
+                    record_uart2_dma_error(bridge, uart.rx_generation(), timestamp(), invalidate)
+                });
                 false
             }
             stm32_uart::UartRxIrqOutcome::DeliveryError(
@@ -3359,7 +2454,9 @@ mod app {
                         bridge,
                         Discontinuity::TransportReset,
                         uart.rx_generation(),
+                        timestamp(),
                         safety::RcLinkInvalidation::TransportDiscontinuity,
+                        invalidate,
                     )
                 });
                 false
@@ -3373,7 +2470,9 @@ mod app {
                         bridge,
                         Discontinuity::TransportReset,
                         uart.rx_generation(),
+                        timestamp(),
                         safety::RcLinkInvalidation::TransportDiscontinuity,
+                        invalidate,
                     )
                 });
                 false
@@ -3394,7 +2493,7 @@ mod app {
             let generation = uart.rx_generation();
             cx.shared
                 .uart2_bridge
-                .lock(|bridge| publish_uart2_owned(bridge, generation));
+                .lock(|bridge| publish_uart2_owned(bridge, generation, timestamp(), invalidate));
         }
     }
 
@@ -3501,8 +2600,6 @@ mod app {
         ]
     )]
     async fn osd_refresh(mut cx: osd_refresh::Context) {
-        use embedded_io_async::Read;
-
         loop {
             let rates = cx.local.osd_rc_rates_reader.read();
             let throttle = cx.local.osd_rc_throttle_reader.read();
@@ -3745,18 +2842,6 @@ mod app {
         }
     }
 
-    fn neutralize_rc_input(
-        arm_qualifier: &mut safety::ArmQualifier,
-        rates: &signals::RcRatesWriter,
-        throttle: &signals::RcThrottleWriter,
-        arm_high: &signals::RcArmHighWriter,
-    ) {
-        arm_qualifier.reset();
-        rates.write(safety::RcRates::default());
-        throttle.write(0);
-        arm_high.write(false);
-    }
-
     #[task(
         priority = 10,
         local = [
@@ -3774,8 +2859,6 @@ mod app {
         shared = [tuning_profile]
     )]
     async fn rc_input(mut cx: rc_input::Context) {
-        use embedded_io_async::Read;
-
         loop {
             let mut bytes = [0; stm32_uart::UART_RX_BUFFER_SIZE];
             let read_len = match cx.local.rc_rx_reader.read(&mut bytes).await {

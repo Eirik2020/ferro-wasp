@@ -22,13 +22,13 @@ connection:
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 ```
 
-The Foxeer BSP leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
+The Foxeer board support leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
 must be unpowered at the ESC side; USB DFU remains the recovery path.
 
 Release and feature-selected images use the same logger:
 
 ```powershell
-python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 ```
 
 The script performs a quiet firmware build, runs:

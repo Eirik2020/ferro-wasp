@@ -1,25 +1,19 @@
 # DShot
 
-FerroWasp uses a four-motor DShot600 backend by default on **FerroWasp FCU3**.
-It supports isolated capped bench images and the normal mixed-control path.
-The PA10 legacy BLHeli telemetry service is active only with this default
-DShot backend; it is inactive in the explicit PWM fallback.
-The previous four-channel 400 Hz RC PWM backend remains an explicit fallback:
-
-```powershell
-cd apps/stm32f405-flight
-cargo build --locked --no-default-features --features board-ferrowasp-fcu3
-```
+FerroWasp uses four-motor DShot600 as the standard ESC protocol on FCU3 and
+Foxeer. It supports isolated capped bench images and the normal mixed-control
+path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
+RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
+it is not a flight-app ESC fallback.
 
 The capped bench image remains behind the existing equal-motor gate:
 
 ```powershell
 cd apps/stm32f405-flight
-cargo build --locked --features "dshot bench_equal_motors"
+cargo build --locked --features "bench_equal_motors"
 ```
 
-Physical selected-motor modes, multiple logical-motor selections, and PWM
-calibration are compile-time errors in a DShot image. The base bench image
+Physical selected-motor modes and multiple logical-motor selections are compile-time errors. The base bench image
 sends the same requested throttle to all four lanes. For props-off mapping
 validation, exactly one `bench_logical_motorN_only` feature may be added.
 Those modes retain the 250 PWM-style command cap and normal RC, arming,
@@ -30,9 +24,6 @@ The normal controller and mixer use DShot in the default build:
 ```powershell
 cargo build --release --locked
 ```
-
-The former `dshot_mixed_control` feature remains a compatibility alias for
-existing commands.
 
 ## FCU3 Routes
 
@@ -52,8 +43,7 @@ is disabled. RM0090 Table 96 therefore defines the pad as
 `CC3NP=0`, so PB15 follows the same active-high pulse reference as the ordinary
 timer outputs. This still requires physical waveform validation.
 
-All four DMA2 streams are separate from the active ADC1 and SPI1 streams. The
-PWM fallback retains its existing routes and alternate functions.
+All four DMA2 streams are separate from the active ADC1 and SPI1 streams.
 
 ## Waveform
 
@@ -78,10 +68,9 @@ every 20 ms and a new request cannot overlap an outstanding response.
 
 ## BLHeli Legacy UART Telemetry
 
-The default FCU3 DShot image receives the combined ESC telemetry wire on
+The FCU3 flight image receives the combined ESC telemetry wire on
 **PA10 / USART1 RX AF7** at 115,200 baud, 8N1. USART1 RX uses DMA2 Stream 5
-Channel 4; PA9 is not configured or claimed. The explicit PWM fallback does
-not run the ESC manager or request legacy telemetry. A frame has ten bytes:
+Channel 4; PA9 is not configured or claimed. A frame has ten bytes:
 temperature, big-endian voltage/current, consumption, eRPM/100, and CRC-8. The
 bounded parser validates CRC polynomial `0x07` and advances one byte after
 failure to regain framing without a sync byte.
@@ -580,7 +569,7 @@ expiry, timeout, and fault counts remained zero.
 The operator subsequently confirmed that every motor remained physically
 stopped until `SYSTEM ARMED`, all four idled at value `112`, and motors ran
 only while armed. Command `65` / DShot value `112` is therefore retained as
-the current FCU3 prototype idle without a BSP tuning change. Continued
+the current FCU3 prototype idle without a board support tuning change. Continued
 cold-start and temperature-margin testing remains necessary before treating
 the initial flight result as broad readiness.
 
@@ -612,7 +601,7 @@ roughness, jitter, or abnormal current.
 First flash with actuator power disconnected:
 
 ```powershell
-cargo embed --release --features "dshot bench_equal_motors"
+cargo embed --release --features "bench_equal_motors"
 ```
 
 Expected RTT begins with:
@@ -794,10 +783,10 @@ committed logical-to-physical map without enabling full mixed control.
 For each logical motor, flash one image:
 
 ```powershell
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor1_only"
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor2_only"
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor3_only"
-cargo embed --release --features "dshot bench_equal_motors bench_logical_motor4_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor1_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor2_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor3_only"
+cargo embed --release --features "bench_equal_motors bench_logical_motor4_only"
 ```
 
 The 2026-07-18 release candidates built from commit `c4eeb90` plus the current
@@ -870,7 +859,7 @@ authorize flight output.
 Build and flash:
 
 ```powershell
-cargo embed --release --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+cargo embed --release --features "bench_equal_motors bench_dshot_unequal_motors"
 ```
 
 The 2026-07-18 source-side release candidate built from commit `c4eeb90` plus
@@ -952,7 +941,7 @@ From the repository root, build, flash, display decoded RTT, and retain a
 clean timestamped log with:
 
 ```powershell
-python tools\terminal_embed.py --release --locked --features "dshot bench_equal_motors bench_dshot_unequal_motors"
+python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
 ```
 
 The wrapper uses `probe-rs run`, shows decoded `defmt` lines in the terminal,
@@ -1020,5 +1009,6 @@ measure physical stop latency.
 - DShot special-command policy;
 - a reviewed pitch-authority tuning progression.
 
-The Foxeer F405 V2 backend remains conventional RC PWM. FCU3 timer and DMA
-routes must not be assumed valid for that board.
+The Foxeer F405 V2 backend is standard four-lane DShot600 using its own
+board-declared timer and DMA routes. FCU3 routes must not be assumed valid for
+that board.

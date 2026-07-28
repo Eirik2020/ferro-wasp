@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
     [switch]$BuildOnly,
-    [switch]$UsbDebug,
     [string]$DfuPort
 )
 
@@ -15,10 +14,6 @@ $binPath = "$elfPath.bin"
 Push-Location $PSScriptRoot
 try {
     $cargoArguments = @("build", "--release", "--locked")
-    if ($UsbDebug) {
-        $cargoArguments += @("--features", "usb_serial")
-    }
-
     & cargo @cargoArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Foxeer firmware build failed with exit code $LASTEXITCODE."
@@ -42,9 +37,6 @@ try {
     }
 
     Write-Host "Built DFU image: $binPath"
-    if ($UsbDebug) {
-        Write-Host "USB CDC read-only diagnostics are enabled in this image."
-    }
     if ($BuildOnly) {
         return
     }
