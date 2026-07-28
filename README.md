@@ -11,7 +11,7 @@ careful prototype testing. It is not a stable or production flight stack.
 
 ## Current State
 
-Foxeer F405 V2 is the golden flight target and the reference for supported
+Foxeer F405V2 is the golden flight target and the reference for supported
 runtime behavior. The matrix is intentionally short; the complete matrix and
 board-specific limitations live in the
 [Current Support](mdbook/src/current_support.md) chapter.
