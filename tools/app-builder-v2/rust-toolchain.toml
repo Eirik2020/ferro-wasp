@@ -1,0 +1,5 @@
+[toolchain]
+channel = "nightly-2025-12-13"
+components = ["rustfmt", "rust-analyzer"]
+profile = "minimal"
+targets = ["thumbv7em-none-eabihf"]
