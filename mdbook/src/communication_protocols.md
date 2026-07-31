@@ -7,8 +7,8 @@ FerroWasp currently has early support for several communication paths. Only SBUS
 | Protocol/path | Status |
 |---|---|
 | SBUS | Active prototype RC input over USART2 RX DMA |
-| BLHeli legacy ESC telemetry | Active only in the default FCU3 DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated |
-| USB CDC serial | Mandatory on Foxeer; optional on FCU3 via `usb_serial`; Foxeer emits bounded read-only `FWDBG1` status lines |
+| BLHeli legacy ESC telemetry | Standard in the Foxeer and FCU3 DShot images on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated |
+| USB CDC serial | Standard on Foxeer; optional on FCU3 via `usb_serial`; Foxeer provides bounded status, configuration, and storage access |
 | MSPv1 / DJI O4 OSD | Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames |
 | MAVLink | UART mode placeholder/config values exist, no active MAVLink implementation yet |
 | CRSF/ELRS | Intended preferred RC path, not implemented yet |
@@ -41,32 +41,38 @@ The practical order is:
    remains observational. Consider bidirectional DShot telemetry separately.
 3. Add CRSF/ELRS as the preferred RC input.
 4. Keep MSPv1/DJI O4 OSD display-only and freshness-aware.
-5. Expand USB serial into useful telemetry.
-6. Decide which config path should be first-class: MSP subset, MAVLink subset,
-   custom USB, or a small combination.
+5. Keep the standard Foxeer USB ASCII endpoint bounded and disarmed-only for
+   configuration and storage mutation.
+6. Validate the experimental MSPv2 configurator endpoint on target before
+   considering it for the standard image.
 
 Runtime configuration should stay tightly validated. A malformed packet or bad parameter value should fail closed, not alter safety authority.
 
-## Foxeer USB Debug
+## Foxeer USB CDC
 
-The Foxeer app's optional CDC ACM endpoint reports a self-describing ASCII
+The standard Foxeer CDC ACM endpoint reports a self-describing ASCII
 `FWDBG1` line on the existing roughly two-second heartbeat. It includes the
 selected IMU, sample and control sequences, raw gyro, stale state, RC
 qualification, throttle and arm switch, system arm state, pack voltage, and
 current.
 
-The implementation uses fixed-size buffers and coalesces status requests.
-OTG_FS service runs below control, IMU, RC, and safety priorities. Host input
-is drained and discarded; there is intentionally no USB command parser,
-parameter writer, arming request, or actuator resource.
+The same endpoint exposes bounded ASCII commands for device status,
+firmware-whitelisted configuration, flight-log cataloguing and download, and
+confirmed log maintenance. FerroConfigurator uses this contract. Configuration
+and destructive storage operations are rejected while armed.
 
-## FCU3 ESC Telemetry
+The implementation uses fixed-size buffers and bounded queues. OTG_FS and
+storage service run below control, IMU, RC, and safety priorities. USB owns no
+arming request, safety state, actuator permit, or motor resource.
+
+## Flight-Board ESC Telemetry
 
 The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud in the standard FCU3 flight image. The ESC manager issues
-bounded telemetry-bit requests through the actuator-owned DShot service. Since the
-ten-byte wire frame does not identify a motor, a low-priority ESC manager
-rotates physical-output requests. Both directions use bounded SPSC queues.
+115,200 baud in the standard Foxeer and FCU3 flight images. The ESC manager
+issues bounded telemetry-bit requests through the actuator-owned DShot
+service. Since the ten-byte wire frame does not identify a motor, a
+low-priority ESC manager rotates physical-output requests. Both directions use
+bounded SPSC queues.
 
 The safety-owned DShot service acknowledges an exact sequence/output request
 only after the selected telemetry bit was present in a frame that actually

@@ -14,6 +14,9 @@ Before Foxeer runtime, motor, configuration, logging, or test work, read:
 - `../../project_meta/testing/targets/foxeer-f405-v2.md` when selecting target
   testing.
 
+Before Foxeer initialization or app-thinning cleanup, read the focused section
+in `../../project_meta/INTERNAL_TODO.md`.
+
 Use current code and the target procedure for live defaults. Treat dated hashes,
 gains, and observations in large verification documents as evidence, not
 current configuration.

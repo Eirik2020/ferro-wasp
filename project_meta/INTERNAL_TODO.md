@@ -51,6 +51,61 @@ Remaining host acceptance:
 - [ ] Add concise recovery guidance for WSL/Docker upgrades, recreation, and
   rerunning the environment acceptance checks.
 
+## Foxeer Initialization and App-Thinning TODO
+
+Keep the Foxeer RTIC app as thin as reasonably possible without introducing
+custom macros. The app should select concrete pins, peripherals, DMA streams,
+timers, and board profiles; reusable construction and service initialization
+belong in the narrowest shared crate.
+
+Functional and audit risks:
+
+- [ ] Correct the ADC1 initialization order before further ADC calibration.
+  ADC1 is initialized before the final 168 MHz clock tree is frozen, while the
+  HAL default prescaler appears to produce a 42 MHz ADC clock from the 84 MHz
+  APB2 clock. This exceeds the STM32F405 36 MHz maximum at the normal board
+  voltage. The operator also reports a current reading fixed near `0.8 A`
+  throughout flight. Freeze clocks first, select an explicit safe prescaler
+  through `ferrowasp-stm32f4::adc`, then distinguish stale sampling, PC1
+  routing, offset, and scale using external measurements across multiple
+  known loads.
+- [ ] Add TIM5, used by the blocking initialization delay, to the board timer
+  groups and active resource claims. No current conflict is known, but the
+  omission prevents the manifest from detecting a future conflicting owner.
+
+Shared-initialization backlog:
+
+- [ ] Add a shared STM32F405 foundation initializer for RCC/clock freeze, GPIO
+  and DMA decomposition, and standard timer construction. Keep the RTIC
+  monotonic start and concrete Foxeer resource selection in the app.
+- [ ] Change DShot initialization to accept raw TIM1/TIM8 peripherals and
+  construct HAL timers inside shared STM32F4 support. The app should provide
+  only the timers, pins, DMA streams, storage, and board route/profile.
+- [ ] Let the reusable IMU data-ready initializer own SYSCFG constraint and
+  EXTI setup. The app should provide SYSCFG, EXTI, PC4, and the selected
+  edge/profile.
+- [ ] Move the SPI-NOR JEDEC probe, capability derivation, and flash-queue
+  endpoint assembly into a reusable flash-service initializer.
+- [ ] Bundle duplicated ESC-manager queues, owned UART channels, and safety
+  signal endpoints in `ferrowasp-tasks`, `ferrowasp-io-core`, and
+  `ferrowasp-core`, respectively.
+- [ ] Replace the unused generic `tele_uart` and `gps_uart` routing
+  placeholders with a fixed, typed Foxeer flight-UART routing result.
+- [ ] Move reusable SPI mode/frequency profiles and IMU/NOR construction from
+  board support into `ferrowasp-stm32f4`. Retain only Foxeer hardware facts and
+  concrete resource selection locally.
+
+Completion requires:
+
+- `src/main.rs` declares no helper types, functions, macros, aliases,
+  constants, or statics outside RTIC-specific declarations;
+- `src/main.rs` imports only the app library's internal facade;
+- board support retains physical facts and thin composition only;
+- reusable behavior is not copied between board apps;
+- motor authority, safety ownership, priorities, and task timing do not move;
+- `python tools/check_rtic_boundaries.py` and the exact Foxeer build matrix
+  pass after each extraction.
+
 ## Recently Closed
 
 - The safety-owned DShot arming sequence now stops all motors on failed idle

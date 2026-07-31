@@ -9,9 +9,16 @@ pub struct TaskArgument {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskTrigger {
+    Spawned,
+    Interrupt { binds: &'static str },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TaskDeclaration {
     pub id: &'static str,
     pub priority: u8,
+    pub trigger: TaskTrigger,
     pub args: &'static [TaskArgument],
     pub local_resources: &'static [&'static str],
     pub shared_resources: &'static [&'static str],
@@ -23,6 +30,9 @@ pub fn render(declaration: &TaskDeclaration, body_source: &str) -> Result<String
     validate_body(declaration, &body)?;
 
     let mut fields = vec![format!("priority = {}", declaration.priority)];
+    if let TaskTrigger::Interrupt { binds } = declaration.trigger {
+        fields.insert(0, format!("binds = {binds}"));
+    }
     if !declaration.local_resources.is_empty() {
         fields.push(format!(
             "local = [{}]",
@@ -43,13 +53,22 @@ pub fn render(declaration: &TaskDeclaration, body_source: &str) -> Result<String
     ))
 }
 
-fn validate_declaration(declaration: &TaskDeclaration) -> Result<()> {
+pub(crate) fn validate_declaration(declaration: &TaskDeclaration) -> Result<()> {
     validate_identifier(declaration.id, "task ID")?;
     if declaration.priority == 0 {
         bail!(
             "task `{}` priority must be greater than zero",
             declaration.id
         );
+    }
+    if let TaskTrigger::Interrupt { binds } = declaration.trigger {
+        validate_identifier(binds, "interrupt binding")?;
+        if !declaration.args.is_empty() {
+            bail!(
+                "interrupt task `{}` cannot declare spawn arguments",
+                declaration.id
+            );
+        }
     }
 
     for argument in declaration.args {
@@ -89,8 +108,20 @@ fn validate_body(declaration: &TaskDeclaration, body: &ItemFn) -> Result<()> {
             body.sig.ident
         );
     }
-    if body.sig.asyncness.is_none() {
-        bail!("handwritten task `{}` must be async", declaration.id);
+    match (declaration.trigger, body.sig.asyncness.is_some()) {
+        (TaskTrigger::Spawned, false) => {
+            bail!(
+                "handwritten spawned task `{}` must be async",
+                declaration.id
+            )
+        }
+        (TaskTrigger::Interrupt { .. }, true) => {
+            bail!(
+                "handwritten interrupt task `{}` must not be async",
+                declaration.id
+            )
+        }
+        _ => {}
     }
     if !body.sig.generics.params.is_empty() || body.sig.generics.where_clause.is_some() {
         bail!("handwritten task `{}` must not be generic", declaration.id);
@@ -195,6 +226,7 @@ mod tests {
     const BLINK: TaskDeclaration = TaskDeclaration {
         id: "blink_led",
         priority: 1,
+        trigger: TaskTrigger::Spawned,
         args: &[],
         local_resources: &["led2"],
         shared_resources: &[],
@@ -216,5 +248,25 @@ mod tests {
         let error =
             render(&BLINK, "async fn other(mut cx: other::Context) { loop {} }").unwrap_err();
         assert!(error.to_string().contains("does not match"));
+    }
+
+    #[test]
+    fn interrupt_binding_is_attached_to_synchronous_body() {
+        const BUTTON: TaskDeclaration = TaskDeclaration {
+            id: "button_exti",
+            priority: 2,
+            trigger: TaskTrigger::Interrupt { binds: "EXTI15_10" },
+            args: &[],
+            local_resources: &["user_button"],
+            shared_resources: &["blink_enabled"],
+        };
+        let rendered = render(
+            &BUTTON,
+            "fn button_exti(mut cx: button_exti::Context) { let _ = &mut cx; }",
+        )
+        .unwrap();
+        assert!(rendered.starts_with(
+            "#[task(binds = EXTI15_10, priority = 2, local = [user_button], shared = [blink_enabled])]"
+        ));
     }
 }

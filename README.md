@@ -20,7 +20,7 @@ board-specific limitations live in the
 |---|---|
 | Status | Golden flight app; boots, arms, controls, logs, and has completed controlled prototype flights |
 | Platform | STM32F405, allocation-free embedded Rust, RTIC 2 |
-| RC and sensing | SBUS, MPU6500 or ICM42688-P, data-ready IMU sampling, voltage/current ADC |
+| RC and sensing | SBUS, MPU6500 or ICM42688-P, data-ready IMU sampling, battery-voltage ADC; current sensing remains unreliable |
 | Flight control | 400 Hz rate controller, filtering, gyro calibration, Quad X mixer |
 | Motors | Four-lane DShot600 with guarded arming and fresh-command containment |
 | ESC feedback | BLHeli legacy UART telemetry with four-motor eRPM qualification |

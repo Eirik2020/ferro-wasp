@@ -1,4 +1,6 @@
-use anyhow::{Result, bail};
+use std::collections::BTreeSet;
+
+use anyhow::{Context, Result, bail};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mcu {
@@ -22,8 +24,29 @@ pub enum MonotonicDeclaration {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Pin {
-    PA5,
+pub struct ResourceId(&'static str);
+
+impl ResourceId {
+    pub const fn new(value: &'static str) -> Self {
+        Self(value)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PhysicalPin(&'static str);
+
+impl PhysicalPin {
+    pub const fn new(name: &'static str) -> Self {
+        Self(name)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,25 +56,158 @@ pub enum OutputDrive {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(dead_code)]
-pub enum PinState {
+pub enum LogicLevel {
     Low,
     High,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActiveLevel {
+    Low,
     High,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputPull {
+    Up,
+    #[allow(dead_code)]
+    Down,
+    #[allow(dead_code)]
+    Floating,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InterruptEdge {
+    #[allow(dead_code)]
+    Rising,
+    Falling,
+    #[allow(dead_code)]
+    Both,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HardwareDeclaration {
-    GpioOutput {
-        id: &'static str,
-        pin: Pin,
+    DigitalOutput {
+        id: ResourceId,
+        pin: PhysicalPin,
         drive: OutputDrive,
-        initial: PinState,
+        initial: LogicLevel,
         active: ActiveLevel,
     },
+    DigitalInput {
+        id: ResourceId,
+        pin: PhysicalPin,
+        pull: InputPull,
+        active: ActiveLevel,
+        interrupt: Option<InterruptEdge>,
+    },
+}
+
+impl HardwareDeclaration {
+    pub const fn digital_output(id: ResourceId, pin: PhysicalPin) -> Self {
+        Self::DigitalOutput {
+            id,
+            pin,
+            drive: OutputDrive::PushPull,
+            initial: LogicLevel::Low,
+            active: ActiveLevel::High,
+        }
+    }
+
+    /// Declares an active-low, pull-up digital input with a falling-edge EXTI.
+    pub const fn exti_input(id: ResourceId, pin: PhysicalPin) -> Self {
+        Self::DigitalInput {
+            id,
+            pin,
+            pull: InputPull::Up,
+            active: ActiveLevel::Low,
+            interrupt: Some(InterruptEdge::Falling),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub const fn with_drive(self, drive: OutputDrive) -> Self {
+        match self {
+            Self::DigitalOutput {
+                id,
+                pin,
+                initial,
+                active,
+                ..
+            } => Self::DigitalOutput {
+                id,
+                pin,
+                drive,
+                initial,
+                active,
+            },
+            other => other,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub const fn with_initial(self, initial: LogicLevel) -> Self {
+        match self {
+            Self::DigitalOutput {
+                id,
+                pin,
+                drive,
+                active,
+                ..
+            } => Self::DigitalOutput {
+                id,
+                pin,
+                drive,
+                initial,
+                active,
+            },
+            other => other,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub const fn with_active_level(self, active: ActiveLevel) -> Self {
+        match self {
+            Self::DigitalOutput {
+                id,
+                pin,
+                drive,
+                initial,
+                ..
+            } => Self::DigitalOutput {
+                id,
+                pin,
+                drive,
+                initial,
+                active,
+            },
+            Self::DigitalInput {
+                id,
+                pin,
+                pull,
+                interrupt,
+                ..
+            } => Self::DigitalInput {
+                id,
+                pin,
+                pull,
+                active,
+                interrupt,
+            },
+        }
+    }
+
+    pub const fn id(&self) -> &'static str {
+        match self {
+            Self::DigitalOutput { id, .. } | Self::DigitalInput { id, .. } => id.as_str(),
+        }
+    }
+
+    pub const fn pin(&self) -> PhysicalPin {
+        match self {
+            Self::DigitalOutput { pin, .. } | Self::DigitalInput { pin, .. } => *pin,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,89 +219,30 @@ pub struct BoardDeclaration {
     pub hardware: &'static [HardwareDeclaration],
 }
 
-pub struct RenderedBoardInit {
-    pub imports: String,
-    pub monotonic_declaration: String,
-    pub local_struct: String,
-    pub local_value: String,
-    pub initialization: String,
-}
-
-pub fn render_init(board: &BoardDeclaration, include_resources: bool) -> Result<RenderedBoardInit> {
-    validate(board)?;
-
-    if !include_resources {
-        return Ok(RenderedBoardInit {
-            imports: String::new(),
-            monotonic_declaration: String::new(),
-            local_struct: "struct Local {}".to_owned(),
-            local_value: "Local {}".to_owned(),
-            initialization: String::new(),
-        });
-    }
-
-    let MonotonicDeclaration::SysTick {
-        id,
-        clock_hz: monotonic_clock_hz,
-    } = board.monotonic;
-    let HardwareDeclaration::GpioOutput {
-        id: led_id,
-        initial,
-        ..
-    } = board.hardware[0];
-    let initial_state = match initial {
-        PinState::Low => "Low",
-        PinState::High => "High",
-    };
-
-    Ok(RenderedBoardInit {
-        imports: "use ferrowasp_stm32f4::rtic::prelude::*;".to_owned(),
-        monotonic_declaration: format!("systick_monotonic!({id}, 1_000);"),
-        local_struct: format!("struct Local {{\n    {led_id}: PA5<Output<PushPull>>,\n}}"),
-        local_value: format!("Local {{ {led_id} }}"),
-        initialization: format!(
-            "let mut rcc =\n    ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), {}, false);\n{id}::start(cx.core.SYST, {monotonic_clock_hz});\nlet gpioa = cx.device.GPIOA.split(&mut rcc);\nlet mut {led_id} = gpioa.pa5.into_push_pull_output_in_state(PinState::{initial_state});\n{led_id}.set_internal_resistor(Pull::None);\n{led_id}.set_speed(Speed::Low);",
-            board.clocks.sysclk_hz,
-        ),
-    })
-}
-
-fn validate(board: &BoardDeclaration) -> Result<()> {
-    if board.id != "nucleo_f401re" {
-        bail!("unsupported board `{}`", board.id);
-    }
-    if board.mcu != Mcu::Stm32F401RE {
-        bail!("board `{}` must select STM32F401RE", board.id);
-    }
-    if board.clocks.source != ClockSource::Hsi || board.clocks.sysclk_hz != 84_000_000 {
-        bail!("board `{}` requires an 84 MHz HSI clock", board.id);
-    }
-    let MonotonicDeclaration::SysTick { id, clock_hz } = board.monotonic;
-    if id != "Mono" || clock_hz != board.clocks.sysclk_hz {
-        bail!("board `{}` requires Mono to use the system clock", board.id);
-    }
-    if board.hardware.len() != 1 {
+pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
+    syn::parse_str::<syn::Ident>(board.id)
+        .with_context(|| format!("board ID `{}` is not a Rust identifier", board.id))?;
+    if board.clocks.sysclk_hz == 0 {
         bail!(
-            "board `{}` currently supports exactly one GPIO output",
+            "board `{}` system clock must be greater than zero",
             board.id
         );
     }
-    let HardwareDeclaration::GpioOutput {
-        id,
-        pin,
-        drive,
-        active,
-        ..
-    } = board.hardware[0];
-    if id != "led2"
-        || pin != Pin::PA5
-        || drive != OutputDrive::PushPull
-        || active != ActiveLevel::High
-    {
-        bail!(
-            "board `{}` must declare LD2 as active-high push-pull PA5",
-            board.id
-        );
+
+    let mut hardware_ids = BTreeSet::new();
+    for hardware in board.hardware {
+        let id = hardware.id();
+        syn::parse_str::<syn::Ident>(id)
+            .with_context(|| format!("board hardware ID `{id}` is not a Rust identifier"))?;
+        if !hardware_ids.insert(id) {
+            bail!("board `{}` repeats hardware resource `{id}`", board.id);
+        }
+        if hardware.pin().as_str().is_empty() {
+            bail!(
+                "board `{}` hardware resource `{id}` has an empty physical pin",
+                board.id
+            );
+        }
     }
     Ok(())
 }
@@ -154,6 +251,8 @@ fn validate(board: &BoardDeclaration) -> Result<()> {
 mod tests {
     use super::*;
 
+    const LED2: HardwareDeclaration =
+        HardwareDeclaration::digital_output(ResourceId::new("led2"), PhysicalPin::new("PA5"));
     const BOARD: BoardDeclaration = BoardDeclaration {
         id: "nucleo_f401re",
         mcu: Mcu::Stm32F401RE,
@@ -165,31 +264,81 @@ mod tests {
             id: "Mono",
             clock_hz: 84_000_000,
         },
-        hardware: &[HardwareDeclaration::GpioOutput {
-            id: "led2",
-            pin: Pin::PA5,
-            drive: OutputDrive::PushPull,
-            initial: PinState::Low,
-            active: ActiveLevel::High,
-        }],
+        hardware: &[LED2],
     };
 
     #[test]
-    fn renders_hsi_systick_and_ld2_initialization() {
-        let rendered = render_init(&BOARD, true).unwrap();
-
-        assert!(rendered.monotonic_declaration.contains("Mono"));
-        assert!(rendered.local_struct.contains("led2"));
-        assert_eq!(rendered.local_value, "Local { led2 }");
-        assert!(rendered.initialization.contains("freeze_hsi"));
-        assert!(rendered.initialization.contains("PinState::Low"));
+    fn represents_pa5_without_a_hal_pin_type() {
+        assert_eq!(LED2.pin(), PhysicalPin::new("PA5"));
+        validate(&BOARD).unwrap();
     }
 
     #[test]
-    fn omits_hardware_for_an_app_without_tasks() {
-        let rendered = render_init(&BOARD, false).unwrap();
-        assert!(rendered.imports.is_empty());
-        assert_eq!(rendered.local_struct, "struct Local {}");
-        assert!(rendered.initialization.is_empty());
+    fn constructor_applies_digital_output_defaults() {
+        let HardwareDeclaration::DigitalOutput {
+            drive,
+            initial,
+            active,
+            ..
+        } = LED2
+        else {
+            panic!("expected digital output")
+        };
+        assert_eq!(drive, OutputDrive::PushPull);
+        assert_eq!(initial, LogicLevel::Low);
+        assert_eq!(active, ActiveLevel::High);
+    }
+
+    #[test]
+    fn exti_input_constructor_applies_button_defaults() {
+        const BUTTON: HardwareDeclaration = HardwareDeclaration::exti_input(
+            ResourceId::new("user_button"),
+            PhysicalPin::new("PC13"),
+        );
+        let HardwareDeclaration::DigitalInput {
+            pull,
+            active,
+            interrupt,
+            ..
+        } = BUTTON
+        else {
+            panic!("expected digital input")
+        };
+        assert_eq!(pull, InputPull::Up);
+        assert_eq!(active, ActiveLevel::Low);
+        assert_eq!(interrupt, Some(InterruptEdge::Falling));
+    }
+
+    #[test]
+    fn rejects_empty_physical_pin_names() {
+        const INVALID: BoardDeclaration = BoardDeclaration {
+            hardware: &[HardwareDeclaration::digital_output(
+                ResourceId::new("invalid"),
+                PhysicalPin::new(""),
+            )],
+            ..BOARD
+        };
+
+        assert!(
+            validate(&INVALID)
+                .unwrap_err()
+                .to_string()
+                .contains("empty physical pin")
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_hardware_ids() {
+        const DUPLICATE: BoardDeclaration = BoardDeclaration {
+            hardware: &[LED2, LED2],
+            ..BOARD
+        };
+
+        assert!(
+            validate(&DUPLICATE)
+                .unwrap_err()
+                .to_string()
+                .contains("repeats hardware resource")
+        );
     }
 }

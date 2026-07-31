@@ -131,6 +131,12 @@ Require a ready Winbond-compatible external flash, a ready IMU, and plausible
 status. Close RTT readers, serial terminals, and other programs holding the
 same COM port.
 
+Current sensing is not yet reliable. The operator has observed the displayed
+value remain near `0.8 A` throughout flight instead of tracking load. Do not
+use it for battery-capacity, motor-load, or safety decisions until the ADC
+clock, PC1 response, offset, and scale have been validated against external
+measurements. Battery-voltage validation remains a separate requirement.
+
 ## Back up and inspect configuration
 
 Keep the aircraft disarmed. The firmware rejects configuration writes while

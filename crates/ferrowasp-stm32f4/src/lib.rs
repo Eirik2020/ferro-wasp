@@ -21,6 +21,8 @@ pub mod exti;
 pub mod hal_prelude;
 pub mod memory;
 pub mod pwm_config;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
+pub mod rtic;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod scheduler;
 pub mod serial;

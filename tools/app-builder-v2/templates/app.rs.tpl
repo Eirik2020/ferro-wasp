@@ -4,6 +4,7 @@
 #![deny(warnings)]
 
 use panic_halt as _;
+use defmt_rtt as _;
 
 #[rtic::app(device = ferrowasp_stm32f4::rtic::hal::pac, peripherals = true, dispatchers = [EXTI0])]
 mod app {
@@ -13,7 +14,7 @@ mod app {
     {{MONOTONIC_DECLARATION}}
 
     #[shared]
-    struct Shared {}
+    {{SHARED_STRUCT}}
 
     #[local]
     {{LOCAL_STRUCT}}
@@ -26,7 +27,7 @@ mod app {
         // Initial tasks selected by AppDeclaration::init.spawns.
         {{INIT_SPAWNS}}
 
-        (Shared {}, {{LOCAL_VALUE}})
+        ({{SHARED_VALUE}}, {{LOCAL_VALUE}})
     }
 
     {{TASKS}}

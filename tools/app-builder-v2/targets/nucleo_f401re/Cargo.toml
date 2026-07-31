@@ -10,20 +10,17 @@ build = "build.rs"
 resolver = "2"
 
 [[bin]]
-name = "handwritten"
-path = "handwritten/src/main.rs"
-test = false
-bench = false
-
-[[bin]]
 name = "generated"
-path = "generated/src/main.rs"
+path = "src/main.rs"
 test = false
 bench = false
 
 [dependencies]
+defmt = "=1.0.1"
+defmt-rtt = { version = "=1.2.0", features = ["disable-blocking-mode"] }
 panic-halt = "=1.0.0"
-ferrowasp-stm32f4 = { path = "../../../crates/ferrowasp-stm32f4", features = ["stm32f401"] }
+ferrowasp-io-core = { path = "../../../../crates/ferrowasp-io-core" }
+ferrowasp-stm32f4 = { path = "../../../../crates/ferrowasp-stm32f4", features = ["stm32f401"] }
 rtic = { version = "=2.3.0", features = ["thumbv7-backend"] }
 
 [profile.dev.package."*"]

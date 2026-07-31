@@ -2,24 +2,28 @@ use std::{fs, path::Path};
 
 use anyhow::{Context, Result, bail};
 
-use crate::{app, board::render_init, task::render};
+use crate::{
+    app, backend, board,
+    resolve::{self, ResolvedTask},
+    task::{TaskDeclaration, render},
+};
 
-#[path = "../../boards/nucleo_f401re.rs"]
+#[path = "../../targets/nucleo_f401re/src/board.rs"]
 mod nucleo_f401re;
-#[path = "../../apps/nucleo_f401re.rs"]
+#[path = "../../targets/nucleo_f401re/src/app_composition.rs"]
 mod nucleo_f401re_app;
 
 const APP_TEMPLATE: &str = include_str!("../../templates/app.rs.tpl");
-const OUTPUT_PATH: &str = "app/generated/src/main.rs";
+const OUTPUT_PATH: &str = "targets/nucleo_f401re/src/main.rs";
 
 pub fn generate(repository_root: &Path) -> Result<()> {
     app::validate(&nucleo_f401re_app::APP)?;
-    let tasks = render_tasks(repository_root, &nucleo_f401re_app::APP)?;
-    let init_spawns = render_init_spawns(&nucleo_f401re_app::APP);
-    let board = render_init(
-        &nucleo_f401re::BOARD,
-        !nucleo_f401re_app::APP.tasks.is_empty(),
-    )?;
+    board::validate(&nucleo_f401re::BOARD)?;
+    backend::validate(&nucleo_f401re::BOARD)?;
+    let resolved = resolve::resolve(&nucleo_f401re::BOARD, &nucleo_f401re_app::APP)?;
+    let tasks = render_tasks(repository_root, &resolved.tasks)?;
+    let init_spawns = render_init_spawns(&resolved.init_spawned_tasks);
+    let board = backend::render(&nucleo_f401re::BOARD, &resolved)?;
     let application = substitute(APP_TEMPLATE, &tasks, &init_spawns, &board)?;
     syn::parse_file(&application).context("parse complete generated RTIC application")?;
 
@@ -35,10 +39,33 @@ pub fn generate(repository_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn render_tasks(repository_root: &Path, app: &app::AppDeclaration) -> Result<String> {
-    app.tasks
+fn render_tasks(repository_root: &Path, tasks: &[ResolvedTask<'_>]) -> Result<String> {
+    tasks
         .iter()
-        .map(|task| render(task, &read_task_body(repository_root, task.id)?))
+        .map(|task| {
+            let resolved_locals = task
+                .local_resources
+                .iter()
+                .map(|resource| resource.id())
+                .collect::<Vec<_>>();
+            let resolved_shared = task
+                .shared_resources
+                .iter()
+                .map(|resource| resource.id())
+                .collect::<Vec<_>>();
+            if resolved_locals != task.declaration.local_resources
+                || resolved_shared != task.declaration.shared_resources
+            {
+                bail!(
+                    "resolved resources for task `{}` do not match its declaration",
+                    task.declaration.id
+                );
+            }
+            render(
+                task.declaration,
+                &read_task_body(repository_root, task.declaration.id)?,
+            )
+        })
         .collect::<Result<Vec<_>>>()
         .map(|tasks| tasks.join("\n\n"))
 }
@@ -57,9 +84,8 @@ fn read_task_body(repository_root: &Path, task_id: &str) -> Result<String> {
     fs::read_to_string(&path).with_context(|| format!("read task body {}", path.display()))
 }
 
-fn render_init_spawns(app: &app::AppDeclaration) -> String {
-    app.init
-        .spawns
+fn render_init_spawns(tasks: &[&TaskDeclaration]) -> String {
+    tasks
         .iter()
         .map(|task| {
             format!(
@@ -75,7 +101,7 @@ fn substitute(
     template: &str,
     tasks: &str,
     init_spawns: &str,
-    board: &crate::board::RenderedBoardInit,
+    board: &crate::backend::RenderedBoardInit,
 ) -> Result<String> {
     let replacements = [
         ("{{RTIC_IMPORTS}}", board.imports.clone(), 4),
@@ -84,6 +110,8 @@ fn substitute(
             board.monotonic_declaration.clone(),
             4,
         ),
+        ("{{SHARED_STRUCT}}", board.shared_struct.clone(), 4),
+        ("{{SHARED_VALUE}}", board.shared_value.clone(), 8),
         ("{{LOCAL_STRUCT}}", board.local_struct.clone(), 4),
         ("{{LOCAL_VALUE}}", board.local_value.clone(), 8),
         ("{{BOARD_INIT}}", board.initialization.clone(), 8),
@@ -131,18 +159,77 @@ fn indent(source: &str, spaces: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::board::PhysicalPin;
+
+    #[test]
+    fn nucleo_board_declares_pa5_as_typed_physical_data() {
+        assert_eq!(
+            nucleo_f401re::BOARD.hardware[0].pin(),
+            PhysicalPin::new("PA5")
+        );
+    }
 
     #[test]
     fn empty_application_omits_tasks_and_init_spawns() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let empty_app = app::AppDeclaration::EMPTY;
-        let tasks = render_tasks(root, &empty_app).unwrap();
-        let spawns = render_init_spawns(&empty_app);
-        let board = render_init(&nucleo_f401re::BOARD, false).unwrap();
+        app::validate(&empty_app).unwrap();
+        board::validate(&nucleo_f401re::BOARD).unwrap();
+        backend::validate(&nucleo_f401re::BOARD).unwrap();
+        let resolved = resolve::resolve(&nucleo_f401re::BOARD, &empty_app).unwrap();
+        let tasks = render_tasks(root, &resolved.tasks).unwrap();
+        let spawns = render_init_spawns(&resolved.init_spawned_tasks);
+        let board = backend::render(&nucleo_f401re::BOARD, &resolved).unwrap();
         let application = substitute(APP_TEMPLATE, &tasks, &spawns, &board).unwrap();
 
         assert!(!application.contains("::spawn()"));
         assert!(!application.contains("#[task("));
         assert!(syn::parse_file(&application).is_ok());
+    }
+
+    #[test]
+    fn selected_init_spawn_is_rendered() {
+        app::validate(&nucleo_f401re_app::APP).unwrap();
+        board::validate(&nucleo_f401re::BOARD).unwrap();
+        backend::validate(&nucleo_f401re::BOARD).unwrap();
+        let resolved = resolve::resolve(&nucleo_f401re::BOARD, &nucleo_f401re_app::APP).unwrap();
+        let spawns = render_init_spawns(&resolved.init_spawned_tasks);
+
+        assert!(spawns.contains("blink_led::spawn()"));
+    }
+
+    #[test]
+    fn blink_includes_one_shot_report_task_with_count_argument() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        app::validate(&nucleo_f401re_app::APP).unwrap();
+        board::validate(&nucleo_f401re::BOARD).unwrap();
+        backend::validate(&nucleo_f401re::BOARD).unwrap();
+        let resolved = resolve::resolve(&nucleo_f401re::BOARD, &nucleo_f401re_app::APP).unwrap();
+        let tasks = render_tasks(root, &resolved.tasks).unwrap();
+        let init_spawns = render_init_spawns(&resolved.init_spawned_tasks);
+
+        assert!(tasks.contains("async fn report_blink(cx: report_blink::Context, count: u32)"));
+        assert!(tasks.contains("report_blink::spawn(blink_count)"));
+        assert!(tasks.contains("defmt::info!(\"Blink {}\", count)"));
+        assert!(!init_spawns.contains("report_blink::spawn"));
+    }
+
+    #[test]
+    fn button_exti_task_and_blink_enable_state_are_rendered() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        app::validate(&nucleo_f401re_app::APP).unwrap();
+        board::validate(&nucleo_f401re::BOARD).unwrap();
+        backend::validate(&nucleo_f401re::BOARD).unwrap();
+        let resolved = resolve::resolve(&nucleo_f401re::BOARD, &nucleo_f401re_app::APP).unwrap();
+        let tasks = render_tasks(root, &resolved.tasks).unwrap();
+        let spawns = render_init_spawns(&resolved.init_spawned_tasks);
+        let board = backend::render(&nucleo_f401re::BOARD, &resolved).unwrap();
+        let application = substitute(APP_TEMPLATE, &tasks, &spawns, &board).unwrap();
+
+        assert!(application.contains("binds = EXTI15_10"));
+        assert!(application.contains("user_button: PC13<Input>"));
+        assert!(application.contains("blink_enabled: bool"));
+        assert!(application.contains("clear_interrupt_pending_bit"));
+        assert!(application.contains("blink_enabled.lock"));
     }
 }

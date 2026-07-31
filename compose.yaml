@@ -17,6 +17,7 @@ services:
     stdin_open: true
     tty: true
     environment:
+      SSH_AUTH_SOCK: /run/ssh-agent.sock
       CARGO_TARGET_DIR: /home/ferrowasp/.cache/ferrowasp-target
       MPLBACKEND: Agg
     volumes:
@@ -25,6 +26,7 @@ services:
       - cargo-git:/home/ferrowasp/.cargo/git
       - cargo-target:/home/ferrowasp/.cache/ferrowasp-target
       - codex-home:/home/ferrowasp/.codex
+      - "${SSH_AUTH_SOCK}:/run/ssh-agent.sock"
 
 volumes:
   codex-home:

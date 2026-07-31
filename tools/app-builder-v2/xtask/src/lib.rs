@@ -1,7 +1,11 @@
 mod app;
+mod backend;
 mod board;
 mod generator;
+mod resolve;
 mod task;
+#[path = "../../tasks/task-declarations/mod.rs"]
+mod task_declarations;
 
 use std::{env, path::PathBuf};
 

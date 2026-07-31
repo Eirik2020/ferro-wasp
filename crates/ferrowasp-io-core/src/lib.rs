@@ -4,6 +4,7 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod digital;
 pub mod health;
 pub mod serial;
 pub mod spi;

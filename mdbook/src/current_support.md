@@ -21,7 +21,7 @@ list every peripheral or diagnostic feature.
 | Configuration | Persistent onboard configuration through FerroConfigurator | Compile-time and app-local configuration | None |
 | Blackbox | Standard onboard SPI-NOR FWBB logging and download | RTT / BB2 development logging | None |
 | Pilot display | DJI O4 MSP DisplayPort OSD | DJI O4 MSP DisplayPort OSD | None |
-| ADC | Battery voltage and current inputs | Battery voltage and current inputs | None |
+| ADC | Battery voltage; current input is present but not yet reliable | Battery voltage and current inputs | None |
 | Current evidence | Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight | Boot, RC, IMU, DShot, eRPM-qualified arming, props-off checks, and controlled flight | Build and target smoke checks |
 
 ## Foxeer F405 V2
@@ -100,7 +100,10 @@ Important open work includes:
   escalation;
 - finish estimator and controller validation, bounded I-term repair, and
   airframe-specific tuning;
-- fine-calibrate Foxeer voltage and current scaling;
+- diagnose the operator-reported Foxeer current reading remaining near `0.8 A`
+  throughout flight; treat it as unavailable for load or safety decisions,
+  correct ADC1 clock initialization, and then validate PC1 response, offset,
+  and scale against external measurements;
 - add CRSF/ELRS while retaining SBUS;
 - validate any experimental MSPv2 configurator endpoint before making it part
   of the standard image;
