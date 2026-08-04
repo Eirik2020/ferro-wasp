@@ -3,8 +3,8 @@
 The focused path from this sandbox to generation of the golden Foxeer flight
 application is tracked in [`ROADMAP.md`](ROADMAP.md).
 
-This isolated sandbox generates NUCLEO-F401RE and FerroWasp FCU3 RTIC
-applications from three inputs per target:
+This isolated sandbox generates NUCLEO-F401RE, FerroWasp FCU3, and an
+actuator-inhibited Foxeer F405 V2 RTIC prototype from three inputs per target:
 
 1. a Rust `BoardDeclaration` describing the MCU, clock, monotonic, and physical
    resources;
@@ -39,7 +39,13 @@ targets/nucleo_f401re/src/generated_app.rs
 targets/nucleo_f401re/src/prelude.rs
 targets/ferrowasp_fcu3/src/generated_app.rs
 targets/ferrowasp_fcu3/src/prelude.rs
+targets/foxeer_f405_v2/src/generated_app.rs
+targets/foxeer_f405_v2/src/prelude.rs
 ```
+
+The Foxeer target is an incremental generator prototype, not the authoritative
+golden flight image. Its current scope and cutover boundary are documented in
+[`targets/foxeer_f405_v2/README.md`](targets/foxeer_f405_v2/README.md).
 
 The generated prelude contains the runtime-link imports and only the capability
 and backend reexports required by the resolved application.
@@ -69,6 +75,13 @@ app_task! {
 definition owns the body ID, sync/async kind, arguments, logical resources,
 portable capabilities, and typed compile-time parameter requirements. It does
 not own target hardware names, concrete parameter values, or scheduling.
+
+Reusable component definitions live under [`components/`](components), beside
+`tasks/` and outside both `xtask/` and `targets/`. Each component file groups
+its reusable tasks, resource slots, internal resources, and initialization
+requirements. [`components/mod.rs`](components/mod.rs) is the explicit
+component registry. The generic component data model, validation, expansion,
+and rendering machinery remains in `xtask`.
 
 One app declaration is
 [`targets/nucleo_f401re/src/app_composition.rs`](targets/nucleo_f401re/src/app_composition.rs).
@@ -107,28 +120,40 @@ those parsed field accesses to `cx.local.led3` and
 board, each `to_sw` target against the corresponding application software
 resource section, and each binding against the definition's required
 capability. The current capability set covers digital output, interrupt input,
-Boolean state, an RC input snapshot, and the bounded serial consumer used by
-the UART component.
+Boolean state, protocol-neutral serial RX, bounded protocol decoders, and an RC
+input snapshot. Software capabilities use stable type IDs rather than adding a
+central resource enum variant for every component-owned type.
 
 Components expand before ordinary resource resolution. A component definition
-owns reusable task and resource slots, while a declaration supplies an
-instance ID, configuration, and target bindings. The Nucleo composition uses
-one configurable serial-port instance:
+owns reusable task and resource slots, an architectural layer, and a
+configuration family. Hardware endpoints may bind board hardware; functional
+components are rejected if they do so. The Nucleo composition separates the
+serial endpoint from its COMPORT consumer:
 
 ```rust
 pub const UART2: ComponentDeclaration = ComponentDeclaration {
     id: "uart2",
     definition: &SERIAL_PORT_COMPONENT,
-    configuration: ComponentConfiguration::SerialPort(UART2_ASSIGNMENT),
-    bindings: &[resource("endpoint").to_hw("uart2_endpoint")],
+    configuration: ComponentConfiguration::SerialPort(SerialProtocol::Raw),
+    bindings: &[resource("endpoint").to_hw("uart2")],
+};
+
+pub const COMPORT: ComponentDeclaration = ComponentDeclaration {
+    id: "comport",
+    definition: &COMPORT_COMPONENT,
+    configuration: ComponentConfiguration::None,
+    bindings: &[resource("rx").to_sw("uart2_rx")],
 };
 ```
 
-Expansion prefixes private and exposed artifacts with `uart2_`, validates the
-endpoint capability, and feeds the resulting ordinary tasks and resources to
-the existing resolver. Generated component-owned resource declarations,
-post-init resource values, and RTIC tasks are enclosed in balanced page-width
-component comments so their ownership remains visible in the generated app.
+`SerialPortComponent` owns only UART profile setup, DMA/IDLE interrupts,
+bounded storage, and the exposed raw `uart2_rx` interface. The functional
+COMPORT component owns line decoding and logging; command input similarly owns
+its SBUS decoder and RC snapshot. Expansion validates cross-component
+capabilities and feeds the resulting ordinary tasks and resources to the
+existing resolver. Generated component-owned resource declarations, post-init
+resource values, and RTIC tasks are enclosed in balanced page-width component
+comments so their ownership remains visible in the generated app.
 Inside RTIC `init`, shared clock and peripheral setup is grouped as system
 initialization. Standalone hardware setup is grouped directly by task and
 component hardware setup directly by component. Each init spawn has one plain
@@ -192,6 +217,9 @@ cd targets/nucleo_f401re
 cargo check --locked
 cargo build --locked --release
 cd ../ferrowasp_fcu3
+cargo check --locked
+cargo build --locked --release
+cd ../foxeer_f405_v2
 cargo check --locked
 cargo build --locked --release
 ```

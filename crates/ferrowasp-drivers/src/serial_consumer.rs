@@ -19,6 +19,16 @@ pub enum SerialConsumerEvent {
     ComPortOverflow,
 }
 
+/// One output produced by the bounded line-oriented COMPORT decoder.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LineConsumerEvent {
+    /// A complete line without its CR or LF terminator.
+    Line(Vec<u8, RAW_LINE_MAX_LEN>),
+
+    /// The current line exceeded its fixed buffer and is being discarded.
+    Overflow,
+}
+
 /// Boot-selected, allocation-free parser for one serial endpoint.
 #[derive(Debug)]
 pub enum SerialConsumer {
@@ -43,11 +53,18 @@ impl SerialConsumer {
     }
 
     /// Consumes one bounded UART chunk and reports every completed output.
-    pub fn consume(&mut self, bytes: &[u8], emit: impl FnMut(SerialConsumerEvent)) {
+    pub fn consume(&mut self, bytes: &[u8], mut emit: impl FnMut(SerialConsumerEvent)) {
         match self {
             Self::Disabled => {}
-            Self::Rc(consumer) => consumer.consume(bytes, emit),
-            Self::ComPort(consumer) => consumer.consume(bytes, emit),
+            Self::Rc(consumer) => consumer.consume(bytes, |snapshot| {
+                emit(SerialConsumerEvent::RcSnapshot(snapshot));
+            }),
+            Self::ComPort(consumer) => consumer.consume(bytes, |event| {
+                emit(match event {
+                    LineConsumerEvent::Line(line) => SerialConsumerEvent::ComPortLine(line),
+                    LineConsumerEvent::Overflow => SerialConsumerEvent::ComPortOverflow,
+                });
+            }),
         }
     }
 }
@@ -68,7 +85,8 @@ impl SbusConsumer {
         }
     }
 
-    fn consume(&mut self, bytes: &[u8], mut emit: impl FnMut(SerialConsumerEvent)) {
+    /// Consumes bytes and emits each completed RC snapshot.
+    pub fn consume(&mut self, bytes: &[u8], mut emit: impl FnMut(RcInputSnapshot)) {
         for result in self.parser.push_bytes(bytes) {
             match result {
                 Ok(packet) => {
@@ -79,11 +97,11 @@ impl SbusConsumer {
                         packet.flags.frame_lost,
                         packet.flags.failsafe,
                     );
-                    emit(SerialConsumerEvent::RcSnapshot(self.snapshot));
+                    emit(self.snapshot);
                 }
                 Err(_) => {
                     self.snapshot.record_parse_error();
-                    emit(SerialConsumerEvent::RcSnapshot(self.snapshot));
+                    emit(self.snapshot);
                 }
             }
         }
@@ -114,7 +132,8 @@ impl LineConsumer {
         }
     }
 
-    fn consume(&mut self, bytes: &[u8], mut emit: impl FnMut(SerialConsumerEvent)) {
+    /// Consumes bytes and emits complete lines or one overflow notification.
+    pub fn consume(&mut self, bytes: &[u8], mut emit: impl FnMut(LineConsumerEvent)) {
         for &byte in bytes {
             match byte {
                 b'\r' => {
@@ -133,22 +152,20 @@ impl LineConsumer {
                     if self.line.push(byte).is_err() {
                         self.line.clear();
                         self.discarding = true;
-                        emit(SerialConsumerEvent::ComPortOverflow);
+                        emit(LineConsumerEvent::Overflow);
                     }
                 }
             }
         }
     }
 
-    fn finish_line(&mut self, emit: &mut impl FnMut(SerialConsumerEvent)) {
+    fn finish_line(&mut self, emit: &mut impl FnMut(LineConsumerEvent)) {
         if self.discarding {
             self.discarding = false;
             self.line.clear();
             return;
         }
-        emit(SerialConsumerEvent::ComPortLine(core::mem::take(
-            &mut self.line,
-        )));
+        emit(LineConsumerEvent::Line(core::mem::take(&mut self.line)));
     }
 }
 

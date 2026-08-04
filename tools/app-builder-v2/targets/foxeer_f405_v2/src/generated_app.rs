@@ -21,26 +21,27 @@ mod app {
     use crate::prelude::*;
 
     // Timing configuration generated from the board declaration.
-    const SYSTEM_CLOCK_HZ: u32 = 84_000_000;
+    const SYSTEM_CLOCK_HZ: u32 = 168_000_000;
 
     systick_monotonic!(Mono, 1_000);
 
     #[shared]
     struct Shared {
-        blink_enabled: bool,
         // ============================ Component `uart2` resources ============================
         uart2: Uart2RxIrq,
         uart2_rx: UartRxParserSide,
         // ========================== End component `uart2` resources ==========================
+        // ======================== Component `command_input` resources ========================
+        command_input_rc_input_reader: ObserverReader<'static, RcInputSnapshot>,
+        // ====================== End component `command_input` resources ======================
     }
 
     #[local]
     struct Local {
-        led3: Pin<'A', 5, Output<PushPull>>,
-        user_button: Pin<'C', 13, Input>,
-        // =========================== Component `comport` resources ===========================
-        comport_decoder: LineConsumer,
-        // ========================= End component `comport` resources =========================
+        // ======================== Component `command_input` resources ========================
+        command_input_decoder: SbusConsumer,
+        command_input_rc_input_publisher: ObserverPublisher<'static, RcInputSnapshot>,
+        // ====================== End component `command_input` resources ======================
     }
 
     #[init(local = [
@@ -50,28 +51,18 @@ mod app {
         uart2_free_queue: UartRxFreeQueue = UartRxFreeQueue::new(),
         uart2_filled_queue: UartRxFilledQueue = UartRxFilledQueue::new(),
         // ========================== End component `uart2` resources ==========================
+        // ======================== Component `command_input` resources ========================
+        command_input_rc_input_channel: ObserverChannel<RcInputSnapshot> =
+            ObserverChannel::new(),
+        // ====================== End component `command_input` resources ======================
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         // =============================== System initialization ===============================
         let mut rcc =
-            ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), SYSTEM_CLOCK_HZ, false);
+            ferrowasp_stm32f4::clocks::freeze_hse(cx.device.RCC.constrain(), 8_000_000, SYSTEM_CLOCK_HZ, true);
         Mono::start(cx.core.SYST, SYSTEM_CLOCK_HZ);
         let gpioa = cx.device.GPIOA.split(&mut rcc);
-        let gpioc = cx.device.GPIOC.split(&mut rcc);
-        let mut syscfg = cx.device.SYSCFG.constrain(&mut rcc);
-        let mut exti = cx.device.EXTI;
         // ============================= End system initialization =============================
-
-        // ----------------------------- Task `blink_led` ------------------------------
-        let mut led3 = gpioa.pa5.into_push_pull_output_in_state(PinState::Low);
-        led3.set_internal_resistor(Pull::None);
-        led3.set_speed(Speed::Low);
-        // --------------------------- End task `blink_led` ----------------------------
-
-        // ---------------------------- Task `button_exti` -----------------------------
-        let user_button = Input::new(gpioc.pc13, Pull::Up);
-        let user_button = ferrowasp_stm32f4::exti::init_input(user_button, &mut syscfg, &mut exti, Edge::Falling);
-        // -------------------------- End task `button_exti` ---------------------------
 
         // ================================= Component `uart2` =================================
         let dma1 = StreamsTuple::new(cx.device.DMA1, &mut rcc);
@@ -82,7 +73,7 @@ mod app {
                 rx_dma: dma1.5,
             },
             &mut rcc,
-            SerialProtocol::Raw,
+            SerialProtocol::Sbus,
             UartRxStorageResources {
                 buffers: cx.local.uart2_rx_buffers,
                 free_queue: cx.local.uart2_free_queue,
@@ -93,67 +84,64 @@ mod app {
         let uart2_rx = uart2_parts.parser;
         // =============================== End component `uart2` ===============================
 
+        // ============================= Component `command_input` =============================
+        let (command_input_rc_input_publisher, command_input_rc_input_reader) =
+            cx.local.command_input_rc_input_channel.split();
+        // =========================== End component `command_input` ===========================
+
         // =============================== Initial task startup ================================
 
-        // Task `blink_led`
-        blink_led::spawn().expect("init must spawn declared task blink_led");
+        // Task `rc_heartbeat`
+        rc_heartbeat::spawn().expect("init must spawn declared task rc_heartbeat");
 
-        // Component `comport` task `comport_consumer`
-        comport_consumer::spawn().expect("init must spawn declared task comport_consumer");
+        // Component `command_input` task `command_input_consumer`
+        command_input_consumer::spawn().expect("init must spawn declared task command_input_consumer");
 
         (Shared {
-            blink_enabled: true,
             // ============================ Component `uart2` resources ============================
             uart2,
             uart2_rx: uart2_rx,
             // ========================== End component `uart2` resources ==========================
+            // ======================== Component `command_input` resources ========================
+            command_input_rc_input_reader: command_input_rc_input_reader,
+            // ====================== End component `command_input` resources ======================
         }, Local {
-            led3,
-            user_button,
-            // =========================== Component `comport` resources ===========================
-            comport_decoder: LineConsumer::new(),
-            // ========================= End component `comport` resources =========================
+            // ======================== Component `command_input` resources ========================
+            command_input_decoder: SbusConsumer::new(),
+            command_input_rc_input_publisher: command_input_rc_input_publisher,
+            // ====================== End component `command_input` resources ======================
         })
     }
 
-    #[task(priority = 1, local = [led3], shared = [blink_enabled])]
-    async fn blink_led(mut cx: blink_led::Context) {
-        const TOGGLE_INTERVAL_MS: u32 = 1_000;
+    #[task(priority = 1, shared = [command_input_rc_input_reader])]
+    async fn rc_heartbeat(mut cx: rc_heartbeat::Context) {
+        const REPORT_INTERVAL_MS: u32 = 1_000;
 
-        let mut blink_count = 0_u32;
         loop {
-            Mono::delay(TOGGLE_INTERVAL_MS.millis()).await;
-            let enabled = cx.shared.blink_enabled.lock(|enabled| *enabled);
-            if enabled {
-                let _ = StatefulOutputPin::toggle(cx.local.led3);
-                blink_count = blink_count.wrapping_add(1);
-                report_blink::spawn(blink_count)
-                    .expect("blink report task queue must have capacity");
-            } else {
-                let _ = OutputPin::set_low(cx.local.led3);
+            Mono::delay(REPORT_INTERVAL_MS.millis()).await;
+            let snapshot = cx.shared.command_input_rc_input_reader.lock(|reader| reader.latest());
+            match snapshot {
+                Some(snapshot) if snapshot.has_valid_frame => {
+                    defmt::info!(
+                        "RC channels: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}], d1={}, d2={}, frame_lost={}, failsafe={}, valid={}, errors={}",
+                        snapshot.channels[0], snapshot.channels[1], snapshot.channels[2],
+                        snapshot.channels[3], snapshot.channels[4], snapshot.channels[5],
+                        snapshot.channels[6], snapshot.channels[7], snapshot.channels[8],
+                        snapshot.channels[9], snapshot.channels[10], snapshot.channels[11],
+                        snapshot.channels[12], snapshot.channels[13], snapshot.channels[14],
+                        snapshot.channels[15], snapshot.digital_channel_1,
+                        snapshot.digital_channel_2, snapshot.frame_lost, snapshot.failsafe,
+                        snapshot.valid_frames, snapshot.parse_errors,
+                    );
+                }
+                Some(snapshot) => {
+                    defmt::info!("RC heartbeat: no RC frame (errors={})", snapshot.parse_errors);
+                }
+                None => {
+                    defmt::info!("RC heartbeat: no RC frame (errors=0)");
+                }
             }
         }
-    }
-
-    #[task(priority = 1)]
-    async fn report_blink(cx: report_blink::Context, count: u32) {
-        let _ = cx;
-        defmt::info!("Blink {}", count);
-    }
-
-    #[task(
-        binds = EXTI15_10,
-        priority = 2,
-        local = [user_button],
-        shared = [blink_enabled]
-    )]
-    fn button_exti(mut cx: button_exti::Context) {
-        cx.local.user_button.clear_interrupt_pending_bit();
-        let enabled = cx.shared.blink_enabled.lock(|enabled| {
-            *enabled = !*enabled;
-            *enabled
-        });
-        defmt::info!("Blink enabled: {}", enabled);
     }
 
     // ============================== Component `uart2` tasks ==============================
@@ -184,9 +172,13 @@ mod app {
     }
     // ============================ End component `uart2` tasks ============================
 
-    // ============================= Component `comport` tasks =============================
-    #[task(priority = 2, local = [comport_decoder], shared = [uart2_rx])]
-    async fn comport_consumer(mut cx: comport_consumer::Context) {
+    // ========================== Component `command_input` tasks ==========================
+    #[task(
+        priority = 2,
+        local = [command_input_decoder, command_input_rc_input_publisher],
+        shared = [uart2_rx]
+    )]
+    async fn command_input_consumer(mut cx: command_input_consumer::Context) {
         let mut bytes = [0_u8; UART_RX_BUFFER_SIZE];
 
         loop {
@@ -196,16 +188,8 @@ mod app {
                     defmt::warn!("serial RX buffer recycle error");
                 }
                 UartRxReadOutcome::Chunk(len) => {
-                    cx.local.comport_decoder.consume(&bytes[..len], |event| match event {
-                        LineConsumerEvent::Line(line) => {
-                            match core::str::from_utf8(line.as_slice()) {
-                                Ok(line) => defmt::info!("COMPORT: {}", line),
-                                Err(_) => defmt::info!("COMPORT bytes: {=[u8]}", line.as_slice()),
-                            }
-                        }
-                        LineConsumerEvent::Overflow => {
-                            defmt::warn!("COMPORT line exceeded 64 bytes; discarded");
-                        }
+                    cx.local.command_input_decoder.consume(&bytes[..len], |snapshot| {
+                        cx.local.command_input_rc_input_publisher.publish(snapshot);
                     });
                 }
             }
@@ -213,5 +197,5 @@ mod app {
             Mono::delay(1.millis()).await;
         }
     }
-    // =========================== End component `comport` tasks ===========================
+    // ======================== End component `command_input` tasks ========================
 }

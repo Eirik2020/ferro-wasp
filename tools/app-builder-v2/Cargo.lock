@@ -89,6 +89,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-core"
+version = "0.1.0"
+dependencies = [
+ "critical-section",
+ "heapless",
+]
+
+[[package]]
 name = "ferrowasp-drivers"
 version = "0.1.0"
 dependencies = [
@@ -224,6 +232,7 @@ version = "0.1.0"
 dependencies = [
  "defmt",
  "embedded-hal",
+ "ferrowasp-core",
  "ferrowasp-drivers",
  "ferrowasp-io-core",
  "fugit",

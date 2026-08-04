@@ -3,18 +3,24 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, bail};
-use ferrowasp_io_core::serial::{RcProtocol, SerialPortAssignment};
+use ferrowasp_io_core::serial::SerialProtocol;
 
 use super::RenderedBoardInit;
 use crate::{
     board::{BoardDeclaration, MonotonicDeclaration},
-    component::ExpandedSoftwareResourceKind,
+    component::{
+        ComponentConfiguration, ComponentInitLocalResource, ComponentSoftwareResourceInitializer,
+        ExpandedSoftwareResourceKind,
+    },
     hw_resources::{
         ClockSource, Drive, GpioMode, HardwareResource, InterruptEdge, Level, Mcu, PinId, Pull,
         UartRxDma,
     },
     resolve::{ResolvedApp, ResolvedResource, ResolvedResourceUsage, ResolvedTaskTrigger},
-    task::{HardwareInterrupt, TaskResourceCapability},
+    task::{
+        HardwareInterrupt, SOFTWARE_LINE_CONSUMER, SOFTWARE_MOTOR_CMD, SOFTWARE_RC_INPUT_SNAPSHOT,
+        SOFTWARE_SBUS_CONSUMER, SOFTWARE_SERIAL_RX,
+    },
 };
 
 mod pins;
@@ -36,10 +42,10 @@ enum Stm32SerialRoute {
 }
 
 impl Stm32SerialRoute {
-    const fn endpoint_type(self) -> &'static str {
+    const fn irq_type(self) -> &'static str {
         match self {
-            Self::Usart2Rx => "Uart2Rx",
-            Self::Uart4Rx => "Uart4Rx",
+            Self::Usart2Rx => "Uart2RxIrq",
+            Self::Uart4Rx => "Uart4RxIrq",
         }
     }
 
@@ -62,14 +68,39 @@ pub fn validate(board: &BoardDeclaration) -> Result<ValidatedBoard<'_>> {
         Mcu::Stm32F401 => ("STM32F401RE", 84_000_000),
         Mcu::Stm32F405 => ("STM32F405RG", 168_000_000),
     };
-    if board.target.clock.source != ClockSource::InternalHighSpeed
-        || board.target.clock.sysclk_hz != expected_system_clock_hz
-    {
+    if board.target.clock.sysclk_hz != expected_system_clock_hz {
         bail!(
-            "{part} backend requires board `{}` to use a {} MHz HSI clock",
+            "{part} backend requires board `{}` to use a {} MHz system clock",
             board.id,
             expected_system_clock_hz / 1_000_000,
         );
+    }
+    match (board.target.mcu, board.target.clock.source) {
+        (Mcu::Stm32F401 | Mcu::Stm32F405, ClockSource::InternalHighSpeed) => {}
+        (
+            Mcu::Stm32F405,
+            ClockSource::ExternalCrystal {
+                frequency_hz: 8_000_000,
+            },
+        ) => {}
+        (Mcu::Stm32F405, ClockSource::ExternalCrystal { frequency_hz }) => {
+            bail!(
+                "STM32F405RG backend supports an external crystal only at 8 MHz; board `{}` declares {frequency_hz} Hz",
+                board.id
+            );
+        }
+        (Mcu::Stm32F401, ClockSource::ExternalCrystal { frequency_hz }) => {
+            bail!(
+                "STM32F401RE backend does not yet support an external crystal; board `{}` declares {frequency_hz} Hz",
+                board.id
+            );
+        }
+        (_, ClockSource::ExternalClock { frequency_hz }) => {
+            bail!(
+                "{part} backend does not yet support an externally generated clock; board `{}` declares {frequency_hz} Hz",
+                board.id
+            );
+        }
     }
     let MonotonicDeclaration::SysTick { id, clock_hz } = board.monotonic;
     if id != "Mono" || clock_hz != board.target.clock.sysclk_hz {
@@ -254,7 +285,11 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
         });
         local_values.push(RenderedResourceField {
             owner_component: declaration.owner_component.clone(),
-            declaration: format!("{}: {}", declaration.id, declaration.kind.initial_value()),
+            declaration: format!(
+                "{}: {}",
+                declaration.id,
+                declaration.kind.initial_value(&declaration.id)
+            ),
         });
     }
     for resource in &app.software_shared_resources {
@@ -266,14 +301,31 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
         });
         shared_values.push(RenderedResourceField {
             owner_component: declaration.owner_component.clone(),
-            declaration: format!("{}: {}", declaration.id, declaration.kind.initial_value()),
+            declaration: format!(
+                "{}: {}",
+                declaration.id,
+                declaration.kind.initial_value(&declaration.id)
+            ),
         });
     }
 
     let has_resources = !app.resource_initialization_order.is_empty();
     let rcc_binding = if has_resources { "mut rcc" } else { "_rcc" };
+    let requires_pll48 = declaration.target.clock.requires_pll48;
+    let clock_initialization = match declaration.target.clock.source {
+        ClockSource::InternalHighSpeed => format!(
+            "ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), SYSTEM_CLOCK_HZ, {requires_pll48})"
+        ),
+        ClockSource::ExternalCrystal { frequency_hz } => format!(
+            "ferrowasp_stm32f4::clocks::freeze_hse(cx.device.RCC.constrain(), {}, SYSTEM_CLOCK_HZ, {requires_pll48})",
+            render_u32_literal(frequency_hz)
+        ),
+        ClockSource::ExternalClock { .. } => {
+            unreachable!("unsupported external clock was rejected during backend validation")
+        }
+    };
     let mut system_initialization = format!(
-        "let {rcc_binding} =\n    ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), SYSTEM_CLOCK_HZ, false);\n{id}::start(cx.core.SYST, SYSTEM_CLOCK_HZ);",
+        "let {rcc_binding} =\n    {clock_initialization};\n{id}::start(cx.core.SYST, SYSTEM_CLOCK_HZ);",
     );
     let used_ports = pins_by_id
         .values()
@@ -342,6 +394,81 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
             system_initialization.push_str(&resource_initialization);
         }
     }
+    for channel in app.init_local_resources {
+        let owner = channel.owner_component.as_str();
+        match channel.kind {
+            ComponentInitLocalResource::ObserverChannel {
+                publisher, reader, ..
+            } => {
+                let publisher_id = format!("{owner}_{publisher}");
+                let reader_id = format!("{owner}_{reader}");
+                let resolved_publisher = app
+                    .software_local_resources
+                    .iter()
+                    .find(|resource| resource.declaration.id == publisher_id)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "observer channel `{}` has no resolved local publisher",
+                            channel.id
+                        )
+                    })?;
+                let resolved_reader = app
+                    .software_shared_resources
+                    .iter()
+                    .find(|resource| resource.declaration.id == reader_id);
+                let reader_binding = resolved_reader
+                    .map(|resource| resource.declaration.id.as_str())
+                    .unwrap_or("_observer_reader");
+                push_initialization(
+                    &mut component_initializations,
+                    owner,
+                    format!(
+                        "let ({}, {}) =\n    cx.local.{}.split();",
+                        resolved_publisher.declaration.id, reader_binding, channel.id
+                    ),
+                );
+            }
+            ComponentInitLocalResource::SafetyChannel {
+                producer, consumer, ..
+            } => {
+                let producer_id = format!("{owner}_{producer}");
+                let consumer_id = format!("{owner}_{consumer}");
+                let resolved_producer = app
+                    .software_local_resources
+                    .iter()
+                    .find(|resource| resource.declaration.id == producer_id)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "safety channel `{}` has no resolved local producer",
+                            channel.id
+                        )
+                    })?;
+                let resolved_consumer = app
+                    .software_local_resources
+                    .iter()
+                    .find(|resource| resource.declaration.id == consumer_id)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "safety channel `{}` has no resolved local consumer",
+                            channel.id
+                        )
+                    })?;
+                push_initialization(
+                    &mut component_initializations,
+                    owner,
+                    format!(
+                        "let ({}, {}) =\n    cx.local.{}.split();",
+                        resolved_producer.declaration.id,
+                        resolved_consumer.declaration.id,
+                        channel.id
+                    ),
+                );
+            }
+            ComponentInitLocalResource::UartRxBuffers
+            | ComponentInitLocalResource::UartRxFreeQueue
+            | ComponentInitLocalResource::UartRxFilledQueue => {}
+        }
+    }
     let mut initialization = vec![guarded_init_section(
         "System initialization",
         88,
@@ -396,55 +523,99 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
     if !used_serial_routes.is_empty() {
         let mut route_imports = Vec::new();
         if used_serial_routes.contains(&Stm32SerialRoute::Usart2Rx) {
-            route_imports.extend(["Uart2Rx", "Usart2RxOnlyResources"]);
+            route_imports.extend(["Uart2RxIrq", "Usart2RxOnlyResources"]);
         }
         if used_serial_routes.contains(&Stm32SerialRoute::Uart4Rx) {
-            route_imports.extend(["Uart4Rx", "Uart4RxOnlyResources"]);
+            route_imports.extend(["Uart4RxIrq", "Uart4RxOnlyResources"]);
         }
+        route_imports.push("UartRxParserSide");
         imports.insert(
             0,
             format!(
-                "pub(crate) use ferrowasp_io_core::serial::SerialProtocol;\npub(crate) use ferrowasp_stm32f4::{{\n    app_storage::{{UartRxBufferBank, UartRxFilledQueue, UartRxFreeQueue, UartRxStorageResources}},\n    uart_dma::{{{}, UartRxIrqOutcome, UartRxReadOutcome, UART_RX_BUFFER_SIZE}},\n}};",
+                "pub(crate) use ferrowasp_io_core::serial::SerialProtocol;\npub(crate) use ferrowasp_stm32f4::{{\n    app_storage::{{UartRxBufferBank, UartRxFilledQueue, UartRxFreeQueue, UartRxStorageResources}},\n    uart_dma::{{{}, UartRxIrqOutcome}},\n}};",
                 route_imports.join(", ")
             ),
         );
     }
-    let has_rc_input_snapshot = app
-        .software_shared_resources
-        .iter()
-        .chain(&app.software_local_resources)
-        .any(|resource| resource.declaration.kind == ExpandedSoftwareResourceKind::RcInputSnapshot);
+    let has_value_type = |type_id| {
+        app.software_shared_resources
+            .iter()
+            .chain(&app.software_local_resources)
+            .any(|resource| {
+                matches!(
+                    resource.declaration.kind.capability(),
+                    crate::task::TaskResourceCapability::Software(actual)
+                        | crate::task::TaskResourceCapability::ObserverPublisher(actual)
+                        | crate::task::TaskResourceCapability::ObserverReader(actual)
+                        | crate::task::TaskResourceCapability::SafetyProducer(actual)
+                        | crate::task::TaskResourceCapability::SafetyConsumer(actual)
+                        if actual == type_id
+                )
+            })
+    };
+    let has_serial_rx = has_value_type(SOFTWARE_SERIAL_RX);
+    if has_serial_rx {
+        imports.insert(
+            0,
+            "pub(crate) use ferrowasp_stm32f4::uart_dma::{UartRxReadOutcome, UART_RX_BUFFER_SIZE};"
+                .to_owned(),
+        );
+    }
+    let has_rc_input_snapshot = has_value_type(SOFTWARE_RC_INPUT_SNAPSHOT);
     if has_rc_input_snapshot {
         imports.insert(
             0,
             "pub(crate) use ferrowasp_io_core::serial::RcInputSnapshot;".to_owned(),
         );
     }
-    let has_serial_consumer = app.tasks.iter().any(|task| {
-        task.declaration
-            .definition
-            .local_resources
-            .iter()
-            .any(|resource| resource.capability() == TaskResourceCapability::SerialConsumer)
-    });
-    if has_serial_consumer {
-        imports.insert(
-            0,
-            "pub(crate) use ferrowasp_drivers::serial_consumer::{SerialConsumer, SerialConsumerEvent};\npub(crate) use ferrowasp_io_core::serial::SerialPortAssignment;".to_owned(),
-        );
-    }
-    let has_sbus_consumer = app.software_local_resources.iter().any(|resource| {
+    let has_observer_channel = app.init_local_resources.iter().any(|resource| {
         matches!(
-            resource.declaration.kind,
-            ExpandedSoftwareResourceKind::SerialConsumer(SerialPortAssignment::Rc(
-                RcProtocol::Sbus
-            ))
+            resource.kind,
+            ComponentInitLocalResource::ObserverChannel { .. }
         )
     });
-    if has_sbus_consumer {
+    if has_observer_channel {
         imports.insert(
             0,
-            "pub(crate) use ferrowasp_io_core::serial::RcProtocol;".to_owned(),
+            "pub(crate) use ferrowasp_core::observer_channel::{ObserverChannel, ObserverPublisher, ObserverReader};"
+                .to_owned(),
+        );
+    }
+    let has_safety_channel = app.init_local_resources.iter().any(|resource| {
+        matches!(
+            resource.kind,
+            ComponentInitLocalResource::SafetyChannel { .. }
+        )
+    });
+    if has_safety_channel {
+        imports.insert(
+            0,
+            "pub(crate) use ferrowasp_core::safety_channel::{SafetyChannel, SafetyConsumer, SafetyProducer};"
+                .to_owned(),
+        );
+    }
+    if has_value_type(SOFTWARE_MOTOR_CMD) {
+        imports.insert(
+            0,
+            "pub(crate) use ferrowasp_core::safety::MotorCmd;".to_owned(),
+        );
+    }
+    let has_sbus_consumer = has_value_type(SOFTWARE_SBUS_CONSUMER);
+    let has_line_consumer = has_value_type(SOFTWARE_LINE_CONSUMER);
+    if has_sbus_consumer || has_line_consumer {
+        let mut consumer_imports = Vec::new();
+        if has_sbus_consumer {
+            consumer_imports.push("SbusConsumer");
+        }
+        if has_line_consumer {
+            consumer_imports.extend(["LineConsumer", "LineConsumerEvent"]);
+        }
+        imports.insert(
+            0,
+            format!(
+                "pub(crate) use ferrowasp_drivers::serial_consumer::{{{}}};",
+                consumer_imports.join(", ")
+            ),
         );
     }
 
@@ -507,7 +678,7 @@ fn render_resource_field(
                     serial.id
                 )
             })?;
-            Ok(format!("{}: {},", serial.id, route.endpoint_type()))
+            Ok(format!("{}: {},", serial.id, route.irq_type()))
         }
     }
 }
@@ -516,7 +687,7 @@ fn render_resource_initialization(
     hardware: &HardwareResource,
     pin: PinId,
     serial_route: Option<Stm32SerialRoute>,
-    uart_configuration: Option<(&str, SerialPortAssignment)>,
+    uart_configuration: Option<(&str, &str, SerialProtocol)>,
 ) -> Result<String> {
     match hardware {
         HardwareResource::Gpio(gpio) => {
@@ -563,14 +734,19 @@ fn render_resource_initialization(
             let port = pins::port_letter(pin.port)?.to_ascii_lowercase();
             let id = serial.id;
             let number = pin.pin;
-            let (owner, assignment) = uart_configuration.ok_or_else(|| {
+            let (owner, rx_output, protocol) = uart_configuration.ok_or_else(|| {
                 anyhow::anyhow!("serial resource `{id}` has no owning serial component")
             })?;
-            let mode = match assignment {
-                SerialPortAssignment::Rc(RcProtocol::Sbus) => "Sbus",
-                SerialPortAssignment::ComPort => "Raw",
-                SerialPortAssignment::Disabled => {
+            let mode = match protocol {
+                SerialProtocol::Sbus => "Sbus",
+                SerialProtocol::Raw => "Raw",
+                SerialProtocol::Disabled => {
                     bail!("disabled serial resource `{id}` reached STM32 initialization")
+                }
+                unsupported => {
+                    bail!(
+                        "serial resource `{id}` profile {unsupported:?} is not implemented by this generated endpoint"
+                    )
                 }
             };
             let route = serial_route.ok_or_else(|| {
@@ -594,7 +770,7 @@ fn render_resource_initialization(
                     ),
                 };
             Ok(format!(
-                "let {id} = ferrowasp_stm32f4::uart_dma::{initializer}(\n    {resources_type} {{\n        rx_pin: gpio{port}.p{port}{number},\n        {peripheral_field}: cx.device.{peripheral},\n        rx_dma: dma1.{dma_stream},\n    }},\n    &mut rcc,\n    SerialProtocol::{mode},\n    UartRxStorageResources {{\n        buffers: cx.local.{owner}_rx_buffers,\n        free_queue: cx.local.{owner}_free_queue,\n        filled_queue: cx.local.{owner}_filled_queue,\n    }},\n);"
+                "let {owner}_parts = ferrowasp_stm32f4::uart_dma::{initializer}(\n    {resources_type} {{\n        rx_pin: gpio{port}.p{port}{number},\n        {peripheral_field}: cx.device.{peripheral},\n        rx_dma: dma1.{dma_stream},\n    }},\n    &mut rcc,\n    SerialProtocol::{mode},\n    UartRxStorageResources {{\n        buffers: cx.local.{owner}_rx_buffers,\n        free_queue: cx.local.{owner}_free_queue,\n        filled_queue: cx.local.{owner}_filled_queue,\n    }},\n);\nlet {id} = {owner}_parts.irq;\nlet {rx_output} = {owner}_parts.parser;"
             ))
         }
     }
@@ -607,17 +783,31 @@ fn render_init_attribute(app: &ResolvedApp<'_>) -> String {
         .map(|resource| {
             let id = &resource.id;
             let declaration = match resource.kind {
-                crate::component::ComponentInitLocalResource::UartRxBuffers => render_init_local(
+                ComponentInitLocalResource::UartRxBuffers => render_init_local(
                     id,
                     "UartRxBufferBank",
                     "ferrowasp_stm32f4::app_storage::new_uart_rx_buffer_bank()",
                 ),
-                crate::component::ComponentInitLocalResource::UartRxFreeQueue => {
+                ComponentInitLocalResource::UartRxFreeQueue => {
                     render_init_local(id, "UartRxFreeQueue", "UartRxFreeQueue::new()")
                 }
-                crate::component::ComponentInitLocalResource::UartRxFilledQueue => {
+                ComponentInitLocalResource::UartRxFilledQueue => {
                     render_init_local(id, "UartRxFilledQueue", "UartRxFilledQueue::new()")
                 }
+                ComponentInitLocalResource::ObserverChannel { rust_type, .. } => render_init_local(
+                    id,
+                    &format!("ObserverChannel<{rust_type}>"),
+                    "ObserverChannel::new()",
+                ),
+                ComponentInitLocalResource::SafetyChannel {
+                    rust_type,
+                    queue_length,
+                    ..
+                } => render_init_local(
+                    id,
+                    &format!("SafetyChannel<{rust_type}, {queue_length}>"),
+                    "SafetyChannel::new()",
+                ),
             };
             (resource.owner_component.as_str(), declaration)
         })
@@ -645,7 +835,7 @@ fn render_init_local(id: &str, rust_type: &str, initializer: &str) -> String {
 fn resolved_uart_configuration<'a>(
     app: &'a ResolvedApp<'a>,
     hardware_id: &str,
-) -> Result<(&'a str, SerialPortAssignment)> {
+) -> Result<(&'a str, &'a str, SerialProtocol)> {
     let owner = app
         .tasks
         .iter()
@@ -656,22 +846,24 @@ fn resolved_uart_configuration<'a>(
         })
         .find_map(|task| task.declaration.owner_component.as_deref())
         .ok_or_else(|| anyhow::anyhow!("UART resource `{hardware_id}` is not owned by a component"))?;
-    let assignment = app
-        .software_local_resources
+    let output = app
+        .software_shared_resources
         .iter()
         .find_map(|resource| {
-            (resource.declaration.owner_component.as_deref() == Some(owner)).then_some(
-                match resource.declaration.kind {
-                    crate::component::ExpandedSoftwareResourceKind::SerialConsumer(assignment) => {
-                        Some(assignment)
-                    }
-                    _ => None,
-                },
-            )
+            (resource.declaration.owner_component.as_deref() == Some(owner)
+                && matches!(
+                    resource.declaration.kind,
+                    ExpandedSoftwareResourceKind::Component(component_resource)
+                        if component_resource.initializer
+                            == ComponentSoftwareResourceInitializer::SerialRxOutput
+                ))
+            .then_some(resource.declaration)
         })
-        .flatten()
-        .ok_or_else(|| anyhow::anyhow!("serial component `{owner}` has no consumer state"))?;
-    Ok((owner, assignment))
+        .ok_or_else(|| anyhow::anyhow!("serial component `{owner}` has no raw RX output"))?;
+    let Some(ComponentConfiguration::SerialPort(protocol)) = output.owner_configuration else {
+        bail!("serial component `{owner}` has no serial profile configuration");
+    };
+    Ok((owner, &output.id, protocol))
 }
 
 fn render_interrupt_bindings(
@@ -946,6 +1138,7 @@ mod tests {
             clock: Clock {
                 source: ClockSource::InternalHighSpeed,
                 sysclk_hz: 84_000_000,
+                requires_pll48: false,
             },
         },
         monotonic: MonotonicDeclaration::SysTick {
@@ -1134,6 +1327,28 @@ mod tests {
             validated.serial_routes_by_id["uart4"].peripheral_interrupt(),
             "UART4"
         );
+    }
+
+    #[test]
+    fn validates_foxeer_eight_megahertz_hse_and_rejects_other_crystals() {
+        const FOXEER_CLOCK: BoardDeclaration = BoardDeclaration {
+            id: "foxeer_f405_v2",
+            target: Target::external_crystal(Mcu::Stm32F405, 8_000_000, 168_000_000, true),
+            monotonic: MonotonicDeclaration::SysTick {
+                id: "Mono",
+                clock_hz: 168_000_000,
+            },
+            hardware: &[LED2],
+        };
+        const WRONG_CRYSTAL: BoardDeclaration = BoardDeclaration {
+            target: Target::external_crystal(Mcu::Stm32F405, 12_000_000, 168_000_000, true),
+            ..FOXEER_CLOCK
+        };
+
+        assert!(validate(&FOXEER_CLOCK).is_ok());
+        let error = validate(&WRONG_CRYSTAL).unwrap_err().to_string();
+        assert!(error.contains("external crystal only at 8 MHz"));
+        assert!(error.contains("12000000 Hz"));
     }
 
     #[test]

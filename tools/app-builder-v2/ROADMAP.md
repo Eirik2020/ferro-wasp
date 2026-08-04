@@ -15,6 +15,27 @@ During development, the generated Foxeer target remains a non-authoritative
 prototype. The handwritten golden app remains authoritative until explicit
 parity and safety gates are met.
 
+## Architecture rule
+
+```text
+Board resource → Hardware endpoint → Protocol codec → Functional owner
+```
+
+- Board declarations contain immutable physical facts: MCU routes, pins, DMA,
+  connected signals, supported electrical profiles, and nominal ADC divider
+  ratios. Runtime assignments and unit calibration are not board facts.
+- Hardware endpoint components own peripheral initialization, IRQs, DMA,
+  bounded storage, and protocol-neutral transport. They never parse protocol
+  or device payloads.
+- Functional components consume endpoint interfaces and own protocol state and
+  domain outputs. They cannot bind board hardware directly.
+- The generated graph remains static and bounded. Boot configuration may
+  select only generated, board-compatible assignments and is fixed until
+  reboot; invalid selections fail closed with the endpoint disabled.
+- Motor output follows `pwm_dma → TimerWaveformComponent → DshotEncoder →
+  ActuatorOutputComponent`; only the safety-owned actuator component may
+  submit motor waveforms.
+
 ## Roadmap
 
 ### 1. Establish the Foxeer target boundary
@@ -48,15 +69,18 @@ parity and safety gates are met.
   backend strings.
 - Add support for lock-free resources, bounded queues/channels, and singleton
   storage used by the golden app.
+- Load persisted port assignments and unit calibration during init, validate
+  them against board capabilities, and start only the selected functional
+  consumers without changing the generated task/resource set.
 
-### 4. Add non-actuator Foxeer components
+### 4. Add non-actuator Foxeer endpoints and functional components
 
-- Full-duplex serial: USART2 SBUS, UART4 MSP RX/TX DMA, and USART1 ESC
-  telemetry RX.
-- SPI1 DMA IMU with PC4/EXTI4 data-ready and supported-sensor probing.
-- ADC1 battery/current observation with DMA.
-- USB FS debug/configuration transport.
-- SPI2 NOR storage and blackbox/configuration queues.
+- Serial endpoints for USART2, UART4, and USART1; bind their raw transport to
+  command input, MSP/OSD, and ESC telemetry components.
+- SPI1 DMA and EXTI endpoints feeding the IMU component.
+- ADC1 DMA endpoint feeding voltage/current monitors; apply nominal divider
+  ratios from the board and unit calibration from boot configuration.
+- USB FS and SPI2 endpoints feeding debug/configuration and storage components.
 - TIM4 control scheduler, TIM2 timebase, and TIM6 I/O watchdog.
 
 Prefer the existing `ferrowasp-stm32f4`, `ferrowasp-drivers`, and
@@ -77,7 +101,8 @@ reimplement them.
 
 ### 6. Integrate safety-owned actuator output last
 
-- Add the four-lane TIM1/TIM8 DShot component and its DMA completion tasks.
+- Add the four-lane TIM1/TIM8 `TimerWaveformComponent`, DShot encoder, and DMA
+  completion tasks.
 - Add BLHeli telemetry association and ESC-manager wiring.
 - Preserve the safety-master, actuator-permit, command-freshness, RC-loss,
   IMU-health, failsafe, and disarm ordering from the golden app.
@@ -96,4 +121,3 @@ reimplement them.
   gates.
 - Only replace the handwritten RTIC shell after an explicit review confirms
   behavioral and safety equivalence.
-

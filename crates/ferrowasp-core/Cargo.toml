@@ -12,6 +12,9 @@ path = "src/lib.rs"
 critical-section = { workspace = true }
 heapless = { workspace = true }
 
+[dev-dependencies]
+critical-section = { workspace = true, features = ["std"] }
+
 [features]
 default = []
 std = ["critical-section/std"]

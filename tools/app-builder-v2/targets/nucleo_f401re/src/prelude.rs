@@ -12,16 +12,13 @@ use defmt_rtt as _;
 use panic_halt as _;
 
 // Application-facing imports selected from the resolved application.
-pub(crate) use ferrowasp_drivers::serial_consumer::{SerialConsumer, SerialConsumerEvent};
-pub(crate) use ferrowasp_io_core::digital::prelude::{OutputPin, StatefulOutputPin};
-pub(crate) use ferrowasp_io_core::serial::RcInputSnapshot;
-pub(crate) use ferrowasp_io_core::serial::SerialPortAssignment;
+pub(crate) use ferrowasp_drivers::serial_consumer::{LineConsumer, LineConsumerEvent};
+pub(crate) use ferrowasp_stm32f4::uart_dma::{UartRxReadOutcome, UART_RX_BUFFER_SIZE};
 pub(crate) use ferrowasp_io_core::serial::SerialProtocol;
-pub(crate) use ferrowasp_stm32f4::rtic::hal as stm32f4xx_hal;
-pub(crate) use ferrowasp_stm32f4::rtic::prelude::*;
 pub(crate) use ferrowasp_stm32f4::{
     app_storage::{UartRxBufferBank, UartRxFilledQueue, UartRxFreeQueue, UartRxStorageResources},
-    uart_dma::{
-        UART_RX_BUFFER_SIZE, Uart2Rx, UartRxIrqOutcome, UartRxReadOutcome, Usart2RxOnlyResources,
-    },
+    uart_dma::{Uart2RxIrq, Usart2RxOnlyResources, UartRxParserSide, UartRxIrqOutcome},
 };
+pub(crate) use ferrowasp_io_core::digital::prelude::{OutputPin, StatefulOutputPin};
+pub(crate) use ferrowasp_stm32f4::rtic::hal as stm32f4xx_hal;
+pub(crate) use ferrowasp_stm32f4::rtic::prelude::*;

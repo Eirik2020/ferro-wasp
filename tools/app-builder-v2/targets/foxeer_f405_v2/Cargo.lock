@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "app-builder-v2-ferrowasp-fcu3"
+name = "app-builder-v2-foxeer-f405-v2"
 version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",

@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{Context, Result, bail};
 
-use crate::hw_resources::{HardwareResource, SerialProtocol, Target};
+use crate::hw_resources::{ClockSource, HardwareResource, SerialProtocol, Target};
 
 /// RTIC monotonic configuration retained during the hardware-model migration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +45,19 @@ pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
             board.id
         );
     }
+    match board.target.clock.source {
+        ClockSource::InternalHighSpeed => {}
+        ClockSource::ExternalCrystal { frequency_hz }
+        | ClockSource::ExternalClock { frequency_hz }
+            if frequency_hz == 0 =>
+        {
+            bail!(
+                "board `{}` external clock must be greater than zero",
+                board.id
+            );
+        }
+        ClockSource::ExternalCrystal { .. } | ClockSource::ExternalClock { .. } => {}
+    }
 
     let mut hardware_ids = BTreeSet::new();
     for hardware in board.hardware {
@@ -58,11 +71,11 @@ pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
             if uart.serial_port.number == 0 {
                 bail!("serial resource `{id}` must use a one-based serial-port number");
             }
-            if uart.supported_protocols.is_empty() {
-                bail!("UART resource `{id}` must declare at least one supported protocol");
+            if uart.supported_profiles.is_empty() {
+                bail!("UART resource `{id}` must declare at least one supported profile");
             }
             let mut protocols = Vec::new();
-            for protocol in uart.supported_protocols {
+            for protocol in uart.supported_profiles {
                 if *protocol == SerialProtocol::Disabled {
                     bail!("UART resource `{id}` cannot list Disabled as a hardware capability");
                 }
@@ -93,6 +106,7 @@ mod tests {
             clock: Clock {
                 source: ClockSource::InternalHighSpeed,
                 sysclk_hz: 84_000_000,
+                requires_pll48: false,
             },
         },
         monotonic: MonotonicDeclaration::SysTick {
@@ -158,6 +172,27 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("greater than zero")
+        );
+    }
+
+    #[test]
+    fn rejects_zero_external_clock_frequency() {
+        const INVALID: BoardDeclaration = BoardDeclaration {
+            target: Target {
+                clock: Clock {
+                    source: ClockSource::ExternalCrystal { frequency_hz: 0 },
+                    ..BOARD.target.clock
+                },
+                ..BOARD.target
+            },
+            ..BOARD
+        };
+
+        assert!(
+            validate(&INVALID)
+                .unwrap_err()
+                .to_string()
+                .contains("external clock must be greater than zero")
         );
     }
 

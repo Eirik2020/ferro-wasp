@@ -12,15 +12,14 @@ use defmt_rtt as _;
 use panic_halt as _;
 
 // Application-facing imports selected from the resolved application.
-pub(crate) use ferrowasp_drivers::serial_consumer::{SbusConsumer, LineConsumer, LineConsumerEvent};
+pub(crate) use ferrowasp_drivers::serial_consumer::{SbusConsumer};
 pub(crate) use ferrowasp_core::observer_channel::{ObserverChannel, ObserverPublisher, ObserverReader};
 pub(crate) use ferrowasp_io_core::serial::RcInputSnapshot;
 pub(crate) use ferrowasp_stm32f4::uart_dma::{UartRxReadOutcome, UART_RX_BUFFER_SIZE};
 pub(crate) use ferrowasp_io_core::serial::SerialProtocol;
 pub(crate) use ferrowasp_stm32f4::{
     app_storage::{UartRxBufferBank, UartRxFilledQueue, UartRxFreeQueue, UartRxStorageResources},
-    uart_dma::{Uart2RxIrq, Usart2RxOnlyResources, Uart4RxIrq, Uart4RxOnlyResources, UartRxParserSide, UartRxIrqOutcome},
+    uart_dma::{Uart2RxIrq, Usart2RxOnlyResources, UartRxParserSide, UartRxIrqOutcome},
 };
-pub(crate) use ferrowasp_io_core::digital::prelude::{OutputPin, StatefulOutputPin};
 pub(crate) use ferrowasp_stm32f4::rtic::hal as stm32f4xx_hal;
 pub(crate) use ferrowasp_stm32f4::rtic::prelude::*;

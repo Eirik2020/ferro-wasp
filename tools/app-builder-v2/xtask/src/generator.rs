@@ -14,6 +14,12 @@ use crate::{
 mod ferrowasp_fcu3;
 #[path = "../../targets/ferrowasp_fcu3/src/app_composition.rs"]
 mod ferrowasp_fcu3_app;
+#[path = "../../targets/foxeer_f405_v2/src/board.rs"]
+mod foxeer_f405_v2;
+#[path = "../../targets/foxeer_f405_v2/src/app_composition.rs"]
+mod foxeer_f405_v2_app;
+#[path = "../../targets/foxeer_f405_v2/src/golden_contract.rs"]
+mod foxeer_f405_v2_contract;
 #[path = "../../targets/nucleo_f401re/src/board.rs"]
 mod nucleo_f401re;
 #[path = "../../targets/nucleo_f401re/src/app_composition.rs"]
@@ -28,6 +34,7 @@ struct GenerationTarget {
     app: &'static app::AppDeclaration,
     generated_app_output: &'static str,
     prelude_output: &'static str,
+    source_contract: Option<fn(&Path, &board::BoardDeclaration) -> Result<()>>,
 }
 
 struct RenderedTarget {
@@ -43,14 +50,15 @@ type TargetDeclaration = (
     &'static app::AppDeclaration,
 );
 
-fn generation_targets() -> [GenerationTarget; 2] {
-    [
+fn generation_targets() -> Vec<GenerationTarget> {
+    vec![
         GenerationTarget {
             id: "nucleo_f401re",
             board: &nucleo_f401re::BOARD,
             app: &nucleo_f401re_app::APP,
             generated_app_output: "targets/nucleo_f401re/src/generated_app.rs",
             prelude_output: "targets/nucleo_f401re/src/prelude.rs",
+            source_contract: None,
         },
         GenerationTarget {
             id: "ferrowasp_fcu3",
@@ -58,12 +66,24 @@ fn generation_targets() -> [GenerationTarget; 2] {
             app: &ferrowasp_fcu3_app::APP,
             generated_app_output: "targets/ferrowasp_fcu3/src/generated_app.rs",
             prelude_output: "targets/ferrowasp_fcu3/src/prelude.rs",
+            source_contract: None,
+        },
+        GenerationTarget {
+            id: "foxeer_f405_v2",
+            board: &foxeer_f405_v2::BOARD,
+            app: &foxeer_f405_v2_app::APP,
+            generated_app_output: "targets/foxeer_f405_v2/src/generated_app.rs",
+            prelude_output: "targets/foxeer_f405_v2/src/prelude.rs",
+            source_contract: Some(foxeer_f405_v2_contract::validate),
         },
     ]
 }
 
-pub(crate) fn target_declarations() -> [TargetDeclaration; 2] {
-    generation_targets().map(|target| (target.board, target.app))
+pub(crate) fn target_declarations() -> Vec<TargetDeclaration> {
+    generation_targets()
+        .into_iter()
+        .map(|target| (target.board, target.app))
+        .collect()
 }
 
 /// Validates declarations and writes every supported generated RTIC target.
@@ -80,6 +100,17 @@ pub fn generate(repository_root: &Path) -> Result<()> {
 }
 
 fn render_target(repository_root: &Path, target: &GenerationTarget) -> Result<RenderedTarget> {
+    if target.id != target.board.id {
+        bail!(
+            "generation target ID `{}` does not match board ID `{}`",
+            target.id,
+            target.board.id
+        );
+    }
+    if let Some(validate_source_contract) = target.source_contract {
+        validate_source_contract(repository_root, target.board)
+            .with_context(|| format!("validate source contract for `{}`", target.id))?;
+    }
     app::validate(target.app).with_context(|| format!("validate app for `{}`", target.id))?;
     board::validate(target.board).with_context(|| format!("validate board `{}`", target.id))?;
     let validated_board = backend::validate(target.board)
@@ -341,6 +372,7 @@ mod tests {
                 app: &ferrowasp_fcu3_app::APP,
                 generated_app_output: "unused.rs",
                 prelude_output: "unused_prelude.rs",
+                source_contract: None,
             },
         )
         .unwrap();
@@ -358,7 +390,8 @@ mod tests {
         assert!(application.contains("rx_pin: gpioa.pa3"));
         assert!(application.contains("rx_dma: dma1.5"));
         assert!(application.contains("SerialProtocol::Sbus"));
-        assert!(application.contains("uart2_rc_endpoint: Uart2Rx"));
+        assert!(application.contains("uart2: Uart2RxIrq"));
+        assert!(application.contains("uart2_rx: UartRxParserSide"));
 
         assert!(application.contains("binds = DMA1_STREAM2"));
         assert!(application.contains("binds = UART4"));
@@ -366,7 +399,8 @@ mod tests {
         assert!(application.contains("rx_pin: gpioa.pa1"));
         assert!(application.contains("rx_dma: dma1.2"));
         assert!(application.contains("SerialProtocol::Raw"));
-        assert!(application.contains("uart4_comport_endpoint: Uart4Rx"));
+        assert!(application.contains("uart4: Uart4RxIrq"));
+        assert!(application.contains("uart4_rx: UartRxParserSide"));
         assert!(!application.contains("gpioa.pa0"));
         assert!(!application.contains("dma1.4"));
 
@@ -378,15 +412,65 @@ mod tests {
         );
         assert!(application.contains("init_usart2_rx_only"));
         assert!(application.contains("init_uart4_rx_only"));
-        assert!(application.contains("uart2_rc_input.lock"));
-        assert!(!application.contains("uart4_rc_input.lock(|snapshot|"));
+        assert!(
+            application
+                .contains("command_input_rc_input_channel: ObserverChannel<RcInputSnapshot>")
+        );
+        assert!(application.contains(
+            "command_input_rc_input_publisher: ObserverPublisher<'static, RcInputSnapshot>"
+        ));
+        assert!(
+            application.contains(
+                "command_input_rc_input_reader: ObserverReader<'static, RcInputSnapshot>"
+            )
+        );
+        assert!(application.contains("command_input_rc_input_channel.split()"));
+        assert!(application.contains("command_input_rc_input_reader.lock"));
+        assert!(application.contains("command_input_rc_input_publisher.publish(snapshot)"));
+        assert!(!application.contains("command_input_rc_input: RcInputSnapshot"));
+        assert!(!application.contains("uart4_rc_input"));
         assert!(application.contains("Component `uart2` tasks"));
         assert!(application.contains("Component `uart4` tasks"));
+        assert!(application.contains("Component `command_input` tasks"));
+        assert!(application.contains("Component `comport` tasks"));
 
-        assert!(prelude.contains("Uart2Rx"));
+        assert!(prelude.contains("Uart2RxIrq"));
         assert!(prelude.contains("Usart2RxOnlyResources"));
-        assert!(prelude.contains("Uart4Rx"));
+        assert!(prelude.contains("Uart4RxIrq"));
         assert!(prelude.contains("Uart4RxOnlyResources"));
+        assert!(
+            prelude
+                .contains("observer_channel::{ObserverChannel, ObserverPublisher, ObserverReader}")
+        );
+    }
+
+    #[test]
+    fn foxeer_target_renders_only_the_authoritative_actuator_inhibited_subset() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let target = generation_targets()
+            .into_iter()
+            .find(|target| target.id == "foxeer_f405_v2")
+            .unwrap();
+        let rendered = render_target(root, &target).unwrap();
+        let application = rendered.application;
+
+        assert!(application.contains("const SYSTEM_CLOCK_HZ: u32 = 168_000_000;"));
+        assert!(application.contains(
+            "ferrowasp_stm32f4::clocks::freeze_hse(cx.device.RCC.constrain(), 8_000_000, SYSTEM_CLOCK_HZ, true)"
+        ));
+        assert!(application.contains("binds = DMA1_STREAM5"));
+        assert!(application.contains("binds = USART2"));
+        assert!(application.contains("rx_pin: gpioa.pa3"));
+        assert!(application.contains("SerialProtocol::Sbus"));
+        assert!(application.contains("RC heartbeat: no RC frame"));
+        assert!(application.contains("reader.latest()"));
+        assert!(!application.contains("command_input_rc_input: RcInputSnapshot"));
+
+        for forbidden in [
+            "UART4", "USART1", "DMA2", "Dshot", "dshot", "TIM1", "TIM8", "OTG_FS",
+        ] {
+            assert!(!application.contains(forbidden), "rendered `{forbidden}`");
+        }
     }
 
     #[test]
@@ -425,8 +509,8 @@ mod tests {
         backend::render(&validated_board, &resolved).unwrap();
 
         assert!(spawns.contains("blink_led::spawn()"));
-        assert!(spawns.contains("rc_heartbeat::spawn()"));
-        assert!(spawns.contains("uart2_consumer::spawn()"));
+        assert!(!spawns.contains("rc_heartbeat::spawn()"));
+        assert!(spawns.contains("comport_consumer::spawn()"));
     }
 
     #[test]
@@ -503,12 +587,12 @@ mod tests {
         assert!(application.contains("rx_pin: gpioa.pa3"));
         assert!(application.contains("rx_dma: dma1.5"));
         assert!(application.contains("SerialProtocol::Raw"));
-        assert!(application.contains("uart2_endpoint: Uart2Rx"));
-        assert!(application.contains("uart2_rc_input: RcInputSnapshot"));
-        assert!(application.contains("uart2_consumer_state: SerialConsumer"));
+        assert!(application.contains("uart2: Uart2RxIrq"));
+        assert!(application.contains("uart2_rx: UartRxParserSide"));
+        assert!(application.contains("comport_decoder: LineConsumer"));
         assert!(application.contains("Usart2RxOnlyResources"));
         assert!(application.contains("UartRxStorageResources"));
-        assert!(application.contains("SerialConsumer::new(SerialPortAssignment::ComPort)"));
+        assert!(application.contains("LineConsumer::new()"));
         assert!(!application.contains("ferrowasp_io_core::serial::RcInputSnapshot"));
         assert!(!application.contains("ferrowasp_drivers::serial_consumer::SerialConsumer"));
         assert!(application.contains("ferrowasp_stm32f4::uart_dma::init_usart2_rx_only"));
@@ -520,17 +604,14 @@ mod tests {
         ));
         assert!(application.contains("Mono::start(cx.core.SYST, SYSTEM_CLOCK_HZ);"));
         assert!(!application.contains("Mono::start(cx.core.SYST, 84000000);"));
-        assert!(application.contains("uart2_consumer_state"));
-        assert!(application.contains("uart2_rc_input"));
+        assert!(application.contains("comport_decoder"));
+        assert!(application.contains("uart2_rx"));
         assert!(application.contains("uart2_rx_buffers"));
         assert!(application.contains(
             "uart2_rx_buffers: UartRxBufferBank =\n            ferrowasp_stm32f4::app_storage::new_uart_rx_buffer_bank(),"
         ));
         assert!(application.contains("COMPORT: {}"));
-        assert!(application.contains("RC heartbeat: no RC frame"));
-        assert!(application.contains("const REPORT_INTERVAL_MS: u32 = 1_000;"));
-        assert!(application.contains("Mono::delay(REPORT_INTERVAL_MS.millis()).await;"));
-        assert!(!application.contains("cx.config.report_interval"));
+        assert!(!application.contains("RC heartbeat: no RC frame"));
         assert!(application.starts_with("// ================================="));
         assert!(application.contains("GENERATED FILE — DO NOT EDIT DIRECTLY"));
         assert!(prelude.starts_with("// ================================="));
@@ -550,15 +631,16 @@ mod tests {
         assert!(prelude.contains("pub(crate) use ferrowasp_stm32f4::rtic::hal as stm32f4xx_hal;"));
         assert!(prelude.contains("pub(crate) use ferrowasp_stm32f4::rtic::prelude::*;"));
         assert!(prelude.contains("pub(crate) use ferrowasp_drivers::serial_consumer"));
-        assert!(prelude.contains("RcInputSnapshot"));
-        assert!(prelude.contains("SerialPortAssignment"));
-        assert!(prelude.contains("Uart2Rx"));
+        assert!(!prelude.contains("RcInputSnapshot"));
+        assert!(!prelude.contains("SerialPortAssignment"));
+        assert!(prelude.contains("LineConsumer"));
+        assert!(prelude.contains("Uart2RxIrq"));
         assert!(prelude.contains("UartRxBufferBank"));
 
         let resources_start = crate::component_divider("uart2", "resources", false);
         let resources_end = crate::component_divider("uart2", "resources", true);
-        assert_eq!(application.matches(&resources_start).count(), 5);
-        assert_eq!(application.matches(&resources_end).count(), 5);
+        assert_eq!(application.matches(&resources_start).count(), 3);
+        assert_eq!(application.matches(&resources_end).count(), 3);
         assert!(!application.contains("Component `uart2` shared resources"));
         assert!(!application.contains("Component `uart2` local resources"));
         assert!(!application.contains("Component `uart2` init-local resources"));
@@ -566,8 +648,8 @@ mod tests {
         let init_start = application.find("fn init(").unwrap();
         let first_task = application[init_start..].find("#[task(").unwrap() + init_start;
         let init_body = &application[init_start..first_task];
-        assert_eq!(init_body.matches(&resources_start).count(), 2);
-        assert_eq!(init_body.matches(&resources_end).count(), 2);
+        assert_eq!(init_body.matches(&resources_start).count(), 1);
+        assert_eq!(init_body.matches(&resources_end).count(), 1);
 
         let system_start = crate::scope_divider("System initialization", false, 88, '=');
         let system_end = crate::scope_divider("System initialization", true, 88, '=');
@@ -582,9 +664,8 @@ mod tests {
         assert!(!init_body.contains("Task resources"));
         assert!(init_body.contains("let dma1 = StreamsTuple::new"));
         assert!(init_body.contains("// Task `blink_led`\n"));
-        assert!(init_body.contains("// Task `rc_heartbeat`\n"));
-        assert!(init_body.contains("// Component `uart2` task `uart2_consumer`\n"));
-        assert!(init_body.contains("uart2_consumer::spawn()"));
+        assert!(init_body.contains("// Component `comport` task `comport_consumer`\n"));
+        assert!(init_body.contains("comport_consumer::spawn()"));
         let startup_header = crate::scope_divider("Initial task startup", false, 88, '=');
         assert_eq!(init_body.matches(&startup_header).count(), 1);
         assert!(init_body.find(&startup_header) < init_body.find("blink_led::spawn()"));
@@ -598,9 +679,10 @@ mod tests {
 
         let component_tasks_start = application.find(&tasks_start).unwrap();
         let component_tasks_end = application.find(&tasks_end).unwrap();
-        for task in ["fn uart2_dma_irq", "fn uart2_idle_irq", "fn uart2_consumer"] {
+        for task in ["fn uart2_dma_irq", "fn uart2_idle_irq"] {
             let position = application.find(task).unwrap();
             assert!(component_tasks_start < position && position < component_tasks_end);
         }
+        assert!(application.contains("fn comport_consumer"));
     }
 }

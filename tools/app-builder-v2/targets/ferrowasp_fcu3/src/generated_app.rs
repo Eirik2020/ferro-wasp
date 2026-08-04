@@ -29,24 +29,28 @@ mod app {
     struct Shared {
         blink_enabled: bool,
         // ============================ Component `uart2` resources ============================
-        uart2_rc_endpoint: Uart2Rx,
-        uart2_rc_input: RcInputSnapshot,
+        uart2: Uart2RxIrq,
+        uart2_rx: UartRxParserSide,
         // ========================== End component `uart2` resources ==========================
         // ============================ Component `uart4` resources ============================
-        uart4_comport_endpoint: Uart4Rx,
-        uart4_rc_input: RcInputSnapshot,
+        uart4: Uart4RxIrq,
+        uart4_rx: UartRxParserSide,
         // ========================== End component `uart4` resources ==========================
+        // ======================== Component `command_input` resources ========================
+        command_input_rc_input_reader: ObserverReader<'static, RcInputSnapshot>,
+        // ====================== End component `command_input` resources ======================
     }
 
     #[local]
     struct Local {
         green_led: Pin<'B', 1, Output<PushPull>>,
-        // ============================ Component `uart2` resources ============================
-        uart2_consumer_state: SerialConsumer,
-        // ========================== End component `uart2` resources ==========================
-        // ============================ Component `uart4` resources ============================
-        uart4_consumer_state: SerialConsumer,
-        // ========================== End component `uart4` resources ==========================
+        // ======================== Component `command_input` resources ========================
+        command_input_decoder: SbusConsumer,
+        command_input_rc_input_publisher: ObserverPublisher<'static, RcInputSnapshot>,
+        // ====================== End component `command_input` resources ======================
+        // =========================== Component `comport` resources ===========================
+        comport_decoder: LineConsumer,
+        // ========================= End component `comport` resources =========================
     }
 
     #[init(local = [
@@ -56,6 +60,10 @@ mod app {
         uart2_free_queue: UartRxFreeQueue = UartRxFreeQueue::new(),
         uart2_filled_queue: UartRxFilledQueue = UartRxFilledQueue::new(),
         // ========================== End component `uart2` resources ==========================
+        // ======================== Component `command_input` resources ========================
+        command_input_rc_input_channel: ObserverChannel<RcInputSnapshot> =
+            ObserverChannel::new(),
+        // ====================== End component `command_input` resources ======================
         // ============================ Component `uart4` resources ============================
         uart4_rx_buffers: UartRxBufferBank =
             ferrowasp_stm32f4::app_storage::new_uart_rx_buffer_bank(),
@@ -65,11 +73,8 @@ mod app {
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         // =============================== System initialization ===============================
-        let mut rcc = ferrowasp_stm32f4::clocks::freeze_hsi(
-            cx.device.RCC.constrain(),
-            SYSTEM_CLOCK_HZ,
-            false,
-        );
+        let mut rcc =
+            ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), SYSTEM_CLOCK_HZ, false);
         Mono::start(cx.core.SYST, SYSTEM_CLOCK_HZ);
         let gpioa = cx.device.GPIOA.split(&mut rcc);
         let gpiob = cx.device.GPIOB.split(&mut rcc);
@@ -83,7 +88,7 @@ mod app {
 
         // ================================= Component `uart2` =================================
         let dma1 = StreamsTuple::new(cx.device.DMA1, &mut rcc);
-        let uart2_rc_endpoint = ferrowasp_stm32f4::uart_dma::init_usart2_rx_only(
+        let uart2_parts = ferrowasp_stm32f4::uart_dma::init_usart2_rx_only(
             Usart2RxOnlyResources {
                 rx_pin: gpioa.pa3,
                 usart: cx.device.USART2,
@@ -97,10 +102,12 @@ mod app {
                 filled_queue: cx.local.uart2_filled_queue,
             },
         );
+        let uart2 = uart2_parts.irq;
+        let uart2_rx = uart2_parts.parser;
         // =============================== End component `uart2` ===============================
 
         // ================================= Component `uart4` =================================
-        let uart4_comport_endpoint = ferrowasp_stm32f4::uart_dma::init_uart4_rx_only(
+        let uart4_parts = ferrowasp_stm32f4::uart_dma::init_uart4_rx_only(
             Uart4RxOnlyResources {
                 rx_pin: gpioa.pa1,
                 uart: cx.device.UART4,
@@ -114,7 +121,14 @@ mod app {
                 filled_queue: cx.local.uart4_filled_queue,
             },
         );
+        let uart4 = uart4_parts.irq;
+        let uart4_rx = uart4_parts.parser;
         // =============================== End component `uart4` ===============================
+
+        // ============================= Component `command_input` =============================
+        let (command_input_rc_input_publisher, command_input_rc_input_reader) =
+            cx.local.command_input_rc_input_channel.split();
+        // =========================== End component `command_input` ===========================
 
         // =============================== Initial task startup ================================
 
@@ -124,36 +138,35 @@ mod app {
         // Task `rc_heartbeat`
         rc_heartbeat::spawn().expect("init must spawn declared task rc_heartbeat");
 
-        // Component `uart2` task `uart2_consumer`
-        uart2_consumer::spawn().expect("init must spawn declared task uart2_consumer");
+        // Component `command_input` task `command_input_consumer`
+        command_input_consumer::spawn().expect("init must spawn declared task command_input_consumer");
 
-        // Component `uart4` task `uart4_consumer`
-        uart4_consumer::spawn().expect("init must spawn declared task uart4_consumer");
+        // Component `comport` task `comport_consumer`
+        comport_consumer::spawn().expect("init must spawn declared task comport_consumer");
 
-        (
-            Shared {
-                blink_enabled: true,
-                // ============================ Component `uart2` resources ============================
-                uart2_rc_endpoint,
-                uart2_rc_input: RcInputSnapshot::new(),
-                // ========================== End component `uart2` resources ==========================
-                // ============================ Component `uart4` resources ============================
-                uart4_comport_endpoint,
-                uart4_rc_input: RcInputSnapshot::new(),
-                // ========================== End component `uart4` resources ==========================
-            },
-            Local {
-                green_led,
-                // ============================ Component `uart2` resources ============================
-                uart2_consumer_state: SerialConsumer::new(SerialPortAssignment::Rc(
-                    RcProtocol::Sbus,
-                )),
-                // ========================== End component `uart2` resources ==========================
-                // ============================ Component `uart4` resources ============================
-                uart4_consumer_state: SerialConsumer::new(SerialPortAssignment::ComPort),
-                // ========================== End component `uart4` resources ==========================
-            },
-        )
+        (Shared {
+            blink_enabled: true,
+            // ============================ Component `uart2` resources ============================
+            uart2,
+            uart2_rx: uart2_rx,
+            // ========================== End component `uart2` resources ==========================
+            // ============================ Component `uart4` resources ============================
+            uart4,
+            uart4_rx: uart4_rx,
+            // ========================== End component `uart4` resources ==========================
+            // ======================== Component `command_input` resources ========================
+            command_input_rc_input_reader: command_input_rc_input_reader,
+            // ====================== End component `command_input` resources ======================
+        }, Local {
+            green_led,
+            // ======================== Component `command_input` resources ========================
+            command_input_decoder: SbusConsumer::new(),
+            command_input_rc_input_publisher: command_input_rc_input_publisher,
+            // ====================== End component `command_input` resources ======================
+            // =========================== Component `comport` resources ===========================
+            comport_decoder: LineConsumer::new(),
+            // ========================= End component `comport` resources =========================
+        })
     }
 
     #[task(priority = 1, local = [green_led], shared = [blink_enabled])]
@@ -181,54 +194,44 @@ mod app {
         defmt::info!("Blink {}", count);
     }
 
-    #[task(priority = 1, shared = [uart2_rc_input])]
+    #[task(priority = 1, shared = [command_input_rc_input_reader])]
     async fn rc_heartbeat(mut cx: rc_heartbeat::Context) {
         const REPORT_INTERVAL_MS: u32 = 1_000;
 
         loop {
             Mono::delay(REPORT_INTERVAL_MS.millis()).await;
-            let snapshot = cx.shared.uart2_rc_input.lock(|snapshot| *snapshot);
-            if snapshot.has_valid_frame {
-                defmt::info!(
-                    "RC channels: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}], d1={}, d2={}, frame_lost={}, failsafe={}, valid={}, errors={}",
-                    snapshot.channels[0],
-                    snapshot.channels[1],
-                    snapshot.channels[2],
-                    snapshot.channels[3],
-                    snapshot.channels[4],
-                    snapshot.channels[5],
-                    snapshot.channels[6],
-                    snapshot.channels[7],
-                    snapshot.channels[8],
-                    snapshot.channels[9],
-                    snapshot.channels[10],
-                    snapshot.channels[11],
-                    snapshot.channels[12],
-                    snapshot.channels[13],
-                    snapshot.channels[14],
-                    snapshot.channels[15],
-                    snapshot.digital_channel_1,
-                    snapshot.digital_channel_2,
-                    snapshot.frame_lost,
-                    snapshot.failsafe,
-                    snapshot.valid_frames,
-                    snapshot.parse_errors,
-                );
-            } else {
-                defmt::info!(
-                    "RC heartbeat: no RC frame (errors={})",
-                    snapshot.parse_errors
-                );
+            let snapshot = cx.shared.command_input_rc_input_reader.lock(|reader| reader.latest());
+            match snapshot {
+                Some(snapshot) if snapshot.has_valid_frame => {
+                    defmt::info!(
+                        "RC channels: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}], d1={}, d2={}, frame_lost={}, failsafe={}, valid={}, errors={}",
+                        snapshot.channels[0], snapshot.channels[1], snapshot.channels[2],
+                        snapshot.channels[3], snapshot.channels[4], snapshot.channels[5],
+                        snapshot.channels[6], snapshot.channels[7], snapshot.channels[8],
+                        snapshot.channels[9], snapshot.channels[10], snapshot.channels[11],
+                        snapshot.channels[12], snapshot.channels[13], snapshot.channels[14],
+                        snapshot.channels[15], snapshot.digital_channel_1,
+                        snapshot.digital_channel_2, snapshot.frame_lost, snapshot.failsafe,
+                        snapshot.valid_frames, snapshot.parse_errors,
+                    );
+                }
+                Some(snapshot) => {
+                    defmt::info!("RC heartbeat: no RC frame (errors={})", snapshot.parse_errors);
+                }
+                None => {
+                    defmt::info!("RC heartbeat: no RC frame (errors=0)");
+                }
             }
         }
     }
 
     // ============================== Component `uart2` tasks ==============================
-    #[task(binds = DMA1_STREAM5, priority = 3, shared = [uart2_rc_endpoint])]
+    #[task(binds = DMA1_STREAM5, priority = 3, shared = [uart2])]
     fn uart2_dma_irq(mut cx: uart2_dma_irq::Context) {
-        match cx.shared.uart2_rc_endpoint.lock(|rx| rx.service_dma_irq()) {
-            UartRxIrqOutcome::Ignored | UartRxIrqOutcome::Delivered | UartRxIrqOutcome::NoChunk => {
-            }
+        match cx.shared.uart2.lock(|rx| rx.service_dma_irq()) {
+            UartRxIrqOutcome::Ignored
+            | UartRxIrqOutcome::Delivered
+            | UartRxIrqOutcome::NoChunk => {}
             UartRxIrqOutcome::DmaError => defmt::warn!("UART RX DMA error"),
             UartRxIrqOutcome::DeliveryError(_) => {
                 defmt::warn!("UART RX DMA buffer delivery error")
@@ -236,73 +239,54 @@ mod app {
         }
     }
 
-    #[task(binds = USART2, priority = 3, shared = [uart2_rc_endpoint])]
+    #[task(binds = USART2, priority = 3, shared = [uart2])]
     fn uart2_idle_irq(mut cx: uart2_idle_irq::Context) {
-        match cx.shared.uart2_rc_endpoint.lock(|rx| rx.service_idle_irq()) {
-            UartRxIrqOutcome::Ignored | UartRxIrqOutcome::Delivered | UartRxIrqOutcome::NoChunk => {
-            }
+        match cx.shared.uart2.lock(|rx| rx.service_idle_irq()) {
+            UartRxIrqOutcome::Ignored
+            | UartRxIrqOutcome::Delivered
+            | UartRxIrqOutcome::NoChunk => {}
             UartRxIrqOutcome::DmaError => defmt::warn!("UART RX peripheral error"),
             UartRxIrqOutcome::DeliveryError(_) => {
                 defmt::warn!("UART RX IDLE buffer delivery error")
             }
-        }
-    }
-
-    #[task(
-        priority = 2,
-        local = [uart2_consumer_state],
-        shared = [uart2_rc_endpoint, uart2_rc_input]
-    )]
-    async fn uart2_consumer(mut cx: uart2_consumer::Context) {
-        let mut bytes = [0_u8; UART_RX_BUFFER_SIZE];
-
-        loop {
-            match cx
-                .shared
-                .uart2_rc_endpoint
-                .lock(|endpoint| endpoint.read_chunk(&mut bytes))
-            {
-                UartRxReadOutcome::NoChunk => {}
-                UartRxReadOutcome::RecycleError => {
-                    defmt::warn!("UART RX buffer recycle error");
-                }
-                UartRxReadOutcome::Chunk(len) => {
-                    cx.local
-                        .uart2_consumer_state
-                        .consume(&bytes[..len], |event| match event {
-                            SerialConsumerEvent::RcSnapshot(snapshot) => {
-                                cx.shared.uart2_rc_input.lock(|output| *output = snapshot);
-                            }
-                            SerialConsumerEvent::ComPortLine(line) => {
-                                match core::str::from_utf8(line.as_slice()) {
-                                    Ok(line) => defmt::info!("COMPORT: {}", line),
-                                    Err(_) => {
-                                        defmt::info!("COMPORT bytes: {=[u8]}", line.as_slice())
-                                    }
-                                }
-                            }
-                            SerialConsumerEvent::ComPortOverflow => {
-                                defmt::warn!("COMPORT line exceeded 64 bytes; discarded");
-                            }
-                        });
-                }
-            }
-
-            Mono::delay(1.millis()).await;
         }
     }
     // ============================ End component `uart2` tasks ============================
 
-    // ============================== Component `uart4` tasks ==============================
-    #[task(binds = DMA1_STREAM2, priority = 3, shared = [uart4_comport_endpoint])]
-    fn uart4_dma_irq(mut cx: uart4_dma_irq::Context) {
-        match cx
-            .shared
-            .uart4_comport_endpoint
-            .lock(|rx| rx.service_dma_irq())
-        {
-            UartRxIrqOutcome::Ignored | UartRxIrqOutcome::Delivered | UartRxIrqOutcome::NoChunk => {
+    // ========================== Component `command_input` tasks ==========================
+    #[task(
+        priority = 2,
+        local = [command_input_decoder, command_input_rc_input_publisher],
+        shared = [uart2_rx]
+    )]
+    async fn command_input_consumer(mut cx: command_input_consumer::Context) {
+        let mut bytes = [0_u8; UART_RX_BUFFER_SIZE];
+
+        loop {
+            match cx.shared.uart2_rx.lock(|rx| rx.read_chunk(&mut bytes)) {
+                UartRxReadOutcome::NoChunk => {}
+                UartRxReadOutcome::RecycleError => {
+                    defmt::warn!("serial RX buffer recycle error");
+                }
+                UartRxReadOutcome::Chunk(len) => {
+                    cx.local.command_input_decoder.consume(&bytes[..len], |snapshot| {
+                        cx.local.command_input_rc_input_publisher.publish(snapshot);
+                    });
+                }
             }
+
+            Mono::delay(1.millis()).await;
+        }
+    }
+    // ======================== End component `command_input` tasks ========================
+
+    // ============================== Component `uart4` tasks ==============================
+    #[task(binds = DMA1_STREAM2, priority = 3, shared = [uart4])]
+    fn uart4_dma_irq(mut cx: uart4_dma_irq::Context) {
+        match cx.shared.uart4.lock(|rx| rx.service_dma_irq()) {
+            UartRxIrqOutcome::Ignored
+            | UartRxIrqOutcome::Delivered
+            | UartRxIrqOutcome::NoChunk => {}
             UartRxIrqOutcome::DmaError => defmt::warn!("UART RX DMA error"),
             UartRxIrqOutcome::DeliveryError(_) => {
                 defmt::warn!("UART RX DMA buffer delivery error")
@@ -310,64 +294,48 @@ mod app {
         }
     }
 
-    #[task(binds = UART4, priority = 3, shared = [uart4_comport_endpoint])]
+    #[task(binds = UART4, priority = 3, shared = [uart4])]
     fn uart4_idle_irq(mut cx: uart4_idle_irq::Context) {
-        match cx
-            .shared
-            .uart4_comport_endpoint
-            .lock(|rx| rx.service_idle_irq())
-        {
-            UartRxIrqOutcome::Ignored | UartRxIrqOutcome::Delivered | UartRxIrqOutcome::NoChunk => {
-            }
+        match cx.shared.uart4.lock(|rx| rx.service_idle_irq()) {
+            UartRxIrqOutcome::Ignored
+            | UartRxIrqOutcome::Delivered
+            | UartRxIrqOutcome::NoChunk => {}
             UartRxIrqOutcome::DmaError => defmt::warn!("UART RX peripheral error"),
             UartRxIrqOutcome::DeliveryError(_) => {
                 defmt::warn!("UART RX IDLE buffer delivery error")
             }
         }
     }
+    // ============================ End component `uart4` tasks ============================
 
-    #[task(
-        priority = 2,
-        local = [uart4_consumer_state],
-        shared = [uart4_comport_endpoint, uart4_rc_input]
-    )]
-    async fn uart4_consumer(mut cx: uart4_consumer::Context) {
+    // ============================= Component `comport` tasks =============================
+    #[task(priority = 2, local = [comport_decoder], shared = [uart4_rx])]
+    async fn comport_consumer(mut cx: comport_consumer::Context) {
         let mut bytes = [0_u8; UART_RX_BUFFER_SIZE];
 
         loop {
-            match cx
-                .shared
-                .uart4_comport_endpoint
-                .lock(|endpoint| endpoint.read_chunk(&mut bytes))
-            {
+            match cx.shared.uart4_rx.lock(|rx| rx.read_chunk(&mut bytes)) {
                 UartRxReadOutcome::NoChunk => {}
                 UartRxReadOutcome::RecycleError => {
-                    defmt::warn!("UART RX buffer recycle error");
+                    defmt::warn!("serial RX buffer recycle error");
                 }
                 UartRxReadOutcome::Chunk(len) => {
-                    cx.local
-                        .uart4_consumer_state
-                        .consume(&bytes[..len], |event| match event {
-                            SerialConsumerEvent::RcSnapshot(snapshot) => {
-                                cx.shared.uart4_rc_input.lock(|output| *output = snapshot);
+                    cx.local.comport_decoder.consume(&bytes[..len], |event| match event {
+                        LineConsumerEvent::Line(line) => {
+                            match core::str::from_utf8(line.as_slice()) {
+                                Ok(line) => defmt::info!("COMPORT: {}", line),
+                                Err(_) => defmt::info!("COMPORT bytes: {=[u8]}", line.as_slice()),
                             }
-                            SerialConsumerEvent::ComPortLine(line) => {
-                                match core::str::from_utf8(line.as_slice()) {
-                                    Ok(line) => defmt::info!("COMPORT: {}", line),
-                                    Err(_) => {
-                                        defmt::info!("COMPORT bytes: {=[u8]}", line.as_slice())
-                                    }
-                                }
-                            }
-                            SerialConsumerEvent::ComPortOverflow => {
-                                defmt::warn!("COMPORT line exceeded 64 bytes; discarded");
-                            }
-                        });
+                        }
+                        LineConsumerEvent::Overflow => {
+                            defmt::warn!("COMPORT line exceeded 64 bytes; discarded");
+                        }
+                    });
                 }
             }
 
             Mono::delay(1.millis()).await;
         }
     }
-    // ============================ End component `uart4` tasks ============================
+    // =========================== End component `comport` tasks ===========================
 }

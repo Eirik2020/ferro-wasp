@@ -1,23 +1,26 @@
-//! Reusable receive-only UART DMA component definition.
+//! Reusable protocol-neutral receive-only serial endpoint component.
 
 use crate::{
     component::{
         ComponentActivation, ComponentConfigurationKind, ComponentDefinition,
-        ComponentInitLocalResource, ComponentResource, ComponentResourceKind,
-        ComponentResourceVisibility, ComponentSoftwareResource, ComponentTask,
+        ComponentInitLocalResource, ComponentLayer, ComponentResource, ComponentResourceKind,
+        ComponentResourceVisibility, ComponentSoftwareResource,
+        ComponentSoftwareResourceInitializer, ComponentSoftwareResourceOwnership, ComponentTask,
         ComponentTaskBinding, ComponentTaskTrigger,
     },
-    task::{HardwareInterrupt, TaskResourceCapability},
+    task::{HardwareInterrupt, SOFTWARE_SERIAL_RX, TaskResourceCapability, TaskSafetyClass},
     tasks,
 };
 
-/// UART DMA, IDLE detection, and boot-selected bounded consumer component.
+/// UART profile configuration, DMA/IDLE handling, and bounded raw-byte transport.
 pub const SERIAL_PORT_COMPONENT: ComponentDefinition = ComponentDefinition {
     id: "serial_port",
+    layer: ComponentLayer::HardwareEndpoint,
     configuration_kind: ComponentConfigurationKind::SerialPort,
     tasks: &[
         ComponentTask {
             definition: tasks::UART_RX_DMA_IRQ,
+            safety_class: TaskSafetyClass::NonSafetyCritical,
             id: "dma_irq",
             priority: 3,
             trigger: ComponentTaskTrigger::Interrupt {
@@ -32,6 +35,7 @@ pub const SERIAL_PORT_COMPONENT: ComponentDefinition = ComponentDefinition {
         },
         ComponentTask {
             definition: tasks::UART_RX_IDLE_IRQ,
+            safety_class: TaskSafetyClass::NonSafetyCritical,
             id: "idle_irq",
             priority: 3,
             trigger: ComponentTaskTrigger::Interrupt {
@@ -44,20 +48,6 @@ pub const SERIAL_PORT_COMPONENT: ComponentDefinition = ComponentDefinition {
             init_spawn: false,
             activation: ComponentActivation::SerialEnabled,
         },
-        ComponentTask {
-            definition: tasks::SERIAL_CONSUMER,
-            id: "consumer",
-            priority: 2,
-            trigger: ComponentTaskTrigger::Spawned,
-            parameters: &[],
-            local_resources: &[ComponentTaskBinding::new("consumer", "consumer_state")],
-            shared_resources: &[
-                ComponentTaskBinding::new("endpoint", "endpoint"),
-                ComponentTaskBinding::new("rc_input", "rc_input"),
-            ],
-            init_spawn: true,
-            activation: ComponentActivation::SerialEnabled,
-        },
     ],
     resources: &[
         ComponentResource {
@@ -68,20 +58,17 @@ pub const SERIAL_PORT_COMPONENT: ComponentDefinition = ComponentDefinition {
             activation: ComponentActivation::Always,
         },
         ComponentResource {
-            id: "consumer_state",
+            id: "rx",
             kind: ComponentResourceKind::InternalSoftware {
-                resource: ComponentSoftwareResource::SerialConsumer,
-                visibility: ComponentResourceVisibility::Private,
-            },
-            activation: ComponentActivation::SerialEnabled,
-        },
-        ComponentResource {
-            id: "rc_input",
-            kind: ComponentResourceKind::InternalSoftware {
-                resource: ComponentSoftwareResource::RcInputSnapshot,
+                resource: ComponentSoftwareResource {
+                    type_id: SOFTWARE_SERIAL_RX,
+                    rust_type: "UartRxParserSide",
+                    ownership: ComponentSoftwareResourceOwnership::Shared,
+                    initializer: ComponentSoftwareResourceInitializer::SerialRxOutput,
+                },
                 visibility: ComponentResourceVisibility::Exposed,
             },
-            activation: ComponentActivation::Always,
+            activation: ComponentActivation::SerialEnabled,
         },
         ComponentResource {
             id: "rx_buffers",

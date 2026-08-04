@@ -32,20 +32,18 @@ shared enable flag. While disabled, the task drives LD2 low. The initial EXTI
 prototype is not debounced, so one physical press can occasionally cause more
 than one toggle. This validation app has no actuator or motor-output authority.
 
-`src/app_composition.rs` selects the serial behavior at generation time. The
-checked-in default is `SerialPortAssignment::ComPort`, which configures
-115200-baud 8N1 input. Lines received over PA3 are printed as `COMPORT: ...`
-through the separate defmt RTT terminal. CR, LF, and CRLF terminate messages;
-invalid UTF-8 is logged as bytes, and lines longer than 64 bytes are discarded
-with one warning.
+`src/app_composition.rs` configures the endpoint with `SerialProtocol::Raw`
+for 115200-baud 8N1 input. A separate COMPORT functional component consumes
+the endpoint's raw RX interface and prints complete lines as `COMPORT: ...`
+through the defmt RTT terminal. CR, LF, and CRLF terminate messages; invalid
+UTF-8 is logged as bytes, and lines longer than 64 bytes are discarded with
+one warning. The endpoint itself does not parse or echo bytes.
 
-Selecting `SerialPortAssignment::Rc(RcProtocol::Sbus)` instead configures the
-same route for 100000-baud SBUS input. The serial component updates its exposed
-RC snapshot, and the standalone heartbeat prints all 16 channels and flags
-through `defmt` once per second. Standard SBUS is electrically inverted, but
-the STM32 UART configuration used here is not: PA3 must receive an already
-uninverted, 3.3-volt-compatible signal, such as through a suitable inverter or
-a receiver's uninverted output.
+An SBUS command-input composition may instead select `SerialProtocol::Sbus`
+and bind a command-input component to the same raw endpoint interface.
+Standard SBUS is electrically inverted, but the STM32 UART configuration used
+here is not: PA3 must receive an already uninverted, 3.3-volt-compatible
+signal, such as through a suitable inverter or a receiver's uninverted output.
 
 Do not connect a USB-to-UART adapter and an SBUS receiver to PA3 at the same
 time. The adapter must use 3.3-volt logic and share ground with the board. PA3

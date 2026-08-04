@@ -259,8 +259,8 @@ pub struct UartRxDma {
     /// Physical DMA route used for peripheral-to-memory transfers.
     pub dma: DmaChannel,
 
-    /// Serial protocols supported by this physical endpoint and routing.
-    pub supported_protocols: &'static [SerialProtocol],
+    /// Electrical serial profiles supported by this physical endpoint and routing.
+    pub supported_profiles: &'static [SerialProtocol],
 }
 
 impl UartRxDma {
@@ -276,19 +276,19 @@ impl UartRxDma {
             serial_port,
             rx_pin,
             dma,
-            supported_protocols: &[],
+            supported_profiles: &[],
         }
     }
 
-    /// Declares the serial protocols supported by this endpoint.
-    pub const fn supports(mut self, protocols: &'static [SerialProtocol]) -> Self {
-        self.supported_protocols = protocols;
+    /// Declares the electrical serial profiles supported by this endpoint.
+    pub const fn supports(mut self, profiles: &'static [SerialProtocol]) -> Self {
+        self.supported_profiles = profiles;
         self
     }
 
-    /// Returns whether this physical endpoint supports a serial protocol.
-    pub fn supports_protocol(&self, protocol: SerialProtocol) -> bool {
-        self.supported_protocols.contains(&protocol)
+    /// Returns whether this physical endpoint supports an electrical serial profile.
+    pub fn supports_profile(&self, profile: SerialProtocol) -> bool {
+        self.supported_profiles.contains(&profile)
     }
 
     /// Wraps this UART declaration as an application hardware resource.
@@ -380,6 +380,11 @@ pub struct Clock {
 
     /// Requested system/core clock frequency.
     pub sysclk_hz: u32,
+
+    /// Whether peripheral initialization requires a valid 48 MHz PLL clock.
+    ///
+    /// USB FS is the first consumer of this clock in the supported targets.
+    pub requires_pll48: bool,
 }
 
 impl Clock {
@@ -388,6 +393,18 @@ impl Clock {
         Self {
             source: ClockSource::InternalHighSpeed,
             sysclk_hz,
+            requires_pll48: false,
+        }
+    }
+
+    /// Creates a system-clock request using an external crystal or resonator.
+    pub const fn external_crystal(crystal_hz: u32, sysclk_hz: u32, requires_pll48: bool) -> Self {
+        Self {
+            source: ClockSource::ExternalCrystal {
+                frequency_hz: crystal_hz,
+            },
+            sysclk_hz,
+            requires_pll48,
         }
     }
 }
@@ -408,6 +425,19 @@ impl Target {
         Self {
             mcu,
             clock: Clock::internal_high_speed(sysclk_hz),
+        }
+    }
+
+    /// Creates a target clocked from an external crystal or resonator.
+    pub const fn external_crystal(
+        mcu: Mcu,
+        crystal_hz: u32,
+        sysclk_hz: u32,
+        requires_pll48: bool,
+    ) -> Self {
+        Self {
+            mcu,
+            clock: Clock::external_crystal(crystal_hz, sysclk_hz, requires_pll48),
         }
     }
 }
@@ -437,5 +467,19 @@ mod tests {
         let target = Target::internal_high_speed(Mcu::Stm32F401, 84_000_000);
         assert_eq!(target.clock.source, ClockSource::InternalHighSpeed);
         assert_eq!(target.clock.sysclk_hz, 84_000_000);
+        assert!(!target.clock.requires_pll48);
+    }
+
+    #[test]
+    fn external_crystal_constructor_preserves_pll48_requirement() {
+        let target = Target::external_crystal(Mcu::Stm32F405, 8_000_000, 168_000_000, true);
+        assert_eq!(
+            target.clock.source,
+            ClockSource::ExternalCrystal {
+                frequency_hz: 8_000_000,
+            }
+        );
+        assert_eq!(target.clock.sysclk_hz, 168_000_000);
+        assert!(target.clock.requires_pll48);
     }
 }

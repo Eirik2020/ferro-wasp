@@ -9,8 +9,9 @@ use crate::{
     board::MonotonicDeclaration,
     component, generator, resolve,
     task::{
-        TaskDefinition, TaskParameterDefinition, TaskParameterKind, TaskResourceCapability,
-        TaskResourceDefinition, read_body_source,
+        SOFTWARE_BOOL, SOFTWARE_LINE_CONSUMER, SOFTWARE_MOTOR_CMD, SOFTWARE_RC_INPUT_SNAPSHOT,
+        SOFTWARE_SBUS_CONSUMER, SOFTWARE_SERIAL_RX, TaskDefinition, TaskParameterDefinition,
+        TaskParameterKind, TaskResourceCapability, TaskResourceDefinition, read_body_source,
     },
 };
 
@@ -95,7 +96,7 @@ fn render_definition(
 mod {module_id} {{
     use crate::support::{{DurationExt as _, Monotonic as {monotonic_id}, UartRxIrqOutcome, UartRxReadOutcome, UART_RX_BUFFER_SIZE}};
     use embedded_hal::digital::{{OutputPin, StatefulOutputPin}};
-    use ferrowasp_drivers::serial_consumer::SerialConsumerEvent;
+    use ferrowasp_drivers::serial_consumer::{{LineConsumer, LineConsumerEvent, SbusConsumer}};
 
 {namespaces}
 
@@ -163,11 +164,44 @@ fn capability_type(capability: TaskResourceCapability) -> &'static str {
     match capability {
         TaskResourceCapability::DigitalOutput => "crate::support::DigitalOutput",
         TaskResourceCapability::InterruptInput => "crate::support::InterruptInput",
-        TaskResourceCapability::Bool => "bool",
         TaskResourceCapability::UartRxDma => "crate::support::UartRxDma",
-        TaskResourceCapability::RcInputSnapshot => "ferrowasp_io_core::serial::RcInputSnapshot",
-        TaskResourceCapability::SerialConsumer => {
-            "ferrowasp_drivers::serial_consumer::SerialConsumer"
+        TaskResourceCapability::Software(SOFTWARE_BOOL) => "bool",
+        TaskResourceCapability::Software(SOFTWARE_SERIAL_RX) => "crate::support::SerialRx",
+        TaskResourceCapability::Software(SOFTWARE_RC_INPUT_SNAPSHOT) => {
+            "ferrowasp_io_core::serial::RcInputSnapshot"
+        }
+        TaskResourceCapability::Software(SOFTWARE_SBUS_CONSUMER) => {
+            "ferrowasp_drivers::serial_consumer::SbusConsumer"
+        }
+        TaskResourceCapability::Software(SOFTWARE_LINE_CONSUMER) => {
+            "ferrowasp_drivers::serial_consumer::LineConsumer"
+        }
+        TaskResourceCapability::Software(type_id) => {
+            panic!("task checker has no Rust type for software resource `{type_id}`")
+        }
+        TaskResourceCapability::ObserverPublisher(SOFTWARE_RC_INPUT_SNAPSHOT) => {
+            "ferrowasp_core::observer_channel::ObserverPublisher<'static, ferrowasp_io_core::serial::RcInputSnapshot>"
+        }
+        TaskResourceCapability::ObserverReader(SOFTWARE_RC_INPUT_SNAPSHOT) => {
+            "ferrowasp_core::observer_channel::ObserverReader<'static, ferrowasp_io_core::serial::RcInputSnapshot>"
+        }
+        TaskResourceCapability::ObserverPublisher(type_id) => {
+            panic!("task checker has no publisher type for observer `{type_id}`")
+        }
+        TaskResourceCapability::ObserverReader(type_id) => {
+            panic!("task checker has no reader type for observer `{type_id}`")
+        }
+        TaskResourceCapability::SafetyProducer(SOFTWARE_MOTOR_CMD) => {
+            "ferrowasp_core::safety_channel::SafetyProducer<'static, ferrowasp_core::safety::MotorCmd>"
+        }
+        TaskResourceCapability::SafetyConsumer(SOFTWARE_MOTOR_CMD) => {
+            "ferrowasp_core::safety_channel::SafetyConsumer<'static, ferrowasp_core::safety::MotorCmd>"
+        }
+        TaskResourceCapability::SafetyProducer(type_id) => {
+            panic!("task checker has no producer type for safety channel `{type_id}`")
+        }
+        TaskResourceCapability::SafetyConsumer(type_id) => {
+            panic!("task checker has no consumer type for safety channel `{type_id}`")
         }
     }
 }
@@ -211,7 +245,10 @@ mod tests {
     use super::*;
     use crate::{
         component::{ExpandedTask, ExpandedTaskTrigger},
-        task::{TaskArgument, boolean, digital_output, duration},
+        task::{
+            SOFTWARE_MOTOR_CMD, TaskArgument, TaskResourceCapability, TaskSafetyClass, boolean,
+            digital_output, duration,
+        },
     };
 
     #[test]
@@ -225,6 +262,7 @@ mod tests {
         let report_task = ExpandedTask {
             id: "report_blink".to_owned(),
             definition: REPORT,
+            safety_class: TaskSafetyClass::NonSafetyCritical,
             priority: 1,
             trigger: ExpandedTaskTrigger::Spawned,
             parameters: vec![],
@@ -246,5 +284,14 @@ mod tests {
         assert!(rendered.contains("DurationExt as _, Monotonic as Mono"));
         assert!(rendered.contains("UartRxIrqOutcome"));
         assert!(rendered.contains("include!(\"/workspace/builder/tasks/blink.rs\")"));
+
+        assert_eq!(
+            capability_type(TaskResourceCapability::SafetyProducer(SOFTWARE_MOTOR_CMD)),
+            "ferrowasp_core::safety_channel::SafetyProducer<'static, ferrowasp_core::safety::MotorCmd>"
+        );
+        assert_eq!(
+            capability_type(TaskResourceCapability::SafetyConsumer(SOFTWARE_MOTOR_CMD)),
+            "ferrowasp_core::safety_channel::SafetyConsumer<'static, ferrowasp_core::safety::MotorCmd>"
+        );
     }
 }

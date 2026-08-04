@@ -10,10 +10,11 @@ mod app;
 mod backend;
 mod board;
 pub mod component;
+#[path = "../../components/mod.rs"]
+pub mod components;
 mod generator;
 pub mod hw_resources;
 mod resolve;
-pub mod serial_port;
 pub mod task;
 mod task_check;
 #[path = "../../tasks/mod.rs"]

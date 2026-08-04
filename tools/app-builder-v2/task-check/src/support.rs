@@ -50,7 +50,11 @@ impl UartRxDma {
     pub(crate) fn service_idle_irq(&mut self) -> UartRxIrqOutcome {
         UartRxIrqOutcome::Ignored
     }
+}
 
+pub(crate) struct SerialRx;
+
+impl SerialRx {
     pub(crate) fn read_chunk(
         &mut self,
         _output: &mut [u8; UART_RX_BUFFER_SIZE],

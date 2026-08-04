@@ -10,6 +10,7 @@ build = "build.rs"
 [dependencies]
 defmt.workspace = true
 embedded-hal.workspace = true
+ferrowasp-core = { path = "../../../crates/ferrowasp-core" }
 ferrowasp-drivers = { path = "../../../crates/ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../../../crates/ferrowasp-io-core" }
 fugit.workspace = true

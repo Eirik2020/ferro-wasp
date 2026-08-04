@@ -514,6 +514,21 @@ pub struct UartRxParserSide {
     pub filled_consumer: FilledConsumer,
 }
 
+impl UartRxParserSide {
+    /// Copies one completed DMA chunk into caller-owned storage and recycles its buffer.
+    pub fn read_chunk(&mut self, output: &mut [u8; UART_RX_BUFFER_SIZE]) -> UartRxReadOutcome {
+        let Some(filled) = self.filled_consumer.dequeue() else {
+            return UartRxReadOutcome::NoChunk;
+        };
+        let len = filled.len.min(output.len()).min(filled.buf.len());
+        output[..len].copy_from_slice(&filled.buf[..len]);
+        if self.free_producer.enqueue(filled.buf).is_err() {
+            return UartRxReadOutcome::RecycleError;
+        }
+        UartRxReadOutcome::Chunk(len)
+    }
+}
+
 pub struct UartOwnedRxBridge<'a, const N: usize, const DEPTH: usize> {
     parser: UartRxParserSide,
     producer: SerialRxProducer<'a, N, DEPTH>,
@@ -606,15 +621,7 @@ where
     }
 
     pub fn read_chunk(&mut self, output: &mut [u8; UART_RX_BUFFER_SIZE]) -> UartRxReadOutcome {
-        let Some(filled) = self.parser.filled_consumer.dequeue() else {
-            return UartRxReadOutcome::NoChunk;
-        };
-        let len = filled.len.min(output.len()).min(filled.buf.len());
-        output[..len].copy_from_slice(&filled.buf[..len]);
-        if self.parser.free_producer.enqueue(filled.buf).is_err() {
-            return UartRxReadOutcome::RecycleError;
-        }
-        UartRxReadOutcome::Chunk(len)
+        self.parser.read_chunk(output)
     }
 }
 

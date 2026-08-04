@@ -22,7 +22,7 @@ pub const BOARD: BoardDeclaration = BoardDeclaration {
             .interrupt_on(InterruptEdge::Falling)
             .into_resource(),
         UartRxDma::new(
-            "uart2_endpoint",
+            "uart2",
             SerialPortId::new(2),
             PinId::new(0, 3),
             DmaChannel::new(0, 5, 4),

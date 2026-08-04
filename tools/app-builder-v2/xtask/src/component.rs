@@ -3,34 +3,51 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, bail};
-use ferrowasp_io_core::serial::{RcProtocol, SerialPortAssignment, SerialProtocol};
+use ferrowasp_io_core::serial::SerialProtocol;
 
 use crate::{
     app::{AppDeclaration, SoftwareResourceDeclaration},
     board::BoardDeclaration,
     task::{
-        HardwareInterrupt, ResourceBinding, ResourceTarget, TaskDefinition, TaskParameterBinding,
-        TaskResourceCapability, TaskTrigger,
+        HardwareInterrupt, ResourceBinding, ResourceTarget, SOFTWARE_BOOL, TaskDefinition,
+        TaskParameterBinding, TaskResourceCapability, TaskSafetyClass, TaskTrigger,
     },
 };
+
+/// Architectural layer occupied by a reusable component.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComponentLayer {
+    /// Owns physical hardware initialization and exposes protocol-neutral transport.
+    HardwareEndpoint,
+
+    /// Implements application behavior using endpoint or software interfaces.
+    Functional,
+}
 
 /// Configuration family accepted by a reusable component definition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ComponentConfigurationKind {
-    /// A receive-only boot-assigned serial port.
+    /// No target-specific component configuration.
+    None,
+
+    /// A receive-only serial-port electrical profile.
     SerialPort,
 }
 
 /// Typed configuration supplied to one component instance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ComponentConfiguration {
-    /// Startup assignment for a serial-port component.
-    SerialPort(SerialPortAssignment),
+    /// Component needs no target-specific configuration.
+    None,
+
+    /// Electrical profile used to configure a serial endpoint.
+    SerialPort(SerialProtocol),
 }
 
 impl ComponentConfiguration {
     const fn kind(self) -> ComponentConfigurationKind {
         match self {
+            Self::None => ComponentConfigurationKind::None,
             Self::SerialPort(_) => ComponentConfigurationKind::SerialPort,
         }
     }
@@ -50,9 +67,10 @@ impl ComponentActivation {
     fn active(self, configuration: ComponentConfiguration) -> bool {
         match (self, configuration) {
             (Self::Always, _) => true,
-            (Self::SerialEnabled, ComponentConfiguration::SerialPort(assignment)) => {
-                assignment != SerialPortAssignment::Disabled
+            (Self::SerialEnabled, ComponentConfiguration::SerialPort(protocol)) => {
+                protocol != SerialProtocol::Disabled
             }
+            (Self::SerialEnabled, ComponentConfiguration::None) => false,
         }
     }
 }
@@ -67,14 +85,88 @@ pub enum ComponentResourceVisibility {
     Exposed,
 }
 
-/// Software-resource type created by a component.
+/// Initialization strategy for a software resource created by a component.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ComponentSoftwareResource {
-    /// Latest decoded radio-control sample.
-    RcInputSnapshot,
+pub enum ComponentSoftwareResourceInitializer {
+    /// Initialize the resource with this target-independent Rust expression.
+    Expression(&'static str),
 
-    /// Parser selected from the component's serial-port configuration.
-    SerialConsumer,
+    /// Receive the raw parser-side output produced by serial endpoint initialization.
+    SerialRxOutput,
+
+    /// Receive the publisher returned by splitting an init-local observer channel.
+    ObserverPublisher {
+        /// Logical component resource ID of the backing observer channel.
+        channel: &'static str,
+    },
+
+    /// Receive the reader returned by splitting an init-local observer channel.
+    ObserverReader {
+        /// Logical component resource ID of the backing observer channel.
+        channel: &'static str,
+    },
+
+    /// Receive the producer returned by splitting an init-local safety channel.
+    SafetyProducer {
+        /// Logical component resource ID of the backing safety channel.
+        channel: &'static str,
+    },
+
+    /// Receive the consumer returned by splitting an init-local safety channel.
+    SafetyConsumer {
+        /// Logical component resource ID of the backing safety channel.
+        channel: &'static str,
+    },
+}
+
+/// RTIC ownership class for a component-created software resource.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComponentSoftwareResourceOwnership {
+    /// Exactly one task owns the resource locally.
+    Local,
+
+    /// One or more tasks access the resource through RTIC locking.
+    Shared,
+}
+
+/// Generic software-resource description created by a component.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ComponentSoftwareResource {
+    /// Stable portable type ID matched against task resource requirements.
+    pub type_id: &'static str,
+
+    /// Concrete Rust type emitted in the generated RTIC resource struct.
+    pub rust_type: &'static str,
+
+    /// RTIC ownership class used when the component is expanded.
+    pub ownership: ComponentSoftwareResourceOwnership,
+
+    /// Deterministic initialization strategy for the generated value.
+    pub initializer: ComponentSoftwareResourceInitializer,
+}
+
+impl ComponentSoftwareResource {
+    /// Returns the portable capability supplied by this resource.
+    pub const fn capability(self) -> TaskResourceCapability {
+        match self.initializer {
+            ComponentSoftwareResourceInitializer::Expression(_)
+            | ComponentSoftwareResourceInitializer::SerialRxOutput => {
+                TaskResourceCapability::Software(self.type_id)
+            }
+            ComponentSoftwareResourceInitializer::ObserverPublisher { .. } => {
+                TaskResourceCapability::ObserverPublisher(self.type_id)
+            }
+            ComponentSoftwareResourceInitializer::ObserverReader { .. } => {
+                TaskResourceCapability::ObserverReader(self.type_id)
+            }
+            ComponentSoftwareResourceInitializer::SafetyProducer { .. } => {
+                TaskResourceCapability::SafetyProducer(self.type_id)
+            }
+            ComponentSoftwareResourceInitializer::SafetyConsumer { .. } => {
+                TaskResourceCapability::SafetyConsumer(self.type_id)
+            }
+        }
+    }
 }
 
 /// Backend-owned static storage requested by a component.
@@ -88,6 +180,39 @@ pub enum ComponentInitLocalResource {
 
     /// Queue containing completed UART receive chunks.
     UartRxFilledQueue,
+
+    /// Private storage for one non-consuming latest-value observer output.
+    ObserverChannel {
+        /// Stable portable type ID of the observed value.
+        type_id: &'static str,
+
+        /// Concrete Rust value type stored by the channel.
+        rust_type: &'static str,
+
+        /// Logical component resource ID of the sole publisher handle.
+        publisher: &'static str,
+
+        /// Logical component resource ID of the sole reader handle.
+        reader: &'static str,
+    },
+
+    /// Private storage for one authoritative bounded SPSC channel.
+    SafetyChannel {
+        /// Stable portable type ID of transferred messages.
+        type_id: &'static str,
+
+        /// Concrete Rust message type stored by the channel.
+        rust_type: &'static str,
+
+        /// Backing heapless queue length; usable capacity is one less.
+        queue_length: usize,
+
+        /// Logical component resource ID of the sole producer handle.
+        producer: &'static str,
+
+        /// Logical component resource ID of the sole consumer handle.
+        consumer: &'static str,
+    },
 }
 
 /// One logical resource slot or internally-created component resource.
@@ -173,6 +298,9 @@ pub struct ComponentTask {
     /// Reusable task definition and handwritten body.
     pub definition: TaskDefinition,
 
+    /// Safety role of the generated concrete task.
+    pub safety_class: TaskSafetyClass,
+
     /// Logical task name appended to the component instance ID.
     pub id: &'static str,
 
@@ -203,6 +331,9 @@ pub struct ComponentTask {
 pub struct ComponentDefinition {
     /// Stable component-definition identifier.
     pub id: &'static str,
+
+    /// Hardware-endpoint or functional architectural role.
+    pub layer: ComponentLayer,
 
     /// Configuration family accepted by every instance.
     pub configuration_kind: ComponentConfigurationKind,
@@ -284,6 +415,9 @@ pub struct ExpandedTask {
     /// Reusable definition and handwritten-body identity.
     pub definition: TaskDefinition,
 
+    /// Safety role retained from target composition.
+    pub safety_class: TaskSafetyClass,
+
     /// RTIC task priority.
     pub priority: u8,
 
@@ -309,20 +443,16 @@ pub enum ExpandedSoftwareResourceKind {
     /// Boolean initialized to the contained value.
     Bool(bool),
 
-    /// Empty latest RC-input snapshot.
-    RcInputSnapshot,
-
-    /// Serial parser selected from the contained startup assignment.
-    SerialConsumer(SerialPortAssignment),
+    /// Generic component-owned software resource.
+    Component(ComponentSoftwareResource),
 }
 
 impl ExpandedSoftwareResourceKind {
     /// Returns the task capability supplied by this software resource.
     pub const fn capability(self) -> TaskResourceCapability {
         match self {
-            Self::Bool(_) => TaskResourceCapability::Bool,
-            Self::RcInputSnapshot => TaskResourceCapability::RcInputSnapshot,
-            Self::SerialConsumer(_) => TaskResourceCapability::SerialConsumer,
+            Self::Bool(_) => TaskResourceCapability::Software(SOFTWARE_BOOL),
+            Self::Component(resource) => resource.capability(),
         }
     }
 
@@ -330,25 +460,26 @@ impl ExpandedSoftwareResourceKind {
     pub const fn rust_type(self) -> &'static str {
         match self {
             Self::Bool(_) => "bool",
-            Self::RcInputSnapshot => "RcInputSnapshot",
-            Self::SerialConsumer(_) => "SerialConsumer",
+            Self::Component(resource) => resource.rust_type,
         }
     }
 
     /// Renders the deterministic init expression for this resource.
-    pub fn initial_value(self) -> String {
+    pub fn initial_value(self, resource_id: &str) -> String {
         match self {
             Self::Bool(value) => value.to_string(),
-            Self::RcInputSnapshot => "RcInputSnapshot::new()".to_owned(),
-            Self::SerialConsumer(SerialPortAssignment::Disabled) => {
-                "SerialConsumer::new(SerialPortAssignment::Disabled)".to_owned()
-            }
-            Self::SerialConsumer(SerialPortAssignment::Rc(RcProtocol::Sbus)) => {
-                "SerialConsumer::new(SerialPortAssignment::Rc(RcProtocol::Sbus))".to_owned()
-            }
-            Self::SerialConsumer(SerialPortAssignment::ComPort) => {
-                "SerialConsumer::new(SerialPortAssignment::ComPort)".to_owned()
-            }
+            Self::Component(resource) => match resource.initializer {
+                ComponentSoftwareResourceInitializer::Expression(expression) => {
+                    expression.to_owned()
+                }
+                ComponentSoftwareResourceInitializer::SerialRxOutput => resource_id.to_owned(),
+                ComponentSoftwareResourceInitializer::ObserverPublisher { .. }
+                | ComponentSoftwareResourceInitializer::ObserverReader { .. }
+                | ComponentSoftwareResourceInitializer::SafetyProducer { .. }
+                | ComponentSoftwareResourceInitializer::SafetyConsumer { .. } => {
+                    resource_id.to_owned()
+                }
+            },
         }
     }
 }
@@ -364,6 +495,9 @@ pub struct ExpandedSoftwareResource {
 
     /// Owning component, or `None` for an application resource.
     pub owner_component: Option<String>,
+
+    /// Owning component configuration retained for backend-produced outputs.
+    pub owner_configuration: Option<ComponentConfiguration>,
 
     /// Whether tasks outside the owner may bind this resource.
     pub exposed: bool,
@@ -439,6 +573,7 @@ fn expand_standalone_task(task: &crate::task::TaskDeclaration) -> ExpandedTask {
     ExpandedTask {
         id: task.id.to_owned(),
         definition: task.definition,
+        safety_class: task.safety_class,
         priority: task.priority,
         trigger: match task.trigger {
             TaskTrigger::Spawned => ExpandedTaskTrigger::Spawned,
@@ -477,6 +612,7 @@ fn expand_application_resource(resource: &SoftwareResourceDeclaration) -> Expand
         id: resource.id().to_owned(),
         kind,
         owner_component: None,
+        owner_configuration: None,
         exposed: true,
     }
 }
@@ -506,27 +642,18 @@ fn expand_component(declaration: &ComponentDeclaration, expanded: &mut ExpandedA
                 resource,
                 visibility,
             } => {
-                let kind = match resource {
-                    ComponentSoftwareResource::RcInputSnapshot => {
-                        ExpandedSoftwareResourceKind::RcInputSnapshot
-                    }
-                    ComponentSoftwareResource::SerialConsumer => {
-                        let ComponentConfiguration::SerialPort(assignment) =
-                            declaration.configuration;
-                        ExpandedSoftwareResourceKind::SerialConsumer(assignment)
-                    }
-                };
                 let declaration = ExpandedSoftwareResource {
                     id,
-                    kind,
+                    kind: ExpandedSoftwareResourceKind::Component(resource),
                     owner_component: Some(declaration.id.to_owned()),
+                    owner_configuration: Some(declaration.configuration),
                     exposed: visibility == ComponentResourceVisibility::Exposed,
                 };
-                match resource {
-                    ComponentSoftwareResource::SerialConsumer => {
+                match resource.ownership {
+                    ComponentSoftwareResourceOwnership::Local => {
                         expanded.software_local_resources.push(declaration)
                     }
-                    ComponentSoftwareResource::RcInputSnapshot => {
+                    ComponentSoftwareResourceOwnership::Shared => {
                         expanded.software_shared_resources.push(declaration)
                     }
                 }
@@ -639,6 +766,7 @@ fn expand_component(declaration: &ComponentDeclaration, expanded: &mut ExpandedA
         expanded.tasks.push(ExpandedTask {
             id: task_id.clone(),
             definition: task.definition,
+            safety_class: task.safety_class,
             priority: task.priority,
             trigger,
             parameters: task.parameters.to_vec(),
@@ -669,7 +797,7 @@ fn validate_component_instances(board: &BoardDeclaration, app: &AppDeclaration) 
     {
         software.insert(
             resource.id().to_owned(),
-            (TaskResourceCapability::Bool, true),
+            (TaskResourceCapability::Software(SOFTWARE_BOOL), true),
         );
     }
     for component in declarations {
@@ -681,12 +809,7 @@ fn validate_component_instances(board: &BoardDeclaration, app: &AppDeclaration) 
             else {
                 continue;
             };
-            let capability = match software_resource {
-                ComponentSoftwareResource::RcInputSnapshot => {
-                    TaskResourceCapability::RcInputSnapshot
-                }
-                ComponentSoftwareResource::SerialConsumer => TaskResourceCapability::SerialConsumer,
-            };
+            let capability = software_resource.capability();
             software.insert(
                 namespaced(component.id, resource.id),
                 (
@@ -713,6 +836,19 @@ fn validate_component_instances(board: &BoardDeclaration, app: &AppDeclaration) 
                 declaration.definition.id
             );
         }
+        if declaration.definition.layer == ComponentLayer::Functional
+            && declaration.definition.resources.iter().any(|resource| {
+                matches!(
+                    resource.kind,
+                    ComponentResourceKind::ExternalHardware { .. }
+                )
+            })
+        {
+            bail!(
+                "functional component `{}` cannot bind board hardware directly",
+                declaration.definition.id
+            );
+        }
         let mut resource_ids = BTreeSet::new();
         let mut external = BTreeMap::new();
         for resource in declaration.definition.resources {
@@ -732,6 +868,8 @@ fn validate_component_instances(board: &BoardDeclaration, app: &AppDeclaration) 
                 external.insert(resource.id, resource);
             }
         }
+        validate_observer_resources(declaration.definition)?;
+        validate_safety_channels(declaration.definition)?;
         let mut bound = BTreeSet::new();
         for binding in declaration.bindings {
             let Some(resource) = external.get(binding.task_resource()) else {
@@ -766,19 +904,24 @@ fn validate_component_instances(board: &BoardDeclaration, app: &AppDeclaration) 
                         hardware,
                     )?;
                     if capability == TaskResourceCapability::UartRxDma {
-                        let ComponentConfiguration::SerialPort(assignment) =
-                            declaration.configuration;
+                        let ComponentConfiguration::SerialPort(protocol) =
+                            declaration.configuration
+                        else {
+                            bail!(
+                                "serial endpoint component `{}` has no serial profile",
+                                declaration.id
+                            );
+                        };
                         let uart = hardware.uart_rx_dma().ok_or_else(|| {
                             anyhow::anyhow!(
                                 "component `{}` endpoint `{id}` is not a UART RX DMA resource",
                                 declaration.id
                             )
                         })?;
-                        let protocol = assignment.profile().protocol;
-                        if protocol != SerialProtocol::Disabled && !uart.supports_protocol(protocol)
+                        if protocol != SerialProtocol::Disabled && !uart.supports_profile(protocol)
                         {
                             bail!(
-                                "component `{}` assignment {assignment:?} is not supported by endpoint `{id}`",
+                                "component `{}` serial profile {protocol:?} is not supported by endpoint `{id}`",
                                 declaration.id
                             );
                         }
@@ -853,15 +996,244 @@ fn validate_hardware_capability(
             Some(crate::hw_resources::GpioMode::Input { interrupt: Some(_) })
         ),
         TaskResourceCapability::UartRxDma => hardware.uart_rx_dma().is_some(),
-        TaskResourceCapability::Bool
-        | TaskResourceCapability::RcInputSnapshot
-        | TaskResourceCapability::SerialConsumer => false,
+        TaskResourceCapability::Software(_)
+        | TaskResourceCapability::ObserverPublisher(_)
+        | TaskResourceCapability::ObserverReader(_)
+        | TaskResourceCapability::SafetyProducer(_)
+        | TaskResourceCapability::SafetyConsumer(_) => false,
     };
     if !compatible {
         bail!(
             "component `{component_id}` resource `{resource_id}` requires {capability:?}, but board resource `{}` is incompatible",
             hardware.id()
         );
+    }
+    Ok(())
+}
+
+fn validate_observer_resources(definition: &ComponentDefinition) -> Result<()> {
+    let channels = definition
+        .resources
+        .iter()
+        .filter_map(|resource| match resource.kind {
+            ComponentResourceKind::InitLocal(ComponentInitLocalResource::ObserverChannel {
+                type_id,
+                rust_type,
+                publisher,
+                reader,
+            }) => Some((resource.id, (type_id, rust_type, publisher, reader))),
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut endpoints = BTreeMap::<&str, (usize, usize)>::new();
+
+    for resource in definition.resources {
+        let ComponentResourceKind::InternalSoftware {
+            resource: software,
+            visibility,
+        } = resource.kind
+        else {
+            continue;
+        };
+        let (channel, publisher) = match software.initializer {
+            ComponentSoftwareResourceInitializer::ObserverPublisher { channel } => (channel, true),
+            ComponentSoftwareResourceInitializer::ObserverReader { channel } => (channel, false),
+            ComponentSoftwareResourceInitializer::Expression(_)
+            | ComponentSoftwareResourceInitializer::SerialRxOutput
+            | ComponentSoftwareResourceInitializer::SafetyProducer { .. }
+            | ComponentSoftwareResourceInitializer::SafetyConsumer { .. } => continue,
+        };
+        let (channel_type_id, value_type, publisher_id, reader_id) =
+            channels.get(channel).copied().ok_or_else(|| {
+            anyhow::anyhow!(
+                "component definition `{}` observer endpoint `{}` references missing channel `{channel}`",
+                definition.id,
+                resource.id
+            )
+        })?;
+        let expected_id = if publisher { publisher_id } else { reader_id };
+        if resource.id != expected_id {
+            bail!(
+                "component definition `{}` observer channel `{channel}` names `{expected_id}` as its {} but endpoint `{}` uses that channel",
+                definition.id,
+                if publisher { "publisher" } else { "reader" },
+                resource.id
+            );
+        }
+        if software.type_id != channel_type_id {
+            bail!(
+                "component definition `{}` observer endpoint `{}` type `{}` does not match channel `{channel}` type `{channel_type_id}`",
+                definition.id,
+                resource.id,
+                software.type_id
+            );
+        }
+        let expected_type = if publisher {
+            format!("ObserverPublisher<'static, {value_type}>")
+        } else {
+            format!("ObserverReader<'static, {value_type}>")
+        };
+        if software.rust_type != expected_type {
+            bail!(
+                "component definition `{}` observer endpoint `{}` must use Rust type `{expected_type}`",
+                definition.id,
+                resource.id
+            );
+        }
+        let valid_ownership = if publisher {
+            software.ownership == ComponentSoftwareResourceOwnership::Local
+                && visibility == ComponentResourceVisibility::Private
+        } else {
+            software.ownership == ComponentSoftwareResourceOwnership::Shared
+                && visibility == ComponentResourceVisibility::Exposed
+        };
+        if !valid_ownership {
+            let role = if publisher { "publisher" } else { "reader" };
+            bail!(
+                "component definition `{}` observer {role} `{}` has invalid ownership or visibility",
+                definition.id,
+                resource.id
+            );
+        }
+        let counts = endpoints.entry(channel).or_default();
+        if publisher {
+            counts.0 += 1;
+        } else {
+            counts.1 += 1;
+        }
+    }
+
+    for channel in channels.keys() {
+        let (publishers, readers) = endpoints.get(channel).copied().unwrap_or_default();
+        if publishers != 1 || readers != 1 {
+            bail!(
+                "component definition `{}` observer channel `{channel}` requires exactly one publisher and one reader, found {publishers} publisher(s) and {readers} reader(s)",
+                definition.id
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_safety_channels(definition: &ComponentDefinition) -> Result<()> {
+    let channels = definition
+        .resources
+        .iter()
+        .filter_map(|resource| match resource.kind {
+            ComponentResourceKind::InitLocal(ComponentInitLocalResource::SafetyChannel {
+                type_id,
+                rust_type,
+                queue_length,
+                producer,
+                consumer,
+            }) => Some((
+                resource.id,
+                (type_id, rust_type, queue_length, producer, consumer),
+            )),
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut endpoints = BTreeMap::<&str, (usize, usize)>::new();
+
+    for (channel_id, (_, _, queue_length, _, _)) in &channels {
+        if *queue_length < 2 {
+            bail!(
+                "component definition `{}` safety channel `{channel_id}` requires a queue length of at least two",
+                definition.id
+            );
+        }
+    }
+
+    for resource in definition.resources {
+        let ComponentResourceKind::InternalSoftware {
+            resource: software,
+            visibility,
+        } = resource.kind
+        else {
+            continue;
+        };
+        let (channel, producer) = match software.initializer {
+            ComponentSoftwareResourceInitializer::SafetyProducer { channel } => (channel, true),
+            ComponentSoftwareResourceInitializer::SafetyConsumer { channel } => (channel, false),
+            ComponentSoftwareResourceInitializer::Expression(_)
+            | ComponentSoftwareResourceInitializer::SerialRxOutput
+            | ComponentSoftwareResourceInitializer::ObserverPublisher { .. }
+            | ComponentSoftwareResourceInitializer::ObserverReader { .. } => continue,
+        };
+        let (channel_type_id, value_type, _, producer_id, consumer_id) =
+            channels.get(channel).copied().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "component definition `{}` safety endpoint `{}` references missing channel `{channel}`",
+                    definition.id,
+                    resource.id
+                )
+            })?;
+        let expected_id = if producer { producer_id } else { consumer_id };
+        if resource.id != expected_id {
+            bail!(
+                "component definition `{}` safety channel `{channel}` names `{expected_id}` as its {} but endpoint `{}` uses that channel",
+                definition.id,
+                if producer { "producer" } else { "consumer" },
+                resource.id
+            );
+        }
+        if software.type_id != channel_type_id {
+            bail!(
+                "component definition `{}` safety endpoint `{}` type `{}` does not match channel `{channel}` type `{channel_type_id}`",
+                definition.id,
+                resource.id,
+                software.type_id
+            );
+        }
+        let expected_type = if producer {
+            format!("SafetyProducer<'static, {value_type}>")
+        } else {
+            format!("SafetyConsumer<'static, {value_type}>")
+        };
+        if software.rust_type != expected_type {
+            bail!(
+                "component definition `{}` safety endpoint `{}` must use Rust type `{expected_type}`",
+                definition.id,
+                resource.id
+            );
+        }
+        if software.ownership != ComponentSoftwareResourceOwnership::Local {
+            bail!(
+                "component definition `{}` safety {} `{}` must be task-local",
+                definition.id,
+                if producer { "producer" } else { "consumer" },
+                resource.id
+            );
+        }
+        let expected_visibility = if producer {
+            ComponentResourceVisibility::Private
+        } else {
+            ComponentResourceVisibility::Exposed
+        };
+        if visibility != expected_visibility {
+            bail!(
+                "component definition `{}` safety {} `{}` has invalid visibility",
+                definition.id,
+                if producer { "producer" } else { "consumer" },
+                resource.id
+            );
+        }
+        let counts = endpoints.entry(channel).or_default();
+        if producer {
+            counts.0 += 1;
+        } else {
+            counts.1 += 1;
+        }
+    }
+
+    for channel in channels.keys() {
+        let (producers, consumers) = endpoints.get(channel).copied().unwrap_or_default();
+        if producers != 1 || consumers != 1 {
+            bail!(
+                "component definition `{}` safety channel `{channel}` requires exactly one producer and one consumer, found {producers} producer(s) and {consumers} consumer(s)",
+                definition.id
+            );
+        }
     }
     Ok(())
 }
@@ -940,17 +1312,19 @@ mod tests {
     use crate::{
         app::{InitDeclaration, SoftwareResourcesDeclaration},
         board::{BoardDeclaration, MonotonicDeclaration},
+        components::{COMMAND_INPUT_COMPONENT, SERIAL_PORT_COMPONENT},
         hw_resources::{DmaChannel, HardwareResource, Mcu, PinId, SerialPortId, Target, UartRxDma},
         resolve,
-        serial_port::SERIAL_PORT_COMPONENT,
         task::{
-            TaskDeclaration, TaskDefinition, rc_input_snapshot, resource, serial_consumer_state,
+            SOFTWARE_MOTOR_CMD, SOFTWARE_RC_INPUT_SNAPSHOT, TaskDeclaration, TaskDefinition,
+            TaskSafetyClass, rc_input_observer_publisher, rc_input_observer_reader, resource,
+            safety_consumer, safety_producer, sbus_consumer_state, serial_rx,
         },
     };
 
     const UART2: HardwareResource = HardwareResource::UartRxDma(
         UartRxDma::new(
-            "uart2_endpoint",
+            "uart2",
             SerialPortId::new(2),
             PinId::new(0, 3),
             DmaChannel::new(0, 5, 4),
@@ -959,7 +1333,7 @@ mod tests {
     );
     const UART3: HardwareResource = HardwareResource::UartRxDma(
         UartRxDma::new(
-            "uart3_endpoint",
+            "uart3",
             SerialPortId::new(3),
             PinId::new(1, 11),
             DmaChannel::new(0, 1, 4),
@@ -982,9 +1356,90 @@ mod tests {
     const UART2_COMPONENT: ComponentDeclaration = ComponentDeclaration {
         id: "uart2",
         definition: &SERIAL_PORT_COMPONENT,
-        configuration: ComponentConfiguration::SerialPort(SerialPortAssignment::ComPort),
-        bindings: &[resource("endpoint").to_hw("uart2_endpoint")],
+        configuration: ComponentConfiguration::SerialPort(SerialProtocol::Raw),
+        bindings: &[resource("endpoint").to_hw("uart2")],
     };
+    const COMMAND_INPUT: ComponentDeclaration = ComponentDeclaration {
+        id: "command_input",
+        definition: &COMMAND_INPUT_COMPONENT,
+        configuration: ComponentConfiguration::None,
+        bindings: &[resource("rx").to_sw("uart2_rx")],
+    };
+    const SAFETY_PRODUCER_TASK: TaskDefinition = TaskDefinition::asynchronous("safety_producer")
+        .with_local(&[safety_producer("output", SOFTWARE_MOTOR_CMD)]);
+    const SAFETY_CONSUMER_TASK: TaskDefinition = TaskDefinition::asynchronous("safety_consumer")
+        .with_local(&[safety_consumer("input", SOFTWARE_MOTOR_CMD)]);
+    const SAFETY_CHANNEL_COMPONENT: ComponentDefinition = ComponentDefinition {
+        id: "safety_link",
+        layer: ComponentLayer::Functional,
+        configuration_kind: ComponentConfigurationKind::None,
+        tasks: &[ComponentTask {
+            definition: SAFETY_PRODUCER_TASK,
+            safety_class: TaskSafetyClass::SafetyCritical,
+            id: "producer_task",
+            priority: 2,
+            trigger: ComponentTaskTrigger::Spawned,
+            parameters: &[],
+            local_resources: &[ComponentTaskBinding::new("output", "producer")],
+            shared_resources: &[],
+            init_spawn: false,
+            activation: ComponentActivation::Always,
+        }],
+        resources: &[
+            ComponentResource {
+                id: "channel",
+                kind: ComponentResourceKind::InitLocal(ComponentInitLocalResource::SafetyChannel {
+                    type_id: SOFTWARE_MOTOR_CMD,
+                    rust_type: "MotorCmd",
+                    queue_length: 4,
+                    producer: "producer",
+                    consumer: "consumer",
+                }),
+                activation: ComponentActivation::Always,
+            },
+            ComponentResource {
+                id: "producer",
+                kind: ComponentResourceKind::InternalSoftware {
+                    resource: ComponentSoftwareResource {
+                        type_id: SOFTWARE_MOTOR_CMD,
+                        rust_type: "SafetyProducer<'static, MotorCmd>",
+                        ownership: ComponentSoftwareResourceOwnership::Local,
+                        initializer: ComponentSoftwareResourceInitializer::SafetyProducer {
+                            channel: "channel",
+                        },
+                    },
+                    visibility: ComponentResourceVisibility::Private,
+                },
+                activation: ComponentActivation::Always,
+            },
+            ComponentResource {
+                id: "consumer",
+                kind: ComponentResourceKind::InternalSoftware {
+                    resource: ComponentSoftwareResource {
+                        type_id: SOFTWARE_MOTOR_CMD,
+                        rust_type: "SafetyConsumer<'static, MotorCmd>",
+                        ownership: ComponentSoftwareResourceOwnership::Local,
+                        initializer: ComponentSoftwareResourceInitializer::SafetyConsumer {
+                            channel: "channel",
+                        },
+                    },
+                    visibility: ComponentResourceVisibility::Exposed,
+                },
+                activation: ComponentActivation::Always,
+            },
+        ],
+    };
+    const SAFETY_CHANNEL: ComponentDeclaration = ComponentDeclaration {
+        id: "control_to_actuator",
+        definition: &SAFETY_CHANNEL_COMPONENT,
+        configuration: ComponentConfiguration::None,
+        bindings: &[],
+    };
+    const SAFETY_CONSUMER: TaskDeclaration = SAFETY_CONSUMER_TASK
+        .spawned_as("actuator")
+        .safety_class(TaskSafetyClass::SafetyCritical)
+        .priority(2)
+        .with_local(&[resource("input").to_sw("control_to_actuator_consumer")]);
 
     fn app(
         tasks: &'static [TaskDeclaration],
@@ -999,7 +1454,7 @@ mod tests {
     }
 
     #[test]
-    fn serial_component_expands_namespaced_tasks_resources_and_init_spawn() {
+    fn serial_endpoint_expands_transport_only_tasks_and_resources() {
         let expanded = expand(&BOARD, &app(&[], &[UART2_COMPONENT])).unwrap();
         let task_ids = expanded
             .tasks
@@ -1008,23 +1463,14 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert!(task_ids.contains("uart2_dma_irq"));
         assert!(task_ids.contains("uart2_idle_irq"));
-        assert!(task_ids.contains("uart2_consumer"));
-        assert!(
-            expanded
-                .init_spawned_task_ids
-                .contains(&"uart2_consumer".to_owned())
-        );
-        assert!(
-            expanded
-                .software_local_resources
-                .iter()
-                .any(|resource| resource.id == "uart2_consumer_state")
-        );
+        assert!(!task_ids.contains("uart2_consumer"));
+        assert!(expanded.init_spawned_task_ids.is_empty());
+        assert!(expanded.software_local_resources.is_empty());
         assert!(
             expanded
                 .software_shared_resources
                 .iter()
-                .any(|resource| resource.id == "uart2_rc_input" && resource.exposed)
+                .any(|resource| resource.id == "uart2_rx" && resource.exposed)
         );
         assert!(
             expanded
@@ -1039,59 +1485,38 @@ mod tests {
         const UART3_COMPONENT: ComponentDeclaration = ComponentDeclaration {
             id: "uart3",
             definition: &SERIAL_PORT_COMPONENT,
-            configuration: ComponentConfiguration::SerialPort(SerialPortAssignment::ComPort),
-            bindings: &[resource("endpoint").to_hw("uart3_endpoint")],
+            configuration: ComponentConfiguration::SerialPort(SerialProtocol::Raw),
+            bindings: &[resource("endpoint").to_hw("uart3")],
         };
         let expanded = expand(&BOARD, &app(&[], &[UART2_COMPONENT, UART3_COMPONENT])).unwrap();
+        assert!(expanded.tasks.iter().any(|task| task.id == "uart2_dma_irq"));
+        assert!(expanded.tasks.iter().any(|task| task.id == "uart3_dma_irq"));
         assert!(
             expanded
-                .tasks
+                .software_shared_resources
                 .iter()
-                .any(|task| task.id == "uart2_consumer")
-        );
-        assert!(
-            expanded
-                .tasks
-                .iter()
-                .any(|task| task.id == "uart3_consumer")
+                .any(|resource| resource.id == "uart2_rx")
         );
         assert!(
             expanded
                 .software_shared_resources
                 .iter()
-                .any(|resource| resource.id == "uart2_rc_input")
-        );
-        assert!(
-            expanded
-                .software_shared_resources
-                .iter()
-                .any(|resource| resource.id == "uart3_rc_input")
+                .any(|resource| resource.id == "uart3_rx")
         );
     }
 
     #[test]
-    fn disabled_assignment_keeps_exposed_output_but_omits_uart_work() {
-        const HEARTBEAT_DEF: TaskDefinition =
-            TaskDefinition::asynchronous("heartbeat").with_shared(&[rc_input_snapshot("input")]);
-        const HEARTBEAT: TaskDeclaration = HEARTBEAT_DEF
-            .spawned_as("heartbeat")
-            .priority(1)
-            .with_shared(&[resource("input").to_sw("uart2_rc_input")]);
+    fn disabled_profile_omits_uart_work() {
         const DISABLED: ComponentDeclaration = ComponentDeclaration {
-            configuration: ComponentConfiguration::SerialPort(SerialPortAssignment::Disabled),
+            configuration: ComponentConfiguration::SerialPort(SerialProtocol::Disabled),
             ..UART2_COMPONENT
         };
-        let expanded = expand(&F401_BOARD, &app(&[HEARTBEAT], &[DISABLED])).unwrap();
-        assert_eq!(expanded.tasks.len(), 1);
+        let expanded = expand(&F401_BOARD, &app(&[], &[DISABLED])).unwrap();
+        assert!(expanded.tasks.is_empty());
         assert!(expanded.init_spawned_task_ids.is_empty());
         assert!(expanded.init_local_resources.is_empty());
         assert!(expanded.software_local_resources.is_empty());
-        assert!(
-            expanded
-                .software_shared_resources
-                .iter()
-                .any(|resource| resource.id == "uart2_rc_input")
-        );
+        assert!(expanded.software_shared_resources.is_empty());
         let resolved = resolve::resolve(&F401_BOARD, &expanded).unwrap();
         assert!(resolved.resources.is_empty());
         let board = crate::backend::validate(&F401_BOARD).unwrap();
@@ -1101,18 +1526,286 @@ mod tests {
     }
 
     #[test]
-    fn sbus_assignment_reaches_the_backend_as_an_sbus_profile() {
+    fn sbus_profile_reaches_the_backend_without_parser_ownership() {
         const SBUS: ComponentDeclaration = ComponentDeclaration {
-            configuration: ComponentConfiguration::SerialPort(SerialPortAssignment::Rc(
-                RcProtocol::Sbus,
-            )),
+            configuration: ComponentConfiguration::SerialPort(SerialProtocol::Sbus),
             ..UART2_COMPONENT
         };
-        let expanded = expand(&F401_BOARD, &app(&[], &[SBUS])).unwrap();
+        let expanded = expand(&F401_BOARD, &app(&[], &[SBUS, COMMAND_INPUT])).unwrap();
         let resolved = resolve::resolve(&F401_BOARD, &expanded).unwrap();
         let board = crate::backend::validate(&F401_BOARD).unwrap();
         let rendered = crate::backend::render(&board, &resolved).unwrap();
         assert!(rendered.initialization.contains("SerialProtocol::Sbus"));
+    }
+
+    #[test]
+    fn command_input_observer_expands_to_private_publisher_shared_reader_and_storage() {
+        const READER_DEFINITION: TaskDefinition = TaskDefinition::asynchronous("observer")
+            .with_shared(&[rc_input_observer_reader("input")]);
+        const READER: TaskDeclaration = READER_DEFINITION
+            .spawned_as("observer")
+            .priority(1)
+            .with_shared(&[resource("input").to_sw("command_input_rc_input_reader")]);
+        let expanded = expand(
+            &F401_BOARD,
+            &app(&[READER], &[UART2_COMPONENT, COMMAND_INPUT]),
+        )
+        .unwrap();
+
+        let publisher = expanded
+            .software_local_resources
+            .iter()
+            .find(|resource| resource.id == "command_input_rc_input_publisher")
+            .unwrap();
+        assert!(!publisher.exposed);
+        assert_eq!(
+            publisher.kind.capability(),
+            TaskResourceCapability::ObserverPublisher(SOFTWARE_RC_INPUT_SNAPSHOT)
+        );
+        let reader = expanded
+            .software_shared_resources
+            .iter()
+            .find(|resource| resource.id == "command_input_rc_input_reader")
+            .unwrap();
+        assert!(reader.exposed);
+        assert_eq!(
+            reader.kind.capability(),
+            TaskResourceCapability::ObserverReader(SOFTWARE_RC_INPUT_SNAPSHOT)
+        );
+        assert!(expanded.init_local_resources.iter().any(|resource| {
+            resource.id == "command_input_rc_input_channel"
+                && matches!(
+                    resource.kind,
+                    ComponentInitLocalResource::ObserverChannel { .. }
+                )
+        }));
+
+        let resolved = resolve::resolve(&F401_BOARD, &expanded).unwrap();
+        assert_eq!(resolved.software_local_resources.len(), 2);
+        assert!(resolved.software_shared_resources.iter().any(|resource| {
+            resource.declaration.id == "command_input_rc_input_reader"
+                && resource.task_ids == ["observer"]
+        }));
+    }
+
+    #[test]
+    fn safety_channel_expands_to_two_local_handles_and_private_init_storage() {
+        let expanded = expand(&F401_BOARD, &app(&[SAFETY_CONSUMER], &[SAFETY_CHANNEL])).unwrap();
+        assert!(expanded.software_shared_resources.is_empty());
+        assert!(expanded.software_local_resources.iter().any(|resource| {
+            resource.id == "control_to_actuator_producer"
+                && !resource.exposed
+                && resource.kind.capability()
+                    == TaskResourceCapability::SafetyProducer(SOFTWARE_MOTOR_CMD)
+        }));
+        assert!(expanded.software_local_resources.iter().any(|resource| {
+            resource.id == "control_to_actuator_consumer"
+                && resource.exposed
+                && resource.kind.capability()
+                    == TaskResourceCapability::SafetyConsumer(SOFTWARE_MOTOR_CMD)
+        }));
+        assert!(expanded.init_local_resources.iter().any(|resource| {
+            resource.id == "control_to_actuator_channel"
+                && matches!(
+                    resource.kind,
+                    ComponentInitLocalResource::SafetyChannel {
+                        queue_length: 4,
+                        ..
+                    }
+                )
+        }));
+
+        let resolved = resolve::resolve(&F401_BOARD, &expanded).unwrap();
+        assert_eq!(resolved.software_local_resources.len(), 2);
+        assert!(resolved.software_shared_resources.is_empty());
+        let board = crate::backend::validate(&F401_BOARD).unwrap();
+        let rendered = crate::backend::render(&board, &resolved).unwrap();
+        assert!(
+            rendered
+                .init_attribute
+                .contains("SafetyChannel<MotorCmd, 4> = SafetyChannel::new()")
+        );
+        assert!(
+            rendered
+                .initialization
+                .contains("cx.local.control_to_actuator_channel.split()")
+        );
+        assert!(
+            rendered
+                .local_struct
+                .contains("control_to_actuator_producer: SafetyProducer<'static, MotorCmd>")
+        );
+        assert!(
+            rendered
+                .local_struct
+                .contains("control_to_actuator_consumer: SafetyConsumer<'static, MotorCmd>")
+        );
+        assert!(
+            rendered
+                .prelude_exports
+                .contains("safety_channel::{SafetyChannel, SafetyConsumer, SafetyProducer}")
+        );
+    }
+
+    #[test]
+    fn safety_channel_requires_both_handles_to_have_one_owner() {
+        let expanded = expand(&BOARD, &app(&[], &[SAFETY_CHANNEL])).unwrap();
+        let error = resolve::resolve(&BOARD, &expanded).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("requires exactly one owning task")
+        );
+
+        const SECOND_CONSUMER: TaskDeclaration = SAFETY_CONSUMER_TASK
+            .spawned_as("backup_actuator")
+            .safety_class(TaskSafetyClass::SafetyCritical)
+            .priority(2)
+            .with_local(&[resource("input").to_sw("control_to_actuator_consumer")]);
+        let expanded = expand(
+            &BOARD,
+            &app(&[SAFETY_CONSUMER, SECOND_CONSUMER], &[SAFETY_CHANNEL]),
+        )
+        .unwrap();
+        let error = resolve::resolve(&BOARD, &expanded).unwrap_err();
+        assert!(error.to_string().contains("claimed locally by both"));
+    }
+
+    #[test]
+    fn noncritical_task_cannot_own_a_safety_channel_handle() {
+        const NONCRITICAL_CONSUMER: TaskDeclaration = SAFETY_CONSUMER_TASK
+            .spawned_as("noncritical_consumer")
+            .priority(2)
+            .with_local(&[resource("input").to_sw("control_to_actuator_consumer")]);
+        let expanded = expand(&BOARD, &app(&[NONCRITICAL_CONSUMER], &[SAFETY_CHANNEL])).unwrap();
+        let error = resolve::resolve(&BOARD, &expanded).unwrap_err();
+        assert!(error.to_string().contains("NonSafetyCritical"));
+        assert!(error.to_string().contains("cannot own authoritative"));
+
+        const SAFETY_RELATED_CONSUMER: TaskDeclaration = SAFETY_CONSUMER_TASK
+            .spawned_as("safety_related_consumer")
+            .safety_class(TaskSafetyClass::SafetyRelated)
+            .priority(2)
+            .with_local(&[resource("input").to_sw("control_to_actuator_consumer")]);
+        let expanded = expand(&BOARD, &app(&[SAFETY_RELATED_CONSUMER], &[SAFETY_CHANNEL])).unwrap();
+        let error = resolve::resolve(&BOARD, &expanded).unwrap_err();
+        assert!(error.to_string().contains("SafetyRelated"));
+    }
+
+    #[test]
+    fn safety_channel_handles_cannot_be_rtic_shared_resources() {
+        const SHARED_CONSUMER: ComponentResource = ComponentResource {
+            id: "consumer",
+            kind: ComponentResourceKind::InternalSoftware {
+                resource: ComponentSoftwareResource {
+                    ownership: ComponentSoftwareResourceOwnership::Shared,
+                    ..match SAFETY_CHANNEL_COMPONENT.resources[2].kind {
+                        ComponentResourceKind::InternalSoftware { resource, .. } => resource,
+                        _ => panic!("expected software resource"),
+                    }
+                },
+                visibility: ComponentResourceVisibility::Exposed,
+            },
+            activation: ComponentActivation::Always,
+        };
+        const INVALID: ComponentDefinition = ComponentDefinition {
+            resources: &[
+                SAFETY_CHANNEL_COMPONENT.resources[0],
+                SAFETY_CHANNEL_COMPONENT.resources[1],
+                SHARED_CONSUMER,
+            ],
+            ..SAFETY_CHANNEL_COMPONENT
+        };
+        const DECLARATION: ComponentDeclaration = ComponentDeclaration {
+            definition: &INVALID,
+            ..SAFETY_CHANNEL
+        };
+        let error = expand(&BOARD, &app(&[], &[DECLARATION])).unwrap_err();
+        assert!(error.to_string().contains("must be task-local"));
+    }
+
+    #[test]
+    fn observer_channel_requires_exactly_one_valid_publisher_and_reader() {
+        const INVALID: ComponentDefinition = ComponentDefinition {
+            id: "invalid_observer",
+            layer: ComponentLayer::Functional,
+            configuration_kind: ComponentConfigurationKind::None,
+            tasks: &[],
+            resources: &[
+                ComponentResource {
+                    id: "snapshot_channel",
+                    kind: ComponentResourceKind::InitLocal(
+                        ComponentInitLocalResource::ObserverChannel {
+                            type_id: SOFTWARE_RC_INPUT_SNAPSHOT,
+                            rust_type: "RcInputSnapshot",
+                            publisher: "snapshot_publisher",
+                            reader: "snapshot_reader",
+                        },
+                    ),
+                    activation: ComponentActivation::Always,
+                },
+                ComponentResource {
+                    id: "snapshot_reader",
+                    kind: ComponentResourceKind::InternalSoftware {
+                        resource: ComponentSoftwareResource {
+                            type_id: SOFTWARE_RC_INPUT_SNAPSHOT,
+                            rust_type: "ObserverReader<'static, RcInputSnapshot>",
+                            ownership: ComponentSoftwareResourceOwnership::Shared,
+                            initializer: ComponentSoftwareResourceInitializer::ObserverReader {
+                                channel: "snapshot_channel",
+                            },
+                        },
+                        visibility: ComponentResourceVisibility::Exposed,
+                    },
+                    activation: ComponentActivation::Always,
+                },
+            ],
+        };
+        const DECLARATION: ComponentDeclaration = ComponentDeclaration {
+            id: "invalid_observer",
+            definition: &INVALID,
+            configuration: ComponentConfiguration::None,
+            bindings: &[],
+        };
+
+        let error = expand(&BOARD, &app(&[], &[DECLARATION])).unwrap_err();
+        assert!(error.to_string().contains("exactly one publisher"));
+    }
+
+    #[test]
+    fn observer_publisher_must_be_owned_by_a_producing_task() {
+        const NO_PUBLISHER_TASK: ComponentDefinition = ComponentDefinition {
+            id: "command_input_without_task",
+            tasks: &[],
+            ..COMMAND_INPUT_COMPONENT
+        };
+        const DECLARATION: ComponentDeclaration = ComponentDeclaration {
+            id: "command_input",
+            definition: &NO_PUBLISHER_TASK,
+            configuration: ComponentConfiguration::None,
+            bindings: &[resource("rx").to_sw("uart2_rx")],
+        };
+        let expanded = expand(&F401_BOARD, &app(&[], &[UART2_COMPONENT, DECLARATION])).unwrap();
+
+        let error = resolve::resolve(&F401_BOARD, &expanded).unwrap_err();
+        assert!(error.to_string().contains("not owned by a producing task"));
+    }
+
+    #[test]
+    fn external_task_cannot_claim_private_observer_publisher() {
+        const SNOOP_DEFINITION: TaskDefinition = TaskDefinition::asynchronous("snoop")
+            .with_local(&[rc_input_observer_publisher("publisher")]);
+        const SNOOP: TaskDeclaration = SNOOP_DEFINITION
+            .spawned_as("snoop")
+            .priority(1)
+            .with_local(&[resource("publisher").to_sw("command_input_rc_input_publisher")]);
+        let expanded = expand(
+            &F401_BOARD,
+            &app(&[SNOOP], &[UART2_COMPONENT, COMMAND_INPUT]),
+        )
+        .unwrap();
+        let error = resolve::resolve(&F401_BOARD, &expanded).unwrap_err();
+        assert!(error.to_string().contains("private resource"));
     }
 
     #[test]
@@ -1123,20 +1816,20 @@ mod tests {
         };
         const DUPLICATE: ComponentDeclaration = ComponentDeclaration {
             bindings: &[
-                resource("endpoint").to_hw("uart2_endpoint"),
-                resource("endpoint").to_hw("uart2_endpoint"),
+                resource("endpoint").to_hw("uart2"),
+                resource("endpoint").to_hw("uart2"),
             ],
             ..UART2_COMPONENT
         };
         const EXTRA: ComponentDeclaration = ComponentDeclaration {
             bindings: &[
-                resource("endpoint").to_hw("uart2_endpoint"),
-                resource("extra").to_hw("uart3_endpoint"),
+                resource("endpoint").to_hw("uart2"),
+                resource("extra").to_hw("uart3"),
             ],
             ..UART2_COMPONENT
         };
         const WRONG_NAMESPACE: ComponentDeclaration = ComponentDeclaration {
-            bindings: &[resource("endpoint").to_sw("uart2_endpoint")],
+            bindings: &[resource("endpoint").to_sw("uart2")],
             ..UART2_COMPONENT
         };
         assert!(expand(&BOARD, &app(&[], &[MISSING])).is_err());
@@ -1150,10 +1843,8 @@ mod tests {
         const SBUS_ON_RAW_ONLY: ComponentDeclaration = ComponentDeclaration {
             id: "uart3",
             definition: &SERIAL_PORT_COMPONENT,
-            configuration: ComponentConfiguration::SerialPort(SerialPortAssignment::Rc(
-                RcProtocol::Sbus,
-            )),
-            bindings: &[resource("endpoint").to_hw("uart3_endpoint")],
+            configuration: ComponentConfiguration::SerialPort(SerialProtocol::Sbus),
+            bindings: &[resource("endpoint").to_hw("uart3")],
         };
         let error = expand(&BOARD, &app(&[], &[SBUS_ON_RAW_ONLY])).unwrap_err();
         assert!(error.to_string().contains("not supported"));
@@ -1162,31 +1853,60 @@ mod tests {
     #[test]
     fn generated_artifact_collision_with_standalone_task_fails() {
         const COLLIDING: TaskDeclaration = TaskDefinition::asynchronous("collision")
-            .spawned_as("uart2_consumer")
+            .spawned_as("uart2_dma_irq")
             .priority(1);
         let error = expand(&BOARD, &app(&[COLLIDING], &[UART2_COMPONENT])).unwrap_err();
         assert!(error.to_string().contains("collides"));
     }
 
     #[test]
-    fn exposed_output_is_bindable_but_private_state_is_not() {
-        const HEARTBEAT_DEF: TaskDefinition =
-            TaskDefinition::asynchronous("heartbeat").with_shared(&[rc_input_snapshot("input")]);
-        const HEARTBEAT: TaskDeclaration = HEARTBEAT_DEF
-            .spawned_as("heartbeat")
+    fn exposed_endpoint_output_is_bindable_but_private_functional_state_is_not() {
+        const READER_DEF: TaskDefinition =
+            TaskDefinition::asynchronous("reader").with_shared(&[serial_rx("input")]);
+        const READER: TaskDeclaration = READER_DEF
+            .spawned_as("reader")
             .priority(1)
-            .with_shared(&[resource("input").to_sw("uart2_rc_input")]);
-        let expanded = expand(&BOARD, &app(&[HEARTBEAT], &[UART2_COMPONENT])).unwrap();
+            .with_shared(&[resource("input").to_sw("uart2_rx")]);
+        let expanded = expand(&BOARD, &app(&[READER], &[UART2_COMPONENT])).unwrap();
         resolve::resolve(&BOARD, &expanded).unwrap();
 
         const SNOOP_DEF: TaskDefinition =
-            TaskDefinition::asynchronous("snoop").with_local(&[serial_consumer_state("state")]);
+            TaskDefinition::asynchronous("snoop").with_local(&[sbus_consumer_state("state")]);
         const SNOOP: TaskDeclaration = SNOOP_DEF
             .spawned_as("snoop")
             .priority(1)
-            .with_local(&[resource("state").to_sw("uart2_consumer_state")]);
-        let expanded = expand(&BOARD, &app(&[SNOOP], &[UART2_COMPONENT])).unwrap();
+            .with_local(&[resource("state").to_sw("command_input_decoder")]);
+        let expanded = expand(&BOARD, &app(&[SNOOP], &[UART2_COMPONENT, COMMAND_INPUT])).unwrap();
         let error = resolve::resolve(&BOARD, &expanded).unwrap_err();
         assert!(error.to_string().contains("private resource"));
+    }
+
+    #[test]
+    fn functional_components_cannot_bind_board_hardware() {
+        const INVALID: ComponentDefinition = ComponentDefinition {
+            id: "invalid_function",
+            layer: ComponentLayer::Functional,
+            configuration_kind: ComponentConfigurationKind::None,
+            tasks: &[],
+            resources: &[ComponentResource {
+                id: "endpoint",
+                kind: ComponentResourceKind::ExternalHardware {
+                    capability: TaskResourceCapability::UartRxDma,
+                },
+                activation: ComponentActivation::Always,
+            }],
+        };
+        const DECLARATION: ComponentDeclaration = ComponentDeclaration {
+            id: "invalid",
+            definition: &INVALID,
+            configuration: ComponentConfiguration::None,
+            bindings: &[resource("endpoint").to_hw("uart2")],
+        };
+        let error = expand(&BOARD, &app(&[], &[DECLARATION])).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot bind board hardware directly")
+        );
     }
 }

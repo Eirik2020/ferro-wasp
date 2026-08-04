@@ -11,7 +11,7 @@ use crate::{
         ExpandedTask, ExpandedTaskTrigger,
     },
     hw_resources::{GpioMode, HardwareResource},
-    task::{HardwareInterrupt, TaskResourceCapability, TaskResourceDefinition},
+    task::{HardwareInterrupt, TaskResourceCapability, TaskResourceDefinition, TaskSafetyClass},
 };
 
 /// Expanded task declaration paired with resolved trigger and resource references.
@@ -244,6 +244,34 @@ pub fn resolve<'a>(board: &'a BoardDeclaration, app: &'a ExpandedApp) -> Result<
         })
         .collect::<Result<Vec<_>>>()?;
 
+    for declaration in &app.software_local_resources {
+        match declaration.kind.capability() {
+            TaskResourceCapability::ObserverPublisher(_)
+                if !software_local_usage.contains_key(declaration.id.as_str()) =>
+            {
+                bail!(
+                    "observer publisher `{}` is not owned by a producing task",
+                    declaration.id
+                );
+            }
+            TaskResourceCapability::SafetyProducer(_)
+            | TaskResourceCapability::SafetyConsumer(_) => {
+                let owners = software_local_usage
+                    .get(declaration.id.as_str())
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
+                if owners.len() != 1 {
+                    bail!(
+                        "safety-channel handle `{}` requires exactly one owning task, found {}",
+                        declaration.id,
+                        owners.len()
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
     let mut resources = Vec::with_capacity(hardware_usage.len());
     let mut resource_initialization_order = Vec::with_capacity(hardware_usage.len());
     for hardware in board.hardware {
@@ -326,9 +354,11 @@ fn validate_hardware_capability(
             Some(GpioMode::Input { interrupt: Some(_) })
         ),
         TaskResourceCapability::UartRxDma => hardware.uart_rx_dma().is_some(),
-        TaskResourceCapability::Bool
-        | TaskResourceCapability::RcInputSnapshot
-        | TaskResourceCapability::SerialConsumer => false,
+        TaskResourceCapability::Software(_)
+        | TaskResourceCapability::ObserverPublisher(_)
+        | TaskResourceCapability::ObserverReader(_)
+        | TaskResourceCapability::SafetyProducer(_)
+        | TaskResourceCapability::SafetyConsumer(_) => false,
     };
     if !compatible {
         bail!(
@@ -349,6 +379,14 @@ fn validate_software_capability(
         bail!(
             "task `{}` body resource `{task_resource}` requires {capability:?}, but software resource `{}` is incompatible",
             task.id,
+            declaration.id
+        );
+    }
+    if capability.is_safety_channel() && task.safety_class != TaskSafetyClass::SafetyCritical {
+        bail!(
+            "task `{}` is {:?} and cannot own authoritative safety-channel resource `{}`",
+            task.id,
+            task.safety_class,
             declaration.id
         );
     }

@@ -148,6 +148,22 @@ pub enum TaskExecution {
     Asynchronous,
 }
 
+/// Safety role assigned to one concrete task instance.
+///
+/// The classification is separate from synchronous/asynchronous execution and
+/// belongs to target composition rather than the reusable task body.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskSafetyClass {
+    /// Task participates directly in an authoritative safety path.
+    SafetyCritical,
+
+    /// Task can affect safety behavior but owns no authoritative channel handle.
+    SafetyRelated,
+
+    /// Task has no authority over a safety path.
+    NonSafetyCritical,
+}
+
 /// Portable operation set required from a logical task resource.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TaskResourceCapability {
@@ -157,18 +173,49 @@ pub enum TaskResourceCapability {
     /// A digital input configured to clear and receive an external interrupt.
     InterruptInput,
 
-    /// A Boolean software value.
-    Bool,
-
     /// A DMA-backed serial receiver that exposes IRQ service and bounded chunk reads.
     UartRxDma,
 
-    /// Latest decoded radio-control sample.
-    RcInputSnapshot,
+    /// A software-owned resource identified by a stable portable type ID.
+    Software(&'static str),
 
-    /// Stateful parser for a boot-assigned serial endpoint.
-    SerialConsumer,
+    /// Exclusive authority to publish a non-authoritative observer value.
+    ObserverPublisher(&'static str),
+
+    /// Non-consuming access to the latest non-authoritative observer value.
+    ObserverReader(&'static str),
+
+    /// Exclusive authority to produce one type of safety-path message.
+    SafetyProducer(&'static str),
+
+    /// Exclusive authority to consume one type of safety-path message.
+    SafetyConsumer(&'static str),
 }
+
+impl TaskResourceCapability {
+    /// Returns whether this capability grants access to an authoritative channel.
+    pub const fn is_safety_channel(self) -> bool {
+        matches!(self, Self::SafetyProducer(_) | Self::SafetyConsumer(_))
+    }
+}
+
+/// Stable software-resource type ID for Boolean state.
+pub const SOFTWARE_BOOL: &str = "bool";
+
+/// Stable software-resource type ID for raw bounded serial RX access.
+pub const SOFTWARE_SERIAL_RX: &str = "serial_rx";
+
+/// Stable software-resource type ID for an SBUS decoder.
+pub const SOFTWARE_SBUS_CONSUMER: &str = "sbus_consumer";
+
+/// Stable software-resource type ID for a raw line decoder.
+pub const SOFTWARE_LINE_CONSUMER: &str = "line_consumer";
+
+/// Stable software-resource type ID for the latest RC-input snapshot.
+pub const SOFTWARE_RC_INPUT_SNAPSHOT: &str = "rc_input_snapshot";
+
+/// Stable software-resource type ID for an authoritative motor command.
+pub const SOFTWARE_MOTOR_CMD: &str = "motor_cmd";
 
 /// Declares one logical resource and the capability required by a task body.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -209,7 +256,7 @@ pub const fn interrupt_input(id: &'static str) -> TaskResourceDefinition {
 pub const fn boolean(id: &'static str) -> TaskResourceDefinition {
     TaskResourceDefinition {
         id,
-        capability: TaskResourceCapability::Bool,
+        capability: TaskResourceCapability::Software(SOFTWARE_BOOL),
     }
 }
 
@@ -221,19 +268,59 @@ pub const fn uart_rx_dma(id: &'static str) -> TaskResourceDefinition {
     }
 }
 
-/// Declares a logical latest-RC-snapshot field in a reusable task body.
-pub const fn rc_input_snapshot(id: &'static str) -> TaskResourceDefinition {
+/// Declares exclusive publication authority for an RC-input observer value.
+pub const fn rc_input_observer_publisher(id: &'static str) -> TaskResourceDefinition {
     TaskResourceDefinition {
         id,
-        capability: TaskResourceCapability::RcInputSnapshot,
+        capability: TaskResourceCapability::ObserverPublisher(SOFTWARE_RC_INPUT_SNAPSHOT),
     }
 }
 
-/// Declares a logical serial-consumer state field in a reusable task body.
-pub const fn serial_consumer_state(id: &'static str) -> TaskResourceDefinition {
+/// Declares a shared, non-consuming RC-input observer reader.
+pub const fn rc_input_observer_reader(id: &'static str) -> TaskResourceDefinition {
     TaskResourceDefinition {
         id,
-        capability: TaskResourceCapability::SerialConsumer,
+        capability: TaskResourceCapability::ObserverReader(SOFTWARE_RC_INPUT_SNAPSHOT),
+    }
+}
+
+/// Declares exclusive production authority for a typed safety channel.
+pub const fn safety_producer(id: &'static str, type_id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::SafetyProducer(type_id),
+    }
+}
+
+/// Declares exclusive consumption authority for a typed safety channel.
+pub const fn safety_consumer(id: &'static str, type_id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::SafetyConsumer(type_id),
+    }
+}
+
+/// Declares a logical raw serial-RX interface in a reusable task body.
+pub const fn serial_rx(id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::Software(SOFTWARE_SERIAL_RX),
+    }
+}
+
+/// Declares a logical SBUS-decoder state field in a reusable task body.
+pub const fn sbus_consumer_state(id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::Software(SOFTWARE_SBUS_CONSUMER),
+    }
+}
+
+/// Declares a logical line-decoder state field in a reusable task body.
+pub const fn line_consumer_state(id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::Software(SOFTWARE_LINE_CONSUMER),
     }
 }
 
@@ -322,6 +409,7 @@ impl TaskDefinition {
         TaskDeclaration {
             id,
             definition: self,
+            safety_class: TaskSafetyClass::NonSafetyCritical,
             priority: 0,
             trigger: TaskTrigger::Spawned,
             parameters: &[],
@@ -468,6 +556,9 @@ pub struct TaskDeclaration {
     /// Reusable interface and handwritten-body identity.
     pub definition: TaskDefinition,
 
+    /// Safety role of this concrete task instance.
+    pub safety_class: TaskSafetyClass,
+
     /// RTIC scheduling priority, which must be greater than zero.
     pub priority: u8,
 
@@ -485,6 +576,12 @@ pub struct TaskDeclaration {
 }
 
 impl TaskDeclaration {
+    /// Assigns the safety role of this concrete task instance.
+    pub const fn safety_class(mut self, safety_class: TaskSafetyClass) -> Self {
+        self.safety_class = safety_class;
+        self
+    }
+
     /// Sets the RTIC scheduling priority.
     pub const fn priority(mut self, priority: u8) -> Self {
         self.priority = priority;
@@ -891,6 +988,15 @@ fn validate_definition(definition: &TaskDefinition) -> Result<()> {
     validate_parameter_definitions(definition.id, definition.parameters)?;
     validate_definition_resources(definition.id, "local", definition.local_resources)?;
     validate_definition_resources(definition.id, "shared", definition.shared_resources)?;
+    for resource in definition.shared_resources {
+        if resource.capability().is_safety_channel() {
+            bail!(
+                "task definition `{}` safety-channel resource `{}` must be local",
+                definition.id,
+                resource.id()
+            );
+        }
+    }
     for resource in definition.local_resources {
         if definition
             .shared_resources
