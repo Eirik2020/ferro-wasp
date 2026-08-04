@@ -1,5 +1,5 @@
 [package]
-name = "app-builder-v2-nucleo-f401re"
+name = "app-builder-v2-ferrowasp-fcu3"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -21,7 +21,7 @@ defmt-rtt = { version = "=1.2.0", features = ["disable-blocking-mode"] }
 panic-halt = "=1.0.0"
 ferrowasp-drivers = { path = "../../../../crates/ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../../../../crates/ferrowasp-io-core" }
-ferrowasp-stm32f4 = { path = "../../../../crates/ferrowasp-stm32f4", features = ["stm32f401"] }
+ferrowasp-stm32f4 = { path = "../../../../crates/ferrowasp-stm32f4", features = ["stm32f405"] }
 rtic = { version = "=2.3.0", features = ["thumbv7-backend"] }
 
 [profile.dev.package."*"]

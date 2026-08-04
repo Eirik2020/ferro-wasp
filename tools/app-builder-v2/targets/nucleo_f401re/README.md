@@ -1,7 +1,8 @@
 # NUCLEO-F401RE RTIC prototype app
 
 This self-contained embedded target crate builds the generated, non-actuator
-RTIC application in `src/main.rs`. Its handwritten inputs are `src/board.rs`,
+RTIC application in `src/generated_app.rs` and its selected imports in
+`src/prelude.rs`. Its handwritten inputs are `src/board.rs`,
 `src/app_composition.rs`, and the unified reusable task modules under the
 builder's `tasks/` directory.
 
@@ -13,8 +14,8 @@ cargo xtask generate
 
 The command creates RTIC task attributes from concrete `TaskDeclaration`
 instances, combines them with their reusable `TaskDefinition` bodies, and
-validates the complete Rust syntax before replacing this target's
-`src/main.rs`.
+validates the complete Rust syntax before replacing this target's generated
+`src/generated_app.rs` and `src/prelude.rs`.
 
 The target uses the NUCLEO-F401RE's existing sandbox hardware contract:
 
@@ -23,7 +24,7 @@ The target uses the NUCLEO-F401RE's existing sandbox hardware contract:
 - SysTick provides the 1 kHz RTIC monotonic;
 - EXTI0 and EXTI1 are software-task dispatchers;
 - EXTI15_10 is bound to the B1 hardware task;
-- USART2 RX on PA3 uses DMA1 Stream 5 Channel 4 for SBUS input;
+- USART2 RX on PA3 uses DMA1 Stream 5 Channel 4 for raw or SBUS input;
 - DMA1_STREAM5 and USART2 service full-buffer and IDLE receive events.
 
 The generated app keeps the blink task scheduled and uses B1 to toggle its
@@ -31,14 +32,27 @@ shared enable flag. While disabled, the task drives LD2 low. The initial EXTI
 prototype is not debounced, so one physical press can occasionally cause more
 than one toggle. This validation app has no actuator or motor-output authority.
 
-The SBUS prototype parses received frames and prints all 16 channels and flags
-through `defmt`. Standard SBUS is electrically inverted, but the STM32 UART
-configuration used here is not: PA3 must receive an already uninverted,
-3.3-volt-compatible signal (for example through a suitable inverter or a
-receiver's uninverted output). PA3 is also connected to the Nucleo ST-LINK
-virtual COM route by default, so check the board solder-bridge configuration
-before attaching a receiver. A successful build does not establish that this
-electrical path or DMA reception has been validated on hardware.
+`src/app_composition.rs` selects the serial behavior at generation time. The
+checked-in default is `SerialPortAssignment::ComPort`, which configures
+115200-baud 8N1 input. Lines received over PA3 are printed as `COMPORT: ...`
+through the separate defmt RTT terminal. CR, LF, and CRLF terminate messages;
+invalid UTF-8 is logged as bytes, and lines longer than 64 bytes are discarded
+with one warning.
+
+Selecting `SerialPortAssignment::Rc(RcProtocol::Sbus)` instead configures the
+same route for 100000-baud SBUS input. The serial component updates its exposed
+RC snapshot, and the standalone heartbeat prints all 16 channels and flags
+through `defmt` once per second. Standard SBUS is electrically inverted, but
+the STM32 UART configuration used here is not: PA3 must receive an already
+uninverted, 3.3-volt-compatible signal, such as through a suitable inverter or
+a receiver's uninverted output.
+
+Do not connect a USB-to-UART adapter and an SBUS receiver to PA3 at the same
+time. The adapter must use 3.3-volt logic and share ground with the board. PA3
+is also connected to the Nucleo ST-LINK virtual COM route by default, so check
+the board solder-bridge configuration before attaching external hardware. A
+successful build does not establish that the electrical path or DMA reception
+has been validated on hardware.
 
 ## Build
 

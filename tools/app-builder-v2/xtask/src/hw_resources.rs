@@ -6,6 +6,8 @@
 
 #![deny(missing_docs)]
 
+pub use ferrowasp_io_core::serial::SerialProtocol;
+
 // ############# PIN IDENTIFICATION #############
 
 /// Identifies a physical GPIO pin on the selected microcontroller.
@@ -200,15 +202,19 @@ impl Gpio {
 
 // ############# UART RX DMA RESOURCE #############
 
-/// Identifies a numbered UART or USART peripheral without naming a vendor HAL type.
+/// Identifies a numbered asynchronous serial port without naming a vendor HAL type.
+///
+/// UART and USART peripherals are intentionally represented alike here. A
+/// backend owns the concrete peripheral spelling and any capabilities beyond
+/// ordinary asynchronous serial communication.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UartId {
-    /// One-based peripheral number, such as `2` for USART2.
+pub struct SerialPortId {
+    /// One-based peripheral number, such as `2` for STM32 USART2.
     pub number: u8,
 }
 
-impl UartId {
-    /// Creates a numbered UART identifier.
+impl SerialPortId {
+    /// Creates a numbered asynchronous serial-port identifier.
     pub const fn new(number: u8) -> Self {
         Self { number }
     }
@@ -238,21 +244,14 @@ impl DmaChannel {
     }
 }
 
-/// Selects the serial framing and parser protocol required by a UART receiver.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SerialProtocol {
-    /// Futaba SBUS framing at 100 kbaud, even parity, and two stop bits.
-    Sbus,
-}
-
 /// Declares one receive-only UART connected to a DMA stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UartRxDma {
     /// Application-level resource identifier.
     pub id: &'static str,
 
-    /// Numbered UART or USART peripheral.
-    pub uart: UartId,
+    /// Numbered asynchronous serial peripheral.
+    pub serial_port: SerialPortId,
 
     /// Physical receive pin.
     pub rx_pin: PinId,
@@ -260,20 +259,36 @@ pub struct UartRxDma {
     /// Physical DMA route used for peripheral-to-memory transfers.
     pub dma: DmaChannel,
 
-    /// Serial framing and protocol selected for this receiver.
-    pub protocol: SerialProtocol,
+    /// Serial protocols supported by this physical endpoint and routing.
+    pub supported_protocols: &'static [SerialProtocol],
 }
 
 impl UartRxDma {
-    /// Declares a DMA-backed SBUS receiver.
-    pub const fn sbus(id: &'static str, uart: UartId, rx_pin: PinId, dma: DmaChannel) -> Self {
+    /// Declares a protocol-neutral DMA-backed UART receiver.
+    pub const fn new(
+        id: &'static str,
+        serial_port: SerialPortId,
+        rx_pin: PinId,
+        dma: DmaChannel,
+    ) -> Self {
         Self {
             id,
-            uart,
+            serial_port,
             rx_pin,
             dma,
-            protocol: SerialProtocol::Sbus,
+            supported_protocols: &[],
         }
+    }
+
+    /// Declares the serial protocols supported by this endpoint.
+    pub const fn supports(mut self, protocols: &'static [SerialProtocol]) -> Self {
+        self.supported_protocols = protocols;
+        self
+    }
+
+    /// Returns whether this physical endpoint supports a serial protocol.
+    pub fn supports_protocol(&self, protocol: SerialProtocol) -> bool {
+        self.supported_protocols.contains(&protocol)
     }
 
     /// Wraps this UART declaration as an application hardware resource.
@@ -333,6 +348,9 @@ impl HardwareResource {
 pub enum Mcu {
     /// STM32F401 PAC/backend selection.
     Stm32F401,
+
+    /// STM32F405 PAC/backend selection.
+    Stm32F405,
 }
 
 /// Selects the MCU's primary clock source.

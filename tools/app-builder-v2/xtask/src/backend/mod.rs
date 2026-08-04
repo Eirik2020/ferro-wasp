@@ -20,13 +20,13 @@ pub struct RenderedBoardInit {
     pub dispatchers: String,
 
     /// RTIC interrupt binding keyed by interrupt-task identifier.
-    pub interrupt_bindings: std::collections::BTreeMap<&'static str, String>,
+    pub interrupt_bindings: std::collections::BTreeMap<String, String>,
 
-    /// Imports required by the resolved hardware and task operations.
-    pub imports: String,
+    /// Prelude reexports required by the resolved hardware and task operations.
+    pub prelude_exports: String,
 
-    /// RTIC monotonic declaration emitted inside the app module.
-    pub monotonic_declaration: String,
+    /// System-clock constant and RTIC monotonic declarations emitted inside the app module.
+    pub timing_declarations: String,
 
     /// Complete RTIC init attribute, including generated static local storage.
     pub init_attribute: String,
@@ -50,7 +50,7 @@ pub struct RenderedBoardInit {
 /// Selects the MCU backend and validates target-specific board facts.
 pub fn validate(board: &BoardDeclaration) -> Result<ValidatedBoard<'_>> {
     match board.target.mcu {
-        Mcu::Stm32F401 => stm32f4::validate(board).map(ValidatedBoard::Stm32f4),
+        Mcu::Stm32F401 | Mcu::Stm32F405 => stm32f4::validate(board).map(ValidatedBoard::Stm32f4),
     }
 }
 

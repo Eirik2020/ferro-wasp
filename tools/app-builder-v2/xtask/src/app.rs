@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, bail};
 
+use crate::component::ComponentDeclaration;
 use crate::task::{TaskDeclaration, TaskTrigger, validate_declaration};
 
 /// Declares a software-owned value made available as an RTIC resource.
@@ -86,6 +87,9 @@ pub struct AppDeclaration {
     /// Complete set of task declarations included in the RTIC application.
     pub tasks: &'static [TaskDeclaration],
 
+    /// Reusable component instances expanded before resource resolution.
+    pub components: &'static [ComponentDeclaration],
+
     /// Software-owned local and shared resources available to tasks.
     pub software_resources: SoftwareResourcesDeclaration,
 }
@@ -96,6 +100,7 @@ impl AppDeclaration {
     pub const EMPTY: Self = Self {
         init: InitDeclaration::EMPTY,
         tasks: &[],
+        components: &[],
         software_resources: SoftwareResourcesDeclaration::EMPTY,
     };
 }
@@ -166,6 +171,7 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration { spawns: &[OTHER] },
             tasks: &[TASK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
         assert!(validate(&app).is_err());
@@ -186,6 +192,7 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[FIRST, SECOND],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
 

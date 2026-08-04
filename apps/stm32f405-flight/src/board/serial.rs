@@ -13,6 +13,7 @@ pub const USART2_SBUS: SerialRoute = SerialRoute {
     rx_dma: "DMA1 Stream 5 Channel 4",
     tx_dma: None,
     capabilities: SerialCapabilities {
+        raw: false,
         sbus: true,
         crsf: false,
         mavlink: false,
@@ -31,6 +32,7 @@ pub const UART4_MSP: SerialRoute = SerialRoute {
     rx_dma: "DMA1 Stream 2 Channel 4",
     tx_dma: Some("DMA1 Stream 4 Channel 4"),
     capabilities: SerialCapabilities {
+        raw: false,
         sbus: false,
         crsf: false,
         mavlink: false,
@@ -49,6 +51,7 @@ pub const USART1_ESC_TELEMETRY: SerialRoute = SerialRoute {
     rx_dma: "DMA2 Stream 5 Channel 4",
     tx_dma: None,
     capabilities: SerialCapabilities {
+        raw: false,
         sbus: false,
         crsf: false,
         mavlink: false,

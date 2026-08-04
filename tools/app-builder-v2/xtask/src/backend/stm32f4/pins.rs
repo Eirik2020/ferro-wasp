@@ -1,8 +1,8 @@
-//! STM32F401RE package-pin validation and generated pin-name helpers.
+//! STM32F4 package-pin validation and generated pin-name helpers.
 
 use anyhow::{Result, bail};
 
-use crate::hw_resources::PinId;
+use crate::hw_resources::{Mcu, PinId};
 
 /// Converts a numeric GPIO port index into its STM32 port letter.
 pub(super) fn port_letter(port: u8) -> Result<char> {
@@ -11,7 +11,7 @@ pub(super) fn port_letter(port: u8) -> Result<char> {
         .filter(u8::is_ascii_uppercase)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "STM32F401 backend GPIO port index {port} cannot be represented as port A through Z"
+                "STM32F4 backend GPIO port index {port} cannot be represented as port A through Z"
             )
         })?;
     Ok(char::from(letter))
@@ -22,20 +22,24 @@ pub(super) fn pin_name(pin: PinId) -> Result<String> {
     Ok(format!("P{}{}", port_letter(pin.port)?, pin.pin))
 }
 
-/// Verifies that a pin is valid and bonded on the STM32F401RE LQFP64 package.
-pub(super) fn validate_f401re_lqfp64(pin: PinId) -> Result<()> {
+/// Verifies that a pin is valid and bonded on the selected LQFP64 package.
+pub(super) fn validate_lqfp64(mcu: Mcu, pin: PinId) -> Result<()> {
     if pin.pin > 15 {
         bail!(
-            "STM32F401 backend pin on port {} has pin number {}; GPIO pin numbers must be 0 through 15",
+            "STM32F4 backend pin on port {} has pin number {}; GPIO pin numbers must be 0 through 15",
             pin.port,
             pin.pin
         );
     }
 
     let port = port_letter(pin.port)?;
-    if !is_bonded_f401re_lqfp64(pin) {
+    let (part, bonded) = match mcu {
+        Mcu::Stm32F401 => ("STM32F401RE", is_bonded_f401re_lqfp64(pin)),
+        Mcu::Stm32F405 => ("STM32F405RG", is_bonded_f405rg_lqfp64(pin)),
+    };
+    if !bonded {
         bail!(
-            "STM32F401RE LQFP64 package does not expose physical pin `P{port}{}`",
+            "{part} LQFP64 package does not expose physical pin `P{port}{}`",
             pin.pin
         );
     }
@@ -53,7 +57,7 @@ pub(super) fn exti_binding(pin: PinId) -> Result<&'static str> {
         5..=9 => Ok("EXTI9_5"),
         10..=15 => Ok("EXTI15_10"),
         number => bail!(
-            "STM32F401 backend cannot derive an EXTI binding for GPIO pin number {number}; pin numbers must be 0 through 15"
+            "STM32F4 backend cannot derive an EXTI binding for GPIO pin number {number}; pin numbers must be 0 through 15"
         ),
     }
 }
@@ -67,6 +71,19 @@ fn is_bonded_f401re_lqfp64(pin: PinId) -> bool {
     match pin.port {
         0 | 2 => pin.pin <= 15,
         1 => pin.pin <= 10 || (12..=15).contains(&pin.pin),
+        3 => pin.pin == 2,
+        7 => pin.pin <= 1,
+        _ => false,
+    }
+}
+
+fn is_bonded_f405rg_lqfp64(pin: PinId) -> bool {
+    // Audited against STMicroelectronics DS8626 Rev 9, Figure 12,
+    // "STM32F40x LQFP64 pinout". This establishes package bonding only;
+    // board routing and electrical conflicts remain declaration-owned facts.
+    // https://www.st.com/resource/en/datasheet/dm00037051.pdf
+    match pin.port {
+        0..=2 => pin.pin <= 15,
         3 => pin.pin == 2,
         7 => pin.pin <= 1,
         _ => false,
@@ -87,8 +104,8 @@ mod tests {
 
     #[test]
     fn rejects_out_of_range_numeric_pin_coordinates() {
-        assert!(validate_f401re_lqfp64(PinId::new(0, 16)).is_err());
-        assert!(validate_f401re_lqfp64(PinId::new(26, 0)).is_err());
+        assert!(validate_lqfp64(Mcu::Stm32F401, PinId::new(0, 16)).is_err());
+        assert!(validate_lqfp64(Mcu::Stm32F401, PinId::new(26, 0)).is_err());
     }
 
     #[test]
@@ -103,7 +120,7 @@ mod tests {
             PinId::new(3, 2),
             PinId::new(7, 1),
         ] {
-            validate_f401re_lqfp64(pin).unwrap();
+            validate_lqfp64(Mcu::Stm32F401, pin).unwrap();
         }
         for pin in [
             PinId::new(1, 11),
@@ -111,7 +128,25 @@ mod tests {
             PinId::new(4, 0),
             PinId::new(7, 2),
         ] {
-            assert!(validate_f401re_lqfp64(pin).is_err());
+            assert!(validate_lqfp64(Mcu::Stm32F401, pin).is_err());
+        }
+    }
+
+    #[test]
+    fn validates_stm32f405rg_lqfp64_package_pins() {
+        for pin in [
+            PinId::new(0, 1),
+            PinId::new(0, 3),
+            PinId::new(1, 1),
+            PinId::new(1, 11),
+            PinId::new(2, 15),
+            PinId::new(3, 2),
+            PinId::new(7, 1),
+        ] {
+            validate_lqfp64(Mcu::Stm32F405, pin).unwrap();
+        }
+        for pin in [PinId::new(3, 1), PinId::new(4, 0), PinId::new(7, 2)] {
+            assert!(validate_lqfp64(Mcu::Stm32F405, pin).is_err());
         }
     }
 

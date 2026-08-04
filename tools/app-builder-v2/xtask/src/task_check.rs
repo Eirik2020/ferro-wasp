@@ -2,32 +2,51 @@
 
 use std::{collections::BTreeMap, fs, path::Path};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::{
     app, board,
     board::MonotonicDeclaration,
-    generator, resolve,
+    component, generator, resolve,
     task::{
-        TaskDeclaration, TaskDefinition, TaskResourceCapability, TaskResourceDefinition,
-        read_body_source,
+        TaskDefinition, TaskParameterDefinition, TaskParameterKind, TaskResourceCapability,
+        TaskResourceDefinition, read_body_source,
     },
 };
 
-/// Validates the selected declarations and writes a host task-check harness.
+/// Validates all target declarations and writes a host task-check harness.
 pub(crate) fn write(repository_root: &Path, destination: &Path) -> Result<()> {
-    let selected_board = generator::selected_board();
-    let selected_app = generator::selected_app();
-    app::validate(selected_app)?;
-    board::validate(selected_board)?;
-    resolve::resolve(selected_board, selected_app)?;
-
-    let monotonic_id = match selected_board.monotonic {
-        MonotonicDeclaration::SysTick { id, .. } => id,
-    };
+    let mut expanded_apps = Vec::new();
+    let mut monotonic_id = None;
+    for (target_board, target_app) in generator::target_declarations() {
+        app::validate(target_app)?;
+        board::validate(target_board)?;
+        let expanded = component::expand(target_board, target_app)?;
+        resolve::resolve(target_board, &expanded)?;
+        let target_monotonic_id = match target_board.monotonic {
+            MonotonicDeclaration::SysTick { id, .. } => id,
+        };
+        if monotonic_id.is_some_and(|existing| existing != target_monotonic_id) {
+            bail!("task-check targets must use one shared monotonic identifier");
+        }
+        monotonic_id = Some(target_monotonic_id);
+        expanded_apps.push(expanded);
+    }
+    let monotonic_id = monotonic_id.context("task-check requires at least one target")?;
+    let expanded_tasks = expanded_apps
+        .iter()
+        .flat_map(|expanded| expanded.tasks.iter().cloned())
+        .collect::<Vec<_>>();
     let mut definitions = BTreeMap::new();
-    for task in selected_app.tasks {
-        definitions.insert(task.definition.id, task.definition);
+    for task in &expanded_tasks {
+        if let Some(existing) = definitions.insert(task.definition.id, task.definition)
+            && existing != task.definition
+        {
+            bail!(
+                "task-check targets define conflicting `{}` task contracts",
+                task.definition.id
+            );
+        }
     }
 
     let mut rendered = String::from("// Generated host task-body checks.\n");
@@ -36,7 +55,7 @@ pub(crate) fn write(repository_root: &Path, destination: &Path) -> Result<()> {
         rendered.push_str(&render_definition(
             repository_root,
             definition,
-            selected_app.tasks,
+            &expanded_tasks,
             monotonic_id,
         ));
         rendered.push('\n');
@@ -50,15 +69,15 @@ pub(crate) fn write(repository_root: &Path, destination: &Path) -> Result<()> {
 fn render_definition(
     repository_root: &Path,
     definition: &TaskDefinition,
-    tasks: &[TaskDeclaration],
+    tasks: &[component::ExpandedTask],
     monotonic_id: &str,
 ) -> String {
     let module_id = format!("__check_{}", definition.id);
     let mut namespaces = BTreeMap::<&str, Namespace<'_>>::new();
     namespaces.entry(definition.id).or_default().context = Some(definition);
     for task in tasks {
-        if matches!(task.trigger, crate::task::TaskTrigger::Spawned) {
-            namespaces.entry(task.id).or_default().spawn = Some(task);
+        if matches!(task.trigger, component::ExpandedTaskTrigger::Spawned) {
+            namespaces.entry(task.id.as_str()).or_default().spawn = Some(task);
         }
     }
     let namespaces = namespaces
@@ -76,7 +95,7 @@ fn render_definition(
 mod {module_id} {{
     use crate::support::{{DurationExt as _, Monotonic as {monotonic_id}, UartRxIrqOutcome, UartRxReadOutcome, UART_RX_BUFFER_SIZE}};
     use embedded_hal::digital::{{OutputPin, StatefulOutputPin}};
-    use sbus_rs::StreamingParser;
+    use ferrowasp_drivers::serial_consumer::SerialConsumerEvent;
 
 {namespaces}
 
@@ -90,7 +109,7 @@ mod {module_id} {{
 #[derive(Default)]
 struct Namespace<'a> {
     context: Option<&'a TaskDefinition>,
-    spawn: Option<&'a TaskDeclaration>,
+    spawn: Option<&'a component::ExpandedTask>,
 }
 
 fn render_namespace(id: &str, namespace: Namespace<'_>) -> String {
@@ -105,11 +124,24 @@ fn render_namespace(id: &str, namespace: Namespace<'_>) -> String {
 }
 
 fn render_context(definition: &TaskDefinition) -> String {
+    let parameter_fields = render_parameter_fields(definition.parameters);
     let local_fields = render_context_fields(definition.local_resources, false);
     let shared_fields = render_context_fields(definition.shared_resources, true);
     format!(
-        "pub struct Context {{\n    pub local: LocalResources,\n    pub shared: SharedResources,\n}}\n\npub struct LocalResources {{{local_fields}\n}}\n\npub struct SharedResources {{{shared_fields}\n}}"
+        "pub struct Context {{\n    pub config: Config,\n    pub local: LocalResources,\n    pub shared: SharedResources,\n}}\n\npub struct Config {{{parameter_fields}\n}}\n\npub struct LocalResources {{{local_fields}\n}}\n\npub struct SharedResources {{{shared_fields}\n}}"
     )
+}
+
+fn render_parameter_fields(parameters: &[TaskParameterDefinition]) -> String {
+    parameters
+        .iter()
+        .map(|parameter| {
+            let parameter_type = match parameter.kind() {
+                TaskParameterKind::Duration => "crate::support::Milliseconds",
+            };
+            format!("\n    pub {}: {parameter_type},", parameter.id())
+        })
+        .collect()
 }
 
 fn render_context_fields(resources: &[TaskResourceDefinition], shared: bool) -> String {
@@ -133,10 +165,14 @@ fn capability_type(capability: TaskResourceCapability) -> &'static str {
         TaskResourceCapability::InterruptInput => "crate::support::InterruptInput",
         TaskResourceCapability::Bool => "bool",
         TaskResourceCapability::UartRxDma => "crate::support::UartRxDma",
+        TaskResourceCapability::RcInputSnapshot => "ferrowasp_io_core::serial::RcInputSnapshot",
+        TaskResourceCapability::SerialConsumer => {
+            "ferrowasp_drivers::serial_consumer::SerialConsumer"
+        }
     }
 }
 
-fn render_spawn(task: &TaskDeclaration) -> String {
+fn render_spawn(task: &component::ExpandedTask) -> String {
     let arguments = task
         .definition
         .args
@@ -173,24 +209,38 @@ fn indent(source: &str, spaces: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::{TaskArgument, boolean, digital_output};
+    use crate::{
+        component::{ExpandedTask, ExpandedTaskTrigger},
+        task::{TaskArgument, boolean, digital_output, duration},
+    };
 
     #[test]
     fn renders_logical_context_and_spawn_signatures() {
         const DEFINITION: TaskDefinition = TaskDefinition::asynchronous("blink")
+            .with_parameters(&[duration("interval")])
             .with_local(&[digital_output("led")])
             .with_shared(&[boolean("enabled")]);
         const REPORT: TaskDefinition =
             TaskDefinition::asynchronous("report").with_args(&[TaskArgument::new("count", "u32")]);
-        const REPORT_TASK: TaskDeclaration = REPORT.spawned_as("report_blink").priority(1);
+        let report_task = ExpandedTask {
+            id: "report_blink".to_owned(),
+            definition: REPORT,
+            priority: 1,
+            trigger: ExpandedTaskTrigger::Spawned,
+            parameters: vec![],
+            local_resources: vec![],
+            shared_resources: vec![],
+            owner_component: None,
+        };
         let rendered = render_definition(
             Path::new("/workspace/builder"),
             &DEFINITION,
-            &[REPORT_TASK],
+            &[report_task],
             "Mono",
         );
 
         assert!(rendered.contains("pub led: &'static mut crate::support::DigitalOutput"));
+        assert!(rendered.contains("pub interval: crate::support::Milliseconds"));
         assert!(rendered.contains("Shared<'static, bool>"));
         assert!(rendered.contains("pub fn spawn(count: u32)"));
         assert!(rendered.contains("DurationExt as _, Monotonic as Mono"));

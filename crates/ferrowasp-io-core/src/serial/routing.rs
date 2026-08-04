@@ -88,6 +88,7 @@ pub struct SerialRoute {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SerialCapabilities {
+    pub raw: bool,
     pub sbus: bool,
     pub crsf: bool,
     pub mavlink: bool,
@@ -100,6 +101,7 @@ impl SerialCapabilities {
     pub const fn accepts(self, profile: super::SerialProfile) -> bool {
         match profile.protocol {
             super::SerialProtocol::Disabled => true,
+            super::SerialProtocol::Raw => self.raw,
             super::SerialProtocol::Sbus => self.sbus,
             super::SerialProtocol::Crsf => self.crsf,
             super::SerialProtocol::Mavlink => self.mavlink,

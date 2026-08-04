@@ -91,15 +91,15 @@ impl<T> Shared<'_, T> {
     }
 }
 
-pub(crate) struct Milliseconds(u64);
+pub(crate) type Milliseconds = fugit::MillisDurationU32;
 
 pub(crate) trait DurationExt {
     fn millis(self) -> Milliseconds;
 }
 
-impl DurationExt for u64 {
+impl DurationExt for u32 {
     fn millis(self) -> Milliseconds {
-        Milliseconds(self)
+        Milliseconds::millis(self)
     }
 }
 
@@ -107,8 +107,7 @@ pub(crate) struct Monotonic;
 
 impl Monotonic {
     pub(crate) async fn delay(duration: Milliseconds) {
-        let Milliseconds(milliseconds) = duration;
-        let _ = milliseconds;
+        let _ = duration;
     }
 }
 

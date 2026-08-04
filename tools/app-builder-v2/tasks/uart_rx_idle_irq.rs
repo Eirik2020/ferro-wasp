@@ -9,9 +9,9 @@ crate::app_task! {
             UartRxIrqOutcome::Ignored
             | UartRxIrqOutcome::Delivered
             | UartRxIrqOutcome::NoChunk => {}
-            UartRxIrqOutcome::DmaError => defmt::warn!("SBUS RX UART error"),
+            UartRxIrqOutcome::DmaError => defmt::warn!("UART RX peripheral error"),
             UartRxIrqOutcome::DeliveryError(_) => {
-                defmt::warn!("SBUS RX IDLE buffer delivery error")
+                defmt::warn!("UART RX IDLE buffer delivery error")
             }
         }
     }

@@ -1,67 +1,93 @@
-//! STM32F401 board validation and algorithmic GPIO/EXTI rendering.
+//! STM32F4 board validation and algorithmic GPIO, EXTI, and serial rendering.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, bail};
+use ferrowasp_io_core::serial::{RcProtocol, SerialPortAssignment};
 
 use super::RenderedBoardInit;
 use crate::{
     board::{BoardDeclaration, MonotonicDeclaration},
+    component::ExpandedSoftwareResourceKind,
     hw_resources::{
-        ClockSource, Drive, GpioMode, HardwareResource, InterruptEdge, Level, PinId, Pull,
-        SerialProtocol,
+        ClockSource, Drive, GpioMode, HardwareResource, InterruptEdge, Level, Mcu, PinId, Pull,
+        UartRxDma,
     },
-    resolve::{ResolvedApp, ResolvedResourceUsage, ResolvedTaskTrigger},
-    task::HardwareInterrupt,
+    resolve::{ResolvedApp, ResolvedResource, ResolvedResourceUsage, ResolvedTaskTrigger},
+    task::{HardwareInterrupt, TaskResourceCapability},
 };
 
 mod pins;
 
-/// STM32F401 board declaration with validated physical-pin assignments.
+const HAL_ALIAS_EXPORT: &str = "pub(crate) use ferrowasp_stm32f4::rtic::hal as stm32f4xx_hal;";
+
+/// STM32F4 board declaration with validated physical-pin and serial-route assignments.
 #[derive(Debug)]
 pub(crate) struct ValidatedBoard<'a> {
     declaration: &'a BoardDeclaration,
     pins_by_id: BTreeMap<&'static str, PinId>,
+    serial_routes_by_id: BTreeMap<&'static str, Stm32SerialRoute>,
 }
 
-/// Validates STM32F401 clock, monotonic, package-pin, and pin-ownership facts.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Stm32SerialRoute {
+    Usart2Rx,
+    Uart4Rx,
+}
+
+impl Stm32SerialRoute {
+    const fn endpoint_type(self) -> &'static str {
+        match self {
+            Self::Usart2Rx => "Uart2Rx",
+            Self::Uart4Rx => "Uart4Rx",
+        }
+    }
+
+    const fn peripheral_interrupt(self) -> &'static str {
+        match self {
+            Self::Usart2Rx => "USART2",
+            Self::Uart4Rx => "UART4",
+        }
+    }
+}
+
+struct RenderedResourceField {
+    owner_component: Option<String>,
+    declaration: String,
+}
+
+/// Validates STM32F4 clock, monotonic, package-pin, and pin-ownership facts.
 pub fn validate(board: &BoardDeclaration) -> Result<ValidatedBoard<'_>> {
+    let (part, expected_system_clock_hz) = match board.target.mcu {
+        Mcu::Stm32F401 => ("STM32F401RE", 84_000_000),
+        Mcu::Stm32F405 => ("STM32F405RG", 168_000_000),
+    };
     if board.target.clock.source != ClockSource::InternalHighSpeed
-        || board.target.clock.sysclk_hz != 84_000_000
+        || board.target.clock.sysclk_hz != expected_system_clock_hz
     {
         bail!(
-            "STM32F401RE backend requires board `{}` to use an 84 MHz HSI clock",
-            board.id
+            "{part} backend requires board `{}` to use a {} MHz HSI clock",
+            board.id,
+            expected_system_clock_hz / 1_000_000,
         );
     }
     let MonotonicDeclaration::SysTick { id, clock_hz } = board.monotonic;
     if id != "Mono" || clock_hz != board.target.clock.sysclk_hz {
         bail!(
-            "STM32F401RE backend requires board `{}` Mono to use the system clock",
+            "{part} backend requires board `{}` Mono to use the system clock",
             board.id
         );
     }
     let mut hardware_by_pin = BTreeMap::new();
     let mut pins_by_id = BTreeMap::new();
+    let mut serial_routes_by_id = BTreeMap::new();
     for hardware in board.hardware {
         let pin = hardware.pin();
-        pins::validate_f401re_lqfp64(pin)?;
-        if let Some(uart) = hardware.uart_rx_dma()
-            && (uart.uart.number != 2
-                || uart.rx_pin != PinId::new(0, 3)
-                || uart.dma.controller != 0
-                || uart.dma.stream != 5
-                || uart.dma.channel != 4
-                || uart.protocol != SerialProtocol::Sbus)
-        {
-            bail!(
-                "STM32F401 backend currently supports DMA SBUS only as USART2 RX on PA3 using DMA1 Stream 5 Channel 4; resource `{}` requests UART{}, {}, DMA{} Stream {} Channel {}",
-                uart.id,
-                uart.uart.number,
-                pins::pin_name(uart.rx_pin)?,
-                uart.dma.controller + 1,
-                uart.dma.stream,
-                uart.dma.channel,
+        pins::validate_lqfp64(board.target.mcu, pin)?;
+        if let Some(serial) = hardware.uart_rx_dma() {
+            serial_routes_by_id.insert(
+                hardware.id(),
+                validate_serial_route(board.target.mcu, serial)?,
             );
         }
         if let Some(existing_id) = hardware_by_pin.insert(pin, hardware.id()) {
@@ -77,17 +103,72 @@ pub fn validate(board: &BoardDeclaration) -> Result<ValidatedBoard<'_>> {
     Ok(ValidatedBoard {
         declaration: board,
         pins_by_id,
+        serial_routes_by_id,
     })
 }
 
-/// Renders STM32F401 RTIC resources and initialization for a resolved application.
+fn validate_serial_route(mcu: Mcu, serial: &UartRxDma) -> Result<Stm32SerialRoute> {
+    let (route, expected_pin, expected_dma, concrete_name) = match (mcu, serial.serial_port.number)
+    {
+        (Mcu::Stm32F401 | Mcu::Stm32F405, 2) => (
+            Stm32SerialRoute::Usart2Rx,
+            PinId::new(0, 3),
+            (0, 5, 4),
+            "USART2",
+        ),
+        (Mcu::Stm32F405, 4) => (
+            Stm32SerialRoute::Uart4Rx,
+            PinId::new(0, 1),
+            (0, 2, 4),
+            "UART4",
+        ),
+        (Mcu::Stm32F401, number) => {
+            bail!(
+                "STM32F401RE backend supports DMA receive only on serial port 2; resource `{}` requests serial port {number}",
+                serial.id
+            )
+        }
+        (Mcu::Stm32F405, number) => {
+            bail!(
+                "STM32F405RG backend supports DMA receive only on serial ports 2 and 4; resource `{}` requests serial port {number}",
+                serial.id
+            )
+        }
+    };
+    if serial.rx_pin != expected_pin
+        || serial.dma.controller != expected_dma.0
+        || serial.dma.stream != expected_dma.1
+        || serial.dma.channel != expected_dma.2
+    {
+        bail!(
+            "{} backend requires serial port {} ({concrete_name}) RX on {} using DMA{} Stream {} Channel {}; resource `{}` requests {}, DMA{} Stream {} Channel {}",
+            match mcu {
+                Mcu::Stm32F401 => "STM32F401RE",
+                Mcu::Stm32F405 => "STM32F405RG",
+            },
+            serial.serial_port.number,
+            pins::pin_name(expected_pin)?,
+            expected_dma.0 + 1,
+            expected_dma.1,
+            expected_dma.2,
+            serial.id,
+            pins::pin_name(serial.rx_pin)?,
+            serial.dma.controller + 1,
+            serial.dma.stream,
+            serial.dma.channel,
+        );
+    }
+    Ok(route)
+}
+
+/// Renders STM32F4 RTIC resources and initialization for a resolved application.
 pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<RenderedBoardInit> {
     if app.tasks.is_empty() {
         return Ok(RenderedBoardInit {
             dispatchers: "EXTI0".to_owned(),
             interrupt_bindings: BTreeMap::new(),
-            imports: String::new(),
-            monotonic_declaration: String::new(),
+            prelude_exports: HAL_ALIAS_EXPORT.to_owned(),
+            timing_declarations: String::new(),
             init_attribute: "#[init]".to_owned(),
             shared_struct: "struct Shared {}".to_owned(),
             shared_value: "Shared {}".to_owned(),
@@ -98,10 +179,7 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
     }
 
     let declaration = board.declaration;
-    let MonotonicDeclaration::SysTick {
-        id,
-        clock_hz: monotonic_clock_hz,
-    } = declaration.monotonic;
+    let MonotonicDeclaration::SysTick { id, .. } = declaration.monotonic;
     let resources_by_id = app
         .resources
         .iter()
@@ -138,52 +216,64 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
                     resource.hardware.id()
                 )
             })?;
-        let field = render_resource_field(resource.hardware, pin)?;
+        let serial_route = board
+            .serial_routes_by_id
+            .get(resource.hardware.id())
+            .copied();
+        let field = render_resource_field(resource.hardware, pin, serial_route)?;
+        let owner_component = resolved_hardware_owner(app, resource.hardware.id());
         match resource.usage {
             ResolvedResourceUsage::Local { .. } => {
-                local_fields.push(field);
-                local_values.push(resource.hardware.id().to_owned());
+                local_fields.push(RenderedResourceField {
+                    owner_component: owner_component.clone(),
+                    declaration: field,
+                });
+                local_values.push(RenderedResourceField {
+                    owner_component,
+                    declaration: resource.hardware.id().to_owned(),
+                });
             }
             ResolvedResourceUsage::Shared { .. } => {
-                shared_fields.push(field);
-                shared_values.push(resource.hardware.id().to_owned());
+                shared_fields.push(RenderedResourceField {
+                    owner_component: owner_component.clone(),
+                    declaration: field,
+                });
+                shared_values.push(RenderedResourceField {
+                    owner_component,
+                    declaration: resource.hardware.id().to_owned(),
+                });
             }
         }
     }
     for resource in &app.software_local_resources {
         debug_assert_eq!(resource.task_ids.len(), 1);
         let declaration = resource.declaration;
-        local_fields.push(format!(
-            "{}: {},",
-            declaration.id(),
-            declaration.rust_type()
-        ));
-        local_values.push(format!(
-            "{}: {}",
-            declaration.id(),
-            declaration.initial_value()
-        ));
+        local_fields.push(RenderedResourceField {
+            owner_component: declaration.owner_component.clone(),
+            declaration: format!("{}: {},", declaration.id, declaration.kind.rust_type()),
+        });
+        local_values.push(RenderedResourceField {
+            owner_component: declaration.owner_component.clone(),
+            declaration: format!("{}: {}", declaration.id, declaration.kind.initial_value()),
+        });
     }
     for resource in &app.software_shared_resources {
         debug_assert!(!resource.task_ids.is_empty());
         let declaration = resource.declaration;
-        shared_fields.push(format!(
-            "{}: {},",
-            declaration.id(),
-            declaration.rust_type()
-        ));
-        shared_values.push(format!(
-            "{}: {}",
-            declaration.id(),
-            declaration.initial_value()
-        ));
+        shared_fields.push(RenderedResourceField {
+            owner_component: declaration.owner_component.clone(),
+            declaration: format!("{}: {},", declaration.id, declaration.kind.rust_type()),
+        });
+        shared_values.push(RenderedResourceField {
+            owner_component: declaration.owner_component.clone(),
+            declaration: format!("{}: {}", declaration.id, declaration.kind.initial_value()),
+        });
     }
 
     let has_resources = !app.resource_initialization_order.is_empty();
     let rcc_binding = if has_resources { "mut rcc" } else { "_rcc" };
-    let mut initialization = format!(
-        "let {rcc_binding} =\n    ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), {}, false);\n{id}::start(cx.core.SYST, {monotonic_clock_hz});",
-        declaration.target.clock.sysclk_hz,
+    let mut system_initialization = format!(
+        "let {rcc_binding} =\n    ferrowasp_stm32f4::clocks::freeze_hsi(cx.device.RCC.constrain(), SYSTEM_CLOCK_HZ, false);\n{id}::start(cx.core.SYST, SYSTEM_CLOCK_HZ);",
     );
     let used_ports = pins_by_id
         .values()
@@ -192,7 +282,7 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
     for port in used_ports {
         let port = pins::port_letter(port)?;
         let port_lowercase = port.to_ascii_lowercase();
-        initialization.push_str(&format!(
+        system_initialization.push_str(&format!(
             "\nlet gpio{port_lowercase} = cx.device.GPIO{port}.split(&mut rcc);"
         ));
     }
@@ -203,17 +293,13 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
         )
     });
     if has_exti_input {
-        initialization.push_str(
+        system_initialization.push_str(
             "\nlet mut syscfg = cx.device.SYSCFG.constrain(&mut rcc);\nlet mut exti = cx.device.EXTI;",
         );
     }
-    if app
-        .resources
-        .iter()
-        .any(|resource| resource.hardware.uart_rx_dma().is_some())
-    {
-        initialization.push_str("\nlet dma1 = StreamsTuple::new(cx.device.DMA1, &mut rcc);");
-    }
+    let mut task_initializations = Vec::<(String, Vec<String>)>::new();
+    let mut component_initializations = Vec::<(String, Vec<String>)>::new();
+    let mut dma1_initialized = false;
     for resource_id in &app.resource_initialization_order {
         let resource = resources_by_id.get(resource_id).ok_or_else(|| {
             anyhow::anyhow!(
@@ -225,9 +311,60 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
                 "resolved initialization order references resource `{resource_id}` without a validated STM32 pin"
             )
         })?;
-        initialization.push('\n');
-        initialization.push_str(&render_resource_initialization(resource.hardware, pin)?);
+        let uart_configuration = resource
+            .hardware
+            .uart_rx_dma()
+            .map(|_| resolved_uart_configuration(app, resource.hardware.id()))
+            .transpose()?;
+        let serial_route = board.serial_routes_by_id.get(*resource_id).copied();
+        let mut resource_initialization = render_resource_initialization(
+            resource.hardware,
+            pin,
+            serial_route,
+            uart_configuration,
+        )?;
+        if resource.hardware.uart_rx_dma().is_some() && !dma1_initialized {
+            resource_initialization = format!(
+                "let dma1 = StreamsTuple::new(cx.device.DMA1, &mut rcc);\n{resource_initialization}"
+            );
+            dma1_initialized = true;
+        }
+        if let Some(owner) = resolved_hardware_owner(app, resource.hardware.id()) {
+            push_initialization(
+                &mut component_initializations,
+                &owner,
+                resource_initialization,
+            );
+        } else if let Some(task_id) = standalone_hardware_owner(app, resource) {
+            push_initialization(&mut task_initializations, task_id, resource_initialization);
+        } else {
+            system_initialization.push('\n');
+            system_initialization.push_str(&resource_initialization);
+        }
     }
+    let mut initialization = vec![guarded_init_section(
+        "System initialization",
+        88,
+        '=',
+        &system_initialization,
+    )];
+    initialization.extend(task_initializations.iter().map(|(task_id, statements)| {
+        guarded_init_section(
+            &format!("Task `{task_id}`"),
+            80,
+            '-',
+            &statements.join("\n"),
+        )
+    }));
+    initialization.extend(component_initializations.iter().map(|(owner, statements)| {
+        guarded_init_section(
+            &format!("Component `{owner}`"),
+            88,
+            '=',
+            &statements.join("\n"),
+        )
+    }));
+    let initialization = initialization.join("\n\n");
 
     let has_digital_output = app.resources.iter().any(|resource| {
         matches!(
@@ -235,30 +372,92 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
             Some(GpioMode::Output { .. })
         )
     });
-    let has_uart_rx_dma = app
+    let used_serial_routes = app
         .resources
         .iter()
-        .any(|resource| resource.hardware.uart_rx_dma().is_some());
-    let mut imports = vec!["use ferrowasp_stm32f4::rtic::prelude::*;"];
+        .filter_map(|resource| {
+            board
+                .serial_routes_by_id
+                .get(resource.hardware.id())
+                .copied()
+        })
+        .collect::<BTreeSet<_>>();
+    let mut imports = vec![
+        HAL_ALIAS_EXPORT.to_owned(),
+        "pub(crate) use ferrowasp_stm32f4::rtic::prelude::*;".to_owned(),
+    ];
     if has_digital_output {
         imports.insert(
             0,
-            "use ferrowasp_io_core::digital::prelude::{OutputPin, StatefulOutputPin};",
+            "pub(crate) use ferrowasp_io_core::digital::prelude::{OutputPin, StatefulOutputPin};"
+                .to_owned(),
         );
     }
-    if has_uart_rx_dma {
+    if !used_serial_routes.is_empty() {
+        let mut route_imports = Vec::new();
+        if used_serial_routes.contains(&Stm32SerialRoute::Usart2Rx) {
+            route_imports.extend(["Uart2Rx", "Usart2RxOnlyResources"]);
+        }
+        if used_serial_routes.contains(&Stm32SerialRoute::Uart4Rx) {
+            route_imports.extend(["Uart4Rx", "Uart4RxOnlyResources"]);
+        }
         imports.insert(
             0,
-            "use ferrowasp_stm32f4::uart_dma::{UartRxIrqOutcome, UartRxReadOutcome, UART_RX_BUFFER_SIZE};\nuse sbus_rs::StreamingParser;",
+            format!(
+                "pub(crate) use ferrowasp_io_core::serial::SerialProtocol;\npub(crate) use ferrowasp_stm32f4::{{\n    app_storage::{{UartRxBufferBank, UartRxFilledQueue, UartRxFreeQueue, UartRxStorageResources}},\n    uart_dma::{{{}, UartRxIrqOutcome, UartRxReadOutcome, UART_RX_BUFFER_SIZE}},\n}};",
+                route_imports.join(", ")
+            ),
+        );
+    }
+    let has_rc_input_snapshot = app
+        .software_shared_resources
+        .iter()
+        .chain(&app.software_local_resources)
+        .any(|resource| resource.declaration.kind == ExpandedSoftwareResourceKind::RcInputSnapshot);
+    if has_rc_input_snapshot {
+        imports.insert(
+            0,
+            "pub(crate) use ferrowasp_io_core::serial::RcInputSnapshot;".to_owned(),
+        );
+    }
+    let has_serial_consumer = app.tasks.iter().any(|task| {
+        task.declaration
+            .definition
+            .local_resources
+            .iter()
+            .any(|resource| resource.capability() == TaskResourceCapability::SerialConsumer)
+    });
+    if has_serial_consumer {
+        imports.insert(
+            0,
+            "pub(crate) use ferrowasp_drivers::serial_consumer::{SerialConsumer, SerialConsumerEvent};\npub(crate) use ferrowasp_io_core::serial::SerialPortAssignment;".to_owned(),
+        );
+    }
+    let has_sbus_consumer = app.software_local_resources.iter().any(|resource| {
+        matches!(
+            resource.declaration.kind,
+            ExpandedSoftwareResourceKind::SerialConsumer(SerialPortAssignment::Rc(
+                RcProtocol::Sbus
+            ))
+        )
+    });
+    if has_sbus_consumer {
+        imports.insert(
+            0,
+            "pub(crate) use ferrowasp_io_core::serial::RcProtocol;".to_owned(),
         );
     }
 
-    let (dispatchers, interrupt_bindings) = render_interrupt_bindings(app, &board.pins_by_id)?;
+    let (dispatchers, interrupt_bindings) =
+        render_interrupt_bindings(app, &board.pins_by_id, &board.serial_routes_by_id)?;
     Ok(RenderedBoardInit {
         dispatchers,
         interrupt_bindings,
-        imports: imports.join("\n"),
-        monotonic_declaration: format!("systick_monotonic!({id}, 1_000);"),
+        prelude_exports: imports.join("\n"),
+        timing_declarations: format!(
+            "// Timing configuration generated from the board declaration.\nconst SYSTEM_CLOCK_HZ: u32 = {};\n\nsystick_monotonic!({id}, 1_000);",
+            render_u32_literal(declaration.target.clock.sysclk_hz)
+        ),
         init_attribute: render_init_attribute(app),
         shared_struct: render_resource_struct("Shared", &shared_fields),
         shared_value: render_resource_value("Shared", &shared_values),
@@ -268,7 +467,23 @@ pub fn render(board: &ValidatedBoard<'_>, app: &ResolvedApp<'_>) -> Result<Rende
     })
 }
 
-fn render_resource_field(hardware: &HardwareResource, pin: PinId) -> Result<String> {
+fn render_u32_literal(value: u32) -> String {
+    let digits = value.to_string();
+    let mut rendered = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index) % 3 == 0 {
+            rendered.push('_');
+        }
+        rendered.push(digit);
+    }
+    rendered
+}
+
+fn render_resource_field(
+    hardware: &HardwareResource,
+    pin: PinId,
+    serial_route: Option<Stm32SerialRoute>,
+) -> Result<String> {
     match hardware {
         HardwareResource::Gpio(gpio) => {
             let port = pins::port_letter(pin.port)?;
@@ -285,14 +500,24 @@ fn render_resource_field(hardware: &HardwareResource, pin: PinId) -> Result<Stri
                 }
             }
         }
-        HardwareResource::UartRxDma(uart) => Ok(format!(
-            "{}: ferrowasp_stm32f4::uart_dma::Uart2SbusRx,",
-            uart.id
-        )),
+        HardwareResource::UartRxDma(serial) => {
+            let route = serial_route.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "serial resource `{}` has no validated STM32 route",
+                    serial.id
+                )
+            })?;
+            Ok(format!("{}: {},", serial.id, route.endpoint_type()))
+        }
     }
 }
 
-fn render_resource_initialization(hardware: &HardwareResource, pin: PinId) -> Result<String> {
+fn render_resource_initialization(
+    hardware: &HardwareResource,
+    pin: PinId,
+    serial_route: Option<Stm32SerialRoute>,
+    uart_configuration: Option<(&str, SerialPortAssignment)>,
+) -> Result<String> {
     match hardware {
         HardwareResource::Gpio(gpio) => {
             let port = pins::port_letter(pin.port)?.to_ascii_lowercase();
@@ -334,12 +559,42 @@ fn render_resource_initialization(hardware: &HardwareResource, pin: PinId) -> Re
                 }
             }
         }
-        HardwareResource::UartRxDma(uart) => {
+        HardwareResource::UartRxDma(serial) => {
             let port = pins::port_letter(pin.port)?.to_ascii_lowercase();
-            let id = uart.id;
+            let id = serial.id;
             let number = pin.pin;
+            let (owner, assignment) = uart_configuration.ok_or_else(|| {
+                anyhow::anyhow!("serial resource `{id}` has no owning serial component")
+            })?;
+            let mode = match assignment {
+                SerialPortAssignment::Rc(RcProtocol::Sbus) => "Sbus",
+                SerialPortAssignment::ComPort => "Raw",
+                SerialPortAssignment::Disabled => {
+                    bail!("disabled serial resource `{id}` reached STM32 initialization")
+                }
+            };
+            let route = serial_route.ok_or_else(|| {
+                anyhow::anyhow!("serial resource `{id}` has no validated STM32 route")
+            })?;
+            let (initializer, resources_type, peripheral_field, peripheral, dma_stream) =
+                match route {
+                    Stm32SerialRoute::Usart2Rx => (
+                        "init_usart2_rx_only",
+                        "Usart2RxOnlyResources",
+                        "usart",
+                        "USART2",
+                        5,
+                    ),
+                    Stm32SerialRoute::Uart4Rx => (
+                        "init_uart4_rx_only",
+                        "Uart4RxOnlyResources",
+                        "uart",
+                        "UART4",
+                        2,
+                    ),
+                };
             Ok(format!(
-                "let {id} = ferrowasp_stm32f4::uart_dma::init_usart2_sbus_rx_only(\n    ferrowasp_stm32f4::uart_dma::Usart2SbusRxOnlyResources {{\n        rx_pin: gpio{port}.p{port}{number},\n        usart: cx.device.USART2,\n        rx_dma: dma1.5,\n    }},\n    &mut rcc,\n    ferrowasp_stm32f4::app_storage::UartRxStorageResources {{\n        buffers: cx.local.{id}_buffers,\n        free_queue: cx.local.{id}_free_queue,\n        filled_queue: cx.local.{id}_filled_queue,\n    }},\n);"
+                "let {id} = ferrowasp_stm32f4::uart_dma::{initializer}(\n    {resources_type} {{\n        rx_pin: gpio{port}.p{port}{number},\n        {peripheral_field}: cx.device.{peripheral},\n        rx_dma: dma1.{dma_stream},\n    }},\n    &mut rcc,\n    SerialProtocol::{mode},\n    UartRxStorageResources {{\n        buffers: cx.local.{owner}_rx_buffers,\n        free_queue: cx.local.{owner}_free_queue,\n        filled_queue: cx.local.{owner}_filled_queue,\n    }},\n);"
             ))
         }
     }
@@ -347,35 +602,83 @@ fn render_resource_initialization(hardware: &HardwareResource, pin: PinId) -> Re
 
 fn render_init_attribute(app: &ResolvedApp<'_>) -> String {
     let resources = app
-        .resources
+        .init_local_resources
         .iter()
-        .filter_map(|resource| resource.hardware.uart_rx_dma())
-        .flat_map(|uart| {
-            let id = uart.id;
-            [
-                format!(
-                    "{id}_buffers: ferrowasp_stm32f4::app_storage::UartRxBufferBank = ferrowasp_stm32f4::app_storage::new_uart_rx_buffer_bank()"
+        .map(|resource| {
+            let id = &resource.id;
+            let declaration = match resource.kind {
+                crate::component::ComponentInitLocalResource::UartRxBuffers => render_init_local(
+                    id,
+                    "UartRxBufferBank",
+                    "ferrowasp_stm32f4::app_storage::new_uart_rx_buffer_bank()",
                 ),
-                format!(
-                    "{id}_free_queue: ferrowasp_stm32f4::app_storage::UartRxFreeQueue = ferrowasp_stm32f4::app_storage::UartRxFreeQueue::new()"
-                ),
-                format!(
-                    "{id}_filled_queue: ferrowasp_stm32f4::app_storage::UartRxFilledQueue = ferrowasp_stm32f4::app_storage::UartRxFilledQueue::new()"
-                ),
-            ]
+                crate::component::ComponentInitLocalResource::UartRxFreeQueue => {
+                    render_init_local(id, "UartRxFreeQueue", "UartRxFreeQueue::new()")
+                }
+                crate::component::ComponentInitLocalResource::UartRxFilledQueue => {
+                    render_init_local(id, "UartRxFilledQueue", "UartRxFilledQueue::new()")
+                }
+            };
+            (resource.owner_component.as_str(), declaration)
         })
         .collect::<Vec<_>>();
     if resources.is_empty() {
         "#[init]".to_owned()
     } else {
-        format!("#[init(local = [\n    {},\n])]", resources.join(",\n    "))
+        let grouped = render_component_sections("resources", &resources, ",");
+        format!("#[init(local = [\n    {grouped}\n])]")
     }
+}
+
+fn render_init_local(id: &str, rust_type: &str, initializer: &str) -> String {
+    const MODULE_AND_ATTRIBUTE_INDENT: usize = 8;
+    const LINE_WIDTH: usize = 88;
+
+    let compact = format!("{id}: {rust_type} = {initializer}");
+    if MODULE_AND_ATTRIBUTE_INDENT + compact.len() <= LINE_WIDTH {
+        compact
+    } else {
+        format!("{id}: {rust_type} =\n        {initializer}")
+    }
+}
+
+fn resolved_uart_configuration<'a>(
+    app: &'a ResolvedApp<'a>,
+    hardware_id: &str,
+) -> Result<(&'a str, SerialPortAssignment)> {
+    let owner = app
+        .tasks
+        .iter()
+        .filter(|task| {
+            task.shared_resources.iter().any(|resource| {
+                matches!(resource, crate::resolve::ResolvedTaskResource::Hardware { hardware, .. } if hardware.id() == hardware_id)
+            })
+        })
+        .find_map(|task| task.declaration.owner_component.as_deref())
+        .ok_or_else(|| anyhow::anyhow!("UART resource `{hardware_id}` is not owned by a component"))?;
+    let assignment = app
+        .software_local_resources
+        .iter()
+        .find_map(|resource| {
+            (resource.declaration.owner_component.as_deref() == Some(owner)).then_some(
+                match resource.declaration.kind {
+                    crate::component::ExpandedSoftwareResourceKind::SerialConsumer(assignment) => {
+                        Some(assignment)
+                    }
+                    _ => None,
+                },
+            )
+        })
+        .flatten()
+        .ok_or_else(|| anyhow::anyhow!("serial component `{owner}` has no consumer state"))?;
+    Ok((owner, assignment))
 }
 
 fn render_interrupt_bindings(
     app: &ResolvedApp<'_>,
     pins_by_id: &BTreeMap<&str, PinId>,
-) -> Result<(String, BTreeMap<&'static str, String>)> {
+    serial_routes_by_id: &BTreeMap<&str, Stm32SerialRoute>,
+) -> Result<(String, BTreeMap<String, String>)> {
     let mut interrupt_owners = BTreeMap::<String, &str>::new();
     let mut bindings_by_task = BTreeMap::new();
     for task in &app.tasks {
@@ -408,23 +711,36 @@ fn render_interrupt_bindings(
                 format!("DMA{}_STREAM{}", uart.dma.controller + 1, uart.dma.stream)
             }
             HardwareInterrupt::Peripheral => {
-                let uart = resource.uart_rx_dma().ok_or_else(|| {
+                resource.uart_rx_dma().ok_or_else(|| {
                     anyhow::anyhow!(
-                        "UART interrupt task `{}` resolved non-UART resource `{}`",
+                        "serial interrupt task `{}` resolved non-serial resource `{}`",
                         task.declaration.id,
                         resource.id()
                     )
                 })?;
-                format!("USART{}", uart.uart.number)
+                serial_routes_by_id
+                    .get(resource.id())
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "serial interrupt task `{}` resource `{}` has no validated STM32 route",
+                            task.declaration.id,
+                            resource.id()
+                        )
+                    })?
+                    .peripheral_interrupt()
+                    .to_owned()
             }
         };
-        if let Some(existing_task) = interrupt_owners.insert(binding.clone(), task.declaration.id) {
+        if let Some(existing_task) =
+            interrupt_owners.insert(binding.clone(), task.declaration.id.as_str())
+        {
             bail!(
                 "interrupt tasks `{existing_task}` and `{}` both resolve to `{binding}`; grouped STM32 EXTI vectors require one demultiplexing task",
                 task.declaration.id
             );
         }
-        bindings_by_task.insert(task.declaration.id, binding);
+        bindings_by_task.insert(task.declaration.id.clone(), binding);
     }
 
     let dispatcher_count = app
@@ -443,25 +759,151 @@ fn render_interrupt_bindings(
         .collect::<Vec<_>>();
     if dispatchers.len() != dispatcher_count {
         return Err(anyhow::anyhow!(
-            "STM32F401RE backend needs {dispatcher_count} software dispatchers but does not have enough free EXTI0 through EXTI4 vectors"
+            "STM32F4 backend needs {dispatcher_count} software dispatchers but does not have enough free EXTI0 through EXTI4 vectors"
         ));
     }
     Ok((dispatchers.join(", "), bindings_by_task))
 }
 
-fn render_resource_struct(name: &str, fields: &[String]) -> String {
+fn render_resource_struct(name: &str, fields: &[RenderedResourceField]) -> String {
     if fields.is_empty() {
         format!("struct {name} {{}}")
     } else {
-        format!("struct {name} {{\n    {}\n}}", fields.join("\n    "))
+        let mut contents = fields
+            .iter()
+            .filter(|field| field.owner_component.is_none())
+            .map(|field| field.declaration.clone())
+            .collect::<Vec<_>>();
+        let mut component_order = Vec::new();
+        for field in fields {
+            if let Some(owner) = field.owner_component.as_deref()
+                && !component_order.contains(&owner)
+            {
+                component_order.push(owner);
+            }
+        }
+        for owner in component_order {
+            let declarations = fields
+                .iter()
+                .filter(|field| field.owner_component.as_deref() == Some(owner))
+                .map(|field| field.declaration.as_str())
+                .collect::<Vec<_>>();
+            contents.push(component_section(owner, "resources", &declarations, ""));
+        }
+        format!("struct {name} {{\n    {}\n}}", contents.join("\n    "))
     }
 }
 
-fn render_resource_value(name: &str, resources: &[String]) -> String {
+fn resolved_hardware_owner(app: &ResolvedApp<'_>, hardware_id: &str) -> Option<String> {
+    let mut owner = None::<&str>;
+    for task in &app.tasks {
+        let uses_hardware = task
+            .local_resources
+            .iter()
+            .chain(&task.shared_resources)
+            .any(|resource| {
+                matches!(resource, crate::resolve::ResolvedTaskResource::Hardware { hardware, .. } if hardware.id() == hardware_id)
+            });
+        if !uses_hardware {
+            continue;
+        }
+        let task_owner = task.declaration.owner_component.as_deref()?;
+        if owner.is_some_and(|existing| existing != task_owner) {
+            return None;
+        }
+        owner = Some(task_owner);
+    }
+    owner.map(str::to_owned)
+}
+
+fn standalone_hardware_owner<'a>(
+    app: &'a ResolvedApp<'a>,
+    resource: &ResolvedResource<'a>,
+) -> Option<&'a str> {
+    let task_id = match &resource.usage {
+        ResolvedResourceUsage::Local { task_id } => *task_id,
+        ResolvedResourceUsage::Shared { task_ids } if task_ids.len() == 1 => task_ids[0],
+        ResolvedResourceUsage::Shared { .. } => return None,
+    };
+    app.tasks
+        .iter()
+        .find(|task| task.declaration.id == task_id)
+        .filter(|task| task.declaration.owner_component.is_none())
+        .map(|task| task.declaration.id.as_str())
+}
+
+fn push_initialization(
+    groups: &mut Vec<(String, Vec<String>)>,
+    owner: &str,
+    initialization: String,
+) {
+    if let Some((_, statements)) = groups.iter_mut().find(|(candidate, _)| candidate == owner) {
+        statements.push(initialization);
+    } else {
+        groups.push((owner.to_owned(), vec![initialization]));
+    }
+}
+
+fn guarded_init_section(label: &str, width: usize, fill: char, body: &str) -> String {
+    let start = crate::scope_divider(label, false, width, fill);
+    let end = crate::scope_divider(label, true, width, fill);
+    format!("{start}\n{body}\n{end}")
+}
+
+fn render_component_sections(kind: &str, resources: &[(&str, String)], separator: &str) -> String {
+    let mut owners = Vec::new();
+    for (owner, _) in resources {
+        if !owners.contains(owner) {
+            owners.push(*owner);
+        }
+    }
+    owners
+        .into_iter()
+        .map(|owner| {
+            let declarations = resources
+                .iter()
+                .filter(|(candidate, _)| *candidate == owner)
+                .map(|(_, declaration)| declaration.as_str())
+                .collect::<Vec<_>>();
+            component_section(owner, kind, &declarations, separator)
+        })
+        .collect::<Vec<_>>()
+        .join("\n    ")
+}
+
+fn component_section(owner: &str, kind: &str, declarations: &[&str], separator: &str) -> String {
+    let body = declarations.join(&format!("{separator}\n    "));
+    let start = crate::component_divider(owner, kind, false);
+    let end = crate::component_divider(owner, kind, true);
+    format!("{start}\n    {body}{separator}\n    {end}")
+}
+
+fn render_resource_value(name: &str, resources: &[RenderedResourceField]) -> String {
     if resources.is_empty() {
         format!("{name} {{}}")
     } else {
-        format!("{name} {{ {} }}", resources.join(", "))
+        let mut contents = resources
+            .iter()
+            .filter(|resource| resource.owner_component.is_none())
+            .map(|resource| format!("{},", resource.declaration))
+            .collect::<Vec<_>>();
+        let mut component_order = Vec::new();
+        for resource in resources {
+            if let Some(owner) = resource.owner_component.as_deref()
+                && !component_order.contains(&owner)
+            {
+                component_order.push(owner);
+            }
+        }
+        for owner in component_order {
+            let declarations = resources
+                .iter()
+                .filter(|resource| resource.owner_component.as_deref() == Some(owner))
+                .map(|resource| resource.declaration.as_str())
+                .collect::<Vec<_>>();
+            contents.push(component_section(owner, "resources", &declarations, ","));
+        }
+        format!("{name} {{\n    {}\n}}", contents.join("\n    "))
     }
 }
 
@@ -475,8 +917,8 @@ mod tests {
         },
         board::MonotonicDeclaration,
         hw_resources::{
-            Clock, DmaChannel, ExternalInterrupt, Gpio, HardwareResource, Mcu, PinId, Target,
-            UartId, UartRxDma,
+            Clock, DmaChannel, ExternalInterrupt, Gpio, HardwareResource, Mcu, PinId, SerialPortId,
+            Target, UartRxDma,
         },
         resolve::resolve,
         task::{
@@ -524,10 +966,12 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[BLINK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
         let board = validate(&BOARD).unwrap();
-        let resolved = resolve(&BOARD, &app).unwrap();
+        let expanded = crate::component::expand(&BOARD, &app).unwrap();
+        let resolved = resolve(&BOARD, &expanded).unwrap();
         let rendered = render(&board, &resolved).unwrap();
 
         assert!(
@@ -559,6 +1003,7 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[BUTTON_TASK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration {
                 shared: SOFTWARE_SHARED,
                 local: &[],
@@ -566,7 +1011,8 @@ mod tests {
         };
 
         let board = validate(&BUTTON_BOARD).unwrap();
-        let resolved = resolve(&BUTTON_BOARD, &app).unwrap();
+        let expanded = crate::component::expand(&BUTTON_BOARD, &app).unwrap();
+        let resolved = resolve(&BUTTON_BOARD, &expanded).unwrap();
         let rendered = render(&board, &resolved).unwrap();
 
         assert!(rendered.local_struct.contains("Pin<'C', 13, Input>"));
@@ -576,7 +1022,7 @@ mod tests {
         assert!(rendered.initialization.contains("exti::init_input"));
         assert!(rendered.initialization.contains("Edge::Falling"));
         assert!(!rendered.initialization.contains("GPIOA.split"));
-        assert!(!rendered.imports.contains("ferrowasp_io_core"));
+        assert!(!rendered.prelude_exports.contains("ferrowasp_io_core"));
         assert_eq!(
             rendered.interrupt_bindings.get("button_exti"),
             Some(&"EXTI15_10".to_owned())
@@ -596,7 +1042,7 @@ mod tests {
             },
         });
 
-        let rendered = render_resource_initialization(&INPUT, INPUT.pin()).unwrap();
+        let rendered = render_resource_initialization(&INPUT, INPUT.pin(), None, None).unwrap();
 
         assert!(rendered.contains("Input::new(gpiob.pb4, Pull::Down)"));
         assert!(rendered.contains("Edge::RisingFalling"));
@@ -611,7 +1057,7 @@ mod tests {
             mode: GpioMode::Input { interrupt: None },
         });
 
-        let rendered = render_resource_initialization(&INPUT, INPUT.pin()).unwrap();
+        let rendered = render_resource_initialization(&INPUT, INPUT.pin(), None, None).unwrap();
 
         assert_eq!(rendered, "let input = Input::new(gpioa.pa1, Pull::None);");
         assert!(!rendered.contains("exti::init_input"));
@@ -631,9 +1077,9 @@ mod tests {
 
     #[test]
     fn validates_only_the_supported_f401_sbus_dma_route() {
-        const INVALID_ROUTE: HardwareResource = HardwareResource::UartRxDma(UartRxDma::sbus(
+        const INVALID_ROUTE: HardwareResource = HardwareResource::UartRxDma(UartRxDma::new(
             "sbus",
-            UartId::new(2),
+            SerialPortId::new(2),
             PinId::new(0, 3),
             DmaChannel::new(0, 4, 4),
         ));
@@ -648,6 +1094,84 @@ mod tests {
     }
 
     #[test]
+    fn validates_both_fcu3_receive_routes() {
+        const USART2: HardwareResource = HardwareResource::UartRxDma(UartRxDma::new(
+            "uart2",
+            SerialPortId::new(2),
+            PinId::new(0, 3),
+            DmaChannel::new(0, 5, 4),
+        ));
+        const UART4: HardwareResource = HardwareResource::UartRxDma(UartRxDma::new(
+            "uart4",
+            SerialPortId::new(4),
+            PinId::new(0, 1),
+            DmaChannel::new(0, 2, 4),
+        ));
+        const FCU3: BoardDeclaration = BoardDeclaration {
+            id: "ferrowasp_fcu3",
+            target: Target::internal_high_speed(Mcu::Stm32F405, 168_000_000),
+            monotonic: MonotonicDeclaration::SysTick {
+                id: "Mono",
+                clock_hz: 168_000_000,
+            },
+            hardware: &[USART2, UART4],
+        };
+
+        let validated = validate(&FCU3).unwrap();
+        assert_eq!(
+            validated.serial_routes_by_id.get("uart2"),
+            Some(&Stm32SerialRoute::Usart2Rx)
+        );
+        assert_eq!(
+            validated.serial_routes_by_id.get("uart4"),
+            Some(&Stm32SerialRoute::Uart4Rx)
+        );
+        assert_eq!(
+            validated.serial_routes_by_id["uart2"].peripheral_interrupt(),
+            "USART2"
+        );
+        assert_eq!(
+            validated.serial_routes_by_id["uart4"].peripheral_interrupt(),
+            "UART4"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_fcu3_uart4_route_and_f401_port_four() {
+        const WRONG_UART4: HardwareResource = HardwareResource::UartRxDma(UartRxDma::new(
+            "uart4",
+            SerialPortId::new(4),
+            PinId::new(0, 1),
+            DmaChannel::new(0, 3, 4),
+        ));
+        const FCU3: BoardDeclaration = BoardDeclaration {
+            id: "ferrowasp_fcu3",
+            target: Target::internal_high_speed(Mcu::Stm32F405, 168_000_000),
+            monotonic: MonotonicDeclaration::SysTick {
+                id: "Mono",
+                clock_hz: 168_000_000,
+            },
+            hardware: &[WRONG_UART4],
+        };
+        let error = validate(&FCU3).unwrap_err().to_string();
+        assert!(error.contains("UART4"));
+        assert!(error.contains("DMA1 Stream 2 Channel 4"));
+        assert!(error.contains("DMA1 Stream 3 Channel 4"));
+
+        const F401_PORT4: BoardDeclaration = BoardDeclaration {
+            hardware: &[HardwareResource::UartRxDma(UartRxDma::new(
+                "uart4",
+                SerialPortId::new(4),
+                PinId::new(0, 1),
+                DmaChannel::new(0, 2, 4),
+            ))],
+            ..BOARD
+        };
+        let error = validate(&F401_PORT4).unwrap_err().to_string();
+        assert!(error.contains("supports DMA receive only on serial port 2"));
+    }
+
+    #[test]
     fn renders_pb4_output_without_a_pin_specific_branch() {
         const PB4_LED: HardwareResource = output("led2", 1, 4, Level::Low);
         const PB4_BOARD: BoardDeclaration = BoardDeclaration {
@@ -657,11 +1181,13 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[BLINK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
 
         let board = validate(&PB4_BOARD).unwrap();
-        let resolved = resolve(&PB4_BOARD, &app).unwrap();
+        let expanded = crate::component::expand(&PB4_BOARD, &app).unwrap();
+        let resolved = resolve(&PB4_BOARD, &expanded).unwrap();
         let rendered = render(&board, &resolved).unwrap();
 
         assert!(
@@ -690,11 +1216,13 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[BLINK, AUX_TASK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
 
         let board = validate(&TWO_OUTPUT_BOARD).unwrap();
-        let resolved = resolve(&TWO_OUTPUT_BOARD, &app).unwrap();
+        let expanded = crate::component::expand(&TWO_OUTPUT_BOARD, &app).unwrap();
+        let resolved = resolve(&TWO_OUTPUT_BOARD, &expanded).unwrap();
         let rendered = render(&board, &resolved).unwrap();
 
         assert_eq!(rendered.initialization.matches("GPIOA.split").count(), 1);
@@ -718,11 +1246,13 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[BUTTON_TASK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
 
         let board = validate(&BUTTON_BOARD).unwrap();
-        let resolved = resolve(&BUTTON_BOARD, &app).unwrap();
+        let expanded = crate::component::expand(&BUTTON_BOARD, &app).unwrap();
+        let resolved = resolve(&BUTTON_BOARD, &expanded).unwrap();
         let rendered = render(&board, &resolved).unwrap();
         assert_eq!(
             rendered.interrupt_bindings.get("button_irq"),
@@ -752,11 +1282,13 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[FIRST_TASK, SECOND_TASK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
 
         let board = validate(&INPUT_BOARD).unwrap();
-        let resolved = resolve(&INPUT_BOARD, &app).unwrap();
+        let expanded = crate::component::expand(&INPUT_BOARD, &app).unwrap();
+        let resolved = resolve(&INPUT_BOARD, &expanded).unwrap();
         let error = render(&board, &resolved).unwrap_err();
         assert!(error.to_string().contains("both resolve to `EXTI9_5`"));
     }
@@ -771,10 +1303,12 @@ mod tests {
         let app = AppDeclaration {
             init: InitDeclaration::EMPTY,
             tasks: &[BLINK],
+            components: &[],
             software_resources: SoftwareResourcesDeclaration::EMPTY,
         };
         let board = validate(&BOARD_WITH_UNUSED).unwrap();
-        let resolved = resolve(&BOARD_WITH_UNUSED, &app).unwrap();
+        let expanded = crate::component::expand(&BOARD_WITH_UNUSED, &app).unwrap();
+        let resolved = resolve(&BOARD_WITH_UNUSED, &expanded).unwrap();
         let rendered = render(&board, &resolved).unwrap();
 
         assert!(!rendered.local_struct.contains("unused"));
@@ -797,12 +1331,13 @@ mod tests {
     }
 
     #[test]
-    fn empty_application_renders_without_backend_imports() {
-        let resolved = resolve(&BOARD, &AppDeclaration::EMPTY).unwrap();
+    fn empty_application_renders_only_the_required_hal_alias() {
+        let expanded = crate::component::expand(&BOARD, &AppDeclaration::EMPTY).unwrap();
+        let resolved = resolve(&BOARD, &expanded).unwrap();
         let board = validate(&BOARD).unwrap();
         let rendered = render(&board, &resolved).unwrap();
 
-        assert!(rendered.imports.is_empty());
+        assert_eq!(rendered.prelude_exports, HAL_ALIAS_EXPORT);
         assert_eq!(rendered.shared_struct, "struct Shared {}");
         assert_eq!(rendered.local_struct, "struct Local {}");
         assert!(rendered.initialization.is_empty());

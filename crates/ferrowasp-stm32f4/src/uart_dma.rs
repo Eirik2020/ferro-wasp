@@ -40,9 +40,12 @@ pub type UartRxBuf = &'static mut [u8; UART_RX_BUFFER_SIZE];
 #[cfg(feature = "stm32f405")]
 pub type Uart1RxIrq = UartRxIrqSide<Stream5<DMA2>, USART1, 4>;
 pub type Uart2RxIrq = UartRxIrqSide<Stream5<DMA1>, USART2, 4>;
+pub type Uart2Rx = UartRxParts<Stream5<DMA1>, USART2, 4>;
 pub type Uart2SbusRx = UartRxParts<Stream5<DMA1>, USART2, 4>;
 #[cfg(feature = "stm32f405")]
 pub type Uart4RxIrq = UartRxIrqSide<Stream2<DMA1>, UART4, 4>;
+#[cfg(feature = "stm32f405")]
+pub type Uart4Rx = UartRxParts<Stream2<DMA1>, UART4, 4>;
 #[cfg(feature = "stm32f405")]
 pub type Uart4TxBuf = &'static mut [u8; UART4_TX_BUFFER_SIZE];
 #[cfg(feature = "stm32f405")]
@@ -56,11 +59,13 @@ pub struct Usart2SbusResources {
     pub rx_dma: Stream5<DMA1>,
 }
 
-pub struct Usart2SbusRxOnlyResources {
+pub struct Usart2RxOnlyResources {
     pub rx_pin: PA3<Input>,
     pub usart: USART2,
     pub rx_dma: Stream5<DMA1>,
 }
+
+pub type Usart2SbusRxOnlyResources = Usart2RxOnlyResources;
 
 #[cfg(feature = "stm32f405")]
 pub struct Usart1EscTelemetryResources {
@@ -83,6 +88,19 @@ pub struct Uart4MspRxResources {
     pub tx_pin: PA0<Input>,
     pub rx_pin: PA1<Input>,
     pub uart: UART4,
+    pub rx_dma: Stream2<DMA1>,
+}
+
+/// Receive-only UART4 resources for PA1 with DMA1 Stream 2 Channel 4.
+#[cfg(feature = "stm32f405")]
+pub struct Uart4RxOnlyResources {
+    /// UART4 receive pin, mapped to PA1 AF8 during initialization.
+    pub rx_pin: PA1<Input>,
+
+    /// UART4 peripheral instance.
+    pub uart: UART4,
+
+    /// DMA1 Stream 2 receive stream.
     pub rx_dma: Stream2<DMA1>,
 }
 
@@ -615,6 +633,10 @@ where
 
 pub fn stm32f4_uart_config(mode: Mode) -> serial::Config {
     match mode {
+        Mode::Raw => serial::Config::default()
+            .baudrate(115_200.bps())
+            .dma(serial::config::DmaConfig::Rx),
+
         Mode::Sbus => serial::Config::default()
             .baudrate(100_000.bps())
             .wordlength_9()
@@ -836,7 +858,7 @@ pub fn init_usart2_sbus_rx_dma(
 }
 
 pub fn init_usart2_sbus_rx_only_dma(
-    resources: Usart2SbusRxOnlyResources,
+    resources: Usart2RxOnlyResources,
     rcc: &mut Rcc,
     storage: UartRxStorage,
 ) -> Uart2SbusRx {
@@ -851,11 +873,45 @@ pub fn init_usart2_sbus_rx_only_dma(
 }
 
 pub fn init_usart2_sbus_rx_only(
-    resources: Usart2SbusRxOnlyResources,
+    resources: Usart2RxOnlyResources,
     rcc: &mut Rcc,
     storage: crate::app_storage::UartRxStorageResources,
 ) -> Uart2SbusRx {
     init_usart2_sbus_rx_only_dma(resources, rcc, storage.into_backend())
+}
+
+pub fn init_usart2_rx_only(
+    resources: Usart2RxOnlyResources,
+    rcc: &mut Rcc,
+    mode: Mode,
+    storage: crate::app_storage::UartRxStorageResources,
+) -> Uart2Rx {
+    init_uart_rx_only_dma::<_, _, _, 4>(
+        resources.rx_pin.into_alternate::<7>(),
+        resources.usart,
+        resources.rx_dma,
+        rcc,
+        mode,
+        storage.into_backend(),
+    )
+}
+
+/// Initializes receive-only UART4 on PA1 with a selected serial profile.
+#[cfg(feature = "stm32f405")]
+pub fn init_uart4_rx_only(
+    resources: Uart4RxOnlyResources,
+    rcc: &mut Rcc,
+    mode: Mode,
+    storage: crate::app_storage::UartRxStorageResources,
+) -> Uart4Rx {
+    init_uart_rx_only_dma::<_, _, _, 4>(
+        resources.rx_pin.into_alternate::<8>(),
+        resources.uart,
+        resources.rx_dma,
+        rcc,
+        mode,
+        storage.into_backend(),
+    )
 }
 
 #[cfg(feature = "stm32f405")]

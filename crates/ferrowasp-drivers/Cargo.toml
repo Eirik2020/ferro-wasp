@@ -11,6 +11,9 @@ path = "src/lib.rs"
 [dependencies]
 embedded-hal = { workspace = true }
 defmt = { version = "1.0.1", optional = true }
+ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+heapless = { workspace = true }
+sbus-rs = { version = "=0.1.3", default-features = false }
 
 [features]
 default = []

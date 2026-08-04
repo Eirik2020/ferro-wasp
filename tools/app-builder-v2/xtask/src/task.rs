@@ -3,6 +3,7 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use anyhow::{Context, Result, bail};
+use fugit::MillisDurationU32;
 use proc_macro2::{Span, TokenTree};
 use quote::ToTokens;
 use syn::{
@@ -41,6 +42,95 @@ pub struct TaskArgument {
     pub rust_type: &'static str,
 }
 
+/// Portable value category required by one reusable task parameter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskParameterKind {
+    /// Fixed duration used by task timing behavior.
+    Duration,
+}
+
+/// Logical compile-time parameter required by a reusable task body.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TaskParameterDefinition {
+    id: &'static str,
+    kind: TaskParameterKind,
+}
+
+impl TaskParameterDefinition {
+    /// Returns the logical field used after `cx.config` in the task body.
+    pub const fn id(self) -> &'static str {
+        self.id
+    }
+
+    /// Returns the portable value category required by the task body.
+    pub const fn kind(self) -> TaskParameterKind {
+        self.kind
+    }
+}
+
+/// Declares one logical duration field in a reusable task body.
+pub const fn duration(id: &'static str) -> TaskParameterDefinition {
+    TaskParameterDefinition {
+        id,
+        kind: TaskParameterKind::Duration,
+    }
+}
+
+/// Typed compile-time value supplied to one concrete task parameter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskParameterValue {
+    /// Millisecond duration represented by the embedded Rust `fugit` crate.
+    Duration(MillisDurationU32),
+}
+
+impl TaskParameterValue {
+    const fn kind(self) -> TaskParameterKind {
+        match self {
+            Self::Duration(_) => TaskParameterKind::Duration,
+        }
+    }
+}
+
+/// Maps one logical task parameter to a typed compile-time value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TaskParameterBinding {
+    task_parameter: &'static str,
+    value: TaskParameterValue,
+}
+
+impl TaskParameterBinding {
+    /// Returns the logical `cx.config` field supplied by this binding.
+    pub const fn task_parameter(self) -> &'static str {
+        self.task_parameter
+    }
+
+    /// Returns the typed compile-time value supplied by this binding.
+    pub const fn value(self) -> TaskParameterValue {
+        self.value
+    }
+}
+
+/// Logical task parameter waiting to receive its concrete typed value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UnboundParameter {
+    task_parameter: &'static str,
+}
+
+impl UnboundParameter {
+    /// Supplies a `fugit` millisecond duration to this logical parameter.
+    pub const fn duration(self, value: MillisDurationU32) -> TaskParameterBinding {
+        TaskParameterBinding {
+            task_parameter: self.task_parameter,
+            value: TaskParameterValue::Duration(value),
+        }
+    }
+}
+
+/// Starts a typed value binding for one logical task parameter.
+pub const fn parameter(task_parameter: &'static str) -> UnboundParameter {
+    UnboundParameter { task_parameter }
+}
+
 impl TaskArgument {
     /// Creates a task argument from its generated name and Rust type.
     pub const fn new(name: &'static str, rust_type: &'static str) -> Self {
@@ -72,6 +162,12 @@ pub enum TaskResourceCapability {
 
     /// A DMA-backed serial receiver that exposes IRQ service and bounded chunk reads.
     UartRxDma,
+
+    /// Latest decoded radio-control sample.
+    RcInputSnapshot,
+
+    /// Stateful parser for a boot-assigned serial endpoint.
+    SerialConsumer,
 }
 
 /// Declares one logical resource and the capability required by a task body.
@@ -125,6 +221,22 @@ pub const fn uart_rx_dma(id: &'static str) -> TaskResourceDefinition {
     }
 }
 
+/// Declares a logical latest-RC-snapshot field in a reusable task body.
+pub const fn rc_input_snapshot(id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::RcInputSnapshot,
+    }
+}
+
+/// Declares a logical serial-consumer state field in a reusable task body.
+pub const fn serial_consumer_state(id: &'static str) -> TaskResourceDefinition {
+    TaskResourceDefinition {
+        id,
+        capability: TaskResourceCapability::SerialConsumer,
+    }
+}
+
 /// Selects which interrupt exposed by a hardware resource enters a task.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HardwareInterrupt {
@@ -150,6 +262,9 @@ pub struct TaskDefinition {
     /// Arguments accepted after the RTIC context parameter.
     pub args: &'static [TaskArgument],
 
+    /// Logical compile-time values accessed through `cx.config` by the body.
+    pub parameters: &'static [TaskParameterDefinition],
+
     /// Logical resources owned exclusively by a concrete task instance.
     pub local_resources: &'static [TaskResourceDefinition],
 
@@ -164,6 +279,7 @@ impl TaskDefinition {
             id,
             execution: TaskExecution::Asynchronous,
             args: &[],
+            parameters: &[],
             local_resources: &[],
             shared_resources: &[],
         }
@@ -180,6 +296,12 @@ impl TaskDefinition {
     /// Sets the arguments accepted after the generated context.
     pub const fn with_args(mut self, args: &'static [TaskArgument]) -> Self {
         self.args = args;
+        self
+    }
+
+    /// Sets the logical compile-time parameters required by the task body.
+    pub const fn with_parameters(mut self, parameters: &'static [TaskParameterDefinition]) -> Self {
+        self.parameters = parameters;
         self
     }
 
@@ -202,6 +324,7 @@ impl TaskDefinition {
             definition: self,
             priority: 0,
             trigger: TaskTrigger::Spawned,
+            parameters: &[],
             local_resources: &[],
             shared_resources: &[],
         }
@@ -351,6 +474,9 @@ pub struct TaskDeclaration {
     /// Mechanism that enters the task.
     pub trigger: TaskTrigger,
 
+    /// Concrete generation-time values supplied to the reusable body.
+    pub parameters: &'static [TaskParameterBinding],
+
     /// Resources owned exclusively by this task.
     pub local_resources: &'static [ResourceBinding],
 
@@ -362,6 +488,12 @@ impl TaskDeclaration {
     /// Sets the RTIC scheduling priority.
     pub const fn priority(mut self, priority: u8) -> Self {
         self.priority = priority;
+        self
+    }
+
+    /// Sets the typed generation-time values supplied to the task body.
+    pub const fn with_parameters(mut self, parameters: &'static [TaskParameterBinding]) -> Self {
+        self.parameters = parameters;
         self
     }
 
@@ -438,10 +570,86 @@ pub fn render(
     }
 
     Ok(format!(
-        "#[task({})]\n{}",
-        fields.join(", "),
+        "{}\n{}",
+        render_task_attribute(&fields),
         body_source.trim()
     ))
+}
+
+/// Renders an owned task produced by component expansion.
+///
+/// Logical resource and `cx.config` accesses are rewritten to their concrete
+/// resolved fields and compile-time values before the RTIC attribute is added.
+pub fn render_expanded(
+    declaration: &crate::component::ExpandedTask,
+    body_source: &str,
+    interrupt_binding: Option<&str>,
+) -> Result<String> {
+    validate_expanded_declaration(declaration)?;
+    let body: ItemFn = syn::parse_str(body_source).context("parse handwritten task body")?;
+    validate_body(&declaration.definition, &declaration.id, &body)?;
+    let body_source = rewrite_expanded_body(declaration, body_source, &body)?;
+
+    let mut fields = vec![format!("priority = {}", declaration.priority)];
+    match (&declaration.trigger, interrupt_binding) {
+        (crate::component::ExpandedTaskTrigger::Spawned, None) => {}
+        (crate::component::ExpandedTaskTrigger::Interrupt { .. }, Some(binding)) => {
+            validate_identifier(binding, "resolved interrupt binding")?;
+            fields.insert(0, format!("binds = {binding}"));
+        }
+        (crate::component::ExpandedTaskTrigger::Spawned, Some(_)) => {
+            bail!(
+                "spawned task `{}` received an interrupt binding",
+                declaration.id
+            )
+        }
+        (crate::component::ExpandedTaskTrigger::Interrupt { .. }, None) => {
+            bail!(
+                "interrupt task `{}` has no resolved binding",
+                declaration.id
+            )
+        }
+    }
+    if !declaration.local_resources.is_empty() {
+        fields.push(format!(
+            "local = [{}]",
+            declaration
+                .local_resources
+                .iter()
+                .map(|binding| binding.target.id())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !declaration.shared_resources.is_empty() {
+        fields.push(format!(
+            "shared = [{}]",
+            declaration
+                .shared_resources
+                .iter()
+                .map(|binding| binding.target.id())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    Ok(format!(
+        "{}\n{}",
+        render_task_attribute(&fields),
+        body_source.trim()
+    ))
+}
+
+fn render_task_attribute(fields: &[String]) -> String {
+    const MODULE_INDENT: usize = 4;
+    const LINE_WIDTH: usize = 88;
+
+    let compact = format!("#[task({})]", fields.join(", "));
+    if MODULE_INDENT + compact.len() <= LINE_WIDTH {
+        compact
+    } else {
+        format!("#[task(\n    {}\n)]", fields.join(",\n    "))
+    }
 }
 
 /// Validates a task declaration independently of its handwritten body.
@@ -463,6 +671,11 @@ pub(crate) fn validate_declaration(declaration: &TaskDeclaration) -> Result<()> 
             );
         }
     }
+    validate_parameter_bindings(
+        declaration.id,
+        declaration.definition.parameters,
+        declaration.parameters,
+    )?;
     validate_resource_list(declaration.id, "local", declaration.local_resources)?;
     validate_resource_list(declaration.id, "shared", declaration.shared_resources)?;
     validate_bindings_match_definition(
@@ -517,6 +730,153 @@ pub(crate) fn validate_declaration(declaration: &TaskDeclaration) -> Result<()> 
     Ok(())
 }
 
+/// Validates an owned task produced by standalone/component expansion.
+pub(crate) fn validate_expanded_declaration(
+    declaration: &crate::component::ExpandedTask,
+) -> Result<()> {
+    use crate::component::ExpandedTaskTrigger;
+
+    validate_identifier(&declaration.id, "task ID")?;
+    validate_definition(&declaration.definition)?;
+    if declaration.priority == 0 {
+        bail!(
+            "task `{}` priority must be greater than zero",
+            declaration.id
+        );
+    }
+    if let ExpandedTaskTrigger::Interrupt { resource, .. } = &declaration.trigger {
+        validate_identifier(resource, "interrupt resource")?;
+        if !declaration.definition.args.is_empty() {
+            bail!(
+                "interrupt task `{}` cannot declare spawn arguments",
+                declaration.id
+            );
+        }
+    }
+    validate_parameter_bindings(
+        &declaration.id,
+        declaration.definition.parameters,
+        &declaration.parameters,
+    )?;
+    validate_expanded_resource_list(&declaration.id, "local", &declaration.local_resources)?;
+    validate_expanded_resource_list(&declaration.id, "shared", &declaration.shared_resources)?;
+    validate_expanded_bindings_match_definition(
+        &declaration.id,
+        "local",
+        declaration.definition.local_resources,
+        &declaration.local_resources,
+    )?;
+    validate_expanded_bindings_match_definition(
+        &declaration.id,
+        "shared",
+        declaration.definition.shared_resources,
+        &declaration.shared_resources,
+    )?;
+    match (&declaration.trigger, declaration.definition.execution) {
+        (ExpandedTaskTrigger::Spawned, TaskExecution::Synchronous) => bail!(
+            "spawned task `{}` requires an asynchronous task definition",
+            declaration.id
+        ),
+        (ExpandedTaskTrigger::Interrupt { .. }, TaskExecution::Asynchronous) => bail!(
+            "interrupt task `{}` requires a synchronous task definition",
+            declaration.id
+        ),
+        _ => {}
+    }
+    for resource in &declaration.local_resources {
+        if declaration
+            .shared_resources
+            .iter()
+            .any(|shared| shared.task_resource == resource.task_resource)
+        {
+            bail!(
+                "task `{}` body resource `{}` cannot be both local and shared",
+                declaration.id,
+                resource.task_resource
+            );
+        }
+        if declaration
+            .shared_resources
+            .iter()
+            .any(|shared| shared.target == resource.target)
+        {
+            bail!(
+                "task `{}` concrete resource `{}` cannot be both local and shared",
+                declaration.id,
+                resource.target.id()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_expanded_resource_list(
+    task_id: &str,
+    kind: &str,
+    resources: &[crate::component::ExpandedResourceBinding],
+) -> Result<()> {
+    for (index, resource) in resources.iter().enumerate() {
+        validate_identifier(
+            &resource.task_resource,
+            &format!("task `{task_id}` {kind} body resource"),
+        )?;
+        validate_identifier(
+            resource.target.id(),
+            &format!("task `{task_id}` {kind} concrete resource"),
+        )?;
+        if resources[..index]
+            .iter()
+            .any(|existing| existing.task_resource == resource.task_resource)
+        {
+            bail!(
+                "task `{task_id}` repeats {kind} body resource `{}`",
+                resource.task_resource
+            );
+        }
+        if resources[..index]
+            .iter()
+            .any(|existing| existing.target == resource.target)
+        {
+            bail!(
+                "task `{task_id}` binds {kind} concrete resource `{}` more than once",
+                resource.target.id()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_expanded_bindings_match_definition(
+    task_id: &str,
+    kind: &str,
+    resources: &[TaskResourceDefinition],
+    bindings: &[crate::component::ExpandedResourceBinding],
+) -> Result<()> {
+    for resource in resources {
+        if !bindings
+            .iter()
+            .any(|binding| binding.task_resource == resource.id())
+        {
+            bail!(
+                "task `{task_id}` is missing {kind} binding for body resource `{}`",
+                resource.id()
+            );
+        }
+    }
+    for binding in bindings {
+        if !resources
+            .iter()
+            .any(|resource| resource.id() == binding.task_resource)
+        {
+            bail!(
+                "task `{task_id}` has extra {kind} binding for body resource `{}`",
+                binding.task_resource
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_definition(definition: &TaskDefinition) -> Result<()> {
     validate_identifier(definition.id, "task definition ID")?;
     for argument in definition.args {
@@ -528,6 +888,7 @@ fn validate_definition(definition: &TaskDefinition) -> Result<()> {
             )
         })?;
     }
+    validate_parameter_definitions(definition.id, definition.parameters)?;
     validate_definition_resources(definition.id, "local", definition.local_resources)?;
     validate_definition_resources(definition.id, "shared", definition.shared_resources)?;
     for resource in definition.local_resources {
@@ -540,6 +901,88 @@ fn validate_definition(definition: &TaskDefinition) -> Result<()> {
                 "task definition `{}` resource `{}` cannot be both local and shared",
                 definition.id,
                 resource.id()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_parameter_definitions(
+    definition_id: &str,
+    parameters: &[TaskParameterDefinition],
+) -> Result<()> {
+    let mut ids = std::collections::BTreeSet::new();
+    let mut generated_constants = std::collections::BTreeSet::new();
+    for parameter in parameters {
+        validate_identifier(
+            parameter.id(),
+            &format!("task definition `{definition_id}` parameter"),
+        )?;
+        if !ids.insert(parameter.id()) {
+            bail!(
+                "task definition `{definition_id}` repeats parameter `{}`",
+                parameter.id()
+            );
+        }
+        let constant = parameter_constant_name(parameter.id());
+        if !generated_constants.insert(constant.clone()) {
+            bail!(
+                "task definition `{definition_id}` parameters collide as generated constant `{constant}`"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_parameter_bindings(
+    task_id: &str,
+    definitions: &[TaskParameterDefinition],
+    bindings: &[TaskParameterBinding],
+) -> Result<()> {
+    let mut bound = std::collections::BTreeSet::new();
+    for binding in bindings {
+        validate_identifier(
+            binding.task_parameter(),
+            &format!("task `{task_id}` parameter"),
+        )?;
+        if !bound.insert(binding.task_parameter()) {
+            bail!(
+                "task `{task_id}` binds parameter `{}` more than once",
+                binding.task_parameter()
+            );
+        }
+        let Some(definition) = definitions
+            .iter()
+            .find(|definition| definition.id() == binding.task_parameter())
+        else {
+            bail!(
+                "task `{task_id}` has extra parameter binding `{}`",
+                binding.task_parameter()
+            );
+        };
+        if definition.kind() != binding.value().kind() {
+            bail!(
+                "task `{task_id}` parameter `{}` requires {:?}, but its binding provides {:?}",
+                definition.id(),
+                definition.kind(),
+                binding.value().kind()
+            );
+        }
+        match binding.value() {
+            TaskParameterValue::Duration(value) if value.is_zero() => {
+                bail!(
+                    "task `{task_id}` duration parameter `{}` must be greater than zero",
+                    definition.id()
+                )
+            }
+            TaskParameterValue::Duration(_) => {}
+        }
+    }
+    for definition in definitions {
+        if !bound.contains(definition.id()) {
+            bail!(
+                "task `{task_id}` is missing parameter binding `{}`",
+                definition.id()
             );
         }
     }
@@ -756,7 +1199,7 @@ fn validate_bindings_match_definition(
 #[derive(Debug)]
 struct SourceReplacement {
     span: Span,
-    expected: String,
+    expected: Option<String>,
     replacement: String,
 }
 
@@ -764,6 +1207,8 @@ struct ResourceUseVisitor<'a> {
     task_id: &'a str,
     local_resources: BTreeMap<&'a str, &'a str>,
     shared_resources: BTreeMap<&'a str, &'a str>,
+    parameters: BTreeMap<&'a str, TaskParameterValue>,
+    used_parameters: std::collections::BTreeSet<String>,
     replacements: Vec<SourceReplacement>,
     errors: Vec<String>,
 }
@@ -785,8 +1230,25 @@ impl ResourceUseVisitor<'_> {
         };
         self.replacements.push(SourceReplacement {
             span: field.span(),
-            expected: field_name,
+            expected: Some(field_name),
             replacement: (*concrete_resource).to_owned(),
+        });
+    }
+
+    fn record_parameter_use(&mut self, field: &syn::Ident, span: Span) {
+        let field_name = field.to_string();
+        let Some(value) = self.parameters.get(field_name.as_str()).copied() else {
+            self.errors.push(format!(
+                "task `{}` body uses cx.config.{field_name} without a parameter binding",
+                self.task_id
+            ));
+            return;
+        };
+        self.used_parameters.insert(field_name.clone());
+        self.replacements.push(SourceReplacement {
+            span,
+            expected: None,
+            replacement: render_parameter_expression(&field_name, value),
         });
     }
 
@@ -808,15 +1270,22 @@ impl ResourceUseVisitor<'_> {
             else {
                 continue;
             };
-            if context == "cx"
-                && first_dot.as_char() == '.'
-                && second_dot.as_char() == '.'
-                && (kind == "local" || kind == "shared")
-            {
-                self.record_resource_use(
-                    if kind == "local" { "local" } else { "shared" },
-                    resource,
-                );
+            if context == "cx" && first_dot.as_char() == '.' && second_dot.as_char() == '.' {
+                if kind == "local" || kind == "shared" {
+                    self.record_resource_use(
+                        if kind == "local" { "local" } else { "shared" },
+                        resource,
+                    );
+                } else if kind == "config" {
+                    if let Some(span) = context.span().join(resource.span()) {
+                        self.record_parameter_use(resource, span);
+                    } else {
+                        self.errors.push(format!(
+                            "task `{}` cannot resolve cx.config.{} inside macro tokens",
+                            self.task_id, resource
+                        ));
+                    }
+                }
             }
         }
     }
@@ -826,6 +1295,8 @@ impl<'ast> Visit<'ast> for ResourceUseVisitor<'_> {
     fn visit_expr_field(&mut self, field: &'ast ExprField) {
         if let Some((kind, resource)) = context_resource_field(field) {
             self.record_resource_use(kind, resource);
+        } else if let Some(parameter) = context_parameter_field(field) {
+            self.record_parameter_use(parameter, field.span());
         }
         syn::visit::visit_expr_field(self, field);
     }
@@ -834,6 +1305,25 @@ impl<'ast> Visit<'ast> for ResourceUseVisitor<'_> {
         self.visit_macro_tokens(task_macro.tokens.clone());
         syn::visit::visit_macro(self, task_macro);
     }
+}
+
+fn context_parameter_field(field: &ExprField) -> Option<&syn::Ident> {
+    let Member::Named(parameter) = &field.member else {
+        return None;
+    };
+    let Expr::Field(context_group) = field.base.as_ref() else {
+        return None;
+    };
+    let Member::Named(kind) = &context_group.member else {
+        return None;
+    };
+    if kind != "config" {
+        return None;
+    }
+    let Expr::Path(context) = context_group.base.as_ref() else {
+        return None;
+    };
+    context.path.is_ident("cx").then_some(parameter)
 }
 
 fn context_resource_field(field: &ExprField) -> Option<(&str, &syn::Ident)> {
@@ -869,10 +1359,68 @@ fn rewrite_body(declaration: &TaskDeclaration, body_source: &str, body: &ItemFn)
         .iter()
         .map(|binding| (binding.task_resource(), binding.target().id()))
         .collect();
-    let mut visitor = ResourceUseVisitor {
-        task_id: declaration.id,
+    let parameters = declaration
+        .parameters
+        .iter()
+        .map(|binding| (binding.task_parameter(), binding.value()))
+        .collect();
+    rewrite_body_with_bindings(
+        declaration.id,
+        &declaration.definition,
+        body_source,
+        body,
         local_resources,
         shared_resources,
+        parameters,
+    )
+}
+
+fn rewrite_expanded_body(
+    declaration: &crate::component::ExpandedTask,
+    body_source: &str,
+    body: &ItemFn,
+) -> Result<String> {
+    let local_resources = declaration
+        .local_resources
+        .iter()
+        .map(|binding| (binding.task_resource.as_str(), binding.target.id()))
+        .collect();
+    let shared_resources = declaration
+        .shared_resources
+        .iter()
+        .map(|binding| (binding.task_resource.as_str(), binding.target.id()))
+        .collect();
+    let parameters = declaration
+        .parameters
+        .iter()
+        .map(|binding| (binding.task_parameter(), binding.value()))
+        .collect();
+    rewrite_body_with_bindings(
+        &declaration.id,
+        &declaration.definition,
+        body_source,
+        body,
+        local_resources,
+        shared_resources,
+        parameters,
+    )
+}
+
+fn rewrite_body_with_bindings<'a>(
+    task_id: &'a str,
+    definition: &TaskDefinition,
+    body_source: &str,
+    body: &ItemFn,
+    local_resources: BTreeMap<&'a str, &'a str>,
+    shared_resources: BTreeMap<&'a str, &'a str>,
+    parameters: BTreeMap<&'a str, TaskParameterValue>,
+) -> Result<String> {
+    let mut visitor = ResourceUseVisitor {
+        task_id,
+        local_resources,
+        shared_resources,
+        parameters,
+        used_parameters: std::collections::BTreeSet::new(),
         replacements: Vec::new(),
         errors: Vec::new(),
     };
@@ -880,21 +1428,48 @@ fn rewrite_body(declaration: &TaskDeclaration, body_source: &str, body: &ItemFn)
     if !visitor.errors.is_empty() {
         bail!(visitor.errors.join("; "));
     }
+    for parameter in definition.parameters {
+        if !visitor.used_parameters.contains(parameter.id()) {
+            bail!(
+                "task `{task_id}` parameter `{}` is declared and bound but not used by its body",
+                parameter.id()
+            );
+        }
+    }
 
-    if declaration.definition.id != declaration.id {
+    if !definition.parameters.is_empty() {
+        let constants = definition
+            .parameters
+            .iter()
+            .map(|parameter| {
+                let value = visitor.parameters[parameter.id()];
+                render_parameter_constant(parameter.id(), value)
+            })
+            .collect::<Vec<_>>()
+            .join("\n    ");
+        visitor.replacements.push(SourceReplacement {
+            span: body.block.brace_token.span.open(),
+            expected: Some("{".to_owned()),
+            replacement: format!("{{\n    {constants}\n"),
+        });
+    }
+
+    if definition.id != task_id {
         visitor.replacements.push(SourceReplacement {
             span: body.sig.ident.span(),
-            expected: declaration.definition.id.to_owned(),
-            replacement: declaration.id.to_owned(),
+            expected: Some(definition.id.to_owned()),
+            replacement: task_id.to_owned(),
         });
-        let context = body.sig.inputs.first().ok_or_else(|| {
-            anyhow::anyhow!("task `{}` is missing its RTIC context", declaration.id)
-        })?;
-        let context_task = validate_context(declaration.id, declaration.definition.id, context)?;
+        let context = body
+            .sig
+            .inputs
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("task `{task_id}` is missing its RTIC context"))?;
+        let context_task = validate_context(task_id, definition.id, context)?;
         visitor.replacements.push(SourceReplacement {
             span: context_task.span(),
-            expected: declaration.definition.id.to_owned(),
-            replacement: declaration.id.to_owned(),
+            expected: Some(definition.id.to_owned()),
+            replacement: task_id.to_owned(),
         });
     }
 
@@ -915,10 +1490,11 @@ fn apply_source_replacements(source: &str, replacements: Vec<SourceReplacement>)
         .map(|replacement| {
             let start = source_offset(source, &line_starts, replacement.span.start())?;
             let end = source_offset(source, &line_starts, replacement.span.end())?;
-            if source.get(start..end) != Some(replacement.expected.as_str()) {
+            if let Some(expected) = replacement.expected
+                && source.get(start..end) != Some(expected.as_str())
+            {
                 bail!(
-                    "task source span expected `{}`, found `{}`",
-                    replacement.expected,
+                    "task source span expected `{expected}`, found `{}`",
                     source.get(start..end).unwrap_or("<invalid UTF-8 boundary>")
                 );
             }
@@ -937,6 +1513,40 @@ fn apply_source_replacements(source: &str, replacements: Vec<SourceReplacement>)
         next_start = start;
     }
     Ok(rendered)
+}
+
+fn parameter_constant_name(parameter_id: &str) -> String {
+    format!("{}_MS", parameter_id.to_uppercase())
+}
+
+fn render_parameter_expression(parameter_id: &str, value: TaskParameterValue) -> String {
+    match value {
+        TaskParameterValue::Duration(_) => {
+            format!("{}.millis()", parameter_constant_name(parameter_id))
+        }
+    }
+}
+
+fn render_parameter_constant(parameter_id: &str, value: TaskParameterValue) -> String {
+    match value {
+        TaskParameterValue::Duration(duration) => format!(
+            "const {}: u32 = {};",
+            parameter_constant_name(parameter_id),
+            render_u32_literal(duration.ticks())
+        ),
+    }
+}
+
+fn render_u32_literal(value: u32) -> String {
+    let digits = value.to_string();
+    let mut rendered = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index) % 3 == 0 {
+            rendered.push('_');
+        }
+        rendered.push(digit);
+    }
+    rendered
 }
 
 struct AppTaskInput {
@@ -1134,7 +1744,7 @@ mod tests {
         )
         .unwrap();
         assert!(rendered.starts_with(
-            "#[task(binds = EXTI15_10, priority = 2, local = [user_button], shared = [blink_enabled])]"
+            "#[task(\n    binds = EXTI15_10,\n    priority = 2,\n    local = [user_button],\n    shared = [blink_enabled]\n)]"
         ));
     }
 
@@ -1184,6 +1794,99 @@ mod tests {
             error
                 .to_string()
                 .contains("without a local resource binding")
+        );
+    }
+
+    #[test]
+    fn duration_parameter_is_rewritten_to_a_function_local_constant() {
+        const DEFINITION: TaskDefinition =
+            TaskDefinition::asynchronous("timed").with_parameters(&[duration("interval")]);
+        const DECLARATION: TaskDeclaration = DEFINITION
+            .spawned_as("timed_fast")
+            .priority(1)
+            .with_parameters(&[parameter("interval").duration(MillisDurationU32::millis(250))]);
+
+        let rendered = render(
+            &DECLARATION,
+            "async fn timed(cx: timed::Context) { Mono::delay(cx.config.interval).await; }",
+            None,
+        )
+        .unwrap();
+
+        assert!(rendered.contains("async fn timed_fast(cx: timed_fast::Context)"));
+        assert!(rendered.contains("const INTERVAL_MS: u32 = 250;"));
+        assert!(rendered.contains("Mono::delay(INTERVAL_MS.millis()).await;"));
+        assert!(!rendered.contains("cx.config"));
+        assert!(syn::parse_file(&rendered).is_ok());
+    }
+
+    #[test]
+    fn task_parameters_require_exact_nonzero_bindings() {
+        const DEFINITION: TaskDefinition =
+            TaskDefinition::asynchronous("timed").with_parameters(&[duration("interval")]);
+        const MISSING: TaskDeclaration = DEFINITION.spawned_as("missing").priority(1);
+        const ZERO: TaskDeclaration = DEFINITION
+            .spawned_as("zero")
+            .priority(1)
+            .with_parameters(&[parameter("interval").duration(MillisDurationU32::millis(0))]);
+        const EXTRA: TaskDeclaration = TaskDefinition::asynchronous("plain")
+            .spawned_as("extra")
+            .priority(1)
+            .with_parameters(&[parameter("interval").duration(MillisDurationU32::millis(1))]);
+
+        assert!(
+            validate_declaration(&MISSING)
+                .unwrap_err()
+                .to_string()
+                .contains("missing parameter binding `interval`")
+        );
+        assert!(
+            validate_declaration(&ZERO)
+                .unwrap_err()
+                .to_string()
+                .contains("must be greater than zero")
+        );
+        assert!(
+            validate_declaration(&EXTRA)
+                .unwrap_err()
+                .to_string()
+                .contains("extra parameter binding `interval`")
+        );
+    }
+
+    #[test]
+    fn body_config_use_requires_a_declared_and_used_parameter() {
+        const EMPTY: TaskDeclaration = TaskDefinition::asynchronous("plain")
+            .spawned_as("plain")
+            .priority(1);
+        let undeclared = render(
+            &EMPTY,
+            "async fn plain(cx: plain::Context) { let _ = cx.config.interval; }",
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            undeclared
+                .to_string()
+                .contains("without a parameter binding")
+        );
+
+        const DEFINITION: TaskDefinition =
+            TaskDefinition::asynchronous("timed").with_parameters(&[duration("interval")]);
+        const UNUSED: TaskDeclaration = DEFINITION
+            .spawned_as("timed")
+            .priority(1)
+            .with_parameters(&[parameter("interval").duration(MillisDurationU32::millis(1))]);
+        let unused = render(
+            &UNUSED,
+            "async fn timed(cx: timed::Context) { let _ = cx; }",
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            unused
+                .to_string()
+                .contains("declared and bound but not used")
         );
     }
 

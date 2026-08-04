@@ -9,6 +9,7 @@ pub enum LogicalSerialPort {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SerialProtocol {
     Disabled,
+    Raw,
     Sbus,
     Crsf,
     Mavlink,
@@ -22,11 +23,13 @@ pub const MAVLINK_MIN_FRAME_LEN: usize = 25;
 pub const MSP_V1_MAX_PAYLOAD_LEN: usize = 64;
 pub const MSP_V1_MAX_FRAME_LEN: usize = MSP_V1_MAX_PAYLOAD_LEN + 6;
 pub const ESC_TELEMETRY_FRAME_LEN: usize = 10;
+pub const RAW_LINE_MAX_LEN: usize = 64;
 
 impl SerialProtocol {
     pub const fn frame_size(self) -> usize {
         match self {
             SerialProtocol::Disabled => 0,
+            SerialProtocol::Raw => RAW_LINE_MAX_LEN,
             SerialProtocol::Sbus => SBUS_FRAME_LEN,
             SerialProtocol::Crsf => CRSF_FRAME_LEN,
             SerialProtocol::Mavlink => MAVLINK_MIN_FRAME_LEN,
@@ -37,6 +40,7 @@ impl SerialProtocol {
 
     pub const fn max_frame_size() -> usize {
         let sizes = [
+            SerialProtocol::Raw.frame_size(),
             SerialProtocol::Sbus.frame_size(),
             SerialProtocol::Crsf.frame_size(),
             SerialProtocol::Mavlink.frame_size(),
@@ -86,6 +90,16 @@ impl SerialProfile {
             word_bits: 9,
             stop_bits: 2,
             parity_even: true,
+        }
+    }
+
+    pub const fn raw() -> Self {
+        Self {
+            protocol: SerialProtocol::Raw,
+            baud: 115_200,
+            word_bits: 8,
+            stop_bits: 1,
+            parity_even: false,
         }
     }
 

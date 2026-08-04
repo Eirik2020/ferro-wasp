@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{Context, Result, bail};
 
-use crate::hw_resources::{HardwareResource, Target};
+use crate::hw_resources::{HardwareResource, SerialProtocol, Target};
 
 /// RTIC monotonic configuration retained during the hardware-model migration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,6 +54,24 @@ pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
         if !hardware_ids.insert(id) {
             bail!("board `{}` repeats hardware resource `{id}`", board.id);
         }
+        if let Some(uart) = hardware.uart_rx_dma() {
+            if uart.serial_port.number == 0 {
+                bail!("serial resource `{id}` must use a one-based serial-port number");
+            }
+            if uart.supported_protocols.is_empty() {
+                bail!("UART resource `{id}` must declare at least one supported protocol");
+            }
+            let mut protocols = Vec::new();
+            for protocol in uart.supported_protocols {
+                if *protocol == SerialProtocol::Disabled {
+                    bail!("UART resource `{id}` cannot list Disabled as a hardware capability");
+                }
+                if protocols.contains(protocol) {
+                    bail!("UART resource `{id}` repeats protocol capability {protocol:?}");
+                }
+                protocols.push(*protocol);
+            }
+        }
     }
     Ok(())
 }
@@ -62,7 +80,8 @@ pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
 mod tests {
     use super::*;
     use crate::hw_resources::{
-        Clock, ClockSource, Drive, Gpio, GpioMode, InterruptEdge, Level, Mcu, PinId, Pull,
+        Clock, ClockSource, DmaChannel, Drive, Gpio, GpioMode, InterruptEdge, Level, Mcu, PinId,
+        Pull, SerialPortId, UartRxDma,
     };
 
     const LED2: HardwareResource =
@@ -140,6 +159,26 @@ mod tests {
                 .to_string()
                 .contains("greater than zero")
         );
+    }
+
+    #[test]
+    fn rejects_zero_serial_port_number() {
+        const SERIAL: HardwareResource = HardwareResource::UartRxDma(
+            UartRxDma::new(
+                "serial",
+                SerialPortId::new(0),
+                PinId::new(0, 3),
+                DmaChannel::new(0, 5, 4),
+            )
+            .supports(&[SerialProtocol::Raw]),
+        );
+        const INVALID: BoardDeclaration = BoardDeclaration {
+            hardware: &[SERIAL],
+            ..BOARD
+        };
+
+        let error = validate(&INVALID).unwrap_err().to_string();
+        assert!(error.contains("one-based serial-port number"));
     }
 
     #[test]
