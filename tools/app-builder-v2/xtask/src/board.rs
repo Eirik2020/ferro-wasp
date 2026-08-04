@@ -1,228 +1,45 @@
+//! HAL-independent board declaration and basic declaration validation.
+
 use std::collections::BTreeSet;
 
 use anyhow::{Context, Result, bail};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Mcu {
-    Stm32F401RE,
-}
+use crate::hw_resources::{HardwareResource, Target};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ClockSource {
-    Hsi,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ClockDeclaration {
-    pub source: ClockSource,
-    pub sysclk_hz: u32,
-}
-
+/// RTIC monotonic configuration retained during the hardware-model migration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MonotonicDeclaration {
-    SysTick { id: &'static str, clock_hz: u32 },
-}
+    /// Cortex-M SysTick monotonic clock.
+    SysTick {
+        /// Rust identifier used by generated task bodies.
+        id: &'static str,
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ResourceId(&'static str);
-
-impl ResourceId {
-    pub const fn new(value: &'static str) -> Self {
-        Self(value)
-    }
-
-    pub const fn as_str(self) -> &'static str {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PhysicalPin(&'static str);
-
-impl PhysicalPin {
-    pub const fn new(name: &'static str) -> Self {
-        Self(name)
-    }
-
-    pub const fn as_str(self) -> &'static str {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OutputDrive {
-    PushPull,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(dead_code)]
-pub enum LogicLevel {
-    Low,
-    High,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ActiveLevel {
-    Low,
-    High,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InputPull {
-    Up,
-    #[allow(dead_code)]
-    Down,
-    #[allow(dead_code)]
-    Floating,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InterruptEdge {
-    #[allow(dead_code)]
-    Rising,
-    Falling,
-    #[allow(dead_code)]
-    Both,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HardwareDeclaration {
-    DigitalOutput {
-        id: ResourceId,
-        pin: PhysicalPin,
-        drive: OutputDrive,
-        initial: LogicLevel,
-        active: ActiveLevel,
-    },
-    DigitalInput {
-        id: ResourceId,
-        pin: PhysicalPin,
-        pull: InputPull,
-        active: ActiveLevel,
-        interrupt: Option<InterruptEdge>,
+        /// Input clock frequency in hertz.
+        clock_hz: u32,
     },
 }
 
-impl HardwareDeclaration {
-    pub const fn digital_output(id: ResourceId, pin: PhysicalPin) -> Self {
-        Self::DigitalOutput {
-            id,
-            pin,
-            drive: OutputDrive::PushPull,
-            initial: LogicLevel::Low,
-            active: ActiveLevel::High,
-        }
-    }
-
-    /// Declares an active-low, pull-up digital input with a falling-edge EXTI.
-    pub const fn exti_input(id: ResourceId, pin: PhysicalPin) -> Self {
-        Self::DigitalInput {
-            id,
-            pin,
-            pull: InputPull::Up,
-            active: ActiveLevel::Low,
-            interrupt: Some(InterruptEdge::Falling),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub const fn with_drive(self, drive: OutputDrive) -> Self {
-        match self {
-            Self::DigitalOutput {
-                id,
-                pin,
-                initial,
-                active,
-                ..
-            } => Self::DigitalOutput {
-                id,
-                pin,
-                drive,
-                initial,
-                active,
-            },
-            other => other,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub const fn with_initial(self, initial: LogicLevel) -> Self {
-        match self {
-            Self::DigitalOutput {
-                id,
-                pin,
-                drive,
-                active,
-                ..
-            } => Self::DigitalOutput {
-                id,
-                pin,
-                drive,
-                initial,
-                active,
-            },
-            other => other,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub const fn with_active_level(self, active: ActiveLevel) -> Self {
-        match self {
-            Self::DigitalOutput {
-                id,
-                pin,
-                drive,
-                initial,
-                ..
-            } => Self::DigitalOutput {
-                id,
-                pin,
-                drive,
-                initial,
-                active,
-            },
-            Self::DigitalInput {
-                id,
-                pin,
-                pull,
-                interrupt,
-                ..
-            } => Self::DigitalInput {
-                id,
-                pin,
-                pull,
-                active,
-                interrupt,
-            },
-        }
-    }
-
-    pub const fn id(&self) -> &'static str {
-        match self {
-            Self::DigitalOutput { id, .. } | Self::DigitalInput { id, .. } => id.as_str(),
-        }
-    }
-
-    pub const fn pin(&self) -> PhysicalPin {
-        match self {
-            Self::DigitalOutput { pin, .. } | Self::DigitalInput { pin, .. } => *pin,
-        }
-    }
-}
-
+/// Hardware target and physical resources available to an application.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BoardDeclaration {
+    /// Stable board identifier used by the generator.
     pub id: &'static str,
-    pub mcu: Mcu,
-    pub clocks: ClockDeclaration,
+
+    /// MCU and clock configuration for the board.
+    pub target: Target,
+
+    /// RTIC monotonic configuration.
     pub monotonic: MonotonicDeclaration,
-    pub hardware: &'static [HardwareDeclaration],
+
+    /// Physical hardware resources declared by the board.
+    pub hardware: &'static [HardwareResource],
 }
 
+/// Validates generic board identifiers, clock invariants, and resource IDs.
 pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
     syn::parse_str::<syn::Ident>(board.id)
         .with_context(|| format!("board ID `{}` is not a Rust identifier", board.id))?;
-    if board.clocks.sysclk_hz == 0 {
+    if board.target.clock.sysclk_hz == 0 {
         bail!(
             "board `{}` system clock must be greater than zero",
             board.id
@@ -237,12 +54,6 @@ pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
         if !hardware_ids.insert(id) {
             bail!("board `{}` repeats hardware resource `{id}`", board.id);
         }
-        if hardware.pin().as_str().is_empty() {
-            bail!(
-                "board `{}` hardware resource `{id}` has an empty physical pin",
-                board.id
-            );
-        }
     }
     Ok(())
 }
@@ -250,15 +61,20 @@ pub(crate) fn validate(board: &BoardDeclaration) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hw_resources::{
+        Clock, ClockSource, Drive, Gpio, GpioMode, InterruptEdge, Level, Mcu, PinId, Pull,
+    };
 
-    const LED2: HardwareDeclaration =
-        HardwareDeclaration::digital_output(ResourceId::new("led2"), PhysicalPin::new("PA5"));
+    const LED2: HardwareResource =
+        HardwareResource::Gpio(Gpio::output("led2", PinId::new(0, 5), Level::Low));
     const BOARD: BoardDeclaration = BoardDeclaration {
         id: "nucleo_f401re",
-        mcu: Mcu::Stm32F401RE,
-        clocks: ClockDeclaration {
-            source: ClockSource::Hsi,
-            sysclk_hz: 84_000_000,
+        target: Target {
+            mcu: Mcu::Stm32F401,
+            clock: Clock {
+                source: ClockSource::InternalHighSpeed,
+                sysclk_hz: 84_000_000,
+            },
         },
         monotonic: MonotonicDeclaration::SysTick {
             id: "Mono",
@@ -268,54 +84,53 @@ mod tests {
     };
 
     #[test]
-    fn represents_pa5_without_a_hal_pin_type() {
-        assert_eq!(LED2.pin(), PhysicalPin::new("PA5"));
+    fn represents_port_zero_pin_five_without_a_hal_pin_type() {
+        assert_eq!(LED2.pin(), PinId::new(0, 5));
         validate(&BOARD).unwrap();
     }
 
     #[test]
-    fn constructor_applies_digital_output_defaults() {
-        let HardwareDeclaration::DigitalOutput {
-            drive,
-            initial,
-            active,
-            ..
-        } = LED2
-        else {
-            panic!("expected digital output")
-        };
-        assert_eq!(drive, OutputDrive::PushPull);
-        assert_eq!(initial, LogicLevel::Low);
-        assert_eq!(active, ActiveLevel::High);
-    }
-
-    #[test]
-    fn exti_input_constructor_applies_button_defaults() {
-        const BUTTON: HardwareDeclaration = HardwareDeclaration::exti_input(
-            ResourceId::new("user_button"),
-            PhysicalPin::new("PC13"),
+    fn output_constructor_applies_gpio_defaults() {
+        let gpio = LED2.gpio().unwrap();
+        assert_eq!(gpio.pull, Pull::None);
+        assert_eq!(
+            gpio.mode,
+            GpioMode::Output {
+                drive: Drive::PushPull,
+                initial_level: Level::Low,
+            }
         );
-        let HardwareDeclaration::DigitalInput {
-            pull,
-            active,
-            interrupt,
-            ..
-        } = BUTTON
-        else {
-            panic!("expected digital input")
-        };
-        assert_eq!(pull, InputPull::Up);
-        assert_eq!(active, ActiveLevel::Low);
-        assert_eq!(interrupt, Some(InterruptEdge::Falling));
     }
 
     #[test]
-    fn rejects_empty_physical_pin_names() {
+    fn input_modifiers_apply_button_configuration() {
+        const BUTTON: HardwareResource = HardwareResource::Gpio(
+            Gpio::input("user_button", PinId::new(2, 13))
+                .pull_up()
+                .interrupt_on(InterruptEdge::Falling),
+        );
+        let gpio = BUTTON.gpio().unwrap();
+        assert_eq!(gpio.pull, Pull::Up);
+        assert_eq!(
+            gpio.mode,
+            GpioMode::Input {
+                interrupt: Some(crate::hw_resources::ExternalInterrupt {
+                    edge: InterruptEdge::Falling,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_zero_system_clock() {
         const INVALID: BoardDeclaration = BoardDeclaration {
-            hardware: &[HardwareDeclaration::digital_output(
-                ResourceId::new("invalid"),
-                PhysicalPin::new(""),
-            )],
+            target: Target {
+                clock: Clock {
+                    sysclk_hz: 0,
+                    ..BOARD.target.clock
+                },
+                ..BOARD.target
+            },
             ..BOARD
         };
 
@@ -323,7 +138,7 @@ mod tests {
             validate(&INVALID)
                 .unwrap_err()
                 .to_string()
-                .contains("empty physical pin")
+                .contains("greater than zero")
         );
     }
 

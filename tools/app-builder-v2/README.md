@@ -6,16 +6,17 @@ inputs:
 1. a Rust `BoardDeclaration` describing the MCU, clock, monotonic, and physical
    resources;
 2. an `AppDeclaration` selecting included tasks and init spawns;
-3. handwritten, unannotated task functions.
+3. reusable task modules that colocate capability declarations and handwritten
+   functions.
 
 The initial example declares a priority-1 `blink_led` task with `led3` as a
 local resource. Its handwritten body waits on the SysTick monotonic and toggles
 the NUCLEO LD2 LED on PA5. Each iteration spawns a one-shot `report_blink`
 task, which logs the wrapping `u32` blink count through defmt RTT.
 The board's active-low B1 button on PC13 is configured as a falling-edge EXTI
-input. Its synchronous `EXTI15_10` task toggles the shared `blink_enabled`
-software resource; the async blink task remains scheduled but holds LD2 low
-while disabled.
+input. Its synchronous interrupt task toggles the shared `blink_enabled`
+software resource; the STM32 backend derives the `EXTI15_10` binding from
+PC13. The async blink task remains scheduled but holds LD2 low while disabled.
 
 ## Generate
 
@@ -25,7 +26,8 @@ From this directory:
 cargo xtask generate
 ```
 
-The generator validates the declaration and handwritten function, creates the
+The generator validates each definition, concrete instance, and handwritten
+function, creates the
 RTIC `#[task(...)]` attribute, inserts the combined task into the app template,
 parses the complete result, and writes:
 
@@ -33,22 +35,51 @@ parses the complete result, and writes:
 targets/nucleo_f401re/src/main.rs
 ```
 
-The handwritten body is
-[`tasks/task-bodies/blink_led.rs`](tasks/task-bodies/blink_led.rs). It is source
-input and is never compiled as a separate Rust module. The Rust declaration is
-[`tasks/task-declarations/blink_led.rs`](tasks/task-declarations/blink_led.rs),
-which the central
-[`tasks/task-declarations/mod.rs`](tasks/task-declarations/mod.rs) registry
-reexports for app declarations. Apps can import that registry with `*` and
-then explicitly select task constants in `APP.tasks` and `APP.init.spawns`.
+Each reusable task is one module under [`tasks/`](tasks). For example,
+[`tasks/blink.rs`](tasks/blink.rs) contains both its portable capability
+contract and ordinary Rust function:
+
+```rust
+app_task! {
+    pub const BLINK: TaskDefinition = TaskDefinition::asynchronous("blink")
+        .with_local(&[digital_output("led")])
+        .with_shared(&[boolean("enabled")]);
+
+    async fn blink(mut cx: blink::Context) {
+        // Handwritten implementation.
+    }
+}
+```
+
+[`tasks/mod.rs`](tasks/mod.rs) is the explicit reusable-task registry. A
+definition owns the body ID, sync/async kind, arguments, logical resources, and
+portable capabilities. It does not own target hardware names or scheduling.
 
 The app declaration is
 [`targets/nucleo_f401re/src/app_composition.rs`](targets/nucleo_f401re/src/app_composition.rs).
-`APP.tasks` controls all rendered tasks; `APP.init.spawns` controls only the
-tasks started from RTIC `init`. `APP.software_resources.shared` and
-`APP.software_resources.local` declare non-hardware RTIC state. Tasks refer to
-that state by ID in the same resource lists they use for board hardware, and
-the resolution phase checks that the selected section matches the task use.
+The target composition creates concrete instances from those definitions:
+
+```rust
+pub const BLINK_LED: TaskDeclaration = tasks::BLINK
+    .spawned_as("blink_led")
+    .priority(1)
+    .with_local(&[resource("led").to_hw("led3")])
+    .with_shared(&[resource("enabled").to_sw("blink_enabled")]);
+```
+
+`APP.tasks` controls all rendered instances; `APP.init.spawns` controls only the
+instances started from RTIC `init`. `APP.software_resources.shared` and
+`APP.software_resources.local` declare non-hardware RTIC state. Task bodies use
+logical resource fields that declarations bind explicitly to hardware or
+software IDs.
+
+The body uses `cx.local.led` and `cx.shared.enabled`; generation rewrites only
+those parsed field accesses to `cx.local.led3` and
+`cx.shared.blink_enabled`. The resolver checks each `to_hw` target against the
+board, each `to_sw` target against the corresponding application software
+resource section, and each binding against the definition's required
+capability. The initial capability set is digital output, interrupt input, and
+Boolean software state.
 
 An empty application is declared as `pub const APP: AppDeclaration =
 AppDeclaration::EMPTY;`. Rust struct literals require every field explicitly,
@@ -57,15 +88,35 @@ so `AppDeclaration { init: InitDeclaration {} }` cannot omit `spawns` or
 
 The board declaration is
 [`targets/nucleo_f401re/src/board.rs`](targets/nucleo_f401re/src/board.rs). It
-contains only HAL-independent physical data such as typed resource IDs and
-physical-pin names. Digital outputs default to push-pull, initial-low, and
-active-high.
-Resolution uses those declarations without depending on an MCU
-HAL. EXTI inputs default to active-low, pull-up, and falling-edge operation.
-The STM32F4 backend validates the selected target and maps the resolved PA5 and
-PC13 resources to `ferrowasp-stm32f4` types and initialization. Task code imports
-its digital capability through `ferrowasp-io-core`; the existing RTIC and
-SysTick-monotonic facade remains in `ferrowasp-stm32f4` for this prototype.
+contains only HAL-independent physical data such as resource IDs and numeric
+`PinId { port, pin }` coordinates. Port numbering is normalized at this
+boundary; the STM32 backend maps port `0` to GPIOA, port `1` to GPIOB, and so
+on. Digital outputs currently use push-pull drive, receive their initial level
+explicitly, and default to no internal pull. Resolution uses those declarations
+without depending on an MCU HAL. The Nucleo button declaration explicitly
+selects pull-up and falling-edge operation. Interrupt declarations reference a
+logical local input binding instead of naming a raw interrupt vector:
+
+```rust
+tasks::BUTTON_EXTI.interrupt_as("button_exti", "button")
+    .with_local(&[resource("button").to_hw("user_button")]);
+```
+
+The STM32F4 backend maps each declared numeric pin once, validates it against the
+STM32F401RE LQFP64 package catalog, and algorithmically renders the generic HAL
+pin type, GPIO port split, pin accessor, pull, initial state, interrupt edge,
+and EXTI binding. For example, changing a valid digital output from
+`PinId::new(0, 5)` (PA5) to `PinId::new(1, 4)` (PB4) produces
+`Pin<'B', 4, Output<PushPull>>`, `GPIOB.split(...)`, and `gpiob.pb4` without a
+PB4-specific renderer branch. It splits only ports used by resolved resources,
+so unused board hardware is not initialized.
+
+Package validation proves only that a pin is bonded on the selected MCU
+package. Connector routing, debugger conflicts, and external electrical
+constraints remain explicit responsibilities of the board declaration author.
+Task code imports its digital capability through `ferrowasp-io-core`; the
+existing RTIC and SysTick-monotonic facade remains in `ferrowasp-stm32f4` for
+this prototype.
 
 The first button prototype deliberately has no debounce yet. A physical press
 can therefore produce more than one EXTI edge; a later task can add a bounded
@@ -74,11 +125,20 @@ monotonic debounce policy without changing the board declaration.
 ## Verify
 
 ```text
+cargo check --workspace --locked
 cargo test -p xtask --locked
+cargo xtask generate
 cd targets/nucleo_f401re
 cargo check --locked
 cargo build --locked --release
 ```
+
+The `task-check` workspace member builds a generated, host-only RTIC-shaped
+context around every included reusable task. `cargo check --workspace`
+therefore checks the original task files for logical fields, resource
+operations, shared locking, monotonic calls, defmt formatting, and task spawn
+signatures. It does not execute tasks or simulate RTIC scheduling. The embedded
+target check remains authoritative for RTIC macro expansion and HAL integration.
 
 The app is a non-actuator validation prototype. It has no motor-output
 authority.

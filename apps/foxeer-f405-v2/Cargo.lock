@@ -346,6 +346,7 @@ dependencies = [
  "ferrowasp-waveform",
  "heapless 0.9.2",
  "rc-pwm",
+ "rtic-monotonics",
  "stm32f4xx-hal",
  "usb-device",
  "usbd-serial",

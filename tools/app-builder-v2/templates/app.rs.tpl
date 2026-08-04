@@ -6,7 +6,7 @@
 use panic_halt as _;
 use defmt_rtt as _;
 
-#[rtic::app(device = ferrowasp_stm32f4::rtic::hal::pac, peripherals = true, dispatchers = [EXTI0])]
+#[rtic::app(device = ferrowasp_stm32f4::rtic::hal::pac, peripherals = true, dispatchers = [{{DISPATCHERS}}])]
 mod app {
     {{RTIC_IMPORTS}}
 
@@ -19,7 +19,7 @@ mod app {
     #[local]
     {{LOCAL_STRUCT}}
 
-    #[init]
+    {{INIT_ATTRIBUTE}}
     fn init(cx: init::Context) -> (Shared, Local) {
         // Board clock, monotonic, and hardware initialization.
         {{BOARD_INIT}}

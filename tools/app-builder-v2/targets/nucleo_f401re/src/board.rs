@@ -1,21 +1,27 @@
-use crate::board::{
-    BoardDeclaration, ClockDeclaration, ClockSource, HardwareDeclaration, Mcu,
-    MonotonicDeclaration, PhysicalPin, ResourceId,
+use crate::{
+    board::{BoardDeclaration, MonotonicDeclaration},
+    hw_resources::{DmaChannel, Gpio, InterruptEdge, Mcu, PinId, Target, UartId, UartRxDma},
 };
 
 pub const BOARD: BoardDeclaration = BoardDeclaration {
     id: "nucleo_f401re",
-    mcu: Mcu::Stm32F401RE,
-    clocks: ClockDeclaration {
-        source: ClockSource::Hsi,
-        sysclk_hz: 84_000_000,
-    },
+    target: Target::internal_high_speed(Mcu::Stm32F401, 84_000_000),
     monotonic: MonotonicDeclaration::SysTick {
         id: "Mono",
         clock_hz: 84_000_000,
     },
     hardware: &[
-        HardwareDeclaration::digital_output(ResourceId::new("led3"), PhysicalPin::new("PA5")),
-        HardwareDeclaration::exti_input(ResourceId::new("user_button"), PhysicalPin::new("PC13")),
+        Gpio::output_low("led3", PinId::new(0, 5)).into_resource(),
+        Gpio::input("user_button", PinId::new(2, 13))
+            .pull_up()
+            .interrupt_on(InterruptEdge::Falling)
+            .into_resource(),
+        UartRxDma::sbus(
+            "sbus_rx",
+            UartId::new(2),
+            PinId::new(0, 3),
+            DmaChannel::new(0, 5, 4),
+        )
+        .into_resource(),
     ],
 };

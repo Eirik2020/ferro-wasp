@@ -5,7 +5,7 @@ pub mod adc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod advanced_pwm;
 pub mod app_config;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub mod app_storage;
 pub mod board_manifest;
 pub mod board_routes;
@@ -34,7 +34,7 @@ pub mod static_pwm;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod timebase;
 pub mod timer_dma;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub mod uart_dma;
 pub mod usb_serial;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]

@@ -1,36 +1,51 @@
 use crate::serial::irq_plan::{RxIrqAction, RxIrqFlags, RxIrqPlanner};
 use crate::serial::rx_state::{DetachedRxBuffer, RxDetachCause};
+#[cfg(feature = "stm32f405")]
 use crate::serial::tx_state::{
     TxDmaFinish, TxDmaIrqFlags, TxDmaIrqTerminal, TxDmaLifecycle, plan_tx_dma_irq,
 };
 use ferrowasp_io_core::serial::{
-    Discontinuity, MSP_V1_MAX_FRAME_LEN, RxChunk, RxCompletion, SerialFault,
-    SerialProtocol as Mode, SerialRxProducer, StreamGeneration, TxChunk,
+    Discontinuity, RxChunk, RxCompletion, SerialFault, SerialProtocol as Mode, SerialRxProducer,
+    StreamGeneration,
 };
+#[cfg(feature = "stm32f405")]
+use ferrowasp_io_core::serial::{MSP_V1_MAX_FRAME_LEN, TxChunk};
 use ferrowasp_io_core::time::TimestampMicros;
 use heapless::spsc::{Consumer, Producer, Queue};
 use stm32f4xx_hal::{
     dma::{
-        ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream2, Stream4, Stream5, Transfer,
+        ChannelX, PeripheralToMemory, Stream5, Transfer,
         config::DmaConfig,
         traits::{Channel, DMASet, Stream},
     },
-    gpio::{Input, PA0, PA1, PA2, PA3, PA10, PushPull},
-    pac::{DMA1, DMA2, UART4, USART1, USART2},
+    gpio::{Input, PA2, PA3, PushPull},
+    pac::{DMA1, USART2},
     prelude::*,
     rcc::Rcc,
     serial::{self, RxListen, Serial},
 };
+#[cfg(feature = "stm32f405")]
+use stm32f4xx_hal::{
+    dma::{MemoryToPeripheral, Stream2, Stream4},
+    gpio::{PA0, PA1, PA10},
+    pac::{DMA2, UART4, USART1},
+};
 
 pub const UART_RX_BUFFER_SIZE: usize = Mode::max_frame_size();
 pub const UART_RX_QUEUE_CAPACITY: usize = 4;
+#[cfg(feature = "stm32f405")]
 pub const UART4_TX_BUFFER_SIZE: usize = MSP_V1_MAX_FRAME_LEN;
 
 pub type UartRxBuf = &'static mut [u8; UART_RX_BUFFER_SIZE];
+#[cfg(feature = "stm32f405")]
 pub type Uart1RxIrq = UartRxIrqSide<Stream5<DMA2>, USART1, 4>;
 pub type Uart2RxIrq = UartRxIrqSide<Stream5<DMA1>, USART2, 4>;
+pub type Uart2SbusRx = UartRxParts<Stream5<DMA1>, USART2, 4>;
+#[cfg(feature = "stm32f405")]
 pub type Uart4RxIrq = UartRxIrqSide<Stream2<DMA1>, UART4, 4>;
+#[cfg(feature = "stm32f405")]
 pub type Uart4TxBuf = &'static mut [u8; UART4_TX_BUFFER_SIZE];
+#[cfg(feature = "stm32f405")]
 pub type Uart4TxTransfer =
     Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, Uart4TxBuf>;
 
@@ -41,12 +56,20 @@ pub struct Usart2SbusResources {
     pub rx_dma: Stream5<DMA1>,
 }
 
+pub struct Usart2SbusRxOnlyResources {
+    pub rx_pin: PA3<Input>,
+    pub usart: USART2,
+    pub rx_dma: Stream5<DMA1>,
+}
+
+#[cfg(feature = "stm32f405")]
 pub struct Usart1EscTelemetryResources {
     pub rx_pin: PA10<Input>,
     pub usart: USART1,
     pub rx_dma: Stream5<DMA2>,
 }
 
+#[cfg(feature = "stm32f405")]
 pub struct Uart4MspResources {
     pub tx_pin: PA0<Input>,
     pub rx_pin: PA1<Input>,
@@ -55,6 +78,7 @@ pub struct Uart4MspResources {
     pub tx_dma: Stream4<DMA1>,
 }
 
+#[cfg(feature = "stm32f405")]
 pub struct Uart4MspRxResources {
     pub tx_pin: PA0<Input>,
     pub rx_pin: PA1<Input>,
@@ -62,6 +86,7 @@ pub struct Uart4MspRxResources {
     pub rx_dma: Stream2<DMA1>,
 }
 
+#[cfg(feature = "stm32f405")]
 pub struct Uart4TxDmaSide {
     tx_transfer: Option<Uart4TxTransfer>,
     dma_config: DmaConfig,
@@ -69,6 +94,7 @@ pub struct Uart4TxDmaSide {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(feature = "stm32f405")]
 pub enum UartTxStartError {
     Busy,
     InvalidChunk,
@@ -76,6 +102,7 @@ pub enum UartTxStartError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(feature = "stm32f405")]
 pub enum UartTxIrqOutcome {
     Ignored,
     Completed,
@@ -83,17 +110,20 @@ pub enum UartTxIrqOutcome {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(feature = "stm32f405")]
 pub enum UartTxDmaError {
     Transfer,
     DirectMode,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[cfg(feature = "stm32f405")]
 pub struct UartTxDmaStats {
     pub completed_chunks: u32,
     pub dma_errors: u32,
 }
 
+#[cfg(feature = "stm32f405")]
 impl Uart4TxDmaSide {
     /// Starts one fixed-size UART4 DMA transfer.
     ///
@@ -191,12 +221,14 @@ impl Uart4TxDmaSide {
     }
 }
 
+#[cfg(feature = "stm32f405")]
 pub struct Uart4MspParts {
     pub rx_irq: Uart4RxIrq,
     pub parser: UartRxParserSide,
     pub tx_dma: Uart4TxDmaSide,
 }
 
+#[cfg(feature = "stm32f405")]
 pub fn init_uart4_tx_dma(
     tx_dma: Stream4<DMA1>,
     tx: serial::Tx<UART4>,
@@ -241,6 +273,13 @@ pub enum UartRxIrqOutcome {
     NoChunk,
     DmaError,
     DeliveryError(UartRxDeliveryError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UartRxReadOutcome {
+    NoChunk,
+    Chunk(usize),
+    RecycleError,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -533,6 +572,35 @@ where
     pub parser: UartRxParserSide,
 }
 
+impl<StreamT, UsartT, const CHANNEL: u8> UartRxParts<StreamT, UsartT, CHANNEL>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Rx<UsartT>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
+{
+    pub fn service_dma_irq(&mut self) -> UartRxIrqOutcome {
+        self.irq.service_dma_irq()
+    }
+
+    pub fn service_idle_irq(&mut self) -> UartRxIrqOutcome {
+        self.irq.service_idle_irq()
+    }
+
+    pub fn read_chunk(&mut self, output: &mut [u8; UART_RX_BUFFER_SIZE]) -> UartRxReadOutcome {
+        let Some(filled) = self.parser.filled_consumer.dequeue() else {
+            return UartRxReadOutcome::NoChunk;
+        };
+        let len = filled.len.min(output.len()).min(filled.buf.len());
+        output[..len].copy_from_slice(&filled.buf[..len]);
+        if self.parser.free_producer.enqueue(filled.buf).is_err() {
+            return UartRxReadOutcome::RecycleError;
+        }
+        UartRxReadOutcome::Chunk(len)
+    }
+}
+
+#[cfg(feature = "stm32f405")]
 pub struct UartRxTxParts<StreamT, UsartT, const CHANNEL: u8>
 where
     StreamT: Stream,
@@ -689,6 +757,7 @@ where
     }
 }
 
+#[cfg(feature = "stm32f405")]
 pub fn init_uart_rx_dma_with_tx<TxPin, RxPin, UsartT, StreamT, const CHANNEL: u8>(
     tx_pin: TxPin,
     rx_pin: RxPin,
@@ -766,6 +835,30 @@ pub fn init_usart2_sbus_rx_dma(
     )
 }
 
+pub fn init_usart2_sbus_rx_only_dma(
+    resources: Usart2SbusRxOnlyResources,
+    rcc: &mut Rcc,
+    storage: UartRxStorage,
+) -> Uart2SbusRx {
+    init_uart_rx_only_dma::<_, _, _, 4>(
+        resources.rx_pin.into_alternate::<7>(),
+        resources.usart,
+        resources.rx_dma,
+        rcc,
+        Mode::Sbus,
+        storage,
+    )
+}
+
+pub fn init_usart2_sbus_rx_only(
+    resources: Usart2SbusRxOnlyResources,
+    rcc: &mut Rcc,
+    storage: crate::app_storage::UartRxStorageResources,
+) -> Uart2SbusRx {
+    init_usart2_sbus_rx_only_dma(resources, rcc, storage.into_backend())
+}
+
+#[cfg(feature = "stm32f405")]
 pub fn init_usart1_esc_telemetry_rx_dma(
     resources: Usart1EscTelemetryResources,
     rcc: &mut Rcc,
@@ -781,6 +874,7 @@ pub fn init_usart1_esc_telemetry_rx_dma(
     )
 }
 
+#[cfg(feature = "stm32f405")]
 pub fn init_uart4_msp_rx_dma_with_tx(
     resources: Uart4MspRxResources,
     rcc: &mut Rcc,
@@ -797,6 +891,7 @@ pub fn init_uart4_msp_rx_dma_with_tx(
     )
 }
 
+#[cfg(feature = "stm32f405")]
 pub fn init_usart2_sbus(
     resources: Usart2SbusResources,
     rcc: &mut Rcc,
@@ -805,6 +900,7 @@ pub fn init_usart2_sbus(
     init_usart2_sbus_rx_dma(resources, rcc, storage.into_backend())
 }
 
+#[cfg(feature = "stm32f405")]
 pub fn init_usart1_esc_telemetry(
     resources: Usart1EscTelemetryResources,
     rcc: &mut Rcc,
@@ -813,6 +909,7 @@ pub fn init_usart1_esc_telemetry(
     init_usart1_esc_telemetry_rx_dma(resources, rcc, storage.into_backend())
 }
 
+#[cfg(feature = "stm32f405")]
 pub fn init_uart4_msp_osd(
     resources: Uart4MspResources,
     rcc: &mut Rcc,

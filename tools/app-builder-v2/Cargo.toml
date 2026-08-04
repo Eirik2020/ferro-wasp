@@ -1,5 +1,5 @@
 [workspace]
-members = ["xtask"]
+members = ["task-check", "xtask"]
 resolver = "2"
 
 [workspace.package]
@@ -9,5 +9,9 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 anyhow = "=1.0.103"
+defmt = "=1.0.1"
+embedded-hal = "=1.0.0"
+sbus-rs = { version = "=0.1.3", default-features = false }
+proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 quote = "=1.0.47"
-syn = { version = "=2.0.119", features = ["full", "parsing"] }
+syn = { version = "=2.0.119", features = ["full", "parsing", "visit"] }

@@ -14,7 +14,8 @@ pub mod monotonic {
 pub mod prelude {
     pub use super::{
         hal::{
-            gpio::{Edge, ExtiPin, Input, Output, PA5, PC13, PinState, Pull, PushPull, Speed},
+            dma::StreamsTuple,
+            gpio::{Edge, ExtiPin, Input, Output, Pin, PinState, Pull, PushPull, Speed},
             prelude::*,
         },
         monotonic::*,
