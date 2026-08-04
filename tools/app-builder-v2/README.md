@@ -1,5 +1,8 @@
 # RTIC task-composition sandbox
 
+The focused path from this sandbox to generation of the golden Foxeer flight
+application is tracked in [`ROADMAP.md`](ROADMAP.md).
+
 This isolated sandbox generates NUCLEO-F401RE and FerroWasp FCU3 RTIC
 applications from three inputs per target:
 
