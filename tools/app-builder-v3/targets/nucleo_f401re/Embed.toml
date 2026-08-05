@@ -1,0 +1,14 @@
+[default.probe]
+protocol = "Swd"
+
+[default.flashing]
+enabled = true
+
+[default.reset]
+enabled = true
+
+[default.general]
+chip = "STM32F401RE"
+
+[default.rtt]
+enabled = false

@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/workspace/ferro-wasp/tools/app-builder-v3/target-local/debug/build/stm32f4-b2cabe94e18f1540/out
+cargo:rerun-if-changed=src/stm32f405/device.x
+cargo:rerun-if-changed=build.rs

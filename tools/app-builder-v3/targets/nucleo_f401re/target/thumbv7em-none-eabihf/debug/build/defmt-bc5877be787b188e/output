@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/workspace/ferro-wasp/tools/app-builder-v2/targets/nucleo_f401re/target/thumbv7em-none-eabihf/debug/build/defmt-bc5877be787b188e/out
+cargo:rustc-check-cfg=cfg(c_variadic)
+cargo:rustc-check-cfg=cfg(no_cas)
