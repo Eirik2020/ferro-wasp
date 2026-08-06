@@ -2,7 +2,7 @@
 
 use crate::hardware_definitions::stm32f4::{
     board_declaration::BoardDeclaration,
-    components::serial_endpoint::{self, SerialEndpointDeclaration},
+    hw_endpoint::serial_endpoint::{self, SerialEndpointDeclaration},
 };
 
 /// One reusable component instance selected by application composition.

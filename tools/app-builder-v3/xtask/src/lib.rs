@@ -1,8 +1,8 @@
-//! Host-side authoring model for future generated STM32F4 RTIC applications.
+//! Host-side authoring model and generator for STM32F4 RTIC applications.
 //!
 //! The active V3 surface currently provides hardware definitions, reusable
-//! task-local contracts, and application-composition declarations. RTIC source
-//! generation remains deliberately disabled while those inputs are designed.
+//! task-local contracts, application-composition declarations, deterministic
+//! resolution, and RTIC source rendering.
 
 #![deny(missing_docs)]
 
@@ -14,3 +14,6 @@ pub mod rtic;
 pub mod target;
 /// Reusable HAL-agnostic task definitions and ordinary Rust task bodies.
 pub mod tasks;
+
+/// Selected-target generation orchestration and filesystem output.
+pub mod generator;

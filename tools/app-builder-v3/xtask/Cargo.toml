@@ -7,8 +7,12 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+anyhow.workspace = true
 defmt = "=1.0.1"
 ferrowasp-io-core = { path = "../../../crates/ferrowasp-io-core" }
 ferrowasp-stm32f4 = { path = "../../../crates/ferrowasp-stm32f4" }
 fugit.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["stm32f405", "uart4"] }
+syn.workspace = true

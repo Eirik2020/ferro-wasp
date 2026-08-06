@@ -3,10 +3,16 @@
 version = 4
 
 [[package]]
-name = "anyhow"
-version = "1.0.103"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
+name = "app-builder-v3-generated"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "defmt-rtt",
+ "ferrowasp-io-core",
+ "ferrowasp-stm32f4",
+ "panic-halt",
+ "rtic",
+]
 
 [[package]]
 name = "atomic-polyfill"
@@ -424,6 +430,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
 
 [[package]]
+name = "panic-halt"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a513e167849a384b7f9b746e517604398518590a9142f4846a32e3c2a4de7b11"
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -635,6 +647,7 @@ dependencies = [
  "rtic",
  "rtic-time",
  "stm32f4",
+ "synopsys-usb-otg",
  "time",
  "void",
 ]
@@ -659,6 +672,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "synopsys-usb-otg"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e948d523b316939545d8b21a48c27aef150ce25321b9f95ff7978647a806a6fe"
+dependencies = [
+ "cortex-m",
+ "embedded-hal 0.2.7",
+ "usb-device",
+ "vcell",
 ]
 
 [[package]]
@@ -746,19 +771,4 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de437e2a6208b014ab52972a27e59b33fa2920d3e00fe05026167a1c509d19cc"
 dependencies = [
  "vcell",
-]
-
-[[package]]
-name = "xtask"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "defmt 1.0.1",
- "ferrowasp-io-core",
- "ferrowasp-stm32f4",
- "fugit",
- "proc-macro2",
- "quote",
- "stm32f4xx-hal",
- "syn 2.0.119",
 ]

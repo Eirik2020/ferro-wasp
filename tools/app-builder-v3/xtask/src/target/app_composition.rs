@@ -11,12 +11,13 @@ use super::board;
 
 use crate::{
     hardware_definitions::stm32f4::{
-        components::serial_endpoint::{SERIAL_DMA_ENDPOINT, SerialEndpointDeclaration},
+        hw_endpoint::serial_endpoint::{SERIAL_DMA_ENDPOINT, SerialEndpointDeclaration},
         tasks as stm32f4_tasks,
     },
     rtic::{
         component::ComponentDeclaration,
         composition::{AppComposition, SharedResourceDeclaration, TaskDeclaration},
+        timing::MonotonicDeclaration,
     },
     tasks,
 };
@@ -28,9 +29,8 @@ pub const BUTTON_ENABLED: SharedResourceDeclaration =
 /// Concrete EXTI instance of the reusable button task.
 ///
 /// The selected board must provide `user_button` as a concrete resource that
-/// implements `stm32f4xx_hal::gpio::ExtiPin`. Whole-application resolution of
-/// that hardware identifier is intentionally deferred until app generation is
-/// implemented.
+/// implements `stm32f4xx_hal::gpio::ExtiPin`. Composition validation resolves
+/// the identifier against the selected board before generation begins.
 pub const BUTTON_EXTI_TASK: TaskDeclaration = TaskDeclaration::interrupt(
     "button_exti",
     &stm32f4_tasks::button_exti::CONTRACT,
@@ -56,6 +56,13 @@ pub const BLINK_LED_TASK: TaskDeclaration =
             .interval
             .set(MillisDurationU32::millis(500))]);
 
+/// Software task receiving the state produced by the button interrupt.
+pub const OBSERVE_BUTTON_CHANGE_TASK: TaskDeclaration = TaskDeclaration::software(
+    "observe_button_change",
+    &tasks::observe_button_change::CONTRACT,
+)
+.priority(1);
+
 /// Full-duplex MSP endpoint consuming the UART4 declaration from `board.rs`.
 pub const OSD_UART: SerialEndpointDeclaration = SERIAL_DMA_ENDPOINT
     .declare("osd_uart", "uart4")
@@ -70,8 +77,9 @@ pub const OSD_UART: SerialEndpointDeclaration = SERIAL_DMA_ENDPOINT
 /// Complete example consumed by composition validation and, later, xtask.
 pub const APP_COMPOSITION: AppComposition = AppComposition {
     board: &board::BOARD,
+    monotonic: MonotonicDeclaration::systick(1_000),
     components: &[ComponentDeclaration::serial_endpoint(OSD_UART)],
     shared_resources: &[BUTTON_ENABLED],
-    tasks: &[BUTTON_EXTI_TASK, BLINK_LED_TASK],
+    tasks: &[BUTTON_EXTI_TASK, BLINK_LED_TASK, OBSERVE_BUTTON_CHANGE_TASK],
     init_spawns: &[BLINK_LED_TASK.init_spawn()],
 };

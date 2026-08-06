@@ -78,11 +78,31 @@ impl SpawnRequirement {
     }
 }
 
+/// Location of the ordinary Rust function implementing a task contract.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TaskSource {
+    /// Source file containing the `reusable_task!` invocation.
+    pub file: &'static str,
+
+    /// Rust function extracted from the invocation during generation.
+    pub function: &'static str,
+}
+
+impl TaskSource {
+    /// Creates task-source metadata recorded at the macro invocation site.
+    pub const fn new(file: &'static str, function: &'static str) -> Self {
+        Self { file, function }
+    }
+}
+
 /// Complete logical interface owned by one reusable task definition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TaskContract {
     /// Reusable function and generated RTIC context name.
     pub id: &'static str,
+
+    /// Source location of the checked ordinary Rust task body.
+    pub source: TaskSource,
 
     /// Resources owned exclusively by the concrete task instance.
     pub local: &'static [ResourceRequirement],
@@ -578,6 +598,7 @@ macro_rules! task_contract {
         $(#[$task_attribute])*
         #[doc = concat!("Authoring context and contract for task `", stringify!($task), "`.")]
         $visibility mod $task {
+            #[allow(unused_imports)]
             use super::*;
 
             /// Task-local resources exposed below `cx.local`.
@@ -611,6 +632,7 @@ macro_rules! task_contract {
                 marker: ::core::marker::PhantomData<&'a mut ()>,
             }
 
+            #[allow(clippy::new_without_default)]
             impl<'a> Shared<'a> {
                 /// Creates the authoring view of the task's shared resources.
                 pub fn new($($shared: &'a mut $shared_type),*) -> Self {
@@ -744,6 +766,10 @@ macro_rules! task_contract {
             pub const CONTRACT: $crate::rtic::task::TaskContract =
                 $crate::rtic::task::TaskContract {
                     id: stringify!($task),
+                    source: $crate::rtic::task::TaskSource::new(
+                        file!(),
+                        stringify!($task),
+                    ),
                     local: &[
                         $(
                             $crate::rtic::task::ResourceRequirement::new(
@@ -799,4 +825,17 @@ macro_rules! task_contract {
             }
         )*
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tasks;
+
+    #[test]
+    fn reusable_task_records_its_source_location() {
+        let contract = tasks::blink_led::CONTRACT;
+
+        assert_eq!(contract.source.function, contract.id);
+        assert!(contract.source.file.ends_with("src/tasks/blink_led.rs"));
+    }
 }

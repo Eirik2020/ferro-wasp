@@ -13,6 +13,7 @@ use super::{
     task::{
         ConfigBinding, LocalResourceBinding, SharedResourceBinding, SpawnBinding, TaskContract,
     },
+    timing::{self, MonotonicDeclaration},
 };
 
 /// Initial value for an application-owned shared resource.
@@ -175,11 +176,14 @@ pub struct InitSpawn {
     pub task: &'static str,
 }
 
-/// Complete authoring declaration consumed by the future RTIC generator.
+/// Complete authoring declaration consumed by the RTIC generator.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AppComposition {
     /// Board whose physical hardware may be consumed by components and tasks.
     pub board: &'static BoardDeclaration,
+
+    /// Monotonic timer used by asynchronous RTIC task bodies.
+    pub monotonic: MonotonicDeclaration,
 
     /// Reusable hardware components expanded before standalone task resolution.
     pub components: &'static [ComponentDeclaration],
@@ -218,13 +222,13 @@ impl Error for CompositionError {}
 
 /// Validates task-local contracts and their concrete composition bindings.
 ///
-/// This phase intentionally does not resolve hardware IDs or logical spawn
-/// destinations; those names belong to board and whole-task-graph resolution
-/// in the future generator. It validates identifier shape, complete slot
-/// coverage, shared-resource types, priorities, init spawns, unique interrupt
-/// ownership, and exclusive task-local resource ownership.
+/// It validates identifier shape, source metadata, complete slot coverage,
+/// hardware and shared-resource bindings, priorities, init spawns, logical
+/// spawn destinations, unique interrupt ownership, and exclusive task-local
+/// resource ownership.
 pub fn validate(composition: &AppComposition) -> Result<(), CompositionError> {
     board_definition::validate(composition.board).map_err(CompositionError::new)?;
+    timing::validate(composition.monotonic).map_err(CompositionError::new)?;
 
     let mut component_ids = BTreeSet::new();
     let mut component_hardware = BTreeSet::new();
@@ -263,6 +267,20 @@ pub fn validate(composition: &AppComposition) -> Result<(), CompositionError> {
     let mut local_targets = BTreeSet::new();
     for task in composition.tasks {
         validate_identifier(task.id, "task")?;
+        validate_identifier(task.contract.id, "task contract")?;
+        validate_identifier(task.contract.source.function, "task source function")?;
+        if task.contract.source.file.is_empty() {
+            return Err(CompositionError::new(format!(
+                "task contract `{}` has no source file",
+                task.contract.id
+            )));
+        }
+        if task.contract.source.function != task.contract.id {
+            return Err(CompositionError::new(format!(
+                "task contract `{}` source function is `{}`",
+                task.contract.id, task.contract.source.function
+            )));
+        }
         if !task_ids.insert(task.id) {
             return Err(CompositionError::new(format!(
                 "task `{}` is declared more than once",
@@ -290,6 +308,14 @@ pub fn validate(composition: &AppComposition) -> Result<(), CompositionError> {
 
         for binding in task.local {
             validate_identifier(binding.target(), "hardware resource")?;
+            if composition.board.gpio(binding.target()).is_none() {
+                return Err(CompositionError::new(format!(
+                    "task `{}` binds local slot `{}` to undeclared board GPIO `{}`",
+                    task.id,
+                    binding.logical(),
+                    binding.target()
+                )));
+            }
             if !local_targets.insert(binding.target()) {
                 return Err(CompositionError::new(format!(
                     "hardware resource `{}` is owned by more than one local task binding",
@@ -326,6 +352,29 @@ pub fn validate(composition: &AppComposition) -> Result<(), CompositionError> {
 
         for binding in task.spawns {
             validate_identifier(binding.target(), "spawn target")?;
+        }
+    }
+
+    for task in composition.tasks {
+        for binding in task.spawns {
+            let destination = composition
+                .tasks
+                .iter()
+                .find(|candidate| candidate.id == binding.target())
+                .ok_or_else(|| {
+                    CompositionError::new(format!(
+                        "task `{}` spawn slot `{}` targets undeclared task `{}`",
+                        task.id,
+                        binding.logical(),
+                        binding.target()
+                    ))
+                })?;
+            if !matches!(destination.trigger, TaskTrigger::Software) {
+                return Err(CompositionError::new(format!(
+                    "task `{}` cannot spawn interrupt task `{}`",
+                    task.id, destination.id
+                )));
+            }
         }
     }
 
@@ -525,6 +574,7 @@ mod tests {
         hardware_definitions::stm32f4::{
             board_declaration::{BoardDeclaration, SerialHardwareDeclaration},
             dma_route::{DmaChannel, DmaController, DmaRoute, DmaStream},
+            mcu::{ClockDeclaration, Mcu, McuDeclaration},
             pins::{GpioPort, PinId},
             serial::{SerialPeripheral, SerialRoute},
             tasks as stm32f4_tasks,
@@ -576,7 +626,11 @@ mod tests {
 
     #[test]
     fn serial_endpoint_requires_hardware_declared_by_the_selected_board() {
-        const BOARD_WITHOUT_UART4: BoardDeclaration = BoardDeclaration::new("empty_board", &[]);
+        const BOARD_WITHOUT_UART4: BoardDeclaration = BoardDeclaration::new(
+            "empty_board",
+            McuDeclaration::new(Mcu::Stm32f405, ClockDeclaration::hsi(16_000_000)),
+            &[],
+        );
         const INVALID: AppComposition = AppComposition {
             board: &BOARD_WITHOUT_UART4,
             ..APP_COMPOSITION
@@ -609,13 +663,73 @@ mod tests {
                         DmaChannel::Channel4,
                     ),
                 ));
-        const DIFFERENT_BOARD: BoardDeclaration =
-            BoardDeclaration::new("different_board", &[DIFFERENT_UART4]);
+        const DIFFERENT_BOARD: BoardDeclaration = BoardDeclaration::new(
+            "different_board",
+            McuDeclaration::new(Mcu::Stm32f405, ClockDeclaration::hsi(16_000_000)),
+            &[DIFFERENT_UART4],
+        )
+        .with_gpio(crate::target::board::BOARD.gpio);
         const ALTERNATE: AppComposition = AppComposition {
             board: &DIFFERENT_BOARD,
             ..APP_COMPOSITION
         };
 
         validate(&ALTERNATE).unwrap();
+    }
+
+    #[test]
+    fn standalone_task_requires_declared_board_gpio() {
+        const INVALID_BLINK: TaskDeclaration =
+            TaskDeclaration::software("blink_led", &crate::tasks::blink_led::CONTRACT)
+                .priority(1)
+                .with_local(&[crate::tasks::blink_led::LOCAL.led.bind("missing_led")])
+                .with_shared(&[crate::tasks::blink_led::SHARED
+                    .enabled
+                    .bind("button_enabled")])
+                .with_config(&[crate::tasks::blink_led::CONFIG
+                    .interval
+                    .set(fugit::MillisDurationU32::millis(500))]);
+        const INVALID: AppComposition = AppComposition {
+            tasks: &[
+                crate::target::app_composition::BUTTON_EXTI_TASK,
+                INVALID_BLINK,
+                crate::target::app_composition::OBSERVE_BUTTON_CHANGE_TASK,
+            ],
+            init_spawns: &[INVALID_BLINK.init_spawn()],
+            ..APP_COMPOSITION
+        };
+
+        let error = validate(&INVALID).unwrap_err().to_string();
+        assert!(error.contains("undeclared board GPIO `missing_led`"));
+    }
+
+    #[test]
+    fn logical_spawn_requires_a_declared_software_task() {
+        const INVALID_BUTTON: TaskDeclaration = crate::target::app_composition::BUTTON_EXTI_TASK
+            .with_spawns(&[stm32f4_tasks::button_exti::SPAWNS
+                .button_changed
+                .bind("missing_observer")]);
+        const INVALID: AppComposition = AppComposition {
+            tasks: &[
+                INVALID_BUTTON,
+                crate::target::app_composition::BLINK_LED_TASK,
+                crate::target::app_composition::OBSERVE_BUTTON_CHANGE_TASK,
+            ],
+            ..APP_COMPOSITION
+        };
+
+        let error = validate(&INVALID).unwrap_err().to_string();
+        assert!(error.contains("targets undeclared task `missing_observer`"));
+    }
+
+    #[test]
+    fn zero_monotonic_frequency_is_rejected() {
+        const INVALID: AppComposition = AppComposition {
+            monotonic: MonotonicDeclaration::systick(0),
+            ..APP_COMPOSITION
+        };
+
+        let error = validate(&INVALID).unwrap_err().to_string();
+        assert_eq!(error, "monotonic tick frequency must be nonzero");
     }
 }

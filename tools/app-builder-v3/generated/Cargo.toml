@@ -1,0 +1,37 @@
+[package]
+name = "app-builder-v3-generated"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+resolver = "2"
+
+[[bin]]
+name = "generated"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+defmt = "=1.0.1"
+defmt-rtt = { version = "=1.3.0", features = ["disable-blocking-mode"] }
+panic-halt = "=1.0.0"
+ferrowasp-io-core = { path = "../../../crates/ferrowasp-io-core" }
+ferrowasp-stm32f4 = { path = "../../../crates/ferrowasp-stm32f4", features = ["stm32f405"] }
+rtic = { version = "=2.3.0", features = ["thumbv7-backend"] }
+
+[profile.dev.package."*"]
+opt-level = "s"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+incremental = false
+lto = true
+opt-level = "s"
+panic = "abort"

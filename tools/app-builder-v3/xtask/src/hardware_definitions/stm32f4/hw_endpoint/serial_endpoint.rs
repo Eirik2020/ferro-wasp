@@ -1,4 +1,4 @@
-//! DMA-backed STM32F4 serial endpoint component.
+//! DMA-backed STM32F4 serial hardware endpoint.
 //!
 //! The reusable definition owns the transport task graph and common resource
 //! roles. An application declaration supplies one board serial resource,
@@ -32,6 +32,8 @@ pub struct SerialEndpointTasks {
 pub enum SerialEndpointResourceRole {
     /// Receive DMA and UART peripheral state.
     RxService,
+    /// Receive parser retained for the future owned-channel bridge task.
+    RxParser,
     /// Static receive DMA buffer bank.
     RxBuffers,
     /// Queue of receive buffers available to DMA.
@@ -137,6 +139,7 @@ pub const SERIAL_ENDPOINT_RESOURCES: &[SerialEndpointResource] = &[
         PRIVATE,
         ALWAYS,
     ),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxParser, LOCAL, PRIVATE, ALWAYS),
     SerialEndpointResource::new(
         SerialEndpointResourceRole::RxBuffers,
         INIT_LOCAL,
@@ -163,7 +166,7 @@ pub const SERIAL_ENDPOINT_RESOURCES: &[SerialEndpointResource] = &[
     ),
     SerialEndpointResource::new(
         SerialEndpointResourceRole::RxProducer,
-        INIT_LOCAL,
+        LOCAL,
         PRIVATE,
         ALWAYS,
     ),
