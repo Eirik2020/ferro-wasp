@@ -6,12 +6,9 @@ license.workspace = true
 rust-version.workspace = true
 publish = false
 
-[features]
-# The copied generator still depends on component declarations that have not
-# yet been migrated into the V3 workspace. The default build intentionally
-# validates only the standalone hardware-definition authoring surface.
-default = []
-legacy-generator = []
-
 [dependencies]
+defmt = "=1.0.1"
+ferrowasp-io-core = { path = "../../../crates/ferrowasp-io-core" }
+ferrowasp-stm32f4 = { path = "../../../crates/ferrowasp-stm32f4" }
+fugit.workspace = true
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["stm32f405", "uart4"] }

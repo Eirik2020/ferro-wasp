@@ -1,9 +1,0 @@
-/workspace/ferro-wasp/tools/app-builder-v2/target/thumbv7em-none-eabihf/debug/deps/embedded_io_async-ca3cad254fe32aaf.d: /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/lib.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/mod.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/slice_mut.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/slice_ref.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/../README.md
-
-/workspace/ferro-wasp/tools/app-builder-v2/target/thumbv7em-none-eabihf/debug/deps/libembedded_io_async-ca3cad254fe32aaf.rmeta: /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/lib.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/mod.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/slice_mut.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/slice_ref.rs /home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/../README.md
-
-/home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/lib.rs:
-/home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/mod.rs:
-/home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/slice_mut.rs:
-/home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/impls/slice_ref.rs:
-/home/ferrowasp/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/embedded-io-async-0.7.0/src/../README.md:

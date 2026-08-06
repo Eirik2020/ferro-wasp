@@ -1,20 +1,27 @@
 # App Builder V3
 
-V3 currently provides a small, compilable hardware-definition authoring
-surface. Use it to add and type-check HAL-independent physical definitions
-before they are consumed by the pending generator migration.
+App Builder V3 is an isolated, compilable authoring model for future generated
+STM32F4 RTIC applications. It currently validates declarations and reusable
+task bodies; RTIC source generation is not implemented yet.
+
+The active source is organized by responsibility:
+
+- `xtask/src/hardware_definitions/` contains reusable hardware types,
+  STM32F4-specific components, and HAL-specific hardware tasks;
+- `xtask/src/rtic/` contains the task, component, and application-composition
+  declaration model;
+- `xtask/src/tasks/` contains reusable HAL-agnostic task bodies;
+- `xtask/src/target/board.rs` declares the selected board hardware;
+- `xtask/src/target/app_composition.rs` selects components, task instances,
+  resources, constants, priorities, spawns, and interrupt bindings.
 
 From this directory, run:
 
 ```text
-cargo check
-cargo test
+cargo check --workspace
+cargo test --workspace
 ```
-
-The `xtask::hardware_definitions` module is the supported authoring entry
-point. The older generator source remains in `xtask/src/`, but is deliberately
-excluded from the default build until its components are migrated into V3.
 
 For Rust completion and diagnostics, open `tools/app-builder-v3` in its own
 VS Code window. Its local editor configuration loads only the host-side
-`xtask` package, rather than the repository's embedded firmware workspace.
+`xtask` package rather than the repository's embedded firmware workspace.

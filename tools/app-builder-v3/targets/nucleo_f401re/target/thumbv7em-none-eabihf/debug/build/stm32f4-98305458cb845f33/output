@@ -1,3 +1,0 @@
-cargo:rustc-link-search=/workspace/ferro-wasp/tools/app-builder-v2/targets/nucleo_f401re/target/thumbv7em-none-eabihf/debug/build/stm32f4-98305458cb845f33/out
-cargo:rerun-if-changed=src/stm32f401/device.x
-cargo:rerun-if-changed=build.rs

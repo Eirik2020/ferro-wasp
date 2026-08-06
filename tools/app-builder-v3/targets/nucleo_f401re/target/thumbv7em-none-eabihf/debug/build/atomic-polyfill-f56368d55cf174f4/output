@@ -1,2 +1,0 @@
-cargo:rustc-cfg=polyfill_u64
-cargo:rustc-cfg=polyfill_i64

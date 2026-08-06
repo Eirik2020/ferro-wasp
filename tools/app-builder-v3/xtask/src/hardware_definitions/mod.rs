@@ -1,10 +1,4 @@
-//! Hardware-neutral physical definitions used by builder authoring APIs.
+//! Hardware definitions grouped by MCU family.
 
-/// DMA route definitions.
-pub mod dma_route;
-
-/// Physical GPIO pin definitions.
-pub mod pins;
-
-/// Serial peripheral definitions.
-pub mod serial;
+/// STM32F4 hardware definitions.
+pub mod stm32f4;
