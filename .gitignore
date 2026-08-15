@@ -2,6 +2,9 @@
 /target-*
 /src/**/target
 /apps/**/target
+/tools/app-builder-v3/target/
+/tools/app-builder-v3/target-*/
+/tools/app-builder-v3/targets/*/target/
 /diagnostic_*.jpg
 /logs
 /local_archive/

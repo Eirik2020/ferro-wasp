@@ -6,6 +6,7 @@ extern crate std;
 
 pub mod digital;
 pub mod health;
+pub mod platform_config;
 pub mod serial;
 pub mod spi;
 pub mod stats;

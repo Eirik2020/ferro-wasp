@@ -25,9 +25,21 @@ use crate::{
     },
 };
 
-/// Renders one resolved application and verifies that the result is Rust syntax.
-pub fn render(source_root: &Path, app: &ResolvedApp) -> Result<String> {
+/// Generated Rust source files for one resolved application.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RenderedSources {
+    /// RTIC application crate root.
+    pub main: String,
+    /// Crate-local imports consumed by the RTIC application module.
+    pub prelude: String,
+    /// Boot-time service assignments lowered for the generated firmware.
+    pub platform_config: String,
+}
+
+/// Renders one resolved application and verifies that both files are Rust syntax.
+pub fn render_sources(source_root: &Path, app: &ResolvedApp) -> Result<RenderedSources> {
     let hardware = lower::lower(app).context("lower resolved application for STM32F4")?;
+    let safety = render_safety_resources(app);
     let task_sources = app
         .tasks
         .iter()
@@ -45,9 +57,22 @@ pub fn render(source_root: &Path, app: &ResolvedApp) -> Result<String> {
         .map(|(task, source)| render_task(task, source))
         .collect::<Result<Vec<_>>>()?
         .join("\n\n");
-    let rendered = render_app(app, &hardware, &tasks);
-    syn::parse_file(&rendered).context("parse complete generated RTIC application")?;
-    Ok(rendered)
+    let main = render_app(app, &hardware, &safety, &tasks);
+    let prelude = render_prelude(&hardware.imports, !app.safety_channels.is_empty());
+    let platform_config = render_platform_config(&hardware.platform_config);
+    syn::parse_file(&main).context("parse complete generated RTIC application")?;
+    syn::parse_file(&prelude).context("parse generated RTIC prelude")?;
+    syn::parse_file(&platform_config).context("parse generated platform configuration")?;
+    Ok(RenderedSources {
+        main,
+        prelude,
+        platform_config,
+    })
+}
+
+/// Renders the generated RTIC crate root.
+pub fn render(source_root: &Path, app: &ResolvedApp) -> Result<String> {
+    Ok(render_sources(source_root, app)?.main)
 }
 
 #[derive(Clone)]
@@ -565,7 +590,18 @@ fn render_config_value(value: ConfigValue) -> String {
     match value {
         ConfigValue::Bool(value) => value.to_string(),
         ConfigValue::U32(value) => render_u32(value),
-        ConfigValue::Millis(value) => format!("{}.millis()", render_u32(value.ticks())),
+        ConfigValue::Millis(value) => {
+            format!("{}.millis().into()", render_u32(value.ticks()))
+        }
+        ConfigValue::FrameRotation(value) => format!(
+            "FrameRotation::new([{}, {}, {}], [{}, {}, {}])",
+            value.source_axes[0],
+            value.source_axes[1],
+            value.source_axes[2],
+            value.signs[0],
+            value.signs[1],
+            value.signs[2],
+        ),
     }
 }
 
@@ -600,13 +636,93 @@ fn apply_source_replacements(source: &str, replacements: Vec<SourceReplacement>)
     Ok(rendered)
 }
 
-fn render_app(app: &ResolvedApp, hardware: &RenderedHardware, tasks: &str) -> String {
+#[derive(Default)]
+struct RenderedSafetyResources {
+    local_fields: Vec<String>,
+    local_values: Vec<String>,
+    init_locals: Vec<RenderedInitLocal>,
+    initialization: String,
+}
+
+fn render_safety_resources(app: &ResolvedApp) -> RenderedSafetyResources {
+    let mut rendered = RenderedSafetyResources::default();
+    let mut initialization = Vec::new();
+    for channel in &app.safety_channels {
+        let section = format!("Safety channel `{}` resources", channel.id);
+        let guard = format!("// ===== {section} =====");
+        rendered.local_fields.push(guard.clone());
+        rendered.local_values.push(guard);
+        rendered.local_fields.push(format!(
+            "{}: SafetyProducer<'static, {}>,",
+            channel.producer.id,
+            channel.message.rust_type()
+        ));
+        rendered.local_fields.push(format!(
+            "{}: SafetyConsumer<'static, {}>,",
+            channel.consumer.id,
+            channel.message.rust_type()
+        ));
+        rendered.local_values.push(channel.producer.id.to_owned());
+        rendered.local_values.push(channel.consumer.id.to_owned());
+
+        rendered.init_locals.push(RenderedInitLocal {
+            section,
+            id: channel.id.to_owned(),
+            rust_type: format!(
+                "SafetyChannel<{}, {}>",
+                channel.message.rust_type(),
+                channel.usable_capacity + 1
+            ),
+            initializer: "SafetyChannel::new()".to_owned(),
+        });
+        initialization.push(format!(
+            "// ===== Safety channel `{}` initialization =====\nlet ({}, {}) = cx.local.{}.split();",
+            channel.id, channel.producer.id, channel.consumer.id, channel.id
+        ));
+    }
+    rendered.initialization = initialization.join("\n\n");
+    rendered
+}
+
+fn render_app(
+    app: &ResolvedApp,
+    hardware: &RenderedHardware,
+    safety: &RenderedSafetyResources,
+    tasks: &str,
+) -> String {
     let dispatchers = app.dispatchers.join(", ");
     let shared = render_resource_struct("Shared", &hardware.shared_fields);
-    let local = render_resource_struct("Local", &hardware.local_fields);
-    let init_attribute = render_init_attribute(&hardware.init_locals);
+    let local_fields = hardware
+        .local_fields
+        .iter()
+        .chain(&safety.local_fields)
+        .cloned()
+        .collect::<Vec<_>>();
+    let local = render_resource_struct("Local", &local_fields);
+    let init_locals = hardware
+        .init_locals
+        .iter()
+        .chain(&safety.init_locals)
+        .cloned()
+        .collect::<Vec<_>>();
+    let init_attribute = render_init_attribute(&init_locals);
     let shared_value = render_resource_value("Shared", &hardware.shared_values);
-    let local_value = render_resource_value("Local", &hardware.local_values);
+    let local_values = hardware
+        .local_values
+        .iter()
+        .chain(&safety.local_values)
+        .cloned()
+        .collect::<Vec<_>>();
+    let local_value = render_resource_value("Local", &local_values);
+    let initialization = match (
+        hardware.initialization.is_empty(),
+        safety.initialization.is_empty(),
+    ) {
+        (false, false) => format!("{}\n\n{}", hardware.initialization, safety.initialization),
+        (false, true) => hardware.initialization.clone(),
+        (true, false) => safety.initialization.clone(),
+        (true, true) => String::new(),
+    };
     let init_spawns = app
         .init_spawns
         .iter()
@@ -617,45 +733,96 @@ fn render_app(app: &ResolvedApp, hardware: &RenderedHardware, tasks: &str) -> St
     format!(
         concat!(
             "// GENERATED FILE — DO NOT EDIT DIRECTLY\n",
-            "// Generated from xtask/src/target/board.rs and app_composition.rs.\n\n",
+            "// Generated from xtask/src/target/board.rs, app_composition.rs, and platform_config.rs.\n\n",
             "#![no_main]\n",
             "#![no_std]\n",
             "#![forbid(unsafe_code)]\n",
             "#![deny(warnings)]\n\n",
             "// Endpoint exports may intentionally have no consumer in a partial composition.\n",
             "#![allow(dead_code)]\n\n",
-            "use defmt_rtt as _;\n",
-            "use panic_halt as _;\n\n",
+            "mod platform_config;\n",
+            "mod prelude;\n\n",
             "#[rtic::app(\n",
             "    device = ferrowasp_stm32f4::rtic::hal::pac,\n",
             "    peripherals = true,\n",
             "    dispatchers = [{dispatchers}]\n",
             ")]\n",
             "mod app {{\n",
-            "{imports}\n\n",
+            "    use crate::prelude::*;\n\n",
+            "{globals}\n\n",
             "{timing}\n\n",
             "{shared}\n\n",
             "{local}\n\n",
             "{init_attribute}\n",
             "    fn init(cx: init::Context) -> (Shared, Local) {{\n",
             "{initialization}\n\n",
+            "        // ===== Initial task spawns =====\n",
             "{init_spawns}\n\n",
+            "        // ===== RTIC resource handoff =====\n",
             "        ({shared_value}, {local_value})\n",
             "    }}\n\n",
             "{tasks}\n",
             "}}\n",
         ),
         dispatchers = dispatchers,
-        imports = indent(&hardware.imports, 4),
+        globals = indent(&hardware.globals, 4),
         timing = indent(&hardware.timing, 4),
         shared = indent(&shared, 4),
         local = indent(&local, 4),
         init_attribute = indent(&init_attribute, 4),
-        initialization = indent(&hardware.initialization, 8),
+        initialization = indent(&initialization, 8),
         init_spawns = indent(&init_spawns, 8),
         shared_value = shared_value,
         local_value = local_value,
         tasks = indent(tasks, 4),
+    )
+}
+
+fn render_prelude(imports: &str, has_safety_channels: bool) -> String {
+    let safety_imports = if has_safety_channels {
+        concat!(
+            "pub(crate) use ferrowasp_core::{\n",
+            "    safety::{\n",
+            "        ActuatorAuthority, ActuatorCmd, ActuatorGuardReport, ActuatorPreparationReport,\n",
+            "        ArmingAbortReason, MotorCmd, PreArmHealth, PreArmHealthReport, RcLinkInvalidation,\n",
+            "        MOTOR_CMD_MAX_AGE_MS,\n",
+            "    },\n",
+            "    safety_channel::{SafetyChannel, SafetyConsumer, SafetyProducer},\n",
+            "};\n",
+            "pub(crate) use ferrowasp_io_core::serial::RcInputSnapshot;\n"
+        )
+    } else {
+        ""
+    };
+    format!(
+        concat!(
+            "// GENERATED FILE — DO NOT EDIT DIRECTLY\n",
+            "// Generated with src/main.rs from the selected application declarations.\n\n",
+            "//! Crate-local imports used by the generated RTIC application.\n\n",
+            "#![allow(unused_imports)]\n\n",
+            "use defmt_rtt as _;\n",
+            "use panic_halt as _;\n\n",
+            "pub(crate) use crate::platform_config::load_platform_config;\n",
+            "{safety_imports}",
+            "{imports}\n",
+        ),
+        safety_imports = safety_imports,
+        imports = imports,
+    )
+}
+
+fn render_platform_config(configuration: &str) -> String {
+    format!(
+        concat!(
+            "// GENERATED FILE — DO NOT EDIT DIRECTLY\n",
+            "// Lowered from xtask/src/target/platform_config.rs.\n\n",
+            "//! Boot-time service assignments for the generated firmware.\n\n",
+            "use ferrowasp_io_core::platform_config::{{\n",
+            "    ImuInstallationId, RuntimePlatformConfig, SerialService, SpiService,\n",
+            "}};\n\n",
+            "{configuration}\n",
+        ),
+        configuration = configuration,
     )
 }
 
@@ -674,7 +841,18 @@ fn render_resource_value(name: &str, fields: &[String]) -> String {
     if fields.is_empty() {
         format!("{name} {{}}")
     } else {
-        format!("{name} {{ {} }}", fields.join(", "))
+        let fields = fields
+            .iter()
+            .map(|field| {
+                if field.starts_with("//") {
+                    field.clone()
+                } else {
+                    format!("{field},")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{name} {{\n{}\n}}", indent(&fields, 4))
     }
 }
 
@@ -682,17 +860,19 @@ fn render_init_attribute(resources: &[RenderedInitLocal]) -> String {
     if resources.is_empty() {
         "#[init]".to_owned()
     } else {
-        let fields = resources
-            .iter()
-            .map(|resource| {
-                format!(
-                    "{}: {} = {}",
-                    resource.id, resource.rust_type, resource.initializer
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",\n");
-        format!("#[init(local = [\n{}\n])]", indent(&fields, 4))
+        let mut lines = Vec::new();
+        let mut previous_section = None;
+        for resource in resources {
+            if previous_section != Some(resource.section.as_str()) {
+                lines.push(format!("// ===== {} =====", resource.section));
+                previous_section = Some(resource.section.as_str());
+            }
+            lines.push(format!(
+                "{}: {} = {},",
+                resource.id, resource.rust_type, resource.initializer
+            ));
+        }
+        format!("#[init(local = [\n{}\n])]", indent(&lines.join("\n"), 4))
     }
 }
 
@@ -765,7 +945,13 @@ fn render_u32(value: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{rtic::resolve, target::app_composition::APP_COMPOSITION};
+    use crate::{
+        rtic::{
+            platform_config::{ImuInstallationId, PlatformConfig, SerialService, SpiService},
+            resolve,
+        },
+        target::app_composition::APP_COMPOSITION,
+    };
 
     fn source_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -777,25 +963,239 @@ mod tests {
     #[test]
     fn current_composition_renders_parseable_rtic_source() {
         let app = resolve::resolve(&APP_COMPOSITION).unwrap();
-        let rendered = render(&source_root(), &app).unwrap();
+        let rendered = render_sources(&source_root(), &app).unwrap();
+        let main = &rendered.main;
+        let prelude = &rendered.prelude;
+        let platform_config = &rendered.platform_config;
 
-        assert!(syn::parse_file(&rendered).is_ok());
-        assert!(rendered.contains("binds = EXTI15_10"));
-        assert!(rendered.contains("binds = DMA1_STREAM4"));
-        assert!(rendered.contains("fn osd_uart_tx_worker"));
-        assert!(rendered.contains("observe_button_change::spawn(enabled)"));
-        assert!(rendered.contains("Mono::delay(500.millis()).await"));
-        assert!(!rendered.contains("cx.config"));
-        assert!(!rendered.contains("button_changed::spawn"));
-        assert!(!rendered.contains("Context<'_>"));
+        syn::parse_file(main).unwrap_or_else(|error| panic!("generated main must parse: {error}"));
+        syn::parse_file(prelude)
+            .unwrap_or_else(|error| panic!("generated prelude must parse: {error}"));
+        assert!(main.contains("mod prelude;"));
+        assert!(main.contains("mod platform_config;"));
+        assert!(main.contains("use crate::prelude::*;"));
+        assert!(main.contains("binds = EXTI4"));
+        assert!(main.contains("binds = DMA1_STREAM4"));
+        assert!(main.contains("binds = USART2"));
+        assert!(main.contains("binds = DMA1_STREAM5"));
+        assert!(main.contains("binds = DMA2_STREAM0"));
+        assert!(main.contains("binds = TIM4"));
+        assert!(main.contains("priority = 14"));
+        assert!(main.contains("fn serial2_tx_worker"));
+        assert!(main.contains("priority = 16"));
+        assert!(main.contains("async fn safety_master"));
+        assert!(main.contains("FoxeerSafetyMaster::output_inhibited()"));
+        assert!(!main.contains("FoxeerSafetyMaster::new(true)"));
+        assert!(main.contains("rc_sbus_rx_discontinuities"));
+        assert!(main.contains("RcLinkInvalidation::DmaError"));
+        assert!(main.contains("RcLinkInvalidation::TransportDiscontinuity"));
+        assert!(main.contains("Mono::timeout_after"));
+        assert!(main.contains("10.millis().into()"));
+        assert!(main.contains(".foxeer_safety_state.poll(now_us)"));
+        assert!(main.contains("async fn msp_osd"));
+        assert!(main.contains("next_menu_frame"));
+        assert!(main.contains("next_overlay_frame"));
+        assert!(!main.contains("async fn simple_osd"));
+        assert!(main.contains("async fn imu_control_bridge"));
+        assert!(main.contains("fn control_loop"));
+        assert!(!main.contains("async fn control_loop"));
+        assert!(main.contains("acknowledge_control_tick(cx.local.control_scheduler)"));
+        assert!(main.contains("if *cx.local.control_phase < 2"));
+        assert!(main.contains("flight_controller: dt::FlightController"));
+        assert!(main.contains("let samples_per_control_loop = 2"));
+        assert!(main.contains("dt::ImuRateLowPassFilter::new(0.55)"));
+        assert!(main.contains("dt::GyroBiasCalibrator::new(800, 1_000)"));
+        assert!(main.contains("ferrowasp_core::frames::BODY_RATE_TO_RATE_CONTROLLER_MAP"));
+        assert!(main.contains("motor_cmd_seq: u32"));
+        assert!(main.contains("local = [control_scheduler, control_phase"));
+        assert!(main.contains("sbus_to_control: SafetyChannel<RcInputSnapshot, 5>"));
+        assert!(main.contains("imu_to_control: SafetyChannel<ImuData, 5>"));
+        assert!(main.contains("control_to_actuator: SafetyChannel<MotorCmd, 4>"));
+        assert!(main.contains("control_to_safety_health: SafetyChannel<PreArmHealthReport, 5>"));
+        assert!(
+            main.contains("prearm_health_producer: SafetyProducer<'static, PreArmHealthReport>")
+        );
+        assert!(
+            main.contains("prearm_health_consumer: SafetyConsumer<'static, PreArmHealthReport>")
+        );
+        assert!(main.contains("observe_control_health(report, now_us)"));
+        assert!(main.contains("imu_bias_calibrated: cx.local.gyro_bias_calibrator.ready()"));
+        assert!(main.contains("armed: false"));
+        assert!(main.contains("run_foxeer_control_step"));
+        assert!(main.contains("cx.local.motor_cmd_producer.try_send(command)"));
+        assert!(main.contains("MotorQueueOutcome::Accepted"));
+        assert!(main.contains("MotorQueueOutcome::Full"));
+        assert!(main.contains("MotorPublishOutcome::WakeRejected"));
+        assert!(main.contains("actuator_output::spawn(ActuatorCmd::ApplyLatestThrottle).is_ok()"));
+        assert!(main.contains("local = [motor_cmd_consumer, actuator_guard_consumer, actuator_completion_producer, esc_telemetry_update_consumer]"));
+        assert!(main.contains("shared = [dshot_motors]"));
+        assert!(main.contains("async fn actuator_output"));
+        assert!(main.contains("request: ferrowasp_core::safety::ActuatorCmd"));
+        assert!(main.contains("handle_inhibited_actuator_wake"));
+        assert!(!main.contains("actuator_output::spawn()"));
+        for required in [
+            "cx.device.TIM1",
+            "cx.device.TIM8",
+            "cx.device.USART1",
+            "gpioa.pa8",
+            "gpioc.pc9",
+            "gpioc.pc8",
+            "gpiob.pb15",
+            "dma2.1",
+            "dma2.7",
+            "dma2.2",
+            "dma2.6",
+            "dma2.5",
+            "if !false",
+            "DshotMotorBank::new_foxeer",
+            "DSHOT_IDLE_QUALIFICATION_CONFIG",
+        ] {
+            assert!(
+                main.contains(required),
+                "missing physical actuator evidence `{required}`"
+            );
+        }
+        assert!(!main.contains("ActuatorHardware"));
+        assert!(main.contains("service_snapshot.msp_snapshot(now_ms)"));
+        assert!(main.contains("MSP DisplayPort RX discontinuity"));
+        assert!(
+            platform_config
+                .contains("pub(crate) fn load_platform_config() -> RuntimePlatformConfig")
+        );
+        assert!(main.contains("match (platform_config.serial1, platform_config.serial2)"));
+        assert!(main.contains("(Some(SerialService::RcSbus), Some(SerialService::MspV1Osd))"));
+        assert!(main.contains("(Some(SerialService::MspV1Osd), Some(SerialService::RcSbus))"));
+        assert!(!main.contains("does not match generated RTIC resources"));
+        assert!(!main.contains("rc_sbus_rx_buffer"));
+        assert!(!main.contains("osd_uart"));
+        assert!(main.contains("match platform_config.spi1"));
+        assert!(main.contains("static SPI1_MAILBOX: Spi1ImuMailbox"));
+        assert!(main.contains("// ===== Common initialization ====="));
+        assert!(main.contains("// ===== Serial endpoint `serial2` initialization ====="));
+        assert!(main.contains("// ===== Boot-time serial service routing ====="));
+        assert!(main.contains("// ===== SPI endpoint `spi1` initialization ====="));
+        assert!(main.contains("// ===== Initial task spawns ====="));
+        assert!(main.contains("// ===== RTIC resource handoff ====="));
+        assert!(
+            main.matches("// ===== Serial endpoint `serial2` resources =====")
+                .count()
+                >= 3
+        );
+        assert!(
+            main.matches("// ===== SPI endpoint `spi1` resources =====")
+                .count()
+                >= 3
+        );
+        assert!(prelude.contains("spi_imu_endpoint::{"));
+        assert!(!main.contains("struct Spi1ImuEndpointOwner"));
+        assert!(!main.contains("struct Spi1ImuDevice"));
+        assert!(!main.contains("struct Spi1ImuParser"));
+        assert!(main.contains("fn spi1_poll"));
+        assert!(main.contains("spi1_poll::spawn(observed_at_us)"));
+        assert!(main.contains("FrameRotation::new([1, 0, 2], [-1, -1, -1]).map_f32(acc)"));
+        assert!(main.contains("ImuInstallationId::new(1)"));
+        assert!(main.contains("stm32_tim2_monotonic!(Mono, 1_000_000)"));
+        assert!(main.contains("Mono::start(rcc.clocks.timclk1().raw())"));
+        assert!(main.contains("Mono::now().duration_since_epoch().to_micros()"));
+        assert!(!main.contains("Spi1ImuTimebase"));
+        assert!(!main.contains("spi1_timebase"));
+        assert!(!main.contains("spi1_delay"));
+        assert!(!main.contains("cx.device.TIM2"));
+        assert!(main.contains("let mut init_delay = cx.device.TIM5.delay::<1_000_000>"));
+        assert!(main.contains("cx.device.TIM4"));
+        assert!(main.contains("800.Hz()"));
+        assert!(prelude.contains("scheduler::{acknowledge_control_tick, init_control_scheduler}"));
+        assert!(main.contains("Mono::delay(1.millis().into()).await"));
+        assert!(!main.contains("cx.config"));
+        assert!(!main.contains("if poll::spawn"));
+        assert!(!main.contains("Context<'_>"));
+    }
+
+    #[test]
+    fn safety_channel_renders_private_storage_and_exclusive_local_handles() {
+        let app = resolve::resolve(&APP_COMPOSITION).unwrap();
+
+        let rendered = render_sources(&source_root(), &app).unwrap();
+        assert!(
+            rendered.main.contains(
+                "control_to_actuator: SafetyChannel<MotorCmd, 4> = SafetyChannel::new(),"
+            )
+        );
+        assert!(rendered.main.contains(
+            "let (motor_cmd_producer, motor_cmd_consumer) = cx.local.control_to_actuator.split();"
+        ));
+        assert_eq!(
+            rendered
+                .main
+                .matches("cx.local.control_to_actuator.split()")
+                .count(),
+            1
+        );
+        assert!(
+            rendered
+                .main
+                .contains("motor_cmd_producer: SafetyProducer<'static, MotorCmd>,")
+        );
+        assert!(
+            rendered
+                .main
+                .contains("motor_cmd_consumer: SafetyConsumer<'static, MotorCmd>,")
+        );
+        assert!(
+            rendered
+                .prelude
+                .contains("safety_channel::{SafetyChannel, SafetyConsumer, SafetyProducer}")
+        );
+        assert!(rendered.prelude.contains("ActuatorGuardReport"));
+        assert!(rendered.prelude.contains("ActuatorPreparationReport"));
+    }
+
+    fn swapped_platform_config() -> PlatformConfig {
+        PlatformConfig::empty()
+            .serial1(SerialService::MspV1Osd)
+            .serial2(SerialService::RcSbus)
+            .spi1(SpiService::Imu(ImuInstallationId::new(1)))
+    }
+
+    #[test]
+    fn serial_services_can_swap_endpoints_without_changing_the_rtic_topology() {
+        const SWAPPED: crate::rtic::composition::AppComposition =
+            crate::rtic::composition::AppComposition {
+                platform_config: swapped_platform_config,
+                ..APP_COMPOSITION
+            };
+
+        let normal =
+            render_sources(&source_root(), &resolve::resolve(&APP_COMPOSITION).unwrap()).unwrap();
+        let swapped = render_sources(&source_root(), &resolve::resolve(&SWAPPED).unwrap()).unwrap();
+
+        for task in [
+            "serial1_rx_idle_irq",
+            "serial1_tx_worker",
+            "serial2_rx_idle_irq",
+            "serial2_tx_worker",
+        ] {
+            assert!(normal.main.contains(&format!("fn {task}")));
+            assert!(swapped.main.contains(&format!("fn {task}")));
+        }
+        assert!(
+            swapped
+                .platform_config
+                .contains("serial1: Some(SerialService::MspV1Osd)")
+        );
+        assert!(
+            swapped
+                .platform_config
+                .contains("serial2: Some(SerialService::RcSbus)")
+        );
     }
 
     #[test]
     fn rendering_is_deterministic() {
         let app = resolve::resolve(&APP_COMPOSITION).unwrap();
         assert_eq!(
-            render(&source_root(), &app).unwrap(),
-            render(&source_root(), &app).unwrap()
+            render_sources(&source_root(), &app).unwrap(),
+            render_sources(&source_root(), &app).unwrap()
         );
     }
 }

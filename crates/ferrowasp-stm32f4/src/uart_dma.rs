@@ -1,9 +1,16 @@
+#[cfg(feature = "stm32f405")]
+use crate::serial::UartTxDmaService;
 use crate::serial::irq_plan::{RxIrqAction, RxIrqFlags, RxIrqPlanner};
 use crate::serial::rx_state::{DetachedRxBuffer, RxDetachCause};
 #[cfg(feature = "stm32f405")]
 use crate::serial::tx_state::{
     TxDmaFinish, TxDmaIrqFlags, TxDmaIrqTerminal, TxDmaLifecycle, plan_tx_dma_irq,
 };
+pub use crate::serial::{
+    UartOwnedRxBridgeOutcome, UartRxDeliveryError, UartRxIrqOutcome, UartTxDmaError,
+    UartTxIrqOutcome, UartTxStartError,
+};
+use crate::serial::{UartOwnedRxBridgeService, UartRxIrqService};
 use ferrowasp_io_core::serial::{
     Discontinuity, RxChunk, RxCompletion, SerialFault, SerialProtocol as Mode, SerialRxProducer,
     StreamGeneration,
@@ -26,7 +33,7 @@ use stm32f4xx_hal::{
 };
 #[cfg(feature = "stm32f405")]
 use stm32f4xx_hal::{
-    dma::{MemoryToPeripheral, Stream2, Stream4},
+    dma::{MemoryToPeripheral, Stream2, Stream4, Stream6},
     gpio::{PA0, PA1, PA10},
     pac::{DMA2, UART4, USART1},
 };
@@ -34,7 +41,9 @@ use stm32f4xx_hal::{
 pub const UART_RX_BUFFER_SIZE: usize = Mode::max_frame_size();
 pub const UART_RX_QUEUE_CAPACITY: usize = 4;
 #[cfg(feature = "stm32f405")]
-pub const UART4_TX_BUFFER_SIZE: usize = MSP_V1_MAX_FRAME_LEN;
+pub const UART_TX_BUFFER_SIZE: usize = MSP_V1_MAX_FRAME_LEN;
+#[cfg(feature = "stm32f405")]
+pub const UART4_TX_BUFFER_SIZE: usize = UART_TX_BUFFER_SIZE;
 
 pub type UartRxBuf = &'static mut [u8; UART_RX_BUFFER_SIZE];
 #[cfg(feature = "stm32f405")]
@@ -47,10 +56,15 @@ pub type Uart4RxIrq = UartRxIrqSide<Stream2<DMA1>, UART4, 4>;
 #[cfg(feature = "stm32f405")]
 pub type Uart4Rx = UartRxParts<Stream2<DMA1>, UART4, 4>;
 #[cfg(feature = "stm32f405")]
-pub type Uart4TxBuf = &'static mut [u8; UART4_TX_BUFFER_SIZE];
+pub type UartTxBuf = &'static mut [u8; UART_TX_BUFFER_SIZE];
+#[cfg(feature = "stm32f405")]
+pub type Uart4TxBuf = UartTxBuf;
+#[cfg(feature = "stm32f405")]
+pub type Uart2TxTransfer =
+    Transfer<Stream6<DMA1>, 4, serial::Tx<USART2>, MemoryToPeripheral, UartTxBuf>;
 #[cfg(feature = "stm32f405")]
 pub type Uart4TxTransfer =
-    Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, Uart4TxBuf>;
+    Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, UartTxBuf>;
 
 pub struct Usart2SbusResources {
     pub tx_pin: PA2<Input>,
@@ -63,6 +77,16 @@ pub struct Usart2RxOnlyResources {
     pub rx_pin: PA3<Input>,
     pub usart: USART2,
     pub rx_dma: Stream5<DMA1>,
+}
+
+/// Full-duplex USART2 connector resources on PA2/PA3.
+#[cfg(feature = "stm32f405")]
+pub struct Usart2EndpointResources {
+    pub tx_pin: PA2<Input>,
+    pub rx_pin: PA3<Input>,
+    pub usart: USART2,
+    pub rx_dma: Stream5<DMA1>,
+    pub tx_dma: Stream6<DMA1>,
 }
 
 pub type Usart2SbusRxOnlyResources = Usart2RxOnlyResources;
@@ -82,6 +106,10 @@ pub struct Uart4MspResources {
     pub rx_dma: Stream2<DMA1>,
     pub tx_dma: Stream4<DMA1>,
 }
+
+/// Full-duplex UART4 connector resources on PA0/PA1.
+#[cfg(feature = "stm32f405")]
+pub type Uart4EndpointResources = Uart4MspResources;
 
 #[cfg(feature = "stm32f405")]
 pub struct Uart4MspRxResources {
@@ -105,34 +133,23 @@ pub struct Uart4RxOnlyResources {
 }
 
 #[cfg(feature = "stm32f405")]
-pub struct Uart4TxDmaSide {
-    tx_transfer: Option<Uart4TxTransfer>,
+pub struct UartTxDmaSide<StreamT, UsartT, const CHANNEL: u8>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
+    tx_transfer:
+        Option<Transfer<StreamT, CHANNEL, serial::Tx<UsartT>, MemoryToPeripheral, UartTxBuf>>,
     dma_config: DmaConfig,
     lifecycle: TxDmaLifecycle,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg(feature = "stm32f405")]
-pub enum UartTxStartError {
-    Busy,
-    InvalidChunk,
-    TransferMissing,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub type Uart2TxDmaSide = UartTxDmaSide<Stream6<DMA1>, USART2, 4>;
 #[cfg(feature = "stm32f405")]
-pub enum UartTxIrqOutcome {
-    Ignored,
-    Completed,
-    DmaError(UartTxDmaError),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg(feature = "stm32f405")]
-pub enum UartTxDmaError {
-    Transfer,
-    DirectMode,
-}
+pub type Uart4TxDmaSide = UartTxDmaSide<Stream4<DMA1>, UART4, 4>;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg(feature = "stm32f405")]
@@ -142,15 +159,21 @@ pub struct UartTxDmaStats {
 }
 
 #[cfg(feature = "stm32f405")]
-impl Uart4TxDmaSide {
-    /// Starts one fixed-size UART4 DMA transfer.
+impl<StreamT, UsartT, const CHANNEL: u8> UartTxDmaSide<StreamT, UsartT, CHANNEL>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
+    /// Starts one fixed-size UART DMA transfer.
     ///
     /// The current target keeps its validated 70-byte wire transfer and pads
     /// the owned chunk with zeros. A variable-length DMA buffer is a separate
     /// backend checkpoint.
     pub fn start_chunk(
         &mut self,
-        chunk: &TxChunk<MSP_V1_MAX_FRAME_LEN>,
+        chunk: &TxChunk<UART_TX_BUFFER_SIZE>,
     ) -> Result<(), UartTxStartError> {
         if self.lifecycle.is_in_flight() {
             return Err(UartTxStartError::Busy);
@@ -240,18 +263,57 @@ impl Uart4TxDmaSide {
 }
 
 #[cfg(feature = "stm32f405")]
+impl<StreamT, UsartT, const CHANNEL: u8> UartTxDmaService<UART_TX_BUFFER_SIZE>
+    for UartTxDmaSide<StreamT, UsartT, CHANNEL>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
+    fn start_chunk(
+        &mut self,
+        chunk: &TxChunk<UART_TX_BUFFER_SIZE>,
+    ) -> Result<(), UartTxStartError> {
+        UartTxDmaSide::start_chunk(self, chunk)
+    }
+
+    fn service_irq(&mut self) -> UartTxIrqOutcome {
+        UartTxDmaSide::service_irq(self)
+    }
+}
+
+#[cfg(feature = "stm32f405")]
 pub struct Uart4MspParts {
     pub rx_irq: Uart4RxIrq,
     pub parser: UartRxParserSide,
     pub tx_dma: Uart4TxDmaSide,
 }
 
+/// Full-duplex USART2 endpoint initialized with a boot-selected profile.
 #[cfg(feature = "stm32f405")]
-pub fn init_uart4_tx_dma(
-    tx_dma: Stream4<DMA1>,
-    tx: serial::Tx<UART4>,
-    tx_buffer: Uart4TxBuf,
-) -> Uart4TxDmaSide {
+pub struct Usart2EndpointParts {
+    pub rx_irq: Uart2RxIrq,
+    pub parser: UartRxParserSide,
+    pub tx_dma: Uart2TxDmaSide,
+}
+
+/// Full-duplex UART4 endpoint initialized with a boot-selected profile.
+#[cfg(feature = "stm32f405")]
+pub type Uart4EndpointParts = Uart4MspParts;
+
+#[cfg(feature = "stm32f405")]
+pub fn init_uart_tx_dma<StreamT, UsartT, const CHANNEL: u8>(
+    tx_dma: StreamT,
+    tx: serial::Tx<UsartT>,
+    tx_buffer: UartTxBuf,
+) -> UartTxDmaSide<StreamT, UsartT, CHANNEL>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
     let dma_config = DmaConfig::default()
         .memory_increment(true)
         .fifo_enable(true)
@@ -261,7 +323,7 @@ pub fn init_uart4_tx_dma(
         .transfer_complete_interrupt(true);
     let tx_transfer = Transfer::init_memory_to_peripheral(tx_dma, tx, tx_buffer, None, dma_config);
 
-    Uart4TxDmaSide {
+    UartTxDmaSide {
         tx_transfer: Some(tx_transfer),
         dma_config,
         lifecycle: TxDmaLifecycle::new(),
@@ -277,26 +339,25 @@ pub struct FilledUartRxBuf {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UartRxDeliveryError {
-    NoFreshBuffer,
-    TransferNotReady,
-    FilledQueueFull,
-    PlannerRejected,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UartRxIrqOutcome {
-    Ignored,
-    Delivered,
-    NoChunk,
-    DmaError,
-    DeliveryError(UartRxDeliveryError),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UartRxReadOutcome {
     NoChunk,
     Chunk(usize),
+    RecycleError,
+}
+
+/// Bounded parser-side read result retaining UART-error evidence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UartRxReadStatus {
+    /// No completed DMA buffer was waiting.
+    NoChunk,
+    /// One chunk was copied and its DMA buffer recycled.
+    Chunk {
+        /// Number of initialized bytes copied into caller storage.
+        len: usize,
+        /// Whether the UART reported an error while collecting this chunk.
+        uart_error_seen: bool,
+    },
+    /// The completed DMA buffer could not be returned to the free pool.
     RecycleError,
 }
 
@@ -509,6 +570,23 @@ where
     }
 }
 
+impl<StreamT, UsartT, const CHANNEL: u8> UartRxIrqService
+    for UartRxIrqSide<StreamT, UsartT, CHANNEL>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Rx<UsartT>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
+{
+    fn service_dma_irq(&mut self) -> UartRxIrqOutcome {
+        UartRxIrqSide::service_dma_irq(self)
+    }
+
+    fn service_idle_irq(&mut self) -> UartRxIrqOutcome {
+        UartRxIrqSide::service_idle_irq(self)
+    }
+}
+
 pub struct UartRxParserSide {
     pub free_producer: FreeProducer,
     pub filled_consumer: FilledConsumer,
@@ -527,21 +605,31 @@ impl UartRxParserSide {
         }
         UartRxReadOutcome::Chunk(len)
     }
+
+    /// Copies one completed chunk, preserves its UART-error bit, and recycles the buffer.
+    pub fn read_chunk_with_status(
+        &mut self,
+        output: &mut [u8; UART_RX_BUFFER_SIZE],
+    ) -> UartRxReadStatus {
+        let Some(filled) = self.filled_consumer.dequeue() else {
+            return UartRxReadStatus::NoChunk;
+        };
+        let len = filled.len.min(output.len()).min(filled.buf.len());
+        output[..len].copy_from_slice(&filled.buf[..len]);
+        let uart_error_seen = filled.uart_error_seen;
+        if self.free_producer.enqueue(filled.buf).is_err() {
+            return UartRxReadStatus::RecycleError;
+        }
+        UartRxReadStatus::Chunk {
+            len,
+            uart_error_seen,
+        }
+    }
 }
 
 pub struct UartOwnedRxBridge<'a, const N: usize, const DEPTH: usize> {
     parser: UartRxParserSide,
     producer: SerialRxProducer<'a, N, DEPTH>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UartOwnedRxBridgeOutcome {
-    NoChunk,
-    Published,
-    InvalidChunk,
-    QueueOverflow,
-    Disabled,
-    RecycleFailed,
 }
 
 impl<'a, const N: usize, const DEPTH: usize> UartOwnedRxBridge<'a, N, DEPTH> {
@@ -591,6 +679,14 @@ impl<'a, const N: usize, const DEPTH: usize> UartOwnedRxBridge<'a, N, DEPTH> {
     ) {
         self.producer
             .record_discontinuity(cause, generation, observed_at);
+    }
+}
+
+impl<const N: usize, const DEPTH: usize> UartOwnedRxBridgeService
+    for UartOwnedRxBridge<'_, N, DEPTH>
+{
+    fn publish_next_untimed(&mut self) -> UartOwnedRxBridgeOutcome {
+        self.publish_next(TimestampMicros(0))
     }
 }
 
@@ -943,15 +1039,94 @@ pub fn init_uart4_msp_rx_dma_with_tx(
     rcc: &mut Rcc,
     storage: UartRxStorage,
 ) -> UartRxTxParts<Stream2<DMA1>, UART4, 4> {
+    init_uart4_rx_dma_with_tx(resources, rcc, Mode::Msp, storage)
+}
+
+/// Initializes full-duplex UART4 RX and returns its TX half.
+#[cfg(feature = "stm32f405")]
+pub fn init_uart4_rx_dma_with_tx(
+    resources: Uart4MspRxResources,
+    rcc: &mut Rcc,
+    mode: Mode,
+    storage: UartRxStorage,
+) -> UartRxTxParts<Stream2<DMA1>, UART4, 4> {
     init_uart_rx_dma_with_tx::<_, _, _, _, 4>(
         resources.tx_pin.into_alternate::<8>(),
         resources.rx_pin.into_alternate::<8>(),
         resources.uart,
         resources.rx_dma,
         rcc,
-        Mode::Msp,
+        mode,
         storage,
     )
+}
+
+/// Initializes a full-duplex USART2 endpoint using a boot-selected profile.
+#[cfg(feature = "stm32f405")]
+pub fn init_usart2_endpoint(
+    resources: Usart2EndpointResources,
+    rcc: &mut Rcc,
+    mode: Mode,
+    rx_storage: crate::app_storage::UartRxStorageResources,
+    tx_buffer: UartTxBuf,
+) -> Usart2EndpointParts {
+    let Usart2EndpointResources {
+        tx_pin,
+        rx_pin,
+        usart,
+        rx_dma,
+        tx_dma,
+    } = resources;
+    let uart = init_uart_rx_dma_with_tx::<_, _, _, _, 4>(
+        tx_pin.into_alternate::<7>(),
+        rx_pin.into_alternate::<7>(),
+        usart,
+        rx_dma,
+        rcc,
+        mode,
+        rx_storage.into_backend(),
+    );
+
+    Usart2EndpointParts {
+        rx_irq: uart.irq,
+        parser: uart.parser,
+        tx_dma: init_uart_tx_dma::<_, _, 4>(tx_dma, uart.tx, tx_buffer),
+    }
+}
+
+/// Initializes a full-duplex UART4 endpoint using a boot-selected profile.
+#[cfg(feature = "stm32f405")]
+pub fn init_uart4_endpoint(
+    resources: Uart4EndpointResources,
+    rcc: &mut Rcc,
+    mode: Mode,
+    rx_storage: crate::app_storage::UartRxStorageResources,
+    tx_buffer: UartTxBuf,
+) -> Uart4EndpointParts {
+    let Uart4MspResources {
+        tx_pin,
+        rx_pin,
+        uart,
+        rx_dma,
+        tx_dma,
+    } = resources;
+    let uart = init_uart4_rx_dma_with_tx(
+        Uart4MspRxResources {
+            tx_pin,
+            rx_pin,
+            uart,
+            rx_dma,
+        },
+        rcc,
+        mode,
+        rx_storage.into_backend(),
+    );
+
+    Uart4MspParts {
+        rx_irq: uart.irq,
+        parser: uart.parser,
+        tx_dma: init_uart_tx_dma::<_, _, 4>(tx_dma, uart.tx, tx_buffer),
+    }
 }
 
 #[cfg(feature = "stm32f405")]
@@ -979,27 +1154,5 @@ pub fn init_uart4_msp_osd(
     rx_storage: crate::app_storage::UartRxStorageResources,
     tx_buffer: Uart4TxBuf,
 ) -> Uart4MspParts {
-    let Uart4MspResources {
-        tx_pin,
-        rx_pin,
-        uart,
-        rx_dma,
-        tx_dma,
-    } = resources;
-    let uart4 = init_uart4_msp_rx_dma_with_tx(
-        Uart4MspRxResources {
-            tx_pin,
-            rx_pin,
-            uart,
-            rx_dma,
-        },
-        rcc,
-        rx_storage.into_backend(),
-    );
-
-    Uart4MspParts {
-        rx_irq: uart4.irq,
-        parser: uart4.parser,
-        tx_dma: init_uart4_tx_dma(tx_dma, uart4.tx, tx_buffer),
-    }
+    init_uart4_endpoint(resources, rcc, Mode::Msp, rx_storage, tx_buffer)
 }

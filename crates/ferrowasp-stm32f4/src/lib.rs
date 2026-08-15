@@ -29,6 +29,7 @@ pub mod serial;
 pub mod spi;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod spi_dma;
+pub mod spi_imu_endpoint;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod static_pwm;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]

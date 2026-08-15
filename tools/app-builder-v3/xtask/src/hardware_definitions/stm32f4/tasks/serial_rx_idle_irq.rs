@@ -11,15 +11,19 @@ crate::reusable_task! {
             rx: UartRxService,
         }
         config {}
-        spawns {}
+        spawns {
+            /// Drains completed DMA buffers into the owned receive channel.
+            bridge(),
+        }
     }
 
     /// Services one STM32F4 UART peripheral IDLE interrupt.
     pub fn serial_rx_idle_irq(mut cx: serial_rx_idle_irq::Context<'_>) {
         match cx.shared.rx.lock(UartRxIrqService::service_idle_irq) {
-            UartRxIrqOutcome::Ignored
-            | UartRxIrqOutcome::Delivered
-            | UartRxIrqOutcome::NoChunk => {}
+            UartRxIrqOutcome::Ignored | UartRxIrqOutcome::NoChunk => {}
+            UartRxIrqOutcome::Delivered => {
+                let _ = bridge::spawn();
+            }
             UartRxIrqOutcome::DmaError => defmt::warn!("UART RX peripheral error"),
             UartRxIrqOutcome::DeliveryError(_) => {
                 defmt::warn!("UART RX IDLE buffer delivery error")

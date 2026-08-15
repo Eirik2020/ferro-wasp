@@ -29,6 +29,15 @@ pub enum LineConsumerEvent {
     Overflow,
 }
 
+/// Classified output from the allocation-free SBUS stream parser.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SbusConsumerEvent {
+    /// One complete frame updated the snapshot.
+    Frame(RcInputSnapshot),
+    /// A malformed frame incremented the parser-error counter.
+    ParserError(RcInputSnapshot),
+}
+
 /// Boot-selected, allocation-free parser for one serial endpoint.
 #[derive(Debug)]
 pub enum SerialConsumer {
@@ -87,6 +96,18 @@ impl SbusConsumer {
 
     /// Consumes bytes and emits each completed RC snapshot.
     pub fn consume(&mut self, bytes: &[u8], mut emit: impl FnMut(RcInputSnapshot)) {
+        self.consume_events(bytes, |event| {
+            emit(match event {
+                SbusConsumerEvent::Frame(snapshot) | SbusConsumerEvent::ParserError(snapshot) => {
+                    snapshot
+                }
+            });
+        });
+    }
+
+    /// Consumes bytes while preserving whether each emission was a frame or
+    /// parser failure, even after diagnostic counters saturate.
+    pub fn consume_events(&mut self, bytes: &[u8], mut emit: impl FnMut(SbusConsumerEvent)) {
         for result in self.parser.push_bytes(bytes) {
             match result {
                 Ok(packet) => {
@@ -97,14 +118,22 @@ impl SbusConsumer {
                         packet.flags.frame_lost,
                         packet.flags.failsafe,
                     );
-                    emit(self.snapshot);
+                    emit(SbusConsumerEvent::Frame(self.snapshot));
                 }
                 Err(_) => {
                     self.snapshot.record_parse_error();
-                    emit(self.snapshot);
+                    emit(SbusConsumerEvent::ParserError(self.snapshot));
                 }
             }
         }
+    }
+
+    /// Drops an incomplete frame after an out-of-band transport discontinuity.
+    ///
+    /// Snapshot counters remain monotonic so downstream freshness comparisons
+    /// cannot confuse a reconnected stream with an already-consumed frame.
+    pub fn reset_parser(&mut self) {
+        self.parser = StreamingParser::new();
     }
 }
 
@@ -228,6 +257,41 @@ mod tests {
         assert_eq!(snapshots.last().unwrap().channels, [500; 16]);
         assert_eq!(snapshots.last().unwrap().valid_frames, 1);
         assert_eq!(snapshots.last().unwrap().parse_errors, 1);
+    }
+
+    #[test]
+    fn sbus_classifies_frames_and_parser_errors_without_counter_inference() {
+        let valid = sbus_frame(500, 0);
+        let mut invalid = sbus_frame(1_000, 0);
+        invalid[SBUS_FRAME_LENGTH - 1] = 0xff;
+        let mut consumer = SbusConsumer::new();
+        let mut events = StdVec::new();
+
+        consumer.consume_events(&valid, |event| events.push(event));
+        consumer.consume_events(&invalid, |event| events.push(event));
+
+        assert!(matches!(events[0], SbusConsumerEvent::Frame(_)));
+        assert!(matches!(events[1], SbusConsumerEvent::ParserError(_)));
+    }
+
+    #[test]
+    fn sbus_parser_reset_drops_an_incomplete_pre_discontinuity_frame() {
+        let frame = sbus_frame(700, 0);
+        let mut consumer = SbusConsumer::new();
+        let mut events = StdVec::new();
+
+        consumer.consume_events(&frame[..12], |event| events.push(event));
+        consumer.reset_parser();
+        consumer.consume_events(&frame[12..], |event| events.push(event));
+        assert!(events.is_empty());
+
+        consumer.consume_events(&frame, |event| events.push(event));
+        assert_eq!(events.len(), 1);
+        let SbusConsumerEvent::Frame(snapshot) = events[0] else {
+            panic!("expected a complete frame after reset")
+        };
+        assert_eq!(snapshot.channels, [700; 16]);
+        assert_eq!(snapshot.valid_frames, 1);
     }
 
     #[test]

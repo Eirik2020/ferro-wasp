@@ -12,6 +12,7 @@ path = "src/lib.rs"
 defmt = { version = "1.0.1", optional = true }
 ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }
+ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 ferrowasp-pid = { path = "../ferrowasp-pid" }

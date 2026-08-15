@@ -18,10 +18,17 @@ stm32f405 = [
     "stm32f4xx-hal/uart4",
     "stm32f4xx-hal/usb_fs",
 ]
+stm32f405-tim2-monotonic = [
+    "stm32f405",
+    "rtic-monotonics/stm32f405rg",
+    "rtic-monotonics/stm32_tim2",
+]
 
 [dependencies]
+critical-section = { workspace = true }
 defmt = "1.0.1"
 embedded-hal = { workspace = true }
+embedded-hal-async = { workspace = true }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-waveform = { path = "../ferrowasp-waveform", optional = true }
 heapless = { workspace = true }

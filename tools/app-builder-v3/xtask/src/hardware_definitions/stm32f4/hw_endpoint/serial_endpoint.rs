@@ -2,9 +2,8 @@
 //!
 //! The reusable definition owns the transport task graph and common resource
 //! roles. An application declaration supplies one board serial resource,
-//! protocol, scheduling priorities, and bounded storage sizes.
-
-use ferrowasp_io_core::serial::{SerialProfile, SerialProtocol};
+//! scheduling priorities, and bounded storage sizes. Protocol and service
+//! ownership are deliberately selected later by the boot platform config.
 
 use crate::{
     hardware_definitions::stm32f4::{board_declaration::BoardDeclaration, tasks},
@@ -20,6 +19,9 @@ pub struct SerialEndpointTasks {
     /// Receive DMA interrupt service.
     pub rx_dma_irq: &'static TaskContract,
 
+    /// Moves completed DMA buffers into the owned receive channel.
+    pub rx_bridge: &'static TaskContract,
+
     /// Transmit DMA completion interrupt service.
     pub tx_dma_irq: &'static TaskContract,
 
@@ -32,7 +34,7 @@ pub struct SerialEndpointTasks {
 pub enum SerialEndpointResourceRole {
     /// Receive DMA and UART peripheral state.
     RxService,
-    /// Receive parser retained for the future owned-channel bridge task.
+    /// Receive parser and owned-channel producer combined into one bridge.
     RxParser,
     /// Static receive DMA buffer bank.
     RxBuffers,
@@ -42,8 +44,6 @@ pub enum SerialEndpointResourceRole {
     RxFilledQueue,
     /// Portable owned receive channel.
     RxChannel,
-    /// Private producer side of the receive channel.
-    RxProducer,
     /// Portable receive reader exported to a consumer task.
     RxReader,
     /// Receive discontinuity reader exported to a consumer task.
@@ -82,15 +82,6 @@ pub enum SerialEndpointResourceVisibility {
     Exposed,
 }
 
-/// Directional condition controlling whether a resource is expanded.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SerialEndpointResourceActivation {
-    /// Present for receive-only and bidirectional endpoints.
-    Always,
-    /// Present only for bidirectional endpoints.
-    Transmit,
-}
-
 /// One common endpoint resource and its ownership policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SerialEndpointResource {
@@ -102,9 +93,6 @@ pub struct SerialEndpointResource {
 
     /// Whether application consumer tasks may bind it.
     pub visibility: SerialEndpointResourceVisibility,
-
-    /// Directional condition controlling resource expansion.
-    pub activation: SerialEndpointResourceActivation,
 }
 
 impl SerialEndpointResource {
@@ -112,102 +100,45 @@ impl SerialEndpointResource {
         role: SerialEndpointResourceRole,
         ownership: SerialEndpointResourceOwnership,
         visibility: SerialEndpointResourceVisibility,
-        activation: SerialEndpointResourceActivation,
     ) -> Self {
         Self {
             role,
             ownership,
             visibility,
-            activation,
         }
     }
 }
 
 const PRIVATE: SerialEndpointResourceVisibility = SerialEndpointResourceVisibility::Private;
 const EXPOSED: SerialEndpointResourceVisibility = SerialEndpointResourceVisibility::Exposed;
-const ALWAYS: SerialEndpointResourceActivation = SerialEndpointResourceActivation::Always;
-const TRANSMIT: SerialEndpointResourceActivation = SerialEndpointResourceActivation::Transmit;
 const INIT_LOCAL: SerialEndpointResourceOwnership = SerialEndpointResourceOwnership::InitLocal;
 const LOCAL: SerialEndpointResourceOwnership = SerialEndpointResourceOwnership::Local;
 const SHARED: SerialEndpointResourceOwnership = SerialEndpointResourceOwnership::Shared;
 
 /// Common resource graph owned by every DMA serial endpoint definition.
 pub const SERIAL_ENDPOINT_RESOURCES: &[SerialEndpointResource] = &[
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::RxService,
-        SHARED,
-        PRIVATE,
-        ALWAYS,
-    ),
-    SerialEndpointResource::new(SerialEndpointResourceRole::RxParser, LOCAL, PRIVATE, ALWAYS),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::RxBuffers,
-        INIT_LOCAL,
-        PRIVATE,
-        ALWAYS,
-    ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::RxFreeQueue,
-        INIT_LOCAL,
-        PRIVATE,
-        ALWAYS,
-    ),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxService, SHARED, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxParser, LOCAL, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxBuffers, INIT_LOCAL, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxFreeQueue, INIT_LOCAL, PRIVATE),
     SerialEndpointResource::new(
         SerialEndpointResourceRole::RxFilledQueue,
         INIT_LOCAL,
         PRIVATE,
-        ALWAYS,
     ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::RxChannel,
-        INIT_LOCAL,
-        PRIVATE,
-        ALWAYS,
-    ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::RxProducer,
-        LOCAL,
-        PRIVATE,
-        ALWAYS,
-    ),
-    SerialEndpointResource::new(SerialEndpointResourceRole::RxReader, LOCAL, EXPOSED, ALWAYS),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxChannel, INIT_LOCAL, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::RxReader, LOCAL, EXPOSED),
     SerialEndpointResource::new(
         SerialEndpointResourceRole::RxDiscontinuities,
         LOCAL,
         EXPOSED,
-        ALWAYS,
     ),
-    SerialEndpointResource::new(SerialEndpointResourceRole::TxDma, SHARED, PRIVATE, TRANSMIT),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::TxBuffer,
-        INIT_LOCAL,
-        PRIVATE,
-        TRANSMIT,
-    ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::TxChannel,
-        INIT_LOCAL,
-        PRIVATE,
-        TRANSMIT,
-    ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::TxWriter,
-        LOCAL,
-        EXPOSED,
-        TRANSMIT,
-    ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::TxOwner,
-        LOCAL,
-        PRIVATE,
-        TRANSMIT,
-    ),
-    SerialEndpointResource::new(
-        SerialEndpointResourceRole::TxCompletion,
-        LOCAL,
-        PRIVATE,
-        TRANSMIT,
-    ),
+    SerialEndpointResource::new(SerialEndpointResourceRole::TxDma, SHARED, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::TxBuffer, INIT_LOCAL, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::TxChannel, INIT_LOCAL, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::TxWriter, LOCAL, EXPOSED),
+    SerialEndpointResource::new(SerialEndpointResourceRole::TxOwner, LOCAL, PRIVATE),
+    SerialEndpointResource::new(SerialEndpointResourceRole::TxCompletion, LOCAL, PRIVATE),
 ];
 
 /// Reusable serial endpoint definition shared by every concrete instance.
@@ -234,24 +165,14 @@ impl SerialEndpointDefinition {
             id,
             definition: self,
             hardware_id,
-            profile: SerialProfile::disabled(),
-            direction: SerialEndpointDirection::ReceiveOnly,
             interrupt_priority: 0,
+            bridge_priority: 0,
             worker_priority: None,
             rx_buffer_count: 4,
             rx_queue_depth: 4,
             tx_queue_depth: 16,
         }
     }
-}
-
-/// Transfer directions requested by an application endpoint instance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SerialEndpointDirection {
-    /// Receive service only.
-    ReceiveOnly,
-    /// Receive and transmit service.
-    Bidirectional,
 }
 
 /// One serial endpoint instance declared by an application composition.
@@ -263,19 +184,16 @@ pub struct SerialEndpointDeclaration {
     /// Reusable task and common-resource definition.
     pub definition: SerialEndpointDefinition,
 
-    /// Stable ID of the serial hardware consumed from the selected board.
+    /// Board hardware consumed by this transport endpoint.
     pub hardware_id: &'static str,
-
-    /// Electrical and protocol profile used to initialize the UART.
-    pub profile: SerialProfile,
-
-    /// Requested receive-only or bidirectional service.
-    pub direction: SerialEndpointDirection,
 
     /// Priority assigned to all endpoint hardware interrupt tasks.
     pub interrupt_priority: u8,
 
-    /// Priority assigned to the transmit worker when TX is enabled.
+    /// Priority assigned to the receive bridge software task.
+    pub bridge_priority: u8,
+
+    /// Priority assigned to the endpoint's transmit worker.
     pub worker_priority: Option<u8>,
 
     /// Number of statically allocated receive DMA buffers.
@@ -289,21 +207,15 @@ pub struct SerialEndpointDeclaration {
 }
 
 impl SerialEndpointDeclaration {
-    /// Selects the UART electrical and protocol profile.
-    pub const fn profile(mut self, profile: SerialProfile) -> Self {
-        self.profile = profile;
-        self
-    }
-
-    /// Enables both receive and transmit endpoint services.
-    pub const fn bidirectional(mut self) -> Self {
-        self.direction = SerialEndpointDirection::Bidirectional;
-        self
-    }
-
     /// Sets the common priority of all endpoint hardware interrupts.
     pub const fn interrupt_priority(mut self, priority: u8) -> Self {
         self.interrupt_priority = priority;
+        self
+    }
+
+    /// Sets the endpoint-owned receive bridge priority.
+    pub const fn bridge_priority(mut self, priority: u8) -> Self {
+        self.bridge_priority = priority;
         self
     }
 
@@ -338,44 +250,65 @@ pub const SERIAL_DMA_ENDPOINT: SerialEndpointDefinition = SerialEndpointDefiniti
     tasks: SerialEndpointTasks {
         peripheral_irq: &tasks::serial_rx_idle_irq::CONTRACT,
         rx_dma_irq: &tasks::serial_rx_dma_irq::CONTRACT,
+        rx_bridge: &tasks::serial_rx_bridge::CONTRACT,
         tx_dma_irq: &tasks::serial_tx_dma_irq::CONTRACT,
         tx_worker: &tasks::serial_tx_worker::CONTRACT,
     },
     resources: SERIAL_ENDPOINT_RESOURCES,
 };
 
+pub(crate) const fn resource_suffix(role: SerialEndpointResourceRole) -> &'static str {
+    match role {
+        SerialEndpointResourceRole::RxService => "rx",
+        SerialEndpointResourceRole::RxParser => "rx_bridge",
+        SerialEndpointResourceRole::RxBuffers => "rx_buffers",
+        SerialEndpointResourceRole::RxFreeQueue => "rx_free_queue",
+        SerialEndpointResourceRole::RxFilledQueue => "rx_filled_queue",
+        SerialEndpointResourceRole::RxChannel => "rx_channel",
+        SerialEndpointResourceRole::RxReader => "rx_reader",
+        SerialEndpointResourceRole::RxDiscontinuities => "rx_discontinuities",
+        SerialEndpointResourceRole::TxDma => "tx_dma",
+        SerialEndpointResourceRole::TxBuffer => "tx_buffer",
+        SerialEndpointResourceRole::TxChannel => "tx_channel",
+        SerialEndpointResourceRole::TxWriter => "tx_writer",
+        SerialEndpointResourceRole::TxOwner => "tx_owner",
+        SerialEndpointResourceRole::TxCompletion => "tx_completion",
+    }
+}
+
 pub(crate) fn validate(
     endpoint: SerialEndpointDeclaration,
     board: &BoardDeclaration,
 ) -> Result<(), String> {
-    let Some(hardware) = board.serial(endpoint.hardware_id) else {
+    let hardware_id = endpoint.hardware_id;
+    let Some(hardware) = board.serial(hardware_id) else {
         return Err(format!(
             "serial endpoint `{}` consumes undeclared board serial hardware `{}`",
-            endpoint.id, endpoint.hardware_id
+            endpoint.id, hardware_id
         ));
     };
-    if endpoint.profile.protocol == SerialProtocol::Disabled {
+    if endpoint.interrupt_priority == 0 || endpoint.bridge_priority == 0 {
         return Err(format!(
-            "serial endpoint `{}` must select an enabled serial profile",
+            "serial endpoint `{}` must have nonzero interrupt and bridge priorities",
             endpoint.id
         ));
     }
-    if endpoint.interrupt_priority == 0 {
+    if endpoint.bridge_priority >= endpoint.interrupt_priority {
         return Err(format!(
-            "serial endpoint `{}` must have a nonzero interrupt priority",
+            "serial endpoint `{}` bridge priority must be lower than its interrupt priority",
             endpoint.id
         ));
     }
     let Some(rx) = hardware.port.rx else {
         return Err(format!(
             "serial endpoint `{}` requires an RX route on board hardware `{}`",
-            endpoint.id, endpoint.hardware_id
+            endpoint.id, hardware_id
         ));
     };
     if rx.dma.is_none() {
         return Err(format!(
             "serial endpoint `{}` requires RX DMA on board hardware `{}`",
-            endpoint.id, endpoint.hardware_id
+            endpoint.id, hardware_id
         ));
     }
     if endpoint.rx_buffer_count == 0 || endpoint.rx_queue_depth == 0 {
@@ -385,44 +318,32 @@ pub(crate) fn validate(
         ));
     }
 
-    match endpoint.direction {
-        SerialEndpointDirection::ReceiveOnly => {
-            if endpoint.worker_priority.is_some() {
-                return Err(format!(
-                    "receive-only serial endpoint `{}` cannot declare a TX worker priority",
-                    endpoint.id
-                ));
-            }
-        }
-        SerialEndpointDirection::Bidirectional => {
-            let Some(tx) = hardware.port.tx else {
-                return Err(format!(
-                    "bidirectional serial endpoint `{}` requires a TX route on board hardware `{}`",
-                    endpoint.id, endpoint.hardware_id
-                ));
-            };
-            if tx.dma.is_none() {
-                return Err(format!(
-                    "bidirectional serial endpoint `{}` requires TX DMA on board hardware `{}`",
-                    endpoint.id, endpoint.hardware_id
-                ));
-            }
-            if endpoint
-                .worker_priority
-                .is_none_or(|priority| priority == 0)
-            {
-                return Err(format!(
-                    "bidirectional serial endpoint `{}` must have a nonzero worker priority",
-                    endpoint.id
-                ));
-            }
-            if endpoint.tx_queue_depth == 0 {
-                return Err(format!(
-                    "bidirectional serial endpoint `{}` TX queue depth must be nonzero",
-                    endpoint.id
-                ));
-            }
-        }
+    let Some(tx) = hardware.port.tx else {
+        return Err(format!(
+            "serial endpoint `{}` requires a TX route on board hardware `{}`",
+            endpoint.id, hardware_id
+        ));
+    };
+    if tx.dma.is_none() {
+        return Err(format!(
+            "serial endpoint `{}` requires TX DMA on board hardware `{}`",
+            endpoint.id, hardware_id
+        ));
+    }
+    if endpoint
+        .worker_priority
+        .is_none_or(|priority| priority == 0)
+    {
+        return Err(format!(
+            "serial endpoint `{}` must have a nonzero worker priority",
+            endpoint.id
+        ));
+    }
+    if endpoint.tx_queue_depth == 0 {
+        return Err(format!(
+            "serial endpoint `{}` TX queue depth must be nonzero",
+            endpoint.id
+        ));
     }
 
     Ok(())
@@ -433,12 +354,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn definition_contains_all_four_transport_tasks() {
+    fn definition_contains_all_five_transport_tasks() {
         assert_eq!(
             SERIAL_DMA_ENDPOINT.tasks.peripheral_irq.id,
             "serial_rx_idle_irq"
         );
         assert_eq!(SERIAL_DMA_ENDPOINT.tasks.rx_dma_irq.id, "serial_rx_dma_irq");
+        assert_eq!(SERIAL_DMA_ENDPOINT.tasks.rx_bridge.id, "serial_rx_bridge");
         assert_eq!(SERIAL_DMA_ENDPOINT.tasks.tx_dma_irq.id, "serial_tx_dma_irq");
         assert_eq!(SERIAL_DMA_ENDPOINT.tasks.tx_worker.id, "serial_tx_worker");
     }

@@ -4,6 +4,17 @@ pub const USB_CDC_TX_BUFFER_BYTES: usize = 256;
 pub const FERROWASP_USB_VID: u16 = 0x16c0;
 pub const FERROWASP_USB_PID: u16 = 0x27dd;
 
+/// Requests service of the OTG_FS interrupt without exposing PAC ownership to
+/// observation-only tasks.
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub fn pend_usb_irq() {
+    cortex_m::peripheral::NVIC::pend(stm32f4xx_hal::pac::Interrupt::OTG_FS);
+}
+
+/// Host-side no-op used by authoring and unit-test builds.
+#[cfg(not(all(target_arch = "arm", feature = "stm32f405")))]
+pub fn pend_usb_irq() {}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UsbCdcIdentity {
     pub manufacturer: &'static str,

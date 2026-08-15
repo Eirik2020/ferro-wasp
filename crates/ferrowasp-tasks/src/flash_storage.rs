@@ -796,6 +796,81 @@ impl Default for PageAssembler {
     }
 }
 
+/// Bounded maintenance operation owned by the priority-1 flash task.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GoldenFlashOperation {
+    /// No erase or configuration transaction is active.
+    Idle,
+    /// Erase one log sector per service iteration.
+    EraseLogs { next_sector: u32 },
+    /// Wait for a configuration-slot erase before programming the staged page.
+    SaveConfigErase { slot: u8 },
+    /// Wait for a configuration page-program operation to complete.
+    SaveConfigProgram { slot: u8 },
+}
+
+/// Persistent, hardware-neutral state of the generated golden flash owner.
+pub struct GoldenFlashState {
+    /// Whether log/config recovery completed.
+    pub initialized: bool,
+    /// Validated capacity-dependent storage layout.
+    pub layout: Option<StorageLayout>,
+    /// Next append-only log page.
+    pub next_page: u32,
+    /// Next flight identity.
+    pub next_flight: u32,
+    /// Whether the append point is erased and writable.
+    pub log_writable: bool,
+    /// Current config candidate, including unsaved disarmed edits.
+    pub config: StoredConfig,
+    /// Persisted configuration sequence.
+    pub config_sequence: u32,
+    /// Currently selected copy-on-write slot.
+    pub config_active_slot: u8,
+    /// Page assembler for the currently armed recording interval.
+    pub assembler: PageAssembler,
+    /// First recorded flight after boot has not yet been marked.
+    pub boot_session_start_pending: bool,
+    /// Encoded page waiting for a nonbusy SPI NOR device.
+    pub pending_log_page: Option<[u8; FLASH_PAGE_LEN]>,
+    /// Encoded configuration page staged across erase/program iterations.
+    pub pending_config_page: [u8; FLASH_PAGE_LEN],
+    /// Current bounded maintenance operation.
+    pub operation: GoldenFlashOperation,
+}
+
+impl GoldenFlashState {
+    /// Creates fail-closed state using the golden Foxeer defaults.
+    pub const fn new() -> Self {
+        Self {
+            initialized: false,
+            layout: None,
+            next_page: 0,
+            next_flight: 1,
+            log_writable: false,
+            config: StoredConfig::foxeer_f405_v2_default(),
+            config_sequence: 0,
+            config_active_slot: 1,
+            assembler: PageAssembler::new(),
+            boot_session_start_pending: true,
+            pending_log_page: None,
+            pending_config_page: [0xff; FLASH_PAGE_LEN],
+            operation: GoldenFlashOperation::Idle,
+        }
+    }
+
+    /// Whether destructive/configuration maintenance is in progress.
+    pub const fn maintenance_busy(&self) -> bool {
+        !matches!(self.operation, GoldenFlashOperation::Idle)
+    }
+}
+
+impl Default for GoldenFlashState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Sequence comparison for two copy-on-write configuration slots.
 pub const fn sequence_is_newer(candidate: u32, current: u32) -> bool {
     candidate != current && candidate.wrapping_sub(current) < 0x8000_0000

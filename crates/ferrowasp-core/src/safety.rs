@@ -4,6 +4,10 @@ pub const ARM_HOLD_US: u64 = 200_000;
 pub const ARM_THRESHOLD: u16 = 1500;
 pub const RC_LINK_TIMEOUT_US: u32 = 100_000;
 pub const RC_LINK_RECOVERY_FRAMES: u8 = 3;
+/// Maximum age of control-owned IMU health evidence accepted while arming.
+pub const PREARM_HEALTH_MAX_AGE_US: u32 = 20_000;
+/// Maximum age of safety-owned actuator authority accepted by the actuator task.
+pub const ACTUATOR_GUARD_MAX_AGE_US: u32 = 20_000;
 
 pub const ZERO_THROTTLE: f32 = 0.0;
 pub const ARM_IDLE_THROTTLE: f32 = 300.0;
@@ -42,7 +46,7 @@ pub enum SafetyEvent {
     RcLinkInvalid(RcLinkInvalidation),
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ActuatorCmd {
     // Protocol-specific arming preparation. The actuator owner decides whether
     // this means a PWM idle sequence or guarded DShot idle-RPM qualification.
@@ -67,11 +71,58 @@ pub enum ActuatorCmd {
     ApplyBenchSelectedMotor,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ArmingState {
     Disarmed,
     Arming,
     Armed,
+}
+
+/// Safety-owned authority visible to the physical actuator boundary.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ActuatorAuthority {
+    /// No physical actuator operation is permitted.
+    Inhibited,
+    /// A bounded pre-arm stop/idle qualification sequence is permitted.
+    Preparing,
+    /// Fresh control-owned motor requests may be applied.
+    Armed,
+}
+
+/// Timestamped authority report emitted only by the safety master.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ActuatorGuardReport {
+    pub authority: ActuatorAuthority,
+    pub sequence: u32,
+    pub observed_at_us: u32,
+}
+
+impl ActuatorGuardReport {
+    /// Whether this safety-owned report is within the actuator freshness limit.
+    pub const fn is_fresh(self, now_us: u32) -> bool {
+        now_us.wrapping_sub(self.observed_at_us) <= ACTUATOR_GUARD_MAX_AGE_US
+    }
+
+    /// Whether this fresh report permits pre-arm actuator preparation.
+    pub const fn permits_preparation(self, now_us: u32) -> bool {
+        self.is_fresh(now_us) && matches!(self.authority, ActuatorAuthority::Preparing)
+    }
+
+    /// Whether this fresh report permits active motor commands.
+    pub const fn permits_active_output(self, now_us: u32) -> bool {
+        self.is_fresh(now_us) && matches!(self.authority, ActuatorAuthority::Armed)
+    }
+}
+
+/// Completion or fault evidence returned from the safety-owned actuator path.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ActuatorPreparationReport {
+    /// Stop hold and four-output fresh in-range eRPM qualification completed.
+    Qualified,
+    /// A reviewed arming guard or qualification rule aborted preparation.
+    Aborted(ArmingAbortReason),
+    /// The physical DShot service faulted or lost its command lease.
+    Faulted,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -94,6 +145,29 @@ pub struct PreArmHealth {
     pub imu_ready: bool,
     pub imu_bias_calibrated: bool,
     pub imu_fresh: bool,
+}
+
+/// Timestamped, observation-only health evidence produced by control.
+///
+/// This report cannot grant actuator authority. The safety master owns that
+/// decision and independently rejects missing, stale, or unhealthy evidence.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct PreArmHealthReport {
+    pub health: PreArmHealth,
+    pub sequence: u32,
+    pub observed_at_us: u32,
+}
+
+impl PreArmHealthReport {
+    /// Returns the report with freshness additionally constrained by age.
+    pub fn health_at(self, now_us: u32) -> PreArmHealth {
+        PreArmHealth {
+            imu_ready: self.health.imu_ready,
+            imu_bias_calibrated: self.health.imu_bias_calibrated,
+            imu_fresh: self.health.imu_fresh
+                && now_us.wrapping_sub(self.observed_at_us) <= PREARM_HEALTH_MAX_AGE_US,
+        }
+    }
 }
 
 pub const fn validate_prearm_health(health: PreArmHealth) -> Result<(), ArmingAbortReason> {
@@ -592,7 +666,6 @@ impl Default for EdgeDetector {
     }
 }
 
-#[derive(Default)]
 pub struct ArmQualifier {
     was_high: bool,
     candidate_start_us: Option<u64>,
@@ -600,6 +673,14 @@ pub struct ArmQualifier {
 }
 
 impl ArmQualifier {
+    pub const fn new() -> Self {
+        Self {
+            was_high: false,
+            candidate_start_us: None,
+            request_sent: false,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.was_high = false;
         self.candidate_start_us = None;
@@ -633,6 +714,12 @@ impl ArmQualifier {
         }
 
         None
+    }
+}
+
+impl Default for ArmQualifier {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -826,6 +913,41 @@ mod tests {
             }),
             Err(ArmingAbortReason::ImuStale)
         );
+    }
+
+    #[test]
+    fn prearm_health_report_adds_wrap_safe_age_freshness() {
+        let report = PreArmHealthReport {
+            health: PreArmHealth {
+                imu_ready: true,
+                imu_bias_calibrated: true,
+                imu_fresh: true,
+            },
+            sequence: 9,
+            observed_at_us: u32::MAX - 5,
+        };
+
+        assert!(report.health_at(4).imu_fresh);
+        assert!(!report.health_at(PREARM_HEALTH_MAX_AGE_US).imu_fresh);
+    }
+
+    #[test]
+    fn actuator_guard_authority_is_mode_and_age_scoped() {
+        let preparing = ActuatorGuardReport {
+            authority: ActuatorAuthority::Preparing,
+            sequence: 7,
+            observed_at_us: u32::MAX - 9,
+        };
+        assert!(preparing.permits_preparation(10));
+        assert!(!preparing.permits_active_output(10));
+        assert!(!preparing.permits_preparation(20_011));
+
+        let armed = ActuatorGuardReport {
+            authority: ActuatorAuthority::Armed,
+            ..preparing
+        };
+        assert!(armed.permits_active_output(10));
+        assert!(!armed.permits_preparation(10));
     }
 
     #[test]

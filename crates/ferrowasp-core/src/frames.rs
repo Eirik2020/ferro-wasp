@@ -34,7 +34,29 @@ pub struct FrameRotation {
 }
 
 impl FrameRotation {
+    /// Leaves all axes unchanged.
     pub const IDENTITY: Self = Self::new([0, 1, 2], [1, 1, 1]);
+
+    /// Applies a positive 90-degree right-hand rotation around +Z.
+    ///
+    /// Output X comes from negative input Y, output Y comes from input X, and
+    /// output Z remains unchanged.
+    pub const ROTATE_Z_90: Self = Self::new([1, 0, 2], [-1, 1, 1]);
+
+    /// Applies a 180-degree rotation around +Z.
+    pub const ROTATE_Z_180: Self = Self::new([0, 1, 2], [-1, -1, 1]);
+
+    /// Applies a positive 270-degree right-hand rotation around +Z.
+    ///
+    /// This is equivalent to a negative 90-degree rotation around +Z.
+    pub const ROTATE_Z_270: Self = Self::new([1, 0, 2], [1, -1, 1]);
+
+    /// Turns the sensor upside down around +X while preserving its forward axis.
+    ///
+    /// Output X remains unchanged while output Y and Z are inverted. The name
+    /// includes the preserved axis because "upside down" alone does not specify
+    /// the sensor's yaw orientation.
+    pub const UPSIDE_DOWN_X_FORWARD: Self = Self::new([0, 1, 2], [1, -1, -1]);
 
     /// Creates a signed axis permutation.
     ///
@@ -68,6 +90,15 @@ impl FrameRotation {
             input[self.source_axes[1]] as i32 * self.signs[1],
             input[self.source_axes[2]] as i32 * self.signs[2],
         ]
+    }
+
+    /// Applies this rotation while retaining an `i16` representation.
+    ///
+    /// Negating `i16::MIN` cannot be represented, so that one boundary value
+    /// saturates to `i16::MAX` instead of overflowing.
+    pub fn map_i16_saturating(self, input: [i16; 3]) -> [i16; 3] {
+        self.map_i16_to_i32(input)
+            .map(|value| value.clamp(i16::MIN as i32, i16::MAX as i32) as i16)
     }
 
     pub fn map_raw(self, input: [i16; 3]) -> [i32; 3] {
@@ -136,12 +167,45 @@ mod tests {
     }
 
     #[test]
+    fn named_orthogonal_rotations_have_explicit_axis_mappings() {
+        let input = [10, 20, 30];
+
+        assert_eq!(FrameRotation::ROTATE_Z_90.map_i32(input), [-20, 10, 30]);
+        assert_eq!(FrameRotation::ROTATE_Z_180.map_i32(input), [-10, -20, 30]);
+        assert_eq!(FrameRotation::ROTATE_Z_270.map_i32(input), [20, -10, 30]);
+        assert_eq!(
+            FrameRotation::UPSIDE_DOWN_X_FORWARD.map_i32(input),
+            [10, -20, -30]
+        );
+    }
+
+    #[test]
+    fn four_quarter_turns_around_z_return_to_identity() {
+        let half_turn = FrameRotation::ROTATE_Z_90.then(FrameRotation::ROTATE_Z_90);
+        let full_turn = half_turn.then(half_turn);
+
+        assert_eq!(half_turn, FrameRotation::ROTATE_Z_180);
+        assert_eq!(full_turn, FrameRotation::IDENTITY);
+    }
+
+    #[test]
     fn signed_axis_permutation_maps_values() {
         let rotation = FrameRotation::new([1, 0, 2], [1, -1, -1]);
 
         assert_eq!(rotation.map_i16_to_i32([10, 20, -30]), [20, -10, 30]);
         assert_eq!(rotation.map_i32([10, 20, -30]), [20, -10, 30]);
         assert_eq!(rotation.map_f32([10.0, 20.0, -30.0]), [20.0, -10.0, 30.0]);
+        assert_eq!(rotation.map_i16_saturating([10, 20, -30]), [20, -10, 30]);
+    }
+
+    #[test]
+    fn i16_rotation_saturates_the_unrepresentable_negated_minimum() {
+        let rotation = FrameRotation::new([0, 1, 2], [-1, 1, 1]);
+
+        assert_eq!(
+            rotation.map_i16_saturating([i16::MIN, 0, 0]),
+            [i16::MAX, 0, 0]
+        );
     }
 
     #[test]

@@ -12,7 +12,9 @@ pub type UartRxBufferBank = [[u8; uart_dma::UART_RX_BUFFER_SIZE]; UART_RX_BUFFER
 pub type UartRxFreeQueue = uart_dma::FreeQueue;
 pub type UartRxFilledQueue = uart_dma::FilledQueue;
 #[cfg(feature = "stm32f405")]
-pub type Uart4TxBuffer = [u8; uart_dma::UART4_TX_BUFFER_SIZE];
+pub type UartTxBuffer = [u8; uart_dma::UART_TX_BUFFER_SIZE];
+#[cfg(feature = "stm32f405")]
+pub type Uart4TxBuffer = UartTxBuffer;
 
 #[cfg(feature = "stm32f405")]
 pub type SpiDmaBufferBank = [[u8; spi_dma::SPI_BUFFER_SIZE]; SPI_DMA_BUFFER_COUNT];

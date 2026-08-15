@@ -375,6 +375,12 @@ impl LowPassFilter {
     pub fn set_alpha(&mut self, alpha: f32) {
         self.alpha = clamp_unit_interval(alpha);
     }
+
+    /// Clears the previous sample while preserving the configured coefficient.
+    pub fn reset(&mut self) {
+        self.value = 0.0;
+        self.initialized = false;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -405,6 +411,18 @@ impl ImuRateLowPassFilter {
         self.roll.set_alpha(alpha);
         self.pitch.set_alpha(alpha);
         self.yaw.set_alpha(alpha);
+    }
+
+    /// Returns the three retained filtered values without advancing state.
+    pub const fn values(&self) -> [f32; 3] {
+        [self.roll.value, self.pitch.value, self.yaw.value]
+    }
+
+    /// Clears all three filter histories without changing their coefficient.
+    pub fn reset(&mut self) {
+        self.roll.reset();
+        self.pitch.reset();
+        self.yaw.reset();
     }
 }
 
@@ -455,6 +473,11 @@ impl GyroAngleIntegrator {
         self.pitch = self.pitch * IMU_COMPLEMENTARY_GYRO_WEIGHT
             + acc_pitch * (1.0 - IMU_COMPLEMENTARY_GYRO_WEIGHT);
 
+        [self.roll, self.pitch, self.yaw]
+    }
+
+    /// Returns the retained body-angle estimate without advancing state.
+    pub const fn angles(&self) -> [f32; 3] {
         [self.roll, self.pitch, self.yaw]
     }
 }

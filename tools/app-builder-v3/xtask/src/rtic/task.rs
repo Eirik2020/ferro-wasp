@@ -8,6 +8,7 @@
 
 use core::marker::PhantomData;
 
+use ferrowasp_core::frames::FrameRotation;
 use fugit::MillisDurationU32;
 
 /// Describes one named local or shared resource required by a task body.
@@ -144,7 +145,53 @@ pub struct SpawnError;
 /// Authoring-only stand-in for the RTIC application's monotonic timer.
 pub struct Mono;
 
+/// Authoring-only timeout marker matching `rtic_time::TimeoutError`.
+pub struct TimeoutError;
+
+/// Authoring-only monotonic instant measured in application ticks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MonoInstant {
+    ticks: u64,
+}
+
+impl MonoInstant {
+    /// Returns ticks since the monotonic was started.
+    pub const fn ticks(self) -> u64 {
+        self.ticks
+    }
+
+    /// Returns the elapsed authoring-placeholder duration since startup.
+    pub const fn duration_since_epoch(self) -> MonoDuration {
+        MonoDuration {
+            microseconds: self.ticks,
+        }
+    }
+}
+
+/// Authoring-only elapsed monotonic duration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MonoDuration {
+    microseconds: u64,
+}
+
+impl MonoDuration {
+    /// Returns the placeholder duration in microseconds.
+    pub const fn to_micros(self) -> u64 {
+        self.microseconds
+    }
+
+    /// Returns the placeholder duration in whole milliseconds.
+    pub const fn to_millis(self) -> u64 {
+        self.microseconds / 1_000
+    }
+}
+
 impl Mono {
+    /// Returns a deterministic authoring placeholder for the current instant.
+    pub const fn now() -> MonoInstant {
+        MonoInstant { ticks: 0 }
+    }
+
     /// Waits for a millisecond duration using RTIC-shaped async syntax.
     ///
     /// This placeholder is only type-checked; reusable task tests must not poll
@@ -152,6 +199,14 @@ impl Mono {
     /// resolve `Mono` to its actual RTIC monotonic.
     pub async fn delay(_duration: MillisDurationU32) {
         core::future::pending::<()>().await;
+    }
+
+    /// Bounds an authoring future with RTIC-shaped timeout syntax.
+    pub async fn timeout_after<F: core::future::Future>(
+        _duration: MillisDurationU32,
+        future: F,
+    ) -> Result<F::Output, TimeoutError> {
+        Ok(future.await)
     }
 }
 
@@ -216,6 +271,9 @@ pub enum ConfigValue {
 
     /// Millisecond duration represented by `fugit`.
     Millis(MillisDurationU32),
+
+    /// Signed axis permutation used for sensor-frame transformations.
+    FrameRotation(FrameRotation),
 }
 
 impl ConfigValue {
@@ -225,6 +283,7 @@ impl ConfigValue {
             Self::Bool(_) => "bool",
             Self::U32(_) => "u32",
             Self::Millis(_) => "MillisDurationU32",
+            Self::FrameRotation(_) => "FrameRotation",
         }
     }
 }
@@ -380,6 +439,17 @@ impl ConfigSlot<MillisDurationU32> {
             logical: self.id,
             expected_type: self.rust_type,
             value: ConfigValue::Millis(value),
+        }
+    }
+}
+
+impl ConfigSlot<FrameRotation> {
+    /// Supplies a sensor-frame rotation to this configuration slot.
+    pub const fn set(&self, value: FrameRotation) -> ConfigBinding {
+        ConfigBinding {
+            logical: self.id,
+            expected_type: self.rust_type,
+            value: ConfigValue::FrameRotation(value),
         }
     }
 }
@@ -611,7 +681,7 @@ macro_rules! task_contract {
                 marker: ::core::marker::PhantomData<&'a mut ()>,
             }
 
-            #[allow(clippy::new_without_default)]
+            #[allow(clippy::new_without_default, clippy::too_many_arguments)]
             impl<'a> Local<'a> {
                 /// Creates the authoring view of the task's local resources.
                 pub fn new($($local: &'a mut $local_type),*) -> Self {
