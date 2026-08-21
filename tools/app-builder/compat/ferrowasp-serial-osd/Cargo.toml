@@ -1,0 +1,12 @@
+[package]
+name = "ferrowasp-serial-osd-compat"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+ferrowasp-mspv1 = { path = "../../../../crates/ferrowasp-mspv1" }
+stm32f4xx-hal = { version = "=0.23.0", features = ["stm32f401"] }
+
+[workspace]

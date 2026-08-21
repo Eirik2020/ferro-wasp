@@ -67,13 +67,15 @@ class RepositoryContextTests(unittest.TestCase):
             if Path(entry["path"]).name == "AGENTS.md"
         }
         expected = {
-            "AGENTS.md": 5120,
+            "AGENTS.md": 6144,
             "apps/AGENTS.md": 5120,
             "apps/foxeer-f405-v2/AGENTS.md": 4096,
             "mdbook/AGENTS.md": 4096,
             "project_meta/AGENTS.md": 4096,
             "tools/AGENTS.md": 4096,
             "tools/ferro-configurator/AGENTS.md": 4096,
+            "tools/app-builder-v3/AGENTS.md": 4096,
+            "tools/app-builder/AGENTS.md": 4096,
             "tools/rtic-app-builder/AGENTS.md": 5120,
         }
         self.assertEqual(agent_budgets, expected)

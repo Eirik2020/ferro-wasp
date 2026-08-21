@@ -1,0 +1,5 @@
+{{OSD_COMPONENT_RESOURCE}}: OsdComponent,
+{{OSD_OUTPUT_RESOURCE}}: [u8; {{BUFFER_SIZE}}],
+{{OSD_WORK_IDLE_SENDER_RESOURCE}}: Sender<'static, OsdWork<{{BUFFER_SIZE}}>, {{RX_QUEUE_CAPACITY}}>,
+{{OSD_WORK_DMA_SENDER_RESOURCE}}: Sender<'static, OsdWork<{{BUFFER_SIZE}}>, {{RX_QUEUE_CAPACITY}}>,
+{{TX_COMPLETION_SENDER_RESOURCE}}: Sender<'static, TxCompletion, 1>,

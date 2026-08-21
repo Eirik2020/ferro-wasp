@@ -1,0 +1,52 @@
+schema_version = 1
+application_id = "nucleo-f401re-blinky"
+safety_scope = "validation"
+build_failure_policy = "reject-compilation"
+boot_initialization_failure_policy = "panic-halt"
+
+[[transports]]
+id = "blinker-enabled"
+interaction = "snapshot"
+safety = "non-critical"
+kind = "latest-value"
+producers = ["button-debounce"]
+consumers = ["blink-led"]
+wakeup = "none"
+faults = []
+
+[[tasks]]
+id = "blink-led"
+execution = "async-periodic"
+period_ms = 1000
+periodic_mode = "fixed-delay"
+missed_release = "skip-to-next"
+
+[[tasks]]
+id = "button-debounce"
+execution = "async-delayed-one-shot"
+delay_ms = 20
+
+[[tasks]]
+id = "button-exti"
+execution = "hardware-run-to-completion"
+
+[[backend_recipes]]
+id = "stm32f4/systick-monotonic"
+version = 1
+mechanism = "monotonic"
+inputs = [
+    { name = "clock-hz", rust_type = "u32" },
+    { name = "tick-hz", rust_type = "u32" },
+]
+outputs = [
+    { name = "mono", rust_type = "Mono" },
+]
+physical_claims = [
+    { id = "systick", kind = "core-peripheral" },
+]
+
+[[faults]]
+id = "button-debounce-spawn-failed"
+severity = "error"
+latching = false
+arming_effect = "none"

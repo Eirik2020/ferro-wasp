@@ -1322,6 +1322,23 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_interrupt_binding_is_rejected() {
+        const DUPLICATE_BUTTON: TaskDeclaration = TaskDeclaration::interrupt(
+            "backup_button_exti",
+            &stm32f4_tasks::button_exti::CONTRACT,
+            Interrupt::EXTI15_10,
+        )
+        .priority(2);
+        const INVALID: AppComposition = AppComposition {
+            tasks: &[TEST_BUTTON, DUPLICATE_BUTTON],
+            ..task_test_app(&[])
+        };
+
+        let error = validate(&INVALID).unwrap_err().to_string();
+        assert_eq!(error, "interrupt `EXTI15_10` is bound more than once");
+    }
+
+    #[test]
     fn safety_channel_requires_two_critical_task_local_owners() {
         validate(&SAFETY_TEST_APP).unwrap();
 

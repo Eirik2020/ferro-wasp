@@ -449,7 +449,7 @@
   "context_budgets": [
     {
       "path": "AGENTS.md",
-      "max_bytes": 5120
+      "max_bytes": 6144
     },
     {
       "path": "apps/AGENTS.md",
@@ -478,6 +478,18 @@
     {
       "path": "tools/rtic-app-builder/AGENTS.md",
       "max_bytes": 5120
+    },
+    {
+      "path": "tools/app-builder-v3/AGENTS.md",
+      "max_bytes": 4096
+    },
+    {
+      "path": "tools/app-builder/AGENTS.md",
+      "max_bytes": 4096
+    },
+    {
+      "path": "tools/app-builder-v3/MAINLINE_MIGRATION_IMPLEMENTATION_PLAN.md",
+      "max_bytes": 32768
     },
     {
       "path": "tools/rtic-app-builder/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md",

@@ -1,0 +1,22 @@
+[package]
+name = "rtic-generated-app"
+version = "0.1.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+[dependencies]
+panic-halt = "=1.0.0"
+rtic = { version = "=2.3.0", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "=2.1.0", features = ["cortex-m-systick"] }
+{{HAL_CRATE}} = { version = "=0.23.0", features = ["{{HAL_FEATURE}}"] }
+{{FEATURE_DEPENDENCIES}}
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = true
+opt-level = "s"
+
+# Keep generated crates independent from the host xtask workspace.
+[workspace]

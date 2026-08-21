@@ -15,7 +15,8 @@ This file applies repository-wide. Before scoped work, also read:
 - `mdbook/AGENTS.md` for documentation;
 - `tools/AGENTS.md` for host tooling;
 - `tools/ferro-configurator/AGENTS.md` for the isolated USB configurator;
-- `tools/rtic-app-builder/AGENTS.md` for the isolated builder workspace;
+- `tools/rtic-app-builder/AGENTS.md`, `tools/app-builder-v3/AGENTS.md`, and
+  `tools/app-builder/AGENTS.md`: builders;
 - `project_meta/AGENTS.md` for project metadata.
 
 Nested instructions add local rules and never weaken this file. Load only the

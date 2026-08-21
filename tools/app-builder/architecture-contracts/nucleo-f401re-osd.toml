@@ -1,0 +1,220 @@
+schema_version = 1
+application_id = "nucleo-f401re-osd"
+safety_scope = "validation"
+build_failure_policy = "reject-compilation"
+boot_initialization_failure_policy = "panic-halt"
+
+[[transports]]
+id = "osd-telemetry"
+interaction = "snapshot"
+safety = "non-critical"
+kind = "latest-value"
+producers = ["button-arm-debounce"]
+consumers = ["osd-consumer"]
+wakeup = "none"
+faults = []
+
+[[transports]]
+id = "osd-to-usart1-tx"
+interaction = "stream"
+safety = "non-critical"
+kind = "spsc-queue"
+producers = ["osd-consumer"]
+consumers = ["usart1-tx-worker"]
+capacity = 16
+overflow = "reject-new-and-record-fault"
+wakeup = "await-receiver"
+faults = [
+    "serial-tx-consumer-closed",
+    "serial-tx-overflow",
+    "serial-tx-producer-closed",
+]
+
+[[transports]]
+id = "uart1-rx-and-refresh-to-osd"
+interaction = "stream"
+safety = "non-critical"
+kind = "mpsc-queue"
+producers = ["osd-refresh", "usart1-rx-dma", "usart1-rx-idle"]
+consumers = ["osd-consumer"]
+capacity = 4
+overflow = "reject-new-and-record-fault"
+wakeup = "await-receiver"
+faults = [
+    "osd-refresh-overflow",
+    "osd-work-producers-closed",
+    "serial-rx-consumer-closed",
+    "serial-rx-overflow",
+]
+
+[[transports]]
+id = "usart1-tx-completion"
+interaction = "stream"
+safety = "non-critical"
+kind = "spsc-queue"
+producers = ["usart1-tx-dma"]
+consumers = ["usart1-tx-worker"]
+capacity = 1
+overflow = "reject-new-and-record-fault"
+wakeup = "await-receiver"
+faults = [
+    "serial-tx-completion-consumer-closed",
+    "serial-tx-completion-overflow",
+    "serial-tx-completion-producer-closed",
+]
+
+[[tasks]]
+id = "button-arm-debounce"
+execution = "async-delayed-one-shot"
+delay_ms = 20
+
+[[tasks]]
+id = "button-arm-exti"
+execution = "hardware-run-to-completion"
+
+[[tasks]]
+id = "osd-consumer"
+execution = "async-divergent-consumer"
+receive_transports = ["uart1-rx-and-refresh-to-osd"]
+
+[[tasks]]
+id = "osd-refresh"
+execution = "async-periodic"
+period_ms = 100
+periodic_mode = "fixed-delay"
+missed_release = "skip-to-next"
+
+[[tasks]]
+id = "usart1-rx-dma"
+execution = "hardware-run-to-completion"
+
+[[tasks]]
+id = "usart1-rx-idle"
+execution = "hardware-run-to-completion"
+
+[[tasks]]
+id = "usart1-tx-dma"
+execution = "hardware-run-to-completion"
+
+[[tasks]]
+id = "usart1-tx-worker"
+execution = "async-divergent-consumer"
+receive_transports = ["osd-to-usart1-tx", "usart1-tx-completion"]
+
+[[backend_recipes]]
+id = "stm32f4/systick-monotonic"
+version = 1
+mechanism = "monotonic"
+inputs = [
+    { name = "clock-hz", rust_type = "u32" },
+    { name = "tick-hz", rust_type = "u32" },
+]
+outputs = [
+    { name = "mono", rust_type = "Mono" },
+]
+physical_claims = [
+    { id = "systick", kind = "core-peripheral" },
+]
+
+[[backend_recipes]]
+id = "stm32f4/usart1-dma-endpoint"
+version = 1
+mechanism = "physical-endpoint"
+inputs = [
+    { name = "baud", rust_type = "u32" },
+    { name = "dma2-stream5-channel4", rust_type = "DmaRoute" },
+    { name = "dma2-stream7-channel4", rust_type = "DmaRoute" },
+    { name = "pa10", rust_type = "PinId" },
+    { name = "pa9", rust_type = "PinId" },
+    { name = "usart1", rust_type = "PeripheralId" },
+]
+outputs = [
+    { name = "usart1-rx-dma", rust_type = "ferrowasp_serial_osd_compat::Usart1RxDma" },
+    { name = "usart1-tx-dma", rust_type = "ferrowasp_serial_osd_compat::Usart1TxDma" },
+]
+physical_claims = [
+    { id = "dma2", kind = "peripheral" },
+    { id = "dma2-stream5", kind = "dma-route" },
+    { id = "dma2-stream7", kind = "dma-route" },
+    { id = "pa10", kind = "pin" },
+    { id = "pa9", kind = "pin" },
+    { id = "usart1", kind = "peripheral" },
+]
+
+[[faults]]
+id = "button-debounce-spawn-failed"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "osd-refresh-overflow"
+severity = "warning"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "osd-work-producers-closed"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-rx-consumer-closed"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-rx-dma"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-rx-overflow"
+severity = "warning"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-completion-consumer-closed"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-completion-overflow"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-completion-producer-closed"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-consumer-closed"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-dma"
+severity = "error"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-overflow"
+severity = "warning"
+latching = false
+arming_effect = "none"
+
+[[faults]]
+id = "serial-tx-producer-closed"
+severity = "error"
+latching = false
+arming_effect = "none"

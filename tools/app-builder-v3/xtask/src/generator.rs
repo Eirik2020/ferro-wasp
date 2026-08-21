@@ -115,6 +115,14 @@ fn write_if_changed(destination: &Path, source: &str, label: &str) -> Result<()>
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
+    use ferrowasp_core::config::ConfigKey;
+    use ferrowasp_tasks::{
+        drone_toolbox::RC_RATE_PROFILE,
+        flash_storage::{LEGACY_STORED_CONFIG_LEN, STORED_CONFIG_LEN, StoredConfig},
+    };
+
     use super::*;
 
     fn source_root() -> PathBuf {
@@ -179,5 +187,106 @@ mod tests {
             format_rust_source(&rendered.platform_config).unwrap(),
             rendered.platform_config
         );
+    }
+
+    #[test]
+    fn selected_target_matches_checked_golden_outputs_deterministically() {
+        let root = source_root();
+        let first = render_selected_sources(&root).unwrap();
+        let second = render_selected_sources(&root).unwrap();
+
+        for (label, first, second, relative_path) in [
+            (
+                "RTIC application",
+                first.main.as_str(),
+                second.main.as_str(),
+                GENERATED_APP_PATH,
+            ),
+            (
+                "RTIC prelude",
+                first.prelude.as_str(),
+                second.prelude.as_str(),
+                GENERATED_PRELUDE_PATH,
+            ),
+            (
+                "platform configuration",
+                first.platform_config.as_str(),
+                second.platform_config.as_str(),
+                GENERATED_PLATFORM_CONFIG_PATH,
+            ),
+            (
+                "safety-spine report",
+                first.safety_spine.as_str(),
+                second.safety_spine.as_str(),
+                GENERATED_SAFETY_SPINE_PATH,
+            ),
+        ] {
+            assert_eq!(first, second, "repeated {label} rendering drifted");
+            let checked = fs::read_to_string(root.join(relative_path))
+                .unwrap_or_else(|error| panic!("read checked {label} fixture: {error}"));
+            assert_eq!(first, checked, "checked {label} fixture drifted");
+        }
+    }
+
+    #[test]
+    fn authoritative_live_configuration_contract_matches_golden_snapshot() {
+        let default = StoredConfig::foxeer_f405_v2_default();
+        let encoded = default.encode();
+        let mut legacy = [0_u8; LEGACY_STORED_CONFIG_LEN];
+        legacy.copy_from_slice(&encoded[..LEGACY_STORED_CONFIG_LEN]);
+        legacy[42..44].fill(0);
+        let migrated = StoredConfig::decode(&legacy).unwrap();
+
+        let mut actual = String::new();
+        writeln!(
+            actual,
+            "stored_config_schema_version={}",
+            u16::from_le_bytes([encoded[42], encoded[43]])
+        )
+        .unwrap();
+        writeln!(actual, "stored_config_len={STORED_CONFIG_LEN}").unwrap();
+        writeln!(
+            actual,
+            "legacy_stored_config_len={LEGACY_STORED_CONFIG_LEN}"
+        )
+        .unwrap();
+        writeln!(actual, "initial_tuning_request_seq=1").unwrap();
+        writeln!(
+            actual,
+            "default_log_rate_divisor={}",
+            default.log_rate_divisor
+        )
+        .unwrap();
+        writeln!(
+            actual,
+            "legacy_migration_preserves_current_rc_defaults={}",
+            migrated.tuning.rc_rates == RC_RATE_PROFILE
+        )
+        .unwrap();
+        for key in ConfigKey::ALL {
+            let spec = key.value_spec();
+            writeln!(
+                actual,
+                "{}|{:.8}|{:.8}|{}|{:.8}",
+                key.name(),
+                spec.minimum,
+                spec.maximum,
+                spec.integer,
+                default.get(key)
+            )
+            .unwrap();
+        }
+
+        let expected = include_str!("../../tests/golden/foxeer-f405-v2-live-config.txt");
+        assert_eq!(actual, expected);
+
+        let rendered = render_selected_sources(&source_root()).unwrap();
+        assert!(
+            rendered
+                .main
+                .contains("let tuning_profile = dt::TuningProfile::default_foxeer_f405_v2();")
+        );
+        assert!(rendered.main.contains("let tuning_request_seq = 1;"));
+        assert!(rendered.main.contains("let flash_log_rate_divisor = 1;"));
     }
 }
