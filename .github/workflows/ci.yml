@@ -52,12 +52,12 @@ jobs:
       - name: Check embedded workspace
         run: >
           cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405
+          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32f4-tasks/stm32f405
 
       - name: Lint embedded workspace
         run: >
           cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405
+          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32f4-tasks/stm32f405
           -- -D warnings
 
       - name: Check standard STM32F405 DShot flight firmware

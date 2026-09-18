@@ -8,6 +8,7 @@ pub use embedded_hal_async::spi::SpiDevice as _;
 pub use embedded_io_async::Read as _;
 pub use ferrowasp_core::safety;
 pub use ferrowasp_core::safety::signals;
+pub use ferrowasp_drivers::icm42688p as icm;
 pub use ferrowasp_drivers::mpu6500 as imu;
 pub use ferrowasp_io_core::serial::{Discontinuity, RxChunk, SerialFault};
 pub use ferrowasp_io_core::spi::{

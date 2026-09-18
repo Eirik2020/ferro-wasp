@@ -2701,33 +2701,21 @@ ferroforge::app! {
     }
 
     // ########### USART1 / BLHeli legacy ESC telemetry #####################
-    #[task(binds = DMA2_STREAM5, priority = 5, shared = [uart1_rx])]
-    fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context) {
-        match cx.shared.uart1_rx.service_dma_irq() {
-            stm32_uart::UartRxIrqOutcome::Delivered
-            | stm32_uart::UartRxIrqOutcome::Ignored
-            | stm32_uart::UartRxIrqOutcome::NoChunk => {}
-            stm32_uart::UartRxIrqOutcome::DmaError
-            | stm32_uart::UartRxIrqOutcome::DeliveryError(_) => {
-                ESC_TELEMETRY_DISCONTINUITY.store(true, Ordering::Relaxed);
-                warn!("Foxeer USART1 ESC telemetry RX DMA discontinuity");
-            }
-        }
-    }
+    #[task(
+        from = flight_tasks::usart1_rx_dma_transfer,
+        binds = DMA2_STREAM5,
+        priority = 5,
+        shared = [uart1_rx]
+    )]
+    fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context);
 
-    #[task(binds = USART1, priority = 5, shared = [uart1_rx])]
-    fn usart1_rx_peripheral(cx: usart1_rx_peripheral::Context) {
-        match cx.shared.uart1_rx.service_idle_irq() {
-            stm32_uart::UartRxIrqOutcome::Delivered
-            | stm32_uart::UartRxIrqOutcome::Ignored
-            | stm32_uart::UartRxIrqOutcome::NoChunk => {}
-            stm32_uart::UartRxIrqOutcome::DmaError
-            | stm32_uart::UartRxIrqOutcome::DeliveryError(_) => {
-                ESC_TELEMETRY_DISCONTINUITY.store(true, Ordering::Relaxed);
-                warn!("Foxeer USART1 ESC telemetry RX IDLE discontinuity");
-            }
-        }
-    }
+    #[task(
+        from = flight_tasks::usart1_rx_peripheral,
+        binds = USART1,
+        priority = 5,
+        shared = [uart1_rx]
+    )]
+    fn usart1_rx_peripheral(cx: usart1_rx_peripheral::Context);
 
     #[task(
         from = flight_tasks::esc_manager_task,
@@ -3113,100 +3101,13 @@ ferroforge::app! {
     #[task(from = flight_tasks::spi1_timeout, priority = 13, shared = [spi1_owner])]
     async fn spi1_timeout(cx: spi1_timeout::Context, observed_at_us: u64);
 
-    #[task(priority = 11, local = [spi1_parser], shared = [imu_data])]
-    async fn spi1_parser(cx: spi1_parser::Context) {
-        let mut imu_data = cx.shared.imu_data;
-        let active_kind = Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Relaxed));
-
-        while let Some(filled) = cx.local.spi1_parser.filled_consumer.dequeue() {
-            let len = filled.len.min(filled.buf.len());
-            let frame = &filled.buf[..len];
-
-            let parsed =
-                active_kind.and_then(|kind| {
-                    if filled.request != kind.dma_burst_register() {
-                        return None;
-                    }
-
-                    match kind {
-                        Spi1ImuKind::Mpu6500 => {
-                            imu::decode_accel_temp_gyro_burst(frame).ok().map(|sample| {
-                                let acc_scale = 4_096.0;
-                                let gyro_scale = 16.4;
-                                ParsedImuSample {
-                                    acc: [
-                                        sample.acc_raw[0] as f32 / acc_scale,
-                                        sample.acc_raw[1] as f32 / acc_scale,
-                                        sample.acc_raw[2] as f32 / acc_scale,
-                                    ],
-                                    gyro: [
-                                        sample.gyro_raw[0] as f32 / gyro_scale,
-                                        sample.gyro_raw[1] as f32 / gyro_scale,
-                                        sample.gyro_raw[2] as f32 / gyro_scale,
-                                    ],
-                                    gyro_raw: sample.gyro_raw,
-                                    temp: sample.temp_raw as f32 / 333.87 + 21.0,
-                                }
-                            })
-                        }
-                        Spi1ImuKind::Icm42688P => icm::decode_temp_accel_gyro_burst(frame)
-                            .ok()
-                            .map(|sample| ParsedImuSample {
-                                acc: sample.accel_g(icm::AccelFullScale::G16),
-                                gyro: sample.gyro_dps(icm::GyroFullScale::Dps2000),
-                                gyro_raw: sample.gyro_raw,
-                                temp: sample.temperature_c(),
-                            }),
-                    }
-                });
-
-            match parsed {
-                Some(sample) => {
-                    #[cfg(feature = "imu_orientation_rtt")]
-                    {
-                        IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::AcqRel);
-                        IMU_LATEST_ACCEL_X_MG
-                            .store((sample.acc[0] * 1_000.0) as i32, Ordering::Relaxed);
-                        IMU_LATEST_ACCEL_Y_MG
-                            .store((sample.acc[1] * 1_000.0) as i32, Ordering::Relaxed);
-                        IMU_LATEST_ACCEL_Z_MG
-                            .store((sample.acc[2] * 1_000.0) as i32, Ordering::Relaxed);
-                        IMU_LATEST_GYRO_X_DPS10
-                            .store((sample.gyro[0] * 10.0) as i32, Ordering::Relaxed);
-                        IMU_LATEST_GYRO_Y_DPS10
-                            .store((sample.gyro[1] * 10.0) as i32, Ordering::Relaxed);
-                        IMU_LATEST_GYRO_Z_DPS10
-                            .store((sample.gyro[2] * 10.0) as i32, Ordering::Relaxed);
-                        IMU_LATEST_TEMP_C10.store((sample.temp * 10.0) as i32, Ordering::Relaxed);
-                        IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::Release);
-                    }
-                    IMU_LATEST_ROLL_RAW.store(sample.gyro_raw[0] as i32, Ordering::Relaxed);
-                    IMU_LATEST_PITCH_RAW.store(sample.gyro_raw[1] as i32, Ordering::Relaxed);
-                    IMU_LATEST_YAW_RAW.store(sample.gyro_raw[2] as i32, Ordering::Relaxed);
-                    IMU_LATEST_SEQ.fetch_add(1, Ordering::Relaxed);
-
-                    imu_data.lock(|data| {
-                        data.acc = sample.acc;
-                        data.gyro = sample.gyro;
-                        data.gyro_raw = sample.gyro_raw;
-                        data.temp = sample.temp;
-                        data.sequence = data.sequence.wrapping_add(1);
-                    });
-                }
-                None => match active_kind {
-                    Some(Spi1ImuKind::Mpu6500) => {
-                        warn!("Invalid MPU6500 accel/temp/gyro frame");
-                    }
-                    Some(Spi1ImuKind::Icm42688P) => {
-                        warn!("Invalid ICM42688-P temp/accel/gyro frame");
-                    }
-                    None => warn!("IMU frame received without an active sensor"),
-                },
-            }
-
-            cx.local.spi1_parser.free_producer.enqueue(filled.buf).ok();
-        }
-    }
+    #[task(
+        from = flight_tasks::spi1_parser,
+        priority = 11,
+        local = [spi1_parser],
+        shared = [imu_data]
+    )]
+    async fn spi1_parser(cx: spi1_parser::Context);
 
     // ########### UART 2 ###################################
     #[task(

@@ -871,12 +871,6 @@ pub fn service_dshot_dma_irq(
     }
 }
 
-pub struct ParsedImuSample {
-    pub acc: [f32; 3],
-    pub gyro: [f32; 3],
-    pub gyro_raw: [i16; 3],
-    pub temp: f32,
-}
 pub fn neutralize_rc_input(
     arm_qualifier: &mut safety::ArmQualifier,
     rates: &signals::RcRatesWriter,
