@@ -189,63 +189,6 @@ pub use stm32_usb::UsbDeviceState;
 
 pub type DshotShared = board::init::DshotMotorBank;
 
-pub struct ActuatorHardware<'a, SharedDshot>
-where
-    SharedDshot: rtic::Mutex<T = DshotShared>,
-{
-    dshot: &'a mut SharedDshot,
-}
-
-impl<'a, SharedDshot> ActuatorHardware<'a, SharedDshot>
-where
-    SharedDshot: rtic::Mutex<T = DshotShared>,
-{
-    pub fn new(dshot: &'a mut SharedDshot) -> Self {
-        Self { dshot }
-    }
-
-    pub fn force_off(&mut self) {
-        self.dshot.lock(|dshot| dshot.command_stop());
-    }
-
-    pub fn apply(&mut self, values: [f32; 4], now_ms: u32) -> bool {
-        self.apply_with_lease(values, now_ms, safety::MOTOR_CMD_MAX_AGE_MS)
-    }
-
-    pub fn apply_with_lease(&mut self, values: [f32; 4], now_ms: u32, lease_ms: u32) -> bool {
-        let commands = values.map(throttle_to_u16);
-        let result = self
-            .dshot
-            .lock(|dshot| dshot.command_throttles(commands, now_ms, lease_ms))
-            .map_err(|_| ());
-
-        if result.is_err() {
-            warn!("Foxeer DShot command rejected");
-            self.force_off();
-            false
-        } else {
-            true
-        }
-    }
-
-    pub fn abort_arming<Report>(
-        &mut self,
-        done: &signals::ActuatorArmDoneWriter,
-        reason: safety::ArmingAbortReason,
-        message: &str,
-        report: Report,
-    ) where
-        Report: FnOnce(safety::ArmingAbortReason) -> bool,
-    {
-        done.clear();
-        self.force_off();
-        warn!("{}", message);
-        if !report(reason) {
-            warn!("Failed to report aborted DShot idle qualification");
-        }
-    }
-}
-
 pub type EscTelemetryUartIrq = stm32_uart::Uart1RxIrq;
 pub type EscTelemetryUartParser = stm32_uart::UartRxParserSide;
 pub type EscManagerState = esc::EscManager;
@@ -383,22 +326,6 @@ const _: () = {
     assert!(DSHOT_IDLE_QUALIFICATION_CONFIG.is_valid());
 };
 
-#[cfg(feature = "bench_dshot_idle_output1_not_running")]
-pub fn inject_idle_qualification_fault(
-    mut update: esc::EscTelemetryUpdate,
-) -> esc::EscTelemetryUpdate {
-    if update.output == esc::EscOutput::Output1 {
-        update.observation.sample.erpm_div100 = 0;
-    }
-    update
-}
-
-#[cfg(not(feature = "bench_dshot_idle_output1_not_running"))]
-pub const fn inject_idle_qualification_fault(
-    update: esc::EscTelemetryUpdate,
-) -> esc::EscTelemetryUpdate {
-    update
-}
 pub const IMU_GYRO_RAW_TO_DPS: f32 = IMU_CONTROL_AXIS_PROFILE.gyro_raw_to_dps as f32 / 10.0;
 #[cfg(feature = "imu_orientation_rtt")]
 pub const PHYSICAL_IMU_TO_DRONE_ROTATION: dt::FrameRotation =
@@ -709,64 +636,6 @@ pub fn motor_command_timestamp(now_ms: u32, sequence: u32) -> u32 {
 
     let _ = sequence;
     now_ms
-}
-
-pub fn take_fresh_motor_outputs(
-    reader: &mut safety::signals::MotorCmdReader,
-    now_ms: u32,
-) -> Option<[f32; 4]> {
-    match reader.take_latest_fresh(now_ms, safety::MOTOR_CMD_MAX_AGE_MS) {
-        Ok(command) => Some(command.motors),
-        Err(safety::MotorCmdReadError::Missing) => {
-            warn!("Actuator command refused: motor command queue empty");
-            None
-        }
-        Err(safety::MotorCmdReadError::Stale { seq, age_ms }) => {
-            warn!(
-                "Actuator command refused: stale motor command seq {}, age {} ms",
-                seq, age_ms
-            );
-            None
-        }
-    }
-}
-
-pub fn current_live_arming_guard(
-    permit: &ActuatorArmPermitReader,
-    rc_link: &signals::RcLinkReader,
-    arm_high: &signals::RcArmHighReader,
-    throttle: &signals::RcThrottleReader,
-    now_us: u32,
-) -> Result<(), safety::ArmingAbortReason> {
-    validate_live_arming_guard(
-        permit.read(),
-        rc_link.is_armable(now_us),
-        arm_high.read(),
-        throttle.read(),
-    )
-}
-
-pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
-    permit: &ActuatorArmPermitReader,
-    rc_link: &signals::RcLinkReader,
-    arm_high: &signals::RcArmHighReader,
-    throttle: &signals::RcThrottleReader,
-    hold_ms: u32,
-    mut now_us: Now,
-    delay_ms: Delay,
-) -> Result<(), safety::ArmingAbortReason>
-where
-    Now: FnMut() -> u32,
-    Delay: FnMut(u32) -> DelayFuture,
-    DelayFuture: core::future::Future<Output = ()>,
-{
-    ferrowasp_tasks::arming::wait_hold(
-        hold_ms,
-        ARMING_GUARD_POLL_MS,
-        || current_live_arming_guard(permit, rc_link, arm_high, throttle, now_us()),
-        delay_ms,
-    )
-    .await
 }
 
 pub fn validate_live_arming_guard(

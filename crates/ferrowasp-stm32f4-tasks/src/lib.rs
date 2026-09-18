@@ -8,6 +8,8 @@
 #![deny(unsafe_code)]
 #![no_std]
 
+#[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
+mod actuator;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod adc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
@@ -34,6 +36,11 @@ mod uart2;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod uart4;
 
+#[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
+pub use actuator::{
+    ActuatorHardware, ArmingGuard, actuator_output, current_live_arming_guard,
+    inject_idle_qualification_fault, take_fresh_motor_outputs, wait_live_arming_hold,
+};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]

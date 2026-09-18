@@ -2536,319 +2536,34 @@ ferroforge::app! {
     async fn esc_manager_task(cx: esc_manager_task::Context);
 
     #[task(
-    priority = 15,
-    shared = [dshot_motors],
-    local = [
-        actuator_safety_arm_reader,
-        actuator_arm_permit_reader,
-        actuator_rc_arm_high_reader,
-        actuator_rc_throttle_reader,
-        actuator_rc_link_reader,
-        actuator_arm_done_writer,
-        motor_cmd_reader,
-        esc_telemetry_update_consumer,
-
-    ]
+        from = flight_tasks::actuator_output,
+        priority = 15,
+        shared = [dshot_motors],
+        local = [
+            actuator_safety_arm_reader,
+            actuator_arm_permit_reader,
+            actuator_rc_arm_high_reader,
+            actuator_rc_throttle_reader,
+            actuator_rc_link_reader,
+            actuator_arm_done_writer,
+            motor_cmd_reader,
+            esc_telemetry_update_consumer
+        ],
+        spawn = [safety_master, actuator_idle_notify],
+        config = [
+            validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
+            dshot_idle_command: f32 = FOXEER_DSHOT_IDLE_COMMAND,
+            actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
+            actuator_inhibit_reason: &'static str = ACTUATOR_INHIBIT_REASON,
+            esc_output_to_logical_motor: [u8; 4] = [
+                logical_motor_for_physical_index(0),
+                logical_motor_for_physical_index(1),
+                logical_motor_for_physical_index(2),
+                logical_motor_for_physical_index(3),
+            ],
+        ]
     )]
-    #[allow(unused_mut)]
-    async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::ActuatorCmd) {
-        let mut actuator = ActuatorHardware::new(&mut cx.shared.dshot_motors);
-
-        if !ACTUATOR_OUTPUT_ENABLED {
-            actuator.force_off();
-            if !matches!(cmd, safety::ActuatorCmd::Disarm) {
-                warn!("Actuator command inhibited: {}", ACTUATOR_INHIBIT_REASON);
-            }
-            return;
-        }
-
-        let safety_armed = cx.local.actuator_safety_arm_reader.read();
-        let output = match cmd {
-            safety::ActuatorCmd::Disarm => {
-                cx.local.motor_cmd_reader.discard_all();
-                cx.local.actuator_arm_done_writer.clear();
-                actuator.force_off();
-                return;
-            }
-
-            safety::ActuatorCmd::EnterIdle => {
-                cx.local.motor_cmd_reader.discard_all();
-                if let Err(reason) = current_live_arming_guard(
-                    cx.local.actuator_arm_permit_reader,
-                    cx.local.actuator_rc_link_reader,
-                    cx.local.actuator_rc_arm_high_reader,
-                    cx.local.actuator_rc_throttle_reader,
-                    Mono::now().duration_since_epoch().to_micros(),
-                ) {
-                    cx.local.actuator_arm_done_writer.clear();
-                    actuator.force_off();
-                    if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err() {
-                        warn!("Failed to report rejected actuator preparation");
-                    }
-                    return;
-                }
-
-                let prepared_output = {
-                    info!(
-                        "Preparing DShot actuators with {} ms of stop frames",
-                        DSHOT_PREARM_STOP_HOLD_MS
-                    );
-                    cx.local.actuator_arm_done_writer.clear();
-                    actuator.force_off();
-                    if let Err(reason) = wait_live_arming_hold(
-                        cx.local.actuator_arm_permit_reader,
-                        cx.local.actuator_rc_link_reader,
-                        cx.local.actuator_rc_arm_high_reader,
-                        cx.local.actuator_rc_throttle_reader,
-                        DSHOT_PREARM_STOP_HOLD_MS,
-                        || Mono::now().duration_since_epoch().to_micros(),
-                        |delay_ms| Mono::delay(delay_ms.millis()),
-                    )
-                    .await
-                    {
-                        cx.local.actuator_arm_done_writer.clear();
-                        actuator.force_off();
-                        if safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason)).is_err()
-                        {
-                            warn!("Failed to report aborted DShot pre-arm stop hold");
-                        }
-                        return;
-                    }
-
-                    // Remove samples accumulated while stopped. Qualification
-                    // accepts only responses observed after idle spin starts.
-                    while cx.local.esc_telemetry_update_consumer.dequeue().is_some() {}
-
-                    let qualification_started_ms = Mono::now().duration_since_epoch().to_millis();
-                    let mut qualification = esc::EscIdleQualification::new(
-                        DSHOT_IDLE_QUALIFICATION_CONFIG,
-                        qualification_started_ms,
-                    );
-                    info!(
-                        "DShot pre-arm stop complete; qualifying idle eRPM {}00..{}00 with {} samples/physical output",
-                        DSHOT_IDLE_QUALIFICATION_CONFIG.min_erpm_div100,
-                        DSHOT_IDLE_QUALIFICATION_CONFIG.max_erpm_div100,
-                        DSHOT_IDLE_QUALIFICATION_CONFIG.required_consecutive_samples
-                    );
-
-                    loop {
-                        if let Err(reason) = current_live_arming_guard(
-                            cx.local.actuator_arm_permit_reader,
-                            cx.local.actuator_rc_link_reader,
-                            cx.local.actuator_rc_arm_high_reader,
-                            cx.local.actuator_rc_throttle_reader,
-                            Mono::now().duration_since_epoch().to_micros(),
-                        ) {
-                            actuator.abort_arming(
-                                cx.local.actuator_arm_done_writer,
-                                reason,
-                                "DShot idle qualification aborted by arming guard",
-                                |reason| {
-                                    safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason))
-                                        .is_ok()
-                                },
-                            );
-                            return;
-                        }
-
-                        // Idle remains under the temporary arm permit. Renew
-                        // its bounded lease while the system is still disarmed.
-                        if !actuator.apply_with_lease(
-                            [FOXEER_DSHOT_IDLE_COMMAND; 4],
-                            Mono::now().duration_since_epoch().to_millis(),
-                            safety::MOTOR_CMD_MAX_AGE_MS,
-                        ) {
-                            return;
-                        }
-                        let now_ms = Mono::now().duration_since_epoch().to_millis();
-                        let mut status = esc::EscIdleQualificationStatus::Pending;
-                        while let Some(update) = cx.local.esc_telemetry_update_consumer.dequeue() {
-                            status = qualification
-                                .observe(inject_idle_qualification_fault(update), now_ms);
-                        }
-                        if status == esc::EscIdleQualificationStatus::Pending {
-                            status = qualification.status(now_ms);
-                        }
-
-                        match status {
-                            esc::EscIdleQualificationStatus::Pending => {}
-                            esc::EscIdleQualificationStatus::Qualified => break,
-                            esc::EscIdleQualificationStatus::Failed(
-                                esc::EscIdleQualificationFailure::Overspeed {
-                                    output,
-                                    erpm_div100,
-                                },
-                            ) => {
-                                warn!(
-                                    "Foxeer physical ESC output {} (logical M{}) idle qualification overspeed: {}00 eRPM",
-                                    output.index() + 1,
-                                    logical_motor_for_esc_output(output),
-                                    erpm_div100
-                                );
-                                actuator.abort_arming(
-                                cx.local.actuator_arm_done_writer,
-                                safety::ArmingAbortReason::EscIdleRpmOutOfRange,
-                                "Foxeer DShot idle qualification rejected an overspeed physical output",
-                                |reason| {
-                                    safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason))
-                                        .is_ok()
-                                },
-                            );
-                                return;
-                            }
-                            esc::EscIdleQualificationStatus::Failed(
-                                esc::EscIdleQualificationFailure::Timeout {
-                                    consecutive_samples,
-                                },
-                            ) => {
-                                warn!(
-                                    "Foxeer DShot idle qualification timeout; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
-                                    consecutive_samples[0],
-                                    consecutive_samples[1],
-                                    consecutive_samples[2],
-                                    consecutive_samples[3]
-                                );
-                                for (index, samples) in
-                                    consecutive_samples.iter().copied().enumerate()
-                                {
-                                    if samples
-                                        < DSHOT_IDLE_QUALIFICATION_CONFIG
-                                            .required_consecutive_samples
-                                    {
-                                        warn!(
-                                            "Foxeer physical ESC output {} (logical M{}) idle qualification failed: motor not running or RPM evidence invalid ({} of {} samples)",
-                                            index + 1,
-                                            logical_motor_for_physical_index(index),
-                                            samples,
-                                            DSHOT_IDLE_QUALIFICATION_CONFIG
-                                                .required_consecutive_samples
-                                        );
-                                    }
-                                }
-                                actuator.abort_arming(
-                                cx.local.actuator_arm_done_writer,
-                                safety::ArmingAbortReason::EscIdleTelemetryTimeout,
-                                "Foxeer DShot idle qualification did not prove all physical outputs turning",
-                                |reason| {
-                                    safety_master::spawn(safety::SafetyEvent::ArmingAborted(reason))
-                                        .is_ok()
-                                },
-                            );
-                                return;
-                            }
-                            esc::EscIdleQualificationStatus::Failed(
-                                esc::EscIdleQualificationFailure::InvalidConfig,
-                            ) => {
-                                actuator.abort_arming(
-                                    cx.local.actuator_arm_done_writer,
-                                    safety::ArmingAbortReason::EscIdleQualificationInvalid,
-                                    "Foxeer DShot idle qualification profile is invalid",
-                                    |reason| {
-                                        safety_master::spawn(safety::SafetyEvent::ArmingAborted(
-                                            reason,
-                                        ))
-                                        .is_ok()
-                                    },
-                                );
-                                return;
-                            }
-                        }
-
-                        Mono::delay(10.millis()).await;
-                    }
-
-                    info!(
-                        "Foxeer DShot idle eRPM qualified; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
-                        qualification.consecutive_samples()[0],
-                        qualification.consecutive_samples()[1],
-                        qualification.consecutive_samples()[2],
-                        qualification.consecutive_samples()[3]
-                    );
-                    [FOXEER_DSHOT_IDLE_COMMAND; 4]
-                };
-
-                cx.local.actuator_arm_done_writer.set_done();
-
-                if actuator_idle_notify::spawn().is_err() {
-                    cx.local.actuator_arm_done_writer.clear();
-                    actuator.force_off();
-                    if safety_master::spawn(safety::SafetyEvent::ArmingAborted(
-                        safety::ArmingAbortReason::CompletionDeliveryFailed,
-                    ))
-                    .is_err()
-                    {
-                        warn!("Failed to report actuator preparation completion failure");
-                    }
-                    return;
-                }
-
-                prepared_output
-            }
-
-            safety::ActuatorCmd::ApplyLatestThrottle if safety_armed => {
-                match take_fresh_motor_outputs(
-                    cx.local.motor_cmd_reader,
-                    Mono::now().duration_since_epoch().to_millis(),
-                ) {
-                    Some(throttles) => match safety::validate_active_motor_outputs_with_idle(
-                        throttles,
-                        FOXEER_DSHOT_IDLE_COMMAND,
-                    ) {
-                        Ok(outputs) => outputs,
-                        Err(_) => {
-                            warn!("Actuator command refused: invalid motor output");
-                            [safety::ESC_LOW_THROTTLE; 4]
-                        }
-                    },
-                    None => [safety::ESC_LOW_THROTTLE; 4],
-                }
-            }
-
-            #[cfg(any(
-                feature = "bench_motor1_only",
-                feature = "bench_motor2_only",
-                feature = "bench_motor3_only",
-                feature = "bench_motor4_only",
-                feature = "bench_logical_motor1_only",
-                feature = "bench_logical_motor2_only",
-                feature = "bench_logical_motor3_only",
-                feature = "bench_logical_motor4_only"
-            ))]
-            safety::ActuatorCmd::ApplyBenchSelectedMotor if safety_armed => {
-                let mut outputs = [safety::ESC_LOW_THROTTLE; 4];
-
-                if let Some(throttles) = take_fresh_motor_outputs(
-                    cx.local.motor_cmd_reader,
-                    Mono::now().duration_since_epoch().to_millis(),
-                ) {
-                    for index in 0..4 {
-                        if !throttles[index].is_finite() {
-                            warn!("Bench selected motor command refused: invalid motor output");
-                            outputs = [safety::ESC_LOW_THROTTLE; 4];
-                            break;
-                        }
-
-                        if throttles[index] > 0.0 {
-                            let idle = FOXEER_DSHOT_IDLE_COMMAND;
-                            outputs[index] = throttles[index].clamp(idle, safety::ESC_MAX_THROTTLE);
-                        }
-                    }
-                }
-
-                outputs
-            }
-
-            _ => {
-                warn!("Actuator command refused");
-                actuator.force_off();
-                return;
-            }
-        };
-
-        if !actuator.apply(output, Mono::now().duration_since_epoch().to_millis()) {
-            return;
-        }
-    }
+    async fn actuator_output(cx: actuator_output::Context, cmd: safety::ActuatorCmd);
 
     // ########### SPI 1 ###################################
     #[task(

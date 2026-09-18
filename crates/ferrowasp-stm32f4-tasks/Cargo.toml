@@ -22,6 +22,17 @@ dshot = ["ferrowasp-stm32f4/dshot"]
 # same name.
 imu_transport_rtt = []
 imu_orientation_rtt = ["imu_transport_rtt"]
+# Bench and fault-injection images, forwarded from the firmware feature of
+# the same name. Never in a flight image.
+bench_motor1_only = []
+bench_motor2_only = []
+bench_motor3_only = []
+bench_motor4_only = []
+bench_logical_motor1_only = []
+bench_logical_motor2_only = []
+bench_logical_motor3_only = []
+bench_logical_motor4_only = []
+bench_dshot_idle_output1_not_running = []
 
 [dependencies]
 critical-section = { workspace = true }
