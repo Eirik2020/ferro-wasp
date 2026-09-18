@@ -120,7 +120,7 @@ pub async fn spi1_timeout(mut cx: spi1_timeout::Context, observed_at_us: u64) {
 /// The I/O watchdog tick: if the SPI1 transaction in flight is past its
 /// deadline, hand it to `spi1_timeout`.
 #[ferroforge::task(
-    bounds = [io_watchdog: stm32_watchdog::WatchdogTick, io_timebase: stm32_timebase::Timebase],
+    bounds = [io_watchdog: stm32_watchdog::TimerTick, io_timebase: stm32_timebase::Timebase],
     local = [io_watchdog],
     shared = [io_timebase],
     spawn = [spi1_timeout(observed_at_us: u64)],

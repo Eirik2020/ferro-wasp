@@ -16,21 +16,8 @@ where
     Ok(watchdog)
 }
 
-/// A watchdog timer whose tick is acknowledged by clearing its flags,
-/// whichever timer a board uses. What a shared task definition bounds on.
-pub trait WatchdogTick {
-    fn acknowledge_tick(&mut self);
-}
+pub use crate::timer_tick::TimerTick;
 
-impl<TIM> WatchdogTick for CounterHz<TIM>
-where
-    TIM: Instance,
-{
-    fn acknowledge_tick(&mut self) {
-        self.clear_all_flags();
-    }
-}
-
-pub fn acknowledge_watchdog_tick(watchdog: &mut impl WatchdogTick) {
+pub fn acknowledge_watchdog_tick(watchdog: &mut impl TimerTick) {
     watchdog.acknowledge_tick();
 }

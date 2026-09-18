@@ -15,6 +15,8 @@ mod adc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod arming;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+mod control;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod diagnostics;
 #[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
 mod dshot;
@@ -22,6 +24,9 @@ mod dshot;
 mod esc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod osd;
+// A convenience for task bodies; which names a body uses depends on the
+// firmware's features, so an unused one is not a mistake.
+#[allow(unused_imports)]
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod prelude;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
@@ -45,6 +50,8 @@ pub use actuator::{
 pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use control::{control_loop, motor_command_timestamp};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use diagnostics::heartbeat;
 #[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]

@@ -628,16 +628,6 @@ pub fn flash_scratch_test_page() -> [u8; ferrowasp_core::blackbox::FLASH_PAGE_LE
     flash_task::scratch_test_page()
 }
 
-pub fn motor_command_timestamp(now_ms: u32, sequence: u32) -> u32 {
-    #[cfg(feature = "bench_motor_cmd_stale_rejection")]
-    if sequence == 1 {
-        return now_ms.wrapping_sub(safety::MOTOR_CMD_MAX_AGE_MS + 1);
-    }
-
-    let _ = sequence;
-    now_ms
-}
-
 pub fn validate_live_arming_guard(
     permit: bool,
     rc_link_armable: bool,
