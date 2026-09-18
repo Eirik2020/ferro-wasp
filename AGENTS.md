@@ -62,8 +62,7 @@ mdBook chapter when details belong in the book.
 
 Keep reusable types and safety state in `ferrowasp-core`; MCU support in
 `ferrowasp-mcu`; protocols and devices in `ferrowasp-drivers`; reusable task
-logic in `ferrowasp-tasks`; RTIC task definitions shared between STM32F4
-boards in `ferrowasp-stm32f4-tasks`; and RTIC wiring in thin app shells. Keep each
+logic in `ferrowasp-tasks`; and RTIC wiring in thin app shells. Keep each
 board's physical facts in that isolated app's `src/board/` support module.
 Reusable STM32F4 mechanisms and configuration types belong in
 `ferrowasp-stm32f4`, not in board support. Optional generation belongs in
