@@ -238,6 +238,62 @@ pub struct SpiDmaOwner<RxTransferT, TxTransferT, CsT> {
 
 pub type Spi1Mpu6500Owner = SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, Spi1Mpu6500Cs>;
 
+/// What a task needs of an SPI DMA owner, whichever DMA streams and chip
+/// select a board wires it to. What a shared task definition bounds on; each
+/// method forwards to the owner's own.
+pub trait SpiDmaService {
+    fn service_request<const MAX_OPS: usize, const MAX_BYTES: usize>(
+        &mut self,
+        mailbox: &mut SpiRequestMailbox<MAX_OPS, MAX_BYTES>,
+        now_us: u64,
+    ) -> SpiOwnerServiceOutcome;
+
+    fn service_timeout<const MAX_OPS: usize, const MAX_BYTES: usize>(
+        &mut self,
+        mailbox: &mut SpiRequestMailbox<MAX_OPS, MAX_BYTES>,
+        now_us: u64,
+    ) -> SpiWatchdogOutcome;
+
+    fn service_dma_irq<const MAX_OPS: usize, const MAX_BYTES: usize>(
+        &mut self,
+        mailbox: &mut SpiRequestMailbox<MAX_OPS, MAX_BYTES>,
+    ) -> SpiRxIrqOutcome;
+}
+
+impl<TxStream, SpiT, const CHANNEL: u8, RxTransferT, CsT> SpiDmaService
+    for SpiDmaOwner<RxTransferT, SpiTxTransfer<TxStream, SpiT, CHANNEL>, CsT>
+where
+    TxStream: Stream,
+    SpiT: spi::Instance,
+    ChannelX<CHANNEL>: Channel,
+    spi::Tx<SpiT>: DMASet<TxStream, CHANNEL, MemoryToPeripheral>,
+    RxTransferT: SpiRxTransferExt,
+    CsT: OutputPin,
+{
+    fn service_request<const MAX_OPS: usize, const MAX_BYTES: usize>(
+        &mut self,
+        mailbox: &mut SpiRequestMailbox<MAX_OPS, MAX_BYTES>,
+        now_us: u64,
+    ) -> SpiOwnerServiceOutcome {
+        SpiDmaOwner::service_request(self, mailbox, now_us)
+    }
+
+    fn service_timeout<const MAX_OPS: usize, const MAX_BYTES: usize>(
+        &mut self,
+        mailbox: &mut SpiRequestMailbox<MAX_OPS, MAX_BYTES>,
+        now_us: u64,
+    ) -> SpiWatchdogOutcome {
+        SpiDmaOwner::service_timeout(self, mailbox, now_us)
+    }
+
+    fn service_dma_irq<const MAX_OPS: usize, const MAX_BYTES: usize>(
+        &mut self,
+        mailbox: &mut SpiRequestMailbox<MAX_OPS, MAX_BYTES>,
+    ) -> SpiRxIrqOutcome {
+        SpiDmaOwner::service_dma_irq(self, mailbox)
+    }
+}
+
 impl<RxTransferT, TxTransferT, CsT> SpiDmaOwner<RxTransferT, TxTransferT, CsT>
 where
     RxTransferT: SpiRxTransferExt,

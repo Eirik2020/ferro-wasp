@@ -165,6 +165,7 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10, IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION,
     imu_orientation_snapshot,
 };
+pub use ferrowasp_stm32f4_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 pub use ferrowasp_stm32f4_tasks::{
     Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
 };
@@ -361,12 +362,6 @@ pub use ferrowasp_core::safety::signals::{
 
 #[cfg(not(feature = "mspv2_configurator"))]
 pub const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 storage CLI v1; type help\r\n";
-pub type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub type Spi1Executor =
-    CriticalSectionSpiExecutor<'static, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub type Spi1Device = AsyncSpiDevice<Spi1Executor, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub static SPI1_MAILBOX: Spi1Mailbox =
-    critical_section::Mutex::new(core::cell::RefCell::new(SpiRequestMailbox::new()));
 pub static RC_RATES: Mutex<RefCell<safety::RcRates>> = Mutex::new(RefCell::new(safety::RcRates {
     roll: 0,
     pitch: 0,
@@ -834,6 +829,15 @@ pub const fn dshot_motor_for_output(output: esc::EscOutput) -> board::init::Dsho
         esc::EscOutput::Output2 => board::init::DshotMotor::Motor2,
         esc::EscOutput::Output3 => board::init::DshotMotor::Motor3,
         esc::EscOutput::Output4 => board::init::DshotMotor::Motor4,
+    }
+}
+
+/// The register the detected SPI1 IMU starts its DMA sample burst at, from
+/// `ACTIVE_IMU_KIND`'s discriminant; `None` when no IMU was detected.
+pub const fn spi1_imu_burst_register(discriminant: u8) -> Option<u8> {
+    match Spi1ImuKind::from_discriminant(discriminant) {
+        Some(kind) => Some(kind.dma_burst_register()),
+        None => None,
     }
 }
 

@@ -364,7 +364,10 @@ name = "ferrowasp-stm32f4-tasks"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
+ "critical-section",
  "defmt 1.0.1",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
  "embedded-io-async",
  "ferroforge",
  "ferrowasp-core",

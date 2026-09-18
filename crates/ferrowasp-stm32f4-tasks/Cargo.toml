@@ -23,7 +23,10 @@ imu_transport_rtt = []
 imu_orientation_rtt = ["imu_transport_rtt"]
 
 [dependencies]
+critical-section = { workspace = true }
 defmt = "1.0.1"
+embedded-hal = { workspace = true }
+embedded-hal-async = { workspace = true }
 embedded-io-async = { workspace = true }
 ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }

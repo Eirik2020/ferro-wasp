@@ -1992,107 +1992,34 @@ ferroforge::app! {
         }
     }
 
-    #[task(priority = 13, shared = [spi1_owner, io_timebase])]
-    async fn spi1_owner_service(mut cx: spi1_owner_service::Context) {
-        let now = cx.shared.io_timebase.lock(|timebase| timebase.now());
-        let outcome = cx.shared.spi1_owner.lock(|owner| {
-            critical_section::with(|cs| {
-                owner.service_request(&mut SPI1_MAILBOX.borrow_ref_mut(cs), now.0)
-            })
-        });
-
-        match outcome {
-            stm32_spi::SpiOwnerServiceOutcome::Idle
-            | stm32_spi::SpiOwnerServiceOutcome::Started
-            | stm32_spi::SpiOwnerServiceOutcome::Cancelled => {}
-            stm32_spi::SpiOwnerServiceOutcome::RecoveryFailed => {
-                warn!("SPI1 cancellation recovery failed; owner disabled");
-            }
-            stm32_spi::SpiOwnerServiceOutcome::StartFailed(_) => {}
-        }
-    }
-
-    #[task(binds = DMA2_STREAM2, priority = 13, shared = [spi1_owner])]
-    fn spi1_rx_dma(mut cx: spi1_rx_dma::Context) {
-        let outcome = cx.shared.spi1_owner.lock(|owner| {
-            critical_section::with(|cs| owner.service_dma_irq(&mut SPI1_MAILBOX.borrow_ref_mut(cs)))
-        });
-        let delivered = match outcome {
-            stm32_spi::SpiRxIrqOutcome::Ignored => return,
-            stm32_spi::SpiRxIrqOutcome::Delivered => true,
-            stm32_spi::SpiRxIrqOutcome::NoChunk => false,
-            stm32_spi::SpiRxIrqOutcome::DmaError => {
-                warn!("SPI1 RX DMA error");
-                return;
-            }
-            stm32_spi::SpiRxIrqOutcome::DeliveryError(
-                stm32_spi::SpiRxDeliveryError::NoFreshBuffer,
-            ) => {
-                panic!("SPI1 RX free-buffer pool exhausted");
-            }
-            stm32_spi::SpiRxIrqOutcome::DeliveryError(
-                stm32_spi::SpiRxDeliveryError::TransferNotReady,
-            ) => {
-                info!("SPI1 DMA next_transfer failed");
-                return;
-            }
-            stm32_spi::SpiRxIrqOutcome::DeliveryError(
-                stm32_spi::SpiRxDeliveryError::FilledQueueFull,
-            ) => {
-                panic!("SPI1 filled queue full; RX buffer ownership would be lost");
-            }
-            stm32_spi::SpiRxIrqOutcome::DeliveryError(
-                stm32_spi::SpiRxDeliveryError::PlannerRejected,
-            ) => {
-                return;
-            }
-        };
-
-        if delivered {
-            let _ = spi1_parser::spawn();
-        }
-    }
+    #[task(
+        from = flight_tasks::spi1_owner_service,
+        priority = 13,
+        shared = [spi1_owner, io_timebase]
+    )]
+    async fn spi1_owner_service(cx: spi1_owner_service::Context);
 
     #[task(
+        from = flight_tasks::spi1_rx_dma,
+        binds = DMA2_STREAM2,
+        priority = 13,
+        shared = [spi1_owner],
+        spawn = [spi1_parser]
+    )]
+    fn spi1_rx_dma(cx: spi1_rx_dma::Context);
+
+    #[task(
+        from = flight_tasks::io_watchdog,
         binds = TIM6_DAC,
         priority = 9,
         local = [io_watchdog],
-        shared = [io_timebase]
+        shared = [io_timebase],
+        spawn = [spi1_timeout]
     )]
-    fn io_watchdog(mut cx: io_watchdog::Context) {
-        stm32_watchdog::acknowledge_watchdog_tick(cx.local.io_watchdog);
+    fn io_watchdog(cx: io_watchdog::Context);
 
-        let now = cx.shared.io_timebase.lock(|timebase| timebase.now());
-        let expired = critical_section::with(|cs| {
-            SPI1_MAILBOX
-                .borrow_ref(cs)
-                .lifecycle()
-                .deadline_expired(now)
-        });
-
-        if expired {
-            let _ = spi1_timeout::spawn(now.0);
-        }
-    }
-
-    #[task(priority = 13, shared = [spi1_owner])]
-    async fn spi1_timeout(mut cx: spi1_timeout::Context, observed_at_us: u64) {
-        let outcome = cx.shared.spi1_owner.lock(|owner| {
-            critical_section::with(|cs| {
-                owner.service_timeout(&mut SPI1_MAILBOX.borrow_ref_mut(cs), observed_at_us)
-            })
-        });
-
-        match outcome {
-            stm32_spi::SpiWatchdogOutcome::Idle | stm32_spi::SpiWatchdogOutcome::Active => {}
-            stm32_spi::SpiWatchdogOutcome::TimedOut => {
-                warn!("SPI1 transaction timed out; DMA ownership recovered");
-            }
-            stm32_spi::SpiWatchdogOutcome::RecoveryFailed => {
-                warn!("SPI1 timeout recovery failed; owner disabled");
-            }
-        }
-    }
+    #[task(from = flight_tasks::spi1_timeout, priority = 13, shared = [spi1_owner])]
+    async fn spi1_timeout(cx: spi1_timeout::Context, observed_at_us: u64);
 
     #[task(priority = 11, local = [spi1_parser], shared = [imu_data])]
     async fn spi1_parser(cx: spi1_parser::Context) {

@@ -316,7 +316,7 @@ STATIC_DEFINITION = re.compile(
     r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?static[ \t]+(?:mut[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]*:",
     re.MULTILINE,
 )
-SHARED_SNAPSHOTS = Path("crates/ferrowasp-stm32f4-tasks/src/snapshots.rs")
+SHARED_TASK_CRATE = Path("crates/ferrowasp-stm32f4-tasks/src")
 
 
 def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
@@ -326,18 +326,19 @@ def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
     one static while a shared definition read the other - so the only defence
     is refusing the copy here.
     """
-    snapshots = root / SHARED_SNAPSHOTS
-    if not snapshots.is_file():
+    shared: set[str] = set()
+    for source in sorted((root / SHARED_TASK_CRATE).glob("**/*.rs")):
+        shared.update(STATIC_DEFINITION.findall(source.read_text(encoding="utf-8")))
+    if not shared:
         return
-    shared = set(STATIC_DEFINITION.findall(snapshots.read_text(encoding="utf-8")))
     for source in sorted(root.glob("firmware/*/src/**/*.rs")):
         text = source.read_text(encoding="utf-8")
         for match in STATIC_DEFINITION.finditer(text):
             if match.group(1) in shared:
                 errors.append(
                     f"{_relative(source, root)}:{_line_number(text, match.start())}: "
-                    f"static {match.group(1)!r} belongs to ferrowasp-stm32f4-tasks "
-                    "snapshots; re-export it instead of defining a second copy"
+                    f"static {match.group(1)!r} belongs to ferrowasp-stm32f4-tasks; "
+                    "re-export it instead of defining a second copy"
                 )
 
 

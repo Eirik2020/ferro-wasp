@@ -18,6 +18,8 @@ mod osd;
 mod prelude;
 pub mod snapshots;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+mod spi1;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod uart2;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod uart4;
@@ -28,6 +30,11 @@ pub use diagnostics::heartbeat;
 pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use osd::osd_refresh;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use spi1::{
+    SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox, imu_data_ready, io_watchdog,
+    spi1_owner_service, spi1_poll, spi1_rx_dma, spi1_timeout,
+};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use uart2::{
     Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,

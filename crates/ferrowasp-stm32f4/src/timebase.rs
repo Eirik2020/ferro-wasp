@@ -31,3 +31,18 @@ where
         TimestampMicros(self.extender.observe(self.counter.now().ticks()))
     }
 }
+
+/// A microsecond clock, whichever timer a board drives it from. What a shared
+/// task definition bounds on, so a board's timer choice stays in the board.
+pub trait Timebase {
+    fn now(&mut self) -> TimestampMicros;
+}
+
+impl<TIM> Timebase for MicrosecondTimebase<TIM>
+where
+    TIM: Instance,
+{
+    fn now(&mut self) -> TimestampMicros {
+        MicrosecondTimebase::now(self)
+    }
+}

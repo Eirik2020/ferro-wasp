@@ -3,17 +3,28 @@
 
 pub use core::sync::atomic::Ordering;
 pub use defmt::{info, warn};
+pub use embedded_hal::spi::Operation;
+pub use embedded_hal_async::spi::SpiDevice as _;
 pub use embedded_io_async::Read as _;
 pub use ferrowasp_core::safety;
 pub use ferrowasp_core::safety::signals;
 pub use ferrowasp_drivers::mpu6500 as imu;
 pub use ferrowasp_io_core::serial::{Discontinuity, RxChunk, SerialFault};
+pub use ferrowasp_io_core::spi::{
+    AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiRequestMailbox,
+};
 pub use ferrowasp_io_core::time::TimestampMicros;
 pub use ferrowasp_mspv1 as mspv1;
 pub use ferrowasp_stm32f4::app_config::ESC_MANAGER_PERIOD_MS;
-pub use ferrowasp_stm32f4::hal_prelude::pac;
+pub use ferrowasp_stm32f4::hal_prelude::{ExtiPin, pac};
 pub use ferrowasp_stm32f4::memory as stm32_memory;
+pub use ferrowasp_stm32f4::memory::{SPI1_JOB_MAX_BYTES, SPI1_JOB_MAX_OPERATIONS};
+pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
+pub use ferrowasp_stm32f4::spi_dma::{SPI_BUFFER_SIZE, SpiDmaService as _};
+pub use ferrowasp_stm32f4::timebase as stm32_timebase;
+pub use ferrowasp_stm32f4::timebase::Timebase as _;
 pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
+pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
 pub use ferrowasp_tasks::drone_toolbox as dt;
 pub use ferrowasp_tasks::esc_manager as esc;
 pub use ferrowasp_tasks::osd;

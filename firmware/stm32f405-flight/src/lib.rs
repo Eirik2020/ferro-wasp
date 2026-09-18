@@ -100,6 +100,7 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_BIAS_CALIBRATED, IMU_LATEST_PITCH_RAW, IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ,
     IMU_LATEST_YAW_RAW, IMU_STALE, RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED,
 };
+pub use ferrowasp_stm32f4_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 pub use ferrowasp_stm32f4_tasks::{
     Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
 };
@@ -213,12 +214,6 @@ pub use ferrowasp_core::safety::signals::{
     self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
 };
 
-pub type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub type Spi1Executor =
-    CriticalSectionSpiExecutor<'static, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub type Spi1Device = AsyncSpiDevice<Spi1Executor, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub static SPI1_MAILBOX: Spi1Mailbox =
-    critical_section::Mutex::new(core::cell::RefCell::new(SpiRequestMailbox::new()));
 pub static RC_RATES: Mutex<RefCell<safety::RcRates>> = Mutex::new(RefCell::new(safety::RcRates {
     roll: 0,
     pitch: 0,
