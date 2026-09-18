@@ -17,6 +17,7 @@ path = "src/lib.rs"
 [features]
 default = []
 stm32f405 = ["ferrowasp-stm32f4/stm32f405"]
+dshot = ["ferrowasp-stm32f4/dshot"]
 # Diagnostics a firmware opts into; forwarded from its own features of the
 # same name.
 imu_transport_rtt = []

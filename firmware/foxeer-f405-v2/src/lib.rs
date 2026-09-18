@@ -819,20 +819,6 @@ pub const fn logical_motor_for_esc_output(output: esc::EscOutput) -> u8 {
     logical_motor_for_physical_index(output.index())
 }
 
-pub fn service_dshot_dma_irq(
-    bank: &mut impl rtic::Mutex<T = DshotShared>,
-    motor: board::init::DshotMotor,
-    stream: u8,
-) {
-    let event = bank.lock(|dshot| dshot.on_dma_interrupt(motor));
-    if event == board::init::DshotInterruptEvent::Spurious {
-        warn!(
-            "Foxeer DShot received spurious DMA2 Stream{} interrupt",
-            stream
-        );
-    }
-}
-
 pub mod internal {
     pub use crate::*;
 }

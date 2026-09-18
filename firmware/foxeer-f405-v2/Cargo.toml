@@ -18,7 +18,7 @@ bench = false
 
 [features]
 default = ["board-foxeer-f405-v2"]
-board-foxeer-f405-v2 = ["ferrowasp-stm32f4/stm32f405", "ferrowasp-stm32f4/dshot", "ferrowasp-stm32f4-tasks/stm32f405"]
+board-foxeer-f405-v2 = ["ferrowasp-stm32f4/stm32f405", "ferrowasp-stm32f4/dshot", "ferrowasp-stm32f4-tasks/stm32f405", "ferrowasp-stm32f4-tasks/dshot"]
 blackbox_defmt = ["ferrowasp-tasks/blackbox_defmt"]
 bench_actuator_validation = []
 bench_equal_motors = []

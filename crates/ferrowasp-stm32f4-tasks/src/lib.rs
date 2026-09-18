@@ -14,6 +14,8 @@ mod adc;
 mod arming;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod diagnostics;
+#[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
+mod dshot;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod esc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
@@ -38,6 +40,8 @@ pub use adc::{adc1_polling, dma_adc1};
 pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use diagnostics::heartbeat;
+#[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
+pub use dshot::{dshot_dma_complete, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]

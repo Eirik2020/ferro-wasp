@@ -23,6 +23,7 @@ board-ferrowasp-fcu3 = [
     "ferrowasp-stm32f4/stm32f405",
     "ferrowasp-stm32f4/dshot",
     "ferrowasp-stm32f4-tasks/stm32f405",
+    "ferrowasp-stm32f4-tasks/dshot",
     "dep:ferrowasp-waveform",
 ]
 blackbox_defmt = ["ferrowasp-tasks/blackbox_defmt"]

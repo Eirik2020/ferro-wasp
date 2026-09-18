@@ -2548,41 +2548,53 @@ ferroforge::app! {
         }
     }
 
-    #[task(binds = DMA2_STREAM1, priority = 16, shared = [dshot_motors])]
-    fn dshot_motor1_dma_complete(mut cx: dshot_motor1_dma_complete::Context) {
-        service_dshot_dma_irq(
-            &mut cx.shared.dshot_motors,
-            board::init::DshotMotor::Motor1,
-            1,
-        );
-    }
+    #[task(
+        from = flight_tasks::dshot_dma_complete,
+        binds = DMA2_STREAM1,
+        priority = 16,
+        shared = [dshot_motors],
+        config = [
+            motor: board::init::DshotMotor = board::init::DshotMotor::Motor1,
+            stream: u8 = 1,
+        ]
+    )]
+    fn dshot_motor1_dma_complete(cx: dshot_motor1_dma_complete::Context);
 
-    #[task(binds = DMA2_STREAM7, priority = 16, shared = [dshot_motors])]
-    fn dshot_motor2_dma_complete(mut cx: dshot_motor2_dma_complete::Context) {
-        service_dshot_dma_irq(
-            &mut cx.shared.dshot_motors,
-            board::init::DshotMotor::Motor2,
-            7,
-        );
-    }
+    #[task(
+        from = flight_tasks::dshot_dma_complete,
+        binds = DMA2_STREAM7,
+        priority = 16,
+        shared = [dshot_motors],
+        config = [
+            motor: board::init::DshotMotor = board::init::DshotMotor::Motor2,
+            stream: u8 = 7,
+        ]
+    )]
+    fn dshot_motor2_dma_complete(cx: dshot_motor2_dma_complete::Context);
 
-    #[task(binds = DMA2_STREAM2, priority = 16, shared = [dshot_motors])]
-    fn dshot_motor3_dma_complete(mut cx: dshot_motor3_dma_complete::Context) {
-        service_dshot_dma_irq(
-            &mut cx.shared.dshot_motors,
-            board::init::DshotMotor::Motor3,
-            2,
-        );
-    }
+    #[task(
+        from = flight_tasks::dshot_dma_complete,
+        binds = DMA2_STREAM2,
+        priority = 16,
+        shared = [dshot_motors],
+        config = [
+            motor: board::init::DshotMotor = board::init::DshotMotor::Motor3,
+            stream: u8 = 2,
+        ]
+    )]
+    fn dshot_motor3_dma_complete(cx: dshot_motor3_dma_complete::Context);
 
-    #[task(binds = DMA2_STREAM6, priority = 16, shared = [dshot_motors])]
-    fn dshot_motor4_dma_complete(mut cx: dshot_motor4_dma_complete::Context) {
-        service_dshot_dma_irq(
-            &mut cx.shared.dshot_motors,
-            board::init::DshotMotor::Motor4,
-            6,
-        );
-    }
+    #[task(
+        from = flight_tasks::dshot_dma_complete,
+        binds = DMA2_STREAM6,
+        priority = 16,
+        shared = [dshot_motors],
+        config = [
+            motor: board::init::DshotMotor = board::init::DshotMotor::Motor4,
+            stream: u8 = 6,
+        ]
+    )]
+    fn dshot_motor4_dma_complete(cx: dshot_motor4_dma_complete::Context);
 
     // ########### USART1 / BLHeli legacy ESC telemetry #####################
     #[task(
