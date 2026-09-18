@@ -18,7 +18,8 @@ FUNCTION_DECLARATION = re.compile(
     r"^ {4}(?:(?:pub(?:\([^)]*\))?|async|const|unsafe)\s+)*fn\s+"
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
 )
-APP_MODULE = re.compile(r"^mod app\s*\{")
+# `#[rtic::app] mod app {`, or `ferroforge::app! {`, which expands into one.
+APP_MODULE = re.compile(r"^(?:mod app|ferroforge::app!)\s*\{")
 ATTRIBUTE_KIND = re.compile(r"#\[\s*(task|init|idle)\b")
 FEATURE_NAME = re.compile(r'feature\s*=\s*"([^"]+)"')
 PRIORITY = re.compile(r"\bpriority\s*=\s*(\d+)")
@@ -313,7 +314,7 @@ def _attribute_start(lines: list[str], declaration_index: int, module_index: int
 
 
 def discover_symbols_from_text(text: str) -> tuple[list[RustSymbol], list[ResourceBlock]]:
-    """Discover top-level functions and RTIC resource blocks inside `mod app`."""
+    """Discover top-level functions and RTIC resource blocks inside the app."""
 
     lines = text.splitlines(keepends=True)
     module_index = next(
@@ -321,7 +322,7 @@ def discover_symbols_from_text(text: str) -> tuple[list[RustSymbol], list[Resour
         None,
     )
     if module_index is None:
-        raise RouteError("RTIC app module `mod app {` was not found")
+        raise RouteError("RTIC app module `mod app {` or `ferroforge::app! {` was not found")
 
     declarations: list[tuple[int, int, str]] = []
     for index in range(module_index + 1, len(lines)):

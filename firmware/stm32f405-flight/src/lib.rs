@@ -93,6 +93,13 @@ pub use ferrowasp_stm32f4::timebase as stm32_timebase;
 pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
 pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
 pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
+pub use ferrowasp_stm32f4_tasks as flight_tasks;
+pub use ferrowasp_stm32f4_tasks::snapshots::{
+    CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW, CONTROL_RATE_SEQ, CONTROL_ROLL_DPS10,
+    CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW, ESC_TELEMETRY_DISCONTINUITY,
+    IMU_BIAS_CALIBRATED, IMU_LATEST_PITCH_RAW, IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ,
+    IMU_LATEST_YAW_RAW, IMU_STALE, RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED,
+};
 pub use ferrowasp_tasks::actuator as actuator_task;
 pub use ferrowasp_tasks::drone_toolbox as dt;
 pub use ferrowasp_tasks::esc_manager as esc;
@@ -208,24 +215,6 @@ pub use ferrowasp_core::safety::signals::{
     self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
 };
 
-pub static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
-pub static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
-pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
-pub static IMU_STALE: AtomicBool = AtomicBool::new(true);
-pub static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
-pub static CONTROL_RATE_SEQ: AtomicU32 = AtomicU32::new(0);
-pub static CONTROL_ISR_SEQ: AtomicU32 = AtomicU32::new(0);
-pub static CONTROL_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_YAW_RAW: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_ROLL_DPS10: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_PITCH_DPS10: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_YAW_DPS10: AtomicI32 = AtomicI32::new(0);
-pub static IMU_LATEST_SEQ: AtomicU32 = AtomicU32::new(0);
-pub static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
-pub static IMU_LATEST_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
-pub static IMU_LATEST_YAW_RAW: AtomicI32 = AtomicI32::new(0);
-pub static ESC_TELEMETRY_DISCONTINUITY: AtomicBool = AtomicBool::new(false);
 pub type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
 pub type Spi1Executor =
     CriticalSectionSpiExecutor<'static, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
@@ -328,30 +317,6 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
 }
 
 // ----  SAFETY MASTER  ----
-pub async fn osd_write(writer: &mut Uart4OwnedWriter, healthy: &mut bool, bytes: &[u8]) {
-    use embedded_io_async::Write;
-
-    if !*healthy {
-        return;
-    }
-
-    if let Err(error) = writer.write_all(bytes).await {
-        *healthy = false;
-        match error {
-            SerialFault::DmaTransfer => warn!("UART4 TX writer stopped after DMA fault"),
-            SerialFault::Disabled => {
-                warn!("UART4 TX writer stopped because stream is disabled")
-            }
-            SerialFault::InvalidChunk => warn!("UART4 TX writer rejected invalid MSP frame"),
-            SerialFault::InvalidState => warn!("UART4 TX writer found invalid transport state"),
-            SerialFault::QueueOverflow => warn!("UART4 TX writer queue overflowed"),
-            SerialFault::Timeout => warn!("UART4 TX writer timed out"),
-            SerialFault::UnsupportedProtocol => {
-                warn!("UART4 TX writer rejected unsupported protocol")
-            }
-        }
-    }
-}
 
 const _: () = assert!(ARMING_GUARD_POLL_MS < safety::MOTOR_CMD_MAX_AGE_MS);
 

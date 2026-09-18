@@ -1,0 +1,42 @@
+[package]
+name = "ferrowasp-stm32f4-tasks"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# RTIC task definitions for STM32F4 flight boards, as FerroForge definitions.
+# Each flight firmware selects them with its own resources, priorities and
+# interrupts through `ferroforge::app!`, so one definition serves every board
+# instead of each app carrying its own copy. The logic they call stays in
+# ferrowasp-tasks and the mechanisms in ferrowasp-stm32f4.
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+stm32f405 = ["ferrowasp-stm32f4/stm32f405"]
+# Diagnostics a firmware opts into; forwarded from its own features of the
+# same name.
+imu_transport_rtt = []
+imu_orientation_rtt = ["imu_transport_rtt"]
+
+[dependencies]
+defmt = "1.0.1"
+embedded-io-async = { workspace = true }
+ferrowasp-core = { path = "../ferrowasp-core" }
+ferrowasp-drivers = { path = "../ferrowasp-drivers" }
+ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
+ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4" }
+ferrowasp-tasks = { path = "../ferrowasp-tasks" }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+# The versions the flight firmware already locks, so selecting a definition
+# does not move RTIC.
+ferroforge = "0.3"
+fugit = "0.3.9"
+rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "2.1.0", default-features = false }

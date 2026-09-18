@@ -253,6 +253,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "ferroforge"
+version = "0.3.0"
+dependencies = [
+ "ferroforge-macros",
+]
+
+[[package]]
+name = "ferroforge-contracts"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
+
+[[package]]
+name = "ferroforge-macros"
+version = "0.3.0"
+dependencies = [
+ "ferroforge-contracts",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ferrowasp-app-stm32f405-flight"
 version = "0.1.0"
 dependencies = [
@@ -264,12 +289,14 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-io-async",
+ "ferroforge",
  "ferrowasp-core",
  "ferrowasp-drivers",
  "ferrowasp-io-core",
  "ferrowasp-mspv1",
  "ferrowasp-pid",
  "ferrowasp-stm32f4",
+ "ferrowasp-stm32f4-tasks",
  "ferrowasp-tasks",
  "ferrowasp-waveform",
  "heapless 0.9.2",
@@ -323,13 +350,36 @@ dependencies = [
  "cortex-m",
  "defmt 1.0.1",
  "embedded-hal 1.0.0",
+ "ferroforge",
  "ferrowasp-io-core",
  "ferrowasp-waveform",
+ "fugit",
  "heapless 0.9.2",
  "rc-pwm",
+ "rtic",
+ "rtic-monotonics",
  "stm32f4xx-hal",
  "usb-device",
  "usbd-serial",
+]
+
+[[package]]
+name = "ferrowasp-stm32f4-tasks"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "defmt 1.0.1",
+ "embedded-io-async",
+ "ferroforge",
+ "ferrowasp-core",
+ "ferrowasp-drivers",
+ "ferrowasp-io-core",
+ "ferrowasp-mspv1",
+ "ferrowasp-stm32f4",
+ "ferrowasp-tasks",
+ "fugit",
+ "rtic",
+ "rtic-monotonics",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ members = [
     "crates/ferrowasp-mspv2",
     "crates/ferrowasp-pid",
     "crates/ferrowasp-stm32f4",
+    "crates/ferrowasp-stm32f4-tasks",
     "crates/ferrowasp-tasks",
     "crates/ferrowasp-waveform",
     "crates/rc-pwm",

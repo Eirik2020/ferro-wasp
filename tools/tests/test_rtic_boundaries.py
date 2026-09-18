@@ -12,6 +12,29 @@ class RticBoundaryTests(unittest.TestCase):
     def test_current_repository_passes(self) -> None:
         self.assertEqual(validate_rtic_boundaries(REPOSITORY_ROOT), [])
 
+    def test_rejects_an_app_copy_of_a_shared_static(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshots = root / "crates" / "ferrowasp-stm32f4-tasks" / "src" / "snapshots.rs"
+            snapshots.parent.mkdir(parents=True)
+            snapshots.write_text(
+                "pub static IMU_STALE: AtomicBool = AtomicBool::new(true);\n",
+                encoding="utf-8",
+            )
+            lib = root / "firmware" / "demo" / "src" / "lib.rs"
+            lib.parent.mkdir(parents=True)
+            lib.write_text(
+                "pub static IMU_STALE: AtomicBool = AtomicBool::new(true);\n"
+                "pub static APP_ONLY: AtomicBool = AtomicBool::new(false);\n",
+                encoding="utf-8",
+            )
+
+            errors = validate_rtic_boundaries(root)
+
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'IMU_STALE'", errors[0])
+        self.assertIn("firmware/demo/src/lib.rs:1", errors[0])
+
     def test_accepts_ferroforge_task_instances(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

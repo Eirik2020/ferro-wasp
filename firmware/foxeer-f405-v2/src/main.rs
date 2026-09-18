@@ -6,8 +6,11 @@
 
 use ferrowasp_app_foxeer_f405_v2::internal::*;
 
-#[rtic::app(device = pac, peripherals = true, dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN])]
-mod app {
+ferroforge::app! {
+    device = pac,
+    peripherals = true,
+    dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN],
+
     use super::*; // Import everything from parent module
 
     // SAFETY CRITICAL SECTION
@@ -1071,101 +1074,17 @@ mod app {
     // IDLE TASK
 
     #[task(
+        from = flight_tasks::heartbeat,
         priority = 1,
-        local = [
-            usb_rc_link_reader,
-            previous_drdy_count: u32 = 0,
-            previous_drdy_rejected: u32 = 0
+        local = [usb_rc_link_reader],
+        config = [
+            physical_imu_to_drone_rotation: dt::FrameRotation =
+                IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation(),
+            control_imu_to_rate_controller_map: dt::FrameRotation =
+                IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map(),
         ]
     )]
-    async fn heartbeat(cx: heartbeat::Context) {
-        info!("Running heartbeat!");
-
-        loop {
-            let now_us = Mono::now().duration_since_epoch().to_micros();
-            let rc_link = cx.local.usb_rc_link_reader.status(now_us);
-            USB_RC_VALID_SNAPSHOT.store(rc_link.valid, Ordering::Relaxed);
-            USB_RC_ARMABLE_SNAPSHOT.store(rc_link.armable, Ordering::Relaxed);
-            USB_DEBUG_DUE.store(true, Ordering::Release);
-            cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
-
-            #[cfg(feature = "imu_transport_rtt")]
-            info!(
-                "IMU raw gyro [{}, {}, {}], seq {}",
-                IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed),
-                IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed),
-                IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
-                IMU_LATEST_SEQ.load(Ordering::Relaxed)
-            );
-            #[cfg(feature = "imu_orientation_rtt")]
-            if let Some((sequence, accel_mg, gyro_dps10, temp_c10)) = imu_orientation_snapshot() {
-                let body_gyro_dps10 = PHYSICAL_IMU_TO_DRONE_ROTATION.map_i32(gyro_dps10);
-                let control_gyro_dps10 = CONTROL_IMU_TO_RATE_CONTROLLER_MAP.map_i32(gyro_dps10);
-                let body_specific_force_mg = PHYSICAL_IMU_TO_DRONE_ROTATION.map_i32(accel_mg);
-                let body_gravity_mg = [
-                    -body_specific_force_mg[0],
-                    -body_specific_force_mg[1],
-                    -body_specific_force_mg[2],
-                ];
-                info!(
-                    "IMU ORIENT sensor seq {} acc_mg [{}, {}, {}] gyro_dps10 [{}, {}, {}] temp_c10 {}",
-                    sequence,
-                    accel_mg[0],
-                    accel_mg[1],
-                    accel_mg[2],
-                    gyro_dps10[0],
-                    gyro_dps10[1],
-                    gyro_dps10[2],
-                    temp_c10
-                );
-                info!(
-                    "IMU ORIENT body seq {} gravity_mg [{}, {}, {}] gyro_dps10 [{}, {}, {}]",
-                    sequence,
-                    body_gravity_mg[0],
-                    body_gravity_mg[1],
-                    body_gravity_mg[2],
-                    body_gyro_dps10[0],
-                    body_gyro_dps10[1],
-                    body_gyro_dps10[2]
-                );
-                info!(
-                    "IMU ORIENT control seq {} gyro_dps10 [{}, {}, {}]",
-                    sequence, control_gyro_dps10[0], control_gyro_dps10[1], control_gyro_dps10[2]
-                );
-            }
-            #[cfg(feature = "imu_transport_rtt")]
-            {
-                let drdy_count = IMU_DRDY_IRQ_COUNT.load(Ordering::Relaxed);
-                let drdy_rejected = IMU_DRDY_REJECTED_COUNT.load(Ordering::Relaxed);
-                info!(
-                    "IMU DRDY IRQ {}, delta {}, rejected {}, delta {}, last {} us",
-                    drdy_count,
-                    drdy_count.wrapping_sub(*cx.local.previous_drdy_count),
-                    drdy_rejected,
-                    drdy_rejected.wrapping_sub(*cx.local.previous_drdy_rejected),
-                    IMU_DRDY_LAST_US.load(Ordering::Relaxed)
-                );
-                *cx.local.previous_drdy_count = drdy_count;
-                *cx.local.previous_drdy_rejected = drdy_rejected;
-            }
-            info!(
-                "SPI2 flash ready {}, JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes",
-                FLASH_READY.load(Ordering::Relaxed),
-                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
-                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
-                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
-                FLASH_CAPACITY_BYTES.load(Ordering::Relaxed)
-            );
-            info!(
-                "SPI2 blackbox pages {}, dropped records {}, write faults {}, divisor {}",
-                FLASH_PAGES_WRITTEN.load(Ordering::Relaxed),
-                FLASH_RECORDS_DROPPED.load(Ordering::Relaxed),
-                FLASH_WRITE_FAULTS.load(Ordering::Relaxed),
-                FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed)
-            );
-            Mono::delay(2000.millis()).await;
-        }
-    }
+    async fn heartbeat(cx: heartbeat::Context);
 
     #[task(
         priority = 1,
@@ -3732,6 +3651,7 @@ mod app {
     }
 
     #[task(
+        from = flight_tasks::osd_refresh,
         priority = 3,
         local = [
             osd_uart,
@@ -3759,215 +3679,15 @@ mod app {
             tuning_request_seq
         ]
     )]
-    async fn osd_refresh(mut cx: osd_refresh::Context) {
-        loop {
-            let rates = cx.local.osd_rc_rates_reader.read();
-            let throttle = cx.local.osd_rc_throttle_reader.read();
-            let armed = cx.local.osd_safety_arm_reader.read();
-            let battery_voltage_v10 = cx.shared.battery_voltage_v10.lock(|value| *value);
-            let battery_cell_count = cx.shared.battery_cell_count.lock(|value| *value);
-            let battery_cell_voltage_v100 =
-                cx.shared.battery_cell_voltage_v100.lock(|value| *value);
-            let amperage_ca = cx.shared.battery_current_ca.lock(|value| *value);
-            let angles = cx.shared.imu_angles.lock(|angles| *angles);
-            let imu_rates = cx.shared.imu_rates.lock(|rates| *rates);
-            let imu_sequence = IMU_LATEST_SEQ.load(Ordering::Relaxed);
-            let imu_raw = [
-                IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed) as i16,
-                IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed) as i16,
-                IMU_LATEST_YAW_RAW.load(Ordering::Relaxed) as i16,
-            ];
-            let telemetry = mspv1::MspOsdTelemetry {
-                armed,
-                battery_voltage_v10,
-                battery_cell_count,
-                battery_cell_voltage_v100,
-                amperage_ca,
-                rc_roll: osd::map_rate_to_msp_rc(rates.roll),
-                rc_pitch: osd::map_rate_to_msp_rc(rates.pitch),
-                rc_yaw: osd::map_rate_to_msp_rc(rates.yaw),
-                rc_throttle: osd::map_throttle_to_msp_rc(throttle),
-                osd_throttle: throttle.min(2000) as u16,
-                roll_deg10: (angles[0] * 10.0) as i16,
-                pitch_deg10: (angles[1] * 10.0) as i16,
-                yaw_deg: angles[2] as i16,
-                imu_roll_dps: imu_rates[0] as i16,
-                imu_pitch_dps: imu_rates[1] as i16,
-                imu_yaw_dps: imu_rates[2] as i16,
-                imu_roll_dps10: (imu_rates[0] * 10.0) as i16,
-                imu_pitch_dps10: (imu_rates[1] * 10.0) as i16,
-                imu_yaw_dps10: (imu_rates[2] * 10.0) as i16,
-                imu_raw,
-                imu_sequence,
-                imu_stale: IMU_STALE.load(Ordering::Relaxed),
-                control_isr_sequence: CONTROL_ISR_SEQ.load(Ordering::Relaxed),
-                control_sequence: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-                control_raw: [
-                    CONTROL_ROLL_RAW.load(Ordering::Relaxed) as i16,
-                    CONTROL_PITCH_RAW.load(Ordering::Relaxed) as i16,
-                    CONTROL_YAW_RAW.load(Ordering::Relaxed) as i16,
-                ],
-                control_dps10: [
-                    CONTROL_ROLL_DPS10.load(Ordering::Relaxed) as i16,
-                    CONTROL_PITCH_DPS10.load(Ordering::Relaxed) as i16,
-                    CONTROL_YAW_DPS10.load(Ordering::Relaxed) as i16,
-                ],
-                ..mspv1::MspOsdTelemetry::default()
-            };
+    async fn osd_refresh(cx: osd_refresh::Context);
 
-            let menu_active = {
-                let mut changed = false;
-                let active = cx.shared.tuning_profile.lock(|profile| {
-                    let before = *profile;
-                    let active = cx.local.osd_task.update_menu(
-                        armed,
-                        osd::OsdStickRates {
-                            roll: rates.roll,
-                            pitch: rates.pitch,
-                            yaw: rates.yaw,
-                        },
-                        throttle,
-                        profile,
-                    );
-                    changed = before != *profile;
-                    active
-                });
-
-                if changed {
-                    cx.shared.tuning_request_seq.lock(|seq| {
-                        *seq = seq.wrapping_add(1);
-                    });
-                }
-
-                active
-            };
-
-            if let Some(uart) = cx.local.osd_uart.as_mut() {
-                while let Some(filled) = uart.filled_consumer.dequeue() {
-                    let len = filled.len.min(filled.buf.len());
-                    let timestamp =
-                        TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
-                    let owned = RxChunk::from_slice(
-                        &filled.buf[..len],
-                        timestamp,
-                        filled.completion,
-                        filled.generation,
-                        filled.uart_error_seen,
-                    );
-                    uart.free_producer.enqueue(filled.buf).ok();
-
-                    let Ok(owned) = owned else {
-                        warn!("UART4 produced an invalid RX chunk");
-                        continue;
-                    };
-                    if cx.local.osd_rx_producer.try_send(owned).is_err() {
-                        warn!("UART4 owned RX queue rejected a chunk");
-                        continue;
-                    }
-
-                    let mut bytes = [0; stm32_uart::UART_RX_BUFFER_SIZE];
-                    let Ok(read_len) = cx.local.osd_rx_reader.read(&mut bytes).await else {
-                        warn!("UART4 owned RX reader failed");
-                        continue;
-                    };
-                    for byte in &bytes[..read_len] {
-                        if let Some(frame_len) =
-                            cx.local
-                                .osd_task
-                                .ingest_byte(*byte, &telemetry, cx.local.osd_tx_buffer)
-                        {
-                            osd_write(
-                                cx.local.osd_tx_writer,
-                                cx.local.osd_tx_healthy,
-                                &cx.local.osd_tx_buffer[..frame_len],
-                            )
-                            .await;
-                        }
-                    }
-                }
-
-                if let Some(event) = cx.local.osd_rx_discontinuities.take_new() {
-                    warn!("UART4 RX discontinuity sequence {}", event.sequence);
-                }
-            }
-
-            *cx.local.osd_refresh_tick = cx.local.osd_refresh_tick.wrapping_add(1);
-            if *cx.local.osd_refresh_tick >= 10 {
-                *cx.local.osd_refresh_tick = 0;
-
-                if let Some(frame_len) = cx.local.osd_task.heartbeat_frame(cx.local.osd_tx_buffer) {
-                    osd_write(
-                        cx.local.osd_tx_writer,
-                        cx.local.osd_tx_healthy,
-                        &cx.local.osd_tx_buffer[..frame_len],
-                    )
-                    .await;
-                }
-
-                if menu_active {
-                    let tuning = cx.shared.tuning_profile.lock(|profile| *profile);
-                    if let Some(frame_len) = cx
-                        .local
-                        .osd_task
-                        .next_menu_frame(&tuning, cx.local.osd_tx_buffer)
-                    {
-                        osd_write(
-                            cx.local.osd_tx_writer,
-                            cx.local.osd_tx_healthy,
-                            &cx.local.osd_tx_buffer[..frame_len],
-                        )
-                        .await;
-                    }
-                } else if let Some(frame_len) = cx
-                    .local
-                    .osd_task
-                    .next_overlay_frame(&telemetry, cx.local.osd_tx_buffer)
-                {
-                    osd_write(
-                        cx.local.osd_tx_writer,
-                        cx.local.osd_tx_healthy,
-                        &cx.local.osd_tx_buffer[..frame_len],
-                    )
-                    .await;
-                }
-            }
-
-            Mono::delay(10.millis()).await;
-        }
-    }
-
-    #[task(priority = 4, local = [uart4_tx_owner], shared = [uart4_tx_dma])]
-    async fn uart4_tx_worker(mut cx: uart4_tx_worker::Context) {
-        loop {
-            let chunk = match cx.local.uart4_tx_owner.next_chunk().await {
-                Ok(chunk) => chunk,
-                Err(_error) => {
-                    warn!("UART4 TX worker stopped before DMA start");
-                    return;
-                }
-            };
-
-            let start_result = cx
-                .shared
-                .uart4_tx_dma
-                .lock(|tx_dma| tx_dma.start_chunk(&chunk));
-            if let Err(error) = start_result {
-                let fault = match error {
-                    stm32_uart::UartTxStartError::InvalidChunk => SerialFault::InvalidChunk,
-                    stm32_uart::UartTxStartError::Busy
-                    | stm32_uart::UartTxStartError::TransferMissing => SerialFault::InvalidState,
-                };
-                cx.local.uart4_tx_owner.fail(fault);
-                warn!("UART4 TX DMA start failed");
-                return;
-            }
-
-            if cx.local.uart4_tx_owner.wait_completion().await.is_err() {
-                warn!("UART4 TX worker stopped after DMA start");
-                return;
-            }
-        }
-    }
+    #[task(
+        from = flight_tasks::uart4_tx_worker,
+        priority = 4,
+        local = [uart4_tx_owner = uart4_tx_owner],
+        shared = [uart4_tx_dma = uart4_tx_dma],
+    )]
+    async fn uart4_tx_worker(cx: uart4_tx_worker::Context);
 
     #[task(
         binds = DMA1_STREAM4,

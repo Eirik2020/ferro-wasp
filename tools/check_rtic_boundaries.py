@@ -312,6 +312,35 @@ def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
                     )
 
 
+STATIC_DEFINITION = re.compile(
+    r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?static[ \t]+(?:mut[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]*:",
+    re.MULTILINE,
+)
+SHARED_SNAPSHOTS = Path("crates/ferrowasp-stm32f4-tasks/src/snapshots.rs")
+
+
+def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
+    """A static that shared task definitions read or write exists once.
+
+    An app defining its own copy would still compile - its tasks would write
+    one static while a shared definition read the other - so the only defence
+    is refusing the copy here.
+    """
+    snapshots = root / SHARED_SNAPSHOTS
+    if not snapshots.is_file():
+        return
+    shared = set(STATIC_DEFINITION.findall(snapshots.read_text(encoding="utf-8")))
+    for source in sorted(root.glob("firmware/*/src/**/*.rs")):
+        text = source.read_text(encoding="utf-8")
+        for match in STATIC_DEFINITION.finditer(text):
+            if match.group(1) in shared:
+                errors.append(
+                    f"{_relative(source, root)}:{_line_number(text, match.start())}: "
+                    f"static {match.group(1)!r} belongs to ferrowasp-stm32f4-tasks "
+                    "snapshots; re-export it instead of defining a second copy"
+                )
+
+
 def validate_rtic_boundaries(root: Path) -> list[str]:
     root = root.resolve()
     errors: list[str] = []
@@ -321,6 +350,7 @@ def validate_rtic_boundaries(root: Path) -> list[str]:
     _validate_board_sources(root, errors)
     _validate_foxeer_required_usb(root, errors)
     _validate_flight_app_contracts(root, errors)
+    _validate_shared_snapshots(root, errors)
     return errors
 
 

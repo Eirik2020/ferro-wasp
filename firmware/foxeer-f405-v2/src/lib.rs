@@ -146,6 +146,25 @@ pub use ferrowasp_stm32f4::timebase as stm32_timebase;
 pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
 pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
 pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
+pub use ferrowasp_stm32f4_tasks as flight_tasks;
+pub use ferrowasp_stm32f4_tasks::snapshots::{
+    ACTIVE_IMU_KIND, ADC_CURRENT_MV_SNAPSHOT, ADC_VOLTAGE_MV_SNAPSHOT, BATTERY_CURRENT_CA_SNAPSHOT,
+    BATTERY_VOLTAGE_V10_SNAPSHOT, CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW,
+    CONTROL_RATE_SEQ, CONTROL_ROLL_DPS10, CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW,
+    ESC_TELEMETRY_DISCONTINUITY, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE,
+    FLASH_JEDEC_MANUFACTURER, FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN,
+    FLASH_READY, FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_BIAS_CALIBRATED,
+    IMU_DRDY_IRQ_COUNT, IMU_DRDY_LAST_US, IMU_DRDY_REJECTED_COUNT, IMU_LATEST_PITCH_RAW,
+    IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY,
+    RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED, USB_DEBUG_DUE, USB_RC_ARMABLE_SNAPSHOT,
+    USB_RC_VALID_SNAPSHOT,
+};
+#[cfg(feature = "imu_orientation_rtt")]
+pub use ferrowasp_stm32f4_tasks::snapshots::{
+    IMU_LATEST_ACCEL_X_MG, IMU_LATEST_ACCEL_Y_MG, IMU_LATEST_ACCEL_Z_MG, IMU_LATEST_GYRO_X_DPS10,
+    IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10, IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION,
+    imu_orientation_snapshot,
+};
 pub use ferrowasp_tasks::actuator as actuator_task;
 #[cfg(feature = "mspv2_configurator")]
 pub use ferrowasp_tasks::blackbox_storage as blackbox_task;
@@ -342,89 +361,6 @@ pub use ferrowasp_core::safety::signals::{
     self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
 };
 
-pub static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
-pub static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
-pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
-pub static IMU_STALE: AtomicBool = AtomicBool::new(true);
-pub static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
-pub static CONTROL_RATE_SEQ: AtomicU32 = AtomicU32::new(0);
-pub static CONTROL_ISR_SEQ: AtomicU32 = AtomicU32::new(0);
-pub static CONTROL_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_YAW_RAW: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_ROLL_DPS10: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_PITCH_DPS10: AtomicI32 = AtomicI32::new(0);
-pub static CONTROL_YAW_DPS10: AtomicI32 = AtomicI32::new(0);
-pub static IMU_LATEST_SEQ: AtomicU32 = AtomicU32::new(0);
-pub static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
-pub static IMU_LATEST_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
-pub static IMU_LATEST_YAW_RAW: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_ORIENTATION_VERSION: AtomicU32 = AtomicU32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_ACCEL_X_MG: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_ACCEL_Y_MG: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_ACCEL_Z_MG: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_GYRO_X_DPS10: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_GYRO_Y_DPS10: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_GYRO_Z_DPS10: AtomicI32 = AtomicI32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub static IMU_LATEST_TEMP_C10: AtomicI32 = AtomicI32::new(0);
-pub static IMU_TRANSPORT_READY: AtomicBool = AtomicBool::new(false);
-pub static IMU_DRDY_IRQ_COUNT: AtomicU32 = AtomicU32::new(0);
-pub static IMU_DRDY_REJECTED_COUNT: AtomicU32 = AtomicU32::new(0);
-pub static IMU_DRDY_LAST_US: AtomicU32 = AtomicU32::new(0);
-pub static ESC_TELEMETRY_DISCONTINUITY: AtomicBool = AtomicBool::new(false);
-pub static ACTIVE_IMU_KIND: AtomicU8 = AtomicU8::new(0);
-pub static BATTERY_VOLTAGE_V10_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
-pub static BATTERY_CURRENT_CA_SNAPSHOT: AtomicI32 = AtomicI32::new(0);
-pub static ADC_VOLTAGE_MV_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
-pub static ADC_CURRENT_MV_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
-pub static USB_DEBUG_DUE: AtomicBool = AtomicBool::new(false);
-pub static USB_RC_VALID_SNAPSHOT: AtomicBool = AtomicBool::new(false);
-pub static USB_RC_ARMABLE_SNAPSHOT: AtomicBool = AtomicBool::new(false);
-pub static FLASH_READY: AtomicBool = AtomicBool::new(false);
-pub static FLASH_JEDEC_MANUFACTURER: AtomicU8 = AtomicU8::new(0);
-pub static FLASH_JEDEC_MEMORY_TYPE: AtomicU8 = AtomicU8::new(0);
-pub static FLASH_JEDEC_CAPACITY_CODE: AtomicU8 = AtomicU8::new(0);
-pub static FLASH_CAPACITY_BYTES: AtomicU32 = AtomicU32::new(0);
-pub static FLASH_LOG_RATE_DIVISOR: AtomicU32 = AtomicU32::new(1);
-pub static FLASH_RECORDS_DROPPED: AtomicU32 = AtomicU32::new(0);
-pub static FLASH_PAGES_WRITTEN: AtomicU32 = AtomicU32::new(0);
-pub static FLASH_WRITE_FAULTS: AtomicU32 = AtomicU32::new(0);
-#[cfg(feature = "imu_orientation_rtt")]
-pub fn imu_orientation_snapshot() -> Option<(u32, [i32; 3], [i32; 3], i32)> {
-    for _ in 0..4 {
-        let version_before = IMU_ORIENTATION_VERSION.load(Ordering::Acquire);
-        if version_before & 1 != 0 {
-            continue;
-        }
-
-        let accel_mg = [
-            IMU_LATEST_ACCEL_X_MG.load(Ordering::Relaxed),
-            IMU_LATEST_ACCEL_Y_MG.load(Ordering::Relaxed),
-            IMU_LATEST_ACCEL_Z_MG.load(Ordering::Relaxed),
-        ];
-        let gyro_dps10 = [
-            IMU_LATEST_GYRO_X_DPS10.load(Ordering::Relaxed),
-            IMU_LATEST_GYRO_Y_DPS10.load(Ordering::Relaxed),
-            IMU_LATEST_GYRO_Z_DPS10.load(Ordering::Relaxed),
-        ];
-        let temp_c10 = IMU_LATEST_TEMP_C10.load(Ordering::Relaxed);
-        let version_after = IMU_ORIENTATION_VERSION.load(Ordering::Acquire);
-        if version_before == version_after {
-            return Some((version_after / 2, accel_mg, gyro_dps10, temp_c10));
-        }
-    }
-
-    None
-}
-
 #[cfg(not(feature = "mspv2_configurator"))]
 pub const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 storage CLI v1; type help\r\n";
 pub type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
@@ -513,31 +449,6 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         }
         safety::ArmingAbortReason::CompletionDeliveryFailed => {
             warn!("Arming aborted: idle completion delivery failed")
-        }
-    }
-}
-
-pub async fn osd_write(writer: &mut Uart4OwnedWriter, healthy: &mut bool, bytes: &[u8]) {
-    use embedded_io_async::Write;
-
-    if !*healthy {
-        return;
-    }
-
-    if let Err(error) = writer.write_all(bytes).await {
-        *healthy = false;
-        match error {
-            SerialFault::DmaTransfer => warn!("UART4 TX writer stopped after DMA fault"),
-            SerialFault::Disabled => {
-                warn!("UART4 TX writer stopped because stream is disabled")
-            }
-            SerialFault::InvalidChunk => warn!("UART4 TX writer rejected invalid MSP frame"),
-            SerialFault::InvalidState => warn!("UART4 TX writer found invalid transport state"),
-            SerialFault::QueueOverflow => warn!("UART4 TX writer queue overflowed"),
-            SerialFault::Timeout => warn!("UART4 TX writer timed out"),
-            SerialFault::UnsupportedProtocol => {
-                warn!("UART4 TX writer rejected unsupported protocol")
-            }
         }
     }
 }

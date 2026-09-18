@@ -360,6 +360,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-stm32f4-tasks"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "defmt 1.0.1",
+ "embedded-io-async",
+ "ferroforge",
+ "ferrowasp-core",
+ "ferrowasp-drivers",
+ "ferrowasp-io-core",
+ "ferrowasp-mspv1",
+ "ferrowasp-stm32f4",
+ "ferrowasp-tasks",
+ "fugit",
+ "rtic",
+ "rtic-monotonics",
+]
+
+[[package]]
 name = "ferrowasp-tasks"
 version = "0.1.0"
 dependencies = [
