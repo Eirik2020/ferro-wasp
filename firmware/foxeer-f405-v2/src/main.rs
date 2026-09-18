@@ -2437,116 +2437,17 @@ ferroforge::app! {
     async fn actuator_idle_notify(cx: actuator_idle_notify::Context);
 
     #[task(
+        from = flight_tasks::dshot_service,
         priority = 13,
         shared = [dshot_motors],
-        local = [
-            fault_reported: bool = false,
-            disarm_pending: bool = false,
-            report_ticks: u16 = 0,
-            esc_request_consumer,
-            esc_ack_producer,
-            esc_actuator_request: Option<esc::EscActuatorRequest> = None,
-            esc_actuator_request_submitted: bool = false
+        local = [esc_request_consumer, esc_ack_producer],
+        spawn = [safety_master],
+        config = [
+            dshot_motor_for_output: fn(esc::EscOutput) -> board::init::DshotMotor =
+                dshot_motor_for_output,
         ]
     )]
-    async fn dshot_service(mut cx: dshot_service::Context) {
-        loop {
-            let release = Mono::now();
-            let next_release = release + board::init::DSHOT_SERVICE_PERIOD_MS.millis();
-            let now_ms = release.duration_since_epoch().to_millis();
-            if cx.local.esc_actuator_request.is_none() {
-                *cx.local.esc_actuator_request = cx.local.esc_request_consumer.dequeue();
-                *cx.local.esc_actuator_request_submitted = false;
-            }
-
-            let (event, telemetry_sent) = cx.shared.dshot_motors.lock(|dshot| {
-                if let Some(request) = *cx.local.esc_actuator_request
-                    && !*cx.local.esc_actuator_request_submitted
-                {
-                    let result = match request.operation {
-                        esc::EscOperation::RequestTelemetry => {
-                            dshot.request_telemetry(dshot_motor_for_output(request.output))
-                        }
-                    };
-                    match result {
-                        Ok(()) => *cx.local.esc_actuator_request_submitted = true,
-                        Err(board::init::DshotTelemetryRequestError::Busy) => {}
-                        Err(board::init::DshotTelemetryRequestError::Faulted) => {
-                            *cx.local.esc_actuator_request = None;
-                        }
-                    }
-                }
-
-                let event = dshot.service(now_ms);
-                let telemetry_sent = dshot.take_telemetry_request_sent();
-                (event, telemetry_sent)
-            });
-            if let (Some(request), Some(sent_motor)) =
-                (*cx.local.esc_actuator_request, telemetry_sent)
-            {
-                if sent_motor == dshot_motor_for_output(request.output) {
-                    let ack = esc::EscActuatorAck {
-                        request,
-                        started_at_ms: now_ms,
-                    };
-                    if cx.local.esc_ack_producer.enqueue(ack).is_err() {
-                        warn!("Foxeer ESC actuator acknowledgement queue full");
-                    }
-                } else {
-                    warn!("Foxeer ESC telemetry acknowledgement output mismatch");
-                }
-                *cx.local.esc_actuator_request = None;
-                *cx.local.esc_actuator_request_submitted = false;
-            }
-
-            match event {
-                board::init::DshotServiceEvent::LeaseExpired => {
-                    warn!("Foxeer DShot command lease expired; stop frames selected");
-                    *cx.local.disarm_pending = true;
-                }
-                board::init::DshotServiceEvent::Faulted if !*cx.local.fault_reported => {
-                    warn!("Foxeer DShot bank faulted; all outputs forced low");
-                    *cx.local.fault_reported = true;
-                    *cx.local.disarm_pending = true;
-                }
-                _ => {}
-            }
-
-            if *cx.local.disarm_pending
-                && safety_master::spawn(safety::SafetyEvent::DisarmRequested).is_ok()
-            {
-                *cx.local.disarm_pending = false;
-            }
-
-            *cx.local.report_ticks = cx.local.report_ticks.wrapping_add(1);
-            if *cx.local.report_ticks >= 1_000 {
-                *cx.local.report_ticks = 0;
-                let (requested, stats) = cx
-                    .shared
-                    .dshot_motors
-                    .lock(|dshot| (dshot.requested_values(), dshot.stats()));
-                info!(
-                    "Foxeer DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
-                    requested[0],
-                    requested[1],
-                    requested[2],
-                    requested[3],
-                    stats.frames_completed,
-                    stats.frames_started,
-                    stats.lane_completions[0],
-                    stats.lane_completions[1],
-                    stats.lane_completions[2],
-                    stats.lane_completions[3],
-                    stats.busy_skips,
-                    stats.lease_expiries,
-                    stats.frame_timeouts,
-                    stats.dma_faults,
-                    now_ms
-                );
-            }
-            Mono::delay_until(next_release).await;
-        }
-    }
+    async fn dshot_service(cx: dshot_service::Context);
 
     #[task(
         from = flight_tasks::dshot_dma_complete,

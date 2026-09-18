@@ -41,7 +41,7 @@ pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use diagnostics::heartbeat;
 #[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
-pub use dshot::{dshot_dma_complete, service_dshot_dma_irq};
+pub use dshot::{dshot_dma_complete, dshot_service, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
