@@ -214,3 +214,25 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
         }
     }
 }
+
+/// Tell the safety master the actuator has reached idle, retrying every
+/// millisecond until the notification is accepted: arming cannot complete
+/// without it, and dropping it would strand the arming sequence.
+#[ferroforge::task(
+    spawn = [safety_master(event: safety::SafetyEvent)],
+    monotonic = Mono,
+)]
+pub async fn actuator_idle_notify(cx: actuator_idle_notify::Context) {
+    let mut retry_logged = false;
+    while cx
+        .spawn
+        .safety_master(safety::SafetyEvent::ActuatorIdling)
+        .is_err()
+    {
+        if !retry_logged {
+            retry_logged = true;
+            warn!("Retrying actuator-idle notification");
+        }
+        Mono::delay(1.millis()).await;
+    }
+}

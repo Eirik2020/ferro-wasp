@@ -20,6 +20,8 @@ mod esc;
 mod osd;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod prelude;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+mod rc;
 pub mod snapshots;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod spi1;
@@ -33,13 +35,15 @@ mod uart4;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub use arming::{safety_master, warn_arming_abort};
+pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use diagnostics::heartbeat;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use osd::osd_refresh;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use rc::{neutralize_rc_input, rc_input};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use spi1::{
     ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1ImuKind, Spi1Mailbox,

@@ -32,3 +32,4 @@ pub use ferrowasp_tasks::drone_toolbox as dt;
 pub use ferrowasp_tasks::esc_manager as esc;
 pub use ferrowasp_tasks::osd;
 pub use fugit::ExtU32 as _;
+pub use sbus_rs::StreamingParser;

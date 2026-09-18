@@ -1397,17 +1397,12 @@ ferroforge::app! {
         }
     }
 
-    #[task(priority = 13)]
-    async fn actuator_idle_notify(_: actuator_idle_notify::Context) {
-        let mut retry_logged = false;
-        while safety_master::spawn(safety::SafetyEvent::ActuatorIdling).is_err() {
-            if !retry_logged {
-                retry_logged = true;
-                warn!("Retrying actuator-idle notification");
-            }
-            Mono::delay(1.millis()).await;
-        }
-    }
+    #[task(
+        from = flight_tasks::actuator_idle_notify,
+        priority = 13,
+        spawn = [safety_master]
+    )]
+    async fn actuator_idle_notify(cx: actuator_idle_notify::Context);
 
     #[task(
         priority = 13,
@@ -2370,6 +2365,7 @@ ferroforge::app! {
     fn uart4_tx_dma_transfer(cx: uart4_tx_dma_transfer::Context);
 
     #[task(
+        from = flight_tasks::rc_input,
         priority = 10,
         local = [
             rc_rx_reader,
@@ -2379,129 +2375,12 @@ ferroforge::app! {
             rc_rates_writer,
             rc_throttle_writer,
             rc_arm_high_writer,
-            rc_link_frame_writer,
-            rc_link_reported_valid: bool = false,
-            rc_link_reported_invalidation_seq: u32 = 0
+            rc_link_frame_writer
         ],
-        shared = [tuning_profile]
+        shared = [tuning_profile],
+        spawn = [safety_master]
     )]
-    async fn rc_input(mut cx: rc_input::Context) {
-        loop {
-            let mut bytes = [0; stm32_uart::UART_RX_BUFFER_SIZE];
-            let read_len = match cx.local.rc_rx_reader.read(&mut bytes).await {
-                Ok(read_len) => read_len,
-                Err(_) => {
-                    let _ = safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(
-                        safety::RcLinkInvalidation::TransportDiscontinuity,
-                    ));
-                    neutralize_rc_input(
-                        cx.local.arm_qualifier,
-                        cx.local.rc_rates_writer,
-                        cx.local.rc_throttle_writer,
-                        cx.local.rc_arm_high_writer,
-                    );
-                    *cx.local.rc_link_reported_valid = false;
-                    warn!("USART2 owned RX reader stopped");
-                    return;
-                }
-            };
-
-            if let Some(event) = cx.local.rc_rx_discontinuities.take_new() {
-                let _ = safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(
-                    safety::RcLinkInvalidation::TransportDiscontinuity,
-                ));
-                cx.local.sbus.reset();
-                neutralize_rc_input(
-                    cx.local.arm_qualifier,
-                    cx.local.rc_rates_writer,
-                    cx.local.rc_throttle_writer,
-                    cx.local.rc_arm_high_writer,
-                );
-                *cx.local.rc_link_reported_valid = false;
-                warn!("USART2 RX discontinuity sequence {}", event.sequence);
-            }
-
-            for packet in cx.local.sbus.push_bytes(&bytes[..read_len]) {
-                let pkt = match packet {
-                    Ok(packet) => packet,
-                    Err(_) => {
-                        let _ = safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(
-                            safety::RcLinkInvalidation::ParserError,
-                        ));
-                        neutralize_rc_input(
-                            cx.local.arm_qualifier,
-                            cx.local.rc_rates_writer,
-                            cx.local.rc_throttle_writer,
-                            cx.local.rc_arm_high_writer,
-                        );
-                        *cx.local.rc_link_reported_valid = false;
-                        continue;
-                    }
-                };
-
-                if let Err(reason) =
-                    safety::classify_rc_frame_flags(pkt.flags.failsafe, pkt.flags.frame_lost)
-                {
-                    let _ = safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(reason));
-                    neutralize_rc_input(
-                        cx.local.arm_qualifier,
-                        cx.local.rc_rates_writer,
-                        cx.local.rc_throttle_writer,
-                        cx.local.rc_arm_high_writer,
-                    );
-                    *cx.local.rc_link_reported_valid = false;
-                    continue;
-                }
-
-                let rc_rate_profile = cx.shared.tuning_profile.lock(|profile| profile.rc_rates);
-                let rc_cmd = dt::remap_rc_channels_with_profile(
-                    pkt.channels[0],
-                    pkt.channels[1],
-                    pkt.channels[3],
-                    pkt.channels[2],
-                    rc_rate_profile,
-                );
-                let arm_high = pkt.channels[8] > safety::ARM_THRESHOLD;
-                let now_us = Mono::now().duration_since_epoch().to_micros();
-                cx.local.rc_rates_writer.write(safety::RcRates {
-                    roll: rc_cmd.roll_dps as i16,
-                    pitch: rc_cmd.pitch_dps as i16,
-                    yaw: rc_cmd.yaw_dps as i16,
-                });
-                cx.local.rc_throttle_writer.write(rc_cmd.throttle);
-                cx.local.rc_arm_high_writer.write(arm_high);
-                let link = cx
-                    .local
-                    .rc_link_frame_writer
-                    .observe_healthy_frame(now_us, arm_high);
-                if link.invalidation_sequence != *cx.local.rc_link_reported_invalidation_seq {
-                    *cx.local.rc_link_reported_invalidation_seq = link.invalidation_sequence;
-                    *cx.local.rc_link_reported_valid = false;
-                }
-                if link.valid && !*cx.local.rc_link_reported_valid {
-                    *cx.local.rc_link_reported_valid = true;
-                    info!("RC link valid after healthy-frame qualification");
-                }
-
-                if !link.valid || (arm_high && !link.armable) {
-                    cx.local.arm_qualifier.reset();
-                    continue;
-                }
-
-                if let Some(event) = cx.local.arm_qualifier.update(arm_high, now_us) {
-                    match event {
-                        safety::SafetyEvent::ArmRequested => info!("RC Requests ARM!"),
-                        safety::SafetyEvent::DisarmRequested => info!("RC Requests Disarm!"),
-                        safety::SafetyEvent::ActuatorIdling
-                        | safety::SafetyEvent::ArmingAborted(_)
-                        | safety::SafetyEvent::RcLinkInvalid(_) => {}
-                    }
-
-                    safety_master::spawn(event).ok();
-                }
-            }
-        }
-    }
+    async fn rc_input(cx: rc_input::Context);
 
     // ---- ADC1 ----
     #[task(

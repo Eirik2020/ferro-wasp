@@ -34,6 +34,7 @@ ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4" }
 ferrowasp-tasks = { path = "../ferrowasp-tasks" }
+sbus-rs = "0.1.3"
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }

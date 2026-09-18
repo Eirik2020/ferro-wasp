@@ -356,17 +356,6 @@ pub fn validate_live_arming_guard(
         imu_fresh: !cfg!(feature = "bench_prearm_imu_stale") && !IMU_STALE.load(Ordering::Acquire),
     })
 }
-pub fn neutralize_rc_input(
-    arm_qualifier: &mut safety::ArmQualifier,
-    rates: &signals::RcRatesWriter,
-    throttle: &signals::RcThrottleWriter,
-    arm_high: &signals::RcArmHighWriter,
-) {
-    arm_qualifier.reset();
-    rates.write(safety::RcRates::default());
-    throttle.write(0);
-    arm_high.write(false);
-}
 
 pub mod internal {
     pub use crate::*;

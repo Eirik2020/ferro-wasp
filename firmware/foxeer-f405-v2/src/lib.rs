@@ -833,18 +833,6 @@ pub fn service_dshot_dma_irq(
     }
 }
 
-pub fn neutralize_rc_input(
-    arm_qualifier: &mut safety::ArmQualifier,
-    rates: &signals::RcRatesWriter,
-    throttle: &signals::RcThrottleWriter,
-    arm_high: &signals::RcArmHighWriter,
-) {
-    arm_qualifier.reset();
-    rates.write(safety::RcRates::default());
-    throttle.write(0);
-    arm_high.write(false);
-}
-
 pub mod internal {
     pub use crate::*;
 }

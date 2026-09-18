@@ -383,6 +383,7 @@ dependencies = [
  "fugit",
  "rtic",
  "rtic-monotonics",
+ "sbus-rs",
 ]
 
 [[package]]
