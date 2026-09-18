@@ -12,13 +12,14 @@ Current important paths:
 |   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
 |       |-- src/board/           # Immutable board facts and typed construction
 |       |-- src/lib.rs           # Internal app-support facade
-|       `-- src/main.rs          # RTIC declarations and wiring only
+|       `-- src/main.rs          # ferroforge::app! declarations and wiring only
 |-- crates/
 |   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
 |   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
 |   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
 |   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
 |   |-- ferrowasp-stm32f4/       # STM32F4 UART/SPI/ADC/PWM/DShot mechanisms
+|   |-- ferrowasp-stm32f4-tasks/ # RTIC task definitions shared by STM32F4 boards
 |   |-- ferrowasp-tasks/         # Control, OSD, and ESC-manager task logic
 |   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
 |   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
@@ -67,9 +68,10 @@ ferrowasp-mcu        family-neutral MCU contracts
 ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
 ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
 ferrowasp-tasks      reusable task logic
+ferrowasp-stm32f4-tasks  RTIC task definitions shared by STM32F4 boards
 app src/board        board pin maps, clocks, DMA/timer assignments
 app src/lib.rs       board composition and internal support facade
-app src/main.rs      thin RTIC shell
+app src/main.rs      thin ferroforge::app! shell selecting shared definitions
 ferrowasp-gen        optional source generation for task/resource wiring
 manifest/            optional board, task, resource, and policy descriptions
 ```

@@ -41,9 +41,14 @@ Run python tools/check_rtic_boundaries.py after app or board-support changes.
 
 ## RTIC ownership
 
-- `src/main.rs` owns `#[rtic::app]`, RTIC resource declarations, priorities,
-  initialization wiring, locking, task spawning, and scheduling. It imports
-  only the app library's internal facade.
+- `src/main.rs` owns the `ferroforge::app!` declaration, which expands into
+  `#[rtic::app]`: RTIC resource declarations, priorities, initialization
+  wiring, locking, task spawning, and scheduling. It imports only the app
+  library's internal facade.
+- A task body shared between boards is a FerroForge definition in
+  `ferrowasp-stm32f4-tasks`; `src/main.rs` declares an instance of it with
+  this board's resources, priority, interrupt and configuration. Board facts
+  reach a definition only that way, never by naming a board.
 - Do not declare helper types, functions, macros, aliases, constants, or
   statics in `src/main.rs`. Put board-specific declarations in the app support
   library and reusable declarations in the narrowest common crate.
