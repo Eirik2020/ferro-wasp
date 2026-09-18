@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "run_id": "20260918T211248Z__BUILD-FOX-001__foxeer-f405-v2__01",
+  "test_id": "BUILD-FOX-001",
+  "started_at_utc": "2026-09-18T21:12:43Z",
+  "completed_at_utc": "2026-09-18T21:12:48Z",
+  "target": "foxeer-f405-v2",
+  "tier": "embedded-build",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "d644dd130d9c117da52309cda16a6606688ac81a07c0f6f822883c6cf759af6d",
+    "procedure_path": "firmware/foxeer-f405-v2/README.md",
+    "procedure_heading": "Build",
+    "procedure_sha256": "21b7c2758223f9c94288fbffeb14324db608d350be44fd85d4b9d4376ed02cf8"
+  },
+  "execution": {
+    "performed_by": "agent",
+    "user_confirmed": false
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "not-applicable",
+    "actuator_power": "not-applicable",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo fmt --check)",
+      "exit_code": 0
+    },
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo check --release --locked)",
+      "exit_code": 0
+    },
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo build --release --locked)",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "dfu-image",
+      "kind": "firmware",
+      "path": "logs/foxeer-candidates/20260918T211248Z-a921ffe-FerroWaspFoxeerF405V2.bin",
+      "bytes": 152664,
+      "sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435"
+    },
+    {
+      "id": "release-elf",
+      "kind": "firmware",
+      "path": "logs/foxeer-candidates/20260918T211248Z-a921ffe-FerroWaspFoxeerF405V2.elf",
+      "bytes": 5100692,
+      "sha256": "6bdcd149d78f710e8eef9f98bfad17d8d045dc0abe2cf04873ba7491ee0acf9b"
+    }
+  ],
+  "measurements": {
+    "dfu_image_bytes": 152664
+  },
+  "observations": [
+    "Default feature set only; no diagnostic or bench features.",
+    "The DFU image is the release ELF converted with `arm-none-eabi-objcopy -O binary`, as flash-dfu.ps1 does; firmware_sha256 is the DFU image.",
+    "Every task except usb_fs and flash_manager_task is a ferroforge::app! instance of a ferrowasp-stm32f4-tasks definition."
+  ],
+  "limitations": [
+    "Compile evidence only; establishes no hardware behavior."
+  ],
+  "stop_conditions_triggered": []
+}
