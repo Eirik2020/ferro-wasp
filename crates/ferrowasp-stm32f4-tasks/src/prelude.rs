@@ -15,8 +15,10 @@ pub use ferrowasp_io_core::spi::{
 };
 pub use ferrowasp_io_core::time::TimestampMicros;
 pub use ferrowasp_mspv1 as mspv1;
+pub use ferrowasp_stm32f4::adc as stm32_adc;
+pub use ferrowasp_stm32f4::adc::Adc1ObservationDma as _;
 pub use ferrowasp_stm32f4::app_config::ESC_MANAGER_PERIOD_MS;
-pub use ferrowasp_stm32f4::hal_prelude::{ExtiPin, pac};
+pub use ferrowasp_stm32f4::hal_prelude::{ExtiPin, VtempCal30, VtempCal110, pac};
 pub use ferrowasp_stm32f4::memory as stm32_memory;
 pub use ferrowasp_stm32f4::memory::{SPI1_JOB_MAX_BYTES, SPI1_JOB_MAX_OPERATIONS};
 pub use ferrowasp_stm32f4::spi_dma as stm32_spi;

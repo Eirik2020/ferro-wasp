@@ -2587,16 +2587,6 @@ ferroforge::app! {
         let _ = (cell_count, current_ca);
     }
 
-    #[task(shared = [adc1_transfer])]
-    async fn adc1_polling(mut cx: adc1_polling::Context) {
-        loop {
-            cx.shared.adc1_transfer.lock(|transfer| {
-                transfer.start(|adc| {
-                    adc.start_conversion();
-                });
-            });
-
-            Mono::delay(100.millis()).await;
-        }
-    }
+    #[task(from = flight_tasks::adc1_polling, priority = 1, shared = [adc1_transfer])]
+    async fn adc1_polling(cx: adc1_polling::Context);
 }

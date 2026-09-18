@@ -3430,7 +3430,9 @@ ferroforge::app! {
 
     // ---- ADC1 ----
     #[task(
+        from = flight_tasks::dma_adc1,
         binds = DMA2_STREAM4,
+        priority = 1,
         shared = [
             adc1_transfer,
             battery_voltage_v10,
@@ -3440,104 +3442,21 @@ ferroforge::app! {
         ],
         local = [
             adc1_buffer,
-            adc1_planner: stm32_adc::AdcDmaIrqPlanner = stm32_adc::AdcDmaIrqPlanner::new(),
             battery_cell_detector: osd::BatteryCellDetector =
                 osd::BatteryCellDetector::new(
                     BATTERY_MAX_CELL_MV,
                     BATTERY_DETECT_CELL_MV,
                     BATTERY_MAX_CELLS,
-                ),
-            battery_voltage_init_logged: bool = false
+                )
+        ],
+        config = [
+            adc_vbat_divider_ratio: f32 = ADC_VBAT_DIVIDER_RATIO,
+            adc_current_betaflight_scale: u32 = ADC_CURRENT_BETAFLIGHT_SCALE,
+            adc_current_offset_ma: i32 = ADC_CURRENT_OFFSET_MA,
         ]
     )]
-    fn dma_adc1(mut cx: dma_adc1::Context) {
-        let sample = match cx.shared.adc1_transfer.lock(|transfer| {
-            stm32_adc::take_completed_adc1_sample_for(
-                transfer,
-                cx.local.adc1_buffer,
-                cx.local.adc1_planner,
-            )
-        }) {
-            Ok(Some(sample)) => sample,
-            Ok(None) => return,
-            Err(stm32_adc::AdcDmaDeliveryError::DmaFault) => {
-                warn!("ADC1 DMA error");
-                return;
-            }
-            Err(stm32_adc::AdcDmaDeliveryError::NoSpareBuffer) => {
-                panic!("ADC1 spare buffer missing");
-            }
-            Err(stm32_adc::AdcDmaDeliveryError::TransferNotReady) => {
-                warn!("ADC1 DMA next_transfer failed");
-                return;
-            }
-        };
+    fn dma_adc1(cx: dma_adc1::Context);
 
-        // Pull the ADC data out of the buffer that the DMA transfer gave us
-        let raw_temp = sample.buffer[0];
-
-        // Now that we're finished with this buffer, put it back in `local.buffer` so it's ready for the next transfer
-        // If we don't do this before the next transfer, we'll get a panic
-        *cx.local.adc1_buffer = Some(sample.buffer);
-
-        let cal30 = VtempCal30::get().read() as f32;
-        let cal110 = VtempCal110::get().read() as f32;
-
-        let _temperature = (110.0 - 30.0) * ((raw_temp as f32) - cal30) / (cal110 - cal30) + 30.0;
-        let pack_mv = ((sample.voltage_mv as f32) * ADC_VBAT_DIVIDER_RATIO) as u32;
-        let cell_count = cx.local.battery_cell_detector.update(pack_mv);
-        let cell_voltage_v100 = osd::pack_millivolts_to_cell_centivolts(pack_mv, cell_count);
-        let current_ca = if cell_count == 0 {
-            0
-        } else {
-            osd::current_sample_to_centiamps_with_offset(
-                sample.current_mv as u32,
-                ADC_CURRENT_BETAFLIGHT_SCALE,
-                ADC_CURRENT_OFFSET_MA,
-            )
-        };
-
-        let battery_voltage_v10 = ((pack_mv + 50) / 100).min(u8::MAX as u32) as u8;
-        BATTERY_VOLTAGE_V10_SNAPSHOT.store(u32::from(battery_voltage_v10), Ordering::Relaxed);
-        BATTERY_CURRENT_CA_SNAPSHOT.store(i32::from(current_ca), Ordering::Relaxed);
-        ADC_VOLTAGE_MV_SNAPSHOT.store(sample.voltage_mv as u32, Ordering::Relaxed);
-        ADC_CURRENT_MV_SNAPSHOT.store(sample.current_mv as u32, Ordering::Relaxed);
-        cx.shared
-            .battery_voltage_v10
-            .lock(|value| *value = battery_voltage_v10);
-        cx.shared
-            .battery_cell_count
-            .lock(|battery_cell_count| *battery_cell_count = cell_count);
-        cx.shared
-            .battery_cell_voltage_v100
-            .lock(|battery_cell_voltage_v100| *battery_cell_voltage_v100 = cell_voltage_v100);
-        cx.shared
-            .battery_current_ca
-            .lock(|battery_current_ca| *battery_current_ca = current_ca);
-
-        if !*cx.local.battery_voltage_init_logged {
-            let pack_v10 = (pack_mv + 50) / 100;
-            info!(
-                "Initial battery voltage: {}.{}V",
-                pack_v10 / 10,
-                pack_v10 % 10
-            );
-            *cx.local.battery_voltage_init_logged = true;
-        }
-
-        let _ = (cell_count, current_ca);
-    }
-
-    #[task(shared = [adc1_transfer])]
-    async fn adc1_polling(mut cx: adc1_polling::Context) {
-        loop {
-            cx.shared.adc1_transfer.lock(|transfer| {
-                transfer.start(|adc| {
-                    adc.start_conversion();
-                });
-            });
-
-            Mono::delay(100.millis()).await;
-        }
-    }
+    #[task(from = flight_tasks::adc1_polling, priority = 1, shared = [adc1_transfer])]
+    async fn adc1_polling(cx: adc1_polling::Context);
 }

@@ -252,6 +252,45 @@ where
     }
 }
 
+/// ADC1's observation transfer, whichever DMA stream a board gives it. What a
+/// shared task definition bounds on; each method forwards to the transfer's
+/// own, or to `take_completed_adc1_sample_for`.
+#[cfg(target_arch = "arm")]
+pub trait Adc1ObservationDma {
+    fn start<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut Adc<ADC1>);
+
+    fn take_completed_sample(
+        &mut self,
+        spare_buffer: &mut Option<Adc1SampleBuffer>,
+        planner: &mut AdcDmaIrqPlanner,
+    ) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError>;
+}
+
+#[cfg(target_arch = "arm")]
+impl<StreamT, const CHANNEL: u8> Adc1ObservationDma for Adc1ObservationTransferFor<StreamT, CHANNEL>
+where
+    StreamT: Stream,
+    ChannelX<CHANNEL>: Channel,
+    Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
+{
+    fn start<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut Adc<ADC1>),
+    {
+        Transfer::start(self, f)
+    }
+
+    fn take_completed_sample(
+        &mut self,
+        spare_buffer: &mut Option<Adc1SampleBuffer>,
+        planner: &mut AdcDmaIrqPlanner,
+    ) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError> {
+        take_completed_adc1_sample_for(self, spare_buffer, planner)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,6 +9,8 @@
 #![no_std]
 
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+mod adc;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod diagnostics;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod esc;
@@ -24,6 +26,8 @@ mod uart2;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod uart4;
 
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use diagnostics::heartbeat;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
