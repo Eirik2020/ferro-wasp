@@ -11,6 +11,8 @@
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod diagnostics;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+mod esc;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod osd;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod prelude;
@@ -20,6 +22,8 @@ mod uart4;
 
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use diagnostics::heartbeat;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
