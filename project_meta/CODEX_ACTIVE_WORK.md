@@ -1,87 +1,40 @@
 # FerroWasp Active Work Handoff
 
-Last updated: 2026-07-27
+Last updated: 2026-09-18
 
-## Current State - 2026-07-27
+## Current State - 2026-09-18
 
-### Today's flight-issue worklist
+### FerroForge adoption candidate - hardware gates pending
 
-- [x] Replace the linear `+/-1000 deg/s` RC mapping with one small,
-  Betaflight-referenced Actual Rates model shared by FCU3 and Foxeer.
-- [x] Use independently readable center sensitivity, maximum rate, and expo
-  values; retain the existing bounded deadband and command signs.
-- [x] Add a shared control-state reset and invoke it throughout every unarmed
-  control interval in both apps. Host tests prove that integral,
-  derivative/filter history, previous setpoint/measurement state, throttle,
-  and mixed outputs are cleared.
-- [x] Add analyzer support for selecting the longest contiguous throttle-on
-  flight window, warn when multiple flight IDs are combined, and keep
-  frequency analysis coverage through 100 Hz on long logs.
-- [x] Reconcile the flight cheatsheet with the current P-only baseline and new
-  analysis option.
-- [x] Extend the disarmed-only USB configuration with persisted RC deadband,
-  per-axis Actual Rates center/max/expo values, and a `config-show` helper.
-  Legacy 44-byte stored configurations load with the current safe RC defaults
-  and migrate on the next successful save.
-- [x] Run the exact FCU3 and Foxeer embedded build matrix and retain the
-  command results with this change.
-- [x] Props-off validate USB RC tuning: reject invalid values, save a temporary
-  profile, verify immediate application without reboot, cold-boot persistence,
-  and restoration of the documented baseline before flight.
-- [x] Props-off verify RC directions, full-stick limits, arming/disarming, and
-  motor opposition on the exact Foxeer flight image before another hop.
-- [x] Perform one conservative logged hop with the new RC curve and inspect
-  command tracking, oscillation frequency, and mixer headroom before changing
-  gains again.
+Foxeer now runs on `ferroforge::app!`: every task except `usb_fs` and
+`flash_manager_task` is an instance of a `ferrowasp-stm32f4-tasks`
+definition, including the whole safety and actuator path. Bodies moved
+verbatim; priorities and bindings are unchanged. None of it has run on
+hardware.
 
-The USB RC configuration gate passed on 2026-07-27: an invalid roll expo was
-rejected, the `60 / 250 / 0.4` temporary roll profile applied and persisted
-over a cold reboot, and the complete documented baseline was restored and
-confirmed after a second reboot. The exact candidate used for the subsequent
-Foxeer checks was programmed through SWD at 17:45 local time with
-`flash_blackbox`, SHA-256
-`08D03F07AFD768CB387FDF7D41BEA1D3927DA83A75674BCEB02243F254A7411A`.
-`probe-rs` completed programming in 9.04 seconds and RTT confirmed the
-Foxeer application boot, valid 48 MHz PLL domain, ICM42688-P `WHO_AM_I 71`,
-supported 16 MiB SPI2 flash (`ef:40:18`), enabled runtime IMU arming health,
-and PA10 telemetry-qualified DShot. Retained transcript:
-`logs/terminal_embed/20260727_174525_rtt.log`. The final powered props-off
-check also
-produced new flash captures before and after reboot: flight 23 is boot session
-5 (`33121..33909`) and flight 24 is boot session 6 (`33910..35188`). This
-confirms boot-session markers and append-only flight cataloguing for those
-captures; their contents still need the normal selected-flight download and
-analysis before being used as flight evidence.
+Candidate: revision `a921ffe`, clean tree, default features only
+(`board-foxeer-f405-v2`). DFU image
+`logs/foxeer-candidates/20260918T211248Z-a921ffe-FerroWaspFoxeerF405V2.bin`,
+152,664 bytes, SHA-256
+`16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435`.
 
-Powered props-off test steps 4 and 5 also passed by operator observation on
-2026-07-27: the arm-high interlock/recovery behavior remained correct and the
-normal guarded DShot arm path passed. The appended boot-6 capture contains
-flights 25-27. Flight 27 was selectively downloaded as
-`logs/foxeer-props-off-20260727-194828.fwbb` (128 CRC-valid pages, 636
-records, SHA-256
-`5D18E2EB5AEB40D7FD0C77317F61F9FDEE41963DC957D1A1BFD4357E1C1EB28B`). Its
-633 analyzed samples are contiguous at 400 Hz, with no missing BB2 frames,
-no repeated IMU samples, a 1,011.4 Hz estimated IMU rate, and no control
-timestamp over 3 ms. The captured interval recorded zero stick commands and
-zero logged motor commands, so it corroborates timing/recording integrity but
-does not independently prove the observed temporary idle/motor response.
+- [x] `SW-COMMON-001` and `BUILD-FOX-001` passed; run records under
+  `testing/evidence/runs/2026/09/`.
+- [ ] `BENCH-COMMON-001` - unpowered boot and idle.
+- [ ] `BENCH-FOX-USB-001` - unpowered USB RC configuration.
+- [ ] `BENCH-FOX-001` - powered props-off exact-image gate.
+- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001`.
 
-The final exact-image props-off sequence passed on 2026-07-27. All four motors
-had the verified physical location and rotation, imposed roll/pitch/yaw motion
-produced corrective rather than reinforcing response, explicit disarm stopped
-the motors immediately, and the previously repeated RC-loss stop/rearm
-interlock remained accepted. Flight 28 was selectively retained as
-`logs/foxeer-props-off-final-20260727-201354.fwbb` (4,593 CRC-valid pages,
-22,963 records, SHA-256
-`F5F8B29AD662A1871548EC6F5B506F5CB00CA0A40C64661D39C931552B72BCDD`). The
-selected 22,960-sample analysis has no missing BB2 frames or repeated IMU
-samples, an estimated 1,011.6 Hz IMU rate, and no control timestamp above
-3 ms. The 0.8/0.8/1.2 Hz roll/pitch/yaw peaks are consistent with the
-operator-imposed movement; no axis was classified as high-frequency/noise-like.
-Stick commands were intentionally centred during this correction test, so the
-zero command fields are expected. The separately tracked USB-held,
-ESC-only-power-cycle telemetry-recovery bug remains open and is explicitly
-outside this normal FCU-and-ESC power-up gate.
+Watch in `BENCH-FOX-001`, first exercised on this image: arming and abort
+paths, DShot service and DMA completion, control-loop correction signs, RC
+loss, and ADC cell voltage and current (the latched cell detection below).
+Avoid ESC-only power cycles with USB attached - the open bug below.
+
+Open decisions before FCU3 follows: the FCU3 drift table in FerroForge's
+`docs/src/ferro-wasp-adoption.md`, above all the differing
+`ActuatorHardware` validation.
+
+### Carried forward from 2026-07-27
 
 Open ESC-only power-cycle recovery bug:
 
@@ -198,5 +151,7 @@ Open flight-mode TODO:
 ## Historical handoff
 
 Completed checkpoints and superseded state were moved to
-[`archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md`](archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md).
+[`archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md`](archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md)
+and
+[`archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md`](archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md).
 Use that archive for provenance only; this file is the live work handoff.

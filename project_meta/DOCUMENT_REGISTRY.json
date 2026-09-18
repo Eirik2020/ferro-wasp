@@ -404,6 +404,12 @@
       "context": "exclude"
     },
     {
+      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md",
+      "role": "historical-work-handoff",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
       "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
       "role": "historical-test-evidence",
       "lifecycle": "historical",
