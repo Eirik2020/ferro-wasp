@@ -779,142 +779,31 @@ ferroforge::app! {
     // ----  SAFETY MASTER  ----
     //---------------------------------------------------------------------------------------------------------------------------
     #[task(
-    priority = 16,
-    local = [
-        safety_rc_arm_high_reader,
-        safety_rc_throttle_reader,
-        safety_rc_link_reader,
-        safety_arm_writer,
-        rc_link_invalidator,
-        actuator_arm_permit_writer,
-        actuator_arm_done_reader
-    ]
+        from = flight_tasks::safety_master,
+        priority = 16,
+        local = [
+            safety_rc_arm_high_reader,
+            safety_rc_throttle_reader,
+            safety_rc_link_reader,
+            safety_arm_writer,
+            rc_link_invalidator,
+            actuator_arm_permit_writer,
+            actuator_arm_done_reader
+        ],
+        spawn = [actuator_output],
+        config = [
+            actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
+            actuator_inhibit_reason: &'static str = ACTUATOR_INHIBIT_REASON,
+            bench_actuator_validation_enabled: bool = BENCH_ACTUATOR_VALIDATION_ENABLED,
+            validate_live_arming_guard: fn(
+                bool,
+                bool,
+                bool,
+                u32,
+            ) -> Result<(), safety::ArmingAbortReason> = validate_live_arming_guard,
+        ]
     )]
-    async fn safety_master(cx: safety_master::Context, event: safety::SafetyEvent) {
-        let rc_arm_high = cx.local.safety_rc_arm_high_reader;
-        let rc_throttle = cx.local.safety_rc_throttle_reader;
-        let rc_link = cx.local.safety_rc_link_reader;
-        let system_arm = cx.local.safety_arm_writer;
-        let link_invalidator = cx.local.rc_link_invalidator;
-        let arm_permit = cx.local.actuator_arm_permit_writer;
-        let actuator_done = cx.local.actuator_arm_done_reader;
-        let now_us = Mono::now().duration_since_epoch().to_micros();
-
-        match event {
-            safety::SafetyEvent::ArmRequested => {
-                system_arm.disarm();
-
-                if !ACTUATOR_OUTPUT_ENABLED {
-                    arm_permit.revoke();
-                    warn!("Arming inhibited: {}", ACTUATOR_INHIBIT_REASON);
-                    return;
-                }
-
-                let guard = validate_live_arming_guard(
-                    true,
-                    rc_link.is_armable(now_us),
-                    rc_arm_high.read(),
-                    rc_throttle.read(),
-                );
-                if guard.is_ok() {
-                    arm_permit.allow();
-                    info!("Attempting DShot safety arming");
-
-                    if actuator_output::spawn(safety::ActuatorCmd::EnterIdle).is_err() {
-                        arm_permit.revoke();
-                        warn!("Failed to spawn actuator EnterIdle");
-                    }
-                } else {
-                    arm_permit.revoke();
-                    warn_arming_abort(guard.unwrap_err());
-                }
-            }
-
-            safety::SafetyEvent::ActuatorIdling => {
-                if ACTUATOR_OUTPUT_ENABLED
-                    && validate_live_arming_guard(
-                        arm_permit.is_allowed(),
-                        rc_link.is_armable(now_us),
-                        rc_arm_high.read(),
-                        rc_throttle.read(),
-                    )
-                    .is_ok()
-                    && actuator_done.read()
-                {
-                    arm_permit.revoke();
-                    system_arm.arm();
-                    if BENCH_ACTUATOR_VALIDATION_ENABLED {
-                        warn!("SYSTEM ARMED FOR CAPPED FOXEER ACTUATOR VALIDATION");
-                    } else {
-                        info!("SYSTEM ARMED");
-                    }
-                } else {
-                    arm_permit.revoke();
-                    system_arm.disarm();
-
-                    let _ = actuator_output::spawn(safety::ActuatorCmd::Disarm);
-                    warn!("ARM FAILED after actuator idle");
-                    info!(
-                        "RC throttle {} vs min {}",
-                        rc_throttle.read(),
-                        safety::ESC_IDLE_THROTTLE
-                    );
-                }
-            }
-
-            safety::SafetyEvent::ArmingAborted(reason) => {
-                if !arm_permit.revoke() {
-                    return;
-                }
-                system_arm.disarm();
-                warn_arming_abort(reason);
-            }
-
-            safety::SafetyEvent::DisarmRequested => {
-                let arming_active = arm_permit.revoke();
-                system_arm.disarm();
-                info!("SYSTEM DISARMED");
-
-                if actuator_output::spawn(safety::ActuatorCmd::Disarm).is_err() && !arming_active {
-                    warn!("Failed to spawn actuator Disarm");
-                }
-            }
-
-            safety::SafetyEvent::RcLinkInvalid(reason) => {
-                if !link_invalidator.invalidate(reason) {
-                    return;
-                }
-                let arming_active = arm_permit.revoke();
-                system_arm.disarm();
-
-                if actuator_output::spawn(safety::ActuatorCmd::Disarm).is_err() && !arming_active {
-                    warn!("Failed to spawn actuator Disarm after RC invalidation");
-                }
-
-                match reason {
-                    safety::RcLinkInvalidation::Startup => warn!("RC link invalid at startup"),
-                    safety::RcLinkInvalidation::TransportDiscontinuity => {
-                        warn!("RC link invalidated by transport discontinuity")
-                    }
-                    safety::RcLinkInvalidation::DmaError => {
-                        warn!("RC link invalidated by USART2 DMA error")
-                    }
-                    safety::RcLinkInvalidation::ParserError => {
-                        warn!("RC link invalidated by SBUS parser error")
-                    }
-                    safety::RcLinkInvalidation::SbusFrameLost => {
-                        warn!("RC link invalidated by SBUS frame-lost flag")
-                    }
-                    safety::RcLinkInvalidation::SbusFailsafe => {
-                        warn!("RC link invalidated by SBUS failsafe flag")
-                    }
-                    safety::RcLinkInvalidation::Timeout => {
-                        warn!("RC link invalidated by frame timeout")
-                    }
-                }
-            }
-        }
-    }
+    async fn safety_master(cx: safety_master::Context, event: safety::SafetyEvent);
     //---------------------------------------------------------------------------------------------------------------------------
 
     // ---- USB CDC READ-ONLY DEBUG ----

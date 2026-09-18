@@ -407,44 +407,6 @@ pub const CONTROL_IMU_TO_RATE_CONTROLLER_MAP: dt::FrameRotation =
     IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map();
 pub const GYRO_BIAS_CALIBRATION_SAMPLES: u32 = IMU_CONTROL_AXIS_PROFILE.bias_calibration_samples;
 pub const GYRO_BIAS_CALIBRATION_MAX_RAW: i32 = IMU_CONTROL_AXIS_PROFILE.bias_calibration_max_raw;
-pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
-    match reason {
-        safety::ArmingAbortReason::PermitRevoked => {
-            warn!("Arming aborted: actuator permission revoked")
-        }
-        safety::ArmingAbortReason::RcLinkInvalid => {
-            warn!("Arming aborted: RC link is not armable")
-        }
-        safety::ArmingAbortReason::ArmSwitchLow => {
-            warn!("Arming aborted: arm switch is low")
-        }
-        safety::ArmingAbortReason::ThrottleHigh => warn!(
-            "Arming aborted: throttle exceeds {}",
-            safety::ARMING_MAX_THROTTLE
-        ),
-        safety::ArmingAbortReason::ImuUnavailable => {
-            warn!("Arming aborted: IMU has not produced a valid sample")
-        }
-        safety::ArmingAbortReason::ImuBiasUncalibrated => {
-            warn!("Arming aborted: gyro bias calibration is incomplete")
-        }
-        safety::ArmingAbortReason::ImuStale => {
-            warn!("Arming aborted: IMU sample is stale")
-        }
-        safety::ArmingAbortReason::EscIdleTelemetryTimeout => {
-            warn!("Arming aborted: ESC idle telemetry qualification timed out")
-        }
-        safety::ArmingAbortReason::EscIdleRpmOutOfRange => {
-            warn!("Arming aborted: ESC idle eRPM outside the permitted range")
-        }
-        safety::ArmingAbortReason::EscIdleQualificationInvalid => {
-            warn!("Arming aborted: invalid ESC idle qualification profile")
-        }
-        safety::ArmingAbortReason::CompletionDeliveryFailed => {
-            warn!("Arming aborted: idle completion delivery failed")
-        }
-    }
-}
 
 #[cfg(not(feature = "mspv2_configurator"))]
 pub fn active_usb_debug_imu_kind() -> usb_debug::ImuKind {
