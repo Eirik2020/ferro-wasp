@@ -12,6 +12,54 @@ class RticBoundaryTests(unittest.TestCase):
     def test_current_repository_passes(self) -> None:
         self.assertEqual(validate_rtic_boundaries(REPOSITORY_ROOT), [])
 
+    def test_accepts_ferroforge_task_instances(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            main = root / "firmware" / "demo" / "src" / "main.rs"
+            main.parent.mkdir(parents=True)
+            main.write_text(
+                """
+use ferrowasp_app_demo::internal::*;
+
+ferroforge::app! {
+    device = pac,
+
+    use super::*;
+
+    #[shared]
+    struct Shared {}
+
+    #[local]
+    struct Local {}
+
+    #[init]
+    fn init(_: init::Context) -> (Shared, Local) {
+        (Shared {}, Local {})
+    }
+
+    #[task(from = heartbeat_task, priority = 1)]
+    async fn heartbeat(cx: heartbeat::Context);
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(validate_rtic_boundaries(root), [])
+
+    def test_a_bodyless_function_must_still_use_its_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            main = root / "firmware" / "demo" / "src" / "main.rs"
+            main.parent.mkdir(parents=True)
+            main.write_text(
+                "ferroforge::app! {\n    async fn heartbeat(cx: other::Context);\n}\n",
+                encoding="utf-8",
+            )
+
+            errors = validate_rtic_boundaries(root)
+
+        self.assertTrue(any("function 'heartbeat'" in error for error in errors))
+
     def test_rejects_non_rtic_main_declarations_and_external_imports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

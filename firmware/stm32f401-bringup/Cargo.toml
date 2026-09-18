@@ -30,6 +30,12 @@ rtic = { version = "2.2.0", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick"] }
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["stm32f401", "defmt", "rtic2"] }
 
+ferroforge = "0.3"
+
+# See the note in the repository root's Cargo.toml.
+[patch.crates-io]
+ferroforge = { path = "../../../ferroforge" }
+
 [profile.dev.package."*"]
 opt-level = "s"
 

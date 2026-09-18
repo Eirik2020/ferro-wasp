@@ -1,6 +1,7 @@
 use core::fmt::Write;
 
 use defmt::{info, warn};
+use fugit::ExtU32 as _;
 use stm32f4xx_hal::{
     gpio::{Input, Output, PA2, PA5, PushPull},
     pac::USART2,
@@ -76,4 +77,15 @@ pub fn run_heartbeat(resources: &mut HeartbeatResources) {
 
     info!("NUCLEO-F401RE RTIC heartbeat {}", resources.sequence);
     resources.sequence = resources.sequence.wrapping_add(1);
+}
+
+/// The bring-up heartbeat: toggle the LED and report over USART2, once per
+/// period, forever. A FerroForge definition, so each firmware selects it
+/// with its own resources rather than repeating the loop.
+#[ferroforge::task(local = [heartbeat: HeartbeatResources], monotonic = Mono)]
+pub async fn heartbeat_task(cx: heartbeat_task::Context) {
+    loop {
+        run_heartbeat(cx.local.heartbeat);
+        Mono::delay(cx.local.heartbeat.period_ms.millis()).await;
+    }
 }

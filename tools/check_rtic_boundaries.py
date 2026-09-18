@@ -113,8 +113,14 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
             )
 
     for match in MAIN_FUNCTION.finditer(text):
-        signature_end = text.find("{", match.end())
-        signature = text[match.start() : signature_end] if signature_end >= 0 else ""
+        # A body starts with `{`; a FerroForge task instance has none and ends
+        # with `;`. Either ends the signature, whichever comes first.
+        ends = [
+            end
+            for end in (text.find("{", match.end()), text.find(";", match.end()))
+            if end >= 0
+        ]
+        signature = text[match.start() : min(ends)] if ends else ""
         name = match.group(1)
         if f"{name}::Context" not in signature:
             errors.append(

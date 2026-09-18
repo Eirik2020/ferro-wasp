@@ -29,6 +29,13 @@ rc-pwm = { path = "../rc-pwm" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+# Reusable RTIC task definitions, selected by each firmware's `app!`. The
+# versions are the ones the firmware already locks, so selecting a definition
+# does not move RTIC.
+ferroforge = "0.3"
+fugit = "0.3.9"
+rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "2.1.0", default-features = false }
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["rtic2", "defmt"] }
 usb-device = "0.3.2"
 usbd-serial = "0.2.2"

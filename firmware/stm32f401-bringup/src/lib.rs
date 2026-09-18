@@ -8,8 +8,8 @@ pub mod internal {
     pub use defmt::info;
     pub use ferrowasp_stm32f4::app_config::BRINGUP_HEARTBEAT_PERIOD_MS;
     pub use ferrowasp_stm32f4::bringup::{
-        HeartbeatConfig, HeartbeatResourceInputs, HeartbeatResources, init_heartbeat_resources,
-        run_heartbeat,
+        HeartbeatConfig, HeartbeatResourceInputs, HeartbeatResources, heartbeat_task,
+        init_heartbeat_resources,
     };
     pub use ferrowasp_stm32f4::clocks as stm32_clocks;
     pub use rtic_monotonics::systick::prelude::*;

@@ -4,8 +4,11 @@
 
 use ferrowasp_app_stm32f401_bringup::internal::*;
 
-#[rtic::app(device = pac, peripherals = true, dispatchers = [EXTI0])]
-mod app {
+ferroforge::app! {
+    device = pac,
+    peripherals = true,
+    dispatchers = [EXTI0],
+
     use super::*;
 
     systick_monotonic!(Mono, 1000);
@@ -53,11 +56,6 @@ mod app {
         (Shared {}, Local { heartbeat })
     }
 
-    #[task(priority = 1, local = [heartbeat])]
-    async fn heartbeat(cx: heartbeat::Context) {
-        loop {
-            run_heartbeat(cx.local.heartbeat);
-            Mono::delay(cx.local.heartbeat.period_ms.millis()).await;
-        }
-    }
+    #[task(from = heartbeat_task, priority = 1, local = [heartbeat = heartbeat])]
+    async fn heartbeat(cx: heartbeat::Context);
 }
