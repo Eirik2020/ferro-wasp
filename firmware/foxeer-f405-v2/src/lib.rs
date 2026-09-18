@@ -165,6 +165,9 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10, IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION,
     imu_orientation_snapshot,
 };
+pub use ferrowasp_stm32f4_tasks::{
+    Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
+};
 pub use ferrowasp_tasks::actuator as actuator_task;
 #[cfg(feature = "mspv2_configurator")]
 pub use ferrowasp_tasks::blackbox_storage as blackbox_task;
@@ -263,11 +266,6 @@ pub type Uart4Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
 pub type Uart2OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
 pub type Uart2OwnedReader = stm32_memory::UartOwnedReader<'static>;
 pub type Uart2Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-pub type Uart2OwnedRxBridge = stm32_uart::UartOwnedRxBridge<
-    'static,
-    { stm32_memory::UART_RX_BUFFER_BYTES },
-    { stm32_memory::OWNED_UART_RX_QUEUE_DEPTH },
->;
 pub type Uart4OwnedTxChannel = stm32_memory::UartOwnedTxChannel;
 pub type Uart4OwnedWriter = stm32_memory::UartOwnedWriter<'static>;
 pub type Uart4OwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
@@ -774,91 +772,6 @@ pub fn take_fresh_motor_outputs(
             None
         }
     }
-}
-
-pub fn record_uart2_discontinuity<Invalidate>(
-    bridge: &mut Uart2OwnedRxBridge,
-    cause: Discontinuity,
-    generation: ferrowasp_io_core::serial::StreamGeneration,
-    timestamp: TimestampMicros,
-    reason: safety::RcLinkInvalidation,
-    mut invalidate: Invalidate,
-) where
-    Invalidate: FnMut(safety::RcLinkInvalidation) -> bool,
-{
-    bridge.record_discontinuity(cause, generation, timestamp);
-    let _ = invalidate(reason);
-}
-
-pub fn publish_uart2_owned<Invalidate>(
-    bridge: &mut Uart2OwnedRxBridge,
-    generation: ferrowasp_io_core::serial::StreamGeneration,
-    timestamp: TimestampMicros,
-    mut invalidate: Invalidate,
-) where
-    Invalidate: FnMut(safety::RcLinkInvalidation) -> bool,
-{
-    match bridge.publish_next(timestamp) {
-        stm32_uart::UartOwnedRxBridgeOutcome::Published => {}
-        stm32_uart::UartOwnedRxBridgeOutcome::NoChunk => {
-            warn!("USART2 delivered IRQ had no detached RX chunk");
-            record_uart2_discontinuity(
-                bridge,
-                Discontinuity::TransportReset,
-                generation,
-                timestamp,
-                safety::RcLinkInvalidation::TransportDiscontinuity,
-                &mut invalidate,
-            );
-        }
-        stm32_uart::UartOwnedRxBridgeOutcome::InvalidChunk => {
-            warn!("USART2 produced an invalid owned RX chunk");
-            record_uart2_discontinuity(
-                bridge,
-                Discontinuity::FramingError,
-                generation,
-                timestamp,
-                safety::RcLinkInvalidation::TransportDiscontinuity,
-                &mut invalidate,
-            );
-        }
-        stm32_uart::UartOwnedRxBridgeOutcome::QueueOverflow => {
-            warn!("USART2 owned RX queue overflowed");
-            let _ = invalidate(safety::RcLinkInvalidation::TransportDiscontinuity);
-        }
-        stm32_uart::UartOwnedRxBridgeOutcome::Disabled => {
-            warn!("USART2 owned RX channel is disabled");
-            record_uart2_discontinuity(
-                bridge,
-                Discontinuity::TransportReset,
-                generation,
-                timestamp,
-                safety::RcLinkInvalidation::TransportDiscontinuity,
-                &mut invalidate,
-            );
-        }
-        stm32_uart::UartOwnedRxBridgeOutcome::RecycleFailed => {
-            panic!("USART2 detached DMA buffer could not be recycled");
-        }
-    }
-}
-
-pub fn record_uart2_dma_error<Invalidate>(
-    bridge: &mut Uart2OwnedRxBridge,
-    generation: ferrowasp_io_core::serial::StreamGeneration,
-    timestamp: TimestampMicros,
-    invalidate: Invalidate,
-) where
-    Invalidate: FnMut(safety::RcLinkInvalidation) -> bool,
-{
-    record_uart2_discontinuity(
-        bridge,
-        Discontinuity::DmaError,
-        generation,
-        timestamp,
-        safety::RcLinkInvalidation::DmaError,
-        invalidate,
-    );
 }
 
 pub fn current_live_arming_guard(

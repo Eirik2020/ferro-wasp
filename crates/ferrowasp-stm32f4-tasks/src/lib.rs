@@ -18,6 +18,8 @@ mod osd;
 mod prelude;
 pub mod snapshots;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+mod uart2;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 mod uart4;
 
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
@@ -27,4 +29,11 @@ pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub use uart4::uart4_tx_worker;
+pub use uart2::{
+    Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
+    usart2_rx_dma_transfer, usart2_rx_peripheral,
+};
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use uart4::{
+    uart4_rx_dma_transfer, uart4_rx_peripheral, uart4_tx_dma_transfer, uart4_tx_worker,
+};

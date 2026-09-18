@@ -4,9 +4,10 @@
 pub use core::sync::atomic::Ordering;
 pub use defmt::{info, warn};
 pub use embedded_io_async::Read as _;
+pub use ferrowasp_core::safety;
 pub use ferrowasp_core::safety::signals;
 pub use ferrowasp_drivers::mpu6500 as imu;
-pub use ferrowasp_io_core::serial::{RxChunk, SerialFault};
+pub use ferrowasp_io_core::serial::{Discontinuity, RxChunk, SerialFault};
 pub use ferrowasp_io_core::time::TimestampMicros;
 pub use ferrowasp_mspv1 as mspv1;
 pub use ferrowasp_stm32f4::app_config::ESC_MANAGER_PERIOD_MS;

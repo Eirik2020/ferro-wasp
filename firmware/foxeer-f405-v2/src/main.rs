@@ -3339,221 +3339,41 @@ ferroforge::app! {
 
     // ########### UART 2 ###################################
     #[task(
+        from = flight_tasks::usart2_rx_dma_transfer,
         binds = DMA1_STREAM5,
         priority = 11,
-        shared = [uart2_rx, uart2_bridge]
+        shared = [uart2_rx, uart2_bridge],
+        spawn = [safety_master]
     )]
-    fn usart2_rx_dma_transfer(mut cx: usart2_rx_dma_transfer::Context) {
-        let uart = cx.shared.uart2_rx;
-        let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
-        let invalidate =
-            |reason| safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(reason)).is_ok();
-        let delivered = match uart.service_dma_irq() {
-            stm32_uart::UartRxIrqOutcome::Delivered => true,
-            stm32_uart::UartRxIrqOutcome::Ignored | stm32_uart::UartRxIrqOutcome::NoChunk => false,
-            stm32_uart::UartRxIrqOutcome::DmaError => {
-                warn!("USART2 RX DMA error");
-                cx.shared.uart2_bridge.lock(|bridge| {
-                    record_uart2_dma_error(bridge, uart.rx_generation(), timestamp(), invalidate)
-                });
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::NoFreshBuffer,
-            ) => {
-                panic!("USART2 RX free-buffer pool exhausted");
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::TransferNotReady,
-            ) => {
-                info!("USART2 DMA next_transfer failed");
-                cx.shared.uart2_bridge.lock(|bridge| {
-                    record_uart2_discontinuity(
-                        bridge,
-                        Discontinuity::TransportReset,
-                        uart.rx_generation(),
-                        timestamp(),
-                        safety::RcLinkInvalidation::TransportDiscontinuity,
-                        invalidate,
-                    )
-                });
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::FilledQueueFull,
-            ) => {
-                panic!("USART2 filled queue full; RX buffer ownership would be lost");
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::PlannerRejected,
-            ) => {
-                cx.shared.uart2_bridge.lock(|bridge| {
-                    record_uart2_discontinuity(
-                        bridge,
-                        Discontinuity::TransportReset,
-                        uart.rx_generation(),
-                        timestamp(),
-                        safety::RcLinkInvalidation::TransportDiscontinuity,
-                        invalidate,
-                    )
-                });
-                false
-            }
-        };
-
-        if delivered {
-            let generation = uart.rx_generation();
-            cx.shared
-                .uart2_bridge
-                .lock(|bridge| publish_uart2_owned(bridge, generation, timestamp(), invalidate));
-        }
-    }
+    fn usart2_rx_dma_transfer(cx: usart2_rx_dma_transfer::Context);
 
     #[task(
+        from = flight_tasks::usart2_rx_peripheral,
         binds = USART2,
         priority = 11,
-        shared = [uart2_rx, uart2_bridge]
+        shared = [uart2_rx, uart2_bridge],
+        spawn = [safety_master]
     )]
-    fn usart2_rx_peripheral(mut cx: usart2_rx_peripheral::Context) {
-        let uart = cx.shared.uart2_rx;
-        let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
-        let invalidate =
-            |reason| safety_master::spawn(safety::SafetyEvent::RcLinkInvalid(reason)).is_ok();
-
-        let delivered = match uart.service_idle_irq() {
-            stm32_uart::UartRxIrqOutcome::Delivered => true,
-            stm32_uart::UartRxIrqOutcome::Ignored | stm32_uart::UartRxIrqOutcome::NoChunk => false,
-            stm32_uart::UartRxIrqOutcome::DmaError => {
-                cx.shared.uart2_bridge.lock(|bridge| {
-                    record_uart2_dma_error(bridge, uart.rx_generation(), timestamp(), invalidate)
-                });
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::NoFreshBuffer,
-            ) => {
-                warn!("USART2 RX free-buffer pool exhausted on IDLE");
-                cx.shared.uart2_bridge.lock(|bridge| {
-                    record_uart2_discontinuity(
-                        bridge,
-                        Discontinuity::TransportReset,
-                        uart.rx_generation(),
-                        timestamp(),
-                        safety::RcLinkInvalidation::TransportDiscontinuity,
-                        invalidate,
-                    )
-                });
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::TransferNotReady,
-            ) => {
-                info!("USART2 IDLE next_transfer failed");
-                cx.shared.uart2_bridge.lock(|bridge| {
-                    record_uart2_discontinuity(
-                        bridge,
-                        Discontinuity::TransportReset,
-                        uart.rx_generation(),
-                        timestamp(),
-                        safety::RcLinkInvalidation::TransportDiscontinuity,
-                        invalidate,
-                    )
-                });
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::FilledQueueFull,
-            ) => {
-                panic!("USART2 filled queue full; RX buffer ownership would be lost");
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::PlannerRejected,
-            ) => {
-                panic!("USART2 RX IDLE planner did not deliver a non-empty buffer");
-            }
-        };
-
-        if delivered {
-            let generation = uart.rx_generation();
-            cx.shared
-                .uart2_bridge
-                .lock(|bridge| publish_uart2_owned(bridge, generation, timestamp(), invalidate));
-        }
-    }
+    fn usart2_rx_peripheral(cx: usart2_rx_peripheral::Context);
 
     // ########### UART 4 / DJI O4 MSP OSD ###################################
-    #[task(binds = DMA1_STREAM2, priority = 6, shared = [uart4_rx])]
-    fn uart4_rx_dma_transfer(cx: uart4_rx_dma_transfer::Context) {
-        let uart = cx.shared.uart4_rx;
-        let delivered = match uart.service_dma_irq() {
-            stm32_uart::UartRxIrqOutcome::Delivered => true,
-            stm32_uart::UartRxIrqOutcome::Ignored | stm32_uart::UartRxIrqOutcome::NoChunk => false,
-            stm32_uart::UartRxIrqOutcome::DmaError => {
-                warn!("UART4 RX DMA error");
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::NoFreshBuffer,
-            ) => {
-                panic!("UART4 RX free-buffer pool exhausted");
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::TransferNotReady,
-            ) => {
-                warn!("UART4 DMA next_transfer failed");
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::FilledQueueFull,
-            ) => {
-                panic!("UART4 filled queue full; RX buffer ownership would be lost");
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::PlannerRejected,
-            ) => false,
-        };
+    #[task(
+        from = flight_tasks::uart4_rx_dma_transfer,
+        binds = DMA1_STREAM2,
+        priority = 6,
+        shared = [uart4_rx],
+        spawn = [osd_refresh]
+    )]
+    fn uart4_rx_dma_transfer(cx: uart4_rx_dma_transfer::Context);
 
-        if delivered {
-            let _ = osd_refresh::spawn();
-        }
-    }
-
-    #[task(binds = UART4, priority = 6, shared = [uart4_rx])]
-    fn uart4_rx_peripheral(cx: uart4_rx_peripheral::Context) {
-        let uart = cx.shared.uart4_rx;
-
-        let delivered = match uart.service_idle_irq() {
-            stm32_uart::UartRxIrqOutcome::Delivered => true,
-            stm32_uart::UartRxIrqOutcome::Ignored | stm32_uart::UartRxIrqOutcome::NoChunk => false,
-            stm32_uart::UartRxIrqOutcome::DmaError => false,
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::NoFreshBuffer,
-            ) => {
-                warn!("UART4 RX free-buffer pool exhausted on IDLE");
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::TransferNotReady,
-            ) => {
-                warn!("UART4 IDLE next_transfer failed");
-                false
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::FilledQueueFull,
-            ) => {
-                panic!("UART4 filled queue full; RX buffer ownership would be lost");
-            }
-            stm32_uart::UartRxIrqOutcome::DeliveryError(
-                stm32_uart::UartRxDeliveryError::PlannerRejected,
-            ) => {
-                panic!("UART4 RX IDLE planner did not deliver a non-empty buffer");
-            }
-        };
-
-        if delivered {
-            let _ = osd_refresh::spawn();
-        }
-    }
+    #[task(
+        from = flight_tasks::uart4_rx_peripheral,
+        binds = UART4,
+        priority = 6,
+        shared = [uart4_rx],
+        spawn = [osd_refresh]
+    )]
+    fn uart4_rx_peripheral(cx: uart4_rx_peripheral::Context);
 
     #[task(
         from = flight_tasks::osd_refresh,
@@ -3595,37 +3415,13 @@ ferroforge::app! {
     async fn uart4_tx_worker(cx: uart4_tx_worker::Context);
 
     #[task(
+        from = flight_tasks::uart4_tx_dma_transfer,
         binds = DMA1_STREAM4,
         priority = 6,
         local = [uart4_tx_completion],
         shared = [uart4_tx_dma]
     )]
-    fn uart4_tx_dma_transfer(mut cx: uart4_tx_dma_transfer::Context) {
-        let outcome = cx
-            .shared
-            .uart4_tx_dma
-            .lock(stm32_uart::Uart4TxDmaSide::service_irq);
-
-        match outcome {
-            stm32_uart::UartTxIrqOutcome::Ignored => {}
-            stm32_uart::UartTxIrqOutcome::Completed => {
-                if cx.local.uart4_tx_completion.complete().is_err() {
-                    warn!("UART4 TX completion arrived without an in-flight chunk");
-                }
-            }
-            stm32_uart::UartTxIrqOutcome::DmaError(error) => {
-                cx.local.uart4_tx_completion.fail(SerialFault::DmaTransfer);
-                match error {
-                    stm32_uart::UartTxDmaError::Transfer => {
-                        warn!("UART4 TX DMA transfer error")
-                    }
-                    stm32_uart::UartTxDmaError::DirectMode => {
-                        warn!("UART4 TX DMA direct-mode error")
-                    }
-                }
-            }
-        }
-    }
+    fn uart4_tx_dma_transfer(cx: uart4_tx_dma_transfer::Context);
 
     #[task(
         priority = 10,
