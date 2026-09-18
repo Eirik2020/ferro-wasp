@@ -9,7 +9,7 @@ it is not a flight-app ESC fallback.
 The capped bench image remains behind the existing equal-motor gate:
 
 ```powershell
-cd apps/stm32f405-flight
+cd firmware/stm32f405-flight
 cargo build --locked --features "bench_equal_motors"
 ```
 

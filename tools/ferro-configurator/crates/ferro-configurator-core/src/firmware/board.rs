@@ -10,7 +10,7 @@ pub struct BoardProfile {
 }
 
 impl BoardProfile {
-    /// Matches `apps/foxeer-f405-v2/memory.x` in FerroWasp.
+    /// Matches `firmware/foxeer-f405-v2/memory.x` in FerroWasp.
     pub const FOXEER_F405_V2: Self = Self {
         id: "foxeer-f405-v2",
         display_name: "Foxeer F405 V2 (STM32F405RGT6)",

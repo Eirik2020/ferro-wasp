@@ -26,7 +26,7 @@ list every peripheral or diagnostic feature.
 
 ## Foxeer F405 V2
 
-The Foxeer app lives in `apps/foxeer-f405-v2`. USB, DShot, ESC telemetry,
+The Foxeer app lives in `firmware/foxeer-f405-v2`. USB, DShot, ESC telemetry,
 persistent configuration, onboard blackbox storage, and MSP OSD are standard
 parts of its flight image rather than optional board capabilities.
 
@@ -46,7 +46,7 @@ storage while the aircraft is disarmed.
 
 ## FerroWasp FCU3
 
-The FCU3 app lives in `apps/stm32f405-flight`. It shares the reusable STM32F4,
+The FCU3 app lives in `firmware/stm32f405-flight`. It shares the reusable STM32F4,
 driver, task, safety, DShot, and telemetry implementations with Foxeer while
 retaining its own pins, DMA routes, timer assignments, IMU orientation, and
 motor map.
@@ -58,7 +58,7 @@ Foxeer persistent configuration and onboard blackbox workflow.
 
 ## NUCLEO-F401RE
 
-The bring-up app lives in `apps/stm32f401-bringup`. It owns a status LED,
+The bring-up app lives in `firmware/stm32f401-bringup`. It owns a status LED,
 USART heartbeat, and RTIC scheduling resources. Its board contract declares no
 IMU or actuator outputs, so it is useful for non-actuating STM32F4 development
 without pretending to be a flight target.

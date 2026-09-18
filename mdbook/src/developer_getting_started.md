@@ -264,9 +264,9 @@ are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:
 
 ```text
-apps/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
-apps/stm32f405-flight  FerroWasp FCU3 secondary flight app
-apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
+firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
+firmware/stm32f405-flight  FerroWasp FCU3 secondary flight app
+firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 ```
 
 Run embedded commands from the selected application directory. Do not use one
@@ -278,7 +278,7 @@ another board.
 Foxeer is the golden flight app for established runtime and safety behavior:
 
 ```powershell
-Set-Location apps\foxeer-f405-v2
+Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
 Set-Location ..\..
 ```
@@ -286,7 +286,7 @@ Set-Location ..\..
 Check the FCU3 secondary app independently:
 
 ```powershell
-Set-Location apps\stm32f405-flight
+Set-Location firmware\stm32f405-flight
 cargo check --release --locked
 Set-Location ..\..
 ```
@@ -294,7 +294,7 @@ Set-Location ..\..
 The resulting Foxeer ELF is:
 
 ```text
-apps/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
+firmware/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
 ```
 
 Prefer `cargo check` when target programming is not part of the task. Do not

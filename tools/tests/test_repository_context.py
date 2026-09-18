@@ -68,8 +68,8 @@ class RepositoryContextTests(unittest.TestCase):
         }
         expected = {
             "AGENTS.md": 5120,
-            "apps/AGENTS.md": 5120,
-            "apps/foxeer-f405-v2/AGENTS.md": 4096,
+            "firmware/AGENTS.md": 5120,
+            "firmware/foxeer-f405-v2/AGENTS.md": 4096,
             "mdbook/AGENTS.md": 4096,
             "project_meta/AGENTS.md": 4096,
             "tools/AGENTS.md": 4096,

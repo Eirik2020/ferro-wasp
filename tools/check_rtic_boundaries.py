@@ -125,7 +125,7 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
 
 def _board_sources(root: Path) -> list[tuple[str, Path]]:
     sources: list[tuple[str, Path]] = []
-    for board_dir in sorted(root.glob("apps/*/src/board")):
+    for board_dir in sorted(root.glob("firmware/*/src/board")):
         board = board_dir.parents[1].name
         for path in sorted(board_dir.rglob("*.rs")):
             sources.append((board, path))
@@ -170,7 +170,7 @@ def _validate_board_sources(root: Path, errors: list[str]) -> None:
 
 
 def _validate_foxeer_required_usb(root: Path, errors: list[str]) -> None:
-    app = root / "apps" / "foxeer-f405-v2"
+    app = root / "firmware" / "foxeer-f405-v2"
     manifest = app / "Cargo.toml"
     main = app / "src" / "main.rs"
     facade = app / "src" / "lib.rs"
@@ -236,7 +236,7 @@ FLIGHT_APP_CONTRACTS = {
 
 def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
     for app_name, contract in FLIGHT_APP_CONTRACTS.items():
-        app = root / "apps" / app_name
+        app = root / "firmware" / app_name
         manifest = app / "Cargo.toml"
         main = app / "src" / "main.rs"
         facade = app / "src" / "lib.rs"
@@ -310,7 +310,7 @@ def validate_rtic_boundaries(root: Path) -> list[str]:
     root = root.resolve()
     errors: list[str] = []
 
-    for main in sorted(root.glob("apps/*/src/main.rs")):
+    for main in sorted(root.glob("firmware/*/src/main.rs")):
         _validate_main(main, root, errors)
     _validate_board_sources(root, errors)
     _validate_foxeer_required_usb(root, errors)

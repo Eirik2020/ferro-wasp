@@ -1350,7 +1350,7 @@ earlier IMU, RC, OSD, ADC, SPI-timeout, arming, and stale-command target checks.
 - Added the typed `nucleo_f401re` BSP target for STM32F401RET6/LQFP64.
 - The Nucleo capability manifest explicitly disables attached-IMU and actuator
   capabilities.
-- Added an isolated sibling application under `apps/stm32f401-bringup` so
+- Added an isolated sibling application under `firmware/stm32f401-bringup` so
   F401 and F405 HAL/PAC features are never unified in one Cargo build graph.
 - The app uses 84 MHz HSI, a 512 KiB flash / 96 KiB SRAM linker map, PA5 LD2,
   PA2 USART2 TX at 115200 baud, and SysTick for one-second heartbeat timing.
@@ -1381,10 +1381,10 @@ soak complete the initial multi-target bring-up checkpoint.
 
 - Converted the repository root into a virtual workspace for reusable crates.
 - Moved the unchanged F405 RTIC shell and its linker, runner, and Cargo Embed
-  files to `apps/stm32f405-flight`.
+  files to `firmware/stm32f405-flight`.
 - The F405 app selects FCU3 through the default
   `board-ferrowasp-fcu3` feature and keeps the `FerroWasp` binary name.
-- Kept `apps/stm32f401-bringup` as the separate F401 bring-up contract, with
+- Kept `firmware/stm32f401-bringup` as the separate F401 bring-up contract, with
   Nucleo selected through its default board feature.
 - Each app now owns an independent Cargo lockfile and PAC feature graph.
 - Updated CI, VS Code, RTT terminal tooling, and FerroDebugger build helpers
@@ -1431,7 +1431,7 @@ with the F405 image. PWM/DShot DMA remains deferred.
 
 - Added the typed `foxeer_f405_v2` BSP for STM32F405RGT6/LQFP64 with an 8 MHz
   HSE and 168 MHz system clock.
-- Added a separate `apps/foxeer-f405-v2` RTIC package and binary so the FCU3
+- Added a separate `firmware/foxeer-f405-v2` RTIC package and binary so the FCU3
   resource contract and image remain independent.
 - Implemented the current FerroWasp subset: SPI1 mode-3 identity probe and
   runtime-selected MPU6500/ICM42688-P data path, USART2 SBUS, UART4 MSP
@@ -1462,7 +1462,7 @@ with the F405 image. PWM/DShot DMA remains deferred.
   three apps, two Foxeer feature combinations, mdBook, diff checks, the
   workspace unsafe-source scan, and DFU binary generation.
 - The recorded baseline non-USB Foxeer binary is
-  `apps/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2.bin`;
+  `firmware/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2.bin`;
   that build was 72,352 bytes with SHA-256
   `F552B767FD834168361E722A74C0626713D58DF013A7F2AC0FDF7DE7D5E90122`.
   Physical boot, peripheral, and waveform evidence remains pending.
@@ -1537,7 +1537,7 @@ superseded by the 2026-07-22 default-DShot flight-candidate state recorded in
 
 # Continuation Notes - Foxeer Cargo DFU Runner
 
-- Added `apps/foxeer-f405-v2/tools/dfu-runner.ps1` and configured the app-local
+- Added `firmware/foxeer-f405-v2/tools/dfu-runner.ps1` and configured the app-local
   Cargo runner so `cargo run --release --locked` flashes through
   STM32CubeProgrammer.
 - The runner discovers CubeProgrammer from an override, `PATH`, standard

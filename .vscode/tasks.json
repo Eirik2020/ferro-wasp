@@ -19,7 +19,7 @@
                 "${config:rust-analyzer.cargo.features}"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/apps/stm32f405-flight"
+                "cwd": "${workspaceFolder}/firmware/stm32f405-flight"
             },
             "problemMatcher": [
                 "$rustc",
@@ -44,7 +44,7 @@
                 "${config:rust-analyzer.cargo.features}"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/apps/stm32f405-flight"
+                "cwd": "${workspaceFolder}/firmware/stm32f405-flight"
             },
             "problemMatcher": [
                 "$rustc",
@@ -64,7 +64,7 @@
                 "--locked"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/apps/foxeer-f405-v2"
+                "cwd": "${workspaceFolder}/firmware/foxeer-f405-v2"
             },
             "problemMatcher": [
                 "$rustc"
@@ -80,7 +80,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "${workspaceFolder}/apps/foxeer-f405-v2/flash-dfu.ps1",
+                "${workspaceFolder}/firmware/foxeer-f405-v2/flash-dfu.ps1",
                 "-BuildOnly"
             ],
             "problemMatcher": [
@@ -97,7 +97,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "${workspaceFolder}/apps/foxeer-f405-v2/tools/dfu-runner.ps1",
+                "${workspaceFolder}/firmware/foxeer-f405-v2/tools/dfu-runner.ps1",
                 "-ListOnly"
             ],
             "problemMatcher": []
@@ -113,7 +113,7 @@
                 "--locked"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/apps/foxeer-f405-v2"
+                "cwd": "${workspaceFolder}/firmware/foxeer-f405-v2"
             },
             "problemMatcher": [
                 "$rustc"
@@ -132,7 +132,7 @@
                 "usb_serial"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/apps/foxeer-f405-v2"
+                "cwd": "${workspaceFolder}/firmware/foxeer-f405-v2"
             },
             "problemMatcher": [
                 "$rustc"

@@ -1,6 +1,6 @@
 # Firmware Application Instructions
 
-These instructions apply under `apps/` in addition to the repository root
+These instructions apply under `firmware/` in addition to the repository root
 rules.
 
 ## Required context

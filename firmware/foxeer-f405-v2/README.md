@@ -345,7 +345,7 @@ control, LED strip, and additional UARTs are not part of this application.
 ## Build
 
 ```powershell
-cd apps/foxeer-f405-v2
+cd firmware/foxeer-f405-v2
 cargo build --release --locked
 ```
 

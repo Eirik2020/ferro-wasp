@@ -125,7 +125,7 @@ function Resolve-AndValidateElf {
         if ($segmentText -notmatch "(?im)^\s*LOAD\s+\S+\s+0x08000000\s+0x08000000\b") {
             throw @"
 Refusing to flash: the ELF does not contain a load segment at 0x08000000.
-Check apps/foxeer-f405-v2/memory.x before using direct ROM-DFU flashing.
+Check firmware/foxeer-f405-v2/memory.x before using direct ROM-DFU flashing.
 "@
         }
         Write-Host "ELF flash origin: 0x08000000 (validated)"

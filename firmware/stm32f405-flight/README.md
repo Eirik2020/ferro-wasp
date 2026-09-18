@@ -17,7 +17,7 @@ Run firmware commands from this directory so Cargo uses the F405 target,
 linker, and runner configuration:
 
 ```powershell
-cd apps/stm32f405-flight
+cd firmware/stm32f405-flight
 cargo build --locked
 ```
 

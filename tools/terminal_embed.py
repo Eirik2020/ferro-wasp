@@ -77,12 +77,12 @@ class FoxeerSmokeEvidence:
 
 FIRMWARE_TARGETS = {
     "fcu3": FirmwareTarget(
-        app_root=REPO_ROOT / "apps/stm32f405-flight",
+        app_root=REPO_ROOT / "firmware/stm32f405-flight",
         binary_name="FerroWasp",
         chip="STM32F405RG",
     ),
     "foxeer-f405-v2": FirmwareTarget(
-        app_root=REPO_ROOT / "apps/foxeer-f405-v2",
+        app_root=REPO_ROOT / "firmware/foxeer-f405-v2",
         binary_name="FerroWaspFoxeerF405V2",
         chip="STM32F405RG",
     ),

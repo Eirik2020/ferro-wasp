@@ -8,7 +8,7 @@ default FCU3 DShot image's legacy ESC telemetry.
 The reusable STM32F4 UART DMA mechanism lives in
 `crates/ferrowasp-stm32f4/src/uart_dma.rs`. FerroWasp FCU3 pin conversion,
 storage shape, and device construction live in
-`apps/stm32f405-flight/src/board/`.
+`firmware/stm32f405-flight/src/board/`.
 
 It provides:
 

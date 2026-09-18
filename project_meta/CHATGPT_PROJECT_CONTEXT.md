@@ -119,17 +119,17 @@ Deployable applications are isolated from the root workspace because
 different PAC features and RTIC resource contracts must not be unified:
 
 ```text
-apps/stm32f405-flight
+firmware/stm32f405-flight
     FerroWasp FCU3 secondary flight application with retained target evidence
 
-apps/foxeer-f405-v2
+firmware/foxeer-f405-v2
     Foxeer F405 V2 golden flight application and runtime baseline
 
-apps/stm32f401-bringup
+firmware/stm32f401-bringup
     NUCLEO-F401RE bring-up application with no actuator outputs
 ```
 
-Treat `apps/foxeer-f405-v2` as the golden reference for established runtime
+Treat `firmware/foxeer-f405-v2` as the golden reference for established runtime
 behavior and safety policy. Before implementing a feature in a secondary app,
 inspect the corresponding Foxeer behavior and identify the invariants that must
 remain synchronized. Hardware differences must come from the target board support, not

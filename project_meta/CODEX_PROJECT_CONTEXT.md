@@ -177,7 +177,7 @@ small patch.
 - typed FCU3, Foxeer F405 V2, and NUCLEO-F401RE manifests exist, but no final
   board generator exists;
 - deployable FCU3, Foxeer, and F401 firmware packages are isolated under
-  `apps/`; this prevents incompatible PAC features from being unified and
+  `firmware/`; this prevents incompatible PAC features from being unified and
   keeps board-specific RTIC resource contracts separate;
 - no formal evidence package or traceability matrix exists.
 
@@ -205,9 +205,9 @@ The root Cargo workspace contains reusable crates. Firmware commands must run
 from the selected isolated package:
 
 ```text
-apps/stm32f405-flight  STM32F405 flight RTIC contract; FCU3 selected by default
-apps/stm32f401-bringup STM32F401 RTIC bring-up contract; Nucleo selected by default
-apps/foxeer-f405-v2    STM32F405 Foxeer RTIC contract; default DShot flight candidate
+firmware/stm32f405-flight  STM32F405 flight RTIC contract; FCU3 selected by default
+firmware/stm32f401-bringup STM32F401 RTIC bring-up contract; Nucleo selected by default
+firmware/foxeer-f405-v2    STM32F405 Foxeer RTIC contract; default DShot flight candidate
 ```
 
 ## Evidence and Documentation

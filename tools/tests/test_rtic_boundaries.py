@@ -15,7 +15,7 @@ class RticBoundaryTests(unittest.TestCase):
     def test_rejects_non_rtic_main_declarations_and_external_imports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            main = root / "apps" / "demo" / "src" / "main.rs"
+            main = root / "firmware" / "demo" / "src" / "main.rs"
             main.parent.mkdir(parents=True)
             main.write_text(
                 """
@@ -52,8 +52,8 @@ mod app {
     def test_rejects_shared_board_types_register_logic_and_copies(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            first = root / "apps" / "one" / "src" / "board" / "routes.rs"
-            second = root / "apps" / "two" / "src" / "board" / "routes.rs"
+            first = root / "firmware" / "one" / "src" / "board" / "routes.rs"
+            second = root / "firmware" / "two" / "src" / "board" / "routes.rs"
             first.parent.mkdir(parents=True)
             second.parent.mkdir(parents=True)
             copied = """
@@ -85,7 +85,7 @@ pub const ROUTES: [DmaRoute; 2] = [
     def test_rejects_optional_or_inline_foxeer_usb(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app = root / "apps" / "foxeer-f405-v2"
+            app = root / "firmware" / "foxeer-f405-v2"
             source = app / "src"
             source.mkdir(parents=True)
             (app / "Cargo.toml").write_text(
@@ -112,7 +112,7 @@ fn init_usb() {
     def test_rejects_optional_standard_flight_services_and_pwm_esc_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app = root / "apps" / "foxeer-f405-v2"
+            app = root / "firmware" / "foxeer-f405-v2"
             source = app / "src"
             board = source / "board"
             board.mkdir(parents=True)

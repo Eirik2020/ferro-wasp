@@ -452,11 +452,11 @@
       "max_bytes": 5120
     },
     {
-      "path": "apps/AGENTS.md",
+      "path": "firmware/AGENTS.md",
       "max_bytes": 5120
     },
     {
-      "path": "apps/foxeer-f405-v2/AGENTS.md",
+      "path": "firmware/foxeer-f405-v2/AGENTS.md",
       "max_bytes": 4096
     },
     {

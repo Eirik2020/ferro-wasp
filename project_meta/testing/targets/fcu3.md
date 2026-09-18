@@ -1,6 +1,6 @@
 # FerroWasp FCU3 Test Procedure
 
-This is the current operator procedure for `apps/stm32f405-flight` on the
+This is the current operator procedure for `firmware/stm32f405-flight` on the
 FerroWasp FCU3. FCU3 retains its own target evidence and is a secondary flight
 app; the Foxeer F405 V2 app is the golden reference for established runtime
 and safety behavior.
@@ -37,7 +37,7 @@ workflow:
 The app-local compile check for the same selected features is:
 
 ```powershell
-cd apps\stm32f405-flight
+cd firmware\stm32f405-flight
 cargo check --release --locked --features blackbox_defmt
 ```
 

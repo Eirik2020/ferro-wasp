@@ -14,9 +14,9 @@ members = [
     "crates/rc-pwm",
 ]
 exclude = [
-    "apps/foxeer-f405-v2",
-    "apps/stm32f401-bringup",
-    "apps/stm32f405-flight",
+    "firmware/foxeer-f405-v2",
+    "firmware/stm32f401-bringup",
+    "firmware/stm32f405-flight",
     "tools/ferro-configurator",
 ]
 

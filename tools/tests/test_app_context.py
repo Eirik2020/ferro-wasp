@@ -78,7 +78,7 @@ mod app {
 
         self.assertIn("actuator_output [task priority=15]", route)
         self.assertIn("Foxeer golden-app comparison anchors:", route)
-        self.assertIn("apps/foxeer-f405-v2/src/main.rs", route)
+        self.assertIn("firmware/foxeer-f405-v2/src/main.rs", route)
         self.assertIn("BENCH-FCU3-DSHOT-001", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
 

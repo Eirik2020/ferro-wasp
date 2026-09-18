@@ -32,7 +32,7 @@ Use the reference WSL 2/Docker environment in the
 [Developer Getting Started guide](developer_getting_started.md)
 unless the change specifically requires a native or hardware-attached host.
 The guide also documents the pinned native fallback. The root workspace
-contains reusable crates; each deployable firmware app under `apps/` has an
+contains reusable crates; each deployable firmware app under `firmware/` has an
 isolated Cargo graph and must be checked separately.
 
 Before opening a pull request, run the checks relevant to the change. The

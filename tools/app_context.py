@@ -75,11 +75,11 @@ class ResourceBlock:
 APP_TARGETS = {
     "fcu3": AppTarget(
         name="fcu3",
-        source=PurePosixPath("apps/stm32f405-flight/src/main.rs"),
-        support=PurePosixPath("apps/stm32f405-flight/src/lib.rs"),
-        readme=PurePosixPath("apps/stm32f405-flight/README.md"),
-        cargo_toml=PurePosixPath("apps/stm32f405-flight/Cargo.toml"),
-        instructions=(PurePosixPath("AGENTS.md"), PurePosixPath("apps/AGENTS.md")),
+        source=PurePosixPath("firmware/stm32f405-flight/src/main.rs"),
+        support=PurePosixPath("firmware/stm32f405-flight/src/lib.rs"),
+        readme=PurePosixPath("firmware/stm32f405-flight/README.md"),
+        cargo_toml=PurePosixPath("firmware/stm32f405-flight/Cargo.toml"),
+        instructions=(PurePosixPath("AGENTS.md"), PurePosixPath("firmware/AGENTS.md")),
         test_chain=(
             "SW-COMMON-001",
             "BUILD-FCU3-001",
@@ -89,19 +89,19 @@ APP_TARGETS = {
             "FLIGHT-FCU3-001",
         ),
         board_directory=PurePosixPath(
-            "apps/stm32f405-flight/src/board"
+            "firmware/stm32f405-flight/src/board"
         ),
     ),
     "foxeer-f405-v2": AppTarget(
         name="foxeer-f405-v2",
-        source=PurePosixPath("apps/foxeer-f405-v2/src/main.rs"),
-        support=PurePosixPath("apps/foxeer-f405-v2/src/lib.rs"),
-        readme=PurePosixPath("apps/foxeer-f405-v2/README.md"),
-        cargo_toml=PurePosixPath("apps/foxeer-f405-v2/Cargo.toml"),
+        source=PurePosixPath("firmware/foxeer-f405-v2/src/main.rs"),
+        support=PurePosixPath("firmware/foxeer-f405-v2/src/lib.rs"),
+        readme=PurePosixPath("firmware/foxeer-f405-v2/README.md"),
+        cargo_toml=PurePosixPath("firmware/foxeer-f405-v2/Cargo.toml"),
         instructions=(
             PurePosixPath("AGENTS.md"),
-            PurePosixPath("apps/AGENTS.md"),
-            PurePosixPath("apps/foxeer-f405-v2/AGENTS.md"),
+            PurePosixPath("firmware/AGENTS.md"),
+            PurePosixPath("firmware/foxeer-f405-v2/AGENTS.md"),
         ),
         test_chain=(
             "SW-COMMON-001",
@@ -113,7 +113,7 @@ APP_TARGETS = {
             "FLIGHT-FOX-001",
         ),
         board_directory=PurePosixPath(
-            "apps/foxeer-f405-v2/src/board"
+            "firmware/foxeer-f405-v2/src/board"
         ),
     ),
 }

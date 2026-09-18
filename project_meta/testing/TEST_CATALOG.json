@@ -9,7 +9,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/",
+          "firmware/",
           "crates/",
           "project_meta/",
           "tools/"
@@ -41,7 +41,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
+          "firmware/stm32f405-flight/",
           "crates/"
         ],
         "features": [
@@ -54,7 +54,7 @@
         ]
       },
       "procedure": {
-        "path": "apps/stm32f405-flight/README.md",
+        "path": "firmware/stm32f405-flight/README.md",
         "heading": "Build"
       },
       "prerequisites": [
@@ -77,7 +77,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/"
         ],
         "features": [
@@ -90,7 +90,7 @@
         ]
       },
       "procedure": {
-        "path": "apps/foxeer-f405-v2/README.md",
+        "path": "firmware/foxeer-f405-v2/README.md",
         "heading": "Build"
       },
       "prerequisites": [
@@ -113,7 +113,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/",
+          "firmware/",
           "crates/ferrowasp-actuator/",
           "crates/ferrowasp-core/src/safety.rs",
           "crates/ferrowasp-tasks/"
@@ -153,7 +153,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/ferrowasp-core/src/blackbox.rs",
           "crates/ferrowasp-tasks/src/flash_storage.rs",
           "tools/ferrowasp_storage.py"
@@ -197,8 +197,8 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
-          "apps/stm32f405-flight/src/board/",
+          "firmware/stm32f405-flight/",
+          "firmware/stm32f405-flight/src/board/",
           "crates/ferrowasp-stm32f4/src/dshot.rs"
         ],
         "features": [
@@ -241,8 +241,8 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
-          "apps/foxeer-f405-v2/src/board/"
+          "firmware/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/src/board/"
         ],
         "features": [
           "board-foxeer-f405-v2"
@@ -283,7 +283,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
+          "firmware/stm32f405-flight/",
           "crates/"
         ],
         "features": [
@@ -325,7 +325,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/"
         ],
         "features": [
@@ -367,7 +367,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
+          "firmware/stm32f405-flight/",
           "crates/"
         ],
         "features": [
@@ -409,7 +409,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/"
         ],
         "features": [

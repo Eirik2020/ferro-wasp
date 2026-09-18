@@ -24,7 +24,7 @@ if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
 }
 if (-not $FirmwareElf) {
     $FirmwareElf = Join-Path $repoRoot (
-        "apps\foxeer-f405-v2\target\thumbv7em-none-eabihf\" +
+        "firmware\foxeer-f405-v2\target\thumbv7em-none-eabihf\" +
         "release\FerroWaspFoxeerF405V2"
     )
 }

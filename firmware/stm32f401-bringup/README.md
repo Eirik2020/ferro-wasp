@@ -18,7 +18,7 @@ Run commands from this directory so Cargo uses the Nucleo-specific target and
 runner configuration:
 
 ```powershell
-cd apps/stm32f401-bringup
+cd firmware/stm32f401-bringup
 cargo build --locked
 ```
 

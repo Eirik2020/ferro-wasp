@@ -6,7 +6,7 @@ Current important paths:
 
 ```text
 .
-|-- apps/
+|-- firmware/
 |   |-- stm32f405-flight/        # FCU3 board support and thin F405 RTIC shell
 |   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
 |   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
