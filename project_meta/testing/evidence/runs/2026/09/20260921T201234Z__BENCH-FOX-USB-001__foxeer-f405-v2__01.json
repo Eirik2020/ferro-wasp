@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "run_id": "20260921T201234Z__BENCH-FOX-USB-001__foxeer-f405-v2__01",
+  "test_id": "BENCH-FOX-USB-001",
+  "started_at_utc": "2026-09-21T20:04:00Z",
+  "completed_at_utc": "2026-09-21T20:12:34Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-unpowered",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "d644dd130d9c117da52309cda16a6606688ac81a07c0f6f822883c6cf759af6d",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer USB RC Configuration Gate",
+    "procedure_sha256": "646947dbd7b4567711165586528589ffc15535e82428765f689c89c9ab3e68fe"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "baseline": {
+        "roll": {
+          "p": 2.5,
+          "i": 0.0,
+          "d": 0.0
+        },
+        "pitch": {
+          "p": 2.5,
+          "i": 0.0,
+          "d": 0.0
+        },
+        "yaw": {
+          "p": 2.0,
+          "i": 0.0,
+          "d": 0.0
+        },
+        "center_rate": [
+          70.0,
+          70.0,
+          70.0
+        ],
+        "max_rate": [
+          300.0,
+          300.0,
+          200.0
+        ],
+        "expo": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "rc_deadband": 8,
+        "imu_lpf_alpha": 0.55,
+        "log_rate_divisor": 1,
+        "schema_version": 2
+      },
+      "temporary_roll": {
+        "center_rate": 60.0,
+        "max_rate": 250.0,
+        "expo": 0.4
+      }
+    }
+  },
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "disconnected",
+    "equipment": [
+      "USB CDC at /dev/ttyACM0 (16c0:27dd)",
+      "FerroConfigurator built from tools/ferro-configurator"
+    ],
+    "environment": [
+      "bench",
+      "battery disconnected",
+      "VTX and RC receiver unpowered"
+    ]
+  },
+  "commands": [
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config export logs/foxeer-config/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator config validate logs/foxeer-config/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config set roll_expo 1.1",
+      "exit_code": 2
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config set roll_max_rate 250",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config set roll_center_rate 60",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config set roll_expo 0.4",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 config apply logs/foxeer-config/foxeer-baseline.toml",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "baseline-profile",
+      "kind": "configuration",
+      "path": "logs/foxeer-config/foxeer-baseline.toml",
+      "bytes": 478,
+      "sha256": "e8aaed2ddff796cb2bae5375bc7c59d5b49a6600cefb4b0352d24368b9152528"
+    }
+  ],
+  "measurements": {
+    "cold_boots": 2,
+    "snapshots_captured": 6,
+    "invalid_set_exit_code": 2
+  },
+  "observations": [
+    "Initial snapshot matched the reviewed baseline exactly: P 2.5/2.5/2.0, every I and D zero, centre 70/70/70, maximum 300/300/200, expo 0.50 throughout, deadband 8.",
+    "`config set roll_expo 1.1` was refused with 'roll_expo is outside the firmware-accepted range' and exit code 2; the following read still showed roll_expo 0.5.",
+    "The temporary roll profile 60 / 250 / 0.4 was persisted with verification by readback on each set, applied without a reboot or reflash, and every other value was unchanged.",
+    "The temporary profile survived a cold boot (USB unplugged and replugged) unchanged.",
+    "The exported baseline was applied back, verified by readback, and matched the reviewed values; it then survived a second cold boot unchanged.",
+    "No arming, actuator activity or storage fault occurred at any point; the battery and ESCs were disconnected throughout.",
+    "The first `config show` after the port permissions were fixed was answered `ERR invalid command; type help`. It did not recur in any later invocation, and the firmware answered the same command correctly when it was sent by hand over the raw port, so it appears to be a garbled first line on the initial open rather than a firmware fault.",
+    "Step 1 (the read-only show and export) was run by the agent at the operator's request; the operator ran every step that writes to the board and performed both cold boots."
+  ],
+  "limitations": [
+    "Run on Linux with FerroConfigurator built from tools/ferro-configurator, not the released Windows package the procedure names; the port is /dev/ttyACM0 rather than a COM port.",
+    "Host port permissions required a udev rule for 16c0:27dd before the tool could open the port.",
+    "`config show` output is recorded as values in this record rather than as retained snapshot files; only the exported baseline profile is retained as an artifact."
+  ],
+  "stop_conditions_triggered": []
+}

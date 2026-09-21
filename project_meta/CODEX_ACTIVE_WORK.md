@@ -24,7 +24,9 @@ Candidate: revision `a921ffe`, clean tree, default features only
   outputs stopped, no arming, heartbeat alive. Motor pins were not observed
   electrically and this board has no reset button; see the record's
   limitations.
-- [ ] `BENCH-FOX-USB-001` - unpowered USB RC configuration.
+- [x] `BENCH-FOX-USB-001` - unpowered USB RC configuration: invalid value
+  refused, temporary profile applied without reboot and across a cold boot,
+  documented baseline restored and confirmed across a second cold boot.
 - [ ] `BENCH-FOX-001` - powered props-off exact-image gate.
 - [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001`.
 
