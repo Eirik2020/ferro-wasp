@@ -20,7 +20,10 @@ Candidate: revision `a921ffe`, clean tree, default features only
 
 - [x] `SW-COMMON-001` and `BUILD-FOX-001` passed; run records under
   `testing/evidence/runs/2026/09/`.
-- [ ] `BENCH-COMMON-001` - unpowered boot and idle.
+- [x] `BENCH-COMMON-001` - unpowered boot and idle: three cold boots, all
+  outputs stopped, no arming, heartbeat alive. Motor pins were not observed
+  electrically and this board has no reset button; see the record's
+  limitations.
 - [ ] `BENCH-FOX-USB-001` - unpowered USB RC configuration.
 - [ ] `BENCH-FOX-001` - powered props-off exact-image gate.
 - [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001`.
