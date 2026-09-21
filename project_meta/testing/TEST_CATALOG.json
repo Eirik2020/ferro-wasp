@@ -264,7 +264,7 @@
         "propellers are installed",
         "physical and controller axis signs do not match the reviewed convention",
         "unexpected motor identity, direction, command, or arming behavior",
-        "transport fault, RC loss, smoke, heat, or rough motor sound"
+        "a fail-open transport fault, unintended RC loss, smoke, heat, or rough motor sound"
       ],
       "evidence": [
         "commit or working-tree identity, firmware image hash, and exact feature set",

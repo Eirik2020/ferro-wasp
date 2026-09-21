@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "run_id": "20260921T212000Z__BENCH-FOX-001__foxeer-f405-v2__02",
+  "test_id": "BENCH-FOX-001",
+  "started_at_utc": "2026-09-21T20:26:05Z",
+  "completed_at_utc": "2026-09-21T21:20:00Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-powered-props-off",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "c6e40ebfe39c6cc523183a334708eb2afd85acb2aaebbab98116e6af9a0bf521",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer Powered Props-Off Exact-Image Gate",
+    "procedure_sha256": "e8fd314d151a755c70957e082be76f6f8c5baf7881bf6f0c82184a3cb96d2c07"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "rc_deadband": 8,
+      "roll_pitch_center_sensitivity_dps": 70,
+      "roll_pitch_max_rate_dps": 300,
+      "yaw_center_sensitivity_dps": 70,
+      "yaw_max_rate_dps": 200,
+      "expo": 0.5,
+      "pid_p": [
+        2.5,
+        2.5,
+        2.0
+      ],
+      "pid_i_d": "all zero",
+      "selected_flight_id": 8
+    }
+  },
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "connected",
+    "equipment": [
+      "SWD probe",
+      "USB host power",
+      "flight battery",
+      "multimeter",
+      "OSD/VTX powered from the battery",
+      "no oscilloscope or logic analyzer"
+    ],
+    "environment": [
+      "bench",
+      "airframe secured",
+      "battery connected",
+      "RC receiver powered through the VTX, so the RC link was live"
+    ]
+  },
+  "commands": [
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo build --release --locked)",
+      "exit_code": 0
+    },
+    {
+      "command": "arm-none-eabi-objcopy -O binary <release ELF> <release .bin>",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator blackbox flights",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "rtt-powered-run",
+      "kind": "log",
+      "path": "logs/terminal_embed/20260921_222605_rtt.log",
+      "bytes": 190878,
+      "sha256": "ce3b63ab0fbeff666e1d62c9fade9bfa144ef10fc642506b5c878906f98fcb5a"
+    }
+  ],
+  "measurements": {
+    "elf_sha256": "6bdcd149d78f710e8eef9f98bfad17d8d045dc0abe2cf04873ba7491ee0acf9b",
+    "armed_transitions": 5,
+    "rc_requested_disarms": 5,
+    "arming_aborts": 3,
+    "dshot_reports_total": 204,
+    "dshot_reports_at_idle_112": 12,
+    "dshot_sets": "203999/204000, final [0,0,0,0] at 408000 ms, busy/expired/timeouts/faults 0",
+    "armed_erpm_range": "6300..7700",
+    "esc_telemetry_requests": 10132,
+    "esc_telemetry_valid": 10131,
+    "esc_telemetry_response_timeouts": 1,
+    "esc_telemetry_crc_failures": 0,
+    "esc_telemetry_faulted_latched_at_ms": 207999,
+    "blackbox_pages_written": 1398,
+    "blackbox_dropped_records": 0,
+    "blackbox_write_faults": 0,
+    "selected_flight_pages": 1379,
+    "battery_voltage_reported_v": 25.1,
+    "detected_cell_count": 6,
+    "cell_voltage_v": 4.18,
+    "battery_current_reported_a": 0.1,
+    "uart4_idle_pool_warnings": 0
+  },
+  "observations": [
+    "Supersedes ...__01, which recorded `fail` for this same run against the earlier procedure. No observation changed: the user scoped this gate to the minimum for safe flight and approved an amendment under which a defect feeding no safety, arming or actuator path, and a fault that fails closed, are recorded rather than gated. __01 is retained; both defects stay open bugs.",
+    "Image identity matched the USB gate: ELF 6bdcd149..., binary 16f6e8ed..., clean tree at a921ffe.",
+    "Boot was stationary and disarmed. config-show read the baseline before and after the run.",
+    "Operator confirmed OSD VBAT and cell voltage consistent with a multimeter at 6 cells, 4.18 V per cell, closing the voltage half of the 2026-07-28 report.",
+    "Motors were stopped at boot and did not respond to stick movement while disarmed.",
+    "Arming succeeded five times, each through the guarded stop dwell and four-motor eRPM qualification before SYSTEM ARMED. No motor started before that transition.",
+    "Arming aborted correctly when throttle was raised during the attempt: 'Arming aborted: throttle exceeds 65'.",
+    "Deliberate RC loss while armed stopped the motors immediately: DShot to [0, 0, 0, 0], eRPM zero in the next report. All five 'RC link invalidated by frame timeout' events were operator-initiated. No automatic rearm followed; a fresh ARM-low then ARM-high was needed.",
+    "Operator verified motor reaction as expected on roll and pitch, correction opposing the imposed motion, full-stick bounds reached, deadband commanding zero.",
+    "The logical-to-physical motor path is byte-identical to pre-conversion 18521d5: MOTOR_OUTPUT_MAP [3, 4, 2, 1], the Quad X mixer, the ferrowasp-core frame conventions, every Foxeer pin and timer. No wiring or airframe change intervened.",
+    "Open bug: battery current read a constant 0.1 A with four motors at 6300..7700 eRPM. centiamps = adc_mv * 10000 / 70 / 10 puts raw PC1 near 1 mV, the noise floor, so the fault is upstream of the scale-70 change this candidate adopted for the 2026-07-28 zero-current report.",
+    "Open bug: the ESC telemetry manager latched faulted at 207999 ms after one response timeout for logical M4, one miss in 10132, zero CRC failures. Earlier disarms, including the first RC-loss stop, reached zero eRPM unfaulted, so it was not systematic.",
+    "Both later arm attempts then aborted on 'ESC idle telemetry qualification timed out', fail-closed. The second followed a battery reconnect, but the latch was set 100 s earlier, so this run does not independently demonstrate the ESC-only power-cycle bug.",
+    "After the latch, per-motor eRPM repeated frozen values while DShot commanded [0, 0, 0, 0]: the tracked stale-telemetry item, not turning motors.",
+    "Blackbox wrote 1398 pages, zero dropped records, zero write faults. Capture: boot 4, flight 8, pages 17182..18560.",
+    "No 'UART4 RX free-buffer pool exhausted on IDLE' warning occurred with the VTX powered, against two in the earlier USB-only run with UART4 floating. The deferred pre-conversion A/B is no longer needed.",
+    "Open bug: the first storage-CLI command after each USB port open is rejected once with 'ERR invalid command', then succeeds on retry. CommandParser in crates/ferrowasp-tasks/src/flash_storage.rs never resets its line across port open. Byte-identical to pre-conversion: pre-existing, cosmetic.",
+    "Neither carried defect can stop a running motor. Current sense drives only OSD and MSP. EscManager::is_faulted has one consumer, a log line, and internally only suppresses further telemetry requests, so a latch degrades eRPM logging and blocks the next arm; it cannot disarm or disturb actuator output while armed."
+  ],
+  "limitations": [
+    "No oscilloscope or logic analyzer: DShot pulse width, jitter, and complementary-output margin were not measured; motor stop is evidenced by the firmware's DShot reports, not at the pins.",
+    "Motor identity came from the roll and pitch differential response plus the unchanged output map, not the capped per-motor procedure, which needs a selector image step 1 forbids.",
+    "This board has no reset button, so boot-with-ARM-high was exercised as a USB power cycle only.",
+    "Yaw was exercised within the stick and correction checks but not logged per motor pair.",
+    "Open bug carried past this gate: battery current is uncalibrated at a constant 0.1 A, unusable as a load indication.",
+    "Open bug carried past this gate: one telemetry response timeout latches telemetry off until reboot, so a flight after such a latch lacks per-motor eRPM data."
+  ],
+  "stop_conditions_triggered": []
+}

@@ -21,23 +21,25 @@ Candidate: revision `a921ffe`, clean tree, default features only
 - [x] `SW-COMMON-001` and `BUILD-FOX-001` passed; run records under
   `testing/evidence/runs/2026/09/`.
 - [x] `BENCH-COMMON-001` - unpowered boot and idle: three cold boots, all
-  outputs stopped, no arming, heartbeat alive. Motor pins were not observed
-  electrically and this board has no reset button; see the record's
-  limitations.
+  outputs stopped, no arming, heartbeat alive.
 - [x] `BENCH-FOX-USB-001` - unpowered USB RC configuration: invalid value
-  refused, temporary profile applied without reboot and across a cold boot,
-  documented baseline restored and confirmed across a second cold boot.
-- [x] `BENCH-FOX-001` - powered props-off exact-image gate **ran and is
-  recorded `fail`**, on two triggered stop conditions, neither in the
-  converted path. Everything the conversion touches passed: five arms through
-  the stop dwell and four-motor qualification, correct throttle and RC-loss
-  aborts, no premature motor start, no automatic rearm, correction opposing
-  motion on roll and pitch, deadband and full-stick bounds, 1398 blackbox
-  pages with no dropped record.
-- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001` - blocked by the above until
-  the user decides between fixing the two items and amending the procedure.
+  refused, temporary profile applied and persisted, baseline restored.
+- [x] `BENCH-FOX-001` - powered props-off exact-image gate **passed** on
+  record `...__02`: five arms through the stop dwell and four-motor
+  qualification, correct throttle and RC-loss aborts, no premature motor
+  start, no automatic rearm, correction opposing motion on roll and pitch,
+  deadband and full-stick bounds, 1398 blackbox pages with no dropped record.
+  The same run was first recorded `fail` in `...__01` on two stop conditions;
+  the user then scoped this gate to the minimum needed for safe flight, and
+  the procedure now records rather than gates a defect that feeds no safety,
+  arming, or actuator path, or a fault that fails closed. Both records are
+  retained, `__01` for the reasoning.
+- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001` - unblocked.
 
-The two stop conditions:
+Two open bugs the gate carried forward. Neither can stop a running motor:
+current sense drives only OSD and MSP, and `EscManager::is_faulted` has one
+consumer, a log line, while internally only suppressing further telemetry
+requests. Neither is accepted behaviour.
 
 1. Battery current reads a constant `0.1 A` with four motors at 6300..7700
    eRPM. `centiamps = adc_mv * 10000 / 70 / 10` puts the raw PC1 reading near
@@ -54,9 +56,11 @@ The two stop conditions:
    `ferrowasp-stm32f4-tasks/src/esc.rs` is new, so a conversion-induced
    dropped response is not excluded by code identity alone.
 
-Because that latch was already set 100 s before the battery was reconnected,
-this run does **not** independently reproduce the ESC-only power-cycle bug
-below. Avoid ESC-only power cycles with USB attached regardless.
+A latch also stops per-motor eRPM logging for the rest of that power cycle, so
+a flight after one lacks that data. Because the latch was already set 100 s
+before the battery was reconnected, this run does **not** independently
+reproduce the ESC-only power-cycle bug below. Avoid ESC-only power cycles with
+USB attached regardless.
 
 Motor identity was established without the forbidden selector image: the
 logical-to-physical path (`MOTOR_OUTPUT_MAP [3, 4, 2, 1]`, the Quad X mixer,
@@ -64,7 +68,7 @@ the `ferrowasp-core` frame conventions, every Foxeer pin and timer) is
 byte-identical to pre-conversion `18521d5`, and the operator's roll and pitch
 differential response confirmed it physically.
 
-Small pre-existing defect worth fixing: the first storage-CLI command after
+Third open bug, pre-existing and cosmetic: the first storage-CLI command after
 each USB port open is rejected once with `ERR invalid command`, then succeeds
 on retry. `CommandParser` in `crates/ferrowasp-tasks/src/flash_storage.rs`
 accumulates a line with no reset across port open, so a stray byte corrupts

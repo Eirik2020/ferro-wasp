@@ -125,6 +125,12 @@ propellers are removed before actuator power is connected. Secure the
 airframe, keep clear of the motors, use a bounded power source where
 available, and keep an immediate disarm/power-removal path.
 
+This gate is the minimum needed to judge the aircraft safe to fly, not an
+exhaustive test schedule. A defect that feeds no safety, arming, or actuator
+path is recorded in the run record, not gated on. A fault that fails closed -
+refusing to arm - is safe by construction and is likewise recorded rather than
+gated, though note it as a limitation when it also degrades flight logging.
+
 1. Confirm the powered image has the same commit, dirty-tree identity, feature
    set, and SHA-256 recorded at the USB gate. Reject bench-only motor selector,
    smoke lockout, retired PWM-output, withdrawn-gain, and pre-fix images.
@@ -132,11 +138,11 @@ available, and keep an immediate disarm/power-removal path.
    DShot/telemetry status, no panic or latched transport fault, and a disarmed
    state. Verify `config-show` still matches the reviewed baseline and record
    the next onboard flight ID/log capacity. With the flight battery connected,
-   require total voltage to remain consistent with a multimeter, cell voltage
-   to equal total voltage divided by the detected cell count, and current to
-   respond in the expected direction as motor load increases. Treat current as
-   provisional until fine calibration; stop on implausible idle or loaded
-   readings.
+   require total voltage to remain consistent with a multimeter and cell
+   voltage to equal total voltage divided by the detected cell count. Record
+   the reported current and any discrepancy, but do not gate on it: current
+   sense drives only OSD and MSP display, feeds no safety, arming, or actuator
+   logic, and is not calibrated.
 3. While disarmed, observe the controller setpoints. Require centered sticks
    inside the configured deadband to command zero. Require right roll, forward
    pitch, and right yaw to use the current positive controller directions.
@@ -165,8 +171,9 @@ available, and keep an immediate disarm/power-removal path.
 Stop on installed propellers; candidate/configuration mismatch; unexpected
 arming; wrong stick, motor, or correction sign; a motor starting before the
 armed transition; failure to stop on disarm or RC loss; automatic rearm;
-DShot, telemetry, storage, stale-command, or IMU faults; smoke, heat, abnormal
-current, rough motor sound, or any loss of operator confidence.
+DShot, storage, stale-command, or IMU faults; a telemetry fault that fails
+open or that disturbs actuator output while armed; smoke, heat, rough motor
+sound, or any loss of operator confidence.
 
 Required evidence: candidate and working-tree identity, image SHA-256, exact
 features, persisted configuration, propeller/power state, board and IMU
