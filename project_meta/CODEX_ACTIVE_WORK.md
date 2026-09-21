@@ -1,8 +1,8 @@
 # FerroWasp Active Work Handoff
 
-Last updated: 2026-09-18
+Last updated: 2026-09-21
 
-## Current State - 2026-09-18
+## Current State - 2026-09-21
 
 ### FerroForge adoption candidate - hardware gates pending
 
@@ -27,23 +27,54 @@ Candidate: revision `a921ffe`, clean tree, default features only
 - [x] `BENCH-FOX-USB-001` - unpowered USB RC configuration: invalid value
   refused, temporary profile applied without reboot and across a cold boot,
   documented baseline restored and confirmed across a second cold boot.
-- [ ] `BENCH-FOX-001` - powered props-off exact-image gate.
-- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001`.
+- [x] `BENCH-FOX-001` - powered props-off exact-image gate **ran and is
+  recorded `fail`**, on two triggered stop conditions, neither in the
+  converted path. Everything the conversion touches passed: five arms through
+  the stop dwell and four-motor qualification, correct throttle and RC-loss
+  aborts, no premature motor start, no automatic rearm, correction opposing
+  motion on roll and pitch, deadband and full-stick bounds, 1398 blackbox
+  pages with no dropped record.
+- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001` - blocked by the above until
+  the user decides between fixing the two items and amending the procedure.
 
-Watch in `BENCH-FOX-001`, first exercised on this image: arming and abort
-paths, DShot service and DMA completion, control-loop correction signs, RC
-loss, and ADC cell voltage and current (the latched cell detection below).
-Avoid ESC-only power cycles with USB attached - the open bug below.
+The two stop conditions:
 
-Open observation, deferred to the VTX check: a 1-minute USB-only run of the
-converted image logged `UART4 RX free-buffer pool exhausted on IDLE` twice
-with no OSD/VTX attached; one pre-conversion run did not. UART4 RX floats
-without the VTX, so noise can deliver junk frames faster than `osd_refresh`
-recycles the four buffers, and the idle path drops and warns where the DMA
-path panics. Re-check with the VTX connected and powered during
-`BENCH-FOX-001`; only then is it worth comparing against a pre-conversion
-image (built from 18521d5, SHA-256
-`9737292a4c0f4a6444710dc3fcfce79dd440e025938655aba299e9ef66043f19`).
+1. Battery current reads a constant `0.1 A` with four motors at 6300..7700
+   eRPM. `centiamps = adc_mv * 10000 / 70 / 10` puts the raw PC1 reading near
+   `1 mV`, the noise floor, so the fault is upstream of the scale-70 change
+   this candidate adopted and that change could never have fixed it. Read
+   `adc_current_mv` from the USB debug status next: still ~1 mV under load
+   means the sense input, not the math. Current feeds only OSD and MSP
+   telemetry, no safety logic.
+2. The ESC telemetry manager latched faulted after a single response timeout
+   for logical M4 (one miss in 10132 requests, zero CRC failures) during an
+   armed RC-loss stop, and both later arm attempts then correctly aborted on
+   idle telemetry qualification. `esc_manager.rs` and `blheli_telemetry.rs`
+   are byte-identical to pre-conversion; the moved UART plumbing in
+   `ferrowasp-stm32f4-tasks/src/esc.rs` is new, so a conversion-induced
+   dropped response is not excluded by code identity alone.
+
+Because that latch was already set 100 s before the battery was reconnected,
+this run does **not** independently reproduce the ESC-only power-cycle bug
+below. Avoid ESC-only power cycles with USB attached regardless.
+
+Motor identity was established without the forbidden selector image: the
+logical-to-physical path (`MOTOR_OUTPUT_MAP [3, 4, 2, 1]`, the Quad X mixer,
+the `ferrowasp-core` frame conventions, every Foxeer pin and timer) is
+byte-identical to pre-conversion `18521d5`, and the operator's roll and pitch
+differential response confirmed it physically.
+
+Small pre-existing defect worth fixing: the first storage-CLI command after
+each USB port open is rejected once with `ERR invalid command`, then succeeds
+on retry. `CommandParser` in `crates/ferrowasp-tasks/src/flash_storage.rs`
+accumulates a line with no reset across port open, so a stray byte corrupts
+the first line and the parse error clears the buffer.
+
+Closed: the `UART4 RX free-buffer pool exhausted on IDLE` warning did not
+recur once in the 6.8-minute powered run with the VTX connected, against two
+occurrences in the earlier USB-only minute with UART4 RX floating. It was
+noise on an unterminated line, and the deferred pre-conversion A/B is no
+longer needed.
 
 Open decisions before FCU3 follows: the FCU3 drift table in FerroForge's
 `docs/src/ferro-wasp-adoption.md`, above all the differing
@@ -89,9 +120,10 @@ fresh-storage/default-reset baseline. Existing valid stored configuration
 continues to win across a firmware update. FCU3 retains its separate legacy
 initial profile.
 
-The 2026-07-28 Foxeer OSD report found zero current and no cell voltage. The
-next candidate uses target values (VBAT 110, current 70/offset zero) and
-latched 4.30 V cell detection. Target comparison remains required.
+Half of the 2026-07-28 Foxeer OSD report is resolved: with the VTX powered,
+OSD `VBAT` and `CELL` agreed with a multimeter at 6 cells and 4.18 V per
+cell, so the target values and latched 4.30 V detection work. Current does
+not; see stop condition 1 above.
 
 FerroConfigurator has no actuator/arming authority. It verifies ROM-DFU
 images, exposes 21 USB parameters with readback, resumes selected downloads,
