@@ -30,6 +30,16 @@ paths, DShot service and DMA completion, control-loop correction signs, RC
 loss, and ADC cell voltage and current (the latched cell detection below).
 Avoid ESC-only power cycles with USB attached - the open bug below.
 
+Open observation, deferred to the VTX check: a 1-minute USB-only run of the
+converted image logged `UART4 RX free-buffer pool exhausted on IDLE` twice
+with no OSD/VTX attached; one pre-conversion run did not. UART4 RX floats
+without the VTX, so noise can deliver junk frames faster than `osd_refresh`
+recycles the four buffers, and the idle path drops and warns where the DMA
+path panics. Re-check with the VTX connected and powered during
+`BENCH-FOX-001`; only then is it worth comparing against a pre-conversion
+image (built from 18521d5, SHA-256
+`9737292a4c0f4a6444710dc3fcfce79dd440e025938655aba299e9ef66043f19`).
+
 Open decisions before FCU3 follows: the FCU3 drift table in FerroForge's
 `docs/src/ferro-wasp-adoption.md`, above all the differing
 `ActuatorHardware` validation.
