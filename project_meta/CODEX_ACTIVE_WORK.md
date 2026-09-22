@@ -34,8 +34,11 @@ Fly this candidate before converting anything further. Foxeer's last two plain
 RTIC tasks, `usb_fs` and `flash_manager_task`, are now to become definitions
 shaped by Foxeer alone, since FCU3's retirement voided the two-board reason for
 parking them - but that changes the image and invalidates the bench evidence,
-so it waits until this candidate has flown. Verified at `79f7541`: the image is
-still ELF `6bdcd149...`, binary `16f6e8ed...`.
+so it waits until this candidate has flown. Keep flying from `~/ws/ferroforge`:
+the image embeds absolute source paths, so only that checkout reproduces
+`16f6e8ed`. Post-flight work happens in the `~/ws/ferroforge-dev` worktree on
+branch `foxeer-post-flight-work`. Tag `foxeer-candidate-16f6e8ed` names the
+candidate.
 
 Two open bugs the gate carried forward. Neither can stop a running motor:
 current sense drives only OSD and MSP, and `EscManager::is_faulted` has one

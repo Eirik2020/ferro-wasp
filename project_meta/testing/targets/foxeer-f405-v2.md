@@ -22,6 +22,15 @@ Use one exact flight candidate and record:
 - propeller and actuator-power state;
 - the complete persisted configuration from `config-show`.
 
+A recorded image hash reproduces only from the same absolute checkout path.
+Panic locations put source paths into `.rodata`, so the same commit built in a
+different directory yields a different hash for identical source. A mismatch
+after moving or copying the tree is not evidence that the image changed.
+Rebuilding also needs the build script to re-run: it declares
+`rerun-if-changed=../../.git/HEAD`, a path that does not exist in every layout,
+so `touch build.rs` before trusting a rebuilt hash. The git revision it embeds
+reaches only defmt, which is interned outside the loadable image.
+
 The reviewed configuration is:
 
 | Field | Roll | Pitch | Yaw |
