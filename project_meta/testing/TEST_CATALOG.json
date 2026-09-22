@@ -114,7 +114,7 @@
       "triggers": {
         "paths": [
           "firmware/",
-          "crates/ferrowasp-actuator/",
+          "crates/ferrowasp-core/src/actuator.rs",
           "crates/ferrowasp-core/src/safety.rs",
           "crates/ferrowasp-tasks/"
         ],

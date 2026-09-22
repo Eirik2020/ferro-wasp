@@ -1,7 +1,8 @@
 # DShot
 
-FerroWasp uses four-motor DShot600 as the standard ESC protocol on FCU3 and
-Foxeer. It supports isolated capped bench images and the normal mixed-control
+FerroWasp uses four-motor DShot600 as the standard ESC protocol on Foxeer, the
+golden flight target. FCU3 is obsolete since 2026-09-22: its sections below
+record how that board was set up and what it measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
 path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
 RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
 it is not a flight-app ESC fallback.

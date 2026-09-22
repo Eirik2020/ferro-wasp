@@ -82,9 +82,6 @@ The current repository is organized around these practical layers:
 ferrowasp-core
     portable safety states, frames, signals, actuator commands, and units
 
-ferrowasp-actuator
-    actuator authority, command validation, mapping, state, and faults
-
 ferrowasp-io-core
     portable bounded serial, SPI, waveform, time, health, and routing contracts
 

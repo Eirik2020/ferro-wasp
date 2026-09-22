@@ -116,8 +116,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--board",
         choices=tuple(FIRMWARE_TARGETS),
-        default="fcu3",
-        help="Firmware board/app to build and run over SWD. Defaults to fcu3.",
+        default="foxeer-f405-v2",
+        help=(
+            "Firmware board/app to build and run over SWD. Defaults to "
+            "foxeer-f405-v2, the golden flight target. It used to default to the "
+            "now-obsolete fcu3, so a bare invocation flashed an unmaintained board."
+        ),
     )
     parser.add_argument(
         "--release",

@@ -7,7 +7,7 @@ Current important paths:
 ```text
 .
 |-- firmware/
-|   |-- stm32f405-flight/        # FCU3 board support and thin F405 RTIC shell
+|   |-- stm32f405-flight/        # FCU3 (obsolete): board support and F405 shell
 |   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
 |   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
 |       |-- src/board/           # Immutable board facts and typed construction
@@ -47,8 +47,8 @@ The code already contains early signs of the future shape:
 - reusable safety, signal, and actuator conversion types in `crates/ferrowasp-core/`
 - board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
   construction policy under each app's `src/board/`
-- isolated FCU3 flight, Foxeer flight/bring-up, and NUCLEO-F401RE bring-up
-  apps with independent Cargo and RTIC resource contracts
+- isolated Foxeer flight, NUCLEO-F401RE bring-up, and obsolete FCU3 apps with
+  independent Cargo and RTIC resource contracts
 - reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
   `crates/ferrowasp-stm32f4/`
 - software-driver and control helpers, including the BLHeli parser and bounded

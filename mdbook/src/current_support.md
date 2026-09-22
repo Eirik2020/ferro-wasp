@@ -1,15 +1,16 @@
 # Current Support
 
 Foxeer F405 V2 is the golden flight target and the behavioral reference for
-new flight-board work. FerroWasp FCU3 is a supported secondary flight target.
-NUCLEO-F401RE is a non-actuating development target.
+new flight-board work. NUCLEO-F401RE is a non-actuating development target.
+FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
+gates, no image and no claim on shared behaviour.
 
 The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.
 
-| Capability | Foxeer F405 V2 | FerroWasp FCU3 | NUCLEO-F401RE |
+| Capability | Foxeer F405 V2 | FerroWasp FCU3 (obsolete) | NUCLEO-F401RE |
 |---|---|---|---|
-| Role | Golden flight target | Secondary flight target | Non-actuating bring-up target |
+| Role | Golden flight target | Obsolete, compiled only | Non-actuating bring-up target |
 | MCU / runtime | STM32F405, RTIC 2 | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
 | RC input | SBUS over USART2 DMA | SBUS over USART2 DMA | None |
 | IMU | Runtime-selected MPU6500 or ICM42688-P; EXTI data-ready sampling | MPU6500; timer-driven polling | None |
@@ -44,17 +45,21 @@ Onboard SPI-NOR stores CRC-protected configuration and FWBB flight records.
 The [FerroConfigurator](user/ferro_configurator.md) uses USB CDC to manage that
 storage while the aircraft is disarmed.
 
-## FerroWasp FCU3
+## FerroWasp FCU3 (obsolete)
 
-The FCU3 app lives in `firmware/stm32f405-flight`. It shares the reusable STM32F4,
-driver, task, safety, DShot, and telemetry implementations with Foxeer while
-retaining its own pins, DMA routes, timer assignments, IMU orientation, and
-motor map.
+Obsolete since 2026-09-22. The app remains in `firmware/stm32f405-flight` and CI
+still compiles it against the shared crates, so a second board can be revived
+cheaply, but it has no test gates, no image, and where its behaviour differed
+from Foxeer's, Foxeer's is now simply the behaviour. Only 14 of its 30 tasks are
+shared definitions; the rest are its own older copies. Do not treat anything
+below as current.
 
-FCU3 uses an MPU6500 and timer-driven IMU polling. Four-lane DShot600 and
-legacy UART ESC telemetry are standard for ESC control and arming
-qualification. USB remains optional, and FCU3 does not yet use the standard
-Foxeer persistent configuration and onboard blackbox workflow.
+It shares the reusable STM32F4, driver, task, safety, DShot, and telemetry
+implementations with Foxeer while retaining its own pins, DMA routes, timer
+assignments, IMU orientation, and motor map. It uses an MPU6500 and
+timer-driven IMU polling, with four-lane DShot600 and legacy UART ESC
+telemetry. It never adopted the Foxeer persistent configuration and onboard
+blackbox workflow.
 
 ## NUCLEO-F401RE
 

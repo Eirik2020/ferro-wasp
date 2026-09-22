@@ -54,9 +54,10 @@ During actuator preparation, the actuator owner rechecks its permit, RC
 armability, arm state, throttle, and IMU health every 10 ms. Any failure selects
 stop before publishing an arming-abort reason.
 
-## Default FCU3 and Foxeer DShot Sequence
+## Telemetry-Qualified DShot Sequence
 
-The default FCU3 and Foxeer paths use telemetry-qualified DShot arming:
+Foxeer uses telemetry-qualified DShot arming, and the obsolete FCU3 image used
+the same sequence:
 
 1. Safety Master enters `Arming`, grants the temporary permit, and asks
    Actuator Output to prepare the ESCs.

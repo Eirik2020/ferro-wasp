@@ -6,7 +6,7 @@ FerroWasp currently supports MPU6500 and ICM42688-P devices over SPI1.
 
 | Board | IMU behavior |
 |---|---|
-| FerroWasp FCU3 | Fixed MPU6500 path, `WHO_AM_I=0x70` |
+| FerroWasp FCU3 (obsolete) | Fixed MPU6500 path, `WHO_AM_I=0x70` |
 | Foxeer F405 V2 | Mode-3 probe selects MPU6500 `0x70` or ICM42688-P `0x47` |
 | NUCLEO-F401RE | No attached IMU in the board contract |
 
@@ -75,7 +75,7 @@ Foxeer configures both supported sensors for active-high, push-pull data-ready
 pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
 edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
-their two-second deltas. FCU3 retains its existing 800 Hz timer poll trigger.
+their two-second deltas. The obsolete FCU3 kept an 800 Hz timer poll trigger.
 
 ## Axis And Rate Convention
 
@@ -93,9 +93,14 @@ vector and gyro rates for direct implementation validation:
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features imu_orientation_rtt --probe-speed-khz 1800 --connect-under-reset
 ```
 
-FCU3's mapping and gyro bias behavior have bench evidence. Foxeer's fitted
-sensor identity, package orientation, body-axis map, and signs must be checked
-on the physical board before its arming inhibit can be removed.
+Foxeer's fitted sensor identity, package orientation, body-axis map and signs
+have been checked on the physical board: its profile sets
+`IMU_SENSOR_IDENTITY_VERIFIED`, `IMU_ORIENTATION_VERIFIED`,
+`M4_COMPLEMENTARY_POLARITY_VERIFIED` and `MOTOR_OUTPUT_ORDER_VERIFIED`, which
+together enable `FLIGHT_ARMING_ENABLED`. Any change to the sensor, its
+orientation or the motor order withdraws that and requires the checks again.
+The obsolete FCU3's mapping and gyro bias behaviour had bench evidence of its
+own.
 
 The optional BB2 `gyro10` values use the same measured-rate convention passed
 to the rate PID. Host viewers should display those roll, pitch, and yaw fields

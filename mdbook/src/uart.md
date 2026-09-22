@@ -1,7 +1,7 @@
 # UART
 
 UART support uses bounded DMA-backed paths for RC input, OSD traffic, and the
-default FCU3 DShot image's legacy ESC telemetry.
+flight image's legacy ESC telemetry.
 
 ## Current Implementation
 

@@ -7,8 +7,8 @@ FerroWasp currently has early support for several communication paths. Only SBUS
 | Protocol/path | Status |
 |---|---|
 | SBUS | Active prototype RC input over USART2 RX DMA |
-| BLHeli legacy ESC telemetry | Active only in the default FCU3 DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated |
-| USB CDC serial | Mandatory on Foxeer; optional on FCU3 via `usb_serial`; Foxeer emits bounded read-only `FWDBG1` status lines |
+| BLHeli legacy ESC telemetry | Active in the flight DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated |
+| USB CDC serial | Mandatory on Foxeer, which emits bounded read-only `FWDBG1` status lines; was optional on the obsolete FCU3 via `usb_serial` |
 | MSPv1 / DJI O4 OSD | Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames |
 | MAVLink | UART mode placeholder/config values exist, no active MAVLink implementation yet |
 | CRSF/ELRS | Intended preferred RC path, not implemented yet |
