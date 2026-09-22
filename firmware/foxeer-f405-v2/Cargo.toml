@@ -1,3 +1,5 @@
+cargo-features = ["trim-paths"]
+
 [package]
 name = "ferrowasp-app-foxeer-f405-v2"
 version = "0.1.0"
@@ -77,3 +79,8 @@ debug = true
 incremental = false
 lto = true
 opt-level = "s"
+# Panic locations otherwise put this checkout's absolute paths into .rodata, so
+# the same source built in a different directory produced a different image and
+# a recorded hash only reproduced from one tree. Trimming them makes the image a
+# function of the source.
+trim-paths = "object"

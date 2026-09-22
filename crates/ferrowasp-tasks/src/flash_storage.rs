@@ -276,6 +276,17 @@ impl CommandParser {
         }
     }
 
+    /// Drops a partially received line.
+    ///
+    /// The host may close the port mid-line, and reopening it can deliver a
+    /// stray byte. Either way the next real command would be prefixed with
+    /// junk and rejected, so the USB task clears the parser whenever the
+    /// device leaves the configured state.
+    pub fn clear(&mut self) {
+        self.line.clear();
+        self.overflowed = false;
+    }
+
     pub fn ingest(&mut self, byte: u8) -> Option<Result<StorageCommand, CommandParseError>> {
         if byte != b'\r' && byte != b'\n' {
             if self.line.push(byte as char).is_err() {
@@ -1112,6 +1123,43 @@ mod tests {
             }
         }
         assert_eq!(result, Some(Ok(StorageCommand::ConfigGet(ConfigKey::YawI))));
+    }
+
+    #[test]
+    fn a_partial_line_left_by_a_closed_port_does_not_spoil_the_next_command() {
+        let mut parser = CommandParser::new();
+        // The host closed the port part-way through a line.
+        for byte in b"config ge" {
+            assert!(parser.ingest(*byte).is_none());
+        }
+
+        // Without the clear, this is what the operator saw: the leftover bytes
+        // prefix the next command and the whole line is rejected once.
+        let mut spoiled = CommandParser::new();
+        for byte in b"config ge" {
+            spoiled.ingest(*byte);
+        }
+        let mut first = None;
+        for byte in b"config get roll_p\r\n" {
+            if let Some(command) = spoiled.ingest(*byte) {
+                first = Some(command);
+            }
+        }
+        assert_eq!(first, Some(Err(CommandParseError::UnknownCommand)));
+
+        // Clearing on deconfigure makes the next command parse first time.
+        parser.clear();
+        let mut result = None;
+        for byte in b"config get roll_p\r\n" {
+            if let Some(command) = parser.ingest(*byte) {
+                assert!(result.is_none());
+                result = Some(command);
+            }
+        }
+        assert_eq!(
+            result,
+            Some(Ok(StorageCommand::ConfigGet(ConfigKey::RollP)))
+        );
     }
 
     #[test]

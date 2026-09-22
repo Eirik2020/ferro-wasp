@@ -865,6 +865,8 @@ ferroforge::app! {
 
         if usb_dev.state() != UsbDeviceState::Configured {
             *cx.local.usb_header_sent = false;
+            #[cfg(not(feature = "mspv2_configurator"))]
+            cx.local.flash_command_parser.clear();
             #[cfg(feature = "mspv2_configurator")]
             {
                 cx.local.configurator_usb.parser.clear();
