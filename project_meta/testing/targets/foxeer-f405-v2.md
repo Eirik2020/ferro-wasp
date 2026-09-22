@@ -22,10 +22,16 @@ Use one exact flight candidate and record:
 - propeller and actuator-power state;
 - the complete persisted configuration from `config-show`.
 
-A recorded image hash reproduces only from the same absolute checkout path.
-Panic locations put source paths into `.rodata`, so the same commit built in a
-different directory yields a different hash for identical source. A mismatch
-after moving or copying the tree is not evidence that the image changed.
+A recorded image hash reproduces only from the same absolute checkout path. A
+mismatch after moving or copying the tree is not evidence that the image
+changed. Measured with the same commit in clean worktrees: the build is
+deterministic within one tree, every other path disagrees, and path length is
+not the cause - two 34-character paths still differed. Panic locations embed
+source paths in `.rodata`, but `trim-paths = "object"` removes all of them
+without making the image portable, so the residue is Cargo's `-C metadata` hash
+over the absolute package path reaching symbol names and link layout. Do not
+retry `trim-paths` for this: it needs an unstable `cargo-features` gate and
+does not deliver.
 Rebuilding also needs the build script to re-run: it declares
 `rerun-if-changed=../../.git/HEAD`, a path that does not exist in every layout,
 so `touch build.rs` before trusting a rebuilt hash. The git revision it embeds
