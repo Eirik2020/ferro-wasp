@@ -24,17 +24,18 @@ Candidate: revision `a921ffe`, clean tree, default features only
   outputs stopped, no arming, heartbeat alive.
 - [x] `BENCH-FOX-USB-001` - unpowered USB RC configuration: invalid value
   refused, temporary profile applied and persisted, baseline restored.
-- [x] `BENCH-FOX-001` - powered props-off exact-image gate **passed** on
-  record `...__02`: five arms through the stop dwell and four-motor
-  qualification, correct throttle and RC-loss aborts, no premature motor
-  start, no automatic rearm, correction opposing motion on roll and pitch,
-  deadband and full-stick bounds, 1398 blackbox pages with no dropped record.
-  The same run was first recorded `fail` in `...__01` on two stop conditions;
-  the user then scoped this gate to the minimum needed for safe flight, and
-  the procedure now records rather than gates a defect that feeds no safety,
-  arming, or actuator path, or a fault that fails closed. Both records are
-  retained, `__01` for the reasoning.
-- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001` - unblocked.
+- [x] `BENCH-FOX-001` - powered props-off gate **passed** on record `...__02`,
+  which supersedes the `fail` in `...__01` after the user scoped this gate to
+  the minimum needed for safe flight. Both are retained, `__01` for the
+  reasoning.
+- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001` - unblocked, and next.
+
+Fly this candidate before converting anything further. Foxeer's last two plain
+RTIC tasks, `usb_fs` and `flash_manager_task`, are now to become definitions
+shaped by Foxeer alone, since FCU3's retirement voided the two-board reason for
+parking them - but that changes the image and invalidates the bench evidence,
+so it waits until this candidate has flown. Verified at `79f7541`: the image is
+still ELF `6bdcd149...`, binary `16f6e8ed...`.
 
 Two open bugs the gate carried forward. Neither can stop a running motor:
 current sense drives only OSD and MSP, and `EscManager::is_faulted` has one
