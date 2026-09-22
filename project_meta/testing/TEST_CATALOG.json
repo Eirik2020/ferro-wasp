@@ -38,7 +38,7 @@
       "summary": "Check the exact FCU3 application and selected feature set.",
       "target": "fcu3",
       "tier": "embedded-build",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
           "firmware/stm32f405-flight/",
@@ -194,7 +194,7 @@
       "summary": "Run the FCU3 powered props-off exact-flight-image DShot gate.",
       "target": "fcu3",
       "tier": "bench-powered-props-off",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
           "firmware/stm32f405-flight/",
@@ -211,7 +211,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/testing/targets/fcu3.md",
+        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Powered Props-Off DShot Gate"
       },
       "prerequisites": [
@@ -280,7 +280,7 @@
       "summary": "Run the final FCU3 exact-image preflight gate.",
       "target": "fcu3",
       "tier": "preflight",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
           "firmware/stm32f405-flight/",
@@ -296,7 +296,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/testing/targets/fcu3.md",
+        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Final Preflight Gate"
       },
       "prerequisites": [
@@ -364,7 +364,7 @@
       "summary": "Run one bounded logged FCU3 characterization flight.",
       "target": "fcu3",
       "tier": "flight",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
           "firmware/stm32f405-flight/",
@@ -379,7 +379,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/testing/targets/fcu3.md",
+        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Bounded Logged Flight Test"
       },
       "prerequisites": [

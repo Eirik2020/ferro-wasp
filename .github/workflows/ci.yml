@@ -60,6 +60,9 @@ jobs:
           --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32f4-tasks/stm32f405,ferrowasp-stm32f4-tasks/dshot
           -- -D warnings
 
+      # FCU3 is obsolete: its gates are retired and no image ships. These
+      # checks stay so the board keeps compiling against the shared crates and
+      # a revival stays cheap.
       - name: Check standard STM32F405 DShot flight firmware
         working-directory: firmware/stm32f405-flight
         run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
@@ -71,37 +74,6 @@ jobs:
       - name: Check firmware with USB serial
         working-directory: firmware/stm32f405-flight
         run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features usb_serial
-
-      - name: Check FCU3 fault-injection images
-        working-directory: firmware/stm32f405-flight
-        run: |
-          for feature in \
-            bench_dshot_idle_output1_not_running \
-            bench_motor_cmd_stale_rejection \
-            bench_spi_timeout_recovery; do
-            cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
-              --features "${feature}"
-          done
-
-      - name: Check FCU3 four-motor DShot bench image
-        working-directory: firmware/stm32f405-flight
-        run: >
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "bench_equal_motors"
-
-      - name: Check FCU3 logical-motor DShot bench images
-        working-directory: firmware/stm32f405-flight
-        run: |
-          for motor in 1 2 3 4; do
-            cargo check --locked --target "${{ env.FIRMWARE_TARGET }}" \
-              --features "bench_equal_motors bench_logical_motor${motor}_only"
-          done
-
-      - name: Check FCU3 unequal-vector DShot bench image
-        working-directory: firmware/stm32f405-flight
-        run: >
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "bench_equal_motors bench_dshot_unequal_motors"
 
       - name: Check STM32F401 bring-up firmware
         working-directory: firmware/stm32f401-bringup
@@ -131,21 +103,9 @@ jobs:
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
           --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
 
-      - name: Build standard DShot release firmware
-        working-directory: firmware/stm32f405-flight
-        run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
-
       - name: Build Foxeer F405 V2 release firmware
         working-directory: firmware/foxeer-f405-v2
         run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
-
-      - name: Upload firmware ELF
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ferrowasp-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
-          path: firmware/stm32f405-flight/target/${{ env.FIRMWARE_TARGET }}/release/FerroWasp
-          if-no-files-found: error
 
       - name: Upload Foxeer F405 V2 firmware ELF
         if: github.event_name != 'pull_request'

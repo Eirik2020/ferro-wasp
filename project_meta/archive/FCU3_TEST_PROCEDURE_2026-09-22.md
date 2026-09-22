@@ -1,3 +1,10 @@
+> **Archived 2026-09-22.** Source: `project_meta/testing/targets/fcu3.md`.
+> FCU3 was marked obsolete; its four catalog entries are `retired` and point
+> here for identity only. Binding material was promoted out first: the shared
+> `MOTOR_OUTPUT_MAP` table and the DShot idle and eRPM-qualification arming
+> semantics now live in `project_meta/testing/targets/foxeer-f405-v2.md`,
+> which owns them for every board. Never selected for a new run.
+
 # FerroWasp FCU3 Test Procedure
 
 This is the current operator procedure for `firmware/stm32f405-flight` on the

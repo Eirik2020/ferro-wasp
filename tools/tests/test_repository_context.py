@@ -209,7 +209,7 @@ class RepositoryContextTests(unittest.TestCase):
                     "project_meta/testing/targets/foxeer-f405-v2.md",
                 )
 
-    def test_fcu3_rollout_remains_active_and_ordered(self) -> None:
+    def test_fcu3_rollout_is_retired_and_ordered(self) -> None:
         catalog_path = REPOSITORY_ROOT / "project_meta" / "testing" / "TEST_CATALOG.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         definitions = {entry["id"]: entry for entry in catalog["tests"]}
@@ -222,11 +222,11 @@ class RepositoryContextTests(unittest.TestCase):
         for test_id, prerequisite in expected_prerequisite.items():
             with self.subTest(test_id=test_id):
                 entry = definitions[test_id]
-                self.assertEqual(entry["status"], "active")
+                self.assertEqual(entry["status"], "retired")
                 self.assertIn(prerequisite, entry["prerequisites"])
                 self.assertEqual(
                     entry["procedure"]["path"],
-                    "project_meta/testing/targets/fcu3.md",
+                    "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
                 )
 
 

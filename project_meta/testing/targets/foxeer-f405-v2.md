@@ -47,6 +47,23 @@ Do not fly the pre-pitch-fix image with SHA-256
 Any other candidate still needs the gates below; a different hash is not
 evidence that the pitch fix or current safety behavior is present.
 
+The logical-to-physical output map is `MOTOR_OUTPUT_MAP = [3, 4, 2, 1]`, shared
+by every FerroWasp board:
+
+| Logical motor | Physical output | Location | Rotation |
+|---|---:|---|---|
+| M1 | 3 | rear-right | CW |
+| M2 | 4 | front-right | CCW |
+| M3 | 2 | rear-left | CCW |
+| M4 | 1 | front-left | CW |
+
+The DShot idle command `65` maps to protocol value `112`. Arming keeps stop
+frames selected through the guarded dwell, then applies bounded idle under
+temporary permission, and requires three fresh in-range eRPM observations from
+every ESC before `SYSTEM ARMED`. Counter and ESC interoperability evidence does
+not establish pulse width, jitter, complementary-output margin, or timer phase;
+those electrical measurements remain open.
+
 ## Foxeer USB RC Configuration Gate
 
 Catalog ID: `BENCH-FOX-USB-001`.

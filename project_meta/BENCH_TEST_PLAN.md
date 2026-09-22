@@ -10,7 +10,8 @@ only the procedures relevant to the exact target and validation tier.
 
 Current operator procedures:
 
-- FCU3: `testing/targets/fcu3.md`
+- FCU3: obsolete. Its gates are retired; the procedure is archived at
+  `archive/FCU3_TEST_PROCEDURE_2026-09-22.md` for identity only.
 - Foxeer F405 V2: `testing/targets/foxeer-f405-v2.md`
 
 For current bench/debug work, motor-output behavior, logging changes, and open
