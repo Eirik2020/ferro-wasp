@@ -55,11 +55,12 @@ npx tauri dev
 | --- | --- |
 | `ferro-configurator-bridge` | Built and tested, 6 tests against a mock transport |
 | `gui/src` TypeScript | Type-checks under `strict`, builds with Vite |
-| `gui/src-tauri` | **Written but never compiled** — no webview available where it was written |
+| `gui/src-tauri` | Compiles, clippy-clean, and launches |
 
-The shell is the only unverified part. It is deliberately thin so that what is
-unverified is small: every command locks the session, calls one bridge method
-on the blocking pool, and returns.
+What remains unverified is the part no amount of building can settle: none of
+the commands have run against a controller. The shell is deliberately thin so
+that the untested surface is small - every command locks the session, calls one
+bridge method on the blocking pool, and returns.
 
 ## Not here yet
 
