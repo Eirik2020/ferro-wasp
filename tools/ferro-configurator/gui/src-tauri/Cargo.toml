@@ -1,0 +1,23 @@
+# Its own workspace: building this needs a system webview, and the library
+# workspace must stay buildable and testable without one.
+[workspace]
+
+[package]
+name = "ferro-configurator-gui"
+version = "0.1.0"
+edition = "2024"
+description = "Prototype desktop front-end for FerroWasp controllers"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+ferro-configurator-bridge = { path = "../../crates/ferro-configurator-bridge" }
+ferro-configurator-core = { path = "../../crates/ferro-configurator-core" }
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

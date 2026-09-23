@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FerroConfigurator</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>FerroConfigurator</h1>
+      <span id="device-description"></span>
+    </header>
+
+    <!-- First on the page on purpose: it decides whether the form below can
+         be submitted, so it should never be scrolled past. -->
+    <section id="safety" aria-live="polite">
+      <div id="safety-banner" data-state="unknown">No controller connected</div>
+      <div id="safety-detail"></div>
+    </section>
+
+    <div id="mock-banner" hidden>
+      Simulated controller — no hardware attached.
+      <button id="toggle-armed" type="button">Toggle armed</button>
+    </div>
+
+    <section>
+      <h2>Connection</h2>
+      <div class="row">
+        <select id="port-select" aria-label="Serial port"></select>
+        <button id="refresh-ports" type="button">Refresh</button>
+        <button id="connect" type="button">Connect</button>
+        <button id="disconnect" type="button">Disconnect</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tuning</h2>
+      <div class="grid">
+        <fieldset>
+          <legend>Roll</legend>
+          <label>P <input id="roll-p" type="number" step="0.1" /></label>
+          <label>I <input id="roll-i" type="number" step="0.01" /></label>
+          <label>D <input id="roll-d" type="number" step="0.01" /></label>
+          <label>Centre °/s <input id="roll-center" type="number" step="1" /></label>
+          <label>Max °/s <input id="roll-max" type="number" step="1" /></label>
+          <label>Expo <input id="roll-expo" type="number" step="0.05" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Pitch</legend>
+          <label>P <input id="pitch-p" type="number" step="0.1" /></label>
+          <label>I <input id="pitch-i" type="number" step="0.01" /></label>
+          <label>D <input id="pitch-d" type="number" step="0.01" /></label>
+          <label>Centre °/s <input id="pitch-center" type="number" step="1" /></label>
+          <label>Max °/s <input id="pitch-max" type="number" step="1" /></label>
+          <label>Expo <input id="pitch-expo" type="number" step="0.05" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Yaw</legend>
+          <label>P <input id="yaw-p" type="number" step="0.1" /></label>
+          <label>I <input id="yaw-i" type="number" step="0.01" /></label>
+          <label>D <input id="yaw-d" type="number" step="0.01" /></label>
+          <label>Centre °/s <input id="yaw-center" type="number" step="1" /></label>
+          <label>Max °/s <input id="yaw-max" type="number" step="1" /></label>
+          <label>Expo <input id="yaw-expo" type="number" step="0.05" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Other</legend>
+          <label>RC deadband <input id="rc-deadband" type="number" step="1" /></label>
+          <label>IMU LPF alpha <input id="imu-lpf" type="number" step="0.01" /></label>
+          <label>Log divisor <input id="log-divisor" type="number" step="1" /></label>
+        </fieldset>
+      </div>
+      <div class="row">
+        <button id="reload-config" type="button">Read from controller</button>
+        <button id="apply" type="button" disabled>Apply &amp; verify</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Flight logs</h2>
+      <div class="row">
+        <button id="load-flights" type="button">Catalogue flights</button>
+        <input id="download-path" type="text" placeholder="output.fwbb" size="28" />
+        <button id="download" type="button">Download latest</button>
+      </div>
+      <div id="storage-summary"></div>
+      <ul id="flight-list"></ul>
+      <progress id="download-progress" value="0" max="100" hidden></progress>
+    </section>
+
+    <footer id="status-line" data-tone="idle">Ready.</footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

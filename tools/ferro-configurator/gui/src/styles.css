@@ -1,0 +1,223 @@
+/* Deliberately plain. The one thing that gets visual weight is the safety
+   banner, because it is the only element whose state changes what the
+   operator is allowed to do. */
+
+:root {
+  --bg: #16181c;
+  --panel: #1e2127;
+  --line: #2d323b;
+  --text: #e6e6e6;
+  --muted: #9aa3ad;
+  --ok: #2f6f4f;
+  --danger: #8c2f2f;
+  --busy: #6b5a1f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 1rem 1.25rem 3rem;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+#device-description {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+#safety {
+  padding: 0;
+  overflow: hidden;
+}
+
+#safety-banner {
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+#safety-banner[data-state="armed"] {
+  background: var(--danger);
+}
+
+#safety-banner[data-state="disarmed"] {
+  background: var(--ok);
+}
+
+#safety-banner[data-state="unknown"] {
+  background: var(--line);
+  color: var(--muted);
+}
+
+#safety-detail {
+  padding: 0.45rem 0.9rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-height: 1.2rem;
+}
+
+#mock-banner {
+  background: var(--busy);
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.5rem 0.6rem 0.6rem;
+  margin: 0;
+}
+
+legend {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 0.3rem;
+}
+
+label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0;
+  color: var(--muted);
+}
+
+input,
+select {
+  background: #14161a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font: inherit;
+}
+
+input[type="number"] {
+  width: 6.5rem;
+  text-align: right;
+}
+
+input:disabled {
+  opacity: 0.45;
+}
+
+button {
+  background: #2a2f38;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #343b46;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#apply:not(:disabled) {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+#flight-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.82rem;
+}
+
+#flight-list li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+#storage-summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+progress {
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.45rem 1.25rem;
+  background: #111316;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+footer[data-tone="bad"] {
+  color: #ff9d9d;
+}
+
+footer[data-tone="busy"] {
+  color: #ffd98a;
+}
