@@ -299,6 +299,13 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/LOGGING_FORMAT.md",
+      "role": "logging-format-requirements",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 8192
+    },
+    {
       "path": "project_meta/BENCH_TEST_PLAN.md",
       "role": "legacy-test-router",
       "lifecycle": "durable",

@@ -6,30 +6,16 @@ Last updated: 2026-09-24
 
 ### FerroForge adoption candidate - flown, every gate passed
 
-Foxeer now runs on `ferroforge::app!`: every task except `usb_fs` and
-`flash_manager_task` is an instance of a `ferrowasp-stm32f4-tasks`
-definition, including the whole safety and actuator path. Bodies moved
-verbatim; priorities and bindings are unchanged. None of it has run on
-hardware.
+Foxeer runs on `ferroforge::app!`: every task except `usb_fs` and
+`flash_manager_task` is an instance of a `ferrowasp-stm32f4-tasks` definition,
+including the whole safety and actuator path. Bodies moved verbatim;
+priorities and bindings are unchanged. It has flown.
 
-Candidate: revision `a921ffe`, clean tree, default features only
-(`board-foxeer-f405-v2`). DFU image
-`logs/foxeer-candidates/20260918T211248Z-a921ffe-FerroWaspFoxeerF405V2.bin`,
-152,664 bytes, SHA-256
-`16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435`.
-
-- [x] `SW-COMMON-001` and `BUILD-FOX-001` passed; run records under
-  `testing/evidence/runs/2026/09/`.
-- [x] `BENCH-COMMON-001` - unpowered boot and idle: three cold boots, all
-  outputs stopped, no arming, heartbeat alive.
-- [x] `BENCH-FOX-USB-001` - unpowered USB RC configuration: invalid value
-  refused, temporary profile applied and persisted, baseline restored.
-- [x] `BENCH-FOX-001` - powered props-off gate **passed** on record `...__02`,
-  which supersedes the `fail` in `...__01` after the user scoped this gate to
-  the minimum needed for safe flight. Both are retained, `__01` for the
-  reasoning.
-- [x] `PREFLIGHT-FOX-001` and `FLIGHT-FOX-001` - flown 2026-09-24, accepted
-  by operator decision.
+Every gate passed on candidate `a921ffe` (binary `16f6e8ed`): SW-COMMON-001,
+BUILD-FOX-001, BENCH-COMMON-001, BENCH-FOX-USB-001, BENCH-FOX-001, then
+PREFLIGHT-FOX-001 and FLIGHT-FOX-001 flown 2026-09-24 and accepted by operator
+decision. Records under `testing/evidence/runs/2026/09/`; BENCH-FOX-001 keeps
+both a `fail` and the `pass` that supersedes it, `__01` for the reasoning.
 
 **The adoption question is answered.** Measured pre- against post-conversion
 over ~133k armed samples: identical control law, identical loop timing, and
@@ -157,44 +143,10 @@ Open IMU-calibration TODO:
   through the existing USB configuration CLI without granting any actuator
   authority.
 
-Open logging-format TODO:
-
-- Record every fresh per-motor legacy-UART eRPM observation at its actual
-  bounded rate, including time/age, identity, freshness, and transport health;
-  never present repeated stale values as new control-rate data.
-- Log timestamped body-frame accelerometer data, range/clipping, and bounded
-  peaks for offline crash-detector development. Validate against landings,
-  maneuvers, gusts, and impacts before allowing any safety-state effect.
-- Make every recorded flight self-describing by storing the exact active
-  configuration at its flight boundary and after any accepted runtime change.
-  In the 2026-07-27 session, BB2 `PID/error` identifies flights 29-32 as P
-  `1/1/2` and 33-34 as `2.5/2.5/2`; future readers must expose configuration
-  directly and warn when it is absent.
-- Adopt ULog as FerroWasp's standard persisted flight-log format so recorded
-  data can use the existing PX4 logging, telemetry, visualization, and analysis
-  ecosystem. Define stable FerroWasp message schemas and units, board/firmware
-  metadata, parameters, timestamps, dropout reporting, and flight boundaries.
-  Keep the hard real-time producer allocation-free and bounded: control tasks
-  should publish fixed-size typed records to the existing bounded logging
-  boundary, while a lower-priority owner performs ULog framing and flash I/O.
-  Provide host tests with known-good ULog readers and a migration/conversion
-  path for retained BB2/`.fwbb` evidence before replacing the current format.
-- Migration paths now exist in both `tools/fwbb_to_ulog.py` and the packaged
-  native FerroConfigurator. Both validate every `.fwbb` page, convert exactly
-  one selected flight, and emit schema version 1 of the compact
-  `ferrowasp_rate_control` topic. Synthetic format/timing/dropout tests pass;
-  the native output is byte-identical to the Python reference for retained
-  flight 27, and PyULog 1.2.3 previously accepted the reference converter's
-  real Foxeer flight 11 output as uncorrupted. Native firmware ULog framing,
-  parameters, richer metadata, and replacement of `.fwbb` remain open work.
-- Onboard BB2 retrieval is now flight-aware. The USB host tool can catalog
-  contiguous flight page ranges, download `--flight-id latest` or a numeric
-  ID, and resume only after validating the selected flight ID, per-flight page
-  sequence, and every page CRC. A backward-compatible record flag marks the
-  first successfully assembled record of the first recorded flight after each
-  MCU boot, allowing `flights` to group new captures by power-on session.
-  Existing pages remain readable and are deliberately labeled `boot unknown`
-  rather than grouped using ambiguous wrapping MCU timestamps.
+Open logging-format TODO: see [`LOGGING_FORMAT.md`](LOGGING_FORMAT.md). Six
+items, all open: per-motor eRPM at its real bounded rate, body-frame
+accelerometer logging, self-describing flights carrying their configuration,
+ULog adoption, and the migration and retrieval work already done.
 
 Open flight-mode TODO:
 
