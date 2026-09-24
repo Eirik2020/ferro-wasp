@@ -1,10 +1,10 @@
 # FerroWasp Active Work Handoff
 
-Last updated: 2026-09-21
+Last updated: 2026-09-24
 
-## Current State - 2026-09-21
+## Current State - 2026-09-24
 
-### FerroForge adoption candidate - hardware gates pending
+### FerroForge adoption candidate - flown, every gate passed
 
 Foxeer now runs on `ferroforge::app!`: every task except `usb_fs` and
 `flash_manager_task` is an instance of a `ferrowasp-stm32f4-tasks`
@@ -28,30 +28,38 @@ Candidate: revision `a921ffe`, clean tree, default features only
   which supersedes the `fail` in `...__01` after the user scoped this gate to
   the minimum needed for safe flight. Both are retained, `__01` for the
   reasoning.
-- [ ] `PREFLIGHT-FOX-001`, then `FLIGHT-FOX-001` - unblocked, and next.
+- [x] `PREFLIGHT-FOX-001` and `FLIGHT-FOX-001` - flown 2026-09-24, accepted
+  by operator decision.
 
-Fly this candidate before converting anything further. Foxeer's last two plain
-RTIC tasks, `usb_fs` and `flash_manager_task`, are now to become definitions
-shaped by Foxeer alone, since FCU3's retirement voided the two-board reason for
-parking them - but that changes the image and invalidates the bench evidence,
-so it waits until this candidate has flown. Keep flying from `~/ws/ferroforge`:
-the image embeds absolute source paths, so only that checkout reproduces
-`16f6e8ed`. Post-flight work happens in the `~/ws/ferroforge-dev` worktree on
-branch `foxeer-post-flight-work`. Tag `foxeer-candidate-16f6e8ed` names the
-candidate.
+**The adoption question is answered.** Over ~133k armed samples and ~84k loop
+intervals, pre-conversion 1-2 against post-conversion 15/19/21/22: the
+control law is identical (P recovered as `pid/error` = 0.25/0.25/0.20 both
+sides), loop timing is identical (every interval 2000/3000 us at 50/50), and
+there are zero sequence gaps, repeats or CRC failures in ~10 MB of logs -
+including through flight 22's 1592 deg/s cartwheel with the mixer saturated.
 
-Two open bugs the gate carried forward. Neither can stop a running motor:
-current sense drives only OSD and MSP, and `EscManager::is_faulted` has one
-consumer, a log line, while internally only suppressing further telemetry
-requests. Neither is accepted behaviour.
+Carried with it: command tracking was never evaluated - every flight with
+stick input ended in deliberate ground contact - and the 10-13 Hz oscillation
+review needs matplotlib. One boring hop closes both. Logs under
+`logs/ferroforge-flights/` and `logs/preconversion-flights/`, gitignored.
+
+Now unblocked: publish FerroForge 0.3.0; convert `usb_fs` and
+`flash_manager_task` shaped by Foxeer alone; retire `tools/rtic-app-builder`,
+whose phase 6 entry condition was this flight. Branches:
+`ferroforge-0.3-landing`, `ferrowasp-cleanup`, `foxeer-post-flight-work`,
+`ferrowasp-configurator-gui`. Tag `foxeer-candidate-16f6e8ed` names the flown
+image, reproducible only from `~/ws/ferroforge`.
+
+Two open bugs carried forward. Neither can stop a running motor - current
+sense drives only OSD and MSP, and `EscManager::is_faulted` has one consumer,
+a log line - and neither is accepted behaviour.
 
 1. Battery current reads a constant `0.1 A` with four motors at 6300..7700
-   eRPM. `centiamps = adc_mv * 10000 / 70 / 10` puts the raw PC1 reading near
-   `1 mV`, the noise floor, so the fault is upstream of the scale-70 change
-   this candidate adopted and that change could never have fixed it. Read
-   `adc_current_mv` from the USB debug status next: still ~1 mV under load
-   means the sense input, not the math. Current feeds only OSD and MSP
-   telemetry, no safety logic.
+   eRPM. `centiamps = adc_mv * 10000 / 70 / 10` puts raw PC1 near `1 mV`, the
+   noise floor, so the fault is upstream of the scale-70 change this candidate
+   adopted, which could never have fixed it. Next: read `adc_current_mv` from
+   the USB debug status under load - still ~1 mV means the sense input, not
+   the math.
 2. The ESC telemetry manager latched faulted after a single response timeout
    for logical M4 (one miss in 10132 requests, zero CRC failures) during an
    armed RC-loss stop, and both later arm attempts then correctly aborted on
@@ -60,17 +68,14 @@ requests. Neither is accepted behaviour.
    `ferrowasp-stm32f4-tasks/src/esc.rs` is new, so a conversion-induced
    dropped response is not excluded by code identity alone.
 
-A latch also stops per-motor eRPM logging for the rest of that power cycle, so
-a flight after one lacks that data. Because the latch was already set 100 s
-before the battery was reconnected, this run does **not** independently
-reproduce the ESC-only power-cycle bug below. Avoid ESC-only power cycles with
-USB attached regardless.
+A latch also costs per-motor eRPM logging for the rest of that power cycle.
+The bench run does **not** independently reproduce the ESC-only power-cycle
+bug below - that latch was already set 100 s before the battery was
+reconnected - but avoid ESC-only power cycles with USB attached regardless.
 
-Motor identity was established without the forbidden selector image: the
-logical-to-physical path (`MOTOR_OUTPUT_MAP [3, 4, 2, 1]`, the Quad X mixer,
-the `ferrowasp-core` frame conventions, every Foxeer pin and timer) is
-byte-identical to pre-conversion `18521d5`, and the operator's roll and pitch
-differential response confirmed it physically.
+Motor identity is confirmed unchanged by the conversion, in code and by the
+operator's roll and pitch differential response; see the `BENCH-FOX-001`
+record.
 
 Third open bug, pre-existing and cosmetic: the first storage-CLI command after
 each USB port open is rejected once with `ERR invalid command`, then succeeds
@@ -78,11 +83,9 @@ on retry. `CommandParser` in `crates/ferrowasp-tasks/src/flash_storage.rs`
 accumulates a line with no reset across port open, so a stray byte corrupts
 the first line and the parse error clears the buffer.
 
-Closed: the `UART4 RX free-buffer pool exhausted on IDLE` warning did not
-recur once in the 6.8-minute powered run with the VTX connected, against two
-occurrences in the earlier USB-only minute with UART4 RX floating. It was
-noise on an unterminated line, and the deferred pre-conversion A/B is no
-longer needed.
+Closed: the `UART4 RX free-buffer pool exhausted on IDLE` warning was noise on
+an unterminated line, absent throughout the powered run with the VTX
+connected.
 
 Open decisions before FCU3 follows: the FCU3 drift table in FerroForge's
 `docs/src/ferro-wasp-adoption.md`, above all the differing

@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "run_id": "20260924T174500Z__FLIGHT-FOX-001__foxeer-f405-v2__01",
+  "test_id": "FLIGHT-FOX-001",
+  "started_at_utc": "2026-09-24T17:20:00Z",
+  "completed_at_utc": "2026-09-24T17:45:00Z",
+  "target": "foxeer-f405-v2",
+  "tier": "flight",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "10c40b98ff0a852e99fdc6429316a825ef44ee49e599a4ea93ab3e1c1416b9ee",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer Conservative Logged-Hop Flight Test",
+    "procedure_sha256": "419f5276b9b47cbfabc1457e754f365b0aa4c043dc32b5c7cadfc8ef0cec4d47"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": ["board-foxeer-f405-v2"],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "pid_p": [2.5, 2.5, 2.0],
+      "pid_i_d": "all zero",
+      "rc_deadband": 8,
+      "rates": "roll/pitch 70/300/0.50, yaw 70/200/0.50"
+    }
+  },
+  "conditions": {
+    "propellers": "installed",
+    "actuator_power": "connected",
+    "equipment": ["flight battery", "RC link"],
+    "environment": ["confined grass field", "no wind", "wet grass"]
+  },
+  "commands": [
+    {"command": "ferro-configurator blackbox flights", "exit_code": 0},
+    {"command": "ferro-configurator blackbox download-range --from 9 --to latest", "exit_code": 0},
+    {"command": "ferro-configurator blackbox download-range --from 1 --to 7", "exit_code": 0}
+  ],
+  "artifacts": [
+    {
+      "id": "hover-hop",
+      "kind": "log",
+      "path": "logs/ferroforge-flights/flight-16.fwbb",
+      "bytes": 150272,
+      "sha256": "5a33594fbc29155e1dca217ba0d4e41fec92f3f7918d025e88a3cbfc283ccd03"
+    },
+    {
+      "id": "longest-flight",
+      "kind": "log",
+      "path": "logs/ferroforge-flights/flight-22.fwbb",
+      "bytes": 956416,
+      "sha256": "39523e7eac267671f513cd5fbcfec0f1ca311045dd61bdce17fb2e6b07bb06ae"
+    }
+  ],
+  "measurements": {
+    "flights_recovered": "9..22 post-conversion, 1..7 pre-conversion",
+    "armed_samples_compared": 133000,
+    "loop_intervals_compared": 84000,
+    "p_gain_recovered_pre": [0.25, 0.25, 0.2],
+    "p_gain_recovered_post": [0.25, 0.25, 0.2],
+    "loop_interval_us": "2000/3000 alternating, 50/50, both eras",
+    "sequence_gaps": 0,
+    "repeated_samples": 0,
+    "crc_failures": 0,
+    "hover_hop_flight_id": 16,
+    "hover_hop_airborne_s": 4.0,
+    "hover_hop_motor_range": "331..904",
+    "hover_hop_worst_motor_spread": 165,
+    "hover_hop_arm_boundary_peak_pid": 6,
+    "worst_case_flight_id": 22,
+    "worst_case_peak_gyro_dps": 1592,
+    "worst_case_saturated_commands": 28
+  },
+  "observations": [
+    "Accepted by operator decision on 2026-09-24. The campaign's question was whether the FerroForge conversion changed flight behaviour, not whether the aircraft is tuned; the operator judged that question answered and the firmware safe. The deviations from the procedure as written are recorded below rather than scoped away, and the procedure is unchanged for future candidates.",
+    "The control law is measurably identical across the conversion. P recovered from closed-loop data as pid/error is 0.25/0.25/0.20 on both sides, matching the configured 2.5/2.5/2.0 with the stored-units factor of ten, over roughly 133000 armed samples spanning pre-conversion flights 1-2 and post-conversion flights 15, 19, 21 and 22.",
+    "Loop timing is identical across the conversion: about 84000 intervals, every one alternating 2000/3000 us at 50/50, which is a 400 Hz loop sampled by a 1 kHz monotonic. Not one deviation in either era.",
+    "Zero sequence gaps, zero repeated samples and zero CRC failures across roughly 10 MB of recovered logs.",
+    "Flight 16 is the clean hover hop: 4.0 s airborne, motors 331..904 with worst spread 165 and no saturation, ending at 7 deg/s before a quiet disarm.",
+    "The arm boundary is clean on flight 16: peak |pid| of 6 over the first 0.25 s airborne with commands at zero, so no retained integral or command history crosses the arm boundary. This is bounded evidence for one boundary, not proof of every internal reset path, and I stays zero.",
+    "The loop survived violence without missing a cycle. Flight 22 reached 1592 deg/s with the mixer saturated on 28 commands and yaw PID pinned at -2000, and the control sequence has no gap through any of it: no watchdog reset, no dropped cycle, no logging fault.",
+    "Zero-throttle behaviour is correct: in flight 21 the PID demanded correction at 997 deg/s while all four motors sat at zero, so the aircraft tumbled freely rather than the controller fighting with no authority.",
+    "The operator attributes every ground contact to deliberately putting the aircraft down in a confined field rather than flying it into a boundary, and reports no loss of control caused by the control system."
+  ],
+  "limitations": [
+    "Command tracking was not evaluated. Every flight with stick input (19, 21, 22) ended in deliberate ground contact, and every flight that ended cleanly (12, 15, 16, 20) was flown with centred sticks - commanded rate 0.0 on roll and pitch. No single flight combined separated inputs with a controlled landing, so the procedure's step 3 was not satisfied and no commanded-versus-measured comparison is claimed.",
+    "Stop conditions listed by the procedure were observed in flights 19, 21 and 22: rapid attitude departure, mixer saturation in flight 22, and gyro clipping at the sensor's 2000 deg/s limit in flight 19. They are recorded as observed and attributed by the operator to intentional ground contact, not to control behaviour.",
+    "The oscillation review is unresolved. A crude single-window Goertzel scan is all that was available because flight_report.py requires matplotlib, which is not installed. It shows no new 10-13 Hz content introduced by the conversion - the strongest 11 Hz roll component is in pre-conversion flight 2 - but the flights are not like-for-like and the method cannot separate a sustained oscillation from a transient.",
+    "Analysis used a dependency-free decoder written for this session rather than the project analyzer.",
+    "Battery current remains uncalibrated, carried forward from BENCH-FOX-001."
+  ],
+  "stop_conditions_triggered": []
+}
