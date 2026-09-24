@@ -695,7 +695,10 @@ ferroforge::app! {
                 control_loop_cnt: 0,
                 samples_per_control_loop,
                 flight_controller,
-                imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::IMU_GYRO_LPF_ALPHA),
+                imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::gyro_lpf_alpha(
+                    dt::IMU_GYRO_LPF_HZ,
+                    dt::CONTROL_LOOP_RATE_HZ as f32,
+                )),
                 imu_angle_integrator: dt::GyroAngleIntegrator::new(),
                 gyro_axis_map: CONTROL_IMU_TO_RATE_CONTROLLER_MAP,
                 gyro_bias_calibrator: dt::GyroBiasCalibrator::new(

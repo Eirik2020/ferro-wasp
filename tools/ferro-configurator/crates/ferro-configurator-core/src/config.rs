@@ -25,7 +25,7 @@ pub struct FerroConfig {
     pub roll: AxisPid,
     pub pitch: AxisPid,
     pub yaw: AxisPid,
-    pub imu_lpf_alpha: f32,
+    pub imu_lpf_hz: f32,
     pub log_rate_divisor: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rc_deadband: Option<u16>,
@@ -72,7 +72,7 @@ impl Default for FerroConfig {
                 i: 0.0,
                 d: 0.0,
             },
-            imu_lpf_alpha: 0.55,
+            imu_lpf_hz: 50.8,
             log_rate_divisor: 1,
             rc_deadband: Some(8),
             roll_center_rate: Some(70.0),
@@ -242,7 +242,7 @@ impl FerroConfig {
             ConfigKey::YawP => Some(self.yaw.p),
             ConfigKey::YawI => Some(self.yaw.i),
             ConfigKey::YawD => Some(self.yaw.d),
-            ConfigKey::ImuLpfAlpha => Some(self.imu_lpf_alpha),
+            ConfigKey::ImuLpfHz => Some(self.imu_lpf_hz),
             ConfigKey::LogRateDivisor => Some(self.log_rate_divisor as f32),
             ConfigKey::RcDeadband => self.rc_deadband.map(|value| value as f32),
             ConfigKey::RollCenterRate => self.roll_center_rate,
@@ -285,7 +285,7 @@ impl FerroConfig {
             ConfigKey::YawP => self.yaw.p = value,
             ConfigKey::YawI => self.yaw.i = value,
             ConfigKey::YawD => self.yaw.d = value,
-            ConfigKey::ImuLpfAlpha => self.imu_lpf_alpha = value,
+            ConfigKey::ImuLpfHz => self.imu_lpf_hz = value,
             ConfigKey::LogRateDivisor => self.log_rate_divisor = value as u16,
             ConfigKey::RcDeadband => self.rc_deadband = Some(value as u16),
             ConfigKey::RollCenterRate => self.roll_center_rate = Some(value),
@@ -380,7 +380,7 @@ mod tests {
     fn legacy_schema_overlays_without_changing_rc_rates() {
         let text = r#"
 schema_version = 1
-imu_lpf_alpha = 0.55
+imu_lpf_hz = 50.8
 log_rate_divisor = 2
 
 [roll]
@@ -425,7 +425,7 @@ d = 0.0
     fn validates_scalar_and_cross_field_firmware_ranges() {
         let mut config = FerroConfig::default();
         config.roll.p = 20.01;
-        config.imu_lpf_alpha = f32::NAN;
+        config.imu_lpf_hz = f32::NAN;
         config.log_rate_divisor = 17;
         config.roll_center_rate = Some(400.0);
         config.roll_max_rate = Some(300.0);
@@ -443,6 +443,7 @@ d = 0.0
                 | ConfigKey::PitchCenterRate
                 | ConfigKey::YawCenterRate => "50",
                 ConfigKey::RollMaxRate | ConfigKey::PitchMaxRate | ConfigKey::YawMaxRate => "300",
+                ConfigKey::ImuLpfHz => "50",
                 _ => "0.5",
             };
             config.set_from_str(key, value).unwrap();
@@ -454,17 +455,17 @@ d = 0.0
     fn dotted_and_dashed_keys_are_friendly_aliases() {
         assert_eq!("roll.p".parse::<ConfigKey>().unwrap(), ConfigKey::RollP);
         assert_eq!(
-            "imu-lpf-alpha".parse::<ConfigKey>().unwrap(),
-            ConfigKey::ImuLpfAlpha
+            "imu-lpf-hz".parse::<ConfigKey>().unwrap(),
+            ConfigKey::ImuLpfHz
         );
     }
 }
 
-/// The loop rate the firmware's gyro filter coefficient was authored for.
+/// The loop rate the firmware runs its gyro filter at.
 ///
-/// `imu_lpf_alpha` is a one-pole smoothing factor, not a frequency, so it only
-/// means what it is meant to mean at one sample rate. Reporting the corner it
-/// produces is the only way an operator can see what a stored value does.
+/// The configuration stores the filter's corner in hertz, so it describes the
+/// same filter whatever the loop rate. This is the rate the firmware converts
+/// it against, and what the host uses to report the resulting coefficient.
 pub const CONTROL_LOOP_RATE_HZ: f32 = 400.0;
 
 /// The corner frequency a one-pole coefficient produces at `sample_rate_hz`.

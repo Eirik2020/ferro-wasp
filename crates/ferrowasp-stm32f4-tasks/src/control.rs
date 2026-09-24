@@ -203,9 +203,12 @@ pub fn control_loop(mut cx: control_loop::Context) {
             if pending_seq != *cx.local.applied_tuning_seq {
                 let profile = cx.shared.tuning_profile.lock(|profile| *profile);
                 fc.apply_tuning_profile(profile);
-                cx.local
-                    .imu_rate_filter
-                    .set_alpha(profile.sanitized().imu_lpf_alpha);
+                // The stored value is a corner in hertz; the filter wants a
+                // one-pole coefficient, which only exists relative to a rate.
+                cx.local.imu_rate_filter.set_alpha(dt::gyro_lpf_alpha(
+                    profile.sanitized().imu_lpf_hz,
+                    dt::CONTROL_LOOP_RATE_HZ as f32,
+                ));
                 *cx.local.applied_tuning_seq = pending_seq;
                 info!("Applied disarmed OSD tuning profile {}", pending_seq);
             }

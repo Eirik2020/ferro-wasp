@@ -13,7 +13,7 @@ pub enum ConfigKey {
     YawP,
     YawI,
     YawD,
-    ImuLpfAlpha,
+    ImuLpfHz,
     LogRateDivisor,
     RcDeadband,
     RollCenterRate,
@@ -93,7 +93,7 @@ impl ConfigKey {
         Self::YawP,
         Self::YawI,
         Self::YawD,
-        Self::ImuLpfAlpha,
+        Self::ImuLpfHz,
         Self::LogRateDivisor,
         Self::RcDeadband,
         Self::RollCenterRate,
@@ -118,7 +118,7 @@ impl ConfigKey {
             Self::YawP => "yaw_p",
             Self::YawI => "yaw_i",
             Self::YawD => "yaw_d",
-            Self::ImuLpfAlpha => "imu_lpf_alpha",
+            Self::ImuLpfHz => "imu_lpf_hz",
             Self::LogRateDivisor => "log_rate_divisor",
             Self::RcDeadband => "rc_deadband",
             Self::RollCenterRate => "roll_center_rate",
@@ -152,13 +152,19 @@ impl ConfigKey {
                 maximum: 20.0,
                 integer: false,
             },
-            Self::ImuLpfAlpha | Self::RollExpo | Self::PitchExpo | Self::YawExpo => {
-                ConfigValueSpec {
-                    minimum: 0.0,
-                    maximum: 1.0,
-                    integer: false,
-                }
-            }
+            Self::RollExpo | Self::PitchExpo | Self::YawExpo => ConfigValueSpec {
+                minimum: 0.0,
+                maximum: 1.0,
+                integer: false,
+            },
+            // A corner frequency, not a smoothing factor. The upper bound is
+            // below Nyquist for the slowest loop rate this firmware runs, so a
+            // stored value stays a filter rather than becoming a pass-through.
+            Self::ImuLpfHz => ConfigValueSpec {
+                minimum: 1.0,
+                maximum: 180.0,
+                integer: false,
+            },
             Self::LogRateDivisor => ConfigValueSpec {
                 minimum: 1.0,
                 maximum: 16.0,

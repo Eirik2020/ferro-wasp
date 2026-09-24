@@ -450,7 +450,8 @@ pub fn current_sample_to_centiamps_with_offset(
 
 fn adjust_menu_value(tuning: &mut TuningProfile, row: u8, direction: i8) {
     let step = if direction >= 0 { 0.1 } else { -0.1 };
-    let lpf_step = if direction >= 0 { 0.05 } else { -0.05 };
+    // Hertz now, not a smoothing factor, so the step is a hertz.
+    let lpf_step = if direction >= 0 { 1.0 } else { -1.0 };
 
     match row {
         0 => tuning.rate_gains.roll.p += step,
@@ -462,7 +463,7 @@ fn adjust_menu_value(tuning: &mut TuningProfile, row: u8, direction: i8) {
         6 => tuning.rate_gains.yaw.p += step,
         7 => tuning.rate_gains.yaw.i += step,
         8 => tuning.rate_gains.yaw.d += step,
-        9 => tuning.imu_lpf_alpha += lpf_step,
+        9 => tuning.imu_lpf_hz += lpf_step,
         _ => {}
     }
 
@@ -483,7 +484,7 @@ fn write_menu_item(output: &mut [u8], index: u8, tuning: &TuningProfile, selecte
         6 => (b"YAW P " as &[u8], tuning.rate_gains.yaw.p),
         7 => (b"YAW I " as &[u8], tuning.rate_gains.yaw.i),
         8 => (b"YAW D " as &[u8], tuning.rate_gains.yaw.d),
-        9 => (b"IMU LPF " as &[u8], tuning.imu_lpf_alpha),
+        9 => (b"IMU LPF HZ " as &[u8], tuning.imu_lpf_hz),
         _ => (b"" as &[u8], 0.0),
     };
 

@@ -14,19 +14,39 @@ pub const RC_INVERT_THROTTLE: bool = false;
 pub const RC_ROLL_CHANNEL_INDEX: usize = 0;
 pub const RC_PITCH_CHANNEL_INDEX: usize = 1;
 pub const RC_YAW_CHANNEL_INDEX: usize = 2;
-/// The gyro low-pass coefficient, authored for [`CONTROL_LOOP_RATE_HZ`].
+/// The gyro low-pass corner, in hertz.
 ///
-/// This is a one-pole smoothing factor, not a frequency, so **it only means
-/// what it is meant to mean at the loop rate it was chosen for**. At 400 Hz it
-/// is a corner near 51 Hz; run the same number at 1 kHz and the corner moves to
-/// about 127 Hz, letting two and a half times the noise bandwidth into the rate
-/// loop with nothing in the stored configuration to say so.
+/// Stored as a frequency rather than as a one-pole smoothing factor, because a
+/// smoothing factor only means what it is meant to mean at one sample rate:
+/// 0.55 is a 51 Hz corner at 400 Hz and a 127 Hz corner at 1 kHz. Storing the
+/// corner keeps a persisted tune meaning the same thing if the loop rate ever
+/// moves, and makes the number legible to whoever reads it.
+pub const IMU_GYRO_LPF_HZ: f32 = 50.8;
+
+/// The one-pole smoothing factor that places the corner at `corner_hz` when
+/// sampled at `sample_rate_hz`.
 ///
-/// FerroConfigurator converts between this coefficient and its corner
-/// frequency so an operator sees what a stored value actually does. If
-/// [`CONTROL_LOOP_RATE_HZ`] ever changes, every stored coefficient must be
-/// re-derived or the tune moves without the configuration saying so.
-pub const IMU_GYRO_LPF_ALPHA: f32 = 0.55;
+/// Saturates at 1.0 - no filtering - for a corner at or above Nyquist, rather
+/// than failing, because the rate loop must always come away with a usable
+/// coefficient.
+pub fn gyro_lpf_alpha(corner_hz: f32, sample_rate_hz: f32) -> f32 {
+    if !(corner_hz > 0.0) || !(sample_rate_hz > 0.0) {
+        return 1.0;
+    }
+    clamp_unit_interval(1.0 - libm::expf(-2.0 * core::f32::consts::PI * corner_hz / sample_rate_hz))
+}
+
+/// The corner a stored smoothing factor produces at `sample_rate_hz`.
+///
+/// Used to migrate configurations written before the corner was stored
+/// directly.
+pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
+    let alpha = clamp_unit_interval(alpha);
+    if alpha <= 0.0 || alpha >= 1.0 || !(sample_rate_hz > 0.0) {
+        return 0.0;
+    }
+    -libm::logf(1.0 - alpha) * sample_rate_hz / (2.0 * core::f32::consts::PI)
+}
 
 pub const IMU_POLL_RATE_HZ: u32 = 800;
 pub const CONTROL_LOOP_RATE_HZ: u32 = 400;
@@ -670,7 +690,7 @@ pub struct PidGains {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TuningProfile {
     pub rate_gains: RateControllerGains,
-    pub imu_lpf_alpha: f32,
+    pub imu_lpf_hz: f32,
     pub rc_rates: RcRateProfile,
 }
 
@@ -694,7 +714,7 @@ impl TuningProfile {
                     d: 0.0,
                 },
             },
-            imu_lpf_alpha: IMU_GYRO_LPF_ALPHA,
+            imu_lpf_hz: IMU_GYRO_LPF_HZ,
             rc_rates: RC_RATE_PROFILE,
         }
     }
@@ -722,7 +742,7 @@ impl TuningProfile {
                     d: 0.0,
                 },
             },
-            imu_lpf_alpha: IMU_GYRO_LPF_ALPHA,
+            imu_lpf_hz: IMU_GYRO_LPF_HZ,
             rc_rates: RC_RATE_PROFILE,
         }
     }
@@ -746,7 +766,7 @@ impl TuningProfile {
                     d: 0.0,
                 },
             },
-            imu_lpf_alpha: IMU_GYRO_LPF_ALPHA,
+            imu_lpf_hz: IMU_GYRO_LPF_HZ,
             rc_rates: RC_RATE_PROFILE,
         }
     }
@@ -755,7 +775,7 @@ impl TuningProfile {
         self.rate_gains.roll = sanitize_pid_gains(self.rate_gains.roll);
         self.rate_gains.pitch = sanitize_pid_gains(self.rate_gains.pitch);
         self.rate_gains.yaw = sanitize_pid_gains(self.rate_gains.yaw);
-        self.imu_lpf_alpha = clamp_unit_interval(self.imu_lpf_alpha);
+        self.imu_lpf_hz = self.imu_lpf_hz.clamp(1.0, 180.0);
         self.rc_rates = self.rc_rates.sanitized();
         self
     }

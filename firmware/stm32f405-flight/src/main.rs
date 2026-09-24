@@ -551,7 +551,10 @@ ferroforge::app! {
                 control_loop_cnt: 0,
                 samples_per_control_loop,
                 flight_controller,
-                imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::IMU_GYRO_LPF_ALPHA),
+                imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::gyro_lpf_alpha(
+                    dt::IMU_GYRO_LPF_HZ,
+                    dt::CONTROL_LOOP_RATE_HZ as f32,
+                )),
                 imu_angle_integrator: dt::GyroAngleIntegrator::new(),
                 gyro_axis_map: CONTROL_IMU_TO_DRONE_ROTATION,
                 gyro_bias_calibrator: dt::GyroBiasCalibrator::new(
@@ -949,7 +952,10 @@ ferroforge::app! {
                     fc.apply_tuning_profile(profile);
                     cx.local
                         .imu_rate_filter
-                        .set_alpha(profile.sanitized().imu_lpf_alpha);
+                        .set_alpha(dt::gyro_lpf_alpha(
+                            profile.sanitized().imu_lpf_hz,
+                            dt::CONTROL_LOOP_RATE_HZ as f32,
+                        ));
                     *cx.local.applied_tuning_seq = pending_seq;
                     info!("Applied disarmed OSD tuning profile {}", pending_seq);
                 }

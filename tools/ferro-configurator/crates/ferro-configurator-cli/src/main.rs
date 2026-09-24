@@ -14,7 +14,7 @@ use ferro_configurator_core::{
     BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
     DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
     PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::CONTROL_LOOP_RATE_HZ,
-    config::lpf_corner_hz, convert_fwbb_to_ulog, detect_dfu,
+    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu,
     discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
     prepare_elf, resolve_device_flight,
 };
@@ -378,7 +378,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 let rendered = config.to_toml()?;
                 emit(cli.format, "config.show", &config, || {
                     print!("{rendered}");
-                    print_lpf_note(config.imu_lpf_alpha);
+                    print_lpf_note(config.imu_lpf_hz);
                 })
             }
             ConfigCommand::Export { path, force } => {
@@ -1127,15 +1127,16 @@ fn bench_watch(
     })
 }
 
-/// Says what the stored gyro coefficient actually does.
+/// Says which coefficient the stored corner produces on the controller.
 ///
-/// `imu_lpf_alpha` is a one-pole smoothing factor, so the number alone does
-/// not tell an operator the filter's corner - and the corner moves if the
-/// loop rate ever does, with nothing in the configuration to show it.
-fn print_lpf_note(alpha: f32) {
-    if let Some(corner) = lpf_corner_hz(alpha, CONTROL_LOOP_RATE_HZ) {
+/// The configuration carries a frequency, which is what an operator can reason
+/// about. The firmware turns it into a one-pole coefficient against its own
+/// loop rate, and seeing that number is useful when comparing against logs or
+/// against Betaflight, where the coefficient is what gets quoted.
+fn print_lpf_note(corner_hz: f32) {
+    if let Some(alpha) = lpf_alpha_for_corner(corner_hz, CONTROL_LOOP_RATE_HZ) {
         println!(
-            "# imu_lpf_alpha {alpha} is a {corner:.0} Hz corner at the {CONTROL_LOOP_RATE_HZ:.0} Hz loop rate."
+            "# imu_lpf_hz {corner_hz} is a one-pole alpha of {alpha:.3} at the {CONTROL_LOOP_RATE_HZ:.0} Hz loop rate."
         );
     }
 }

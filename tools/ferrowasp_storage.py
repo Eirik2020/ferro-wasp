@@ -39,7 +39,7 @@ CONFIG_KEYS = (
     "yaw_p",
     "yaw_i",
     "yaw_d",
-    "imu_lpf_alpha",
+    "imu_lpf_hz",
     "log_rate_divisor",
     "rc_deadband",
     "roll_center_rate",
