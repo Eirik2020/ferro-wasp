@@ -18,6 +18,16 @@ pub struct FlashInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StatusSnapshot {
     pub uptime_ms: u32,
+    /// Control cycles completed since boot.
+    ///
+    /// With `uptime_ms`, two samples give the rate the loop actually achieved,
+    /// which is the measurement that says whether a loop-rate change fits.
+    pub control_sequence: u32,
+    /// The rate the firmware is built for, as the firmware reports it.
+    ///
+    /// The host used to keep its own copy of this and was wrong about it after
+    /// the firmware moved to 1 kHz.
+    pub control_loop_hz: u32,
     pub imu: String,
     pub imu_ready: bool,
     pub rc_valid: bool,
@@ -487,6 +497,8 @@ fn parse_status(line: &str) -> Option<StatusSnapshot> {
     };
     Some(StatusSnapshot {
         uptime_ms: get("ms")?.parse().ok()?,
+        control_sequence: get("ctl").and_then(|v| v.parse().ok()).unwrap_or(0),
+        control_loop_hz: get("ctl_hz").and_then(|v| v.parse().ok()).unwrap_or(0),
         imu: get("imu")?.to_owned(),
         imu_ready: boolean("ready")?,
         rc_valid: boolean("rc")?,

@@ -2,7 +2,12 @@ use core::fmt::{self, Write};
 
 use heapless::String;
 
-pub const STATUS_LINE_CAPACITY: usize = 256;
+/// Bounds one status frame.
+///
+/// The worst case - every numeric field at its extreme - is 270 bytes with the
+/// terminator, which the test below pins. Only this crate's stack buffer is
+/// sized from it, so the headroom is cheap.
+pub const STATUS_LINE_CAPACITY: usize = 288;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ImuKind {
@@ -30,6 +35,13 @@ pub struct StatusSnapshot {
     pub gyro_raw: [i32; 3],
     pub imu_stale: bool,
     pub control_sequence: u32,
+    /// The control loop rate the firmware is built for, in hertz.
+    ///
+    /// Reported so a host does not have to keep its own copy, which has
+    /// already been wrong once. Comparing it against the rate implied by
+    /// `control_sequence` over `uptime_ms` says whether the loop is keeping
+    /// up - the measurement a loop-rate change needs.
+    pub control_loop_hz: u32,
     pub rc_valid: bool,
     pub rc_armable: bool,
     pub rc_throttle: u32,
@@ -45,7 +57,7 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
     let mut line = String::new();
     write!(
         line,
-        "FWDBG1 ms={} imu={} ready={} seq={} gyro={},{},{} stale={} ctl={} rc={} armable={} thr={} arm_sw={} armed={} vbat_dV={} current_cA={} adc_v_mV={} adc_i_mV={}\r\n",
+        "FWDBG1 ms={} imu={} ready={} seq={} gyro={},{},{} stale={} ctl={} ctl_hz={} rc={} armable={} thr={} arm_sw={} armed={} vbat_dV={} current_cA={} adc_v_mV={} adc_i_mV={}\r\n",
         snapshot.uptime_ms,
         snapshot.imu_kind.as_str(),
         u8::from(snapshot.imu_ready),
@@ -55,6 +67,7 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
         snapshot.gyro_raw[2],
         u8::from(snapshot.imu_stale),
         snapshot.control_sequence,
+        snapshot.control_loop_hz,
         u8::from(snapshot.rc_valid),
         u8::from(snapshot.rc_armable),
         snapshot.rc_throttle,
@@ -81,6 +94,7 @@ mod tests {
             gyro_raw: [-17, 4, -70],
             imu_stale: false,
             control_sequence: 4_938,
+            control_loop_hz: 1_000,
             rc_valid: true,
             rc_armable: true,
             rc_throttle: 1_000,
@@ -99,7 +113,7 @@ mod tests {
 
         assert_eq!(
             line.as_str(),
-            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234\r\n"
+            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234\r\n"
         );
         assert!(line.is_ascii());
     }
@@ -128,6 +142,7 @@ mod tests {
             gyro_raw: [i32::MIN, i32::MIN, i32::MIN],
             imu_stale: true,
             control_sequence: u32::MAX,
+            control_loop_hz: u32::MAX,
             rc_valid: true,
             rc_armable: true,
             rc_throttle: u32::MAX,

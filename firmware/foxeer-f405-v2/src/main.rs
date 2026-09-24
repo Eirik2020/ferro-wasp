@@ -940,6 +940,7 @@ ferroforge::app! {
             ],
             imu_stale: IMU_STALE.load(Ordering::Relaxed),
             control_sequence: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+            control_loop_hz: dt::CONTROL_LOOP_RATE_HZ,
             rc_valid: USB_RC_VALID_SNAPSHOT.load(Ordering::Relaxed),
             rc_armable: USB_RC_ARMABLE_SNAPSHOT.load(Ordering::Relaxed),
             rc_throttle: RC_THROTTLE.load(Ordering::Relaxed),

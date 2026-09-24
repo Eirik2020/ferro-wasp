@@ -105,6 +105,17 @@ enum BenchCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Measure whether the control loop is keeping up with its configured rate.
+    ///
+    /// Read-only. The controller reports both the rate it was built for and the
+    /// number of control cycles it has completed, so the shortfall between them
+    /// is the answer to "can this board sustain this loop rate".
+    Loop {
+        /// How long to measure. Longer is more precise; the uptime the
+        /// controller reports has millisecond resolution.
+        #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u64).range(2..))]
+        seconds: u64,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -754,6 +765,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
             BenchCommand::Watch { seconds, out } => {
                 bench_watch(cli, timeout, *seconds, out.as_ref())
             }
+            BenchCommand::Loop { seconds } => bench_loop(cli, timeout, *seconds),
         },
         Command::Doctor => {
             let ports = discover_ports()?;
@@ -1139,6 +1151,95 @@ fn print_lpf_note(corner_hz: f32) {
             "# imu_lpf_hz {corner_hz} is a one-pole alpha of {alpha:.3} at the {CONTROL_LOOP_RATE_HZ:.0} Hz loop rate."
         );
     }
+}
+
+/// What the loop achieved against what it was asked for.
+#[derive(Debug, Clone, Serialize)]
+struct LoopReport {
+    configured_hz: u32,
+    achieved_hz: f64,
+    shortfall_percent: f64,
+    cycles: u32,
+    span_ms: u32,
+    keeping_up: bool,
+}
+
+/// Measures the control loop against its own configured rate.
+///
+/// Both numbers come from the controller: the rate it was built for, and the
+/// cycles it has completed since boot. A loop that cannot sustain its rate
+/// completes fewer cycles than the clock allows, and that shortfall is the
+/// signal - it appears before anything else misbehaves.
+fn bench_loop(cli: &Cli, timeout: Duration, seconds: u64) -> Result<(), FerroError> {
+    let mut client = connect(cli, timeout)?;
+    let first = client.read_status_fresh()?;
+    if first.control_loop_hz == 0 {
+        return Err(FerroError::UnexpectedResponse {
+            operation: "control loop rate".to_owned(),
+            response: "this firmware does not report ctl_hz; reflash to measure the loop"
+                .to_owned(),
+        });
+    }
+    if cli.format == OutputFormat::Human {
+        println!(
+            "Measuring for {seconds}s against the reported {} Hz.",
+            first.control_loop_hz
+        );
+    }
+    // Read continuously rather than sleeping and reading once. The port
+    // buffers status lines, so a read after a sleep returns the oldest queued
+    // line and measures a fraction of the requested span.
+    let deadline = Instant::now() + Duration::from_secs(seconds);
+    let mut last = first.clone();
+    while Instant::now() < deadline {
+        match client.read_status_fresh() {
+            Ok(status) => last = status,
+            Err(_) => continue,
+        }
+    }
+
+    let span_ms = last.uptime_ms.saturating_sub(first.uptime_ms);
+    let cycles = last.control_sequence.saturating_sub(first.control_sequence);
+    if span_ms == 0 {
+        return Err(FerroError::UnexpectedResponse {
+            operation: "control loop rate".to_owned(),
+            response: "the controller reported no elapsed time".to_owned(),
+        });
+    }
+    let achieved = f64::from(cycles) * 1000.0 / f64::from(span_ms);
+    let configured = f64::from(first.control_loop_hz);
+    let shortfall = (configured - achieved) / configured * 100.0;
+    // A tenth of a percent is well inside the millisecond resolution of the
+    // reported uptime, so anything under it is measurement noise.
+    let keeping_up = shortfall < 0.1;
+
+    let report = LoopReport {
+        configured_hz: first.control_loop_hz,
+        achieved_hz: achieved,
+        shortfall_percent: shortfall,
+        cycles,
+        span_ms,
+        keeping_up,
+    };
+
+    emit(cli.format, "bench.loop", &report, || {
+        println!();
+        println!("Configured:  {} Hz", report.configured_hz);
+        println!("Achieved:    {:.1} Hz", report.achieved_hz);
+        println!(
+            "Shortfall:   {:.3} %  ({} cycles in {} ms)",
+            report.shortfall_percent, report.cycles, report.span_ms
+        );
+        println!();
+        if report.keeping_up {
+            println!("The loop is keeping up.");
+        } else {
+            println!(
+                "The loop is NOT keeping up: {:.0} cycles per second are being lost.",
+                f64::from(report.configured_hz) - report.achieved_hz
+            );
+        }
+    })
 }
 
 fn connect(
