@@ -1798,26 +1798,57 @@ ferroforge::app! {
                     *pending_page = None;
                     *next_page_index = next_page_index.saturating_add(1);
                     FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
-                    Mono::delay(1.millis()).await;
-                    continue;
+                    // Fall through to the record drain rather than yielding
+                    // here. Yielding meant a pass either wrote a page or
+                    // consumed records, never both, so the store alternated
+                    // between the two and halved its own throughput. The loop
+                    // still yields once at the end of every pass.
                 }
                 if !*log_region_writable {
                     if flash_record_consumer.dequeue().is_some() {
                         FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
                     }
-                } else if let Some(record) = flash_record_consumer.dequeue() {
-                    let armed = record.flags & 1 != 0;
-                    if armed && !assembler.recording() {
-                        assembler.start(*next_flight_id, *boot_session_start_pending);
-                        *boot_session_start_pending = false;
-                        *next_flight_id = next_flight_id.wrapping_add(1).max(1);
-                    }
-                    if armed {
-                        if assembler.push(record).is_err() {
-                            FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
+                } else if flash_record_consumer.peek().is_some() {
+                    // Drain a bounded batch rather than one record per pass.
+                    //
+                    // This loop ends in a one millisecond yield, so consuming a
+                    // single record per pass capped the store near one record
+                    // per millisecond however fast the flash is - measured at
+                    // 84 pages/s, where the part itself programs a page in well
+                    // under a millisecond. At 400 Hz that left about five
+                    // percent of margin nobody had measured, and any higher
+                    // rate silently dropped most of the log.
+                    //
+                    // The bound keeps this task from starving the rest of the
+                    // system on a full queue. A page still goes out once per
+                    // pass, which at roughly a millisecond a pass is ample for
+                    // the few hundred pages a second these rates ask for.
+                    let mut drained = 0;
+                    while drained < FLASH_RECORD_DRAIN_PER_PASS {
+                        let Some(record) = flash_record_consumer.dequeue() else {
+                            break;
+                        };
+                        drained += 1;
+                        // Bench-only: record while disarmed so the flash write
+                        // path can be exercised without flying. The record's own
+                        // armed flag stays honest, so a capture made this way is
+                        // still identifiable as ground data.
+                        #[cfg(feature = "bench_blackbox")]
+                        let armed = true;
+                        #[cfg(not(feature = "bench_blackbox"))]
+                        let armed = record.flags & 1 != 0;
+                        if armed && !assembler.recording() {
+                            assembler.start(*next_flight_id, *boot_session_start_pending);
+                            *boot_session_start_pending = false;
+                            *next_flight_id = next_flight_id.wrapping_add(1).max(1);
                         }
-                    } else if assembler.recording() && assembler.stop().is_err() {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                        if armed {
+                            if assembler.push(record).is_err() {
+                                FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
+                            }
+                        } else if assembler.recording() && assembler.stop().is_err() {
+                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                        }
                     }
                 } else if !SAFETY_ARMED.load(Ordering::Acquire)
                     && assembler.recording()

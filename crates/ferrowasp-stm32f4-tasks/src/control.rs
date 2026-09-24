@@ -187,6 +187,35 @@ pub fn control_loop(mut cx: control_loop::Context) {
             imu_pitch_filtered,
             imu_yaw_filtered,
         ]);
+        // Bench-only: exercise the blackbox write path while disarmed.
+        //
+        // Every stored record is otherwise an armed record, so the flash write
+        // path is only ever tested by flying. That leaves the one question a
+        // loop-rate change actually turns on - whether the store keeps up at
+        // this many records per second - answerable only in the air.
+        //
+        // This records with motors at zero and the armed flag false, so the
+        // rate is real but nothing actuates. It consumes the same flight log
+        // as a real flight, so it is never in a flight image: the powered
+        // props-off gate rejects bench images by name.
+        #[cfg(feature = "bench_blackbox")]
+        if !control_armed {
+            enqueue_flash_record(dt::CompactRateBlackboxSample::from_fields(
+                dt::CompactRateBlackboxFields {
+                    seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    imu_seq: imu_sequence,
+                    armed: false,
+                    imu_fresh,
+                    raw_gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
+                    filtered_gyro_dps: [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
+                    command_dps: [0.0; 3],
+                    pid: [0.0; 3],
+                    throttle: 0.0,
+                    motors: [0.0; 4],
+                },
+            ));
+        }
+
         CONTROL_ROLL_DPS10.store((imu_roll_filtered * 10.0) as i32, Ordering::Relaxed);
         CONTROL_PITCH_DPS10.store((imu_pitch_filtered * 10.0) as i32, Ordering::Relaxed);
         CONTROL_YAW_DPS10.store((imu_yaw_filtered * 10.0) as i32, Ordering::Relaxed);

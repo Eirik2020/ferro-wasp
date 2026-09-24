@@ -304,6 +304,13 @@ pub use ferrowasp_core::safety::signals::{
 };
 
 #[cfg(not(feature = "mspv2_configurator"))]
+/// How many blackbox records the flash task consumes per pass.
+///
+/// Its loop yields for a millisecond, so one record per pass capped the store
+/// near a thousand records a second regardless of the flash. Bounded so a full
+/// queue cannot starve the rest of the system.
+pub const FLASH_RECORD_DRAIN_PER_PASS: u32 = 16;
+
 pub const USB_DEBUG_HEADER: &[u8] = b"FerroWasp Foxeer F405 V2 storage CLI v1; type help\r\n";
 pub static RC_RATES: Mutex<RefCell<safety::RcRates>> = Mutex::new(RefCell::new(safety::RcRates {
     roll: 0,
