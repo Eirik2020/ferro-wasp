@@ -66,6 +66,33 @@ pub const SCHEDULER_TICK_RATE_HZ: u32 = 1_000;
 /// The gyro filter is stored as a corner in hertz and derived against this, so
 /// changing it does not move a persisted tune. A P-only rate loop's gain is
 /// rate-independent, so the gains carry over too.
+///
+/// # Why not faster
+///
+/// The ceiling is the sensor, not the processor. Measured on a Foxeer F405 V2
+/// with props off, `bench loop` over twenty seconds at each rate:
+///
+/// | configured | achieved | IMU rate | cycles per sample |
+/// |---|---|---|---|
+/// | 1 kHz | 1000.0 Hz | 1011.8 Hz | 1.0 |
+/// | 2 kHz | 2000.0 Hz | 1011.8 Hz | 2.0 |
+/// | 4 kHz | 4000.0 Hz | 1011.8 Hz | 3.95 |
+///
+/// The loop sustains 4 kHz without dropping a cycle, so the F405 is not the
+/// limit. The ICM42688P runs a 1 kHz ODR, so above 1 kHz the extra cycles
+/// recompute on a gyro sample already seen - at 4 kHz the firmware's own
+/// stale-IMU detector reported stale on 12 of 16 samples, three in four.
+///
+/// That costs more than wasted cycles. The control output cannot respond
+/// faster than the sensor delivers; the blackbox would spend three quarters of
+/// a finite flash on duplicate records, at 800 pages/s against a 3 ms
+/// worst-case page program; and a stale-IMU warning that fires constantly is
+/// no longer able to report a sensor that has genuinely stopped.
+///
+/// Raising this is worthwhile only together with the sensor ODR, which the
+/// part supports to 32 kHz. Its UI filter is set to ODR/4, so that corner has
+/// to be chosen deliberately at the same time, and the blackbox needs a
+/// divisor.
 pub const CONTROL_LOOP_RATE_HZ: u32 = 1_000;
 pub const CONTROL_LOOP_DT_SECONDS: f32 = 1.0 / CONTROL_LOOP_RATE_HZ as f32;
 pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;
