@@ -71,10 +71,6 @@ Closed: the `UART4 RX free-buffer pool exhausted on IDLE` warning was noise on
 an unterminated line, absent throughout the powered run with the VTX
 connected.
 
-Open decisions before FCU3 follows: the FCU3 drift table in FerroForge's
-`docs/src/ferro-wasp-adoption.md`, above all the differing
-`ActuatorHardware` validation.
-
 ### Carried forward from 2026-07-27
 
 Open ESC-only power-cycle recovery bug:
