@@ -464,9 +464,15 @@ d = 0.0
 /// The loop rate the firmware runs its gyro filter at.
 ///
 /// The configuration stores the filter's corner in hertz, so it describes the
-/// same filter whatever the loop rate. This is the rate the firmware converts
-/// it against, and what the host uses to report the resulting coefficient.
-pub const CONTROL_LOOP_RATE_HZ: f32 = 400.0;
+/// same filter whatever the loop rate. This is only used to report the
+/// coefficient that corner produces on the controller.
+///
+/// It mirrors `CONTROL_LOOP_RATE_HZ` in the firmware and has to move with it.
+/// That duplication is the same trap the stored corner exists to avoid, and it
+/// has already been wrong once: the host kept saying 400 Hz after the firmware
+/// moved to 1 kHz. The fix is for the device to report its own rate, which the
+/// status line does not carry yet.
+pub const CONTROL_LOOP_RATE_HZ: f32 = 1_000.0;
 
 /// The corner frequency a one-pole coefficient produces at `sample_rate_hz`.
 ///
@@ -495,11 +501,15 @@ pub fn lpf_alpha_for_corner(corner_hz: f32, sample_rate_hz: f32) -> Option<f32> 
 mod lpf_tests {
     use super::*;
 
-    /// The shipped coefficient, and what it actually does at the loop rate it
-    /// was chosen for.
+    /// What the coefficient stored by firmware before schema 3 described.
+    ///
+    /// Stated against 400 Hz explicitly, because that is the rate it was
+    /// authored for and the rate the firmware migrates it at. Writing this
+    /// against whatever the current loop rate happens to be is the mistake the
+    /// stored corner exists to prevent.
     #[test]
-    fn the_shipped_coefficient_is_a_51_hz_corner() {
-        let corner = lpf_corner_hz(0.55, CONTROL_LOOP_RATE_HZ).expect("0.55 is a filter");
+    fn the_pre_schema_three_coefficient_was_a_51_hz_corner_at_400_hz() {
+        let corner = lpf_corner_hz(0.55, 400.0).expect("0.55 is a filter");
         assert!(
             (corner - 50.8).abs() < 0.2,
             "expected about 50.8 Hz, got {corner}"
