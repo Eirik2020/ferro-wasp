@@ -14,7 +14,20 @@ pub const RC_INVERT_THROTTLE: bool = false;
 pub const RC_ROLL_CHANNEL_INDEX: usize = 0;
 pub const RC_PITCH_CHANNEL_INDEX: usize = 1;
 pub const RC_YAW_CHANNEL_INDEX: usize = 2;
+/// The gyro low-pass coefficient, authored for [`CONTROL_LOOP_RATE_HZ`].
+///
+/// This is a one-pole smoothing factor, not a frequency, so **it only means
+/// what it is meant to mean at the loop rate it was chosen for**. At 400 Hz it
+/// is a corner near 51 Hz; run the same number at 1 kHz and the corner moves to
+/// about 127 Hz, letting two and a half times the noise bandwidth into the rate
+/// loop with nothing in the stored configuration to say so.
+///
+/// FerroConfigurator converts between this coefficient and its corner
+/// frequency so an operator sees what a stored value actually does. If
+/// [`CONTROL_LOOP_RATE_HZ`] ever changes, every stored coefficient must be
+/// re-derived or the tune moves without the configuration saying so.
 pub const IMU_GYRO_LPF_ALPHA: f32 = 0.55;
+
 pub const IMU_POLL_RATE_HZ: u32 = 800;
 pub const CONTROL_LOOP_RATE_HZ: u32 = 400;
 pub const CONTROL_LOOP_DT_SECONDS: f32 = 1.0 / CONTROL_LOOP_RATE_HZ as f32;

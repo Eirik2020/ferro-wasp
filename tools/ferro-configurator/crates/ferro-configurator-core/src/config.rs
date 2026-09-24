@@ -459,3 +459,78 @@ d = 0.0
         );
     }
 }
+
+/// The loop rate the firmware's gyro filter coefficient was authored for.
+///
+/// `imu_lpf_alpha` is a one-pole smoothing factor, not a frequency, so it only
+/// means what it is meant to mean at one sample rate. Reporting the corner it
+/// produces is the only way an operator can see what a stored value does.
+pub const CONTROL_LOOP_RATE_HZ: f32 = 400.0;
+
+/// The corner frequency a one-pole coefficient produces at `sample_rate_hz`.
+///
+/// Returns `None` for coefficients that are not a filter: zero passes nothing
+/// through and one filters nothing at all.
+pub fn lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> Option<f32> {
+    if !(alpha > 0.0) || alpha >= 1.0 || !(sample_rate_hz > 0.0) {
+        return None;
+    }
+    Some(-(1.0 - alpha).ln() * sample_rate_hz / (2.0 * std::f32::consts::PI))
+}
+
+/// The coefficient that puts the corner at `corner_hz` when sampled at
+/// `sample_rate_hz`.
+///
+/// Inverse of [`lpf_corner_hz`]. `None` when the request is not achievable:
+/// a corner at or above Nyquist is not a filter.
+pub fn lpf_alpha_for_corner(corner_hz: f32, sample_rate_hz: f32) -> Option<f32> {
+    if !(corner_hz > 0.0) || !(sample_rate_hz > 0.0) || corner_hz >= sample_rate_hz / 2.0 {
+        return None;
+    }
+    Some(1.0 - (-2.0 * std::f32::consts::PI * corner_hz / sample_rate_hz).exp())
+}
+
+#[cfg(test)]
+mod lpf_tests {
+    use super::*;
+
+    /// The shipped coefficient, and what it actually does at the loop rate it
+    /// was chosen for.
+    #[test]
+    fn the_shipped_coefficient_is_a_51_hz_corner() {
+        let corner = lpf_corner_hz(0.55, CONTROL_LOOP_RATE_HZ).expect("0.55 is a filter");
+        assert!(
+            (corner - 50.8).abs() < 0.2,
+            "expected about 50.8 Hz, got {corner}"
+        );
+    }
+
+    /// The trap this exists to expose: the same number at a higher loop rate is
+    /// a different filter, and nothing in the stored configuration says so.
+    #[test]
+    fn the_same_coefficient_means_a_different_filter_at_a_different_rate() {
+        let at_400 = lpf_corner_hz(0.55, 400.0).unwrap();
+        let at_1000 = lpf_corner_hz(0.55, 1000.0).unwrap();
+        assert!(
+            at_1000 > at_400 * 2.4,
+            "0.55 should widen from {at_400} Hz to well over twice that, got {at_1000}"
+        );
+    }
+
+    #[test]
+    fn the_conversions_are_inverses() {
+        for rate in [400.0_f32, 1000.0, 2000.0] {
+            for corner in [10.0_f32, 50.8, 120.0] {
+                let alpha = lpf_alpha_for_corner(corner, rate).expect("achievable");
+                let back = lpf_corner_hz(alpha, rate).expect("a filter");
+                assert!((back - corner).abs() < 0.05, "{corner} Hz at {rate} Hz -> {back}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_corner_at_or_above_nyquist_is_not_a_filter() {
+        assert_eq!(lpf_alpha_for_corner(200.0, 400.0), None);
+        assert_eq!(lpf_alpha_for_corner(500.0, 400.0), None);
+    }
+}

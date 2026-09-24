@@ -13,7 +13,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
     BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
     DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
-    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, convert_fwbb_to_ulog, detect_dfu,
+    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::CONTROL_LOOP_RATE_HZ,
+    config::lpf_corner_hz, convert_fwbb_to_ulog, detect_dfu,
     discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
     prepare_elf, resolve_device_flight,
 };
@@ -377,6 +378,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 let rendered = config.to_toml()?;
                 emit(cli.format, "config.show", &config, || {
                     print!("{rendered}");
+                    print_lpf_note(config.imu_lpf_alpha);
                 })
             }
             ConfigCommand::Export { path, force } => {
@@ -1123,6 +1125,19 @@ fn bench_watch(
             println!("Samples written to {path}");
         }
     })
+}
+
+/// Says what the stored gyro coefficient actually does.
+///
+/// `imu_lpf_alpha` is a one-pole smoothing factor, so the number alone does
+/// not tell an operator the filter's corner - and the corner moves if the
+/// loop rate ever does, with nothing in the configuration to show it.
+fn print_lpf_note(alpha: f32) {
+    if let Some(corner) = lpf_corner_hz(alpha, CONTROL_LOOP_RATE_HZ) {
+        println!(
+            "# imu_lpf_alpha {alpha} is a {corner:.0} Hz corner at the {CONTROL_LOOP_RATE_HZ:.0} Hz loop rate."
+        );
+    }
 }
 
 fn connect(
