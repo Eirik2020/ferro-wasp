@@ -54,7 +54,7 @@ pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
 /// sensor free-runs at its own ODR and raises data-ready on EXTI, so the two
 /// are asynchronous. The control block runs every
 /// `SCHEDULER_TICK_RATE_HZ / CONTROL_LOOP_RATE_HZ` ticks.
-pub const SCHEDULER_TICK_RATE_HZ: u32 = 1_000;
+pub const SCHEDULER_TICK_RATE_HZ: u32 = 2_000;
 
 /// The rate the rate controller, mixer and blackbox record run at.
 ///
@@ -67,33 +67,28 @@ pub const SCHEDULER_TICK_RATE_HZ: u32 = 1_000;
 /// changing it does not move a persisted tune. A P-only rate loop's gain is
 /// rate-independent, so the gains carry over too.
 ///
-/// # Why not faster
+/// # Why 2 kHz
 ///
-/// The ceiling is the sensor, not the processor. Measured on a Foxeer F405 V2
-/// with props off, `bench loop` over twenty seconds at each rate:
+/// Measured on a Foxeer F405 V2 with props off, sweeping both rates:
 ///
-/// | configured | achieved | IMU rate | cycles per sample |
-/// |---|---|---|---|
-/// | 1 kHz | 1000.0 Hz | 1011.8 Hz | 1.0 |
-/// | 2 kHz | 2000.0 Hz | 1011.8 Hz | 2.0 |
-/// | 4 kHz | 4000.0 Hz | 1011.8 Hz | 3.95 |
+/// | ODR | control | achieved control | achieved IMU | cycles/sample | stale |
+/// |---|---|---|---|---|---|
+/// | 1 kHz | 4 kHz | 4000.0 Hz | 1011.8 Hz | 3.95 | 12 of 16 |
+/// | 2 kHz | 2 kHz | 2000.0 Hz | 2023.6 Hz | 0.99 | 0 of 16 |
+/// | 4 kHz | 4 kHz | 3999.9 Hz | 4047.2 Hz | 0.99 | 0 of 16 |
 ///
-/// The loop sustains 4 kHz without dropping a cycle, so the F405 is not the
-/// limit. The ICM42688P runs a 1 kHz ODR, so above 1 kHz the extra cycles
-/// recompute on a gyro sample already seen - at 4 kHz the firmware's own
-/// stale-IMU detector reported stale on 12 of 16 samples, three in four.
+/// The processor is not the constraint: the loop held 4 kHz without dropping a
+/// cycle even while three of every four cycles recomputed on a gyro sample
+/// already seen. Raising the sensor with it fixes that, and 4 kHz works.
 ///
-/// That costs more than wasted cycles. The control output cannot respond
-/// faster than the sensor delivers; the blackbox would spend three quarters of
-/// a finite flash on duplicate records, at 800 pages/s against a 3 ms
-/// worst-case page program; and a stale-IMU warning that fires constantly is
-/// no longer able to report a sensor that has genuinely stopped.
+/// What holds this at 2 kHz is the blackbox, which the bench could not test
+/// because it never armed. One record per cycle is 200 pages/s here against a
+/// 5 ms budget per page; 4 kHz would be 800 pages/s against 1.25 ms, with the
+/// flash specified at 3 ms worst case. Going to 4 kHz needs a log divisor and
+/// an armed props-off run to prove the write path, and that trades away the
+/// high-rate logging the higher sensor rate was for.
 ///
-/// Raising this is worthwhile only together with the sensor ODR, which the
-/// part supports to 32 kHz. Its UI filter is set to ODR/4, so that corner has
-/// to be chosen deliberately at the same time, and the blackbox needs a
-/// divisor.
-pub const CONTROL_LOOP_RATE_HZ: u32 = 1_000;
+pub const CONTROL_LOOP_RATE_HZ: u32 = 2_000;
 pub const CONTROL_LOOP_DT_SECONDS: f32 = 1.0 / CONTROL_LOOP_RATE_HZ as f32;
 pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;
 pub const RATE_CONTROLLER_D_FILTER_ALPHA: f32 = 0.25;
