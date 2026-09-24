@@ -201,7 +201,7 @@ ferroforge::app! {
         let tim8 = Timer::new(dp.TIM8, &mut rcc);
 
         // Poll the IMU at 800 Hz and run the PID/motor update at 400 Hz.
-        let sampling_rate = dt::IMU_POLL_RATE_HZ.Hz();
+        let sampling_rate = dt::SCHEDULER_TICK_RATE_HZ.Hz();
         let control_loop_rate: Rate<u32, 1, 1> = dt::CONTROL_LOOP_RATE_HZ.Hz();
         let samples_per_control_loop = sampling_rate.to_Hz() / control_loop_rate.to_Hz();
 

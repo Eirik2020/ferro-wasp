@@ -209,9 +209,9 @@ ferroforge::app! {
         let gpiob = dp.GPIOB.split(&mut rcc);
         let gpioc = dp.GPIOC.split(&mut rcc);
 
-        // Keep the existing 800 Hz scheduler and 400 Hz PID/motor cadence.
+        // 1 kHz scheduler and 1 kHz PID/motor cadence, matching the IMU's ODR.
         // IMU sampling itself is independently triggered by PC4/EXTI4.
-        let scheduler_rate = dt::IMU_POLL_RATE_HZ.Hz();
+        let scheduler_rate = dt::SCHEDULER_TICK_RATE_HZ.Hz();
         let control_loop_rate: Rate<u32, 1, 1> = dt::CONTROL_LOOP_RATE_HZ.Hz();
         let samples_per_control_loop = scheduler_rate.to_Hz() / control_loop_rate.to_Hz();
 

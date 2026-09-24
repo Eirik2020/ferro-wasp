@@ -48,8 +48,25 @@ pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
     -libm::logf(1.0 - alpha) * sample_rate_hz / (2.0 * core::f32::consts::PI)
 }
 
-pub const IMU_POLL_RATE_HZ: u32 = 800;
-pub const CONTROL_LOOP_RATE_HZ: u32 = 400;
+/// The rate the control scheduler timer ticks at.
+///
+/// Not the IMU sample rate, despite what this constant used to be called: the
+/// sensor free-runs at its own ODR and raises data-ready on EXTI, so the two
+/// are asynchronous. The control block runs every
+/// `SCHEDULER_TICK_RATE_HZ / CONTROL_LOOP_RATE_HZ` ticks.
+pub const SCHEDULER_TICK_RATE_HZ: u32 = 1_000;
+
+/// The rate the rate controller, mixer and blackbox record run at.
+///
+/// Matches the ICM42688P's 1 kHz ODR, so the control block consumes roughly one
+/// sensor sample per cycle instead of decimating an asynchronous 2.53:1. At
+/// 1 kHz the logged Nyquist is 500 Hz, above the sensor's own 250 Hz filter
+/// corner, so nothing folds back into the band.
+///
+/// The gyro filter is stored as a corner in hertz and derived against this, so
+/// changing it does not move a persisted tune. A P-only rate loop's gain is
+/// rate-independent, so the gains carry over too.
+pub const CONTROL_LOOP_RATE_HZ: u32 = 1_000;
 pub const CONTROL_LOOP_DT_SECONDS: f32 = 1.0 / CONTROL_LOOP_RATE_HZ as f32;
 pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;
 pub const RATE_CONTROLLER_D_FILTER_ALPHA: f32 = 0.25;
@@ -1347,6 +1364,36 @@ impl FlightController {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// The scheduler divides down to the control rate with integer division,
+    /// so a pair that does not divide exactly silently runs at a different
+    /// rate than the constant claims - and every dt, filter and log rate
+    /// derived from it would then be wrong by the remainder.
+    #[test]
+    fn the_scheduler_divides_exactly_into_the_control_rate() {
+        assert!(
+            SCHEDULER_TICK_RATE_HZ >= CONTROL_LOOP_RATE_HZ,
+            "the scheduler cannot tick slower than the loop it drives"
+        );
+        assert_eq!(
+            SCHEDULER_TICK_RATE_HZ % CONTROL_LOOP_RATE_HZ,
+            0,
+            "{SCHEDULER_TICK_RATE_HZ} Hz does not divide into {CONTROL_LOOP_RATE_HZ} Hz"
+        );
+    }
+
+    /// The stored filter is a corner, so it must survive a rate change intact.
+    #[test]
+    fn the_default_corner_survives_the_current_loop_rate() {
+        let alpha = gyro_lpf_alpha(IMU_GYRO_LPF_HZ, CONTROL_LOOP_RATE_HZ as f32);
+        let corner = gyro_lpf_corner_hz(alpha, CONTROL_LOOP_RATE_HZ as f32);
+        assert!(
+            (corner - IMU_GYRO_LPF_HZ).abs() < 0.1,
+            "{IMU_GYRO_LPF_HZ} Hz became {corner} Hz at {CONTROL_LOOP_RATE_HZ} Hz"
+        );
+    }
+
     use super::*;
 
     fn assert_close(actual: f32, expected: f32) {
