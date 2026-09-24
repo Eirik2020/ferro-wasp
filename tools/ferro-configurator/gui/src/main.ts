@@ -175,7 +175,7 @@ const NUMERIC_FIELDS: ReadonlyArray<{
   { id: "yaw-center", read: (c) => c.yaw_center_rate, write: (c, v) => { c.yaw_center_rate = v; } },
   { id: "yaw-max", read: (c) => c.yaw_max_rate, write: (c, v) => { c.yaw_max_rate = v; } },
   { id: "yaw-expo", read: (c) => c.yaw_expo, write: (c, v) => { c.yaw_expo = v; } },
-  { id: "imu-lpf", read: (c) => c.imu_lpf_alpha, write: (c, v) => { c.imu_lpf_alpha = v; } },
+  { id: "imu-lpf", read: (c) => c.imu_lpf_hz, write: (c, v) => { c.imu_lpf_hz = v; } },
   { id: "log-divisor", read: (c) => c.log_rate_divisor, write: (c, v) => { c.log_rate_divisor = v; } },
 ];
 

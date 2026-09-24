@@ -24,7 +24,7 @@ function baselineConfig(): FerroConfig {
     roll: { p: 2.5, i: 0, d: 0 },
     pitch: { p: 2.5, i: 0, d: 0 },
     yaw: { p: 2.0, i: 0, d: 0 },
-    imu_lpf_alpha: 0.55,
+    imu_lpf_hz: 50.8,
     log_rate_divisor: 1,
     rc_deadband: 8,
     roll_center_rate: 70,

@@ -42,7 +42,7 @@ export interface FerroConfig {
   roll: AxisPid;
   pitch: AxisPid;
   yaw: AxisPid;
-  imu_lpf_alpha: number;
+  imu_lpf_hz: number;
   log_rate_divisor: number;
   rc_deadband?: number;
   roll_center_rate?: number;
