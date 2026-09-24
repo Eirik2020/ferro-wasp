@@ -31,24 +31,22 @@ Candidate: revision `a921ffe`, clean tree, default features only
 - [x] `PREFLIGHT-FOX-001` and `FLIGHT-FOX-001` - flown 2026-09-24, accepted
   by operator decision.
 
-**The adoption question is answered.** Over ~133k armed samples and ~84k loop
-intervals, pre-conversion 1-2 against post-conversion 15/19/21/22: the
-control law is identical (P recovered as `pid/error` = 0.25/0.25/0.20 both
-sides), loop timing is identical (every interval 2000/3000 us at 50/50), and
-there are zero sequence gaps, repeats or CRC failures in ~10 MB of logs -
-including through flight 22's 1592 deg/s cartwheel with the mixer saturated.
-
-Carried with it: command tracking was never evaluated - every flight with
-stick input ended in deliberate ground contact - and the 10-13 Hz oscillation
-review needs matplotlib. One boring hop closes both. Logs under
+**The adoption question is answered.** Measured pre- against post-conversion
+over ~133k armed samples: identical control law, identical loop timing, and
+zero sequence gaps, repeats or CRC failures in ~10 MB of logs - including
+through flight 22's 1592 deg/s cartwheel with the mixer saturated. No
+oscillation in either era. Detail is in the run records; logs are under
 `logs/ferroforge-flights/` and `logs/preconversion-flights/`, gitignored.
+Command tracking was never evaluated, because every flight with stick input
+ended in deliberate ground contact; one ordinary hop would close it.
 
-Now unblocked: publish FerroForge 0.3.0; convert `usb_fs` and
-`flash_manager_task` shaped by Foxeer alone; retire `tools/rtic-app-builder`,
-whose phase 6 entry condition was this flight. Branches:
-`ferroforge-0.3-landing`, `ferrowasp-cleanup`, `foxeer-post-flight-work`,
-`ferrowasp-configurator-gui`. Tag `foxeer-candidate-16f6e8ed` names the flown
-image, reproducible only from `~/ws/ferroforge`.
+FerroForge 0.3.0 is published and `main` pushed, so the path override is gone
+and this repo builds against the registry. That changes the image, so tag
+`foxeer-candidate-16f6e8ed` is historical and any future flight re-gates.
+Left: convert `usb_fs` and `flash_manager_task` shaped by Foxeer alone, and
+retire `tools/rtic-app-builder`, whose phase 6 entry condition was this
+flight. Branches: `ferrowasp-cleanup`, `foxeer-post-flight-work`,
+`ferrowasp-configurator-gui`.
 
 Two open bugs carried forward. Neither can stop a running motor - current
 sense drives only OSD and MSP, and `EscManager::is_faulted` has one consumer,

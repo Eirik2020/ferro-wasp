@@ -32,9 +32,6 @@ stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "
 
 ferroforge = "0.3"
 
-# See the note in the repository root's Cargo.toml.
-[patch.crates-io]
-ferroforge = { path = "../../../ferroforge" }
 
 [profile.dev.package."*"]
 opt-level = "s"

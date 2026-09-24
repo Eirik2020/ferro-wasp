@@ -264,6 +264,8 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "ferroforge"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73d9f398f1b9ebe3170622a45053fcd59b5f5ad0a9cd4338e4ccfd320eb51f64"
 dependencies = [
  "ferroforge-macros",
 ]
@@ -271,6 +273,8 @@ dependencies = [
 [[package]]
 name = "ferroforge-contracts"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a40f0a2539a1b84492317fe5aeedcd70d7969760adcd43bcca1fba81577c6c4"
 dependencies = [
  "proc-macro2",
  "syn 2.0.118",
@@ -279,6 +283,8 @@ dependencies = [
 [[package]]
 name = "ferroforge-macros"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c08c3cb4e547a306632677c5d3346a023eb8ce42e95ac1f27c70052912e6d84"
 dependencies = [
  "ferroforge-contracts",
  "proc-macro2",
