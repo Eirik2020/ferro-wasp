@@ -67,6 +67,18 @@ impl<T: LineTransport> FerroClient<T> {
         })
     }
 
+    /// Discards the cached snapshot and waits for the controller to emit a new
+    /// one.
+    ///
+    /// [`Self::read_status`] answers from cache when it has one, which is what
+    /// a display wants and what a safety precondition must not have: the arm
+    /// switch can move after the last response was parsed. Anything gating a
+    /// write on the disarmed state, or sampling status over time, calls this.
+    pub fn read_status_fresh(&mut self) -> Result<StatusSnapshot> {
+        self.last_status = None;
+        self.read_status()
+    }
+
     pub fn read_status(&mut self) -> Result<StatusSnapshot> {
         if let Some(status) = self.last_status.clone() {
             return Ok(status);

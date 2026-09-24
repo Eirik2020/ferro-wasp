@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    io::{self, IsTerminal, Write},
+    fs::File,
+    io::{self, BufWriter, IsTerminal, Write},
     path::{Path, PathBuf},
     process::ExitCode,
     thread,
@@ -78,6 +79,31 @@ enum Command {
     Dfu(DfuArgs),
     /// Run read-only host and USB diagnostics.
     Doctor,
+    /// Observe a controller for bench evidence, without commanding it.
+    Bench(BenchArgs),
+}
+
+#[derive(Debug, Args)]
+struct BenchArgs {
+    #[command(subcommand)]
+    command: BenchCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum BenchCommand {
+    /// Record live status and every transition in it for a fixed duration.
+    ///
+    /// Read-only: it polls the controller's own status and never writes. The
+    /// operator still performs every hardware action; this only removes the
+    /// transcription from the evidence.
+    Watch {
+        /// How long to observe.
+        #[arg(long, default_value_t = 60, value_parser = clap::value_parser!(u64).range(1..))]
+        seconds: u64,
+        /// Write one JSON object per sample to this path.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -722,6 +748,11 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 emit(cli.format, "dfu.list", &detection, || print_dfu(&detection))
             }
         },
+        Command::Bench(args) => match &args.command {
+            BenchCommand::Watch { seconds, out } => {
+                bench_watch(cli, timeout, *seconds, out.as_ref())
+            }
+        },
         Command::Doctor => {
             let ports = discover_ports()?;
             let count = ports.iter().filter(|port| port.is_ferrowasp).count();
@@ -900,6 +931,198 @@ fn finish_flash_guidance(timeout: Duration) {
         }
         thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// One polled reading, with the offset from the start of the watch.
+#[derive(Debug, Clone, Serialize)]
+struct WatchSample {
+    elapsed_ms: u64,
+    status: StatusSnapshot,
+}
+
+/// A change in one of the states an operator would otherwise narrate.
+#[derive(Debug, Clone, Serialize)]
+struct WatchTransition {
+    elapsed_ms: u64,
+    field: &'static str,
+    from: bool,
+    to: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WatchReport {
+    requested_seconds: u64,
+    /// What the controller actually delivered. It emits status on its own
+    /// cadence, so this is the resolution of the evidence: a transition
+    /// shorter than one period can be missed entirely.
+    observed_rate_hz: f64,
+    samples: usize,
+    failed_reads: usize,
+    armed_ms: u64,
+    throttle_max: u32,
+    battery_decivolts_min: u32,
+    battery_decivolts_max: u32,
+    transitions: Vec<WatchTransition>,
+    samples_path: Option<String>,
+}
+
+/// Records the transitions between two consecutive readings.
+fn diff_status(
+    elapsed_ms: u64,
+    previous: &StatusSnapshot,
+    current: &StatusSnapshot,
+    into: &mut Vec<WatchTransition>,
+) {
+    let fields: [(&'static str, bool, bool); 5] = [
+        ("armed", previous.armed, current.armed),
+        ("armable", previous.armable, current.armable),
+        ("arm_switch", previous.arm_switch, current.arm_switch),
+        ("rc_valid", previous.rc_valid, current.rc_valid),
+        ("imu_ready", previous.imu_ready, current.imu_ready),
+    ];
+    for (field, from, to) in fields {
+        if from != to {
+            into.push(WatchTransition {
+                elapsed_ms,
+                field,
+                from,
+                to,
+            });
+        }
+    }
+}
+
+/// Polls status for a bounded time and reports what changed.
+///
+/// Nothing here commands the aircraft. A failed read is counted and the watch
+/// continues, because a dropped USB line during a bench run is not a reason to
+/// discard the evidence either side of it.
+fn bench_watch(
+    cli: &Cli,
+    timeout: Duration,
+    seconds: u64,
+    out: Option<&PathBuf>,
+) -> Result<(), FerroError> {
+    let mut client = connect(cli, timeout)?;
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(seconds);
+
+    let mut writer = match out {
+        Some(path) => Some(BufWriter::new(File::create(path).map_err(|error| {
+            FerroError::FileIo {
+                operation: "create",
+                path: path.clone(),
+                reason: error.to_string(),
+            }
+        })?)),
+        None => None,
+    };
+
+    let mut transitions: Vec<WatchTransition> = Vec::new();
+    let mut previous: Option<StatusSnapshot> = None;
+    let mut previous_ms: u64 = 0;
+    let (mut samples, mut failed, mut armed_ms) = (0usize, 0usize, 0u64);
+    let (mut throttle_max, mut vbat_min, mut vbat_max) = (0u32, u32::MAX, 0u32);
+
+    if cli.format == OutputFormat::Human {
+        println!("Watching for {seconds}s. The operator performs every action.");
+    }
+
+    while Instant::now() < deadline {
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+        match client.read_status_fresh() {
+            Ok(status) => {
+                samples += 1;
+                // Credit the gap that just elapsed, so armed time reflects the
+                // clock rather than an assumed cadence.
+                if previous.as_ref().is_some_and(|p| p.armed) {
+                    armed_ms += elapsed_ms.saturating_sub(previous_ms);
+                }
+                previous_ms = elapsed_ms;
+                throttle_max = throttle_max.max(status.throttle);
+                vbat_min = vbat_min.min(status.battery_decivolts);
+                vbat_max = vbat_max.max(status.battery_decivolts);
+
+                if let Some(previous) = previous.as_ref() {
+                    let before = transitions.len();
+                    diff_status(elapsed_ms, previous, &status, &mut transitions);
+                    if cli.format == OutputFormat::Human {
+                        for change in &transitions[before..] {
+                            println!(
+                                "  {:>7.1}s  {} {} -> {}",
+                                elapsed_ms as f64 / 1000.0,
+                                change.field,
+                                change.from,
+                                change.to
+                            );
+                        }
+                    }
+                }
+
+                if let Some(writer) = writer.as_mut() {
+                    let sample = WatchSample {
+                        elapsed_ms,
+                        status: status.clone(),
+                    };
+                    let line = serde_json::to_string(&sample).unwrap_or_default();
+                    let _ = writeln!(writer, "{line}");
+                }
+                previous = Some(status);
+            }
+            Err(_) => failed += 1,
+        }
+    }
+    let elapsed_total_ms = started.elapsed().as_millis() as u64;
+
+    if let Some(mut writer) = writer {
+        let _ = writer.flush();
+    }
+
+    let report = WatchReport {
+        requested_seconds: seconds,
+        observed_rate_hz: if elapsed_total_ms > 0 {
+            samples as f64 * 1000.0 / elapsed_total_ms as f64
+        } else {
+            0.0
+        },
+        samples,
+        failed_reads: failed,
+        armed_ms,
+        throttle_max,
+        battery_decivolts_min: if samples == 0 { 0 } else { vbat_min },
+        battery_decivolts_max: vbat_max,
+        transitions,
+        samples_path: out.map(|path| path.display().to_string()),
+    };
+
+    emit(cli.format, "bench.watch", &report, || {
+        println!();
+        println!(
+            "Samples:     {} at {:.2} Hz ({} failed reads)",
+            report.samples, report.observed_rate_hz, report.failed_reads
+        );
+        println!("Armed:       {:.1} s", report.armed_ms as f64 / 1000.0);
+        println!("Throttle:    max {}", report.throttle_max);
+        println!(
+            "Battery:     {:.1}..{:.1} V",
+            report.battery_decivolts_min as f64 / 10.0,
+            report.battery_decivolts_max as f64 / 10.0
+        );
+        println!("Transitions: {}", report.transitions.len());
+        if report.observed_rate_hz < 5.0 {
+            println!();
+            println!(
+                "Note: the controller emits status at {:.2} Hz, so anything shorter than\n\
+                 {:.1} s can pass unseen. This records state, not events. For arming and\n\
+                 abort transitions, the RTT log is the complete record.",
+                report.observed_rate_hz,
+                if report.observed_rate_hz > 0.0 { 1.0 / report.observed_rate_hz } else { 0.0 }
+            );
+        }
+        if let Some(path) = &report.samples_path {
+            println!("Samples written to {path}");
+        }
+    })
 }
 
 fn connect(
