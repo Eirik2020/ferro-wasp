@@ -20,11 +20,11 @@ import {
 /** The reviewed Foxeer baseline. */
 function baselineConfig(): FerroConfig {
   return {
-    schema_version: 1,
+    schema_version: 2,
     roll: { p: 2.5, i: 0, d: 0 },
     pitch: { p: 2.5, i: 0, d: 0 },
     yaw: { p: 2.0, i: 0, d: 0 },
-    imu_lpf_alpha: 0.2,
+    imu_lpf_alpha: 0.55,
     log_rate_divisor: 1,
     rc_deadband: 8,
     roll_center_rate: 70,
