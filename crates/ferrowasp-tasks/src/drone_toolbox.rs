@@ -48,48 +48,18 @@ pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
     -libm::logf(1.0 - alpha) * sample_rate_hz / (2.0 * core::f32::consts::PI)
 }
 
-/// The rate the control scheduler timer ticks at.
+/// Whether a scheduler tick divides exactly into a control rate.
 ///
-/// Not the IMU sample rate, despite what this constant used to be called: the
-/// sensor free-runs at its own ODR and raises data-ready on EXTI, so the two
-/// are asynchronous. The control block runs every
-/// `SCHEDULER_TICK_RATE_HZ / CONTROL_LOOP_RATE_HZ` ticks.
-pub const SCHEDULER_TICK_RATE_HZ: u32 = 2_000;
-
-/// The rate the rate controller, mixer and blackbox record run at.
-///
-/// Matches the ICM42688P's 1 kHz ODR, so the control block consumes roughly one
-/// sensor sample per cycle instead of decimating an asynchronous 2.53:1. At
-/// 1 kHz the logged Nyquist is 500 Hz, above the sensor's own 250 Hz filter
-/// corner, so nothing folds back into the band.
-///
-/// The gyro filter is stored as a corner in hertz and derived against this, so
-/// changing it does not move a persisted tune. A P-only rate loop's gain is
-/// rate-independent, so the gains carry over too.
-///
-/// # Why 2 kHz
-///
-/// Measured on a Foxeer F405 V2 with props off, sweeping both rates:
-///
-/// | ODR | control | achieved control | achieved IMU | cycles/sample | stale |
-/// |---|---|---|---|---|---|
-/// | 1 kHz | 4 kHz | 4000.0 Hz | 1011.8 Hz | 3.95 | 12 of 16 |
-/// | 2 kHz | 2 kHz | 2000.0 Hz | 2023.6 Hz | 0.99 | 0 of 16 |
-/// | 4 kHz | 4 kHz | 3999.9 Hz | 4047.2 Hz | 0.99 | 0 of 16 |
-///
-/// The processor is not the constraint: the loop held 4 kHz without dropping a
-/// cycle even while three of every four cycles recomputed on a gyro sample
-/// already seen. Raising the sensor with it fixes that, and 4 kHz works.
-///
-/// What holds this at 2 kHz is the blackbox, which the bench could not test
-/// because it never armed. One record per cycle is 200 pages/s here against a
-/// 5 ms budget per page; 4 kHz would be 800 pages/s against 1.25 ms, with the
-/// flash specified at 3 ms worst case. Going to 4 kHz needs a log divisor and
-/// an armed props-off run to prove the write path, and that trades away the
-/// high-rate logging the higher sensor rate was for.
-///
-pub const CONTROL_LOOP_RATE_HZ: u32 = 2_000;
-pub const CONTROL_LOOP_DT_SECONDS: f32 = 1.0 / CONTROL_LOOP_RATE_HZ as f32;
+/// The scheduler divides down with integer division, so a pair that does not
+/// divide exactly runs at a rate the board does not claim, and every dt,
+/// filter and log rate derived from it is wrong by the remainder. Each board
+/// asserts this over its own pair; there is deliberately no shared rate here,
+/// because the rate is bounded by the sensor a board carries and the bus it
+/// sits on, and a board that inherits another's runs on samples it has
+/// already seen.
+pub const fn scheduler_divides_exactly(tick_hz: u32, control_hz: u32) -> bool {
+    control_hz > 0 && tick_hz >= control_hz && tick_hz % control_hz == 0
+}
 pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;
 pub const RATE_CONTROLLER_D_FILTER_ALPHA: f32 = 0.25;
 pub const RATE_CONTROLLER_I_RELAX_SETPOINT_RATE_DPS: f32 = 400.0;
@@ -1206,11 +1176,6 @@ impl FlightController {
     pub fn update_rate_measured(&mut self, roll: f32, pitch: f32, yaw: f32) {
         self.rate_measured = RateMeasured { roll, pitch, yaw };
     }
-    /// Updates motor commands based on setpoints and measured values.
-    pub fn update_motor_commands(&mut self) {
-        self.update_motor_commands_dt(CONTROL_LOOP_DT_SECONDS);
-    }
-
     pub fn update_motor_commands_dt(&mut self, dt_seconds: f32) {
         // Calcualte roll, pitch, yaw controller commands
         self.next_control_output(dt_seconds);
@@ -1388,32 +1353,32 @@ impl FlightController {
 mod tests {
     use super::*;
 
-    /// The scheduler divides down to the control rate with integer division,
-    /// so a pair that does not divide exactly silently runs at a different
-    /// rate than the constant claims - and every dt, filter and log rate
-    /// derived from it would then be wrong by the remainder.
+    /// The divider check itself, since no board's pair lives here any more.
+    ///
+    /// Each board asserts this over its own constants; this proves the helper
+    /// they all use actually rejects a pair that does not divide.
     #[test]
-    fn the_scheduler_divides_exactly_into_the_control_rate() {
-        assert!(
-            SCHEDULER_TICK_RATE_HZ >= CONTROL_LOOP_RATE_HZ,
-            "the scheduler cannot tick slower than the loop it drives"
-        );
-        assert_eq!(
-            SCHEDULER_TICK_RATE_HZ % CONTROL_LOOP_RATE_HZ,
-            0,
-            "{SCHEDULER_TICK_RATE_HZ} Hz does not divide into {CONTROL_LOOP_RATE_HZ} Hz"
-        );
+    fn the_divider_check_rejects_an_inexact_pair() {
+        assert!(scheduler_divides_exactly(2_000, 2_000));
+        assert!(scheduler_divides_exactly(800, 400));
+        assert!(!scheduler_divides_exactly(800, 300), "800 does not divide into 300");
+        assert!(!scheduler_divides_exactly(400, 800), "a scheduler cannot tick slower");
+        assert!(!scheduler_divides_exactly(1_000, 0));
     }
 
     /// The stored filter is a corner, so it must survive a rate change intact.
     #[test]
     fn the_default_corner_survives_the_current_loop_rate() {
-        let alpha = gyro_lpf_alpha(IMU_GYRO_LPF_HZ, CONTROL_LOOP_RATE_HZ as f32);
-        let corner = gyro_lpf_corner_hz(alpha, CONTROL_LOOP_RATE_HZ as f32);
+        // Stated against each rate a board actually runs, since the corner is
+        // meant to mean the same filter at any of them.
+        for rate in [400.0_f32, 1_000.0, 2_000.0] {
+        let alpha = gyro_lpf_alpha(IMU_GYRO_LPF_HZ, rate);
+        let corner = gyro_lpf_corner_hz(alpha, rate);
         assert!(
             (corner - IMU_GYRO_LPF_HZ).abs() < 0.1,
-            "{IMU_GYRO_LPF_HZ} Hz became {corner} Hz at {CONTROL_LOOP_RATE_HZ} Hz"
+            "{IMU_GYRO_LPF_HZ} Hz became {corner} Hz at {rate} Hz"
         );
+        }
     }
 
     use super::*;
@@ -1574,7 +1539,7 @@ mod tests {
         controller.update_throttle_setpoint(1000.0);
         controller.update_attitude_rate_setpoint(roll_right.roll_dps, 0.0, 0.0);
         controller.update_rate_measured(0.0, 0.0, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
         let motors = controller.get_motor_commands();
         assert_close(motors[0], 1000.0 + roll_right.roll_dps);
         assert_close(motors[1], 1000.0 + roll_right.roll_dps);
@@ -1588,7 +1553,7 @@ mod tests {
             RC_CHANNEL_CENTER,
         );
         controller.update_attitude_rate_setpoint(0.0, pitch_forward.pitch_dps, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
         let motors = controller.get_motor_commands();
         assert_close(motors[0], 1000.0 - pitch_forward.pitch_dps);
         assert_close(motors[1], 1000.0 + pitch_forward.pitch_dps);
@@ -1602,7 +1567,7 @@ mod tests {
             RC_CHANNEL_CENTER,
         );
         controller.update_attitude_rate_setpoint(0.0, 0.0, yaw_right.yaw_dps);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
         let motors = controller.get_motor_commands();
         assert_close(motors[0], 1000.0 - yaw_right.yaw_dps);
         assert_close(motors[1], 1000.0 + yaw_right.yaw_dps);
@@ -1799,7 +1764,7 @@ mod tests {
         controller.update_throttle_setpoint(1000.0);
         controller.update_attitude_rate_setpoint(0.0, 0.0, 0.0);
         controller.update_rate_measured(0.0, 0.0, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
 
         assert_eq!(controller.get_rate_controller_output(), [0.0, 0.0, 0.0]);
         assert_eq!(controller.get_motor_commands(), [1000.0; 4]);
@@ -1844,7 +1809,7 @@ mod tests {
         controller.update_throttle_setpoint(1000.0);
         controller.update_attitude_rate_setpoint(100.0, 0.0, 0.0);
         controller.update_rate_measured(0.0, 0.0, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
 
         assert_eq!(controller.get_rate_controller_output(), [100.0, 0.0, 0.0]);
         assert_eq!(
@@ -1866,7 +1831,7 @@ mod tests {
         // The board-level gyro mapping must present a physical nose-up
         // disturbance as negative pitch rate to this controller convention.
         controller.update_rate_measured(0.0, -100.0, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
 
         assert_eq!(controller.get_rate_controller_output(), [0.0, 100.0, 0.0]);
         assert_eq!(
@@ -1886,7 +1851,7 @@ mod tests {
         controller.update_throttle_setpoint(1000.0);
         controller.update_attitude_rate_setpoint(0.0, 0.0, 0.0);
         controller.update_rate_measured(0.0, 100.0, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
 
         assert_eq!(controller.get_rate_controller_output(), [0.0, -100.0, 0.0]);
         assert_eq!(
@@ -1901,7 +1866,7 @@ mod tests {
 
         controller.update_attitude_rate_setpoint(100.0, -50.0, 25.0);
         controller.update_rate_measured(25.0, 25.0, -25.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
 
         let terms = controller.get_rate_controller_contributions();
 
@@ -1968,7 +1933,7 @@ mod tests {
         controller.update_throttle_setpoint(1900.0);
         controller.update_attitude_rate_setpoint(500.0, 0.0, 0.0);
         controller.update_rate_measured(0.0, 0.0, 0.0);
-        controller.update_motor_commands();
+        controller.update_motor_commands_dt(1.0 / 400.0);
 
         assert_eq!(
             controller.get_motor_commands(),

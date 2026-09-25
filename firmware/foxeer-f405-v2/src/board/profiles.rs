@@ -28,6 +28,27 @@ pub const ADC_OBSERVATION_PROFILE: AdcObservationProfile = AdcObservationProfile
     documented_baseline_verified: true,
 };
 
+/// How fast this board runs its rate loop, and the scheduler tick that drives
+/// it.
+///
+/// Bounded by the sensor: this board carries an ICM42688P at a 2 kHz ODR, so
+/// the loop matches it and every cycle has a new sample. A board with an
+/// MPU6500 is limited to 1 kHz and must say so itself rather than inherit this.
+///
+/// Measured with props off: the loop holds 2 kHz and 4 kHz exactly, so the
+/// processor is not the constraint. Going past 2 kHz means raising the sensor
+/// ODR, which needs the 1 MHz SPI clock raised with it, which in turn retires
+/// MPU6500 support - the part is specified at 1 MHz for register access.
+pub const CONTROL_LOOP_RATE_HZ: u32 = 2_000;
+pub const SCHEDULER_TICK_RATE_HZ: u32 = 2_000;
+
+// The scheduler divides down with integer division, so a pair that does not
+// divide exactly would run a rate this board does not claim.
+const _: () = assert!(ferrowasp_tasks::drone_toolbox::scheduler_divides_exactly(
+    SCHEDULER_TICK_RATE_HZ,
+    CONTROL_LOOP_RATE_HZ
+));
+
 pub const IMU_CONTROL_AXIS_PROFILE: ImuControlAxisProfile = ImuControlAxisProfile {
     gyro_raw_to_dps: 164,
     drone_body_frame: DroneBodyFrame::ForwardRightDown,

@@ -1,4 +1,18 @@
+//! Board facts for FCU3.
+
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+
+/// How fast this board runs its rate loop, and the scheduler tick driving it.
+///
+/// This board carries an MPU6500, which runs a 1 kHz gyro output rate with its
+/// 184 Hz DLPF, and is specified at 1 MHz for SPI register access. It cannot
+/// follow the Foxeer to 2 kHz without seeing every sample twice, so it states
+/// its own rate rather than inheriting one.
+///
+/// These are the values this board ran before the rate became a board fact.
+/// It is obsolete and unflown since, so they are restored rather than raised.
+pub const CONTROL_LOOP_RATE_HZ: u32 = 400;
+pub const SCHEDULER_TICK_RATE_HZ: u32 = 800;
 
 pub const DSHOT_IDLE_TUNING_MAX_COMMAND: u16 = 250;
 

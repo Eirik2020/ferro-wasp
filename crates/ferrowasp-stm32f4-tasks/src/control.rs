@@ -63,10 +63,15 @@ pub fn motor_command_timestamp(now_ms: u32, sequence: u32) -> u32 {
         actuator_output(cmd: safety::ActuatorCmd),
         safety_master(event: safety::SafetyEvent),
     ],
+    // `control_loop_rate_hz` is a board fact, not a shared one: it is bounded
+    // by the sensor the board carries and the bus it sits on. A board with an
+    // ICM42688P at 2 kHz and one with an MPU6500 at 1 kHz cannot share a rate
+    // without one of them running on samples it has already seen.
     config = [
         imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile,
         imu_gyro_raw_to_dps: f32,
         logical_to_physical_motor_output: [usize; 4],
+        control_loop_rate_hz: u32,
     ],
     monotonic = Mono,
 )]
@@ -198,6 +203,12 @@ pub fn control_loop(mut cx: control_loop::Context) {
         // rate is real but nothing actuates. It consumes the same flight log
         // as a real flight, so it is never in a flight image: the powered
         // props-off gate rejects bench images by name.
+        //
+        // It fills a 16 MB log in minutes and, unlike a flight, never stops.
+        // Erasing while this image is running is pointless - the erase
+        // completes, verifies empty, and the running firmware refills the
+        // region before anyone can look. Flash a non-bench image first, then
+        // erase. Download anything worth keeping before either.
         #[cfg(feature = "bench_blackbox")]
         if !control_armed {
             enqueue_flash_record(dt::CompactRateBlackboxSample::from_fields(
@@ -236,7 +247,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 // one-pole coefficient, which only exists relative to a rate.
                 cx.local.imu_rate_filter.set_alpha(dt::gyro_lpf_alpha(
                     profile.sanitized().imu_lpf_hz,
-                    dt::CONTROL_LOOP_RATE_HZ as f32,
+                    CONFIG::CONTROL_LOOP_RATE_HZ as f32,
                 ));
                 *cx.local.applied_tuning_seq = pending_seq;
                 info!("Applied disarmed OSD tuning profile {}", pending_seq);
@@ -305,7 +316,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
         let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
             body_rates,
             drone_gravity,
-            dt::CONTROL_LOOP_DT_SECONDS,
+            1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32,
         );
         cx.shared.imu_angles.lock(|angles| {
             *angles = imu_angles;
@@ -650,7 +661,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
                     rc_raw.yaw as f32,
                 ); // deg/s or rad/s, but be consistent
                 fc.update_rate_measured(imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered); // filtered gyro rates
-                fc.update_motor_commands();
+                fc.update_motor_commands_dt(1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32);
                 let motor_commands = remap_motor_outputs(
                     fc.get_logical_motor_commands(),
                     CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,

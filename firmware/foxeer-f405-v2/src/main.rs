@@ -211,8 +211,8 @@ ferroforge::app! {
 
         // 1 kHz scheduler and 1 kHz PID/motor cadence, matching the IMU's ODR.
         // IMU sampling itself is independently triggered by PC4/EXTI4.
-        let scheduler_rate = dt::SCHEDULER_TICK_RATE_HZ.Hz();
-        let control_loop_rate: Rate<u32, 1, 1> = dt::CONTROL_LOOP_RATE_HZ.Hz();
+        let scheduler_rate = board::profiles::SCHEDULER_TICK_RATE_HZ.Hz();
+        let control_loop_rate: Rate<u32, 1, 1> = board::profiles::CONTROL_LOOP_RATE_HZ.Hz();
         let samples_per_control_loop = scheduler_rate.to_Hz() / control_loop_rate.to_Hz();
 
         let adc1_battery = board::init::init_adc1_battery(
@@ -697,7 +697,7 @@ ferroforge::app! {
                 flight_controller,
                 imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::gyro_lpf_alpha(
                     dt::IMU_GYRO_LPF_HZ,
-                    dt::CONTROL_LOOP_RATE_HZ as f32,
+                    board::profiles::CONTROL_LOOP_RATE_HZ as f32,
                 )),
                 imu_angle_integrator: dt::GyroAngleIntegrator::new(),
                 gyro_axis_map: CONTROL_IMU_TO_RATE_CONTROLLER_MAP,
@@ -940,7 +940,7 @@ ferroforge::app! {
             ],
             imu_stale: IMU_STALE.load(Ordering::Relaxed),
             control_sequence: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-            control_loop_hz: dt::CONTROL_LOOP_RATE_HZ,
+            control_loop_hz: board::profiles::CONTROL_LOOP_RATE_HZ,
             rc_valid: USB_RC_VALID_SNAPSHOT.load(Ordering::Relaxed),
             rc_armable: USB_RC_ARMABLE_SNAPSHOT.load(Ordering::Relaxed),
             rc_throttle: RC_THROTTLE.load(Ordering::Relaxed),
@@ -1896,6 +1896,7 @@ ferroforge::app! {
             imu_gyro_raw_to_dps: f32 = IMU_GYRO_RAW_TO_DPS,
             logical_to_physical_motor_output: [usize; 4] =
                 board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
+            control_loop_rate_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
         ]
     )]
     fn control_loop(cx: control_loop::Context);

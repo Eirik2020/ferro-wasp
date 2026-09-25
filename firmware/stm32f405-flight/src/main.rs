@@ -201,8 +201,8 @@ ferroforge::app! {
         let tim8 = Timer::new(dp.TIM8, &mut rcc);
 
         // Poll the IMU at 800 Hz and run the PID/motor update at 400 Hz.
-        let sampling_rate = dt::SCHEDULER_TICK_RATE_HZ.Hz();
-        let control_loop_rate: Rate<u32, 1, 1> = dt::CONTROL_LOOP_RATE_HZ.Hz();
+        let sampling_rate = board::profiles::SCHEDULER_TICK_RATE_HZ.Hz();
+        let control_loop_rate: Rate<u32, 1, 1> = board::profiles::CONTROL_LOOP_RATE_HZ.Hz();
         let samples_per_control_loop = sampling_rate.to_Hz() / control_loop_rate.to_Hz();
 
         let adc1_battery = board::init::init_adc1_battery(
@@ -553,7 +553,7 @@ ferroforge::app! {
                 flight_controller,
                 imu_rate_filter: dt::ImuRateLowPassFilter::new(dt::gyro_lpf_alpha(
                     dt::IMU_GYRO_LPF_HZ,
-                    dt::CONTROL_LOOP_RATE_HZ as f32,
+                    board::profiles::CONTROL_LOOP_RATE_HZ as f32,
                 )),
                 imu_angle_integrator: dt::GyroAngleIntegrator::new(),
                 gyro_axis_map: CONTROL_IMU_TO_DRONE_ROTATION,
@@ -954,7 +954,7 @@ ferroforge::app! {
                         .imu_rate_filter
                         .set_alpha(dt::gyro_lpf_alpha(
                             profile.sanitized().imu_lpf_hz,
-                            dt::CONTROL_LOOP_RATE_HZ as f32,
+                            board::profiles::CONTROL_LOOP_RATE_HZ as f32,
                         ));
                     *cx.local.applied_tuning_seq = pending_seq;
                     info!("Applied disarmed OSD tuning profile {}", pending_seq);
@@ -1022,7 +1022,7 @@ ferroforge::app! {
             let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
                 [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
                 [acc_x, acc_y, acc_z],
-                dt::CONTROL_LOOP_DT_SECONDS,
+                1.0 / board::profiles::CONTROL_LOOP_RATE_HZ as f32,
             );
             cx.shared.imu_angles.lock(|angles| {
                 *angles = imu_angles;
@@ -1376,7 +1376,7 @@ ferroforge::app! {
                         imu_pitch_filtered,
                         imu_yaw_filtered,
                     ); // filtered gyro rates
-                    fc.update_motor_commands();
+                    fc.update_motor_commands_dt(1.0 / board::profiles::CONTROL_LOOP_RATE_HZ as f32);
                     let motor_commands = fc.get_motor_commands();
 
                     #[cfg(feature = "blackbox_defmt")]
