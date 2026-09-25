@@ -1,0 +1,49 @@
+[package]
+name = "ferrowasp-spike-embassy-foxeer-f405"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+build = false
+
+# EXPERIMENT (claude/embassy-spike-*): embassy-stm32 under the FerroForge
+# `app!` on the Foxeer F405 V2 pinout. Compile-only; never flash this near
+# motors - it drives no actuator path and has no safety kernel.
+
+[workspace]
+resolver = "2"
+
+[[bin]]
+name = "spike-embassy-foxeer-f405"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.3"
+defmt = "1.0.1"
+defmt-rtt = "1.2.0"
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+embedded-hal = "1.0.0"
+ferroforge = "0.3"
+ferroforge-task-blinky = { path = "../../../ferroforge/examples/tasks/blinky" }
+ferroforge-task-spike-embassy-async = { path = "../../../ferroforge/spikes/embassy/tasks-async" }
+# Reused unchanged: HAL-free, embedded-hal 1.0 only.
+ferrowasp-drivers = { path = "../../crates/ferrowasp-drivers" }
+rtic = { version = "2.2.0", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick"] }
+# No `exti` feature: embassy would otherwise own every EXTI vector, and the
+# IMU data-ready interrupt stays an RTIC hardware task here.
+embassy-stm32 = { version = "0.6.0", features = ["stm32f405rg", "defmt", "time-driver-tim5", "unstable-pac"] }
+embassy-time = { version = "0.5.1", features = ["defmt", "generic-queue-16"] }
+
+[patch.crates-io]
+ferroforge = { path = "../../../ferroforge/ferroforge" }
+
+[profile.release]
+codegen-units = 1
+debug = true
+incremental = false
+lto = true
+opt-level = "s"
