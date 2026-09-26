@@ -31,8 +31,7 @@ and this repo builds against the registry. That changes the image, so tag
 `foxeer-candidate-16f6e8ed` is historical and any future flight re-gates.
 Left: convert `usb_fs` and `flash_manager_task` shaped by Foxeer alone, and
 retire `tools/rtic-app-builder`, whose phase 6 entry condition was this
-flight. Branches: `ferrowasp-cleanup`, `foxeer-post-flight-work`,
-`ferrowasp-configurator-gui`.
+flight. All of it is on branch `ferroforge-adoption`.
 
 Two open bugs carried forward. Neither can stop a running motor - current
 sense drives only OSD and MSP, and `EscManager::is_faulted` has one consumer,
