@@ -29,7 +29,8 @@ deterministic within one tree, every other path disagrees, and path length is
 not the cause - two 34-character paths still differed. Panic locations embed
 source paths in `.rodata`, but `trim-paths = "object"` removes all of them
 without making the image portable, so the residue is Cargo's `-C metadata` hash
-over the absolute package path reaching symbol names and link layout. Do not
+reaching symbol names and link layout: `crates/` lies outside the app's own
+workspace, so Cargo hashes it by absolute path, not relative to the root. Do not
 retry `trim-paths` for this: it needs an unstable `cargo-features` gate and
 does not deliver.
 Rebuilding also needs the build script to re-run: it declares
