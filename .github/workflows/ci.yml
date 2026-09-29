@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main]
+    # The adoption work lives on its own branch until it merges, and CI is
+    # what keeps it honest meanwhile.
+    branches: [main, ferroforge-adoption]
     tags:
       - "v*"
 
@@ -166,10 +168,16 @@ jobs:
       - name: Enforce isolated DShot unsafe boundary
         shell: bash
         run: |
+          # A missing directory must fail the audit, not shrink it: rg reports
+          # a missing path and exits 2, which `|| true` below would swallow.
+          # `apps/` became `firmware/` and was scanned for nothing until this.
+          for scanned in crates firmware; do
+            test -d "$scanned" || { echo "the unsafe audit expects ./$scanned"; exit 1; }
+          done
           unsafe_matches="$(
             rg --line-number \
               '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)|expect\(unsafe_code\)' \
-              crates apps --glob '*.rs' --glob '!firmware/**/target/**' || true
+              crates firmware --glob '*.rs' --glob '!**/target/**' || true
           )"
           unexpected="$(
             printf '%s\n' "$unsafe_matches" |
@@ -193,6 +201,8 @@ jobs:
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
           rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4/src/dshot.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f405-flight/src/main.rs
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/foxeer-f405-v2/src/main.rs
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f401-bringup/src/main.rs
 
   publication-security:
     name: Publication security
