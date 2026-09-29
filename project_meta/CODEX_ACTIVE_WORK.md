@@ -36,16 +36,19 @@ disarmed.
 
 ### FerroForge 0.4
 
-FerroForge 0.4.0 is published; this branch still builds against 0.3. Moving
-is mechanical but touches about 40 sites - see its book's adoption chapter:
-`systick-64bit`, `Mono::now()` timestamps become `u64` where this repository's
-APIs take `u32`, `u64::from` on `u32` durations, and typed literals in the
-Foxeer app. Each narrowed timestamp must keep its old wrap before it flies. A
-copy migrated end to end builds and passes the host tests. 0.4 also lets a
-config entry carry a doc comment, which `cb03082` could not, and adds task
-groups and hardware-timer monotonics; a 1 MHz timer monotonic would lift
-blackbox `timestamp_us` off its 1 ms resolution, but is a timer-assignment
-decision.
+Branch `ferroforge-0.4` moves every firmware to FerroForge 0.4 with
+`systick-64bit`, and carries the monotonic's `u64` timestamps through the
+safety, lease and ESC-manager code instead of narrowing them, so no internal
+timestamp wraps. Durations and configuration stay `u32`, widened where they
+meet a timestamp. That closed a real bug: an arm hold straddling the old
+71.6-minute microsecond wrap never qualified (fail-safe, but no arm), now a
+regression test. Three places still narrow, each a fixed format: the blackbox
+`FlightRecord.timestamp_us` (the ULog conversion unwraps it), the USB status
+`uptime_ms` (49.7 days), and the `IMU_DRDY_LAST_US` diagnostic, which has no
+64-bit atomic on this core. Every image differs from the flown one, so all of
+it retests before flight. 0.4 also lets a config entry carry a doc comment,
+which `cb03082` could not; a 1 MHz timer monotonic would lift blackbox
+`timestamp_us` off its 1 ms resolution, but is a timer-assignment decision.
 
 Left of the adoption: convert `usb_fs` and `flash_manager_task`, shaped by
 Foxeer alone, and retire `tools/rtic-app-builder`.

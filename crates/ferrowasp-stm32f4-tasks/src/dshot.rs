@@ -54,7 +54,7 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
 pub async fn dshot_service(mut cx: dshot_service::Context) {
     loop {
         let release = Mono::now();
-        let next_release = release + dshot::DSHOT_SERVICE_PERIOD_MS.millis();
+        let next_release = release + u64::from(dshot::DSHOT_SERVICE_PERIOD_MS).millis();
         let now_ms = release.duration_since_epoch().to_millis();
         if cx.local.esc_actuator_request.is_none() {
             *cx.local.esc_actuator_request = cx.local.esc_request_consumer.dequeue();

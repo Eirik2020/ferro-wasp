@@ -150,7 +150,7 @@ pub struct RcLinkStatus {
     pub valid: bool,
     pub timed_out: bool,
     pub armable: bool,
-    pub last_healthy_frame_us: u32,
+    pub last_healthy_frame_us: u64,
     pub consecutive_healthy_frames: u8,
     pub invalidation_sequence: u32,
     pub last_invalidation: RcLinkInvalidation,
@@ -160,7 +160,7 @@ pub struct RcLinkStatus {
 pub struct RcLinkState {
     valid: bool,
     rearm_allowed: bool,
-    last_healthy_frame_us: u32,
+    last_healthy_frame_us: u64,
     consecutive_healthy_frames: u8,
     invalidation_sequence: u32,
     last_invalidation: RcLinkInvalidation,
@@ -178,8 +178,10 @@ impl RcLinkState {
         }
     }
 
-    pub fn observe_healthy_frame(&mut self, now_us: u32, arm_high: bool) -> RcLinkStatus {
-        if self.valid && now_us.wrapping_sub(self.last_healthy_frame_us) > RC_LINK_TIMEOUT_US {
+    pub fn observe_healthy_frame(&mut self, now_us: u64, arm_high: bool) -> RcLinkStatus {
+        if self.valid
+            && now_us.wrapping_sub(self.last_healthy_frame_us) > u64::from(RC_LINK_TIMEOUT_US)
+        {
             let _ = self.invalidate(RcLinkInvalidation::Timeout);
         }
 
@@ -213,9 +215,9 @@ impl RcLinkState {
         changed
     }
 
-    pub fn status(&self, now_us: u32) -> RcLinkStatus {
-        let timed_out =
-            self.valid && now_us.wrapping_sub(self.last_healthy_frame_us) > RC_LINK_TIMEOUT_US;
+    pub fn status(&self, now_us: u64) -> RcLinkStatus {
+        let timed_out = self.valid
+            && now_us.wrapping_sub(self.last_healthy_frame_us) > u64::from(RC_LINK_TIMEOUT_US);
         let valid = self.valid && !timed_out;
         RcLinkStatus {
             valid,
@@ -252,12 +254,14 @@ pub const fn classify_rc_frame_flags(
 pub struct MotorCmd {
     pub motors: [f32; 4],
     pub seq: u32,
-    pub issued_at_ms: u32,
+    pub issued_at_ms: u64,
 }
 
 impl MotorCmd {
-    pub fn is_fresh(&self, now_ms: u32, max_age_ms: u32) -> bool {
-        now_ms.wrapping_sub(self.issued_at_ms) <= max_age_ms
+    /// A command stamped after `now_ms` - read out of order - is as stale as
+    /// one far in the past: the difference wraps rather than saturating.
+    pub fn is_fresh(&self, now_ms: u64, max_age_ms: u32) -> bool {
+        now_ms.wrapping_sub(self.issued_at_ms) <= u64::from(max_age_ms)
     }
 }
 
@@ -495,7 +499,7 @@ pub mod signals {
     }
 
     impl RcLinkFrameWriter {
-        pub fn observe_healthy_frame(&self, now_us: u32, arm_high: bool) -> RcLinkStatus {
+        pub fn observe_healthy_frame(&self, now_us: u64, arm_high: bool) -> RcLinkStatus {
             critical_section::with(|cs| {
                 self.0
                     .borrow_ref_mut(cs)
@@ -511,15 +515,15 @@ pub mod signals {
     }
 
     impl RcLinkReader {
-        pub fn status(&self, now_us: u32) -> RcLinkStatus {
+        pub fn status(&self, now_us: u64) -> RcLinkStatus {
             critical_section::with(|cs| self.0.borrow_ref(cs).status(now_us))
         }
 
-        pub fn is_valid(&self, now_us: u32) -> bool {
+        pub fn is_valid(&self, now_us: u64) -> bool {
             self.status(now_us).valid
         }
 
-        pub fn is_armable(&self, now_us: u32) -> bool {
+        pub fn is_armable(&self, now_us: u64) -> bool {
             self.status(now_us).armable
         }
     }
@@ -551,11 +555,13 @@ pub mod signals {
 
         pub fn take_latest_fresh(
             &mut self,
-            now_ms: u32,
+            now_ms: u64,
             max_age_ms: u32,
         ) -> Result<MotorCmd, MotorCmdReadError> {
             let command = self.take_latest().ok_or(MotorCmdReadError::Missing)?;
-            let age_ms = now_ms.wrapping_sub(command.issued_at_ms);
+            // Reported, not compared: saturated to fit the error's field.
+            let age_ms =
+                u32::try_from(now_ms.wrapping_sub(command.issued_at_ms)).unwrap_or(u32::MAX);
 
             if command.is_fresh(now_ms, max_age_ms) {
                 Ok(command)
@@ -606,7 +612,7 @@ impl ArmQualifier {
         self.request_sent = false;
     }
 
-    pub fn update(&mut self, arm_high: bool, now_us: u32) -> Option<SafetyEvent> {
+    pub fn update(&mut self, arm_high: bool, now_us: u64) -> Option<SafetyEvent> {
         if !arm_high {
             let was_high = self.was_high;
 
@@ -619,14 +625,14 @@ impl ArmQualifier {
 
         if !self.was_high {
             self.was_high = true;
-            self.candidate_start_us = Some(now_us as u64);
+            self.candidate_start_us = Some(now_us);
             self.request_sent = false;
             return None;
         }
 
         if let Some(start) = self.candidate_start_us
             && !self.request_sent
-            && (now_us as u64).saturating_sub(start) >= ARM_HOLD_US
+            && now_us.saturating_sub(start) >= ARM_HOLD_US
         {
             self.request_sent = true;
             return Some(SafetyEvent::ArmRequested);
@@ -641,7 +647,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn motor_command_freshness_handles_normal_and_wrapping_time() {
+    fn motor_command_freshness_holds_past_the_old_u32_wrap() {
         let cmd = MotorCmd {
             motors: [1.0, 2.0, 3.0, 4.0],
             seq: 7,
@@ -652,12 +658,27 @@ mod tests {
         assert!(cmd.is_fresh(120, MOTOR_CMD_MAX_AGE_MS));
         assert!(!cmd.is_fresh(121, MOTOR_CMD_MAX_AGE_MS));
 
-        let wrapped = MotorCmd {
-            issued_at_ms: u32::MAX - 5,
+        // Where a u32 millisecond clock wrapped, after 49.7 days: time now
+        // runs straight through it.
+        let old_wrap = u64::from(u32::MAX);
+        let across = MotorCmd {
+            issued_at_ms: old_wrap - 5,
             ..cmd
         };
-        assert!(wrapped.is_fresh(4, 10));
-        assert!(!wrapped.is_fresh(6, 10));
+        assert!(across.is_fresh(old_wrap + 5, 10));
+        assert!(!across.is_fresh(old_wrap + 6, 10));
+    }
+
+    /// A command stamped after the reading - taken out of order - is stale,
+    /// as it was when time wrapped, rather than fresh by saturation.
+    #[test]
+    fn motor_command_from_the_future_is_stale() {
+        let cmd = MotorCmd {
+            motors: [0.0; 4],
+            seq: 1,
+            issued_at_ms: 100,
+        };
+        assert!(!cmd.is_fresh(99, MOTOR_CMD_MAX_AGE_MS));
     }
 
     #[test]
@@ -713,20 +734,21 @@ mod tests {
     }
 
     #[test]
-    fn rc_link_timeout_is_wrap_safe_and_forces_requalification() {
+    fn rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification() {
         let mut link = RcLinkState::new();
-        let start = u32::MAX - 20_000;
-        link.observe_healthy_frame(start.wrapping_sub(2), false);
-        link.observe_healthy_frame(start.wrapping_sub(1), false);
+        // Just before a u32 microsecond clock wrapped, after 71.6 minutes.
+        let start = u64::from(u32::MAX) - 20_000;
+        let timeout = u64::from(RC_LINK_TIMEOUT_US);
+        link.observe_healthy_frame(start - 2, false);
+        link.observe_healthy_frame(start - 1, false);
         link.observe_healthy_frame(start, false);
 
-        assert!(link.status(start.wrapping_add(RC_LINK_TIMEOUT_US)).valid);
-        let expired = link.status(start.wrapping_add(RC_LINK_TIMEOUT_US + 1));
+        assert!(link.status(start + timeout).valid);
+        let expired = link.status(start + timeout + 1);
         assert!(!expired.valid);
         assert!(expired.timed_out);
 
-        let first_after_timeout =
-            link.observe_healthy_frame(start.wrapping_add(RC_LINK_TIMEOUT_US + 2), true);
+        let first_after_timeout = link.observe_healthy_frame(start + timeout + 2, true);
         assert!(!first_after_timeout.valid);
         assert_eq!(
             first_after_timeout.last_invalidation,
@@ -756,20 +778,33 @@ mod tests {
         let mut qualifier = ArmQualifier::default();
 
         assert_eq!(qualifier.update(true, 1_000), None);
-        assert_eq!(qualifier.update(true, 1_000 + ARM_HOLD_US as u32 - 1), None);
+        assert_eq!(qualifier.update(true, 1_000 + ARM_HOLD_US - 1), None);
         assert_eq!(
-            qualifier.update(true, 1_000 + ARM_HOLD_US as u32),
+            qualifier.update(true, 1_000 + ARM_HOLD_US),
             Some(SafetyEvent::ArmRequested)
         );
-        assert_eq!(
-            qualifier.update(true, 1_000 + ARM_HOLD_US as u32 + 10_000),
-            None
-        );
+        assert_eq!(qualifier.update(true, 1_000 + ARM_HOLD_US + 10_000), None);
         assert_eq!(
             qualifier.update(false, 500_000),
             Some(SafetyEvent::DisarmRequested)
         );
         assert_eq!(qualifier.update(false, 501_000), None);
+    }
+
+    /// The hold used to be timed on a u32 microsecond clock that wrapped
+    /// every 71.6 minutes. A hold straddling the wrap saw `now` fall below its
+    /// start, the difference saturated at zero, and arming never qualified.
+    #[test]
+    fn an_arm_hold_straddling_the_old_u32_wrap_still_arms() {
+        let mut qualifier = ArmQualifier::default();
+        let start = u64::from(u32::MAX) - ARM_HOLD_US / 2;
+
+        assert_eq!(qualifier.update(true, start), None);
+        assert_eq!(qualifier.update(true, start + ARM_HOLD_US - 1), None);
+        assert_eq!(
+            qualifier.update(true, start + ARM_HOLD_US),
+            Some(SafetyEvent::ArmRequested)
+        );
     }
 
     #[test]

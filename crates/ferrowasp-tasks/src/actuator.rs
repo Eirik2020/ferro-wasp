@@ -13,13 +13,13 @@ pub fn publish_motor_command<Stamp, Wake>(
     writer: &mut MotorCmdWriter,
     sequence: &mut u32,
     motors: [f32; 4],
-    now_ms: u32,
+    now_ms: u64,
     wake: ActuatorCmd,
     stamp: Stamp,
     wake_actuator: Wake,
 ) -> PublishOutcome
 where
-    Stamp: FnOnce(u32, u32) -> u32,
+    Stamp: FnOnce(u64, u32) -> u64,
     Wake: FnOnce(ActuatorCmd) -> bool,
 {
     let next_sequence = sequence.wrapping_add(1);

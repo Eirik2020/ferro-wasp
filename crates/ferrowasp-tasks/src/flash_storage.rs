@@ -37,7 +37,7 @@ pub enum RecordEnqueueOutcome {
 pub fn enqueue_rate_record(
     producer: &mut RecordProducer,
     sample: crate::drone_toolbox::CompactRateBlackboxSample,
-    timestamp_us: u32,
+    timestamp_us: u64,
     divisor: u32,
 ) -> RecordEnqueueOutcome {
     let divisor = divisor.clamp(1, 16);
@@ -45,7 +45,10 @@ pub fn enqueue_rate_record(
         return RecordEnqueueOutcome::Skipped;
     }
     let record = FlightRecord {
-        timestamp_us,
+        // The log format keeps a 32-bit microsecond stamp, which wraps every
+        // 71.6 minutes; the configurator's ULog conversion unwraps it from
+        // consecutive records.
+        timestamp_us: timestamp_us as u32,
         control_sequence: sample.seq,
         imu_sequence: sample.imu_seq,
         flags: u16::from(sample.flags),

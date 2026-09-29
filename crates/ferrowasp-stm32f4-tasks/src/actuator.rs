@@ -30,11 +30,11 @@ where
         self.dshot.lock(|dshot| dshot.command_stop());
     }
 
-    pub fn apply(&mut self, values: [f32; 4], now_ms: u32) -> bool {
+    pub fn apply(&mut self, values: [f32; 4], now_ms: u64) -> bool {
         self.apply_with_lease(values, now_ms, safety::MOTOR_CMD_MAX_AGE_MS)
     }
 
-    pub fn apply_with_lease(&mut self, values: [f32; 4], now_ms: u32, lease_ms: u32) -> bool {
+    pub fn apply_with_lease(&mut self, values: [f32; 4], now_ms: u64, lease_ms: u32) -> bool {
         let commands = values.map(throttle_to_u16);
         let result = self
             .dshot
@@ -74,7 +74,7 @@ pub fn current_live_arming_guard(
     rc_link: &signals::RcLinkReader,
     arm_high: &signals::RcArmHighReader,
     throttle: &signals::RcThrottleReader,
-    now_us: u32,
+    now_us: u64,
 ) -> Result<(), safety::ArmingAbortReason> {
     guard(
         permit.read(),
@@ -98,7 +98,7 @@ pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
     delay_ms: Delay,
 ) -> Result<(), safety::ArmingAbortReason>
 where
-    Now: FnMut() -> u32,
+    Now: FnMut() -> u64,
     Delay: FnMut(u32) -> DelayFuture,
     DelayFuture: core::future::Future<Output = ()>,
 {
@@ -113,7 +113,7 @@ where
 
 pub fn take_fresh_motor_outputs(
     reader: &mut safety::signals::MotorCmdReader,
-    now_ms: u32,
+    now_ms: u64,
 ) -> Option<[f32; 4]> {
     match reader.take_latest_fresh(now_ms, safety::MOTOR_CMD_MAX_AGE_MS) {
         Ok(command) => Some(command.motors),
@@ -239,7 +239,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                     cx.local.actuator_rc_throttle_reader,
                     DSHOT_PREARM_STOP_HOLD_MS,
                     || Mono::now().duration_since_epoch().to_micros(),
-                    |delay_ms| Mono::delay(delay_ms.millis()),
+                    |delay_ms| Mono::delay(u64::from(delay_ms).millis()),
                 )
                 .await
                 {

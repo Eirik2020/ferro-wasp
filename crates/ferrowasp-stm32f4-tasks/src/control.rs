@@ -9,10 +9,10 @@ use crate::snapshots::*;
 /// The time a motor command is stamped with: now, except in the
 /// `bench_motor_cmd_stale_rejection` fault-injection image, where the first
 /// command is stamped stale so the actuator's rejection can be observed.
-pub fn motor_command_timestamp(now_ms: u32, sequence: u32) -> u32 {
+pub fn motor_command_timestamp(now_ms: u64, sequence: u32) -> u64 {
     #[cfg(feature = "bench_motor_cmd_stale_rejection")]
     if sequence == 1 {
-        return now_ms.wrapping_sub(safety::MOTOR_CMD_MAX_AGE_MS + 1);
+        return now_ms.wrapping_sub(u64::from(safety::MOTOR_CMD_MAX_AGE_MS) + 1);
     }
 
     let _ = sequence;

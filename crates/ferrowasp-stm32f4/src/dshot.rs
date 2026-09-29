@@ -482,9 +482,9 @@ pub struct DshotMotorBank {
     requested_values: [u16; 4],
     telemetry_request: Option<DshotMotor>,
     telemetry_request_sent: Option<DshotMotor>,
-    lease_started_ms: u32,
+    lease_started_ms: u64,
     lease_duration_ms: Option<u32>,
-    frame_started_ms: u32,
+    frame_started_ms: u64,
     completion_mask: u8,
     busy: bool,
     faulted: bool,
@@ -642,7 +642,7 @@ impl DshotMotorBank {
     pub fn command_throttles(
         &mut self,
         commands: [u16; 4],
-        now_ms: u32,
+        now_ms: u64,
         lease_duration_ms: u32,
     ) -> Result<(), DshotCommandError> {
         if self.faulted {
@@ -678,7 +678,7 @@ impl DshotMotorBank {
         Ok(())
     }
 
-    pub fn service(&mut self, now_ms: u32) -> DshotServiceEvent {
+    pub fn service(&mut self, now_ms: u64) -> DshotServiceEvent {
         self.telemetry_request_sent = None;
         if self.faulted {
             return DshotServiceEvent::Faulted;
@@ -772,7 +772,7 @@ impl DshotMotorBank {
         self.telemetry_request_sent.take()
     }
 
-    fn send_requested(&mut self, now_ms: u32) -> Result<(), DshotCommandError> {
+    fn send_requested(&mut self, now_ms: u64) -> Result<(), DshotCommandError> {
         if self.any_spare_missing() {
             self.latch_fault(false);
             return Err(DshotCommandError::Faulted);
