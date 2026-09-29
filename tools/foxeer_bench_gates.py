@@ -276,21 +276,28 @@ def confirm_bench_state() -> None:
     print("  - propellers removed")
     print("  - ESC power and flight battery disconnected")
     print("  - board powered from USB only, sitting still")
-    if ask("Type 'yes' if all three hold:").lower() != "yes":
+    if not ask_yes_no("Do all three hold?"):
         raise GateStop("the operator did not confirm the bench state")
 
 
-NOTHING_TO_REPORT = {"", "none", "no", "n", "nothing", "nothing abnormal", "all good", "ok"}
-
-
-def meaningful_note(answer: str) -> str:
-    """The operator's note, or empty when the answer says there is nothing."""
-    return "" if answer.strip().lower().rstrip(".!") in NOTHING_TO_REPORT else answer.strip()
+def ask_yes_no(question: str) -> bool:
+    """A yes or a no; anything else is asked again, never guessed."""
+    while True:
+        answer = ask(f"{question} [yes/no]").lower()
+        if answer in ("yes", "y"):
+            return True
+        if answer in ("no", "n"):
+            return False
+        print("Please answer yes or no.")
 
 
 def operator_notes() -> str:
-    answer = ask("Anything abnormal (motor activity, heat, smell, LEDs)? Enter for none, or describe it:")
-    return meaningful_note(answer)
+    """What the operator saw, or empty when they saw nothing abnormal."""
+    if not ask_yes_no("Did you see anything abnormal (motor activity, heat, smell, LEDs)?"):
+        return ""
+    while not (description := ask("Describe what you saw:")):
+        print("A description is needed, since something was abnormal.")
+    return description
 
 
 def find_port() -> str | None:
@@ -596,8 +603,7 @@ def run_usb_config(args: argparse.Namespace) -> int:
     if port is None:
         raise GateStop("no Foxeer on USB; plug it in and wait for it to enumerate")
     confirm_bench_state()
-    flashed = ask("Has the board been flashed with this candidate since it was built? [yes/no]")
-    if flashed.lower() != "yes":
+    if not ask_yes_no("Has the board been flashed with this candidate since it was built?"):
         raise GateStop("run boot-idle first so the board runs the candidate")
     started = utc_now()
     capture = new_capture_dir("usb-config", started)

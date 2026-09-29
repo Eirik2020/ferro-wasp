@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools.test_evidence import ARTIFACT_ID
 from tools.foxeer_bench_gates import (
@@ -9,7 +10,7 @@ from tools.foxeer_bench_gates import (
     REPO_ROOT,
     artifact_id,
     check_usb_snapshots,
-    meaningful_note,
+    operator_notes,
     repository_relative,
     parse_snapshot,
 )
@@ -183,11 +184,22 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(repository_relative(inside), "logs/bench/run/foxeer-baseline.toml")
         self.assertEqual(repository_relative("roll-expo"), "roll-expo")
 
-    def test_saying_there_is_nothing_is_not_a_note(self) -> None:
-        for answer in ("", "none", "None.", "no", "nothing abnormal", "ok"):
-            self.assertEqual(meaningful_note(answer), "", answer)
-        self.assertEqual(meaningful_note("warm ESC 3"), "warm ESC 3")
+    def notes_for(self, *answers: str) -> str:
+        with mock.patch("sys.stdin.isatty", return_value=True), mock.patch(
+            "builtins.input", side_effect=answers
+        ), mock.patch("builtins.print"):
+            return operator_notes()
 
+    def test_no_means_nothing_to_report(self) -> None:
+        self.assertEqual(self.notes_for("no"), "")
+        self.assertEqual(self.notes_for("N"), "")
+
+    def test_yes_asks_for_a_description(self) -> None:
+        self.assertEqual(self.notes_for("yes", "warm ESC 3"), "warm ESC 3")
+
+    def test_an_unclear_answer_is_asked_again(self) -> None:
+        self.assertEqual(self.notes_for("none", "", "no"), "")
+        self.assertEqual(self.notes_for("maybe", "y", "", "smell near M2"), "smell near M2")
 
 if __name__ == "__main__":
     unittest.main()
