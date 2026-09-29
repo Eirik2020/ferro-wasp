@@ -6,8 +6,11 @@ from tools.foxeer_bench_gates import (
     REVIEWED_BASELINE,
     TEMPORARY_ROLL,
     BootIdleEvidence,
+    REPO_ROOT,
     artifact_id,
     check_usb_snapshots,
+    meaningful_note,
+    repository_relative,
     parse_snapshot,
 )
 
@@ -174,6 +177,16 @@ class RecordTests(unittest.TestCase):
             identifier = artifact_id(Path(name))
             self.assertRegex(identifier, ARTIFACT_ID, name)
         self.assertEqual(artifact_id(Path("1-initial.txt")), "capture-1-initial")
+
+    def test_commands_are_recorded_without_the_checkout_path(self) -> None:
+        inside = f"{REPO_ROOT}/logs/bench/run/foxeer-baseline.toml"
+        self.assertEqual(repository_relative(inside), "logs/bench/run/foxeer-baseline.toml")
+        self.assertEqual(repository_relative("roll-expo"), "roll-expo")
+
+    def test_saying_there_is_nothing_is_not_a_note(self) -> None:
+        for answer in ("", "none", "None.", "no", "nothing abnormal", "ok"):
+            self.assertEqual(meaningful_note(answer), "", answer)
+        self.assertEqual(meaningful_note("warm ESC 3"), "warm ESC 3")
 
 
 if __name__ == "__main__":

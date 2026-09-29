@@ -280,8 +280,17 @@ def confirm_bench_state() -> None:
         raise GateStop("the operator did not confirm the bench state")
 
 
+NOTHING_TO_REPORT = {"", "none", "no", "n", "nothing", "nothing abnormal", "all good", "ok"}
+
+
+def meaningful_note(answer: str) -> str:
+    """The operator's note, or empty when the answer says there is nothing."""
+    return "" if answer.strip().lower().rstrip(".!") in NOTHING_TO_REPORT else answer.strip()
+
+
 def operator_notes() -> str:
-    return ask("Anything abnormal (motor activity, heat, smell, LEDs)? Enter for none, or describe it:")
+    answer = ask("Anything abnormal (motor activity, heat, smell, LEDs)? Enter for none, or describe it:")
+    return meaningful_note(answer)
 
 
 def find_port() -> str | None:
@@ -332,7 +341,7 @@ class Configurator:
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
         argv = [str(CONFIGURATOR), "--port", self.port, *args]
-        shown = " ".join(["ferro-configurator", "--port", "<foxeer>", *args])
+        shown = " ".join(["ferro-configurator", "--port", "<foxeer>", *map(repository_relative, args)])
         return self.log.run(argv, shown)
 
     def require(self, *args: str) -> str:
@@ -355,6 +364,12 @@ def artifact_id(path: Path) -> str:
     if not words[:1].isalpha():
         words = f"capture-{words}"
     return words[:64].rstrip("-")
+
+
+def repository_relative(argument: str) -> str:
+    """Records name paths relative to the repository, never a home directory."""
+    root = f"{REPO_ROOT}/"
+    return argument[len(root) :] if argument.startswith(root) else argument
 
 
 def sha256_file(path: Path) -> str:
