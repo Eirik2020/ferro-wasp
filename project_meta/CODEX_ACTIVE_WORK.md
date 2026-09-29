@@ -1,74 +1,74 @@
 # FerroWasp Active Work Handoff
 
-Last updated: 2026-09-24
+Last updated: 2026-09-29
 
-## Current State - 2026-09-24
+## Current State - 2026-09-29
 
-### FerroForge adoption candidate - flown, every gate passed
+### Flown candidate, and what has changed since
 
-Foxeer runs on `ferroforge::app!`: every task except `usb_fs` and
-`flash_manager_task` is an instance of a `ferrowasp-stm32f4-tasks` definition,
-including the whole safety and actuator path. Bodies moved verbatim;
-priorities and bindings are unchanged. It has flown.
+FLIGHT-FOX-001 flew candidate `a921ffe` (binary `16f6e8ed`) on
+`ferroforge::app!` on 2026-09-24, and every gate passed. Its record is tag
+`foxeer-candidate-16f6e8ed` in FerroForge's repository plus the binaries in
+`logs/foxeer-candidates/`, never a rebuild; the runs are under
+`testing/evidence/runs/2026/09/`. Pre- against post-conversion over ~133k
+armed samples: identical control law and loop timing, zero sequence gaps or
+CRC failures. Command tracking was never evaluated. Detail is in the
+2026-09-24 history.
 
-Every gate passed on candidate `a921ffe` (binary `16f6e8ed`): SW-COMMON-001,
-BUILD-FOX-001, BENCH-COMMON-001, BENCH-FOX-USB-001, BENCH-FOX-001, then
-PREFLIGHT-FOX-001 and FLIGHT-FOX-001 flown 2026-09-24 and accepted by operator
-decision. Records under `testing/evidence/runs/2026/09/`; BENCH-FOX-001 keeps
-both a `fail` and the `pass` that supersedes it, `__01` for the reasoning.
+The image has changed since, so **the next flight re-gates**:
 
-**The adoption question is answered.** Measured pre- against post-conversion
-over ~133k armed samples: identical control law, identical loop timing, and
-zero sequence gaps, repeats or CRC failures in ~10 MB of logs - including
-through flight 22's 1592 deg/s cartwheel with the mixer saturated. No
-oscillation in either era. Detail is in the run records; logs are under
-`logs/ferroforge-flights/` and `logs/preconversion-flights/`, gitignored.
-Command tracking was never evaluated, because every flight with stick input
-ended in deliberate ground contact; one ordinary hop would close it.
+- Foxeer's IMU and control loop run at 2 kHz (`65af671`), and the rate is a
+  per-board fact (`cb03082`): FCU3 is back at 800/400. Bench: 2000.0 Hz with
+  no shortfall and no stale samples.
+- The gyro filter is stored as a corner, config schema 3, `imu_lpf_hz`
+  (`1111e69`). The device reports its own loop rate (`52713f3`).
+- The blackbox store drains a bounded batch per pass (`1c74368`): 250
+  pages/s, up from 84. The flown 400 Hz needed 80 - earlier logs fit by five
+  percent. **At 2 kHz, `log_rate_divisor` 1 asks 400 pages/s and drops about
+  750 records/s: set divisor 2 (200 pages/s) before the next flight, or raise
+  the store's ceiling.** `bench_blackbox` records while disarmed; it fills the
+  log in minutes and belongs only in a bench image.
+- The storage CLI's first-command rejection is fixed (`cbc892b`), not flown.
+- `CHIPSERIE` is gone (`e841718`); the image hashed the same without it.
 
-FerroForge 0.3.0 is published and `main` pushed, so the path override is gone
-and this repo builds against the registry. That changes the image, so tag
-`foxeer-candidate-16f6e8ed` is historical and any future flight re-gates.
-Left: convert `usb_fs` and `flash_manager_task` shaped by Foxeer alone, and
-retire `tools/rtic-app-builder`, whose phase 6 entry condition was this
-flight. All of it is on branch `ferroforge-adoption`.
+An armed props-off run is owed first: the 2 kHz blackbox has only run
+disarmed.
 
-Two open bugs carried forward. Neither can stop a running motor - current
-sense drives only OSD and MSP, and `EscManager::is_faulted` has one consumer,
-a log line - and neither is accepted behaviour.
+### FerroForge 0.4
+
+FerroForge 0.4.0 is published; this branch still builds against 0.3. Moving
+is mechanical but touches about 40 sites - see its book's adoption chapter:
+`systick-64bit`, `Mono::now()` timestamps become `u64` where this repository's
+APIs take `u32`, `u64::from` on `u32` durations, and typed literals in the
+Foxeer app. Each narrowed timestamp must keep its old wrap before it flies. A
+copy migrated end to end builds and passes the host tests. 0.4 also lets a
+config entry carry a doc comment, which `cb03082` could not, and adds task
+groups and hardware-timer monotonics; a 1 MHz timer monotonic would lift
+blackbox `timestamp_us` off its 1 ms resolution, but is a timer-assignment
+decision.
+
+Left of the adoption: convert `usb_fs` and `flash_manager_task`, shaped by
+Foxeer alone, and retire `tools/rtic-app-builder`.
+
+### Open bugs
+
+Neither can stop a running motor - current sense drives only OSD and MSP,
+and `EscManager::is_faulted` has one consumer, a log line - and neither is
+accepted behaviour.
 
 1. Battery current reads a constant `0.1 A` with four motors at 6300..7700
    eRPM. `centiamps = adc_mv * 10000 / 70 / 10` puts raw PC1 near `1 mV`, the
-   noise floor, so the fault is upstream of the scale-70 change this candidate
-   adopted, which could never have fixed it. Next: read `adc_current_mv` from
-   the USB debug status under load - still ~1 mV means the sense input, not
-   the math.
+   noise floor, so the fault is upstream of the scale. Next: read
+   `adc_current_mv` from the USB debug status under load - still ~1 mV means
+   the sense input, not the math.
 2. The ESC telemetry manager latched faulted after a single response timeout
    for logical M4 (one miss in 10132 requests, zero CRC failures) during an
-   armed RC-loss stop, and both later arm attempts then correctly aborted on
-   idle telemetry qualification. `esc_manager.rs` and `blheli_telemetry.rs`
-   are byte-identical to pre-conversion; the moved UART plumbing in
+   armed RC-loss stop, and both later arm attempts correctly aborted on idle
+   telemetry qualification. `esc_manager.rs` and `blheli_telemetry.rs` are
+   byte-identical to pre-conversion; the moved UART plumbing in
    `ferrowasp-stm32f4-tasks/src/esc.rs` is new, so a conversion-induced
-   dropped response is not excluded by code identity alone.
-
-A latch also costs per-motor eRPM logging for the rest of that power cycle.
-The bench run does **not** independently reproduce the ESC-only power-cycle
-bug below - that latch was already set 100 s before the battery was
-reconnected - but avoid ESC-only power cycles with USB attached regardless.
-
-Motor identity is confirmed unchanged by the conversion, in code and by the
-operator's roll and pitch differential response; see the `BENCH-FOX-001`
-record.
-
-Third open bug, pre-existing and cosmetic: the first storage-CLI command after
-each USB port open is rejected once with `ERR invalid command`, then succeeds
-on retry. `CommandParser` in `crates/ferrowasp-tasks/src/flash_storage.rs`
-accumulates a line with no reset across port open, so a stray byte corrupts
-the first line and the parse error clears the buffer.
-
-Closed: the `UART4 RX free-buffer pool exhausted on IDLE` warning was noise on
-an unterminated line, absent throughout the powered run with the VTX
-connected.
+   dropped response is not excluded. A latch also costs per-motor eRPM
+   logging for the rest of that power cycle.
 
 ### Carried forward from 2026-07-27
 
@@ -156,5 +156,7 @@ Open flight-mode TODO:
 Completed checkpoints and superseded state were moved to
 [`archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md`](archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md)
 and
-[`archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md`](archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md).
+[`archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md`](archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md)
+and
+[`archive/CODEX_ACTIVE_WORK_HISTORY_2026-09-24.md`](archive/CODEX_ACTIVE_WORK_HISTORY_2026-09-24.md).
 Use that archive for provenance only; this file is the live work handoff.
