@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
+            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -249,7 +249,7 @@ continuity markers. Queue overflow is reported through a separate
 independent. USART2 wakes one persistent async SBUS parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.</p>
-<p>In the default FCU3 DShot image, USART1 feeds the low-priority ESC manager’s
+<p>In the flight DShot image, USART1 feeds the low-priority ESC manager’s
 ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
 samples, and timeouts. UART transport or parser state cannot command motors:
 telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator

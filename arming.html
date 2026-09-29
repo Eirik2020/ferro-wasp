@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
+            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -226,8 +226,9 @@ observed low and then transition high.</p>
 <p>During actuator preparation, the actuator owner rechecks its permit, RC
 armability, arm state, throttle, and IMU health every 10 ms. Any failure selects
 stop before publishing an arming-abort reason.</p>
-<h2 id="default-fcu3-and-foxeer-dshot-sequence"><a class="header" href="#default-fcu3-and-foxeer-dshot-sequence">Default FCU3 and Foxeer DShot Sequence</a></h2>
-<p>The default FCU3 and Foxeer paths use telemetry-qualified DShot arming:</p>
+<h2 id="telemetry-qualified-dshot-sequence"><a class="header" href="#telemetry-qualified-dshot-sequence">Telemetry-Qualified DShot Sequence</a></h2>
+<p>Foxeer uses telemetry-qualified DShot arming, and the obsolete FCU3 image used
+the same sequence:</p>
 <ol>
 <li>Safety Master enters <code>Arming</code>, grants the temporary permit, and asks
 Actuator Output to prepare the ESCs.</li>

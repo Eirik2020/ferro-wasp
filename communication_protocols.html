@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
+            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -184,8 +184,8 @@
 </thead>
 <tbody>
 <tr><td>SBUS</td><td>Active prototype RC input over USART2 RX DMA</td></tr>
-<tr><td>BLHeli legacy ESC telemetry</td><td>Active only in the default FCU3 DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
-<tr><td>USB CDC serial</td><td>Mandatory on Foxeer; optional on FCU3 via <code>usb_serial</code>; Foxeer emits bounded read-only <code>FWDBG1</code> status lines</td></tr>
+<tr><td>BLHeli legacy ESC telemetry</td><td>Active in the flight DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
+<tr><td>USB CDC serial</td><td>Mandatory on Foxeer, which emits bounded read-only <code>FWDBG1</code> status lines; was optional on the obsolete FCU3 via <code>usb_serial</code></td></tr>
 <tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames</td></tr>
 <tr><td>MAVLink</td><td>UART mode placeholder/config values exist, no active MAVLink implementation yet</td></tr>
 <tr><td>CRSF/ELRS</td><td>Intended preferred RC path, not implemented yet</td></tr>

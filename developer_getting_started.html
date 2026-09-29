@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
+            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -369,26 +369,27 @@ python tools\check_repository_context.py
 <p>The root workspace contains reusable crates. Deployable firmware applications
 are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
-<pre><code class="language-text">apps/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
-apps/stm32f405-flight  FerroWasp FCU3 secondary flight app
-apps/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
+<pre><code class="language-text">firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
+firmware/stm32f405-flight  FerroWasp FCU3, obsolete; compiled, never flown
+firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
 board’s image, pins, DMA routes, sensor orientation, or motor mapping on
 another board.</p>
 <h2 id="build-the-flight-applications"><a class="header" href="#build-the-flight-applications">Build the flight applications</a></h2>
 <p>Foxeer is the golden flight app for established runtime and safety behavior:</p>
-<pre><code class="language-powershell">Set-Location apps\foxeer-f405-v2
+<pre><code class="language-powershell">Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
 Set-Location ..\..
 </code></pre>
-<p>Check the FCU3 secondary app independently:</p>
-<pre><code class="language-powershell">Set-Location apps\stm32f405-flight
+<p>Check the obsolete FCU3 app independently, which CI still does so it keeps
+compiling against the shared crates:</p>
+<pre><code class="language-powershell">Set-Location firmware\stm32f405-flight
 cargo check --release --locked
 Set-Location ..\..
 </code></pre>
 <p>The resulting Foxeer ELF is:</p>
-<pre><code class="language-text">apps/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
+<pre><code class="language-text">firmware/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
 </code></pre>
 <p>Prefer <code>cargo check</code> when target programming is not part of the task. Do not
 assume a debugger, MCU, receiver, ESC power, or safe motor bench is available.

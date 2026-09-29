@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
+            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -176,12 +176,12 @@
                     <main>
                         <h1 id="uart"><a class="header" href="#uart">UART</a></h1>
 <p>UART support uses bounded DMA-backed paths for RC input, OSD traffic, and the
-default FCU3 DShot image’s legacy ESC telemetry.</p>
+flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The reusable STM32F4 UART DMA mechanism lives in
 <code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. FerroWasp FCU3 pin conversion,
 storage shape, and device construction live in
-<code>apps/stm32f405-flight/src/board/</code>.</p>
+<code>firmware/stm32f405-flight/src/board/</code>.</p>
 <p>It provides:</p>
 <ul>
 <li>mode-specific UART configuration</li>

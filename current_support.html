@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d65f0ef9.js";
+            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -176,17 +176,18 @@
                     <main>
                         <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
-new flight-board work. FerroWasp FCU3 is a supported secondary flight target.
-NUCLEO-F401RE is a non-actuating development target.</p>
+new flight-board work. NUCLEO-F401RE is a non-actuating development target.
+FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
+gates, no image and no claim on shared behaviour.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Capability</th><th>Foxeer F405 V2</th><th>FerroWasp FCU3</th><th>NUCLEO-F401RE</th></tr>
+<tr><th>Capability</th><th>Foxeer F405 V2</th><th>FerroWasp FCU3 (obsolete)</th><th>NUCLEO-F401RE</th></tr>
 </thead>
 <tbody>
-<tr><td>Role</td><td>Golden flight target</td><td>Secondary flight target</td><td>Non-actuating bring-up target</td></tr>
+<tr><td>Role</td><td>Golden flight target</td><td>Obsolete, compiled only</td><td>Non-actuating bring-up target</td></tr>
 <tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
 <tr><td>RC input</td><td>SBUS over USART2 DMA</td><td>SBUS over USART2 DMA</td><td>None</td></tr>
 <tr><td>IMU</td><td>Runtime-selected MPU6500 or ICM42688-P; EXTI data-ready sampling</td><td>MPU6500; timer-driven polling</td><td>None</td></tr>
@@ -204,7 +205,7 @@ list every peripheral or diagnostic feature.</p>
 </table>
 </div>
 <h2 id="foxeer-f405-v2"><a class="header" href="#foxeer-f405-v2">Foxeer F405 V2</a></h2>
-<p>The Foxeer app lives in <code>apps/foxeer-f405-v2</code>. USB, DShot, ESC telemetry,
+<p>The Foxeer app lives in <code>firmware/foxeer-f405-v2</code>. USB, DShot, ESC telemetry,
 persistent configuration, onboard blackbox storage, and MSP OSD are standard
 parts of its flight image rather than optional board capabilities.</p>
 <p>The fitted SPI1 IMU is detected at boot. MPU6500 and ICM42688-P share the
@@ -218,17 +219,21 @@ requested physical outputs and supplies eRPM evidence for guarded arming.</p>
 <p>Onboard SPI-NOR stores CRC-protected configuration and FWBB flight records.
 The <a href="user/ferro_configurator.html">FerroConfigurator</a> uses USB CDC to manage that
 storage while the aircraft is disarmed.</p>
-<h2 id="ferrowasp-fcu3"><a class="header" href="#ferrowasp-fcu3">FerroWasp FCU3</a></h2>
-<p>The FCU3 app lives in <code>apps/stm32f405-flight</code>. It shares the reusable STM32F4,
-driver, task, safety, DShot, and telemetry implementations with Foxeer while
-retaining its own pins, DMA routes, timer assignments, IMU orientation, and
-motor map.</p>
-<p>FCU3 uses an MPU6500 and timer-driven IMU polling. Four-lane DShot600 and
-legacy UART ESC telemetry are standard for ESC control and arming
-qualification. USB remains optional, and FCU3 does not yet use the standard
-Foxeer persistent configuration and onboard blackbox workflow.</p>
+<h2 id="ferrowasp-fcu3-obsolete"><a class="header" href="#ferrowasp-fcu3-obsolete">FerroWasp FCU3 (obsolete)</a></h2>
+<p>Obsolete since 2026-09-22. The app remains in <code>firmware/stm32f405-flight</code> and CI
+still compiles it against the shared crates, so a second board can be revived
+cheaply, but it has no test gates, no image, and where its behaviour differed
+from Foxeer’s, Foxeer’s is now simply the behaviour. Only 14 of its 30 tasks are
+shared definitions; the rest are its own older copies. Do not treat anything
+below as current.</p>
+<p>It shares the reusable STM32F4, driver, task, safety, DShot, and telemetry
+implementations with Foxeer while retaining its own pins, DMA routes, timer
+assignments, IMU orientation, and motor map. It uses an MPU6500 and
+timer-driven IMU polling, with four-lane DShot600 and legacy UART ESC
+telemetry. It never adopted the Foxeer persistent configuration and onboard
+blackbox workflow.</p>
 <h2 id="nucleo-f401re"><a class="header" href="#nucleo-f401re">NUCLEO-F401RE</a></h2>
-<p>The bring-up app lives in <code>apps/stm32f401-bringup</code>. It owns a status LED,
+<p>The bring-up app lives in <code>firmware/stm32f401-bringup</code>. It owns a status LED,
 USART heartbeat, and RTIC scheduling resources. Its board contract declares no
 IMU or actuator outputs, so it is useful for non-actuating STM32F4 development
 without pretending to be a flight target.</p>
