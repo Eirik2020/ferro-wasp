@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "run_id": "20260929T224732Z__BUILD-FOX-001__foxeer-f405-v2__01",
+  "test_id": "BUILD-FOX-001",
+  "started_at_utc": "2026-09-29T22:47:22Z",
+  "completed_at_utc": "2026-09-29T22:47:32Z",
+  "target": "foxeer-f405-v2",
+  "tier": "embedded-build",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "c0c62764cf2594ae6a61b987f8aba65158b1d618c14b0d65881a57e5610d9216",
+    "procedure_path": "firmware/foxeer-f405-v2/README.md",
+    "procedure_heading": "Build",
+    "procedure_sha256": "c36469ee9def7f93f4c1e18cbba90c19b4ec94067c13999babf656ba0268be87"
+  },
+  "execution": {
+    "performed_by": "agent",
+    "user_confirmed": false
+  },
+  "candidate": {
+    "revision": "5a9aaa4ec6508c74b114a404b473f7229b5d5432",
+    "working_tree": "clean",
+    "firmware_sha256": "b020bdfe1ad9056fbab034752828fbf28be3e63241da60efdd18924dd7c3863f",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "not-applicable",
+    "actuator_power": "not-applicable",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo fmt --check)",
+      "exit_code": 0
+    },
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo check --release --locked)",
+      "exit_code": 0
+    },
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo build --release --locked)",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "dfu-image",
+      "kind": "firmware",
+      "path": "logs/foxeer-candidates/20260929T224732Z-5a9aaa4-FerroWaspFoxeerF405V2.bin",
+      "bytes": 152720,
+      "sha256": "b020bdfe1ad9056fbab034752828fbf28be3e63241da60efdd18924dd7c3863f"
+    },
+    {
+      "id": "release-elf",
+      "kind": "firmware",
+      "path": "logs/foxeer-candidates/20260929T224732Z-5a9aaa4-FerroWaspFoxeerF405V2.elf",
+      "bytes": 5051444,
+      "sha256": "cd873d6b5bb3f88a4388e1e7ebd8a2ab10d721a13454c58b551c1f96f1c2bb6a"
+    }
+  ],
+  "measurements": {
+    "dfu_image_bytes": 152720
+  },
+  "observations": [
+    "Default feature set only; no diagnostic or bench features.",
+    "The DFU image is the release ELF converted with `arm-none-eabi-objcopy -O binary`, as flash-dfu.ps1 does; firmware_sha256 is the DFU image.",
+    "The hash depends on the checkout path, so the preserved binaries, not a rebuild, are the candidate.",
+    "Catalog and procedure hashes are SHA-256 of the whole files at the recorded revision."
+  ],
+  "limitations": [
+    "Compile evidence only; establishes no hardware behavior."
+  ],
+  "stop_conditions_triggered": []
+}
