@@ -25,7 +25,7 @@ use crate::snapshots::*;
 pub async fn esc_manager_task(cx: esc_manager_task::Context) {
     loop {
         let release = Mono::now();
-        let next_release = release + ESC_MANAGER_PERIOD_MS.millis();
+        let next_release = release + u64::from(ESC_MANAGER_PERIOD_MS).millis();
         let now_ms = release.duration_since_epoch().to_millis();
 
         if ESC_TELEMETRY_DISCONTINUITY.swap(false, Ordering::Relaxed) {

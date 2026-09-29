@@ -14,9 +14,9 @@ use ferro_configurator_core::{
     BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
     DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
     PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::CONTROL_LOOP_RATE_HZ,
-    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu,
-    discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
-    prepare_elf, resolve_device_flight,
+    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu, discover_ports,
+    download_flight, find_bundled_firmware, flash_firmware, open_device, prepare_elf,
+    resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -1130,7 +1130,11 @@ fn bench_watch(
                  {:.1} s can pass unseen. This records state, not events. For arming and\n\
                  abort transitions, the RTT log is the complete record.",
                 report.observed_rate_hz,
-                if report.observed_rate_hz > 0.0 { 1.0 / report.observed_rate_hz } else { 0.0 }
+                if report.observed_rate_hz > 0.0 {
+                    1.0 / report.observed_rate_hz
+                } else {
+                    0.0
+                }
             );
         }
         if let Some(path) = &report.samples_path {

@@ -150,8 +150,7 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
         if let Some(uart) = cx.local.osd_uart.as_mut() {
             while let Some(filled) = uart.filled_consumer.dequeue() {
                 let len = filled.len.min(filled.buf.len());
-                let timestamp =
-                    TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
+                let timestamp = TimestampMicros(Mono::now().duration_since_epoch().to_micros());
                 let owned = RxChunk::from_slice(
                     &filled.buf[..len],
                     timestamp,

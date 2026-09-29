@@ -1,7 +1,7 @@
 use core::fmt::Write;
 
 use defmt::{info, warn};
-use fugit::ExtU32 as _;
+use fugit::ExtU64 as _;
 use stm32f4xx_hal::{
     gpio::{Input, Output, PA2, PA5, PushPull},
     pac::USART2,
@@ -86,6 +86,6 @@ pub fn run_heartbeat(resources: &mut HeartbeatResources) {
 pub async fn heartbeat_task(cx: heartbeat_task::Context) {
     loop {
         run_heartbeat(cx.local.heartbeat);
-        Mono::delay(cx.local.heartbeat.period_ms.millis()).await;
+        Mono::delay(u64::from(cx.local.heartbeat.period_ms).millis()).await;
     }
 }

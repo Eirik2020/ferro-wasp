@@ -929,7 +929,8 @@ ferroforge::app! {
 
         #[cfg(not(feature = "mspv2_configurator"))]
         let snapshot = usb_debug::StatusSnapshot {
-            uptime_ms: Mono::now().duration_since_epoch().to_millis(),
+            // The status format carries 32-bit milliseconds, 49.7 days.
+            uptime_ms: Mono::now().duration_since_epoch().to_millis() as u32,
             imu_kind: active_usb_debug_imu_kind(),
             imu_ready: IMU_TRANSPORT_READY.load(Ordering::Relaxed),
             imu_sequence: IMU_LATEST_SEQ.load(Ordering::Relaxed),
@@ -1062,7 +1063,7 @@ ferroforge::app! {
                             ),
                         );
                     }
-                    Mono::delay(100.millis()).await;
+                    Mono::delay(100u64.millis()).await;
                     continue;
                 }
                 let Some(layout) =
@@ -1132,7 +1133,7 @@ ferroforge::app! {
                     }
                 };
                 if status.busy() {
-                    Mono::delay(1.millis()).await;
+                    Mono::delay(1u64.millis()).await;
                     continue;
                 }
 
@@ -1181,7 +1182,7 @@ ferroforge::app! {
                             *erase_sector_index = Some(sector + 1);
                         }
                     }
-                    Mono::delay(1.millis()).await;
+                    Mono::delay(1u64.millis()).await;
                     continue;
                 }
 
@@ -1858,7 +1859,7 @@ ferroforge::app! {
                 }
             }
 
-            Mono::delay(1.millis()).await;
+            Mono::delay(1u64.millis()).await;
         }
     }
 

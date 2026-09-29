@@ -27,10 +27,10 @@ defmt-rtt = { version = "1.2.0", features = ["disable-blocking-mode"] }
 ferrowasp-stm32f4 = { path = "../../crates/ferrowasp-stm32f4", features = ["stm32f401"] }
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 rtic = { version = "2.2.0", features = ["thumbv7-backend"] }
-rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick"] }
+rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick", "systick-64bit"] }
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["stm32f401", "defmt", "rtic2"] }
 
-ferroforge = "0.3"
+ferroforge = "0.4"
 
 
 [profile.dev.package."*"]

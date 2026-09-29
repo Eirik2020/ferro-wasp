@@ -108,7 +108,7 @@ pub fn publish_uart2_owned<Invalidate>(
 )]
 pub fn usart2_rx_dma_transfer(mut cx: usart2_rx_dma_transfer::Context) {
     let uart = cx.shared.uart2_rx;
-    let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
+    let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros());
     let invalidate = |reason| {
         cx.spawn
             .safety_master(safety::SafetyEvent::RcLinkInvalid(reason))
@@ -186,7 +186,7 @@ pub fn usart2_rx_dma_transfer(mut cx: usart2_rx_dma_transfer::Context) {
 )]
 pub fn usart2_rx_peripheral(mut cx: usart2_rx_peripheral::Context) {
     let uart = cx.shared.uart2_rx;
-    let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros() as u64);
+    let timestamp = || TimestampMicros(Mono::now().duration_since_epoch().to_micros());
     let invalidate = |reason| {
         cx.spawn
             .safety_master(safety::SafetyEvent::RcLinkInvalid(reason))

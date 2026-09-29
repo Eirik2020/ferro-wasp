@@ -828,7 +828,7 @@ ferroforge::app! {
                 );
             }
 
-            Mono::delay(1000.millis()).await;
+            Mono::delay(1000u64.millis()).await;
         }
     }
 
@@ -1687,7 +1687,7 @@ ferroforge::app! {
                         cx.local.actuator_rc_throttle_reader,
                         DSHOT_PREARM_STOP_HOLD_MS,
                         || Mono::now().duration_since_epoch().to_micros(),
-                        |delay_ms| Mono::delay(delay_ms.millis()),
+                        |delay_ms| Mono::delay(u64::from(delay_ms).millis()),
                     )
                     .await
                     {
@@ -1845,7 +1845,7 @@ ferroforge::app! {
                             }
                         }
 
-                        Mono::delay(10.millis()).await;
+                        Mono::delay(10u64.millis()).await;
                     }
 
                     info!(

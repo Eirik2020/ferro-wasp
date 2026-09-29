@@ -478,6 +478,10 @@ pub const CONTROL_LOOP_RATE_HZ: f32 = 1_000.0;
 ///
 /// Returns `None` for coefficients that are not a filter: zero passes nothing
 /// through and one filters nothing at all.
+#[allow(
+    clippy::neg_cmp_op_on_partial_ord,
+    reason = "`!(x > 0.0)` is true for NaN, so a NaN coefficient or rate reports no filter"
+)]
 pub fn lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> Option<f32> {
     if !(alpha > 0.0) || alpha >= 1.0 || !(sample_rate_hz > 0.0) {
         return None;
@@ -490,6 +494,10 @@ pub fn lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> Option<f32> {
 ///
 /// Inverse of [`lpf_corner_hz`]. `None` when the request is not achievable:
 /// a corner at or above Nyquist is not a filter.
+#[allow(
+    clippy::neg_cmp_op_on_partial_ord,
+    reason = "`!(x > 0.0)` is true for NaN, so a NaN corner or rate is not achievable"
+)]
 pub fn lpf_alpha_for_corner(corner_hz: f32, sample_rate_hz: f32) -> Option<f32> {
     if !(corner_hz > 0.0) || !(sample_rate_hz > 0.0) || corner_hz >= sample_rate_hz / 2.0 {
         return None;
@@ -534,7 +542,10 @@ mod lpf_tests {
             for corner in [10.0_f32, 50.8, 120.0] {
                 let alpha = lpf_alpha_for_corner(corner, rate).expect("achievable");
                 let back = lpf_corner_hz(alpha, rate).expect("a filter");
-                assert!((back - corner).abs() < 0.05, "{corner} Hz at {rate} Hz -> {back}");
+                assert!(
+                    (back - corner).abs() < 0.05,
+                    "{corner} Hz at {rate} Hz -> {back}"
+                );
             }
         }
     }

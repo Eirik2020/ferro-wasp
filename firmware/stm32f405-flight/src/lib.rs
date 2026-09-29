@@ -153,11 +153,11 @@ where
         Self { dshot }
     }
 
-    pub fn apply(&mut self, values: [f32; 4], now_ms: u32) {
+    pub fn apply(&mut self, values: [f32; 4], now_ms: u64) {
         self.apply_with_lease(values, now_ms, safety::MOTOR_CMD_MAX_AGE_MS);
     }
 
-    pub fn apply_with_lease(&mut self, values: [f32; 4], now_ms: u32, lease_ms: u32) {
+    pub fn apply_with_lease(&mut self, values: [f32; 4], now_ms: u64, lease_ms: u32) {
         let invalid = values.iter().any(|value| {
             !value.is_finite()
                 || *value < safety::ESC_LOW_THROTTLE
@@ -191,7 +191,7 @@ where
         reason: safety::ArmingAbortReason,
         message: &str,
         report: Report,
-        now_ms: u32,
+        now_ms: u64,
     ) where
         Report: FnOnce(safety::ArmingAbortReason) -> bool,
     {
@@ -276,10 +276,10 @@ pub const GYRO_BIAS_CALIBRATION_MAX_RAW: i32 = IMU_CONTROL_AXIS_PROFILE.bias_cal
 
 const _: () = assert!(ARMING_GUARD_POLL_MS < safety::MOTOR_CMD_MAX_AGE_MS);
 
-pub fn motor_command_timestamp(now_ms: u32, sequence: u32) -> u32 {
+pub fn motor_command_timestamp(now_ms: u64, sequence: u32) -> u64 {
     #[cfg(feature = "bench_motor_cmd_stale_rejection")]
     if sequence == 1 {
-        return now_ms.wrapping_sub(safety::MOTOR_CMD_MAX_AGE_MS + 1);
+        return now_ms.wrapping_sub(u64::from(safety::MOTOR_CMD_MAX_AGE_MS) + 1);
     }
     let _ = sequence;
     now_ms
@@ -287,7 +287,7 @@ pub fn motor_command_timestamp(now_ms: u32, sequence: u32) -> u32 {
 
 pub fn take_fresh_motor_outputs(
     reader: &mut safety::signals::MotorCmdReader,
-    now_ms: u32,
+    now_ms: u64,
 ) -> Option<[f32; 4]> {
     match reader.take_latest_fresh(now_ms, safety::MOTOR_CMD_MAX_AGE_MS) {
         Ok(command) => Some(command.motors),
@@ -310,7 +310,7 @@ pub fn current_live_arming_guard(
     rc_link: &signals::RcLinkReader,
     arm_high: &signals::RcArmHighReader,
     throttle: &signals::RcThrottleReader,
-    now_us: u32,
+    now_us: u64,
 ) -> Result<(), safety::ArmingAbortReason> {
     validate_live_arming_guard(
         permit.read(),
@@ -330,7 +330,7 @@ pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
     delay_ms: Delay,
 ) -> Result<(), safety::ArmingAbortReason>
 where
-    Now: FnMut() -> u32,
+    Now: FnMut() -> u64,
     Delay: FnMut(u32) -> DelayFuture,
     DelayFuture: core::future::Future<Output = ()>,
 {

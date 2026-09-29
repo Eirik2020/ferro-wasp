@@ -21,8 +21,8 @@
 use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
-    CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError,
-    FlashInfo, FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, SerialTransport,
+    CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo,
+    FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, SerialTransport,
     StatusSnapshot, catalog_device, discover_ports, download_flight, open_device,
     resolve_device_flight,
 };

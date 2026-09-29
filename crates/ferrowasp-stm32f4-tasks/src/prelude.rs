@@ -40,5 +40,5 @@ pub use ferrowasp_tasks::esc_manager::{
 };
 pub use ferrowasp_tasks::flash_storage as flash_task;
 pub use ferrowasp_tasks::osd;
-pub use fugit::ExtU32 as _;
+pub use fugit::ExtU64 as _;
 pub use sbus_rs::StreamingParser;
