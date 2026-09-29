@@ -29,6 +29,11 @@ pub const IMU_GYRO_LPF_HZ: f32 = 50.8;
 /// Saturates at 1.0 - no filtering - for a corner at or above Nyquist, rather
 /// than failing, because the rate loop must always come away with a usable
 /// coefficient.
+#[allow(
+    clippy::neg_cmp_op_on_partial_ord,
+    reason = "`!(x > 0.0)` is true for NaN, so a NaN corner or rate takes the \
+              no-filtering branch; `x <= 0.0` would let it into the coefficient"
+)]
 pub fn gyro_lpf_alpha(corner_hz: f32, sample_rate_hz: f32) -> f32 {
     if !(corner_hz > 0.0) || !(sample_rate_hz > 0.0) {
         return 1.0;
@@ -40,6 +45,10 @@ pub fn gyro_lpf_alpha(corner_hz: f32, sample_rate_hz: f32) -> f32 {
 ///
 /// Used to migrate configurations written before the corner was stored
 /// directly.
+#[allow(
+    clippy::neg_cmp_op_on_partial_ord,
+    reason = "`!(x > 0.0)` is true for NaN, so a NaN rate reports no corner"
+)]
 pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
     let alpha = clamp_unit_interval(alpha);
     if alpha <= 0.0 || alpha >= 1.0 || !(sample_rate_hz > 0.0) {
@@ -58,7 +67,7 @@ pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
 /// sits on, and a board that inherits another's runs on samples it has
 /// already seen.
 pub const fn scheduler_divides_exactly(tick_hz: u32, control_hz: u32) -> bool {
-    control_hz > 0 && tick_hz >= control_hz && tick_hz % control_hz == 0
+    control_hz > 0 && tick_hz >= control_hz && tick_hz.is_multiple_of(control_hz)
 }
 pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;
 pub const RATE_CONTROLLER_D_FILTER_ALPHA: f32 = 0.25;
@@ -1361,8 +1370,14 @@ mod tests {
     fn the_divider_check_rejects_an_inexact_pair() {
         assert!(scheduler_divides_exactly(2_000, 2_000));
         assert!(scheduler_divides_exactly(800, 400));
-        assert!(!scheduler_divides_exactly(800, 300), "800 does not divide into 300");
-        assert!(!scheduler_divides_exactly(400, 800), "a scheduler cannot tick slower");
+        assert!(
+            !scheduler_divides_exactly(800, 300),
+            "800 does not divide into 300"
+        );
+        assert!(
+            !scheduler_divides_exactly(400, 800),
+            "a scheduler cannot tick slower"
+        );
         assert!(!scheduler_divides_exactly(1_000, 0));
     }
 
@@ -1372,16 +1387,14 @@ mod tests {
         // Stated against each rate a board actually runs, since the corner is
         // meant to mean the same filter at any of them.
         for rate in [400.0_f32, 1_000.0, 2_000.0] {
-        let alpha = gyro_lpf_alpha(IMU_GYRO_LPF_HZ, rate);
-        let corner = gyro_lpf_corner_hz(alpha, rate);
-        assert!(
-            (corner - IMU_GYRO_LPF_HZ).abs() < 0.1,
-            "{IMU_GYRO_LPF_HZ} Hz became {corner} Hz at {rate} Hz"
-        );
+            let alpha = gyro_lpf_alpha(IMU_GYRO_LPF_HZ, rate);
+            let corner = gyro_lpf_corner_hz(alpha, rate);
+            assert!(
+                (corner - IMU_GYRO_LPF_HZ).abs() < 0.1,
+                "{IMU_GYRO_LPF_HZ} Hz became {corner} Hz at {rate} Hz"
+            );
         }
     }
-
-    use super::*;
 
     fn assert_close(actual: f32, expected: f32) {
         assert!(

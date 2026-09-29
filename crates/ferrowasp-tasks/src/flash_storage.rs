@@ -12,8 +12,8 @@ use heapless::spsc::{Consumer, Producer, Queue};
 use ferrowasp_mspv2::rpc;
 
 use crate::drone_toolbox::{
-    gyro_lpf_corner_hz,
     ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcRateProfile, TuningProfile,
+    gyro_lpf_corner_hz,
 };
 
 pub const RECORD_QUEUE_CAPACITY: usize = 64;
@@ -880,8 +880,8 @@ pub fn scratch_test_page() -> [u8; FLASH_PAGE_LEN] {
 
 #[cfg(test)]
 mod tests {
-    use crate::drone_toolbox::gyro_lpf_alpha;
     use super::*;
+    use crate::drone_toolbox::gyro_lpf_alpha;
     use ferrowasp_core::blackbox::{decode_page, record_from_page};
 
     fn record(sequence: u32) -> FlightRecord {
@@ -1065,7 +1065,10 @@ mod tests {
         let corner = 50.8;
         let at_400 = gyro_lpf_alpha(corner, 400.0);
         let at_1000 = gyro_lpf_alpha(corner, 1000.0);
-        assert!(at_1000 < at_400, "a faster loop needs a smaller coefficient");
+        assert!(
+            at_1000 < at_400,
+            "a faster loop needs a smaller coefficient"
+        );
         for (alpha, rate) in [(at_400, 400.0), (at_1000, 1000.0)] {
             let back = gyro_lpf_corner_hz(alpha, rate);
             assert!((back - corner).abs() < 0.1, "{rate} Hz -> {back}");
