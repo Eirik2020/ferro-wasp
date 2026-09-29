@@ -146,11 +146,11 @@ pub fn throttles_to_dshot(values: [u16; 4]) -> [u16; 4] {
 
 /// Returns true once a bounded command lease is older than its duration.
 ///
-/// The wrapping subtraction keeps the comparison valid across a `u32`
-/// millisecond-counter rollover, provided leases remain shorter than half the
-/// counter range.
-pub const fn command_lease_expired(started_ms: u32, duration_ms: u32, now_ms: u32) -> bool {
-    now_ms.wrapping_sub(started_ms) > duration_ms
+/// Timestamps are a `u64` millisecond count, which does not wrap. The
+/// subtraction still wraps, so a `now_ms` read before `started_ms` - out of
+/// order - counts as expired, the conservative answer.
+pub const fn command_lease_expired(started_ms: u64, duration_ms: u32, now_ms: u64) -> bool {
+    now_ms.wrapping_sub(started_ms) > duration_ms as u64
 }
 
 #[cfg(test)]
@@ -294,21 +294,30 @@ mod tests {
         assert!(command_lease_expired(100, 20, 121));
     }
 
+    /// Where a u32 millisecond counter rolled over, after 49.7 days: the
+    /// lease is measured straight through it now.
     #[test]
-    fn command_lease_expiry_handles_millisecond_counter_rollover() {
-        let started = u32::MAX - 9;
+    fn command_lease_expiry_holds_past_the_old_u32_rollover() {
+        let started = u64::from(u32::MAX) - 9;
 
-        assert!(!command_lease_expired(started, 20, 10));
-        assert!(command_lease_expired(started, 20, 11));
+        assert!(!command_lease_expired(started, 20, started + 20));
+        assert!(command_lease_expired(started, 20, started + 21));
+    }
+
+    /// A reading taken before the lease started - out of order - counts as
+    /// expired, the conservative answer.
+    #[test]
+    fn a_reading_before_the_lease_started_counts_as_expired() {
+        assert!(command_lease_expired(100, 20, 99));
     }
 
     #[test]
     fn periodically_renewed_command_lease_covers_a_long_guarded_hold() {
-        const HOLD_MS: u32 = 500;
-        const REFRESH_MS: u32 = 10;
+        const HOLD_MS: u64 = 500;
+        const REFRESH_MS: u64 = 10;
         const LEASE_MS: u32 = 20;
 
-        let mut now_ms = 0;
+        let mut now_ms: u64 = 0;
 
         while now_ms < HOLD_MS {
             let lease_started_ms = now_ms;
@@ -320,12 +329,12 @@ mod tests {
         assert!(!command_lease_expired(
             lease_started_ms,
             LEASE_MS,
-            now_ms + LEASE_MS
+            now_ms + u64::from(LEASE_MS)
         ));
         assert!(command_lease_expired(
             lease_started_ms,
             LEASE_MS,
-            now_ms + LEASE_MS + 1
+            now_ms + u64::from(LEASE_MS) + 1
         ));
     }
 }

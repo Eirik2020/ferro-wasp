@@ -1,5 +1,5 @@
 schema_version = 2
-imu_lpf_alpha = 0.55
+imu_lpf_hz = 50.8
 log_rate_divisor = 1
 rc_deadband = 8
 roll_center_rate = 70.0

@@ -299,6 +299,13 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/LOGGING_FORMAT.md",
+      "role": "logging-format-requirements",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 8192
+    },
+    {
       "path": "project_meta/BENCH_TEST_PLAN.md",
       "role": "legacy-test-router",
       "lifecycle": "durable",
@@ -378,11 +385,10 @@
       "max_bytes": 4096
     },
     {
-      "path": "project_meta/testing/targets/fcu3.md",
-      "role": "target-test-procedure",
-      "lifecycle": "live",
-      "context": "targeted",
-      "max_bytes": 16384
+      "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
+      "role": "historical-target-test-procedure",
+      "lifecycle": "historical",
+      "context": "exclude"
     },
     {
       "path": "project_meta/testing/targets/foxeer-f405-v2.md",
@@ -399,6 +405,18 @@
     },
     {
       "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md",
+      "role": "historical-work-handoff",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md",
+      "role": "historical-work-handoff",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-09-24.md",
       "role": "historical-work-handoff",
       "lifecycle": "historical",
       "context": "exclude"
@@ -452,11 +470,11 @@
       "max_bytes": 5120
     },
     {
-      "path": "apps/AGENTS.md",
+      "path": "firmware/AGENTS.md",
       "max_bytes": 5120
     },
     {
-      "path": "apps/foxeer-f405-v2/AGENTS.md",
+      "path": "firmware/foxeer-f405-v2/AGENTS.md",
       "max_bytes": 4096
     },
     {

@@ -1,0 +1,22 @@
+{
+  "name": "ferro-configurator-gui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Prototype desktop front-end for FerroWasp controllers",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.2",
+    "vite": "~6.0.7",
+    "@tauri-apps/cli": "^2.2.0"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0"
+  }
+}

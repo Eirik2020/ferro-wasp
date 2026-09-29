@@ -9,7 +9,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/",
+          "firmware/",
           "crates/",
           "project_meta/",
           "tools/"
@@ -38,10 +38,10 @@
       "summary": "Check the exact FCU3 application and selected feature set.",
       "target": "fcu3",
       "tier": "embedded-build",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
+          "firmware/stm32f405-flight/",
           "crates/"
         ],
         "features": [
@@ -54,7 +54,7 @@
         ]
       },
       "procedure": {
-        "path": "apps/stm32f405-flight/README.md",
+        "path": "firmware/stm32f405-flight/README.md",
         "heading": "Build"
       },
       "prerequisites": [
@@ -77,7 +77,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/"
         ],
         "features": [
@@ -90,7 +90,7 @@
         ]
       },
       "procedure": {
-        "path": "apps/foxeer-f405-v2/README.md",
+        "path": "firmware/foxeer-f405-v2/README.md",
         "heading": "Build"
       },
       "prerequisites": [
@@ -113,8 +113,8 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/",
-          "crates/ferrowasp-actuator/",
+          "firmware/",
+          "crates/ferrowasp-core/src/actuator.rs",
           "crates/ferrowasp-core/src/safety.rs",
           "crates/ferrowasp-tasks/"
         ],
@@ -153,7 +153,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/ferrowasp-core/src/blackbox.rs",
           "crates/ferrowasp-tasks/src/flash_storage.rs",
           "tools/ferrowasp_storage.py"
@@ -194,11 +194,11 @@
       "summary": "Run the FCU3 powered props-off exact-flight-image DShot gate.",
       "target": "fcu3",
       "tier": "bench-powered-props-off",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
-          "apps/stm32f405-flight/src/board/",
+          "firmware/stm32f405-flight/",
+          "firmware/stm32f405-flight/src/board/",
           "crates/ferrowasp-stm32f4/src/dshot.rs"
         ],
         "features": [
@@ -211,7 +211,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/testing/targets/fcu3.md",
+        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Powered Props-Off DShot Gate"
       },
       "prerequisites": [
@@ -241,8 +241,8 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
-          "apps/foxeer-f405-v2/src/board/"
+          "firmware/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/src/board/"
         ],
         "features": [
           "board-foxeer-f405-v2"
@@ -264,7 +264,7 @@
         "propellers are installed",
         "physical and controller axis signs do not match the reviewed convention",
         "unexpected motor identity, direction, command, or arming behavior",
-        "transport fault, RC loss, smoke, heat, or rough motor sound"
+        "a fail-open transport fault, unintended RC loss, smoke, heat, or rough motor sound"
       ],
       "evidence": [
         "commit or working-tree identity, firmware image hash, and exact feature set",
@@ -280,10 +280,10 @@
       "summary": "Run the final FCU3 exact-image preflight gate.",
       "target": "fcu3",
       "tier": "preflight",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
+          "firmware/stm32f405-flight/",
           "crates/"
         ],
         "features": [
@@ -296,7 +296,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/testing/targets/fcu3.md",
+        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Final Preflight Gate"
       },
       "prerequisites": [
@@ -325,7 +325,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/"
         ],
         "features": [
@@ -364,10 +364,10 @@
       "summary": "Run one bounded logged FCU3 characterization flight.",
       "target": "fcu3",
       "tier": "flight",
-      "status": "active",
+      "status": "retired",
       "triggers": {
         "paths": [
-          "apps/stm32f405-flight/",
+          "firmware/stm32f405-flight/",
           "crates/"
         ],
         "features": [
@@ -379,7 +379,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/testing/targets/fcu3.md",
+        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Bounded Logged Flight Test"
       },
       "prerequisites": [
@@ -409,7 +409,7 @@
       "status": "active",
       "triggers": {
         "paths": [
-          "apps/foxeer-f405-v2/",
+          "firmware/foxeer-f405-v2/",
           "crates/"
         ],
         "features": [

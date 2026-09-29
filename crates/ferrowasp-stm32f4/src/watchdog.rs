@@ -16,9 +16,8 @@ where
     Ok(watchdog)
 }
 
-pub fn acknowledge_watchdog_tick<TIM>(watchdog: &mut CounterHz<TIM>)
-where
-    TIM: Instance,
-{
-    watchdog.clear_all_flags();
+pub use crate::timer_tick::TimerTick;
+
+pub fn acknowledge_watchdog_tick(watchdog: &mut impl TimerTick) {
+    watchdog.acknowledge_tick();
 }

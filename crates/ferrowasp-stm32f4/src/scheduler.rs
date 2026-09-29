@@ -19,9 +19,8 @@ where
     Ok(scheduler)
 }
 
-pub fn acknowledge_control_tick<TIM>(scheduler: &mut CounterHz<TIM>)
-where
-    TIM: Instance,
-{
-    scheduler.clear_all_flags();
+pub use crate::timer_tick::TimerTick;
+
+pub fn acknowledge_control_tick(scheduler: &mut impl TimerTick) {
+    scheduler.acknowledge_tick();
 }

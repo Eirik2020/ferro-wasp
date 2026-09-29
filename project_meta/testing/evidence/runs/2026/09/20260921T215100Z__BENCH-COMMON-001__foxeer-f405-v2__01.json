@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "run_id": "20260921T215100Z__BENCH-COMMON-001__foxeer-f405-v2__01",
+  "test_id": "BENCH-COMMON-001",
+  "started_at_utc": "2026-09-21T21:47:00Z",
+  "completed_at_utc": "2026-09-21T21:51:00Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-unpowered",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "d644dd130d9c117da52309cda16a6606688ac81a07c0f6f822883c6cf759af6d",
+    "procedure_path": "project_meta/testing/targets/common-boot-idle.md",
+    "procedure_heading": "Boot and Idle State",
+    "procedure_sha256": "e8ac455bfc74c67a69d4571e3ef11afefd6df89f0c13dfddb2aa41c425820f61"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "flash_config_seq": 21,
+      "stored_flash_log_page": 15784,
+      "next_flight_id": 3
+    }
+  },
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "disconnected",
+    "equipment": [
+      "SWD probe",
+      "USB host power",
+      "no oscilloscope or logic analyzer",
+      "no reset button on this board"
+    ],
+    "environment": [
+      "bench",
+      "battery disconnected",
+      "RC receiver part of the unpowered VTX, so no RC link"
+    ]
+  },
+  "commands": [
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo build --release --locked)",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "rtt-run-1",
+      "kind": "log",
+      "path": "logs/terminal_embed/20260921_214715_rtt.log",
+      "bytes": 11105,
+      "sha256": "21f7f3174006505e40d569cb28ad5a37b7c172d751e8f6f0a95e9d24bf41758f"
+    },
+    {
+      "id": "rtt-run-2",
+      "kind": "log",
+      "path": "logs/terminal_embed/20260921_214806_rtt.log",
+      "bytes": 6057,
+      "sha256": "0687ce440b144b3e7b82ce71299f5d3b1cd579ee75950ed1a5e54a34d3bba2a6"
+    },
+    {
+      "id": "rtt-run-3",
+      "kind": "log",
+      "path": "logs/terminal_embed/20260921_214938_rtt.log",
+      "bytes": 13618,
+      "sha256": "d61c7a7c7820bed076b1a7c747a11a14cbb188a88914623201cdc2f9a6847599"
+    }
+  ],
+  "measurements": {
+    "boot_cycles": 3,
+    "dshot_zero_output_reports": 43,
+    "dshot_nonzero_output_reports": 0,
+    "longest_capture_seconds": 50,
+    "imu_who_am_i": 113,
+    "spi2_flash_jedec": "ef:40:18"
+  },
+  "observations": [
+    "Three cold boots (USB unplugged between runs) reached the same steady state: PLL48 valid at 48 MHz, SPI2 flash ef:40:18 16 MiB supported, ICM42688-P WHO_AM_I 71, flash recovered at page 15784 with config seq 21, telemetry-qualified DShot arming on PA10.",
+    "Every DShot report in all three runs was [0, 0, 0, 0] with faults 0; no arming and no panic occurred.",
+    "The two-second SPI2 heartbeat continued to the end of each capture, the longest about 50 seconds.",
+    "One boot-time `IMU stale in control loop: seq 0, stale ticks 1` per run, before the first IMU sample.",
+    "ESC telemetry latched faulted after M1's response timeout in each run, correct with no ESC power.",
+    "Operator observed the board's LEDs lit and nothing else abnormal; no heat or unexpected behaviour.",
+    "No `UART4 RX free-buffer pool exhausted on IDLE` in any of the three runs; the earlier sighting remains deferred to the powered gate, where the VTX drives that line.",
+    "Probe-side errors ending runs 1 and 2 (device disconnected, SwdDpError) are the SWD session dropping on USB unplug, not firmware behaviour.",
+    "First run under the candidate whose task bodies are ferroforge::app! instances of ferrowasp-stm32f4-tasks definitions."
+  ],
+  "limitations": [
+    "No oscilloscope or logic analyzer available: the check that no motor output pulses occur before the actuator-output task is initialized was not observed electrically. Actuator power was disconnected throughout, so no pulse could reach a motor; direct observation is deferred to the powered props-off gate.",
+    "Motor outputs at stop are evidenced by the firmware's own DShot reports, not by measurement at the pins.",
+    "This board has no reset button, so reset was exercised as a cold USB power cycle; no brownout was induced and NRST was not asserted.",
+    "The procedure's red/green LED heartbeat check does not apply to this board: its manifest sets onboard_debug_leds_usable_with_swd to false. The RTT heartbeat was used instead.",
+    "The RC receiver is powered from the battery through the VTX, so 'disarmed with the receiver disconnected' was established with no RC hardware powered at all."
+  ],
+  "stop_conditions_triggered": []
+}

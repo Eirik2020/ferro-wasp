@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "run_id": "20260921T205100Z__BENCH-FOX-001__foxeer-f405-v2__01",
+  "test_id": "BENCH-FOX-001",
+  "started_at_utc": "2026-09-21T20:26:05Z",
+  "completed_at_utc": "2026-09-21T20:51:00Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-powered-props-off",
+  "result": "fail",
+  "definition": {
+    "catalog_sha256": "d644dd130d9c117da52309cda16a6606688ac81a07c0f6f822883c6cf759af6d",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer Powered Props-Off Exact-Image Gate",
+    "procedure_sha256": "646947dbd7b4567711165586528589ffc15535e82428765f689c89c9ab3e68fe"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "rc_deadband": 8,
+      "roll_pitch_center_sensitivity_dps": 70,
+      "roll_pitch_max_rate_dps": 300,
+      "yaw_center_sensitivity_dps": 70,
+      "yaw_max_rate_dps": 200,
+      "expo": 0.5,
+      "pid_p": [
+        2.5,
+        2.5,
+        2.0
+      ],
+      "pid_i_d": "all zero",
+      "selected_flight_id": 8
+    }
+  },
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "connected",
+    "equipment": [
+      "SWD probe",
+      "USB host power",
+      "flight battery",
+      "multimeter",
+      "OSD/VTX powered from the battery",
+      "no oscilloscope or logic analyzer"
+    ],
+    "environment": [
+      "bench",
+      "airframe secured",
+      "battery connected",
+      "RC receiver powered through the VTX, so the RC link was live"
+    ]
+  },
+  "commands": [
+    {
+      "command": "(cd firmware/foxeer-f405-v2 && cargo build --release --locked)",
+      "exit_code": 0
+    },
+    {
+      "command": "arm-none-eabi-objcopy -O binary <release ELF> <release .bin>",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator blackbox flights",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "rtt-powered-run",
+      "kind": "log",
+      "path": "logs/terminal_embed/20260921_222605_rtt.log",
+      "bytes": 190878,
+      "sha256": "ce3b63ab0fbeff666e1d62c9fade9bfa144ef10fc642506b5c878906f98fcb5a"
+    }
+  ],
+  "measurements": {
+    "elf_sha256": "6bdcd149d78f710e8eef9f98bfad17d8d045dc0abe2cf04873ba7491ee0acf9b",
+    "armed_transitions": 5,
+    "rc_requested_disarms": 5,
+    "arming_aborts": 3,
+    "dshot_reports_total": 204,
+    "dshot_reports_at_idle_112": 12,
+    "dshot_sets": "203999/204000, final [0,0,0,0] at 408000 ms, busy/expired/timeouts/faults 0",
+    "armed_erpm_range": "6300..7700",
+    "esc_telemetry_requests": 10132,
+    "esc_telemetry_valid": 10131,
+    "esc_telemetry_response_timeouts": 1,
+    "esc_telemetry_crc_failures": 0,
+    "esc_telemetry_faulted_latched_at_ms": 207999,
+    "blackbox_pages_written": 1398,
+    "blackbox_dropped_records": 0,
+    "blackbox_write_faults": 0,
+    "selected_flight_pages": 1379,
+    "battery_voltage_reported_v": 25.1,
+    "detected_cell_count": 6,
+    "cell_voltage_v": 4.18,
+    "battery_current_reported_a": 0.1,
+    "uart4_idle_pool_warnings": 0
+  },
+  "observations": [
+    "Image identity matched the USB gate: ELF 6bdcd149..., binary 16f6e8ed..., clean tree at a921ffe.",
+    "Boot was stationary and disarmed. config-show read the baseline before and after the run.",
+    "Operator confirmed OSD VBAT and cell voltage consistent with a multimeter across the pack at 6 cells, 4.18 V per cell, closing the missing-cell-voltage half of the 2026-07-28 report.",
+    "Motors were stopped at boot and did not respond to stick movement while disarmed.",
+    "Arming succeeded five times, each through the guarded stop dwell and four-motor eRPM qualification before SYSTEM ARMED. No motor started before that transition.",
+    "Arming aborted correctly when throttle was raised during the attempt: 'Arming aborted: throttle exceeds 65'.",
+    "Deliberate RC loss while armed stopped the motors immediately: DShot to [0, 0, 0, 0], eRPM zero in the next report. All five 'RC link invalidated by frame timeout' events were operator-initiated. No automatic rearm followed recovery; a fresh ARM-low then ARM-high was needed.",
+    "Operator verified motor reaction as expected on roll and pitch, correction opposing the imposed motion, full-stick bounds reached, deadband commanding zero.",
+    "The logical-to-physical motor path is byte-identical to pre-conversion 18521d5: MOTOR_OUTPUT_MAP [3, 4, 2, 1], the Quad X mixer, the ferrowasp-core frame conventions, and every Foxeer pin and timer. The conversion cannot have moved a motor, and no wiring or airframe change intervened.",
+    "Battery current read a constant 0.1 A including at four motors turning 6300..7700 eRPM. Conversion is centiamps = adc_mv * 10000 / 70 / 10, so 0.1 A implies a raw PC1 reading near 1 mV, the noise floor. The defect is upstream of the scale-70 change this candidate adopted, which therefore could not have fixed the 2026-07-28 zero-current report.",
+    "The ESC telemetry manager latched a fault at 207999 ms after one response timeout for physical output 4 (logical M4) at request 10131: one miss in 10132, zero CRC failures. Earlier disarms, including the first RC-loss stop, reached zero eRPM unfaulted, so the miss was not systematic.",
+    "Both later arming attempts then aborted on 'ESC idle telemetry qualification timed out', correctly fail-closed. The second followed a battery reconnect, but the latch was already set 100 s earlier, so this run does not independently demonstrate the carried-forward ESC-only power-cycle bug.",
+    "After the latch, per-motor eRPM repeated frozen values while DShot commanded [0, 0, 0, 0]: the stale-telemetry item already tracked, not turning motors. Operator confirmed motors stopped.",
+    "Blackbox wrote 1398 pages, zero dropped records, zero write faults. Capture: boot 4, flight 8, pages 17182..18560.",
+    "No 'UART4 RX free-buffer pool exhausted on IDLE' warning occurred with the VTX connected and powered, against two in the earlier USB-only run with UART4 floating. The deferred pre-conversion A/B is no longer needed for this symptom.",
+    "The first storage-CLI command after each USB port open was rejected once with 'ERR invalid command; type help' and succeeded on retry. CommandParser in crates/ferrowasp-tasks/src/flash_storage.rs accumulates a line with no reset across port open, so a stray byte corrupts the first line and the error clears the buffer. Byte-identical to pre-conversion: pre-existing, cosmetic."
+  ],
+  "limitations": [
+    "No oscilloscope or logic analyzer: DShot pulse width, jitter, and complementary-output margin were not measured; motor stop is evidenced by the firmware's DShot reports, not at the pins.",
+    "Battery current magnitude is unusable, so no loaded-current cross-check was possible.",
+    "Motor identity came from the roll and pitch differential response plus the unchanged output map, not the capped per-motor identification procedure, which needs a bench-only selector image that step 1 forbids.",
+    "This board has no reset button, so boot-with-ARM-high was exercised as a USB power cycle only.",
+    "Yaw was exercised within the stick and correction checks but not logged per motor pair."
+  ],
+  "stop_conditions_triggered": [
+    "Abnormal current: battery current read a constant 0.1 A with four motors turning, an implausible loaded reading under step 2 of the procedure.",
+    "Telemetry fault: the ESC telemetry manager latched faulted after a response timeout for logical M4, and the two subsequent arming attempts aborted on idle telemetry qualification."
+  ]
+}

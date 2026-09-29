@@ -40,8 +40,9 @@ candidate.
 
 ## Target Procedures
 
-- FCU3: `project_meta/testing/targets/fcu3.md`
 - Foxeer F405 V2: `project_meta/testing/targets/foxeer-f405-v2.md`
+- FCU3: obsolete since 2026-09-22; its procedure is archived and its gates
+  retired, so it is never selected for a new run.
 
 Start with the catalog so prerequisites and validation tiers remain ordered.
 Do not substitute historical evidence for rerunning the selected gate on a new

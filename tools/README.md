@@ -24,7 +24,7 @@ defaults to its normal DShot600/eRPM-qualified flight path:
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 ```
 
-This builds `apps/foxeer-f405-v2`, flashes its own
+This builds `firmware/foxeer-f405-v2`, flashes its own
 `FerroWaspFoxeerF405V2` ELF through `probe-rs`, and decodes RTT. PA13/SWDIO and
 PA14/SWCLK are reserved by the Foxeer board support and are not configured as LEDs.
 The host prints explicit milestones so a quiet or slow probe cannot be mistaken
@@ -102,7 +102,7 @@ python tools\terminal_embed.py --log-file logs\bench_rtt.log
 To pass a custom command:
 
 ```powershell
-python tools\terminal_embed.py -- probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps apps\stm32f405-flight\target\thumbv7em-none-eabihf\debug\FerroWasp
+python tools\terminal_embed.py -- probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps firmware\stm32f405-flight\target\thumbv7em-none-eabihf\debug\FerroWasp
 ```
 
 ## IMU Live View

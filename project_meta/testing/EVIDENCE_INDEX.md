@@ -10,7 +10,8 @@ Use these sources for current work:
 
 - `../CODEX_ACTIVE_WORK.md` for the live bench, logging, and flight handoff;
 - `README.md` and `TEST_CATALOG.json` for test selection and prerequisites;
-- `targets/fcu3.md` for the current FCU3 operator procedure;
+- `../archive/FCU3_TEST_PROCEDURE_2026-09-22.md` for the FCU3 procedure,
+  archived 2026-09-22 when the board was marked obsolete;
 - `targets/foxeer-f405-v2.md` for the current Foxeer F405 V2 procedure;
 - `../../mdbook/src/user/foxeer_f405_v2.md` for the current USB field
   cheatsheet.

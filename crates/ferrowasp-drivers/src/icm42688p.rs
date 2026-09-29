@@ -11,14 +11,27 @@ pub const WHO_AM_I_EXPECTED: u8 = 0x47;
 pub const SPI_BURST_SIZE: usize = 15;
 pub const SPI_READ_BIT: u8 = 0x80;
 
-pub const OUTPUT_DATA_RATE_HZ: u32 = 1_000;
+/// The sensor's output data rate.
+///
+/// Measured on a Foxeer F405 V2 with props off: the part sustains 2 kHz and
+/// 4 kHz exactly, at 2023.6 Hz and 4047.2 Hz for the +1.2% its clock runs
+/// fast, with one control cycle per sample and no stale reads at either.
+///
+/// The ceiling is the SPI clock, not the sensor. A 15-byte burst at the 1 MHz
+/// this board configures takes about 120 us, which is 24% of a 2 kHz period,
+/// 48% of a 4 kHz one and 96% at 8 kHz. Going beyond 4 kHz means raising the
+/// bus first; the part accepts 24 MHz.
+///
+/// The UI filter is set to ODR/4, so this also moves the anti-alias corner:
+/// 500 Hz here, against a 1 kHz Nyquist at a matched control rate.
+pub const OUTPUT_DATA_RATE_HZ: u32 = 2_000;
 pub const TEMPERATURE_LSB_PER_C: f32 = 132.48;
 pub const TEMPERATURE_OFFSET_C: f32 = 25.0;
 
 const RESET_DONE: u8 = 1 << 4;
 const SOFT_RESET: u8 = 1;
 const DISABLE_I2C_BIG_ENDIAN: u8 = 0x33;
-const ODR_1_KHZ: u8 = 0x06;
+const ODR_2_KHZ: u8 = 0x05;
 const UI_FILTER_ODR_DIV_4: u8 = 0x11;
 const ACCEL_GYRO_LOW_NOISE: u8 = 0x0f;
 const RESET_SETTLE_MS: u32 = 2;
@@ -119,11 +132,11 @@ impl Default for Config {
 
 impl Config {
     const fn gyro_config0(self) -> u8 {
-        self.gyro_full_scale.register_bits() | ODR_1_KHZ
+        self.gyro_full_scale.register_bits() | ODR_2_KHZ
     }
 
     const fn accel_config0(self) -> u8 {
-        self.accel_full_scale.register_bits() | ODR_1_KHZ
+        self.accel_full_scale.register_bits() | ODR_2_KHZ
     }
 }
 
@@ -565,9 +578,10 @@ mod tests {
 
         assert_eq!(config.gyro_full_scale, GyroFullScale::Dps2000);
         assert_eq!(config.accel_full_scale, AccelFullScale::G16);
-        assert_eq!(config.gyro_config0(), 0x06);
-        assert_eq!(config.accel_config0(), 0x06);
-        assert_eq!(OUTPUT_DATA_RATE_HZ, 1_000);
+        // 0x05 is the part's 2 kHz ODR selection; 0x06 was its 1 kHz default.
+        assert_eq!(config.gyro_config0(), 0x05);
+        assert_eq!(config.accel_config0(), 0x05);
+        assert_eq!(OUTPUT_DATA_RATE_HZ, 2_000);
     }
 
     #[test]
@@ -584,8 +598,8 @@ mod tests {
                 [Register::DeviceConfig as u8, SOFT_RESET],
                 [Register::RegBankSel as u8, 0],
                 [Register::IntfConfig0 as u8, DISABLE_I2C_BIG_ENDIAN],
-                [Register::GyroConfig0 as u8, 0x06],
-                [Register::AccelConfig0 as u8, 0x06],
+                [Register::GyroConfig0 as u8, 0x05],
+                [Register::AccelConfig0 as u8, 0x05],
                 [Register::GyroAccelConfig0 as u8, UI_FILTER_ODR_DIV_4],
                 [Register::PwrMgmt0 as u8, ACCEL_GYRO_LOW_NOISE],
                 [Register::IntConfig as u8, INT1_ACTIVE_HIGH_PUSH_PULL_PULSED],

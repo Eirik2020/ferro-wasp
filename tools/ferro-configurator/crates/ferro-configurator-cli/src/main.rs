@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    io::{self, IsTerminal, Write},
+    fs::File,
+    io::{self, BufWriter, IsTerminal, Write},
     path::{Path, PathBuf},
     process::ExitCode,
     thread,
@@ -12,9 +13,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
     BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
     DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
-    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, convert_fwbb_to_ulog, detect_dfu,
-    discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
-    prepare_elf, resolve_device_flight,
+    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::CONTROL_LOOP_RATE_HZ,
+    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu, discover_ports,
+    download_flight, find_bundled_firmware, flash_firmware, open_device, prepare_elf,
+    resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -78,6 +80,42 @@ enum Command {
     Dfu(DfuArgs),
     /// Run read-only host and USB diagnostics.
     Doctor,
+    /// Observe a controller for bench evidence, without commanding it.
+    Bench(BenchArgs),
+}
+
+#[derive(Debug, Args)]
+struct BenchArgs {
+    #[command(subcommand)]
+    command: BenchCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum BenchCommand {
+    /// Record live status and every transition in it for a fixed duration.
+    ///
+    /// Read-only: it polls the controller's own status and never writes. The
+    /// operator still performs every hardware action; this only removes the
+    /// transcription from the evidence.
+    Watch {
+        /// How long to observe.
+        #[arg(long, default_value_t = 60, value_parser = clap::value_parser!(u64).range(1..))]
+        seconds: u64,
+        /// Write one JSON object per sample to this path.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Measure whether the control loop is keeping up with its configured rate.
+    ///
+    /// Read-only. The controller reports both the rate it was built for and the
+    /// number of control cycles it has completed, so the shortfall between them
+    /// is the answer to "can this board sustain this loop rate".
+    Loop {
+        /// How long to measure. Longer is more precise; the uptime the
+        /// controller reports has millisecond resolution.
+        #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u64).range(2..))]
+        seconds: u64,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -351,6 +389,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 let rendered = config.to_toml()?;
                 emit(cli.format, "config.show", &config, || {
                     print!("{rendered}");
+                    print_lpf_note(config.imu_lpf_hz);
                 })
             }
             ConfigCommand::Export { path, force } => {
@@ -722,6 +761,12 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 emit(cli.format, "dfu.list", &detection, || print_dfu(&detection))
             }
         },
+        Command::Bench(args) => match &args.command {
+            BenchCommand::Watch { seconds, out } => {
+                bench_watch(cli, timeout, *seconds, out.as_ref())
+            }
+            BenchCommand::Loop { seconds } => bench_loop(cli, timeout, *seconds),
+        },
         Command::Doctor => {
             let ports = discover_ports()?;
             let count = ports.iter().filter(|port| port.is_ferrowasp).count();
@@ -900,6 +945,305 @@ fn finish_flash_guidance(timeout: Duration) {
         }
         thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// One polled reading, with the offset from the start of the watch.
+#[derive(Debug, Clone, Serialize)]
+struct WatchSample {
+    elapsed_ms: u64,
+    status: StatusSnapshot,
+}
+
+/// A change in one of the states an operator would otherwise narrate.
+#[derive(Debug, Clone, Serialize)]
+struct WatchTransition {
+    elapsed_ms: u64,
+    field: &'static str,
+    from: bool,
+    to: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WatchReport {
+    requested_seconds: u64,
+    /// What the controller actually delivered. It emits status on its own
+    /// cadence, so this is the resolution of the evidence: a transition
+    /// shorter than one period can be missed entirely.
+    observed_rate_hz: f64,
+    samples: usize,
+    failed_reads: usize,
+    armed_ms: u64,
+    throttle_max: u32,
+    battery_decivolts_min: u32,
+    battery_decivolts_max: u32,
+    transitions: Vec<WatchTransition>,
+    samples_path: Option<String>,
+}
+
+/// Records the transitions between two consecutive readings.
+fn diff_status(
+    elapsed_ms: u64,
+    previous: &StatusSnapshot,
+    current: &StatusSnapshot,
+    into: &mut Vec<WatchTransition>,
+) {
+    let fields: [(&'static str, bool, bool); 5] = [
+        ("armed", previous.armed, current.armed),
+        ("armable", previous.armable, current.armable),
+        ("arm_switch", previous.arm_switch, current.arm_switch),
+        ("rc_valid", previous.rc_valid, current.rc_valid),
+        ("imu_ready", previous.imu_ready, current.imu_ready),
+    ];
+    for (field, from, to) in fields {
+        if from != to {
+            into.push(WatchTransition {
+                elapsed_ms,
+                field,
+                from,
+                to,
+            });
+        }
+    }
+}
+
+/// Polls status for a bounded time and reports what changed.
+///
+/// Nothing here commands the aircraft. A failed read is counted and the watch
+/// continues, because a dropped USB line during a bench run is not a reason to
+/// discard the evidence either side of it.
+fn bench_watch(
+    cli: &Cli,
+    timeout: Duration,
+    seconds: u64,
+    out: Option<&PathBuf>,
+) -> Result<(), FerroError> {
+    let mut client = connect(cli, timeout)?;
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(seconds);
+
+    let mut writer = match out {
+        Some(path) => Some(BufWriter::new(File::create(path).map_err(|error| {
+            FerroError::FileIo {
+                operation: "create",
+                path: path.clone(),
+                reason: error.to_string(),
+            }
+        })?)),
+        None => None,
+    };
+
+    let mut transitions: Vec<WatchTransition> = Vec::new();
+    let mut previous: Option<StatusSnapshot> = None;
+    let mut previous_ms: u64 = 0;
+    let (mut samples, mut failed, mut armed_ms) = (0usize, 0usize, 0u64);
+    let (mut throttle_max, mut vbat_min, mut vbat_max) = (0u32, u32::MAX, 0u32);
+
+    if cli.format == OutputFormat::Human {
+        println!("Watching for {seconds}s. The operator performs every action.");
+    }
+
+    while Instant::now() < deadline {
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+        match client.read_status_fresh() {
+            Ok(status) => {
+                samples += 1;
+                // Credit the gap that just elapsed, so armed time reflects the
+                // clock rather than an assumed cadence.
+                if previous.as_ref().is_some_and(|p| p.armed) {
+                    armed_ms += elapsed_ms.saturating_sub(previous_ms);
+                }
+                previous_ms = elapsed_ms;
+                throttle_max = throttle_max.max(status.throttle);
+                vbat_min = vbat_min.min(status.battery_decivolts);
+                vbat_max = vbat_max.max(status.battery_decivolts);
+
+                if let Some(previous) = previous.as_ref() {
+                    let before = transitions.len();
+                    diff_status(elapsed_ms, previous, &status, &mut transitions);
+                    if cli.format == OutputFormat::Human {
+                        for change in &transitions[before..] {
+                            println!(
+                                "  {:>7.1}s  {} {} -> {}",
+                                elapsed_ms as f64 / 1000.0,
+                                change.field,
+                                change.from,
+                                change.to
+                            );
+                        }
+                    }
+                }
+
+                if let Some(writer) = writer.as_mut() {
+                    let sample = WatchSample {
+                        elapsed_ms,
+                        status: status.clone(),
+                    };
+                    let line = serde_json::to_string(&sample).unwrap_or_default();
+                    let _ = writeln!(writer, "{line}");
+                }
+                previous = Some(status);
+            }
+            Err(_) => failed += 1,
+        }
+    }
+    let elapsed_total_ms = started.elapsed().as_millis() as u64;
+
+    if let Some(mut writer) = writer {
+        let _ = writer.flush();
+    }
+
+    let report = WatchReport {
+        requested_seconds: seconds,
+        observed_rate_hz: if elapsed_total_ms > 0 {
+            samples as f64 * 1000.0 / elapsed_total_ms as f64
+        } else {
+            0.0
+        },
+        samples,
+        failed_reads: failed,
+        armed_ms,
+        throttle_max,
+        battery_decivolts_min: if samples == 0 { 0 } else { vbat_min },
+        battery_decivolts_max: vbat_max,
+        transitions,
+        samples_path: out.map(|path| path.display().to_string()),
+    };
+
+    emit(cli.format, "bench.watch", &report, || {
+        println!();
+        println!(
+            "Samples:     {} at {:.2} Hz ({} failed reads)",
+            report.samples, report.observed_rate_hz, report.failed_reads
+        );
+        println!("Armed:       {:.1} s", report.armed_ms as f64 / 1000.0);
+        println!("Throttle:    max {}", report.throttle_max);
+        println!(
+            "Battery:     {:.1}..{:.1} V",
+            report.battery_decivolts_min as f64 / 10.0,
+            report.battery_decivolts_max as f64 / 10.0
+        );
+        println!("Transitions: {}", report.transitions.len());
+        if report.observed_rate_hz < 5.0 {
+            println!();
+            println!(
+                "Note: the controller emits status at {:.2} Hz, so anything shorter than\n\
+                 {:.1} s can pass unseen. This records state, not events. For arming and\n\
+                 abort transitions, the RTT log is the complete record.",
+                report.observed_rate_hz,
+                if report.observed_rate_hz > 0.0 {
+                    1.0 / report.observed_rate_hz
+                } else {
+                    0.0
+                }
+            );
+        }
+        if let Some(path) = &report.samples_path {
+            println!("Samples written to {path}");
+        }
+    })
+}
+
+/// Says which coefficient the stored corner produces on the controller.
+///
+/// The configuration carries a frequency, which is what an operator can reason
+/// about. The firmware turns it into a one-pole coefficient against its own
+/// loop rate, and seeing that number is useful when comparing against logs or
+/// against Betaflight, where the coefficient is what gets quoted.
+fn print_lpf_note(corner_hz: f32) {
+    if let Some(alpha) = lpf_alpha_for_corner(corner_hz, CONTROL_LOOP_RATE_HZ) {
+        println!(
+            "# imu_lpf_hz {corner_hz} is a one-pole alpha of {alpha:.3} at the {CONTROL_LOOP_RATE_HZ:.0} Hz loop rate."
+        );
+    }
+}
+
+/// What the loop achieved against what it was asked for.
+#[derive(Debug, Clone, Serialize)]
+struct LoopReport {
+    configured_hz: u32,
+    achieved_hz: f64,
+    shortfall_percent: f64,
+    cycles: u32,
+    span_ms: u32,
+    keeping_up: bool,
+}
+
+/// Measures the control loop against its own configured rate.
+///
+/// Both numbers come from the controller: the rate it was built for, and the
+/// cycles it has completed since boot. A loop that cannot sustain its rate
+/// completes fewer cycles than the clock allows, and that shortfall is the
+/// signal - it appears before anything else misbehaves.
+fn bench_loop(cli: &Cli, timeout: Duration, seconds: u64) -> Result<(), FerroError> {
+    let mut client = connect(cli, timeout)?;
+    let first = client.read_status_fresh()?;
+    if first.control_loop_hz == 0 {
+        return Err(FerroError::UnexpectedResponse {
+            operation: "control loop rate".to_owned(),
+            response: "this firmware does not report ctl_hz; reflash to measure the loop"
+                .to_owned(),
+        });
+    }
+    if cli.format == OutputFormat::Human {
+        println!(
+            "Measuring for {seconds}s against the reported {} Hz.",
+            first.control_loop_hz
+        );
+    }
+    // Read continuously rather than sleeping and reading once. The port
+    // buffers status lines, so a read after a sleep returns the oldest queued
+    // line and measures a fraction of the requested span.
+    let deadline = Instant::now() + Duration::from_secs(seconds);
+    let mut last = first.clone();
+    while Instant::now() < deadline {
+        match client.read_status_fresh() {
+            Ok(status) => last = status,
+            Err(_) => continue,
+        }
+    }
+
+    let span_ms = last.uptime_ms.saturating_sub(first.uptime_ms);
+    let cycles = last.control_sequence.saturating_sub(first.control_sequence);
+    if span_ms == 0 {
+        return Err(FerroError::UnexpectedResponse {
+            operation: "control loop rate".to_owned(),
+            response: "the controller reported no elapsed time".to_owned(),
+        });
+    }
+    let achieved = f64::from(cycles) * 1000.0 / f64::from(span_ms);
+    let configured = f64::from(first.control_loop_hz);
+    let shortfall = (configured - achieved) / configured * 100.0;
+    // A tenth of a percent is well inside the millisecond resolution of the
+    // reported uptime, so anything under it is measurement noise.
+    let keeping_up = shortfall < 0.1;
+
+    let report = LoopReport {
+        configured_hz: first.control_loop_hz,
+        achieved_hz: achieved,
+        shortfall_percent: shortfall,
+        cycles,
+        span_ms,
+        keeping_up,
+    };
+
+    emit(cli.format, "bench.loop", &report, || {
+        println!();
+        println!("Configured:  {} Hz", report.configured_hz);
+        println!("Achieved:    {:.1} Hz", report.achieved_hz);
+        println!(
+            "Shortfall:   {:.3} %  ({} cycles in {} ms)",
+            report.shortfall_percent, report.cycles, report.span_ms
+        );
+        println!();
+        if report.keeping_up {
+            println!("The loop is keeping up.");
+        } else {
+            println!(
+                "The loop is NOT keeping up: {:.0} cycles per second are being lost.",
+                f64::from(report.configured_hz) - report.achieved_hz
+            );
+        }
+    })
 }
 
 fn connect(

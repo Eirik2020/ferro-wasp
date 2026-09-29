@@ -12,10 +12,81 @@ class RticBoundaryTests(unittest.TestCase):
     def test_current_repository_passes(self) -> None:
         self.assertEqual(validate_rtic_boundaries(REPOSITORY_ROOT), [])
 
+    def test_rejects_an_app_copy_of_a_shared_static(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshots = root / "crates" / "ferrowasp-stm32f4-tasks" / "src" / "snapshots.rs"
+            snapshots.parent.mkdir(parents=True)
+            snapshots.write_text(
+                "pub static IMU_STALE: AtomicBool = AtomicBool::new(true);\n",
+                encoding="utf-8",
+            )
+            lib = root / "firmware" / "demo" / "src" / "lib.rs"
+            lib.parent.mkdir(parents=True)
+            lib.write_text(
+                "pub static IMU_STALE: AtomicBool = AtomicBool::new(true);\n"
+                "pub static APP_ONLY: AtomicBool = AtomicBool::new(false);\n",
+                encoding="utf-8",
+            )
+
+            errors = validate_rtic_boundaries(root)
+
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'IMU_STALE'", errors[0])
+        self.assertIn("firmware/demo/src/lib.rs:1", errors[0])
+
+    def test_accepts_ferroforge_task_instances(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            main = root / "firmware" / "demo" / "src" / "main.rs"
+            main.parent.mkdir(parents=True)
+            main.write_text(
+                """
+use ferrowasp_app_demo::internal::*;
+
+ferroforge::app! {
+    device = pac,
+
+    use super::*;
+
+    #[shared]
+    struct Shared {}
+
+    #[local]
+    struct Local {}
+
+    #[init]
+    fn init(_: init::Context) -> (Shared, Local) {
+        (Shared {}, Local {})
+    }
+
+    #[task(from = heartbeat_task, priority = 1)]
+    async fn heartbeat(cx: heartbeat::Context);
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(validate_rtic_boundaries(root), [])
+
+    def test_a_bodyless_function_must_still_use_its_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            main = root / "firmware" / "demo" / "src" / "main.rs"
+            main.parent.mkdir(parents=True)
+            main.write_text(
+                "ferroforge::app! {\n    async fn heartbeat(cx: other::Context);\n}\n",
+                encoding="utf-8",
+            )
+
+            errors = validate_rtic_boundaries(root)
+
+        self.assertTrue(any("function 'heartbeat'" in error for error in errors))
+
     def test_rejects_non_rtic_main_declarations_and_external_imports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            main = root / "apps" / "demo" / "src" / "main.rs"
+            main = root / "firmware" / "demo" / "src" / "main.rs"
             main.parent.mkdir(parents=True)
             main.write_text(
                 """
@@ -52,8 +123,8 @@ mod app {
     def test_rejects_shared_board_types_register_logic_and_copies(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            first = root / "apps" / "one" / "src" / "board" / "routes.rs"
-            second = root / "apps" / "two" / "src" / "board" / "routes.rs"
+            first = root / "firmware" / "one" / "src" / "board" / "routes.rs"
+            second = root / "firmware" / "two" / "src" / "board" / "routes.rs"
             first.parent.mkdir(parents=True)
             second.parent.mkdir(parents=True)
             copied = """
@@ -85,7 +156,7 @@ pub const ROUTES: [DmaRoute; 2] = [
     def test_rejects_optional_or_inline_foxeer_usb(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app = root / "apps" / "foxeer-f405-v2"
+            app = root / "firmware" / "foxeer-f405-v2"
             source = app / "src"
             source.mkdir(parents=True)
             (app / "Cargo.toml").write_text(
@@ -112,7 +183,7 @@ fn init_usb() {
     def test_rejects_optional_standard_flight_services_and_pwm_esc_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app = root / "apps" / "foxeer-f405-v2"
+            app = root / "firmware" / "foxeer-f405-v2"
             source = app / "src"
             board = source / "board"
             board.mkdir(parents=True)

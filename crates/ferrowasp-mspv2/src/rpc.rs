@@ -31,7 +31,7 @@ pub struct ConfigV1 {
     pub yaw_p: f32,
     pub yaw_i: f32,
     pub yaw_d: f32,
-    pub imu_lpf_alpha: f32,
+    pub imu_lpf_hz: f32,
     pub log_rate_divisor: u16,
 }
 
@@ -140,7 +140,7 @@ pub enum ConfigFieldId {
     YawP,
     YawI,
     YawD,
-    ImuLpfAlpha,
+    ImuLpfHz,
     LogRateDivisor,
 }
 
@@ -286,7 +286,7 @@ mod tests {
             yaw_p: 0.3,
             yaw_i: 0.04,
             yaw_d: 0.0,
-            imu_lpf_alpha: 0.55,
+            imu_lpf_hz: 50.8,
             log_rate_divisor: 1,
         }
     }

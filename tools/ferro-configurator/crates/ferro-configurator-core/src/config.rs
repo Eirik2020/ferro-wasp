@@ -25,7 +25,7 @@ pub struct FerroConfig {
     pub roll: AxisPid,
     pub pitch: AxisPid,
     pub yaw: AxisPid,
-    pub imu_lpf_alpha: f32,
+    pub imu_lpf_hz: f32,
     pub log_rate_divisor: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rc_deadband: Option<u16>,
@@ -72,7 +72,7 @@ impl Default for FerroConfig {
                 i: 0.0,
                 d: 0.0,
             },
-            imu_lpf_alpha: 0.55,
+            imu_lpf_hz: 50.8,
             log_rate_divisor: 1,
             rc_deadband: Some(8),
             roll_center_rate: Some(70.0),
@@ -242,7 +242,7 @@ impl FerroConfig {
             ConfigKey::YawP => Some(self.yaw.p),
             ConfigKey::YawI => Some(self.yaw.i),
             ConfigKey::YawD => Some(self.yaw.d),
-            ConfigKey::ImuLpfAlpha => Some(self.imu_lpf_alpha),
+            ConfigKey::ImuLpfHz => Some(self.imu_lpf_hz),
             ConfigKey::LogRateDivisor => Some(self.log_rate_divisor as f32),
             ConfigKey::RcDeadband => self.rc_deadband.map(|value| value as f32),
             ConfigKey::RollCenterRate => self.roll_center_rate,
@@ -285,7 +285,7 @@ impl FerroConfig {
             ConfigKey::YawP => self.yaw.p = value,
             ConfigKey::YawI => self.yaw.i = value,
             ConfigKey::YawD => self.yaw.d = value,
-            ConfigKey::ImuLpfAlpha => self.imu_lpf_alpha = value,
+            ConfigKey::ImuLpfHz => self.imu_lpf_hz = value,
             ConfigKey::LogRateDivisor => self.log_rate_divisor = value as u16,
             ConfigKey::RcDeadband => self.rc_deadband = Some(value as u16),
             ConfigKey::RollCenterRate => self.roll_center_rate = Some(value),
@@ -380,7 +380,7 @@ mod tests {
     fn legacy_schema_overlays_without_changing_rc_rates() {
         let text = r#"
 schema_version = 1
-imu_lpf_alpha = 0.55
+imu_lpf_hz = 50.8
 log_rate_divisor = 2
 
 [roll]
@@ -425,7 +425,7 @@ d = 0.0
     fn validates_scalar_and_cross_field_firmware_ranges() {
         let mut config = FerroConfig::default();
         config.roll.p = 20.01;
-        config.imu_lpf_alpha = f32::NAN;
+        config.imu_lpf_hz = f32::NAN;
         config.log_rate_divisor = 17;
         config.roll_center_rate = Some(400.0);
         config.roll_max_rate = Some(300.0);
@@ -443,6 +443,7 @@ d = 0.0
                 | ConfigKey::PitchCenterRate
                 | ConfigKey::YawCenterRate => "50",
                 ConfigKey::RollMaxRate | ConfigKey::PitchMaxRate | ConfigKey::YawMaxRate => "300",
+                ConfigKey::ImuLpfHz => "50",
                 _ => "0.5",
             };
             config.set_from_str(key, value).unwrap();
@@ -454,8 +455,104 @@ d = 0.0
     fn dotted_and_dashed_keys_are_friendly_aliases() {
         assert_eq!("roll.p".parse::<ConfigKey>().unwrap(), ConfigKey::RollP);
         assert_eq!(
-            "imu-lpf-alpha".parse::<ConfigKey>().unwrap(),
-            ConfigKey::ImuLpfAlpha
+            "imu-lpf-hz".parse::<ConfigKey>().unwrap(),
+            ConfigKey::ImuLpfHz
         );
+    }
+}
+
+/// The loop rate the firmware runs its gyro filter at.
+///
+/// The configuration stores the filter's corner in hertz, so it describes the
+/// same filter whatever the loop rate. This is only used to report the
+/// coefficient that corner produces on the controller.
+///
+/// It mirrors `CONTROL_LOOP_RATE_HZ` in the firmware and has to move with it.
+/// That duplication is the same trap the stored corner exists to avoid, and it
+/// has already been wrong once: the host kept saying 400 Hz after the firmware
+/// moved to 1 kHz. The fix is for the device to report its own rate, which the
+/// status line does not carry yet.
+pub const CONTROL_LOOP_RATE_HZ: f32 = 1_000.0;
+
+/// The corner frequency a one-pole coefficient produces at `sample_rate_hz`.
+///
+/// Returns `None` for coefficients that are not a filter: zero passes nothing
+/// through and one filters nothing at all.
+#[allow(
+    clippy::neg_cmp_op_on_partial_ord,
+    reason = "`!(x > 0.0)` is true for NaN, so a NaN coefficient or rate reports no filter"
+)]
+pub fn lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> Option<f32> {
+    if !(alpha > 0.0) || alpha >= 1.0 || !(sample_rate_hz > 0.0) {
+        return None;
+    }
+    Some(-(1.0 - alpha).ln() * sample_rate_hz / (2.0 * std::f32::consts::PI))
+}
+
+/// The coefficient that puts the corner at `corner_hz` when sampled at
+/// `sample_rate_hz`.
+///
+/// Inverse of [`lpf_corner_hz`]. `None` when the request is not achievable:
+/// a corner at or above Nyquist is not a filter.
+#[allow(
+    clippy::neg_cmp_op_on_partial_ord,
+    reason = "`!(x > 0.0)` is true for NaN, so a NaN corner or rate is not achievable"
+)]
+pub fn lpf_alpha_for_corner(corner_hz: f32, sample_rate_hz: f32) -> Option<f32> {
+    if !(corner_hz > 0.0) || !(sample_rate_hz > 0.0) || corner_hz >= sample_rate_hz / 2.0 {
+        return None;
+    }
+    Some(1.0 - (-2.0 * std::f32::consts::PI * corner_hz / sample_rate_hz).exp())
+}
+
+#[cfg(test)]
+mod lpf_tests {
+    use super::*;
+
+    /// What the coefficient stored by firmware before schema 3 described.
+    ///
+    /// Stated against 400 Hz explicitly, because that is the rate it was
+    /// authored for and the rate the firmware migrates it at. Writing this
+    /// against whatever the current loop rate happens to be is the mistake the
+    /// stored corner exists to prevent.
+    #[test]
+    fn the_pre_schema_three_coefficient_was_a_51_hz_corner_at_400_hz() {
+        let corner = lpf_corner_hz(0.55, 400.0).expect("0.55 is a filter");
+        assert!(
+            (corner - 50.8).abs() < 0.2,
+            "expected about 50.8 Hz, got {corner}"
+        );
+    }
+
+    /// The trap this exists to expose: the same number at a higher loop rate is
+    /// a different filter, and nothing in the stored configuration says so.
+    #[test]
+    fn the_same_coefficient_means_a_different_filter_at_a_different_rate() {
+        let at_400 = lpf_corner_hz(0.55, 400.0).unwrap();
+        let at_1000 = lpf_corner_hz(0.55, 1000.0).unwrap();
+        assert!(
+            at_1000 > at_400 * 2.4,
+            "0.55 should widen from {at_400} Hz to well over twice that, got {at_1000}"
+        );
+    }
+
+    #[test]
+    fn the_conversions_are_inverses() {
+        for rate in [400.0_f32, 1000.0, 2000.0] {
+            for corner in [10.0_f32, 50.8, 120.0] {
+                let alpha = lpf_alpha_for_corner(corner, rate).expect("achievable");
+                let back = lpf_corner_hz(alpha, rate).expect("a filter");
+                assert!(
+                    (back - corner).abs() < 0.05,
+                    "{corner} Hz at {rate} Hz -> {back}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_corner_at_or_above_nyquist_is_not_a_filter() {
+        assert_eq!(lpf_alpha_for_corner(200.0, 400.0), None);
+        assert_eq!(lpf_alpha_for_corner(500.0, 400.0), None);
     }
 }

@@ -113,8 +113,14 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
             )
 
     for match in MAIN_FUNCTION.finditer(text):
-        signature_end = text.find("{", match.end())
-        signature = text[match.start() : signature_end] if signature_end >= 0 else ""
+        # A body starts with `{`; a FerroForge task instance has none and ends
+        # with `;`. Either ends the signature, whichever comes first.
+        ends = [
+            end
+            for end in (text.find("{", match.end()), text.find(";", match.end()))
+            if end >= 0
+        ]
+        signature = text[match.start() : min(ends)] if ends else ""
         name = match.group(1)
         if f"{name}::Context" not in signature:
             errors.append(
@@ -125,7 +131,7 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
 
 def _board_sources(root: Path) -> list[tuple[str, Path]]:
     sources: list[tuple[str, Path]] = []
-    for board_dir in sorted(root.glob("apps/*/src/board")):
+    for board_dir in sorted(root.glob("firmware/*/src/board")):
         board = board_dir.parents[1].name
         for path in sorted(board_dir.rglob("*.rs")):
             sources.append((board, path))
@@ -170,7 +176,7 @@ def _validate_board_sources(root: Path, errors: list[str]) -> None:
 
 
 def _validate_foxeer_required_usb(root: Path, errors: list[str]) -> None:
-    app = root / "apps" / "foxeer-f405-v2"
+    app = root / "firmware" / "foxeer-f405-v2"
     manifest = app / "Cargo.toml"
     main = app / "src" / "main.rs"
     facade = app / "src" / "lib.rs"
@@ -236,7 +242,7 @@ FLIGHT_APP_CONTRACTS = {
 
 def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
     for app_name, contract in FLIGHT_APP_CONTRACTS.items():
-        app = root / "apps" / app_name
+        app = root / "firmware" / app_name
         manifest = app / "Cargo.toml"
         main = app / "src" / "main.rs"
         facade = app / "src" / "lib.rs"
@@ -306,15 +312,46 @@ def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
                     )
 
 
+STATIC_DEFINITION = re.compile(
+    r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?static[ \t]+(?:mut[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]*:",
+    re.MULTILINE,
+)
+SHARED_TASK_CRATE = Path("crates/ferrowasp-stm32f4-tasks/src")
+
+
+def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
+    """A static that shared task definitions read or write exists once.
+
+    An app defining its own copy would still compile - its tasks would write
+    one static while a shared definition read the other - so the only defence
+    is refusing the copy here.
+    """
+    shared: set[str] = set()
+    for source in sorted((root / SHARED_TASK_CRATE).glob("**/*.rs")):
+        shared.update(STATIC_DEFINITION.findall(source.read_text(encoding="utf-8")))
+    if not shared:
+        return
+    for source in sorted(root.glob("firmware/*/src/**/*.rs")):
+        text = source.read_text(encoding="utf-8")
+        for match in STATIC_DEFINITION.finditer(text):
+            if match.group(1) in shared:
+                errors.append(
+                    f"{_relative(source, root)}:{_line_number(text, match.start())}: "
+                    f"static {match.group(1)!r} belongs to ferrowasp-stm32f4-tasks; "
+                    "re-export it instead of defining a second copy"
+                )
+
+
 def validate_rtic_boundaries(root: Path) -> list[str]:
     root = root.resolve()
     errors: list[str] = []
 
-    for main in sorted(root.glob("apps/*/src/main.rs")):
+    for main in sorted(root.glob("firmware/*/src/main.rs")):
         _validate_main(main, root, errors)
     _validate_board_sources(root, errors)
     _validate_foxeer_required_usb(root, errors)
     _validate_flight_app_contracts(root, errors)
+    _validate_shared_snapshots(root, errors)
     return errors
 
 

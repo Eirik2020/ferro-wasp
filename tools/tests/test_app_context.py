@@ -62,6 +62,36 @@ mod app {
             [("Shared", 1), ("Local", 2)],
         )
 
+    def test_discovers_tasks_inside_ferroforge_app(self) -> None:
+        source = """
+ferroforge::app! {
+    device = pac,
+
+    #[shared]
+    struct Shared {
+        value: u32,
+    }
+
+    #[local]
+    struct Local {
+    }
+
+    #[init]
+    fn init(cx: init::Context) -> (Shared, Local) {
+        todo!()
+    }
+
+    #[task(from = flight_tasks::osd_refresh, priority = 3, shared = [value])]
+    async fn osd_refresh(cx: osd_refresh::Context);
+}
+"""
+        symbols, resources = discover_symbols_from_text(source)
+        names = [symbol.name for symbol in symbols]
+        self.assertEqual(names, ["init", "osd_refresh"])
+        self.assertEqual(symbols[1].kind, "task")
+        self.assertEqual(symbols[1].priority, 3)
+        self.assertEqual([block.name for block in resources], ["Shared", "Local"])
+
     def test_rejects_a_missing_routed_symbol(self) -> None:
         with self.assertRaisesRegex(RouteError, "routed symbol `missing`"):
             _select_symbols({}, ("missing",), label="fixture")
@@ -78,7 +108,7 @@ mod app {
 
         self.assertIn("actuator_output [task priority=15]", route)
         self.assertIn("Foxeer golden-app comparison anchors:", route)
-        self.assertIn("apps/foxeer-f405-v2/src/main.rs", route)
+        self.assertIn("firmware/foxeer-f405-v2/src/main.rs", route)
         self.assertIn("BENCH-FCU3-DSHOT-001", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
 

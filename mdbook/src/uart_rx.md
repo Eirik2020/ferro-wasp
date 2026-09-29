@@ -104,7 +104,7 @@ independent. USART2 wakes one persistent async SBUS parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.
 
-In the default FCU3 DShot image, USART1 feeds the low-priority ESC manager's
+In the flight DShot image, USART1 feeds the low-priority ESC manager's
 ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
 samples, and timeouts. UART transport or parser state cannot command motors:
 telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator

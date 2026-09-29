@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "run_id": "20260918T211242Z__SW-COMMON-001__common__01",
+  "test_id": "SW-COMMON-001",
+  "started_at_utc": "2026-09-18T21:12:40Z",
+  "completed_at_utc": "2026-09-18T21:12:42Z",
+  "target": "common",
+  "tier": "software",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "d644dd130d9c117da52309cda16a6606688ac81a07c0f6f822883c6cf759af6d",
+    "procedure_path": "mdbook/src/contributing.md",
+    "procedure_heading": "Development Workflow",
+    "procedure_sha256": "20e88fae266f7da753bfc42459861995c67dd149c8c43ffd0a770e6d403c9845"
+  },
+  "execution": {
+    "performed_by": "agent",
+    "user_confirmed": false
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": null,
+    "features": [],
+    "target_triple": null,
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "not-applicable",
+    "actuator_power": "not-applicable",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [
+    {
+      "command": "cargo fmt --all --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --workspace --locked",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --locked -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "python tools/check_repository_context.py",
+      "exit_code": 0
+    },
+    {
+      "command": "mdbook build mdbook",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [],
+  "measurements": {
+    "host_tests_passed": 228,
+    "host_tests_failed": 0
+  },
+  "observations": [
+    "All five baseline commands exit 0 on the recorded revision."
+  ],
+  "limitations": [
+    "Run natively on Linux, not in the reference WSL 2/Docker environment.",
+    "`python` resolves to the host python3.",
+    "mdbook-mermaid 0.17.1 was installed on the host before the book build; the book build failed without it.",
+    "Revision is the FerroForge adoption branch of the combined ferroforge/ferro-wasp repository; ferro-wasp is under ferro-wasp/."
+  ],
+  "stop_conditions_triggered": []
+}

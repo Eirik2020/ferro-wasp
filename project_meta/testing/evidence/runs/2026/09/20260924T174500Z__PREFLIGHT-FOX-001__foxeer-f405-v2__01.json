@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "run_id": "20260924T174500Z__PREFLIGHT-FOX-001__foxeer-f405-v2__01",
+  "test_id": "PREFLIGHT-FOX-001",
+  "started_at_utc": "2026-09-24T17:20:00Z",
+  "completed_at_utc": "2026-09-24T17:45:00Z",
+  "target": "foxeer-f405-v2",
+  "tier": "preflight",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "10c40b98ff0a852e99fdc6429316a825ef44ee49e599a4ea93ab3e1c1416b9ee",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer Final Preflight Gate",
+    "procedure_sha256": "419f5276b9b47cbfabc1457e754f365b0aa4c043dc32b5c7cadfc8ef0cec4d47"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+    "working_tree": "clean",
+    "firmware_sha256": "16f6e8ed493d9002be700317b2c78c7a7265028d7e567cab8f82027aae578435",
+    "features": ["board-foxeer-f405-v2"],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "pid_p": [2.5, 2.5, 2.0],
+      "pid_i_d": "all zero",
+      "rc_deadband": 8,
+      "rates": "roll/pitch 70/300/0.50, yaw 70/200/0.50",
+      "imu_lpf_alpha": 0.55,
+      "schema_version": 2
+    }
+  },
+  "conditions": {
+    "propellers": "installed",
+    "actuator_power": "connected",
+    "equipment": ["flight battery", "RC link", "USB for post-flight readout"],
+    "environment": [
+      "confined grass field",
+      "no wind",
+      "wet grass",
+      "operator-declared safe area"
+    ]
+  },
+  "commands": [
+    {
+      "command": "ferro-configurator device info",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator config show",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [],
+  "measurements": {
+    "image_unchanged_since_bench_gate": true,
+    "config_matches_reviewed_baseline": true
+  },
+  "observations": [
+    "Operator confirmed the same candidate flew as the one the powered props-off gate accepted: no reflash between BENCH-FOX-001 and this session.",
+    "Post-session config-show reads the reviewed baseline exactly: P 2.5/2.5/2.0, every I and D zero, rc_deadband 8, roll/pitch 70/300/0.50 and yaw 70/200/0.50.",
+    "Conditions were a confined grass field, no wind, wet grass, with the operator judging the area suitable and accepting the flights.",
+    "The operator reports no dangerous situation arose at any point in the session.",
+    "Accepted by operator decision on 2026-09-24 rather than by a transcribed step-by-step checklist; see limitations."
+  ],
+  "limitations": [
+    "The itemised preflight checklist was not transcribed. This record carries the image and configuration identity, the environment, and the operator's acceptance, not a per-step account of the frame, fastener, antenna, propeller and centre-of-gravity inspection.",
+    "Flight wall-clock times were not captured. Flights are identified by their onboard flight IDs and boot-session grouping, which are exact; the times in this record bound the readout session, not the flying.",
+    "Battery current remains uncalibrated and unusable as a load indication, carried forward from BENCH-FOX-001."
+  ],
+  "stop_conditions_triggered": []
+}

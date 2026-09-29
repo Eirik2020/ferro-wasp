@@ -33,6 +33,8 @@ pub mod static_pwm;
 pub mod timebase;
 pub mod timer_dma;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub mod timer_tick;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod uart_dma;
 pub mod usb_serial;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]

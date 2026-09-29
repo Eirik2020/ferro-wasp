@@ -10,8 +10,8 @@ as a PX4, ArduPilot, or Betaflight clone.
 
 This file applies repository-wide. Before scoped work, also read:
 
-- `apps/AGENTS.md` for firmware applications;
-- `apps/foxeer-f405-v2/AGENTS.md` for the Foxeer app;
+- `firmware/AGENTS.md` for firmware applications;
+- `firmware/foxeer-f405-v2/AGENTS.md` for the Foxeer app;
 - `mdbook/AGENTS.md` for documentation;
 - `tools/AGENTS.md` for host tooling;
 - `tools/ferro-configurator/AGENTS.md` for the isolated USB configurator;

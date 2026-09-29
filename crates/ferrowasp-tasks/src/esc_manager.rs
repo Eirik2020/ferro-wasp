@@ -64,13 +64,13 @@ pub struct EscActuatorRequest {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EscActuatorAck {
     pub request: EscActuatorRequest,
-    pub started_at_ms: u32,
+    pub started_at_ms: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EscTelemetryObservation {
     pub sample: EscTelemetry,
-    pub observed_at_ms: u32,
+    pub observed_at_ms: u64,
     pub request_sequence: u32,
 }
 
@@ -127,21 +127,21 @@ pub struct EscManagerStats {
 enum PendingRequest {
     Queued {
         request: EscActuatorRequest,
-        queued_at_ms: u32,
+        queued_at_ms: u64,
         early_observation: Option<EscTelemetryObservation>,
     },
     Started {
         request: EscActuatorRequest,
-        started_at_ms: u32,
+        started_at_ms: u64,
     },
 }
 
 pub struct EscManager {
     config: EscManagerConfig,
-    boot_started_ms: u32,
+    boot_started_ms: u64,
     next_output: EscOutput,
     next_sequence: u32,
-    last_request_ms: Option<u32>,
+    last_request_ms: Option<u64>,
     pending: Option<PendingRequest>,
     // Legacy BLHeli frames carry no output identity. Once either side of a
     // request times out, a late acknowledgement or frame cannot be safely
@@ -154,7 +154,7 @@ pub struct EscManager {
 }
 
 impl EscManager {
-    pub const fn new(config: EscManagerConfig, boot_started_ms: u32) -> Self {
+    pub const fn new(config: EscManagerConfig, boot_started_ms: u64) -> Self {
         Self {
             config,
             boot_started_ms,
@@ -184,7 +184,7 @@ impl EscManager {
     /// Returns the next operation the manager wants the actuator owner to
     /// execute. The caller must invoke `mark_request_queued` only after the
     /// bounded channel accepts it.
-    pub fn next_request(&self, now_ms: u32) -> Option<EscActuatorRequest> {
+    pub fn next_request(&self, now_ms: u64) -> Option<EscActuatorRequest> {
         if self.faulted
             || self.pending.is_some()
             || !elapsed_at_least(self.boot_started_ms, now_ms, self.config.boot_delay_ms)
@@ -202,7 +202,7 @@ impl EscManager {
         })
     }
 
-    pub fn mark_request_queued(&mut self, request: EscActuatorRequest, now_ms: u32) -> bool {
+    pub fn mark_request_queued(&mut self, request: EscActuatorRequest, now_ms: u64) -> bool {
         if self.pending.is_some() || self.next_request(now_ms) != Some(request) {
             return false;
         }
@@ -251,7 +251,7 @@ impl EscManager {
         }
     }
 
-    pub fn poll_timeout(&mut self, now_ms: u32) -> Option<EscManagerTimeout> {
+    pub fn poll_timeout(&mut self, now_ms: u64) -> Option<EscManagerTimeout> {
         match self.pending {
             Some(PendingRequest::Queued {
                 request,
@@ -282,7 +282,7 @@ impl EscManager {
         }
     }
 
-    pub fn push_wire_byte(&mut self, byte: u8, observed_at_ms: u32) -> Option<EscTelemetryUpdate> {
+    pub fn push_wire_byte(&mut self, byte: u8, observed_at_ms: u64) -> Option<EscTelemetryUpdate> {
         let sample = self.parser.push(byte)?;
         self.stats.wire = self.parser.stats();
 
@@ -352,8 +352,10 @@ impl EscManager {
     }
 }
 
-const fn elapsed_at_least(start_ms: u32, now_ms: u32, duration_ms: u32) -> bool {
-    now_ms.wrapping_sub(start_ms) >= duration_ms
+/// A timestamp read before `start_ms` - out of order - counts as long elapsed,
+/// as it did when time wrapped.
+const fn elapsed_at_least(start_ms: u64, now_ms: u64, duration_ms: u32) -> bool {
+    now_ms.wrapping_sub(start_ms) >= duration_ms as u64
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -409,14 +411,14 @@ pub enum EscIdleQualificationStatus {
 
 pub struct EscIdleQualification {
     config: EscIdleQualificationConfig,
-    started_at_ms: u32,
+    started_at_ms: u64,
     consecutive_samples: [u8; 4],
-    last_valid_sample_ms: [Option<u32>; 4],
+    last_valid_sample_ms: [Option<u64>; 4],
     terminal: Option<EscIdleQualificationStatus>,
 }
 
 impl EscIdleQualification {
-    pub const fn new(config: EscIdleQualificationConfig, started_at_ms: u32) -> Self {
+    pub const fn new(config: EscIdleQualificationConfig, started_at_ms: u64) -> Self {
         Self {
             config,
             started_at_ms,
@@ -429,7 +431,7 @@ impl EscIdleQualification {
     pub fn observe(
         &mut self,
         update: EscTelemetryUpdate,
-        now_ms: u32,
+        now_ms: u64,
     ) -> EscIdleQualificationStatus {
         if let Some(terminal) = self.terminal {
             return terminal;
@@ -460,7 +462,7 @@ impl EscIdleQualification {
         self.status(now_ms)
     }
 
-    pub fn status(&mut self, now_ms: u32) -> EscIdleQualificationStatus {
+    pub fn status(&mut self, now_ms: u64) -> EscIdleQualificationStatus {
         if let Some(terminal) = self.terminal {
             return terminal;
         }
@@ -524,7 +526,7 @@ mod tests {
     fn telemetry_update(
         output: EscOutput,
         erpm_div100: u16,
-        observed_at_ms: u32,
+        observed_at_ms: u64,
         request_sequence: u32,
     ) -> EscTelemetryUpdate {
         EscTelemetryUpdate {
@@ -691,7 +693,7 @@ mod tests {
 
         for round in 0..3 {
             for (index, output) in outputs.into_iter().enumerate() {
-                let now_ms = 1_250 + round * 60 + index as u32 * 10;
+                let now_ms = 1_250 + u64::from(round) * 60 + index as u64 * 10;
                 let status = qualification.observe(
                     telemetry_update(output, 70, now_ms, round * 4 + index as u32),
                     now_ms,
@@ -709,8 +711,8 @@ mod tests {
     fn zero_erpm_never_qualifies_and_times_out() {
         let config = idle_qualification_config();
         let mut qualification = EscIdleQualification::new(config, 1_000);
-        for sequence in 0..12 {
-            let now_ms = 1_250 + sequence * 70;
+        for sequence in 0..12u32 {
+            let now_ms = 1_250 + u64::from(sequence) * 70;
             let output = match sequence & 3 {
                 0 => EscOutput::Output1,
                 1 => EscOutput::Output2,
@@ -757,7 +759,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let now_ms = 1_250 + index as u32 * 80;
+            let now_ms = 1_250 + index as u64 * 80;
             let _ =
                 qualification.observe(telemetry_update(output, 70, now_ms, index as u32), now_ms);
         }

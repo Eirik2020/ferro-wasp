@@ -92,7 +92,7 @@ This implementation reuses design and protocol code from an external
 FerroWasp source snapshot at commit
 `bc26276c5b34e20f96f603d95585893b91784d05`:
 
-- `apps/foxeer-f405-v2/src/main.rs` for RTIC task wiring and ownership
+- `firmware/foxeer-f405-v2/src/main.rs` for RTIC task wiring and ownership
 - `crates/ferrowasp-stm32f4/src/uart_dma.rs` for DMA transfer handling
 - `crates/ferrowasp-io-core/src/serial/` for bounded serial endpoint semantics
 - `crates/ferrowasp-tasks/src/osd.rs` for the OSD consumer boundary

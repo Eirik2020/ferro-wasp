@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/ferrowasp-actuator",
     "crates/ferrowasp-core",
     "crates/ferrowasp-drivers",
     "crates/ferrowasp-io-core",
@@ -9,14 +8,15 @@ members = [
     "crates/ferrowasp-mspv2",
     "crates/ferrowasp-pid",
     "crates/ferrowasp-stm32f4",
+    "crates/ferrowasp-stm32f4-tasks",
     "crates/ferrowasp-tasks",
     "crates/ferrowasp-waveform",
     "crates/rc-pwm",
 ]
 exclude = [
-    "apps/foxeer-f405-v2",
-    "apps/stm32f401-bringup",
-    "apps/stm32f405-flight",
+    "firmware/foxeer-f405-v2",
+    "firmware/stm32f401-bringup",
+    "firmware/stm32f405-flight",
     "tools/ferro-configurator",
 ]
 
@@ -27,3 +27,4 @@ embedded-hal-async = "=1.0.0"
 embedded-io = "=0.7.1"
 embedded-io-async = "=0.7.0"
 heapless = "=0.9.2"
+

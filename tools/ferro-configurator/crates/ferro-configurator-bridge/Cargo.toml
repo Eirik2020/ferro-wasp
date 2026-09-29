@@ -1,0 +1,12 @@
+[package]
+name = "ferro-configurator-bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Front-end-agnostic session layer over ferro-configurator-core"
+
+[dependencies]
+ferro-configurator-core = { path = "../ferro-configurator-core" }
+serde.workspace = true

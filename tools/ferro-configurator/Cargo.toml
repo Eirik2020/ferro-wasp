@@ -3,7 +3,9 @@ resolver = "2"
 members = [
     "crates/ferro-configurator-core",
     "crates/ferro-configurator-cli",
+    "crates/ferro-configurator-bridge",
 ]
+exclude = ["gui/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

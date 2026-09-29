@@ -106,7 +106,7 @@ cargo build --release --locked -p ferro-configurator-cli
 Build the exact Foxeer image first:
 
 ```powershell
-Set-Location ..\..\apps\foxeer-f405-v2
+Set-Location ..\..\firmware\foxeer-f405-v2
 cargo build --release --locked
 Set-Location ..\..\tools\ferro-configurator
 ```

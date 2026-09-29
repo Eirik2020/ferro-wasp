@@ -13,6 +13,7 @@ use ferrowasp_mspv2::rpc;
 
 use crate::drone_toolbox::{
     ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcRateProfile, TuningProfile,
+    gyro_lpf_corner_hz,
 };
 
 pub const RECORD_QUEUE_CAPACITY: usize = 64;
@@ -36,7 +37,7 @@ pub enum RecordEnqueueOutcome {
 pub fn enqueue_rate_record(
     producer: &mut RecordProducer,
     sample: crate::drone_toolbox::CompactRateBlackboxSample,
-    timestamp_us: u32,
+    timestamp_us: u64,
     divisor: u32,
 ) -> RecordEnqueueOutcome {
     let divisor = divisor.clamp(1, 16);
@@ -44,7 +45,10 @@ pub fn enqueue_rate_record(
         return RecordEnqueueOutcome::Skipped;
     }
     let record = FlightRecord {
-        timestamp_us,
+        // The log format keeps a 32-bit microsecond stamp, which wraps every
+        // 71.6 minutes; the configurator's ULog conversion unwraps it from
+        // consecutive records.
+        timestamp_us: timestamp_us as u32,
         control_sequence: sample.seq,
         imu_sequence: sample.imu_seq,
         flags: u16::from(sample.flags),
@@ -275,6 +279,17 @@ impl CommandParser {
         }
     }
 
+    /// Drops a partially received line.
+    ///
+    /// The host may close the port mid-line, and reopening it can deliver a
+    /// stray byte. Either way the next real command would be prefixed with
+    /// junk and rejected, so the USB task clears the parser whenever the
+    /// device leaves the configured state.
+    pub fn clear(&mut self) {
+        self.line.clear();
+        self.overflowed = false;
+    }
+
     pub fn ingest(&mut self, byte: u8) -> Option<Result<StorageCommand, CommandParseError>> {
         if byte != b'\r' && byte != b'\n' {
             if self.line.push(byte as char).is_err() {
@@ -354,7 +369,17 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
 
 pub const LEGACY_STORED_CONFIG_LEN: usize = 44;
 pub const STORED_CONFIG_LEN: usize = 84;
-const STORED_CONFIG_SCHEMA_VERSION: u16 = 2;
+/// Version 3 stores the gyro filter as a corner in hertz.
+///
+/// Versions 1 and 2 stored a one-pole smoothing factor, which only means what
+/// it is meant to mean at one loop rate. A version 2 payload is still read:
+/// its coefficient is converted at the rate it was authored for, so a tune
+/// saved before this change keeps the filter it had.
+const STORED_CONFIG_SCHEMA_VERSION: u16 = 3;
+const STORED_CONFIG_SCHEMA_VERSION_ALPHA: u16 = 2;
+
+/// The loop rate every version 1 and 2 coefficient was authored for.
+const LEGACY_LPF_SAMPLE_RATE_HZ: f32 = 400.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StoredConfig {
@@ -392,7 +417,7 @@ impl StoredConfig {
             ConfigKey::YawP => candidate.tuning.rate_gains.yaw.p = value,
             ConfigKey::YawI => candidate.tuning.rate_gains.yaw.i = value,
             ConfigKey::YawD => candidate.tuning.rate_gains.yaw.d = value,
-            ConfigKey::ImuLpfAlpha => candidate.tuning.imu_lpf_alpha = value,
+            ConfigKey::ImuLpfHz => candidate.tuning.imu_lpf_hz = value,
             ConfigKey::LogRateDivisor => {
                 let integer = value as u16;
                 if !(1.0..=16.0).contains(&value) || integer as f32 != value {
@@ -441,7 +466,7 @@ impl StoredConfig {
             ConfigKey::YawP => self.tuning.rate_gains.yaw.p,
             ConfigKey::YawI => self.tuning.rate_gains.yaw.i,
             ConfigKey::YawD => self.tuning.rate_gains.yaw.d,
-            ConfigKey::ImuLpfAlpha => self.tuning.imu_lpf_alpha,
+            ConfigKey::ImuLpfHz => self.tuning.imu_lpf_hz,
             ConfigKey::LogRateDivisor => self.log_rate_divisor as f32,
             ConfigKey::RcDeadband => self.tuning.rc_rates.deadband as f32,
             ConfigKey::RollCenterRate => self.tuning.rc_rates.roll.center_sensitivity_dps,
@@ -467,7 +492,7 @@ impl StoredConfig {
             self.tuning.rate_gains.yaw.p,
             self.tuning.rate_gains.yaw.i,
             self.tuning.rate_gains.yaw.d,
-            self.tuning.imu_lpf_alpha,
+            self.tuning.imu_lpf_hz,
         ];
         let mut output = [0u8; STORED_CONFIG_LEN];
         for (index, value) in values.iter().enumerate() {
@@ -509,12 +534,18 @@ impl StoredConfig {
                 input[start + 3],
             ]));
         }
+        // Version 1 payloads carry no version field; they are coefficients.
+        let mut schema_version = STORED_CONFIG_SCHEMA_VERSION_ALPHA;
         let rc_rates = if input.len() == LEGACY_STORED_CONFIG_LEN {
             RC_RATE_PROFILE
         } else {
-            if u16::from_le_bytes([input[42], input[43]]) != STORED_CONFIG_SCHEMA_VERSION {
+            let stored_version = u16::from_le_bytes([input[42], input[43]]);
+            if stored_version != STORED_CONFIG_SCHEMA_VERSION
+                && stored_version != STORED_CONFIG_SCHEMA_VERSION_ALPHA
+            {
                 return None;
             }
+            schema_version = stored_version;
             let mut rate_values = [0.0f32; 9];
             for (index, value) in rate_values.iter_mut().enumerate() {
                 let start = 44 + index * 4;
@@ -551,7 +582,14 @@ impl StoredConfig {
                         d: values[8],
                     },
                 },
-                imu_lpf_alpha: values[9],
+                // Older payloads stored a one-pole coefficient. Convert it at
+                // the rate it was authored for, so the filter a stored tune
+                // had is the filter it keeps.
+                imu_lpf_hz: if schema_version == STORED_CONFIG_SCHEMA_VERSION {
+                    values[9]
+                } else {
+                    gyro_lpf_corner_hz(values[9], LEGACY_LPF_SAMPLE_RATE_HZ)
+                },
                 rc_rates,
             },
             log_rate_divisor: u16::from_le_bytes([input[40], input[41]]),
@@ -578,7 +616,7 @@ impl StoredConfig {
             yaw_p: self.get(ConfigKey::YawP),
             yaw_i: self.get(ConfigKey::YawI),
             yaw_d: self.get(ConfigKey::YawD),
-            imu_lpf_alpha: self.get(ConfigKey::ImuLpfAlpha),
+            imu_lpf_hz: self.get(ConfigKey::ImuLpfHz),
             log_rate_divisor: self.log_rate_divisor,
         }
     }
@@ -615,9 +653,9 @@ impl StoredConfig {
             (ConfigKey::YawI, config.yaw_i, rpc::ConfigFieldId::YawI),
             (ConfigKey::YawD, config.yaw_d, rpc::ConfigFieldId::YawD),
             (
-                ConfigKey::ImuLpfAlpha,
-                config.imu_lpf_alpha,
-                rpc::ConfigFieldId::ImuLpfAlpha,
+                ConfigKey::ImuLpfHz,
+                config.imu_lpf_hz,
+                rpc::ConfigFieldId::ImuLpfHz,
             ),
             (
                 ConfigKey::LogRateDivisor,
@@ -846,6 +884,7 @@ pub fn scratch_test_page() -> [u8; FLASH_PAGE_LEN] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::drone_toolbox::gyro_lpf_alpha;
     use ferrowasp_core::blackbox::{decode_page, record_from_page};
 
     fn record(sequence: u32) -> FlightRecord {
@@ -999,17 +1038,62 @@ mod tests {
         assert_eq!(StoredConfig::decode(&corrupt), None);
     }
 
+    /// A tune saved by the previous firmware must keep the filter it had.
+    ///
+    /// Version 2 stored a one-pole coefficient; version 3 stores the corner.
+    /// Reading a version 2 payload converts at the rate the coefficient was
+    /// authored for, or every saved tune silently changes.
+    #[test]
+    fn a_version_two_coefficient_survives_as_the_same_filter() {
+        let mut payload = StoredConfig::first_hop_default().encode();
+        payload[36..40].copy_from_slice(&0.55f32.to_bits().to_le_bytes());
+        payload[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION_ALPHA.to_le_bytes());
+
+        let decoded = StoredConfig::decode(&payload).expect("version 2 must still be readable");
+        let corner = decoded.tuning.imu_lpf_hz;
+        assert!(
+            (corner - 50.8).abs() < 0.2,
+            "0.55 at 400 Hz is a 50.8 Hz corner, decoded {corner}"
+        );
+        let alpha = gyro_lpf_alpha(corner, LEGACY_LPF_SAMPLE_RATE_HZ);
+        assert!(
+            (alpha - 0.55).abs() < 0.005,
+            "round trip should return 0.55, got {alpha}"
+        );
+    }
+
+    /// The point of storing a frequency: it means the same filter at any rate.
+    #[test]
+    fn a_stored_corner_holds_its_meaning_across_loop_rates() {
+        let corner = 50.8;
+        let at_400 = gyro_lpf_alpha(corner, 400.0);
+        let at_1000 = gyro_lpf_alpha(corner, 1000.0);
+        assert!(
+            at_1000 < at_400,
+            "a faster loop needs a smaller coefficient"
+        );
+        for (alpha, rate) in [(at_400, 400.0), (at_1000, 1000.0)] {
+            let back = gyro_lpf_corner_hz(alpha, rate);
+            assert!((back - corner).abs() < 0.1, "{rate} Hz -> {back}");
+        }
+    }
+
     #[test]
     fn legacy_stored_config_migrates_with_current_rc_defaults() {
         let current = StoredConfig::first_hop_default().encode();
         let mut legacy = [0u8; LEGACY_STORED_CONFIG_LEN];
         legacy.copy_from_slice(&current[..LEGACY_STORED_CONFIG_LEN]);
         legacy[42..44].fill(0);
+        // A real legacy payload holds a one-pole coefficient here, not the
+        // corner the current default encodes.
+        legacy[36..40].copy_from_slice(&0.55f32.to_bits().to_le_bytes());
 
         let migrated = StoredConfig::decode(&legacy).unwrap();
 
         assert_eq!(migrated.tuning.rc_rates, RC_RATE_PROFILE);
         assert_eq!(migrated.log_rate_divisor, 1);
+        // The coefficient becomes the corner it always described.
+        assert!((migrated.tuning.imu_lpf_hz - 50.8).abs() < 0.2);
     }
 
     #[cfg(feature = "mspv2_configurator")]
@@ -1027,10 +1111,10 @@ mod tests {
         assert_eq!(updated.get(ConfigKey::YawMaxRate), 350.0);
 
         let mut invalid = stored.to_rpc();
-        invalid.imu_lpf_alpha = 1.1;
+        invalid.imu_lpf_hz = 1.1;
         assert_eq!(
             StoredConfig::from_rpc(invalid),
-            Err(rpc::ConfigFieldId::ImuLpfAlpha)
+            Err(rpc::ConfigFieldId::ImuLpfHz)
         );
     }
 
@@ -1045,6 +1129,43 @@ mod tests {
             }
         }
         assert_eq!(result, Some(Ok(StorageCommand::ConfigGet(ConfigKey::YawI))));
+    }
+
+    #[test]
+    fn a_partial_line_left_by_a_closed_port_does_not_spoil_the_next_command() {
+        let mut parser = CommandParser::new();
+        // The host closed the port part-way through a line.
+        for byte in b"config ge" {
+            assert!(parser.ingest(*byte).is_none());
+        }
+
+        // Without the clear, this is what the operator saw: the leftover bytes
+        // prefix the next command and the whole line is rejected once.
+        let mut spoiled = CommandParser::new();
+        for byte in b"config ge" {
+            spoiled.ingest(*byte);
+        }
+        let mut first = None;
+        for byte in b"config get roll_p\r\n" {
+            if let Some(command) = spoiled.ingest(*byte) {
+                first = Some(command);
+            }
+        }
+        assert_eq!(first, Some(Err(CommandParseError::UnknownCommand)));
+
+        // Clearing on deconfigure makes the next command parse first time.
+        parser.clear();
+        let mut result = None;
+        for byte in b"config get roll_p\r\n" {
+            if let Some(command) = parser.ingest(*byte) {
+                assert!(result.is_none());
+                result = Some(command);
+            }
+        }
+        assert_eq!(
+            result,
+            Some(Ok(StorageCommand::ConfigGet(ConfigKey::RollP)))
+        );
     }
 
     #[test]

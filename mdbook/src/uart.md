@@ -1,14 +1,14 @@
 # UART
 
 UART support uses bounded DMA-backed paths for RC input, OSD traffic, and the
-default FCU3 DShot image's legacy ESC telemetry.
+flight image's legacy ESC telemetry.
 
 ## Current Implementation
 
 The reusable STM32F4 UART DMA mechanism lives in
 `crates/ferrowasp-stm32f4/src/uart_dma.rs`. FerroWasp FCU3 pin conversion,
 storage shape, and device construction live in
-`apps/stm32f405-flight/src/board/`.
+`firmware/stm32f405-flight/src/board/`.
 
 It provides:
 

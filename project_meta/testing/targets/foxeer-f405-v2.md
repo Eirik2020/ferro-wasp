@@ -22,6 +22,22 @@ Use one exact flight candidate and record:
 - propeller and actuator-power state;
 - the complete persisted configuration from `config-show`.
 
+A recorded image hash reproduces only from the same absolute checkout path. A
+mismatch after moving or copying the tree is not evidence that the image
+changed. Measured with the same commit in clean worktrees: the build is
+deterministic within one tree, every other path disagrees, and path length is
+not the cause - two 34-character paths still differed. Panic locations embed
+source paths in `.rodata`, but `trim-paths = "object"` removes all of them
+without making the image portable, so the residue is Cargo's `-C metadata` hash
+reaching symbol names and link layout: `crates/` lies outside the app's own
+workspace, so Cargo hashes it by absolute path, not relative to the root. Do not
+retry `trim-paths` for this: it needs an unstable `cargo-features` gate and
+does not deliver.
+Rebuilding also needs the build script to re-run: it declares
+`rerun-if-changed=../../.git/HEAD`, a path that does not exist in every layout,
+so `touch build.rs` before trusting a rebuilt hash. The git revision it embeds
+reaches only defmt, which is interned outside the loadable image.
+
 The reviewed configuration is:
 
 | Field | Roll | Pitch | Yaw |
@@ -46,6 +62,23 @@ Do not fly the pre-pitch-fix image with SHA-256
 `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
 Any other candidate still needs the gates below; a different hash is not
 evidence that the pitch fix or current safety behavior is present.
+
+The logical-to-physical output map is `MOTOR_OUTPUT_MAP = [3, 4, 2, 1]`, shared
+by every FerroWasp board:
+
+| Logical motor | Physical output | Location | Rotation |
+|---|---:|---|---|
+| M1 | 3 | rear-right | CW |
+| M2 | 4 | front-right | CCW |
+| M3 | 2 | rear-left | CCW |
+| M4 | 1 | front-left | CW |
+
+The DShot idle command `65` maps to protocol value `112`. Arming keeps stop
+frames selected through the guarded dwell, then applies bounded idle under
+temporary permission, and requires three fresh in-range eRPM observations from
+every ESC before `SYSTEM ARMED`. Counter and ESC interoperability evidence does
+not establish pulse width, jitter, complementary-output margin, or timer phase;
+those electrical measurements remain open.
 
 ## Foxeer USB RC Configuration Gate
 
@@ -125,6 +158,12 @@ propellers are removed before actuator power is connected. Secure the
 airframe, keep clear of the motors, use a bounded power source where
 available, and keep an immediate disarm/power-removal path.
 
+This gate is the minimum needed to judge the aircraft safe to fly, not an
+exhaustive test schedule. A defect that feeds no safety, arming, or actuator
+path is recorded in the run record, not gated on. A fault that fails closed -
+refusing to arm - is safe by construction and is likewise recorded rather than
+gated, though note it as a limitation when it also degrades flight logging.
+
 1. Confirm the powered image has the same commit, dirty-tree identity, feature
    set, and SHA-256 recorded at the USB gate. Reject bench-only motor selector,
    smoke lockout, retired PWM-output, withdrawn-gain, and pre-fix images.
@@ -132,11 +171,11 @@ available, and keep an immediate disarm/power-removal path.
    DShot/telemetry status, no panic or latched transport fault, and a disarmed
    state. Verify `config-show` still matches the reviewed baseline and record
    the next onboard flight ID/log capacity. With the flight battery connected,
-   require total voltage to remain consistent with a multimeter, cell voltage
-   to equal total voltage divided by the detected cell count, and current to
-   respond in the expected direction as motor load increases. Treat current as
-   provisional until fine calibration; stop on implausible idle or loaded
-   readings.
+   require total voltage to remain consistent with a multimeter and cell
+   voltage to equal total voltage divided by the detected cell count. Record
+   the reported current and any discrepancy, but do not gate on it: current
+   sense drives only OSD and MSP display, feeds no safety, arming, or actuator
+   logic, and is not calibrated.
 3. While disarmed, observe the controller setpoints. Require centered sticks
    inside the configured deadband to command zero. Require right roll, forward
    pitch, and right yaw to use the current positive controller directions.
@@ -165,8 +204,9 @@ available, and keep an immediate disarm/power-removal path.
 Stop on installed propellers; candidate/configuration mismatch; unexpected
 arming; wrong stick, motor, or correction sign; a motor starting before the
 armed transition; failure to stop on disarm or RC loss; automatic rearm;
-DShot, telemetry, storage, stale-command, or IMU faults; smoke, heat, abnormal
-current, rough motor sound, or any loss of operator confidence.
+DShot, storage, stale-command, or IMU faults; a telemetry fault that fails
+open or that disturbs actuator output while armed; smoke, heat, rough motor
+sound, or any loss of operator confidence.
 
 Required evidence: candidate and working-tree identity, image SHA-256, exact
 features, persisted configuration, propeller/power state, board and IMU

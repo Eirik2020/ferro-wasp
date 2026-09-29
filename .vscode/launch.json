@@ -8,10 +8,10 @@
             "name": "probe-rs-debugger",
             // "server": "127.0.0.1:50001", // For connecting to an existing probe-rs-debugger process
             "chip": "STM32F405RG",
-            "cwd": "${workspaceFolder}/apps/stm32f405-flight",
+            "cwd": "${workspaceFolder}/firmware/stm32f405-flight",
             "coreConfigs": [
                 {
-                    "programBinary": "${workspaceFolder}/apps/stm32f405-flight/target/thumbv7em-none-eabihf/debug/FerroWasp",
+                    "programBinary": "${workspaceFolder}/firmware/stm32f405-flight/target/thumbv7em-none-eabihf/debug/FerroWasp",
                     "coreIndex": 0,
                     
                     "rttEnabled": true,
@@ -45,10 +45,10 @@
             "name": "probe-rs-release",
             // "server": "127.0.0.1:50001", // For connecting to an existing probe-rs-debugger process
             "chip": "STM32F405RG",
-            "cwd": "${workspaceFolder}/apps/stm32f405-flight",
+            "cwd": "${workspaceFolder}/firmware/stm32f405-flight",
             "coreConfigs": [
                 {
-                    "programBinary": "${workspaceFolder}/apps/stm32f405-flight/target/thumbv7em-none-eabihf/release/FerroWasp",
+                    "programBinary": "${workspaceFolder}/firmware/stm32f405-flight/target/thumbv7em-none-eabihf/release/FerroWasp",
                     "coreIndex": 0,
                     
                     "rttEnabled": true,

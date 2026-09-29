@@ -5,9 +5,9 @@ multicopter UAVs. It favors explicit resource ownership, deterministic
 scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.
 
-The Foxeer F405 V2 is the golden flight target. FerroWasp FCU3 remains a
-supported secondary flight target, while NUCLEO-F401RE provides a
-non-actuating STM32F4 development target. See [Current Support](current_support.md)
+The Foxeer F405 V2 is the golden flight target, and NUCLEO-F401RE provides a
+non-actuating STM32F4 development target. FerroWasp FCU3 is obsolete: it still
+compiles, but it has no test gates and no image. See [Current Support](current_support.md)
 for the board and feature matrix.
 
 ## Where to Begin

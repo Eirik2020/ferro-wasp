@@ -6,19 +6,20 @@ Current important paths:
 
 ```text
 .
-|-- apps/
-|   |-- stm32f405-flight/        # FCU3 board support and thin F405 RTIC shell
+|-- firmware/
+|   |-- stm32f405-flight/        # FCU3 (obsolete): board support and F405 shell
 |   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
 |   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
 |       |-- src/board/           # Immutable board facts and typed construction
 |       |-- src/lib.rs           # Internal app-support facade
-|       `-- src/main.rs          # RTIC declarations and wiring only
+|       `-- src/main.rs          # ferroforge::app! declarations and wiring only
 |-- crates/
 |   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
 |   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
 |   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
 |   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
 |   |-- ferrowasp-stm32f4/       # STM32F4 UART/SPI/ADC/PWM/DShot mechanisms
+|   |-- ferrowasp-stm32f4-tasks/ # RTIC task definitions shared by STM32F4 boards
 |   |-- ferrowasp-tasks/         # Control, OSD, and ESC-manager task logic
 |   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
 |   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
@@ -46,8 +47,8 @@ The code already contains early signs of the future shape:
 - reusable safety, signal, and actuator conversion types in `crates/ferrowasp-core/`
 - board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
   construction policy under each app's `src/board/`
-- isolated FCU3 flight, Foxeer flight/bring-up, and NUCLEO-F401RE bring-up
-  apps with independent Cargo and RTIC resource contracts
+- isolated Foxeer flight, NUCLEO-F401RE bring-up, and obsolete FCU3 apps with
+  independent Cargo and RTIC resource contracts
 - reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
   `crates/ferrowasp-stm32f4/`
 - software-driver and control helpers, including the BLHeli parser and bounded
@@ -67,9 +68,10 @@ ferrowasp-mcu        family-neutral MCU contracts
 ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
 ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
 ferrowasp-tasks      reusable task logic
+ferrowasp-stm32f4-tasks  RTIC task definitions shared by STM32F4 boards
 app src/board        board pin maps, clocks, DMA/timer assignments
 app src/lib.rs       board composition and internal support facade
-app src/main.rs      thin RTIC shell
+app src/main.rs      thin ferroforge::app! shell selecting shared definitions
 ferrowasp-gen        optional source generation for task/resource wiring
 manifest/            optional board, task, resource, and policy descriptions
 ```

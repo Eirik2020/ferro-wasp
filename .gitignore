@@ -1,7 +1,7 @@
 /target
 /target-*
 /src/**/target
-/apps/**/target
+/firmware/**/target
 /diagnostic_*.jpg
 /logs
 /local_archive/

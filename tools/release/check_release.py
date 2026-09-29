@@ -24,7 +24,7 @@ def load_toml(path: Path) -> dict:
 def manifest_versions() -> dict[str, str]:
     versions: dict[str, str] = {}
     manifests = sorted((REPO_ROOT / "crates").glob("*/Cargo.toml"))
-    manifests.extend(sorted((REPO_ROOT / "apps").glob("*/Cargo.toml")))
+    manifests.extend(sorted((REPO_ROOT / "firmware").glob("*/Cargo.toml")))
 
     for manifest in manifests:
         package = load_toml(manifest).get("package")

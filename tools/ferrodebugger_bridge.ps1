@@ -102,7 +102,7 @@ function Invoke-FerroWaspBuild {
     )
 
     $repoRoot = Get-FerroWaspRepoRoot
-    $appRoot = Join-Path $repoRoot "apps\stm32f405-flight"
+    $appRoot = Join-Path $repoRoot "firmware\stm32f405-flight"
     $resolvedTargetDir = if ([System.IO.Path]::IsPathRooted($TargetDir)) {
         $TargetDir
     } else {

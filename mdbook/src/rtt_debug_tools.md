@@ -15,8 +15,8 @@ Run from the repository root:
 python tools\terminal_embed.py
 ```
 
-FCU3 is the default. Select the isolated Foxeer app after fitting its SWD
-connection:
+Foxeer F405 V2, the golden flight target, is the default. Name a board
+explicitly to be sure which one is flashed:
 
 ```powershell
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
