@@ -99,8 +99,9 @@ pub fn publish_uart2_owned<Invalidate>(
 /// USART2 RX DMA transfer complete. `uart2_rx` is lock-free, shared with the
 /// idle-line handler at one priority.
 #[ferroforge::task(
+    bounds = [uart2_rx: stm32_uart::UartRxIrqService],
     shared = [
-        #[lock_free] uart2_rx: stm32_uart::Uart2RxIrq,
+        #[lock_free] uart2_rx,
         uart2_bridge: Uart2OwnedRxBridge,
     ],
     spawn = [safety_master(event: safety::SafetyEvent)],
@@ -177,8 +178,9 @@ pub fn usart2_rx_dma_transfer(mut cx: usart2_rx_dma_transfer::Context) {
 
 /// USART2 idle line: deliver the partly filled buffer.
 #[ferroforge::task(
+    bounds = [uart2_rx: stm32_uart::UartRxIrqService],
     shared = [
-        #[lock_free] uart2_rx: stm32_uart::Uart2RxIrq,
+        #[lock_free] uart2_rx,
         uart2_bridge: Uart2OwnedRxBridge,
     ],
     spawn = [safety_master(event: safety::SafetyEvent)],

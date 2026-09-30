@@ -75,7 +75,38 @@ impl AdcDmaIrqPlanner {
     }
 }
 
-#[cfg(target_arch = "arm")]
+/// ADC1's DMA sample buffer. Which conversion lands in which word is the
+/// backend's; `Adc1Sample` carries the converted readings.
+pub type Adc1SampleBuffer = &'static mut [u16; 3];
+
+pub struct Adc1Sample {
+    pub buffer: Adc1SampleBuffer,
+    pub voltage_mv: u16,
+    pub current_mv: u16,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdcDmaDeliveryError {
+    DmaFault,
+    NoSpareBuffer,
+    TransferNotReady,
+}
+
+/// ADC1's observation transfer, whichever DMA stream a board gives it. What a
+/// shared task definition bounds on; each backend forwards to its own
+/// transfer.
+pub trait Adc1ObservationDma {
+    /// Start one conversion sequence into the current buffer.
+    fn start_conversion(&mut self);
+
+    fn take_completed_sample(
+        &mut self,
+        spare_buffer: &mut Option<Adc1SampleBuffer>,
+        planner: &mut AdcDmaIrqPlanner,
+    ) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError>;
+}
+
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 use stm32f4xx_hal::{
     ClearFlags, ReadFlags,
     adc::{
@@ -92,22 +123,13 @@ use stm32f4xx_hal::{
     rcc::Rcc,
 };
 
-#[cfg(target_arch = "arm")]
-pub type Adc1SampleBuffer = &'static mut [u16; 3];
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub type Adc1ObservationTransferFor<StreamT, const CHANNEL: u8> =
     Transfer<StreamT, CHANNEL, Adc<ADC1>, PeripheralToMemory, Adc1SampleBuffer>;
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub type Adc1ObservationTransfer = Adc1ObservationTransferFor<Stream0<DMA2>, 0>;
 
-#[cfg(target_arch = "arm")]
-pub struct Adc1Sample {
-    pub buffer: Adc1SampleBuffer,
-    pub voltage_mv: u16,
-    pub current_mv: u16,
-}
-
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub struct Adc1BatteryResources {
     pub adc: ADC1,
     pub voltage_pin: PC0<Input>,
@@ -115,7 +137,7 @@ pub struct Adc1BatteryResources {
     pub dma: Stream0<DMA2>,
 }
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub struct Adc1ObservationPartsFor<StreamT, const CHANNEL: u8>
 where
     StreamT: Stream,
@@ -126,10 +148,10 @@ where
     pub spare_buffer: Adc1SampleBuffer,
 }
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub type Adc1ObservationParts = Adc1ObservationPartsFor<Stream0<DMA2>, 0>;
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn init_adc1_observation(
     adc: ADC1,
     voltage_pin: PC0<Input>,
@@ -150,7 +172,7 @@ pub fn init_adc1_observation(
     )
 }
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn init_adc1_observation_for<StreamT, const CHANNEL: u8>(
     adc: ADC1,
     voltage_pin: PC0<Input>,
@@ -187,15 +209,7 @@ where
     }
 }
 
-#[cfg(target_arch = "arm")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AdcDmaDeliveryError {
-    DmaFault,
-    NoSpareBuffer,
-    TransferNotReady,
-}
-
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn take_completed_adc1_sample(
     transfer: &mut Adc1ObservationTransfer,
     spare_buffer: &mut Option<Adc1SampleBuffer>,
@@ -204,7 +218,7 @@ pub fn take_completed_adc1_sample(
     take_completed_adc1_sample_for(transfer, spare_buffer, planner)
 }
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn take_completed_adc1_sample_for<StreamT, const CHANNEL: u8>(
     transfer: &mut Adc1ObservationTransferFor<StreamT, CHANNEL>,
     spare_buffer: &mut Option<Adc1SampleBuffer>,
@@ -252,34 +266,17 @@ where
     }
 }
 
-/// ADC1's observation transfer, whichever DMA stream a board gives it. What a
-/// shared task definition bounds on; each method forwards to the transfer's
-/// own, or to `take_completed_adc1_sample_for`.
-#[cfg(target_arch = "arm")]
-pub trait Adc1ObservationDma {
-    fn start<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut Adc<ADC1>);
-
-    fn take_completed_sample(
-        &mut self,
-        spare_buffer: &mut Option<Adc1SampleBuffer>,
-        planner: &mut AdcDmaIrqPlanner,
-    ) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError>;
-}
-
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 impl<StreamT, const CHANNEL: u8> Adc1ObservationDma for Adc1ObservationTransferFor<StreamT, CHANNEL>
 where
     StreamT: Stream,
     ChannelX<CHANNEL>: Channel,
     Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
 {
-    fn start<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut Adc<ADC1>),
-    {
-        Transfer::start(self, f)
+    fn start_conversion(&mut self) {
+        Transfer::start(self, |adc| {
+            adc.start_conversion();
+        })
     }
 
     fn take_completed_sample(
