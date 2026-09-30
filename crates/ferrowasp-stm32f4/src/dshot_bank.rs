@@ -385,9 +385,9 @@ where
         index: usize,
         next: &mut [Option<&'static mut L::Buffer>; 4],
     ) {
-        for later in index + 1..4 {
-            if let Some(buffer) = next[later].take() {
-                self.spares[later] = Some(buffer);
+        for (spare, buffer) in self.spares.iter_mut().zip(next.iter_mut()).skip(index + 1) {
+            if let Some(buffer) = buffer.take() {
+                *spare = Some(buffer);
             }
         }
     }

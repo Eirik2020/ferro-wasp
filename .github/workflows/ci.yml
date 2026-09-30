@@ -51,6 +51,10 @@ jobs:
         working-directory: firmware/foxeer-f405-v2
         run: cargo fmt --manifest-path Cargo.toml --check
 
+      - name: Check TBS Lucid H7 formatting
+        working-directory: firmware/tbs-lucid-h7
+        run: cargo fmt --manifest-path Cargo.toml --check
+
       - name: Check embedded workspace
         run: >
           cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
@@ -109,6 +113,36 @@ jobs:
         working-directory: firmware/foxeer-f405-v2
         run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
 
+      - name: Check embedded workspace for STM32H743
+        run: >
+          cargo check -p ferrowasp-stm32h7 -p ferrowasp-stm32f4-tasks --locked
+          --target ${{ env.FIRMWARE_TARGET }}
+          --features ferrowasp-stm32h7/stm32h743,ferrowasp-stm32f4-tasks/stm32h743,ferrowasp-stm32f4-tasks/dshot
+
+      - name: Lint STM32H7 backend
+        run: >
+          cargo clippy -p ferrowasp-stm32h7 --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features ferrowasp-stm32h7/stm32h743
+          -- -D warnings
+
+      - name: Check TBS Lucid H7 firmware
+        working-directory: firmware/tbs-lucid-h7
+        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Lint TBS Lucid H7 firmware
+        working-directory: firmware/tbs-lucid-h7
+        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+
+      - name: Check TBS Lucid H7 diagnostic and bench features
+        working-directory: firmware/tbs-lucid-h7
+        run: |
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "blackbox_defmt bench_spi_timeout_recovery"
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
+
+      - name: Build TBS Lucid H7 release firmware
+        working-directory: firmware/tbs-lucid-h7
+        run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
+
       - name: Upload Foxeer F405 V2 firmware ELF
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
@@ -165,7 +199,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ripgrep
 
-      - name: Enforce isolated DShot unsafe boundary
+      - name: Enforce isolated DShot and STM32H7 DMA unsafe boundaries
         shell: bash
         run: |
           # A missing directory must fail the audit, not shrink it: rg reports
@@ -182,7 +216,7 @@ jobs:
           unexpected="$(
             printf '%s\n' "$unsafe_matches" |
               rg --invert-match \
-                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]+unsafe impl (PeriAddress|DMASet))' ||
+                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]+unsafe impl (PeriAddress|DMASet)|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]dma_endpoints.rs:[0-9]+:(unsafe impl(<[^>]*>)? TargetAddress<|[[:space:]]+let dma = unsafe \{ &\*I::ptr\(\) \};$))' ||
               true
           )"
 
@@ -192,9 +226,11 @@ jobs:
             exit 1
           fi
 
-          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 3 ]]; then
+          # 3 for the F4 DShot boundary; 7 for the H7 DMA endpoints (the
+          # module allow, five TargetAddress impls, one status-register read).
+          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 10 ]]; then
             printf '%s\n' "$unsafe_matches"
-            echo "the reviewed DShot unsafe boundary changed"
+            echo "the reviewed DShot or STM32H7 DMA unsafe boundary changed"
             exit 1
           fi
 
@@ -203,6 +239,10 @@ jobs:
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f405-flight/src/main.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/foxeer-f405-v2/src/main.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f401-bringup/src/main.rs
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32h7/src/lib.rs
+          rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32h7/src/dma_endpoints.rs
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/tbs-lucid-h7/src/main.rs
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/tbs-lucid-h7/src/lib.rs
 
   publication-security:
     name: Publication security

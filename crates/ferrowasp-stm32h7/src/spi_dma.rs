@@ -35,8 +35,7 @@ pub type Spi1ImuBus = eh1::SpiBus<Spi<SPI1, Enabled, u8>>;
 /// An H7 SPI1 DMA owner: the shared owner over this module's two sides.
 pub type Spi1DmaOwner<RxS, TxS, CsT> = SpiDmaOwner<Spi1RxDma<RxS>, Spi1Poller<TxS>, CsT>;
 
-pub struct Spi1ImuPins {
-    pub cs: PC15,
+pub struct Spi1BusPins {
     pub sck: PA5,
     pub miso: PA6,
     pub mosi: PD7,
@@ -52,9 +51,7 @@ pub fn init_spi1_imu_cs(cs_pin: PC15) -> Spi1ImuCs {
 /// select.
 pub fn init_spi1_bus(
     spi: SPI1,
-    sck: PA5,
-    miso: PA6,
-    mosi: PD7,
+    pins: Spi1BusPins,
     mode: spi::Mode,
     frequency_hz: u32,
     prec: rec::Spi1,
@@ -62,9 +59,9 @@ pub fn init_spi1_bus(
 ) -> Spi1ImuBus {
     let spi: Spi<SPI1, Enabled, u8> = spi.spi(
         (
-            sck.into_alternate::<5>(),
-            miso.into_alternate::<5>(),
-            mosi.into_alternate::<5>(),
+            pins.sck.into_alternate::<5>(),
+            pins.miso.into_alternate::<5>(),
+            pins.mosi.into_alternate::<5>(),
         ),
         mode,
         frequency_hz.Hz(),

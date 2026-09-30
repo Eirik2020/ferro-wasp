@@ -18,6 +18,7 @@ exclude = [
     "firmware/foxeer-f405-v2",
     "firmware/stm32f401-bringup",
     "firmware/stm32f405-flight",
+    "firmware/tbs-lucid-h7",
     "tools/ferro-configurator",
 ]
 

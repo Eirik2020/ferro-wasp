@@ -165,12 +165,12 @@ where
         Transfer::number_of_transfers(self)
     }
 
-    fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, ()> {
+    fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, UartRxRestartError> {
         Transfer::<StreamT, CHANNEL, serial::Rx<UsartT>, PeripheralToMemory, UartRxBuf>::next_transfer(
             self, fresh,
         )
         .map(|(raw_buffer, _)| raw_buffer)
-            .map_err(|_| ())
+            .map_err(|_| UartRxRestartError)
     }
 }
 

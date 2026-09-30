@@ -273,8 +273,12 @@ pub trait UartRxDmaTransfer {
     fn number_of_transfers(&self) -> u16;
     /// Restart the stream into `fresh` and hand back the buffer it filled.
     /// On failure the stream keeps no buffer the caller can recover.
-    fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, ()>;
+    fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, UartRxRestartError>;
 }
+
+/// The receive stream could not be restarted into a fresh buffer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UartRxRestartError;
 
 pub struct UartRxIrqSide<T> {
     pub mode: Mode,

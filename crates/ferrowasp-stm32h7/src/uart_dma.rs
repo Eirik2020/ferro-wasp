@@ -73,13 +73,13 @@ where
         S::get_number_of_transfers()
     }
 
-    fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, ()> {
+    fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, UartRxRestartError> {
         // Single-buffer mode: the HAL stops the stream, which flushes its
         // FIFO to memory, before handing back the filled buffer.
         self.transfer
             .next_transfer(fresh)
             .map(|(filled, _, _)| filled)
-            .map_err(|_| ())
+            .map_err(|_| UartRxRestartError)
     }
 }
 

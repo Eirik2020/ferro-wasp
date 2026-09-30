@@ -236,12 +236,12 @@ where
         if self.claimed {
             return Ok(());
         }
+        // Read first, so a card that never came up reports its own error.
+        let mut header = [0; BLOCK_SIZE];
+        self.device.read_block(HEADER_LBA, &mut header)?;
         if self.device.block_count() < REQUIRED_BLOCKS {
             return Err(Error::Refused(RefusalReason::TooSmall));
         }
-
-        let mut header = [0; BLOCK_SIZE];
-        self.device.read_block(HEADER_LBA, &mut header)?;
         if header[..HEADER_MAGIC.len()] == HEADER_MAGIC[..] {
             if header[HEADER_MAGIC.len()] != HEADER_VERSION {
                 return Err(Error::Refused(RefusalReason::UnknownVersion));
@@ -288,6 +288,51 @@ where
         self.device.write_block(lba, data)?;
         self.cache = Some(CachedBlock { lba, data: *data });
         Ok(())
+    }
+}
+
+/// A card slot whose card may have failed to come up. The flash manager
+/// owns the slot either way; a failed card answers every access with the
+/// error it failed with.
+pub enum CardSlot<D, E> {
+    Ready(D),
+    Failed(E),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CardSlotError<D, E> {
+    Device(D),
+    NotReady(E),
+}
+
+impl<D, E> BlockDevice for CardSlot<D, E>
+where
+    D: BlockDevice,
+    E: Copy,
+{
+    type Error = CardSlotError<D::Error, E>;
+
+    fn block_count(&self) -> u32 {
+        match self {
+            Self::Ready(device) => device.block_count(),
+            Self::Failed(_) => 0,
+        }
+    }
+
+    fn read_block(&mut self, lba: u32, block: &mut [u8; BLOCK_SIZE]) -> Result<(), Self::Error> {
+        match self {
+            Self::Ready(device) => device.read_block(lba, block).map_err(CardSlotError::Device),
+            Self::Failed(error) => Err(CardSlotError::NotReady(*error)),
+        }
+    }
+
+    fn write_block(&mut self, lba: u32, block: &[u8; BLOCK_SIZE]) -> Result<(), Self::Error> {
+        match self {
+            Self::Ready(device) => device
+                .write_block(lba, block)
+                .map_err(CardSlotError::Device),
+            Self::Failed(error) => Err(CardSlotError::NotReady(*error)),
+        }
     }
 }
 
@@ -547,5 +592,14 @@ mod tests {
             Err(Error::InvalidAddress)
         );
         assert!(!nor.read_status().unwrap().busy());
+    }
+
+    #[test]
+    fn failed_card_reports_its_init_error() {
+        let mut flash = SdNor::new(CardSlot::<MemoryCard, u8>::Failed(7));
+        assert_eq!(
+            flash.read_jedec_id(),
+            Err(Error::Device(CardSlotError::NotReady(7)))
+        );
     }
 }
