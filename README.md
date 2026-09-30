@@ -27,7 +27,8 @@ board-specific limitations live in the
 | Pilot interfaces | DJI O4 MSP DisplayPort OSD and USB CDC |
 | Configuration and logging | Persistent tuning plus onboard SPI-NOR blackbox access through FerroConfigurator |
 
-FerroWasp FCU3 remains a supported secondary STM32F405 flight target.
+FerroWasp FCU3 remains a supported secondary STM32F405 flight target. TBS
+Lucid H7 is an unverified STM32H743 port of the Foxeer feature set.
 NUCLEO-F401RE is a non-actuating development target. Additional boards can be
 added to the matrix as their support becomes meaningful.
 

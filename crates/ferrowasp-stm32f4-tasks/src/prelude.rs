@@ -1,6 +1,15 @@
 //! The names task bodies are written against, so a body moves out of an app
 //! unchanged. Module aliases only: every type is named by its own crate.
 
+/// The selected chip family's backend. Only what differs between families
+/// is named through it: the HAL's own interrupt and pin types, and the motor
+/// bank over the family's timers.
+#[cfg(feature = "stm32f405")]
+pub use ferrowasp_stm32f4 as backend;
+#[cfg(feature = "stm32h743")]
+pub use ferrowasp_stm32h7 as backend;
+
+pub use backend::hal_prelude::{ExtiPin, pac};
 pub use core::sync::atomic::Ordering;
 pub use defmt::{info, warn};
 pub use embedded_hal::spi::Operation;
@@ -22,15 +31,15 @@ pub use ferrowasp_stm32f4::adc::Adc1ObservationDma as _;
 pub use ferrowasp_stm32f4::app_config::{
     ARMING_GUARD_POLL_MS, BENCH_EQUAL_MOTOR_MAX_THROTTLE, ESC_MANAGER_PERIOD_MS,
 };
-pub use ferrowasp_stm32f4::hal_prelude::{ExtiPin, VtempCal30, VtempCal110, pac};
 pub use ferrowasp_stm32f4::memory as stm32_memory;
 pub use ferrowasp_stm32f4::memory::{SPI1_JOB_MAX_BYTES, SPI1_JOB_MAX_OPERATIONS};
 pub use ferrowasp_stm32f4::scheduler as stm32_scheduler;
-pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
-pub use ferrowasp_stm32f4::spi_dma::{SPI_BUFFER_SIZE, SpiDmaService as _};
+pub use ferrowasp_stm32f4::spi_common as stm32_spi;
+pub use ferrowasp_stm32f4::spi_common::{SPI_BUFFER_SIZE, SpiDmaService as _};
 pub use ferrowasp_stm32f4::timebase as stm32_timebase;
 pub use ferrowasp_stm32f4::timebase::Timebase as _;
-pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
+pub use ferrowasp_stm32f4::uart_common as stm32_uart;
+pub use ferrowasp_stm32f4::uart_common::{UartRxIrqService as _, UartTxDmaService as _};
 pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
 pub use ferrowasp_tasks::actuator as actuator_task;
 pub use ferrowasp_tasks::drone_toolbox as dt;

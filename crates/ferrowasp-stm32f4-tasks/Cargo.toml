@@ -5,7 +5,7 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 
-# RTIC task definitions for STM32F4 flight boards, as FerroForge definitions.
+# RTIC task definitions for STM32 flight boards, as FerroForge definitions.
 # Each flight firmware selects them with its own resources, priorities and
 # interrupts through `ferroforge::app!`, so one definition serves every board
 # instead of each app carrying its own copy. The logic they call stays in
@@ -16,7 +16,10 @@ path = "src/lib.rs"
 
 [features]
 default = []
+# One chip family per firmware. The definitions are the same for each; only
+# the backend under them changes.
 stm32f405 = ["ferrowasp-stm32f4/stm32f405"]
+stm32h743 = ["dep:ferrowasp-stm32h7", "ferrowasp-stm32h7/stm32h743"]
 dshot = ["ferrowasp-stm32f4/dshot"]
 # Diagnostics a firmware opts into; forwarded from its own features of the
 # same name.
@@ -49,6 +52,7 @@ ferrowasp-drivers = { path = "../ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4" }
+ferrowasp-stm32h7 = { path = "../ferrowasp-stm32h7", optional = true }
 ferrowasp-tasks = { path = "../ferrowasp-tasks" }
 sbus-rs = "0.1.3"
 

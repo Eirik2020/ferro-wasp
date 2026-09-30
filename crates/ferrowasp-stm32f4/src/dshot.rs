@@ -1,5 +1,7 @@
 //! STM32F405 four-motor DShot600 transmitter.
 //!
+//! The command lease, telemetry, completion, and fault policy are the shared
+//! `DshotBank` state machine; this module is the STM32F405 hardware under it.
 //! The backend owns TIM1, TIM8, four fixed DMA2 streams, every motor pin, and
 //! all DMA buffers as one fault-containment unit. TIM1 is the frame master and
 //! starts TIM8 through ITR0, so all four lanes begin from the same hardware
@@ -22,8 +24,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use ferrowasp_waveform::dshot::{
-    COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotTiming, DshotTimingError, command_lease_expired,
-    encode_compare_sequence, four_motor_packets, throttles_to_dshot,
+    COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotPacket, DshotTiming, encode_compare_sequence,
 };
 use stm32f4xx_hal::{
     dma::{
@@ -38,10 +39,11 @@ use stm32f4xx_hal::{
     timer::Timer,
 };
 
-pub const DSHOT_COMMAND_MAX: u16 = 2000;
-pub const DSHOT_SERVICE_PERIOD_MS: u32 = 2;
-pub const DSHOT_FRAME_TIMEOUT_MS: u32 = 1;
-const ALL_MOTORS_COMPLETE: u8 = 0b1111;
+pub use crate::dshot_bank::{
+    DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotBank,
+    DshotCommandError, DshotInitError, DshotInterruptEvent, DshotLanes, DshotMotor,
+    DshotServiceEvent, DshotStats, DshotTelemetryRequestError,
+};
 
 pub type DshotDmaBuffer = [u16; COMPARE_DMA_SLOTS];
 type DshotBuffer = &'static mut DshotDmaBuffer;
@@ -53,76 +55,9 @@ type FoxeerMotor3Transfer =
     Transfer<Stream2<DMA2>, 0, Tim8Ch3DmaFoxeer, MemoryToPeripheral, DshotBuffer>;
 type Motor4Transfer = Transfer<Stream6<DMA2>, 6, Tim1Ch3Dma, MemoryToPeripheral, DshotBuffer>;
 
-/// Physical four-lane DShot bank output, before any airframe motor remap.
-///
-/// `Motor1` here means physical timer/DMA lane 1. It must not be interpreted as
-/// Betaflight logical M1; the application performs that mapping separately.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DshotMotor {
-    Motor1,
-    Motor2,
-    Motor3,
-    Motor4,
-}
-
-impl DshotMotor {
-    const fn index(self) -> usize {
-        match self {
-            Self::Motor1 => 0,
-            Self::Motor2 => 1,
-            Self::Motor3 => 2,
-            Self::Motor4 => 3,
-        }
-    }
-
-    const fn completion_bit(self) -> u8 {
-        1 << self.index()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DshotInitError {
-    InvalidTiming(DshotTimingError),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DshotCommandError {
-    ThrottleOutOfRange,
-    Faulted,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DshotTelemetryRequestError {
-    Busy,
-    Faulted,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DshotServiceEvent {
-    FrameStarted,
-    Busy,
-    LeaseExpired,
-    Faulted,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DshotInterruptEvent {
-    Completed,
-    Faulted,
-    Spurious,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct DshotStats {
-    pub frames_started: u32,
-    pub frames_completed: u32,
-    pub lane_completions: [u32; 4],
-    pub busy_skips: u32,
-    pub lease_expiries: u32,
-    pub frame_timeouts: u32,
-    pub dma_faults: u32,
-    pub spurious_interrupts: u32,
-}
+/// The STM32F405 four-motor bank: the shared DShot state machine over TIM1,
+/// TIM8, and their four DMA2 streams.
+pub type DshotMotorBank = DshotBank<Stm32f4DshotLanes>;
 
 /// Static storage for two DMA buffers per motor lane.
 pub struct DshotDmaStorage {
@@ -422,14 +357,10 @@ impl Motor3Transfer {
         }
     }
 
-    fn exchange_buffer(
-        &mut self,
-        spare: &mut Option<DshotBuffer>,
-        next: DshotBuffer,
-    ) -> Result<(), ()> {
+    fn exchange_buffer(&mut self, next: DshotBuffer) -> Result<DshotBuffer, DshotBuffer> {
         match self {
-            Self::Fcu3(transfer) => exchange_buffer(transfer, spare, next),
-            Self::Foxeer(transfer) => exchange_buffer(transfer, spare, next),
+            Self::Fcu3(transfer) => exchange_buffer(transfer, next),
+            Self::Foxeer(transfer) => exchange_buffer(transfer, next),
         }
     }
 
@@ -464,7 +395,9 @@ impl Motor3Transfer {
     }
 }
 
-pub struct DshotMotorBank {
+/// TIM1/TIM8 compare lanes and their DMA2 streams, the STM32F405 hardware
+/// under a `DshotMotorBank`.
+pub struct Stm32f4DshotLanes {
     timers: DshotTimerBank,
     _motor1_pin: PA8<Alternate<1>>,
     _motor2_pin: PC9<Alternate<3>>,
@@ -474,24 +407,84 @@ pub struct DshotMotorBank {
     motor2_transfer: Motor2Transfer,
     motor3_transfer: Motor3Transfer,
     motor4_transfer: Motor4Transfer,
-    motor1_spare: Option<DshotBuffer>,
-    motor2_spare: Option<DshotBuffer>,
-    motor3_spare: Option<DshotBuffer>,
-    motor4_spare: Option<DshotBuffer>,
-    timing: DshotTiming,
-    requested_values: [u16; 4],
-    telemetry_request: Option<DshotMotor>,
-    telemetry_request_sent: Option<DshotMotor>,
-    lease_started_ms: u64,
-    lease_duration_ms: Option<u32>,
-    frame_started_ms: u64,
-    completion_mask: u8,
-    busy: bool,
-    faulted: bool,
-    stats: DshotStats,
 }
 
-impl DshotMotorBank {
+impl DshotLanes for Stm32f4DshotLanes {
+    type Buffer = DshotDmaBuffer;
+
+    fn encode(packet: DshotPacket, timing: DshotTiming, buffer: &mut DshotDmaBuffer) -> u16 {
+        encode_compare_sequence(packet, timing, buffer)
+    }
+
+    fn exchange_buffer(
+        &mut self,
+        motor: DshotMotor,
+        next: DshotBuffer,
+    ) -> Result<DshotBuffer, DshotBuffer> {
+        match motor {
+            DshotMotor::Motor1 => exchange_buffer(&mut self.motor1_transfer, next),
+            DshotMotor::Motor2 => exchange_buffer(&mut self.motor2_transfer, next),
+            DshotMotor::Motor3 => self.motor3_transfer.exchange_buffer(next),
+            DshotMotor::Motor4 => exchange_buffer(&mut self.motor4_transfer, next),
+        }
+    }
+
+    fn start_dma(&mut self, motor: DshotMotor) {
+        match motor {
+            DshotMotor::Motor1 => self.motor1_transfer.start(|_| {}),
+            DshotMotor::Motor2 => self.motor2_transfer.start(|_| {}),
+            DshotMotor::Motor3 => self.motor3_transfer.start(),
+            DshotMotor::Motor4 => self.motor4_transfer.start(|_| {}),
+        }
+    }
+
+    fn start_frame(&mut self, first_duties: [u16; 4]) {
+        self.timers.start_frame(first_duties);
+    }
+
+    fn stop_frame(&mut self) {
+        self.timers.stop_frame();
+    }
+
+    fn force_outputs_low(&mut self) {
+        self.timers.force_outputs_low();
+    }
+
+    fn dma_status(&self, motor: DshotMotor) -> (bool, bool) {
+        match motor {
+            DshotMotor::Motor1 => (
+                self.motor1_transfer.is_transfer_complete(),
+                self.motor1_transfer.is_transfer_error()
+                    || self.motor1_transfer.is_direct_mode_error(),
+            ),
+            DshotMotor::Motor2 => (
+                self.motor2_transfer.is_transfer_complete(),
+                self.motor2_transfer.is_transfer_error()
+                    || self.motor2_transfer.is_direct_mode_error(),
+            ),
+            DshotMotor::Motor3 => (
+                self.motor3_transfer.is_transfer_complete(),
+                self.motor3_transfer.is_error(),
+            ),
+            DshotMotor::Motor4 => (
+                self.motor4_transfer.is_transfer_complete(),
+                self.motor4_transfer.is_transfer_error()
+                    || self.motor4_transfer.is_direct_mode_error(),
+            ),
+        }
+    }
+
+    fn pause_and_clear(&mut self, motor: DshotMotor) {
+        match motor {
+            DshotMotor::Motor1 => pause_and_clear(&mut self.motor1_transfer),
+            DshotMotor::Motor2 => pause_and_clear(&mut self.motor2_transfer),
+            DshotMotor::Motor3 => self.motor3_transfer.pause_and_clear(),
+            DshotMotor::Motor4 => pause_and_clear(&mut self.motor4_transfer),
+        }
+    }
+}
+
+impl DshotBank<Stm32f4DshotLanes> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         motor1_pin: PA8<Input>,
@@ -606,7 +599,7 @@ impl DshotMotorBank {
             Motor3Transfer::new(motor3_dma, motor3_endpoint_address, buffers.motor3_active);
         let motor4_transfer = init_transfer(motor4_dma, motor4_endpoint, buffers.motor4_active);
 
-        Ok(Self {
+        let lanes = Stm32f4DshotLanes {
             timers,
             _motor1_pin: motor1_pin,
             _motor2_pin: motor2_pin,
@@ -616,329 +609,17 @@ impl DshotMotorBank {
             motor2_transfer,
             motor3_transfer,
             motor4_transfer,
-            motor1_spare: Some(buffers.motor1_spare),
-            motor2_spare: Some(buffers.motor2_spare),
-            motor3_spare: Some(buffers.motor3_spare),
-            motor4_spare: Some(buffers.motor4_spare),
+        };
+        Ok(Self::from_lanes(
+            lanes,
+            [
+                buffers.motor1_spare,
+                buffers.motor2_spare,
+                buffers.motor3_spare,
+                buffers.motor4_spare,
+            ],
             timing,
-            requested_values: [0; 4],
-            telemetry_request: None,
-            telemetry_request_sent: None,
-            lease_started_ms: 0,
-            lease_duration_ms: None,
-            frame_started_ms: 0,
-            completion_mask: 0,
-            busy: false,
-            faulted: false,
-            stats: DshotStats::default(),
-        })
-    }
-
-    pub fn command_stop(&mut self) {
-        self.requested_values = [0; 4];
-        self.lease_duration_ms = None;
-    }
-
-    pub fn command_throttles(
-        &mut self,
-        commands: [u16; 4],
-        now_ms: u64,
-        lease_duration_ms: u32,
-    ) -> Result<(), DshotCommandError> {
-        if self.faulted {
-            return Err(DshotCommandError::Faulted);
-        }
-        if commands.iter().any(|command| *command > DSHOT_COMMAND_MAX) {
-            return Err(DshotCommandError::ThrottleOutOfRange);
-        }
-        if commands.iter().all(|command| *command == 0) {
-            self.command_stop();
-            return Ok(());
-        }
-
-        self.requested_values = throttles_to_dshot(commands);
-        self.lease_started_ms = now_ms;
-        self.lease_duration_ms = Some(lease_duration_ms);
-        Ok(())
-    }
-
-    /// Requests legacy UART telemetry from exactly one motor in the next
-    /// successfully started DShot frame.
-    pub fn request_telemetry(
-        &mut self,
-        motor: DshotMotor,
-    ) -> Result<(), DshotTelemetryRequestError> {
-        if self.faulted {
-            return Err(DshotTelemetryRequestError::Faulted);
-        }
-        if self.telemetry_request.is_some() {
-            return Err(DshotTelemetryRequestError::Busy);
-        }
-        self.telemetry_request = Some(motor);
-        Ok(())
-    }
-
-    pub fn service(&mut self, now_ms: u64) -> DshotServiceEvent {
-        self.telemetry_request_sent = None;
-        if self.faulted {
-            return DshotServiceEvent::Faulted;
-        }
-
-        let lease_expired = self.lease_duration_ms.is_some_and(|duration_ms| {
-            command_lease_expired(self.lease_started_ms, duration_ms, now_ms)
-        });
-        if lease_expired {
-            self.command_stop();
-            self.stats.lease_expiries = self.stats.lease_expiries.wrapping_add(1);
-        }
-
-        if self.busy {
-            self.stats.busy_skips = self.stats.busy_skips.wrapping_add(1);
-            if command_lease_expired(self.frame_started_ms, DSHOT_FRAME_TIMEOUT_MS, now_ms) {
-                self.stats.frame_timeouts = self.stats.frame_timeouts.wrapping_add(1);
-                self.latch_fault(false);
-                return DshotServiceEvent::Faulted;
-            }
-
-            return if lease_expired {
-                DshotServiceEvent::LeaseExpired
-            } else {
-                DshotServiceEvent::Busy
-            };
-        }
-
-        if self.send_requested(now_ms).is_err() {
-            return DshotServiceEvent::Faulted;
-        }
-
-        if lease_expired {
-            DshotServiceEvent::LeaseExpired
-        } else {
-            DshotServiceEvent::FrameStarted
-        }
-    }
-
-    pub fn on_dma_interrupt(&mut self, motor: DshotMotor) -> DshotInterruptEvent {
-        if self.faulted {
-            self.pause_and_clear_motor(motor);
-            return DshotInterruptEvent::Faulted;
-        }
-
-        let (transfer_complete, dma_error) = self.motor_dma_status(motor);
-        self.pause_and_clear_motor(motor);
-
-        let completion_bit = motor.completion_bit();
-        if !self.busy || self.completion_mask & completion_bit != 0 {
-            self.latch_fault(true);
-            return DshotInterruptEvent::Spurious;
-        }
-        if dma_error {
-            self.latch_fault(false);
-            return DshotInterruptEvent::Faulted;
-        }
-        if !transfer_complete {
-            self.latch_fault(true);
-            return DshotInterruptEvent::Spurious;
-        }
-
-        self.completion_mask |= completion_bit;
-        let lane = &mut self.stats.lane_completions[motor.index()];
-        *lane = lane.wrapping_add(1);
-
-        if self.completion_mask == ALL_MOTORS_COMPLETE {
-            self.timers.stop_frame();
-            self.busy = false;
-            self.stats.frames_completed = self.stats.frames_completed.wrapping_add(1);
-        }
-
-        DshotInterruptEvent::Completed
-    }
-
-    pub const fn is_faulted(&self) -> bool {
-        self.faulted
-    }
-
-    pub const fn stats(&self) -> DshotStats {
-        self.stats
-    }
-
-    pub const fn requested_values(&self) -> [u16; 4] {
-        self.requested_values
-    }
-
-    /// Takes the lane whose telemetry bit was included in the frame started by
-    /// the most recent `service` call.
-    pub fn take_telemetry_request_sent(&mut self) -> Option<DshotMotor> {
-        self.telemetry_request_sent.take()
-    }
-
-    fn send_requested(&mut self, now_ms: u64) -> Result<(), DshotCommandError> {
-        if self.any_spare_missing() {
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        }
-
-        let Some(motor1_next) = self.motor1_spare.take() else {
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        };
-        let Some(motor2_next) = self.motor2_spare.take() else {
-            self.motor1_spare = Some(motor1_next);
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        };
-        let Some(motor3_next) = self.motor3_spare.take() else {
-            self.motor1_spare = Some(motor1_next);
-            self.motor2_spare = Some(motor2_next);
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        };
-        let Some(motor4_next) = self.motor4_spare.take() else {
-            self.motor1_spare = Some(motor1_next);
-            self.motor2_spare = Some(motor2_next);
-            self.motor3_spare = Some(motor3_next);
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        };
-
-        let telemetry_request = self.telemetry_request;
-        let packets = four_motor_packets(
-            self.requested_values,
-            telemetry_request.map(DshotMotor::index),
-        );
-        let mut first_duties = [0; 4];
-        for (index, (packet, buffer)) in packets
-            .into_iter()
-            .zip([
-                &mut *motor1_next,
-                &mut *motor2_next,
-                &mut *motor3_next,
-                &mut *motor4_next,
-            ])
-            .enumerate()
-        {
-            first_duties[index] = encode_compare_sequence(packet, self.timing, buffer);
-        }
-
-        if exchange_buffer(
-            &mut self.motor1_transfer,
-            &mut self.motor1_spare,
-            motor1_next,
-        )
-        .is_err()
-        {
-            self.motor2_spare = Some(motor2_next);
-            self.motor3_spare = Some(motor3_next);
-            self.motor4_spare = Some(motor4_next);
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        }
-        if exchange_buffer(
-            &mut self.motor2_transfer,
-            &mut self.motor2_spare,
-            motor2_next,
-        )
-        .is_err()
-        {
-            self.motor3_spare = Some(motor3_next);
-            self.motor4_spare = Some(motor4_next);
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        }
-        if self
-            .motor3_transfer
-            .exchange_buffer(&mut self.motor3_spare, motor3_next)
-            .is_err()
-        {
-            self.motor4_spare = Some(motor4_next);
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        }
-        if exchange_buffer(
-            &mut self.motor4_transfer,
-            &mut self.motor4_spare,
-            motor4_next,
-        )
-        .is_err()
-        {
-            self.latch_fault(false);
-            return Err(DshotCommandError::Faulted);
-        }
-
-        self.frame_started_ms = now_ms;
-        self.completion_mask = 0;
-        self.busy = true;
-        self.stats.frames_started = self.stats.frames_started.wrapping_add(1);
-
-        // Enable all four DMA streams before opening any timer DMA request.
-        self.motor1_transfer.start(|_| {});
-        self.motor2_transfer.start(|_| {});
-        self.motor3_transfer.start();
-        self.motor4_transfer.start(|_| {});
-        self.timers.start_frame(first_duties);
-        self.telemetry_request_sent = telemetry_request;
-        self.telemetry_request = None;
-        Ok(())
-    }
-
-    fn any_spare_missing(&self) -> bool {
-        self.motor1_spare.is_none()
-            || self.motor2_spare.is_none()
-            || self.motor3_spare.is_none()
-            || self.motor4_spare.is_none()
-    }
-
-    fn motor_dma_status(&self, motor: DshotMotor) -> (bool, bool) {
-        match motor {
-            DshotMotor::Motor1 => (
-                self.motor1_transfer.is_transfer_complete(),
-                self.motor1_transfer.is_transfer_error()
-                    || self.motor1_transfer.is_direct_mode_error(),
-            ),
-            DshotMotor::Motor2 => (
-                self.motor2_transfer.is_transfer_complete(),
-                self.motor2_transfer.is_transfer_error()
-                    || self.motor2_transfer.is_direct_mode_error(),
-            ),
-            DshotMotor::Motor3 => (
-                self.motor3_transfer.is_transfer_complete(),
-                self.motor3_transfer.is_error(),
-            ),
-            DshotMotor::Motor4 => (
-                self.motor4_transfer.is_transfer_complete(),
-                self.motor4_transfer.is_transfer_error()
-                    || self.motor4_transfer.is_direct_mode_error(),
-            ),
-        }
-    }
-
-    fn pause_and_clear_motor(&mut self, motor: DshotMotor) {
-        match motor {
-            DshotMotor::Motor1 => pause_and_clear(&mut self.motor1_transfer),
-            DshotMotor::Motor2 => pause_and_clear(&mut self.motor2_transfer),
-            DshotMotor::Motor3 => self.motor3_transfer.pause_and_clear(),
-            DshotMotor::Motor4 => pause_and_clear(&mut self.motor4_transfer),
-        }
-    }
-
-    fn latch_fault(&mut self, spurious: bool) {
-        if !self.faulted {
-            self.stats.dma_faults = self.stats.dma_faults.wrapping_add(1);
-        }
-        if spurious {
-            self.stats.spurious_interrupts = self.stats.spurious_interrupts.wrapping_add(1);
-        }
-
-        self.faulted = true;
-        self.busy = false;
-        self.telemetry_request = None;
-        self.telemetry_request_sent = None;
-        self.command_stop();
-        self.timers.force_outputs_low();
-        pause_and_clear(&mut self.motor1_transfer);
-        pause_and_clear(&mut self.motor2_transfer);
-        self.motor3_transfer.pause_and_clear();
-        pause_and_clear(&mut self.motor4_transfer);
+        ))
     }
 }
 
@@ -1047,24 +728,17 @@ where
 
 fn exchange_buffer<STREAM, const CHANNEL: u8, ENDPOINT>(
     transfer: &mut Transfer<STREAM, CHANNEL, ENDPOINT, MemoryToPeripheral, DshotBuffer>,
-    spare: &mut Option<DshotBuffer>,
     next: DshotBuffer,
-) -> Result<(), ()>
+) -> Result<DshotBuffer, DshotBuffer>
 where
     STREAM: stm32f4xx_hal::dma::traits::Stream,
     ChannelX<CHANNEL>: Channel,
     ENDPOINT: PeriAddress<MemSize = u16> + DMASet<STREAM, CHANNEL, MemoryToPeripheral>,
 {
-    match transfer.next_transfer(next) {
-        Ok((old, _)) => {
-            *spare = Some(old);
-            Ok(())
-        }
-        Err(error) => {
-            *spare = Some(dma_error_buffer(error));
-            Err(())
-        }
-    }
+    transfer
+        .next_transfer(next)
+        .map(|(old, _)| old)
+        .map_err(dma_error_buffer)
 }
 
 fn dma_error_buffer(error: DMAError<DshotBuffer>) -> DshotBuffer {

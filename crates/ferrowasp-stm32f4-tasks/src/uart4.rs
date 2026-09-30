@@ -7,7 +7,8 @@ use crate::prelude::*;
 /// Stops, with a warning, when the queue closes or DMA refuses a chunk.
 #[ferroforge::task(
     local = [uart4_tx_owner: stm32_memory::UartOwnedTxOwner<'static>],
-    shared = [uart4_tx_dma: stm32_uart::Uart4TxDmaSide],
+    bounds = [uart4_tx_dma: stm32_uart::UartTxDmaService],
+    shared = [uart4_tx_dma],
 )]
 pub async fn uart4_tx_worker(mut cx: uart4_tx_worker::Context) {
     loop {
@@ -44,7 +45,8 @@ pub async fn uart4_tx_worker(mut cx: uart4_tx_worker::Context) {
 /// UART4 RX DMA transfer complete: hand the filled buffer on and wake the OSD.
 /// `uart4_rx` is lock-free, shared with the idle-line handler at one priority.
 #[ferroforge::task(
-    shared = [#[lock_free] uart4_rx: stm32_uart::Uart4RxIrq],
+    bounds = [uart4_rx: stm32_uart::UartRxIrqService],
+    shared = [#[lock_free] uart4_rx],
     spawn = [osd_refresh()],
 )]
 pub fn uart4_rx_dma_transfer(cx: uart4_rx_dma_transfer::Context) {
@@ -84,7 +86,8 @@ pub fn uart4_rx_dma_transfer(cx: uart4_rx_dma_transfer::Context) {
 
 /// UART4 idle line: deliver the partly filled buffer and wake the OSD.
 #[ferroforge::task(
-    shared = [#[lock_free] uart4_rx: stm32_uart::Uart4RxIrq],
+    bounds = [uart4_rx: stm32_uart::UartRxIrqService],
+    shared = [#[lock_free] uart4_rx],
     spawn = [osd_refresh()],
 )]
 pub fn uart4_rx_peripheral(cx: uart4_rx_peripheral::Context) {
@@ -126,13 +129,11 @@ pub fn uart4_rx_peripheral(cx: uart4_rx_peripheral::Context) {
 /// UART4 TX DMA complete: finish or fail the in-flight chunk.
 #[ferroforge::task(
     local = [uart4_tx_completion: stm32_memory::UartOwnedTxCompletion<'static>],
-    shared = [uart4_tx_dma: stm32_uart::Uart4TxDmaSide],
+    bounds = [uart4_tx_dma: stm32_uart::UartTxDmaService],
+    shared = [uart4_tx_dma],
 )]
 pub fn uart4_tx_dma_transfer(mut cx: uart4_tx_dma_transfer::Context) {
-    let outcome = cx
-        .shared
-        .uart4_tx_dma
-        .lock(stm32_uart::Uart4TxDmaSide::service_irq);
+    let outcome = cx.shared.uart4_tx_dma.lock(|tx_dma| tx_dma.service_irq());
 
     match outcome {
         stm32_uart::UartTxIrqOutcome::Ignored => {}

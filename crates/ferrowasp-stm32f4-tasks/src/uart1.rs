@@ -6,7 +6,10 @@ use crate::snapshots::*;
 
 /// USART1 RX DMA transfer complete. `uart1_rx` is lock-free, shared with the
 /// idle-line handler at one priority.
-#[ferroforge::task(shared = [#[lock_free] uart1_rx: stm32_uart::Uart1RxIrq])]
+#[ferroforge::task(
+    bounds = [uart1_rx: stm32_uart::UartRxIrqService],
+    shared = [#[lock_free] uart1_rx],
+)]
 pub fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context) {
     match cx.shared.uart1_rx.service_dma_irq() {
         stm32_uart::UartRxIrqOutcome::Delivered
@@ -20,7 +23,10 @@ pub fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context) {
 }
 
 /// USART1 idle line: deliver the partly filled buffer.
-#[ferroforge::task(shared = [#[lock_free] uart1_rx: stm32_uart::Uart1RxIrq])]
+#[ferroforge::task(
+    bounds = [uart1_rx: stm32_uart::UartRxIrqService],
+    shared = [#[lock_free] uart1_rx],
+)]
 pub fn usart1_rx_peripheral(cx: usart1_rx_peripheral::Context) {
     match cx.shared.uart1_rx.service_idle_irq() {
         stm32_uart::UartRxIrqOutcome::Delivered
