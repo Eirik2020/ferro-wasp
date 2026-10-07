@@ -21,6 +21,18 @@ export interface StatusSnapshot {
   arm_switch: boolean;
   armed: boolean;
   battery_decivolts: number;
+  /** Absent or null on firmware that does not report it. */
+  imu_stale?: boolean | null;
+  /** Raw receiver channels; null until the firmware reports them. */
+  channels?: number[] | null;
+}
+
+/** Mirrors `PrearmCheck` in ferro-configurator-core. */
+export interface PrearmCheck {
+  id: string;
+  label: string;
+  state: "pass" | "fail" | "unknown";
+  hint: string;
 }
 
 /** Mirrors `Safety` in ferro-configurator-bridge. */
@@ -28,6 +40,8 @@ export interface Safety {
   status: StatusSnapshot;
   /** False whenever the controller reports itself armed. */
   writes_allowed: boolean;
+  /** Arming preconditions, in the order the firmware evaluates them. */
+  checks: PrearmCheck[];
 }
 
 export interface AxisPid {

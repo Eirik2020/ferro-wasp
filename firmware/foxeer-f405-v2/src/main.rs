@@ -972,6 +972,7 @@ ferroforge::app! {
             battery_current_centiamps: BATTERY_CURRENT_CA_SNAPSHOT.load(Ordering::Relaxed),
             adc_voltage_mv: ADC_VOLTAGE_MV_SNAPSHOT.load(Ordering::Relaxed),
             adc_current_mv: ADC_CURRENT_MV_SNAPSHOT.load(Ordering::Relaxed),
+            rc_channels_us: rc_channels_us(),
         };
         #[cfg(not(feature = "mspv2_configurator"))]
         let Ok(line) = usb_debug::format_status(snapshot) else {

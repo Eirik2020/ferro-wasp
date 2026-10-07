@@ -7,7 +7,7 @@ use heapless::String;
 /// The worst case - every numeric field at its extreme - is 270 bytes with the
 /// terminator, which the test below pins. Only this crate's stack buffer is
 /// sized from it, so the headroom is cheap.
-pub const STATUS_LINE_CAPACITY: usize = 288;
+pub const STATUS_LINE_CAPACITY: usize = 400;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ImuKind {
@@ -53,13 +53,15 @@ pub struct StatusSnapshot {
     pub battery_current_centiamps: i32,
     pub adc_voltage_mv: u32,
     pub adc_current_mv: u32,
+    /// The last accepted receiver frame's channels, in microseconds.
+    pub rc_channels_us: [u16; 16],
 }
 
 pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPACITY>, fmt::Error> {
     let mut line = String::new();
     write!(
         line,
-        "FWDBG1 ms={} imu={} ready={} seq={} gyro={},{},{} stale={} ctl={} ctl_hz={} rc={} armable={} thr={} arm_sw={} armed={} vbat_dV={} current_cA={} adc_v_mV={} adc_i_mV={}\r\n",
+        "FWDBG1 ms={} imu={} ready={} seq={} gyro={},{},{} stale={} ctl={} ctl_hz={} rc={} armable={} thr={} arm_sw={} armed={} vbat_dV={} current_cA={} adc_v_mV={} adc_i_mV={} ch=",
         snapshot.uptime_ms,
         snapshot.imu_kind.as_str(),
         u8::from(snapshot.imu_ready),
@@ -80,6 +82,11 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
         snapshot.adc_voltage_mv,
         snapshot.adc_current_mv,
     )?;
+    for (index, channel) in snapshot.rc_channels_us.iter().enumerate() {
+        let separator = if index == 0 { "" } else { "," };
+        write!(line, "{separator}{channel}")?;
+    }
+    line.push_str("\r\n").map_err(|_| fmt::Error)?;
     Ok(line)
 }
 
@@ -106,6 +113,9 @@ mod tests {
             battery_current_centiamps: -12,
             adc_voltage_mv: 2_091,
             adc_current_mv: 1_234,
+            rc_channels_us: [
+                1500, 1500, 988, 1500, 2012, 988, 988, 988, 988, 988, 988, 988, 988, 988, 988, 988,
+            ],
         }
     }
 
@@ -115,7 +125,7 @@ mod tests {
 
         assert_eq!(
             line.as_str(),
-            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234\r\n"
+            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988\r\n"
         );
         assert!(line.is_ascii());
     }
@@ -155,6 +165,7 @@ mod tests {
             battery_current_centiamps: i32::MIN,
             adc_voltage_mv: u32::MAX,
             adc_current_mv: u32::MAX,
+            rc_channels_us: [u16::MAX; 16],
         })
         .unwrap();
 

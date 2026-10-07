@@ -8,6 +8,15 @@
 use ferrowasp_drivers::crsf;
 use sbus_rs::StreamingParser as SbusParser;
 
+/// A raw SBUS or CRSF channel value (172..=1811) as a pulse width in
+/// microseconds, the scale radios and configurators show: 172 is 988 µs,
+/// 992 is 1500 µs and 1811 is 2012 µs.
+pub const fn channel_us(raw: u16) -> u16 {
+    // 5/8 µs per count from 880 µs, rounded to the nearest microsecond. A
+    // u16 raw value stays below u16::MAX after scaling.
+    ((raw as u32 * 5 + 4) / 8 + 880) as u16
+}
+
 /// One frame of receiver channels and the link flags it carried.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RcFrame {
@@ -100,6 +109,14 @@ impl RcReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn channels_convert_to_the_microseconds_radios_show() {
+        assert_eq!(channel_us(172), 988);
+        assert_eq!(channel_us(992), 1500);
+        assert_eq!(channel_us(1811), 2012);
+        assert_eq!(channel_us(0), 880);
+    }
 
     fn crsf_frame(frame_type: u8, payload: &[u8]) -> heapless::Vec<u8, 64> {
         let mut bytes = heapless::Vec::new();

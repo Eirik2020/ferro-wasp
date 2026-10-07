@@ -11,23 +11,28 @@ import {
   toBridgeError,
   type Api,
   type FerroConfig,
+  type PrearmCheck,
   type Safety,
   type SerialBindings,
 } from "./api";
 import { MockApi } from "./mock";
+import { drawRates, type RateAxis } from "./rates";
+import { ControlFinder, channelName, drawChannels } from "./receiver";
 import { TauriApi, isTauri } from "./tauri";
 
 const api: Api = isTauri() ? new TauriApi() : new MockApi();
 const usingMock = !isTauri();
 
-/** How often the banner re-reads the controller while connected. */
-const SAFETY_POLL_MS = 1_000;
+/** How often the banner and receiver re-read the controller while connected. */
+const SAFETY_POLL_MS = 200;
 
 let connected = false;
 let safetyState: Safety | null = null;
 let config: FerroConfig | null = null;
 let bindings: SerialBindings | null = null;
 let pollTimer: number | undefined;
+let finder: ControlFinder | null = null;
+let finderTimeout: number | undefined;
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -67,6 +72,8 @@ function renderSafety(): void {
     banner.textContent = "No controller connected";
     banner.dataset["state"] = "unknown";
     detail.textContent = "";
+    element("prearm-checks").replaceChildren();
+    renderReceiver();
     updateWriteControls();
     return;
   }
@@ -88,7 +95,87 @@ function renderSafety(): void {
   if (!writes_allowed) {
     setStatusLine("Disarm the controller to change configuration.", "bad");
   }
+  renderChecks(status.armed ? [] : safetyState.checks);
+  renderReceiver();
   updateWriteControls();
+}
+
+/**
+ * The pre-arm list. Only failures carry their hint, so a healthy quad reads
+ * as a short column of ticks and a broken one says what to do next.
+ */
+function renderChecks(checks: PrearmCheck[]): void {
+  const list = element("prearm-checks");
+  list.replaceChildren();
+  for (const check of checks) {
+    const row = document.createElement("li");
+    row.dataset["state"] = check.state;
+    row.textContent = check.label;
+    if (check.state !== "pass") {
+      row.title = check.hint;
+    }
+    if (check.state === "fail") {
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = check.hint;
+      row.append(hint);
+    }
+    list.append(row);
+  }
+}
+
+// ------------------------------------------------------------- receiver ---
+
+function renderReceiver(): void {
+  const unavailable = element("receiver-unavailable");
+  const container = element("channels");
+  const findButton = element<HTMLButtonElement>("find-control");
+  const channels = connected ? safetyState?.status.channels : null;
+
+  if (!channels) {
+    container.replaceChildren();
+    if (!connected) {
+      unavailable.textContent = "Connect to see live channels.";
+    } else if (safetyState?.status.rc_valid === false) {
+      unavailable.textContent = "No receiver signal. Turn the radio on and check it is bound.";
+    } else {
+      unavailable.textContent = "This firmware does not report receiver channels over USB yet.";
+    }
+    findButton.disabled = true;
+    return;
+  }
+  unavailable.textContent = "";
+  findButton.disabled = finder !== null;
+  drawChannels(container, channels, config);
+
+  if (finder) {
+    const found = finder.observe(channels);
+    if (found !== null) {
+      stopFinding(
+        `That control is on channel ${String(found + 1)} (${channelName(found, config)} in the saved map).`,
+      );
+      container.children[found]?.classList.add("found");
+    }
+  }
+}
+
+function startFinding(): void {
+  finder = new ControlFinder();
+  for (const row of Array.from(element("channels").children)) {
+    row.classList.remove("found");
+  }
+  element("find-result").textContent = "Flip the switch or move the stick you want to find…";
+  element<HTMLButtonElement>("find-control").disabled = true;
+  finderTimeout = window.setTimeout(() => {
+    stopFinding("Nothing moved. Is the radio on and bound?");
+  }, 10_000);
+}
+
+function stopFinding(message: string): void {
+  window.clearTimeout(finderTimeout);
+  finder = null;
+  element("find-result").textContent = message;
+  element<HTMLButtonElement>("find-control").disabled = !connected;
 }
 
 async function pollSafety(): Promise<void> {
@@ -150,6 +237,9 @@ async function disconnect(): Promise<void> {
   pollTimer = undefined;
   await api.disconnect();
   connected = false;
+  if (finder) {
+    stopFinding("");
+  }
   safetyState = null;
   config = null;
   bindings = null;
@@ -203,7 +293,28 @@ function renderConfig(): void {
   const protocol = element<HTMLSelectElement>("rc-protocol");
   protocol.value = config?.rc_protocol ?? "sbus";
   protocol.disabled = config?.rc_protocol === undefined;
+  renderRates();
   updateWriteControls();
+}
+
+/** Reads the form, not `config`, so the curve follows edits before Apply. */
+function renderRates(): void {
+  const axis = (name: string): RateAxis | null => {
+    const read = (suffix: string): number =>
+      Number(element<HTMLInputElement>(`${name}-${suffix}`).value);
+    const values = ["center", "max", "expo"].map((suffix) =>
+      element<HTMLInputElement>(`${name}-${suffix}`).value.trim(),
+    );
+    if (values.some((value) => value === "")) {
+      return null;
+    }
+    return { center: read("center"), max: read("max"), expo: read("expo") };
+  };
+  drawRates(element("rates-curve") as unknown as SVGSVGElement, {
+    roll: axis("roll"),
+    pitch: axis("pitch"),
+    yaw: axis("yaw"),
+  });
 }
 
 /**
@@ -410,6 +521,12 @@ function wire(): void {
   element("apply-ports").addEventListener("click", () => void applyPorts());
   element("load-flights").addEventListener("click", () => void loadFlights());
   element("download").addEventListener("click", () => void downloadLatest());
+  element("find-control").addEventListener("click", startFinding);
+  for (const axis of ["roll", "pitch", "yaw"]) {
+    for (const suffix of ["center", "max", "expo"]) {
+      element(`${axis}-${suffix}`).addEventListener("input", renderRates);
+    }
+  }
 
   if (usingMock) {
     const banner = element("mock-banner");
@@ -417,6 +534,15 @@ function wire(): void {
     element("toggle-armed").addEventListener("click", () => {
       const mock = api as MockApi;
       mock.armed = !mock.armed;
+      void pollSafety();
+    });
+    element("toggle-radio").addEventListener("click", () => {
+      const mock = api as MockApi;
+      mock.radioOn = !mock.radioOn;
+      void pollSafety();
+    });
+    element("flip-switch").addEventListener("click", () => {
+      (api as MockApi).flipAux();
       void pollSafety();
     });
   }

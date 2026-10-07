@@ -152,6 +152,12 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 *cx.local.rc_link_reported_valid = false;
                 continue;
             }
+            for (snapshot, raw) in crate::snapshots::RC_CHANNELS_US.iter().zip(frame.channels) {
+                snapshot.store(
+                    ferrowasp_tasks::rc_receiver::channel_us(raw),
+                    Ordering::Relaxed,
+                );
+            }
             let sticks = rc_map.sticks(&frame.channels);
             let rc_cmd = dt::remap_rc_channels_with_profile(
                 sticks.roll,

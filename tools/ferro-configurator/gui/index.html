@@ -17,11 +17,16 @@
     <section id="safety" aria-live="polite">
       <div id="safety-banner" data-state="unknown">No controller connected</div>
       <div id="safety-detail"></div>
+      <!-- Why it will or will not arm: the question every new pilot asks
+           first. Rows come from the library, in the firmware's own order. -->
+      <ul id="prearm-checks" aria-label="Pre-arm checks"></ul>
     </section>
 
     <div id="mock-banner" hidden>
       Simulated controller — no hardware attached.
       <button id="toggle-armed" type="button">Toggle armed</button>
+      <button id="toggle-radio" type="button">Toggle radio</button>
+      <button id="flip-switch" type="button">Flip aux switch</button>
     </div>
 
     <section>
@@ -31,6 +36,16 @@
         <button id="refresh-ports" type="button">Refresh</button>
         <button id="connect" type="button">Connect</button>
         <button id="disconnect" type="button">Disconnect</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Receiver</h2>
+      <div id="receiver-unavailable">Connect to see live channels.</div>
+      <div id="channels"></div>
+      <div class="row">
+        <button id="find-control" type="button" disabled>Find a control…</button>
+        <span id="find-result"></span>
       </div>
     </section>
 
@@ -82,6 +97,10 @@
           <label>Arm channel <input id="rc-arm-channel" type="number" step="1" min="5" max="16" /></label>
         </fieldset>
       </div>
+      <figure id="rates-figure">
+        <svg id="rates-curve" role="img" aria-label="Rates curve"></svg>
+        <figcaption>Betaflight "Actual" rates: centre sensitivity, max rate and expo mean the same here.</figcaption>
+      </figure>
       <div class="row">
         <button id="reload-config" type="button">Read from controller</button>
         <button id="apply" type="button" disabled>Apply &amp; verify</button>

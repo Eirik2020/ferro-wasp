@@ -15,6 +15,12 @@ crates/ferro-configurator-bridge/   the session layer both of them sit on
 Connect to a controller, read and apply tuning configuration, and catalogue and
 download flight logs — the read and configure half of the CLI.
 
+It also explains why the controller will not arm, as a pre-arm checklist built
+by `ferro-configurator-core::prearm` from the status line; draws the rates
+curve as the form is edited; and shows live receiver channels with a
+find-a-control helper. The channels need a proposed `ch=` status field that no
+firmware emits yet, so on hardware that panel says so; the mock exercises it.
+
 ## Authority
 
 It has none over the actuator or arming path, and neither does the library

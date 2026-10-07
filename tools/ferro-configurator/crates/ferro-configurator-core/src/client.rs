@@ -36,6 +36,13 @@ pub struct StatusSnapshot {
     pub arm_switch: bool,
     pub armed: bool,
     pub battery_decivolts: u32,
+    /// Whether the IMU stream has gone stale. `None` on firmware that does
+    /// not report it.
+    pub imu_stale: Option<bool>,
+    /// Raw receiver channels in the receiver's own order, from the last
+    /// frame the controller accepted. `None` on firmware that does not report
+    /// them.
+    pub channels: Option<Vec<u16>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -674,6 +681,8 @@ fn parse_status(line: &str) -> Option<StatusSnapshot> {
         arm_switch: boolean("arm_sw")?,
         armed: boolean("armed")?,
         battery_decivolts: get("vbat_dV")?.parse().ok()?,
+        imu_stale: boolean("stale"),
+        channels: get("ch").and_then(|v| v.split(',').map(|c| c.parse().ok()).collect()),
     })
 }
 
@@ -868,6 +877,23 @@ mod tests {
         assert_eq!(parse_serial_port_line("OK uartX=rc"), None);
         assert_eq!(parse_serial_port_line("OK uart3=gps"), None);
         assert_eq!(parse_serial_port_line("OK uart3"), None);
+    }
+
+    #[test]
+    fn parses_optional_staleness_and_channels() {
+        let base = "FWDBG1 ms=1 imu=icm42688p ready=1 stale=1 rc=1 armable=1 thr=0 arm_sw=0 armed=0 vbat_dV=0";
+        let status = parse_status(base).unwrap();
+        assert_eq!(status.imu_stale, Some(true));
+        assert_eq!(status.channels, None);
+
+        let status = parse_status(&format!("{base} ch=1500,1000,2000,988")).unwrap();
+        assert_eq!(status.channels, Some(vec![1500, 1000, 2000, 988]));
+
+        let status = parse_status(&format!("{base} ch=1500,oops")).unwrap();
+        assert_eq!(
+            status.channels, None,
+            "a malformed list is dropped, not truncated"
+        );
     }
 
     #[test]

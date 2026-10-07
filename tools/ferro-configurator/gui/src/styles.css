@@ -251,3 +251,113 @@ footer[data-tone="bad"] {
 footer[data-tone="busy"] {
   color: #ffd98a;
 }
+
+#prearm-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.9rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+#prearm-checks:empty {
+  padding: 0;
+}
+
+#prearm-checks li {
+  padding: 0.12rem 0;
+}
+
+#prearm-checks li::before {
+  display: inline-block;
+  width: 1.2rem;
+  font-weight: 700;
+}
+
+#prearm-checks li[data-state="pass"]::before {
+  content: "✓";
+  color: #6fcf97;
+}
+
+#prearm-checks li[data-state="fail"]::before {
+  content: "✗";
+  color: #ff9d9d;
+}
+
+#prearm-checks li[data-state="unknown"]::before {
+  content: "?";
+  color: var(--muted);
+}
+
+#prearm-checks .hint {
+  display: block;
+  margin-left: 1.2rem;
+  color: var(--muted);
+}
+
+#receiver-unavailable {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#receiver-unavailable:empty {
+  display: none;
+}
+
+.channel {
+  display: grid;
+  grid-template-columns: 7rem 1fr 3.5rem;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.85rem;
+  margin: 0.15rem 0;
+}
+
+.channel-name {
+  color: var(--muted);
+}
+
+.channel-bar {
+  height: 0.7rem;
+  background: #14161a;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.channel-bar > span {
+  display: block;
+  height: 100%;
+  background: #4f7cac;
+}
+
+.channel.found .channel-bar > span {
+  background: #d9a441;
+}
+
+.channel-value {
+  text-align: right;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+#channels:not(:empty) + .row {
+  margin-top: 0.5rem;
+}
+
+#rates-figure {
+  margin: 0 0 0.7rem;
+  max-width: 520px;
+}
+
+#rates-figure figcaption {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+#rates-curve .grid-line {
+  stroke: var(--line);
+}
+
+#rates-curve .axis-label {
+  fill: var(--muted);
+  font-size: 10px;
+}
