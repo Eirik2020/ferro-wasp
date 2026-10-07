@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a702dd90.js";
+            window.path_to_searchindex_js = "searchindex-41602ad8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -224,7 +224,8 @@ becomes valid, so the craft cannot arm.</li>
 <li>Until a pilot saves bindings the board’s defaults apply. Over USB,
 <code>serial</code> shows them and <code>serial &lt;port&gt; &lt;function&gt;</code> stages a change, which
 takes effect after <code>config save</code> and a reboot. Changes are refused while
-armed.</li>
+armed. FerroConfigurator’s <code>config ports</code> and <code>config bind</code> do the same and
+verify the saved table by readback.</li>
 <li>Port transports are role-free and chip-neutral
 (<code>crates/ferrowasp-stm32f4/src/uart_port.rs</code>): they record faults on the
 stream, and the function task decides what a fault means. Each family’s
@@ -255,7 +256,9 @@ UART4 can carry ESC telemetry instead:</p>
 <p>PA9/USART1 TX is not configured.</p>
 <p>On the TBS Lucid H7, USART6 (<code>uart6</code>) carries SBUS, inverted in the UART;
 USART3 (<code>uart3</code>) carries MSP DisplayPort with TX DMA; and UART8 (<code>uart8</code>)
-carries ESC telemetry on PE0. In the standard flight image, the manager sends typed telemetry requests through
+carries ESC telemetry on PE0. Every H743 UART inverts in hardware, so any of
+the three can take SBUS or ESC telemetry; only <code>uart3</code> has the transmit DMA
+MSP needs. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-a702dd90.js";
+            window.path_to_searchindex_js = "../searchindex-41602ad8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-0cbe97ab.js"></script>
@@ -308,6 +308,15 @@ yaw rates:        center 70, maximum 200, expo 0.50
 .\ferro-configurator.exe --port $Port config apply foxeer-profile.toml
 .\ferro-configurator.exe --port $Port config show
 </code></pre>
+<h2 id="change-serial-ports"><a class="header" href="#change-serial-ports">Change serial ports</a></h2>
+<p>Each UART is named by its number on the chip. List what each port serves,
+then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code> or <code>esc_telemetry</code>):</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config ports
+.\ferro-configurator.exe --port $Port config bind uart4 esc_telemetry
+</code></pre>
+<p>The change is saved and verified by readback, and takes effect when the
+controller reboots. A function the port cannot carry is dropped at boot and
+logged; with no port bound to <code>rc</code>, the craft cannot arm.</p>
 <p>Legacy schema-v1 profiles contain only the original eleven fields. Applying
 one overlays those fields onto the connected board and preserves its current
 RC-rate settings.</p>
