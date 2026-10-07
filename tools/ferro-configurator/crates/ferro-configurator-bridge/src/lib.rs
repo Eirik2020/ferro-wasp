@@ -22,9 +22,9 @@ use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
     CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo,
-    FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, SerialBindings,
+    FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, PrearmCheck, SerialBindings,
     SerialTransport, StatusSnapshot, catalog_device, discover_ports, download_flight, open_device,
-    resolve_device_flight,
+    prearm_checks, resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -79,6 +79,8 @@ pub struct Safety {
     pub status: StatusSnapshot,
     /// Whether this session would currently accept a write.
     pub writes_allowed: bool,
+    /// Why the controller would or would not arm, first failure first.
+    pub checks: Vec<PrearmCheck>,
 }
 
 /// One connected controller, or none.
@@ -133,6 +135,7 @@ impl<T: LineTransport> Session<T> {
         let status = self.client_mut()?.read_status_fresh()?;
         Ok(Safety {
             writes_allowed: !status.armed,
+            checks: prearm_checks(&status),
             status,
         })
     }

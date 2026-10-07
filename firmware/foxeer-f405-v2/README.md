@@ -401,7 +401,7 @@ The board-mandatory USB FS route exposes a CDC ACM device named
 ASCII status line with each roughly two-second firmware heartbeat:
 
 ```text
-FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234
+FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,988,988,988,988,988,988,988,988,988,988,988,988
 ```
 
 The fields report uptime, selected IMU and transport state, raw gyro and IMU
@@ -409,7 +409,8 @@ sequence, control sequence, RC qualification/throttle/arm switch, system arm
 state, pack voltage in decivolts, and current in centiamps. `current_cA` uses
 the Foxeer/Betaflight scale 70 and zero offset. The stream is read-only.
 `adc_v_mV` and `adc_i_mV` are the pre-scale ADC observations retained for
-future fine calibration. Received USB bytes are drained and ignored, and the
+future fine calibration. `ch` is the last accepted receiver frame's sixteen
+channels in microseconds, for display; nothing reads it to fly or arm. Received USB bytes are drained and ignored, and the
 USB task owns
 no safety or actuator handle.
 

@@ -148,6 +148,7 @@ pub use ferrowasp_stm32f4::uart_port as stm32_port;
 pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
 pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
 pub use ferrowasp_stm32f4_tasks as flight_tasks;
+pub use ferrowasp_stm32f4_tasks::snapshots::rc_channels_us;
 pub use ferrowasp_stm32f4_tasks::snapshots::{
     ACTIVE_IMU_KIND, ADC_CURRENT_MV_SNAPSHOT, ADC_VOLTAGE_MV_SNAPSHOT, BATTERY_CURRENT_CA_SNAPSHOT,
     BATTERY_VOLTAGE_V10_SNAPSHOT, CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW,

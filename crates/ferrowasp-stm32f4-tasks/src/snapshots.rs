@@ -4,9 +4,7 @@
 //! task that reads it must name the same static, so a firmware re-exports
 //! these by name and never defines its own.
 
-#[cfg(feature = "imu_orientation_rtt")]
-use core::sync::atomic::Ordering;
-use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32};
+use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU16, AtomicU32, Ordering};
 
 pub static IMU_LATEST_SEQ: AtomicU32 = AtomicU32::new(0);
 pub static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
@@ -47,6 +45,14 @@ pub static IMU_DRDY_IRQ_COUNT: AtomicU32 = AtomicU32::new(0);
 pub static IMU_DRDY_REJECTED_COUNT: AtomicU32 = AtomicU32::new(0);
 pub static IMU_DRDY_LAST_US: AtomicU32 = AtomicU32::new(0);
 pub static ACTIVE_IMU_KIND: AtomicU8 = AtomicU8::new(0);
+/// The last accepted receiver frame's channels in microseconds, for the USB
+/// status line. Display only: nothing reads it to fly or arm.
+pub static RC_CHANNELS_US: [AtomicU16; 16] = [const { AtomicU16::new(0) }; 16];
+
+/// Every channel of [`RC_CHANNELS_US`], read one at a time.
+pub fn rc_channels_us() -> [u16; 16] {
+    core::array::from_fn(|index| RC_CHANNELS_US[index].load(Ordering::Relaxed))
+}
 pub static BATTERY_VOLTAGE_V10_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
 pub static BATTERY_CURRENT_CA_SNAPSHOT: AtomicI32 = AtomicI32::new(0);
 pub static ADC_VOLTAGE_MV_SNAPSHOT: AtomicU32 = AtomicU32::new(0);

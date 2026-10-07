@@ -1,6 +1,8 @@
 pub const USB_ENDPOINT_MEMORY_WORDS: usize = 1024;
 pub const USB_CDC_RX_BUFFER_BYTES: usize = 64;
-pub const USB_CDC_TX_BUFFER_BYTES: usize = 256;
+/// Holds a whole `FWDBG1` status line, receiver channels included, so a line
+/// is written in one piece.
+pub const USB_CDC_TX_BUFFER_BYTES: usize = 512;
 pub const FERROWASP_USB_VID: u16 = 0x16c0;
 pub const FERROWASP_USB_PID: u16 = 0x27dd;
 
@@ -94,7 +96,7 @@ mod tests {
     fn shared_usb_policy_is_bounded_and_stable() {
         assert_eq!(USB_ENDPOINT_MEMORY_WORDS, 1024);
         assert_eq!(USB_CDC_RX_BUFFER_BYTES, 64);
-        assert_eq!(USB_CDC_TX_BUFFER_BYTES, 256);
+        assert_eq!(USB_CDC_TX_BUFFER_BYTES, 512);
         assert_eq!((FERROWASP_USB_VID, FERROWASP_USB_PID), (0x16c0, 0x27dd));
     }
 }

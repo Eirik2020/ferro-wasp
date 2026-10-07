@@ -11,6 +11,7 @@ import {
   type Api,
   type FerroConfig,
   type FlightCatalog,
+  type PrearmCheck,
   type PortInfo,
   type Safety,
   type SerialBindings,
@@ -56,6 +57,9 @@ function sleep(ms: number): Promise<void> {
  */
 export class MockApi implements Api {
   armed = false;
+  /** Lets the demo show the checklist failing on a lost receiver link. */
+  radioOn = true;
+  private aux = 988;
   private connected = false;
   private config = baselineConfig();
   // The Foxeer F405 V2's default wiring.
@@ -92,22 +96,81 @@ export class MockApi implements Api {
     }
   }
 
+  /** Flips aux channel 6, so the find-a-control helper has something to find. */
+  flipAux(): void {
+    this.aux = this.aux === 988 ? 2012 : 988;
+  }
+
   async safety(): Promise<Safety> {
     this.requireConnection();
-    await sleep(40);
+    await sleep(20);
+    // Sticks drift gently so the bars visibly track a live radio.
+    const t = Date.now() / 1000;
+    const stick = (phase: number): number => Math.round(1500 + 120 * Math.sin(t + phase));
+    // AETR with the arm switch on channel 9, every board's default.
+    const channels = this.radioOn
+      ? [
+          stick(0),
+          stick(1.3),
+          988,
+          stick(2.1),
+          this.aux,
+          988,
+          988,
+          1500,
+          this.armed ? 2012 : 988,
+          988,
+          988,
+          988,
+          988,
+          988,
+          988,
+          988,
+        ]
+      : null;
+    // Scripted, not computed: the real list comes from the Rust library.
+    const check = (id: string, label: string, pass: boolean | null, hint: string): PrearmCheck => ({
+      id,
+      label,
+      state: pass === null ? "unknown" : pass ? "pass" : "fail",
+      hint,
+    });
     return {
       status: {
         uptime_ms: 128_400,
         imu: "icm42688p",
         imu_ready: true,
-        rc_valid: true,
-        armable: !this.armed,
+        rc_valid: this.radioOn,
+        armable: this.radioOn && !this.armed,
         throttle: this.armed ? 112 : 0,
         arm_switch: this.armed,
         armed: this.armed,
         battery_decivolts: 251,
+        imu_stale: false,
+        channels,
       },
       writes_allowed: !this.armed,
+      checks: [
+        check(
+          "rc_link",
+          "Receiver link",
+          this.radioOn,
+          "No valid receiver frames. Turn the radio on, check it is bound, and check the receiver wiring.",
+        ),
+        check(
+          "rc_armable",
+          "Arm switch reset",
+          this.radioOn,
+          "After the link connects the arm switch must be seen off once. Flip it off, then on.",
+        ),
+        check("throttle_low", "Throttle low", true, "Move the throttle stick fully down."),
+        check("imu_detected", "Gyro detected", true, ""),
+        check("imu_ready", "Gyro running", true, ""),
+        check("gyro_calibrated", "Gyro calibrated", null, "Not reported over USB yet."),
+        check("imu_fresh", "Gyro data fresh", true, ""),
+        check("battery", "Flight battery connected", true, ""),
+        check("esc_idle", "ESCs report idle", null, "Not reported over USB yet."),
+      ],
     };
   }
 

@@ -11,12 +11,12 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
-    BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
-    DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
-    PreparedImage, ProfileStore, SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, catalog_device,
-    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu, discover_ports,
-    download_flight, find_bundled_firmware, flash_firmware, open_device, prepare_elf,
-    resolve_device_flight,
+    BoardProfile, CatalogEntry, CheckState, ConfigKey, ConversionSummary, DeviceSelector,
+    DfuDetection, DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress,
+    FlightSelector, PortInfo, PreparedImage, ProfileStore, SERIAL_FUNCTIONS, SerialBindings,
+    StatusSnapshot, catalog_device, config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu,
+    discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
+    prearm_checks, prepare_elf, resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -1350,8 +1350,26 @@ fn print_device_report(report: &DeviceReport) {
             "Battery:    {:.1} V",
             status.battery_decivolts as f32 / 10.0
         );
+        if !status.armed {
+            print_prearm_checks(status);
+        }
     } else {
         println!("Live status: unavailable within the configured timeout");
+    }
+}
+
+fn print_prearm_checks(status: &StatusSnapshot) {
+    println!("Pre-arm checks:");
+    for check in prearm_checks(status) {
+        let mark = match check.state {
+            CheckState::Pass => "ok  ",
+            CheckState::Fail => "FAIL",
+            CheckState::Unknown => "?   ",
+        };
+        println!("  [{mark}] {}", check.label);
+        if check.state == CheckState::Fail {
+            println!("         {}", check.hint);
+        }
     }
 }
 
