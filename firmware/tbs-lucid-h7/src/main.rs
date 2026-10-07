@@ -178,7 +178,7 @@ ferroforge::app! {
             stm32_storage::UartRxFreeQueue::new(),
         uart3_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
-        uart3_tx_buffer: stm32_storage::Uart4TxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
+        uart3_tx_buffer: stm32_storage::UartTxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
         spi1_dma_buffers: stm32_storage::SpiDmaBufferBank =
             stm32_storage::new_spi_dma_buffer_bank(),
         spi1_free_queue: stm32_storage::SpiFreeQueue =
@@ -470,18 +470,18 @@ ferroforge::app! {
         } = stm32_uart::init_h743_uart_ports(
             stm32_uart::H743UartPortResources {
                 // PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
-                usart3: stm32_uart::Usart3PortResources {
+                uart3: stm32_uart::Uart3PortResources {
                     tx_pin: gpiod.pd8,
                     rx_pin: gpiod.pd9,
-                    usart: dp.USART3,
+                    uart: dp.USART3,
                     prec: rec.USART3,
                     rx_dma: dma1.1,
                     tx_dma: dma1.3,
                 },
-                usart6: stm32_uart::Usart6PortResources {
+                uart6: stm32_uart::Uart6PortResources {
                     tx_pin: gpioc.pc6,
                     rx_pin: gpioc.pc7,
-                    usart: dp.USART6,
+                    uart: dp.USART6,
                     prec: rec.USART6,
                     rx_dma: dma1.0,
                 },
@@ -495,7 +495,7 @@ ferroforge::app! {
             },
             &clocks,
             stm32_uart::H743UartPortStorage {
-                usart3: stm32_port::UartRxTxPortStorage {
+                uart3: stm32_port::UartRxTxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart3_rx_buffers,
                         free_queue: cx.local.uart3_free_queue,
@@ -511,7 +511,7 @@ ferroforge::app! {
                     )
                     .unwrap(),
                 },
-                usart6: stm32_port::UartRxPortStorage {
+                uart6: stm32_port::UartRxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart6_rx_buffers,
                         free_queue: cx.local.uart6_free_queue,
@@ -538,8 +538,7 @@ ferroforge::app! {
         );
 
         // Init rate controller
-        // The Foxeer tuning: the Lucid starts from the same airframe profile.
-        let tuning_profile = dt::TuningProfile::default_foxeer_f405_v2();
+        let tuning_profile = DEFAULT_TUNING;
         let flight_controller = dt::FlightController::new(
             dt::FlightControllerConfig::default(),
             dt::RateController::new(tuning_profile.rate_gains, dt::RATE_CONTROLLER_OUTPUT_LIMIT),
@@ -1000,7 +999,7 @@ ferroforge::app! {
             next_flight_id: u32 = 1,
             log_region_writable: bool = false,
             stored_config: flash_task::StoredConfig =
-                flash_task::StoredConfig::foxeer_f405_v2_default(),
+                DEFAULT_STORED_CONFIG,
             config_sequence: u32 = 0,
             config_active_slot: u8 = 1,
             erase_sector_index: Option<u32> = None,
@@ -1008,7 +1007,7 @@ ferroforge::app! {
             config_save_phase: u8 = 0,
             config_save_slot: u8 = 0,
             config_save_candidate: flash_task::StoredConfig =
-                flash_task::StoredConfig::foxeer_f405_v2_default(),
+                DEFAULT_STORED_CONFIG,
             config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
                 [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
             staged_rpc_config: Option<flash_task::StoredConfig> = None,
@@ -1699,7 +1698,7 @@ ferroforge::app! {
                             } else if maintenance_busy {
                                 Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
                             } else {
-                                let candidate = flash_task::StoredConfig::foxeer_f405_v2_default();
+                                let candidate = DEFAULT_STORED_CONFIG;
                                 let next_sequence = config_sequence.wrapping_add(1);
                                 match ferrowasp_core::blackbox::encode_config_page(
                                     next_sequence,

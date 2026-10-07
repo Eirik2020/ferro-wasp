@@ -273,8 +273,8 @@ impl Default for ConfiguratorUsbState {
 
 pub use board::Spi1ImuKind;
 pub use board::profiles::{
-    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, FLIGHT_ARMING_ENABLED,
-    IMU_CONTROL_AXIS_PROFILE, imu_kind_flight_verified,
+    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, DEFAULT_STORED_CONFIG, DEFAULT_TUNING,
+    FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE, imu_kind_flight_verified,
 };
 pub const BENCH_ACTUATOR_VALIDATION_ENABLED: bool = cfg!(feature = "bench_actuator_validation");
 pub const SMOKE_ACTUATOR_INHIBIT_ENABLED: bool = cfg!(feature = "smoke_actuator_inhibit");
@@ -510,11 +510,9 @@ pub fn load_flash_config(
     (flash_task::StoredConfig, u32, u8),
     flash_task::StorageReadError<board::aliases::Spi2FlashError>,
 > {
-    flash_task::load_config(
-        layout,
-        flash_task::StoredConfig::foxeer_f405_v2_default(),
-        |address, page| flash.read(address, page),
-    )
+    flash_task::load_config(layout, DEFAULT_STORED_CONFIG, |address, page| {
+        flash.read(address, page)
+    })
 }
 
 /// The serial bindings to start the ports with: the saved table when flash

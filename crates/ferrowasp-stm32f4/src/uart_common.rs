@@ -18,10 +18,10 @@ use heapless::spsc::{Consumer, Producer, Queue};
 
 pub const UART_RX_BUFFER_SIZE: usize = Mode::max_frame_size();
 pub const UART_RX_QUEUE_CAPACITY: usize = 4;
-pub const UART4_TX_BUFFER_SIZE: usize = MSP_V1_MAX_FRAME_LEN;
+pub const UART_TX_BUFFER_SIZE: usize = MSP_V1_MAX_FRAME_LEN;
 
 pub type UartRxBuf = &'static mut [u8; UART_RX_BUFFER_SIZE];
-pub type Uart4TxBuf = &'static mut [u8; UART4_TX_BUFFER_SIZE];
+pub type UartTxBuf = &'static mut [u8; UART_TX_BUFFER_SIZE];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UartTxStartError {

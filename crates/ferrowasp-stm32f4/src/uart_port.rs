@@ -19,8 +19,9 @@ use crate::memory::{
     UartOwnedWriter,
 };
 use crate::uart_common::{
-    Uart4TxBuf, UartOwnedRxBridge, UartOwnedRxBridgeOutcome, UartRxDeliveryError, UartRxIrqOutcome,
-    UartRxIrqService, UartRxParserSide, UartTxDmaService, UartTxIrqOutcome, UartTxStartError,
+    UartOwnedRxBridge, UartOwnedRxBridgeOutcome, UartRxDeliveryError, UartRxIrqOutcome,
+    UartRxIrqService, UartRxParserSide, UartTxBuf, UartTxDmaService, UartTxIrqOutcome,
+    UartTxStartError,
 };
 use defmt::{info, warn};
 use ferrowasp_io_core::serial::{
@@ -184,7 +185,7 @@ pub struct UartRxPortStorage {
 pub struct UartRxTxPortStorage {
     pub rx: UartRxStorageResources,
     pub stream: &'static mut UartOwnedRxChannel,
-    pub tx_buffer: Uart4TxBuf,
+    pub tx_buffer: UartTxBuf,
     pub tx_stream: &'static mut UartOwnedTxChannel,
 }
 

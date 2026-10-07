@@ -1,4 +1,8 @@
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+use ferrowasp_tasks::drone_toolbox::{
+    IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, TuningProfile,
+};
+use ferrowasp_tasks::flash_storage::StoredConfig;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AdcObservationProfile {
@@ -83,6 +87,48 @@ pub const FLIGHT_ARMING_ENABLED: bool = IMU_SENSOR_IDENTITY_VERIFIED
     && M4_COMPLEMENTARY_POLARITY_VERIFIED
     && MOTOR_OUTPUT_ORDER_VERIFIED;
 pub const ARMING_INHIBIT_REASON: &str = "Foxeer board flight-verification profile is incomplete";
+
+/// The Foxeer F405 V2's approved P-only tune, the fallback when storage holds
+/// no valid configuration. Persisted configuration takes precedence.
+pub const DEFAULT_TUNING: TuningProfile = TuningProfile {
+    rate_gains: RateControllerGains {
+        roll: PidGains {
+            p: 2.5,
+            i: 0.0,
+            d: 0.0,
+        },
+        pitch: PidGains {
+            p: 2.5,
+            i: 0.0,
+            d: 0.0,
+        },
+        yaw: PidGains {
+            p: 2.0,
+            i: 0.0,
+            d: 0.0,
+        },
+    },
+    imu_lpf_hz: IMU_GYRO_LPF_HZ,
+    rc_rates: RC_RATE_PROFILE,
+};
+
+/// The configuration this board boots with when storage holds none, and the
+/// one a configurator reset restores. The serial bindings stay unset, so the
+/// board's default bindings apply.
+pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
+    tuning: DEFAULT_TUNING,
+    log_rate_divisor: 1,
+    serial_bindings: None,
+};
+
+// The approved P-only baseline: changing it is a tuning change and re-gates
+// the next flight.
+const _: () = {
+    let gains = DEFAULT_TUNING.rate_gains;
+    assert!(gains.roll.p == 2.5 && gains.pitch.p == 2.5 && gains.yaw.p == 2.0);
+    assert!(gains.roll.i == 0.0 && gains.pitch.i == 0.0 && gains.yaw.i == 0.0);
+    assert!(gains.roll.d == 0.0 && gains.pitch.d == 0.0 && gains.yaw.d == 0.0);
+};
 
 #[cfg(test)]
 mod tests {

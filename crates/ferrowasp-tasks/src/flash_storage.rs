@@ -423,14 +423,6 @@ impl StoredConfig {
         }
     }
 
-    pub const fn foxeer_f405_v2_default() -> Self {
-        Self {
-            tuning: TuningProfile::default_foxeer_f405_v2(),
-            log_rate_divisor: 1,
-            serial_bindings: None,
-        }
-    }
-
     pub fn set(&mut self, key: ConfigKey, value: f32) -> bool {
         if !key.value_spec().accepts(value) {
             return false;

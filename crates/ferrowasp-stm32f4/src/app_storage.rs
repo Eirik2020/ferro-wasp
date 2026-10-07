@@ -7,7 +7,7 @@ pub const ADC_BUFFER_COUNT: usize = 2;
 pub type UartRxBufferBank = [[u8; uart_dma::UART_RX_BUFFER_SIZE]; UART_RX_BUFFER_COUNT];
 pub type UartRxFreeQueue = uart_dma::FreeQueue;
 pub type UartRxFilledQueue = uart_dma::FilledQueue;
-pub type Uart4TxBuffer = [u8; uart_dma::UART4_TX_BUFFER_SIZE];
+pub type UartTxBuffer = [u8; uart_dma::UART_TX_BUFFER_SIZE];
 
 pub type SpiDmaBufferBank = [[u8; spi_dma::SPI_BUFFER_SIZE]; SPI_DMA_BUFFER_COUNT];
 pub type SpiFreeQueue = spi_dma::FreeQueue;

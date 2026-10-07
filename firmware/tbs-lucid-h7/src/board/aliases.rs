@@ -12,11 +12,11 @@ pub type Spi1ImuOwner = spi_dma::Spi1DmaOwner<Stream4<DMA1>, Stream5<DMA1>, spi_
 /// The started UART ports, by the DMA streams `routes.rs` gives each.
 pub type UartPorts =
     uart_dma::H743UartPorts<Stream1<DMA1>, Stream3<DMA1>, Stream0<DMA1>, Stream2<DMA1>>;
-/// USART3, RX on DMA1 Stream 1 and TX on DMA1 Stream 3.
+/// UART3 (USART3), RX on DMA1 Stream 1 and TX on DMA1 Stream 3.
 pub type Uart3RxPort =
     uart_port::UartRxPort<uart_dma::UartRxIrqSide<uart_dma::UartRxDma<Stream1<DMA1>, USART3>>>;
 pub type Uart3TxDmaSide = uart_dma::UartTxDmaSide<uart_dma::UartTxDma<Stream3<DMA1>, USART3>>;
-/// USART6, RX on DMA1 Stream 0.
+/// UART6 (USART6), RX on DMA1 Stream 0.
 pub type Uart6RxPort =
     uart_port::UartRxPort<uart_dma::UartRxIrqSide<uart_dma::UartRxDma<Stream0<DMA1>, USART6>>>;
 /// UART8, RX on DMA1 Stream 2.
