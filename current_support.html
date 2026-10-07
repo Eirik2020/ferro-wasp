@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0b688843.js";
+            window.path_to_searchindex_js = "searchindex-f92ec8ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -178,7 +178,9 @@
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. NUCLEO-F401RE is a non-actuating development target.
 FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
-gates, no image and no claim on shared behaviour.</p>
+gates, no image and no claim on shared behaviour. TBS Lucid H7 is an
+unverified port of the Foxeer feature set to the STM32H743; it builds, but has
+not run on hardware.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
@@ -219,6 +221,45 @@ requested physical outputs and supplies eRPM evidence for guarded arming.</p>
 <p>Onboard SPI-NOR stores CRC-protected configuration and FWBB flight records.
 The <a href="user/ferro_configurator.html">FerroConfigurator</a> uses USB CDC to manage that
 storage while the aircraft is disarmed.</p>
+<h2 id="tbs-lucid-h7-unverified"><a class="header" href="#tbs-lucid-h7-unverified">TBS Lucid H7 (unverified)</a></h2>
+<p>The app lives in <code>firmware/tbs-lucid-h7</code> and carries the Foxeer feature set on
+the Lucid’s own peripherals, through the <code>ferrowasp-stm32h7</code> backend. Pins
+follow the upstream Betaflight <code>TBS_LUCID_H7</code> target. Nothing here has run on
+the board, so flight arming is disabled at compile time until the IMU
+orientation, motor order, and ADC scale are verified on it.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Function</th><th>Lucid H7 resource</th></tr>
+</thead>
+<tbody>
+<tr><td>IMU</td><td>SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000</td></tr>
+<tr><td>SBUS</td><td>USART6 RX PC7, inverted in the UART</td></tr>
+<tr><td>MSP DisplayPort</td><td>USART3 (PD8 TX, PD9 RX)</td></tr>
+<tr><td>ESC telemetry</td><td>UART8 RX PE0</td></tr>
+<tr><td>DShot600</td><td>PB0, PB1 (TIM3), PA0, PA1 (TIM5), DMA2 streams 0-3</td></tr>
+<tr><td>ADC</td><td>Voltage PC0, current PC1</td></tr>
+<tr><td>Storage</td><td>microSD on SDMMC1</td></tr>
+<tr><td>USB</td><td>USB CDC on PA11/PA12</td></tr>
+</tbody>
+</table>
+</div>
+<p>Differences from the Foxeer that matter on the bench:</p>
+<ul>
+<li>The microSD card stands in for SPI NOR. FerroWasp claims only a card whose
+first block is blank or already its own, so a card with a partition table
+is refused and left untouched; zero its first block to give it to
+FerroWasp. The card is then no longer readable by a PC.</li>
+<li>TIM3 and TIM5 are started back to back in software rather than
+hardware-synchronized, so the motor 1-2 and 3-4 frames may be offset by a
+few cycles.</li>
+<li>The ADC is read with blocking conversions against a nominal 3.3 V
+reference.</li>
+<li>The core runs at 400 MHz. The image links at <code>0x08000000</code>, replacing any
+bootloader.</li>
+<li>The Lucid’s second IMU, barometer, and extra UARTs and motor outputs are
+not used.</li>
+</ul>
 <h2 id="ferrowasp-fcu3-obsolete"><a class="header" href="#ferrowasp-fcu3-obsolete">FerroWasp FCU3 (obsolete)</a></h2>
 <p>Obsolete since 2026-09-22. The app remains in <code>firmware/stm32f405-flight</code> and CI
 still compiles it against the shared crates, so a second board can be revived
