@@ -205,10 +205,12 @@ The root Cargo workspace contains reusable crates. Firmware commands must run
 from the selected isolated package:
 
 ```text
-firmware/stm32f405-flight  STM32F405 flight RTIC contract; FCU3 selected by default
-firmware/stm32f401-bringup STM32F401 RTIC bring-up contract; Nucleo selected by default
 firmware/foxeer-f405-v2    STM32F405 Foxeer RTIC contract; default DShot flight candidate
+firmware/tbs-lucid-h7      STM32H743 TBS Lucid H7 RTIC contract; unverified
+firmware/stm32f401-bringup STM32F401 RTIC bring-up contract; Nucleo selected by default
 ```
+
+The FCU3 app (`firmware/stm32f405-flight`) was removed on 2026-10-07.
 
 ## Evidence and Documentation
 

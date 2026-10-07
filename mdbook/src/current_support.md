@@ -2,30 +2,29 @@
 
 Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. NUCLEO-F401RE is a non-actuating development target.
-FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
-gates, no image and no claim on shared behaviour. TBS Lucid H7 is an
-unverified port of the Foxeer feature set to the STM32H743; it builds, but has
-not run on hardware.
+FerroWasp FCU3, obsolete since 2026-09-22, was removed on 2026-10-07. TBS
+Lucid H7 is an unverified port of the Foxeer feature set to the STM32H743; it
+builds, but has not run on hardware.
 
 The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.
 
-| Capability | Foxeer F405 V2 | FerroWasp FCU3 (obsolete) | NUCLEO-F401RE |
-|---|---|---|---|
-| Role | Golden flight target | Obsolete, compiled only | Non-actuating bring-up target |
-| MCU / runtime | STM32F405, RTIC 2 | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
-| RC input | SBUS over USART2 DMA by default; ports bound at boot from saved config | SBUS over USART2 DMA | None |
-| IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | MPU6500; timer-driven polling | None |
-| Control | 400 Hz rate controller and Quad X mixer | 400 Hz rate controller and Quad X mixer | None |
-| ESC output | Four-lane DShot600 | Four-lane DShot600 | None |
-| ESC telemetry | Standard BLHeli legacy UART eRPM path | Standard BLHeli legacy UART eRPM path | None |
-| Arming qualification | Fresh idle eRPM from all four motors | Fresh idle eRPM from all four motors | Not applicable |
-| USB | Standard USB CDC | Optional USB CDC | None |
-| Configuration | Persistent onboard configuration through FerroConfigurator | Compile-time and app-local configuration | None |
-| Blackbox | Standard onboard SPI-NOR FWBB logging and download | RTT / BB2 development logging | None |
-| Pilot display | DJI O4 MSP DisplayPort OSD | DJI O4 MSP DisplayPort OSD | None |
-| ADC | Battery voltage and current inputs | Battery voltage and current inputs | None |
-| Current evidence | Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight | Boot, RC, IMU, DShot, eRPM-qualified arming, props-off checks, and controlled flight | Build and target smoke checks |
+| Capability | Foxeer F405 V2 | NUCLEO-F401RE |
+|---|---|---|
+| Role | Golden flight target | Non-actuating bring-up target |
+| MCU / runtime | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
+| RC input | SBUS over USART2 DMA by default; ports bound at boot from saved config | None |
+| IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | None |
+| Control | 400 Hz rate controller and Quad X mixer | None |
+| ESC output | Four-lane DShot600 | None |
+| ESC telemetry | Standard BLHeli legacy UART eRPM path | None |
+| Arming qualification | Fresh idle eRPM from all four motors | Not applicable |
+| USB | Standard USB CDC | None |
+| Configuration | Persistent onboard configuration through FerroConfigurator | None |
+| Blackbox | Standard onboard SPI-NOR FWBB logging and download | None |
+| Pilot display | DJI O4 MSP DisplayPort OSD | None |
+| ADC | Battery voltage and current inputs | None |
+| Current evidence | Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight | Build and target smoke checks |
 
 ## Foxeer F405 V2
 
@@ -81,22 +80,6 @@ Differences from the Foxeer that matter on the bench:
   bootloader.
 - The Lucid's second IMU, barometer, and extra UARTs and motor outputs are
   not used.
-
-## FerroWasp FCU3 (obsolete)
-
-Obsolete since 2026-09-22. The app remains in `firmware/stm32f405-flight` and CI
-still compiles it against the shared crates, so a second board can be revived
-cheaply, but it has no test gates, no image, and where its behaviour differed
-from Foxeer's, Foxeer's is now simply the behaviour. Only 14 of its 30 tasks are
-shared definitions; the rest are its own older copies. Do not treat anything
-below as current.
-
-It shares the reusable STM32F4, driver, task, safety, DShot, and telemetry
-implementations with Foxeer while retaining its own pins, DMA routes, timer
-assignments, IMU orientation, and motor map. It uses an MPU6500 and
-timer-driven IMU polling, with four-lane DShot600 and legacy UART ESC
-telemetry. It never adopted the Foxeer persistent configuration and onboard
-blackbox workflow.
 
 ## NUCLEO-F401RE
 

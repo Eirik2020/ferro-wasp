@@ -94,11 +94,6 @@ class FoxeerSmokeEvidence:
 
 
 FIRMWARE_TARGETS = {
-    "fcu3": FirmwareTarget(
-        app_root=REPO_ROOT / "firmware/stm32f405-flight",
-        binary_name="FerroWasp",
-        chip="STM32F405RG",
-    ),
     "foxeer-f405-v2": FirmwareTarget(
         app_root=REPO_ROOT / "firmware/foxeer-f405-v2",
         binary_name="FerroWaspFoxeerF405V2",
@@ -137,8 +132,7 @@ def parse_args() -> argparse.Namespace:
         default="foxeer-f405-v2",
         help=(
             "Firmware board/app to build and run over SWD. Defaults to "
-            "foxeer-f405-v2, the golden flight target. It used to default to the "
-            "now-obsolete fcu3, so a bare invocation flashed an unmaintained board."
+            "foxeer-f405-v2, the golden flight target."
         ),
     )
     parser.add_argument(

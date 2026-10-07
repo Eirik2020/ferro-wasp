@@ -39,10 +39,6 @@ jobs:
       - name: Check reusable-crate formatting
         run: cargo fmt --all --check
 
-      - name: Check STM32F405 flight-app formatting
-        working-directory: firmware/stm32f405-flight
-        run: cargo fmt --manifest-path Cargo.toml --check
-
       - name: Check STM32F401 bring-up formatting
         working-directory: firmware/stm32f401-bringup
         run: cargo fmt --manifest-path Cargo.toml --check
@@ -65,21 +61,6 @@ jobs:
           cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
           --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32f4-tasks/stm32f405,ferrowasp-stm32f4-tasks/dshot
           -- -D warnings
-
-      # FCU3 is obsolete: its gates are retired and no image ships. These
-      # checks stay so the board keeps compiling against the shared crates and
-      # a revival stays cheap.
-      - name: Check standard STM32F405 DShot flight firmware
-        working-directory: firmware/stm32f405-flight
-        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-
-      - name: Lint standard STM32F405 DShot flight firmware
-        working-directory: firmware/stm32f405-flight
-        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
-
-      - name: Check firmware with USB serial
-        working-directory: firmware/stm32f405-flight
-        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features usb_serial
 
       - name: Check STM32F401 bring-up firmware
         working-directory: firmware/stm32f401-bringup
@@ -236,7 +217,6 @@ jobs:
 
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
           rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4/src/dshot.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f405-flight/src/main.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/foxeer-f405-v2/src/main.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f401-bringup/src/main.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32h7/src/lib.rs

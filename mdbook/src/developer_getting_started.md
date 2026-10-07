@@ -265,7 +265,7 @@ compatible in one Cargo dependency graph:
 
 ```text
 firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
-firmware/stm32f405-flight  FerroWasp FCU3, obsolete; compiled, never flown
+firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, unverified
 firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 ```
 
@@ -280,15 +280,6 @@ Foxeer is the golden flight app for established runtime and safety behavior:
 ```powershell
 Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
-Set-Location ..\..
-```
-
-Check the obsolete FCU3 app independently, which CI still does so it keeps
-compiling against the shared crates:
-
-```powershell
-Set-Location firmware\stm32f405-flight
-cargo check --release --locked
 Set-Location ..\..
 ```
 

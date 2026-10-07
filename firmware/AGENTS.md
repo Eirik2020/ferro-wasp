@@ -15,7 +15,7 @@ For localized work, route source context from the repository root before
 opening an entire flight-app shell:
 
 ```text
-python tools/app_context.py --board fcu3 --topic control
+python tools/app_context.py --board foxeer-f405-v2 --topic control
 python tools/app_context.py --board foxeer-f405-v2 --topic arming
 ```
 

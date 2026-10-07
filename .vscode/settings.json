@@ -3,8 +3,8 @@
   "rust-analyzer.check.targets": "thumbv7em-none-eabihf",
   "rust-analyzer.linkedProjects": [
     "Cargo.toml",
-    "firmware/stm32f405-flight/Cargo.toml",
     "firmware/stm32f401-bringup/Cargo.toml",
-    "firmware/foxeer-f405-v2/Cargo.toml"
+    "firmware/foxeer-f405-v2/Cargo.toml",
+    "firmware/tbs-lucid-h7/Cargo.toml"
   ],
 }

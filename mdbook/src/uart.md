@@ -6,9 +6,8 @@ flight image's legacy ESC telemetry.
 ## Current Implementation
 
 The reusable STM32F4 UART DMA mechanism lives in
-`crates/ferrowasp-stm32f4/src/uart_dma.rs`. FerroWasp FCU3 pin conversion,
-storage shape, and device construction live in
-`firmware/stm32f405-flight/src/board/`.
+`crates/ferrowasp-stm32f4/src/uart_dma.rs`. Each board's pin conversion,
+storage shape, and device construction live in its app's `src/board/`.
 
 It provides:
 

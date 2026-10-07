@@ -48,7 +48,6 @@ class TopicRoute:
     summary: str
     common_symbols: tuple[str, ...]
     foxeer_symbols: tuple[str, ...] = ()
-    golden_symbols: tuple[str, ...] | None = None
     companions: tuple[PurePosixPath, ...] = ()
 
 
@@ -74,25 +73,6 @@ class ResourceBlock:
 
 
 APP_TARGETS = {
-    "fcu3": AppTarget(
-        name="fcu3",
-        source=PurePosixPath("firmware/stm32f405-flight/src/main.rs"),
-        support=PurePosixPath("firmware/stm32f405-flight/src/lib.rs"),
-        readme=PurePosixPath("firmware/stm32f405-flight/README.md"),
-        cargo_toml=PurePosixPath("firmware/stm32f405-flight/Cargo.toml"),
-        instructions=(PurePosixPath("AGENTS.md"), PurePosixPath("firmware/AGENTS.md")),
-        test_chain=(
-            "SW-COMMON-001",
-            "BUILD-FCU3-001",
-            "BENCH-COMMON-001",
-            "BENCH-FCU3-DSHOT-001",
-            "PREFLIGHT-FCU3-001",
-            "FLIGHT-FCU3-001",
-        ),
-        board_directory=PurePosixPath(
-            "firmware/stm32f405-flight/src/board"
-        ),
-    ),
     "foxeer-f405-v2": AppTarget(
         name="foxeer-f405-v2",
         source=PurePosixPath("firmware/foxeer-f405-v2/src/main.rs"),
@@ -262,7 +242,6 @@ TOPIC_ROUTES = {
     "usb": TopicRoute(
         summary="USB task plus Foxeer debug/configurator request handling.",
         common_symbols=("usb_fs",),
-        golden_symbols=("usb_fs", "safety_master", "actuator_output"),
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/usb_debug.rs"),
@@ -275,7 +254,6 @@ TOPIC_ROUTES = {
         foxeer_symbols=(
             "flash_manager_task",
         ),
-        golden_symbols=("safety_master", "control_loop", "actuator_output"),
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
@@ -287,7 +265,6 @@ TOPIC_ROUTES = {
         summary="Control-record production and Foxeer persisted-log ownership.",
         common_symbols=("control_loop",),
         foxeer_symbols=("flash_manager_task",),
-        golden_symbols=("control_loop", "safety_master", "actuator_output"),
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
@@ -518,27 +495,6 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
     lines.extend(_describe_symbol(target.source, symbol) for symbol in primary)
     lines.append(f"Primary routed source: {_selected_bytes(primary)} B")
 
-    if board == "fcu3" and topic_name != "overview":
-        golden_target = APP_TARGETS["foxeer-f405-v2"]
-        golden_symbols, _ = discover_symbols(root, golden_target)
-        golden_index = _index_symbols(golden_symbols)
-        golden_names = (
-            topic.golden_symbols
-            if topic.golden_symbols is not None
-            else topic.common_symbols
-        )
-        golden = _select_symbols(
-            golden_index,
-            golden_names,
-            label=f"foxeer golden comparison/{topic_name}",
-        )
-        if golden:
-            lines.extend(["", "Foxeer golden-app comparison anchors:"])
-            lines.extend(
-                _describe_symbol(golden_target.source, symbol) for symbol in golden
-            )
-            lines.append(f"Golden routed source: {_selected_bytes(golden)} B")
-
     companion_paths = (
         PurePosixPath("project_meta/testing/README.md"),
         PurePosixPath("project_meta/testing/TEST_CATALOG.json"),
@@ -666,8 +622,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--board",
         choices=tuple(APP_TARGETS),
-        default="fcu3",
-        help="App to route. FCU3 topics include Foxeer golden-app anchors.",
+        default="foxeer-f405-v2",
+        help="App to route.",
     )
     parser.add_argument(
         "--topic",

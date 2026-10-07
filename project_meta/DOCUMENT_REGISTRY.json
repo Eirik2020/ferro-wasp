@@ -385,6 +385,12 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/archive/FCU3_APP_README_2026-10-07.md",
+      "role": "historical-target-test-procedure",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
       "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
       "role": "historical-target-test-procedure",
       "lifecycle": "historical",
