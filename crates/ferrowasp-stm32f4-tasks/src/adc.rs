@@ -17,9 +17,7 @@ use crate::snapshots::*;
 pub async fn adc1_polling(mut cx: adc1_polling::Context) {
     loop {
         cx.shared.adc1_transfer.lock(|transfer| {
-            transfer.start(|adc| {
-                adc.start_conversion();
-            });
+            transfer.start_conversion();
         });
 
         Mono::delay(100.millis()).await;
@@ -69,17 +67,10 @@ pub fn dma_adc1(mut cx: dma_adc1::Context) {
         }
     };
 
-    // Pull the ADC data out of the buffer that the DMA transfer gave us
-    let raw_temp = sample.buffer[0];
-
     // Now that we're finished with this buffer, put it back in `local.buffer` so it's ready for the next transfer
     // If we don't do this before the next transfer, we'll get a panic
     *cx.local.adc1_buffer = Some(sample.buffer);
 
-    let cal30 = VtempCal30::get().read() as f32;
-    let cal110 = VtempCal110::get().read() as f32;
-
-    let _temperature = (110.0 - 30.0) * ((raw_temp as f32) - cal30) / (cal110 - cal30) + 30.0;
     let pack_mv = ((sample.voltage_mv as f32) * CONFIG::ADC_VBAT_DIVIDER_RATIO) as u32;
     let cell_count = cx.local.battery_cell_detector.update(pack_mv);
     let cell_voltage_v100 = osd::pack_millivolts_to_cell_centivolts(pack_mv, cell_count);

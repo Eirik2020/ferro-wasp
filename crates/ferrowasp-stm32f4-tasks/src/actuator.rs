@@ -4,8 +4,8 @@
 //! while the system is armed. `ActuatorHardware` is the one place a motor
 //! command reaches the DShot bank.
 
+use crate::prelude::backend::dshot;
 use crate::prelude::*;
-use ferrowasp_stm32f4::dshot;
 
 /// A live arming guard: permit, RC link armable, arm switch high, throttle.
 /// Which pre-arm health it also requires is the board's safety policy.

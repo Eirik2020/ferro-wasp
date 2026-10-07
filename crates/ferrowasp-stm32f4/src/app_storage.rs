@@ -1,4 +1,4 @@
-use crate::{spi_dma, uart_dma};
+use crate::{spi_common as spi_dma, uart_common as uart_dma};
 
 pub const UART_RX_BUFFER_COUNT: usize = 4;
 pub const SPI_DMA_BUFFER_COUNT: usize = 6;

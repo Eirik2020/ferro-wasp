@@ -12,8 +12,11 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = []
 dshot = ["dep:ferrowasp-waveform"]
-stm32f401 = ["stm32f4xx-hal/stm32f401"]
+# Each chip feature selects the STM32F4 HAL. Without one, only the
+# HAL-neutral mechanisms build, which is what another family's backend uses.
+stm32f401 = ["dep:stm32f4xx-hal", "stm32f4xx-hal/stm32f401"]
 stm32f405 = [
+    "dep:stm32f4xx-hal",
     "stm32f4xx-hal/stm32f405",
     "stm32f4xx-hal/uart4",
     "stm32f4xx-hal/usb_fs",
@@ -36,6 +39,6 @@ ferroforge = "0.4"
 fugit = "0.3.9"
 rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.1.0", default-features = false }
-stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["rtic2", "defmt"] }
+stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["rtic2", "defmt"], optional = true }
 usb-device = "0.3.2"
 usbd-serial = "0.2.2"

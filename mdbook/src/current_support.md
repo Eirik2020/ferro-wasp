@@ -3,7 +3,9 @@
 Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. NUCLEO-F401RE is a non-actuating development target.
 FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
-gates, no image and no claim on shared behaviour.
+gates, no image and no claim on shared behaviour. TBS Lucid H7 is an
+unverified port of the Foxeer feature set to the STM32H743; it builds, but has
+not run on hardware.
 
 The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.
@@ -44,6 +46,41 @@ requested physical outputs and supplies eRPM evidence for guarded arming.
 Onboard SPI-NOR stores CRC-protected configuration and FWBB flight records.
 The [FerroConfigurator](user/ferro_configurator.md) uses USB CDC to manage that
 storage while the aircraft is disarmed.
+
+## TBS Lucid H7 (unverified)
+
+The app lives in `firmware/tbs-lucid-h7` and carries the Foxeer feature set on
+the Lucid's own peripherals, through the `ferrowasp-stm32h7` backend. Pins
+follow the upstream Betaflight `TBS_LUCID_H7` target. Nothing here has run on
+the board, so flight arming is disabled at compile time until the IMU
+orientation, motor order, and ADC scale are verified on it.
+
+| Function | Lucid H7 resource |
+|---|---|
+| IMU | SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000 |
+| SBUS | USART6 RX PC7, inverted in the UART |
+| MSP DisplayPort | USART3 (PD8 TX, PD9 RX) |
+| ESC telemetry | UART8 RX PE0 |
+| DShot600 | PB0, PB1 (TIM3), PA0, PA1 (TIM5), DMA2 streams 0-3 |
+| ADC | Voltage PC0, current PC1 |
+| Storage | microSD on SDMMC1 |
+| USB | USB CDC on PA11/PA12 |
+
+Differences from the Foxeer that matter on the bench:
+
+- The microSD card stands in for SPI NOR. FerroWasp claims only a card whose
+  first block is blank or already its own, so a card with a partition table
+  is refused and left untouched; zero its first block to give it to
+  FerroWasp. The card is then no longer readable by a PC.
+- TIM3 and TIM5 are started back to back in software rather than
+  hardware-synchronized, so the motor 1-2 and 3-4 frames may be offset by a
+  few cycles.
+- The ADC is read with blocking conversions against a nominal 3.3 V
+  reference.
+- The core runs at 400 MHz. The image links at `0x08000000`, replacing any
+  bootloader.
+- The Lucid's second IMU, barometer, and extra UARTs and motor outputs are
+  not used.
 
 ## FerroWasp FCU3 (obsolete)
 

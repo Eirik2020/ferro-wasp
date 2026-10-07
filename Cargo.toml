@@ -9,6 +9,7 @@ members = [
     "crates/ferrowasp-pid",
     "crates/ferrowasp-stm32f4",
     "crates/ferrowasp-stm32f4-tasks",
+    "crates/ferrowasp-stm32h7",
     "crates/ferrowasp-tasks",
     "crates/ferrowasp-waveform",
     "crates/rc-pwm",
@@ -17,6 +18,7 @@ exclude = [
     "firmware/foxeer-f405-v2",
     "firmware/stm32f401-bringup",
     "firmware/stm32f405-flight",
+    "firmware/tbs-lucid-h7",
     "tools/ferro-configurator",
 ]
 

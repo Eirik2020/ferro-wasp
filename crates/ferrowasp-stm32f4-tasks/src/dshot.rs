@@ -1,8 +1,8 @@
 //! DShot motor output: the service loop that sends frames and telemetry
 //! requests, and the DMA completion of each motor's frame.
 
+use crate::prelude::backend::dshot;
 use crate::prelude::*;
-use ferrowasp_stm32f4::dshot;
 
 pub fn service_dshot_dma_irq(
     bank: &mut impl rtic::Mutex<T = dshot::DshotMotorBank>,

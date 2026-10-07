@@ -237,6 +237,27 @@ FLIGHT_APP_CONTRACTS = {
             "init_spi2_flash(",
         ),
     },
+    # The Foxeer's feature set on the STM32H743: SBUS on USART6, MSP on
+    # USART3, ESC telemetry on UART8, and blackbox storage on the microSD card.
+    "tbs-lucid-h7": {
+        "board_feature": "board-tbs-lucid-h7",
+        "dshot_feature": "ferrowasp-stm32f4-tasks/dshot",
+        "mandatory_features": (
+            "dshot",
+            "pwm_cal",
+            "usb_serial",
+            "esc_telemetry",
+            "flash_storage",
+            "flash_writes",
+            "flash_blackbox",
+        ),
+        "required_calls": (
+            "init_dshot_motor_bank(",
+            "init_usb_cdc_serial(",
+            "init_uart8_esc_telemetry(",
+            "init_sd_flash(",
+        ),
+    },
 }
 
 
@@ -267,10 +288,11 @@ def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
             manifest_text,
             re.MULTILINE | re.DOTALL,
         )
-        if board_feature is None or "ferrowasp-stm32f4/dshot" not in board_feature.group(1):
+        dshot_feature = contract.get("dshot_feature", "ferrowasp-stm32f4/dshot")
+        if board_feature is None or dshot_feature not in board_feature.group(1):
             errors.append(
                 f"{_relative(manifest, root)}: the board feature must enable "
-                "ferrowasp-stm32f4/dshot"
+                f"{dshot_feature}"
             )
 
         for path in (main, facade):
