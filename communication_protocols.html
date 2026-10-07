@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-41602ad8.js";
+            window.path_to_searchindex_js = "searchindex-ef6578a7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -175,7 +175,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="communication-protocols"><a class="header" href="#communication-protocols">Communication Protocols</a></h1>
-<p>FerroWasp currently has early support for several communication paths. Only SBUS is part of the active RC input path today.</p>
+<p>FerroWasp currently has early support for several communication paths. RC input is SBUS or CRSF, selected by configuration; SBUS is the target-tested baseline.</p>
 <h2 id="current-status"><a class="header" href="#current-status">Current Status</a></h2>
 <div class="table-wrapper">
 <table>
@@ -183,12 +183,12 @@
 <tr><th>Protocol/path</th><th>Status</th></tr>
 </thead>
 <tbody>
-<tr><td>SBUS</td><td>Active prototype RC input over USART2 RX DMA</td></tr>
+<tr><td>SBUS</td><td>Active prototype RC input, by default on UART2 (Foxeer) or UART6 (Lucid)</td></tr>
 <tr><td>BLHeli legacy ESC telemetry</td><td>Active in the flight DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
 <tr><td>USB CDC serial</td><td>Mandatory on Foxeer, which emits bounded read-only <code>FWDBG1</code> status lines; was optional on the obsolete FCU3 via <code>usb_serial</code></td></tr>
 <tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames</td></tr>
 <tr><td>MAVLink</td><td>UART mode placeholder/config values exist, no active MAVLink implementation yet</td></tr>
-<tr><td>CRSF/ELRS</td><td>Intended preferred RC path, not implemented yet</td></tr>
+<tr><td>CRSF/ELRS</td><td>RC input with battery telemetry, selected by <code>rc_protocol</code>; not yet run on hardware</td></tr>
 </tbody>
 </table>
 </div>
@@ -215,13 +215,44 @@
 <li>Keep the BLHeli legacy telemetry manager non-authoritative and bounded;
 missing pre-arm evidence may block qualification, while post-arm telemetry
 remains observational. Consider bidirectional DShot telemetry separately.</li>
-<li>Add CRSF/ELRS as the preferred RC input.</li>
+<li>Validate CRSF/ELRS on the target, link loss included, before preferring it.</li>
 <li>Keep MSPv1/DJI O4 OSD display-only and freshness-aware.</li>
 <li>Expand USB serial into useful telemetry.</li>
 <li>Decide which config path should be first-class: MSP subset, MAVLink subset,
 custom USB, or a small combination.</li>
 </ol>
 <p>Runtime configuration should stay tightly validated. A malformed packet or bad parameter value should fail closed, not alter safety authority.</p>
+<h2 id="crsf"><a class="header" href="#crsf">CRSF</a></h2>
+<p>ExpressLRS and TBS Crossfire receivers both speak CRSF to the flight
+controller: 420 000 baud, 8N1, not inverted, both ways. Setting
+<code>rc_protocol</code> to <code>crsf</code> starts the port bound to RC input with those line
+settings at the next boot. CRSF needs a port that can transmit, so a
+receive-only port refuses the binding and RC stays unbound.</p>
+<p>The decoder in <code>ferrowasp-drivers</code> validates each frame’s CRC-8/DVB-S2 and
+reads the sixteen packed 11-bit RC channels, which use the same 172-1811 scale
+as SBUS, so the RC task treats both protocols alike.</p>
+<p>CRSF channel frames carry no failsafe flag. An ExpressLRS receiver stops
+sending channels when its link drops, so the 100 ms RC-link timeout is the
+primary loss detector. A link-statistics report of zero uplink quality also
+marks following channel frames as frame-lost until the uplink recovers.</p>
+<p>Battery voltage and current go back to the receiver every 200 ms as CRSF
+battery frames, for the radio to show. Consumed capacity and remaining charge
+are sent as zero. Telemetry has its own low-priority task and writer, so the
+RC task never waits on a transmit; a transmit fault stops telemetry, not RC.</p>
+<h3 id="channel-map"><a class="header" href="#channel-map">Channel map</a></h3>
+<p>The stick order and arm switch are configurable for either protocol. Every
+board’s default is AETR stick order with the arm switch on channel 9, where
+FerroWasp has always read it. EdgeTX and ExpressLRS radios put the arm switch
+on channel 5 out of the box, so a stock radio needs <code>rc_arm_channel</code> set to 5
+or the radio remixed.</p>
+<p><code>rc_map</code> names the one-based channels for roll, pitch, throttle and yaw, in
+that order, so AETR is <code>1234</code> and TAER is <code>2314</code>. Each of channels 1-4 must be
+used once. <code>rc_arm_channel</code> accepts channels 5-16.</p>
+<p>A saved change to the map takes effect when the configuration is saved, while
+disarmed. Because the arm switch may now be read from a channel that is
+already high, the change invalidates the RC link like a lost receiver: the
+link must recover, and the new arm channel must read low, before the craft
+can arm.</p>
 <h2 id="foxeer-usb-debug"><a class="header" href="#foxeer-usb-debug">Foxeer USB Debug</a></h2>
 <p>The Foxeer app’s optional CDC ACM endpoint reports a self-describing ASCII
 <code>FWDBG1</code> line on the existing roughly two-second heartbeat. It includes the

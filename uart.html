@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-41602ad8.js";
+            window.path_to_searchindex_js = "searchindex-ef6578a7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -202,6 +202,7 @@ storage shape, and device construction live in its app’s <code>src/board/</cod
 <tr><td><code>Sbus</code></td><td>100000 baud, even parity, 2 stop bits, RX DMA</td><td>Active RC input path</td></tr>
 <tr><td><code>Msp</code></td><td>115200 baud, TX/RX DMA</td><td>Active DJI O4 OSD path on UART4</td></tr>
 <tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Standard flight-board BLHeli legacy telemetry path on USART1</td></tr>
+<tr><td><code>Crsf</code></td><td>420000 baud, 8N1, not inverted, TX/RX DMA</td><td>RC input with battery telemetry when <code>rc_protocol</code> is <code>crsf</code></td></tr>
 <tr><td><code>Mavlink</code></td><td>57600 baud, RX DMA</td><td>Future telemetry/config subset</td></tr>
 </tbody>
 </table>

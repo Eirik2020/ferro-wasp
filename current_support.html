@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-41602ad8.js";
+            window.path_to_searchindex_js = "searchindex-ef6578a7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -190,7 +190,7 @@ list every peripheral or diagnostic feature.</p>
 <tbody>
 <tr><td>Role</td><td>Golden flight target</td><td>Non-actuating bring-up target</td></tr>
 <tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
-<tr><td>RC input</td><td>SBUS over USART2 DMA by default; ports bound at boot from saved config</td><td>None</td></tr>
+<tr><td>RC input</td><td>SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config</td><td>None</td></tr>
 <tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>None</td></tr>
 <tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
 <tr><td>ESC output</td><td>Four-lane DShot600</td><td>None</td></tr>
@@ -294,7 +294,7 @@ escalation;</li>
 <li>finish estimator and controller validation, bounded I-term repair, and
 airframe-specific tuning;</li>
 <li>fine-calibrate Foxeer voltage and current scaling;</li>
-<li>add CRSF/ELRS while retaining SBUS;</li>
+<li>validate CRSF/ELRS and its telemetry on the target, link loss included;</li>
 <li>validate any experimental MSPv2 configurator endpoint before making it part
 of the standard image;</li>
 <li>extend self-describing blackbox data with the remaining configuration,

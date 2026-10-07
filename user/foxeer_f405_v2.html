@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-41602ad8.js";
+            window.path_to_searchindex_js = "../searchindex-ef6578a7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-0cbe97ab.js"></script>
@@ -308,6 +308,17 @@ yaw rates:        center 70, maximum 200, expo 0.50
 .\ferro-configurator.exe --port $Port config apply foxeer-profile.toml
 .\ferro-configurator.exe --port $Port config show
 </code></pre>
+<h2 id="use-a-crsf-receiver"><a class="header" href="#use-a-crsf-receiver">Use a CRSF receiver</a></h2>
+<p>Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the
+SBUS pad: CRSF must not pass through the board’s SBUS inverter. Then select
+the protocol and, for a stock EdgeTX radio, the arm switch on channel 5:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config set rc-protocol crsf
+.\ferro-configurator.exe --port $Port config set rc-arm-channel 5
+</code></pre>
+<p>Reboot the controller: the protocol applies at boot. Props off, confirm in the
+status output that <code>rc</code> becomes valid and that <code>arm_sw</code> follows the intended
+switch before flight. The radio shows the pack voltage and current the board
+measures.</p>
 <h2 id="change-serial-ports"><a class="header" href="#change-serial-ports">Change serial ports</a></h2>
 <p>Each UART is named by its number on the chip. List what each port serves,
 then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code> or <code>esc_telemetry</code>):</p>
