@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -370,7 +370,7 @@ python tools\check_repository_context.py
 are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
 <pre><code class="language-text">firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
-firmware/stm32f405-flight  FerroWasp FCU3, obsolete; compiled, never flown
+firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, unverified
 firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
@@ -380,12 +380,6 @@ another board.</p>
 <p>Foxeer is the golden flight app for established runtime and safety behavior:</p>
 <pre><code class="language-powershell">Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
-Set-Location ..\..
-</code></pre>
-<p>Check the obsolete FCU3 app independently, which CI still does so it keeps
-compiling against the shared crates:</p>
-<pre><code class="language-powershell">Set-Location firmware\stm32f405-flight
-cargo check --release --locked
 Set-Location ..\..
 </code></pre>
 <p>The resulting Foxeer ELF is:</p>

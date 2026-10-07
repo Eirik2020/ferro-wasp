@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -179,7 +179,7 @@
 <p>Current important paths:</p>
 <pre><code class="language-text">.
 |-- firmware/
-|   |-- stm32f405-flight/        # FCU3 (obsolete): board support and F405 shell
+|   |-- tbs-lucid-h7/            # TBS Lucid H7 board support and H743 RTIC shell
 |   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
 |   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
 |       |-- src/board/           # Immutable board facts and typed construction
@@ -216,7 +216,7 @@ Foxeer is the golden flight app.</p>
 <li>reusable safety, signal, and actuator conversion types in <code>crates/ferrowasp-core/</code></li>
 <li>board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
 construction policy under each app’s <code>src/board/</code></li>
-<li>isolated Foxeer flight, NUCLEO-F401RE bring-up, and obsolete FCU3 apps with
+<li>isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
 independent Cargo and RTIC resource contracts</li>
 <li>reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
 <code>crates/ferrowasp-stm32f4/</code></li>

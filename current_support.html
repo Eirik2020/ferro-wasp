@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -177,32 +177,31 @@
                         <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. NUCLEO-F401RE is a non-actuating development target.
-FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
-gates, no image and no claim on shared behaviour. TBS Lucid H7 is an
-unverified port of the Foxeer feature set to the STM32H743; it builds, but has
-not run on hardware.</p>
+FerroWasp FCU3, obsolete since 2026-09-22, was removed on 2026-10-07. TBS
+Lucid H7 is an unverified port of the Foxeer feature set to the STM32H743; it
+builds, but has not run on hardware.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Capability</th><th>Foxeer F405 V2</th><th>FerroWasp FCU3 (obsolete)</th><th>NUCLEO-F401RE</th></tr>
+<tr><th>Capability</th><th>Foxeer F405 V2</th><th>NUCLEO-F401RE</th></tr>
 </thead>
 <tbody>
-<tr><td>Role</td><td>Golden flight target</td><td>Obsolete, compiled only</td><td>Non-actuating bring-up target</td></tr>
-<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
-<tr><td>RC input</td><td>SBUS over USART2 DMA by default; ports bound at boot from saved config</td><td>SBUS over USART2 DMA</td><td>None</td></tr>
-<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>MPU6500; timer-driven polling</td><td>None</td></tr>
-<tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
-<tr><td>ESC output</td><td>Four-lane DShot600</td><td>Four-lane DShot600</td><td>None</td></tr>
-<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
-<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
-<tr><td>USB</td><td>Standard USB CDC</td><td>Optional USB CDC</td><td>None</td></tr>
-<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td><td>Compile-time and app-local configuration</td><td>None</td></tr>
-<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td><td>RTT / BB2 development logging</td><td>None</td></tr>
-<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td><td>DJI O4 MSP DisplayPort OSD</td><td>None</td></tr>
-<tr><td>ADC</td><td>Battery voltage and current inputs</td><td>Battery voltage and current inputs</td><td>None</td></tr>
-<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td><td>Boot, RC, IMU, DShot, eRPM-qualified arming, props-off checks, and controlled flight</td><td>Build and target smoke checks</td></tr>
+<tr><td>Role</td><td>Golden flight target</td><td>Non-actuating bring-up target</td></tr>
+<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
+<tr><td>RC input</td><td>SBUS over USART2 DMA by default; ports bound at boot from saved config</td><td>None</td></tr>
+<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>None</td></tr>
+<tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
+<tr><td>ESC output</td><td>Four-lane DShot600</td><td>None</td></tr>
+<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
+<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
+<tr><td>USB</td><td>Standard USB CDC</td><td>None</td></tr>
+<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td><td>None</td></tr>
+<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td><td>None</td></tr>
+<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td><td>None</td></tr>
+<tr><td>ADC</td><td>Battery voltage and current inputs</td><td>None</td></tr>
+<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td><td>Build and target smoke checks</td></tr>
 </tbody>
 </table>
 </div>
@@ -260,19 +259,6 @@ bootloader.</li>
 <li>The Lucid’s second IMU, barometer, and extra UARTs and motor outputs are
 not used.</li>
 </ul>
-<h2 id="ferrowasp-fcu3-obsolete"><a class="header" href="#ferrowasp-fcu3-obsolete">FerroWasp FCU3 (obsolete)</a></h2>
-<p>Obsolete since 2026-09-22. The app remains in <code>firmware/stm32f405-flight</code> and CI
-still compiles it against the shared crates, so a second board can be revived
-cheaply, but it has no test gates, no image, and where its behaviour differed
-from Foxeer’s, Foxeer’s is now simply the behaviour. Only 14 of its 30 tasks are
-shared definitions; the rest are its own older copies. Do not treat anything
-below as current.</p>
-<p>It shares the reusable STM32F4, driver, task, safety, DShot, and telemetry
-implementations with Foxeer while retaining its own pins, DMA routes, timer
-assignments, IMU orientation, and motor map. It uses an MPU6500 and
-timer-driven IMU polling, with four-lane DShot600 and legacy UART ESC
-telemetry. It never adopted the Foxeer persistent configuration and onboard
-blackbox workflow.</p>
 <h2 id="nucleo-f401re"><a class="header" href="#nucleo-f401re">NUCLEO-F401RE</a></h2>
 <p>The bring-up app lives in <code>firmware/stm32f401-bringup</code>. It owns a status LED,
 USART heartbeat, and RTIC scheduling resources. Its board contract declares no

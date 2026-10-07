@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -179,9 +179,8 @@
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The reusable STM32F4 UART DMA mechanism lives in
-<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. FerroWasp FCU3 pin conversion,
-storage shape, and device construction live in
-<code>firmware/stm32f405-flight/src/board/</code>.</p>
+<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. Each board’s pin conversion,
+storage shape, and device construction live in its app’s <code>src/board/</code>.</p>
 <p>It provides:</p>
 <ul>
 <li>mode-specific UART configuration</li>

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -176,14 +176,15 @@
                     <main>
                         <h1 id="dshot"><a class="header" href="#dshot">DShot</a></h1>
 <p>FerroWasp uses four-motor DShot600 as the standard ESC protocol on Foxeer, the
-golden flight target. FCU3 is obsolete since 2026-09-22: its sections below
-record how that board was set up and what it measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
+golden flight target. FCU3, obsolete since 2026-09-22, was removed on
+2026-10-07: its sections below record how that board was set up and what it
+measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
 path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
 RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
 it is not a flight-app ESC fallback.</p>
 <p>The capped bench image remains behind the existing equal-motor gate:</p>
-<pre><code class="language-powershell">cd firmware/stm32f405-flight
-cargo build --locked --features "bench_equal_motors"
+<pre><code class="language-powershell">cd firmware/foxeer-f405-v2
+cargo build --release --locked --features "bench_actuator_validation bench_equal_motors"
 </code></pre>
 <p>Physical selected-motor modes and multiple logical-motor selections are compile-time errors. The base bench image
 sends the same requested throttle to all four lanes. For props-off mapping

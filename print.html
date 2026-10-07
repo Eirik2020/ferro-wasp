@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -181,8 +181,7 @@ multicopter UAVs. It favors explicit resource ownership, deterministic
 scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.</p>
 <p>The Foxeer F405 V2 is the golden flight target, and NUCLEO-F401RE provides a
-non-actuating STM32F4 development target. FerroWasp FCU3 is obsolete: it still
-compiles, but it has no test gates and no image. See <a href="#current-support">Current Support</a>
+non-actuating STM32F4 development target. FerroWasp FCU3 has been retired. See <a href="#current-support">Current Support</a>
 for the board and feature matrix.</p>
 <h2 id="where-to-begin"><a class="header" href="#where-to-begin">Where to Begin</a></h2>
 <ul>
@@ -685,7 +684,7 @@ python tools\check_repository_context.py
 are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
 <pre><code class="language-text">firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
-firmware/stm32f405-flight  FerroWasp FCU3, obsolete; compiled, never flown
+firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, unverified
 firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
@@ -695,12 +694,6 @@ another board.</p>
 <p>Foxeer is the golden flight app for established runtime and safety behavior:</p>
 <pre><code class="language-powershell">Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
-Set-Location ..\..
-</code></pre>
-<p>Check the obsolete FCU3 app independently, which CI still does so it keeps
-compiling against the shared crates:</p>
-<pre><code class="language-powershell">Set-Location firmware\stm32f405-flight
-cargo check --release --locked
 Set-Location ..\..
 </code></pre>
 <p>The resulting Foxeer ELF is:</p>
@@ -784,32 +777,31 @@ from prototype evidence.</p>
 <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. NUCLEO-F401RE is a non-actuating development target.
-FerroWasp FCU3 is obsolete: its firmware still compiles, but it has no test
-gates, no image and no claim on shared behaviour. TBS Lucid H7 is an
-unverified port of the Foxeer feature set to the STM32H743; it builds, but has
-not run on hardware.</p>
+FerroWasp FCU3, obsolete since 2026-09-22, was removed on 2026-10-07. TBS
+Lucid H7 is an unverified port of the Foxeer feature set to the STM32H743; it
+builds, but has not run on hardware.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Capability</th><th>Foxeer F405 V2</th><th>FerroWasp FCU3 (obsolete)</th><th>NUCLEO-F401RE</th></tr>
+<tr><th>Capability</th><th>Foxeer F405 V2</th><th>NUCLEO-F401RE</th></tr>
 </thead>
 <tbody>
-<tr><td>Role</td><td>Golden flight target</td><td>Obsolete, compiled only</td><td>Non-actuating bring-up target</td></tr>
-<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
-<tr><td>RC input</td><td>SBUS over USART2 DMA by default; ports bound at boot from saved config</td><td>SBUS over USART2 DMA</td><td>None</td></tr>
-<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>MPU6500; timer-driven polling</td><td>None</td></tr>
-<tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
-<tr><td>ESC output</td><td>Four-lane DShot600</td><td>Four-lane DShot600</td><td>None</td></tr>
-<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
-<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
-<tr><td>USB</td><td>Standard USB CDC</td><td>Optional USB CDC</td><td>None</td></tr>
-<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td><td>Compile-time and app-local configuration</td><td>None</td></tr>
-<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td><td>RTT / BB2 development logging</td><td>None</td></tr>
-<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td><td>DJI O4 MSP DisplayPort OSD</td><td>None</td></tr>
-<tr><td>ADC</td><td>Battery voltage and current inputs</td><td>Battery voltage and current inputs</td><td>None</td></tr>
-<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td><td>Boot, RC, IMU, DShot, eRPM-qualified arming, props-off checks, and controlled flight</td><td>Build and target smoke checks</td></tr>
+<tr><td>Role</td><td>Golden flight target</td><td>Non-actuating bring-up target</td></tr>
+<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
+<tr><td>RC input</td><td>SBUS over USART2 DMA by default; ports bound at boot from saved config</td><td>None</td></tr>
+<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>None</td></tr>
+<tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
+<tr><td>ESC output</td><td>Four-lane DShot600</td><td>None</td></tr>
+<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
+<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
+<tr><td>USB</td><td>Standard USB CDC</td><td>None</td></tr>
+<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td><td>None</td></tr>
+<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td><td>None</td></tr>
+<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td><td>None</td></tr>
+<tr><td>ADC</td><td>Battery voltage and current inputs</td><td>None</td></tr>
+<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td><td>Build and target smoke checks</td></tr>
 </tbody>
 </table>
 </div>
@@ -867,19 +859,6 @@ bootloader.</li>
 <li>The Lucid’s second IMU, barometer, and extra UARTs and motor outputs are
 not used.</li>
 </ul>
-<h2 id="ferrowasp-fcu3-obsolete"><a class="header" href="#ferrowasp-fcu3-obsolete">FerroWasp FCU3 (obsolete)</a></h2>
-<p>Obsolete since 2026-09-22. The app remains in <code>firmware/stm32f405-flight</code> and CI
-still compiles it against the shared crates, so a second board can be revived
-cheaply, but it has no test gates, no image, and where its behaviour differed
-from Foxeer’s, Foxeer’s is now simply the behaviour. Only 14 of its 30 tasks are
-shared definitions; the rest are its own older copies. Do not treat anything
-below as current.</p>
-<p>It shares the reusable STM32F4, driver, task, safety, DShot, and telemetry
-implementations with Foxeer while retaining its own pins, DMA routes, timer
-assignments, IMU orientation, and motor map. It uses an MPU6500 and
-timer-driven IMU polling, with four-lane DShot600 and legacy UART ESC
-telemetry. It never adopted the Foxeer persistent configuration and onboard
-blackbox workflow.</p>
 <h2 id="nucleo-f401re"><a class="header" href="#nucleo-f401re">NUCLEO-F401RE</a></h2>
 <p>The bring-up app lives in <code>firmware/stm32f401-bringup</code>. It owns a status LED,
 USART heartbeat, and RTIC scheduling resources. Its board contract declares no
@@ -1275,14 +1254,15 @@ stop latency remain instrumented checkpoints.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="dshot"><a class="header" href="#dshot">DShot</a></h1>
 <p>FerroWasp uses four-motor DShot600 as the standard ESC protocol on Foxeer, the
-golden flight target. FCU3 is obsolete since 2026-09-22: its sections below
-record how that board was set up and what it measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
+golden flight target. FCU3, obsolete since 2026-09-22, was removed on
+2026-10-07: its sections below record how that board was set up and what it
+measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
 path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
 RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
 it is not a flight-app ESC fallback.</p>
 <p>The capped bench image remains behind the existing equal-motor gate:</p>
-<pre><code class="language-powershell">cd firmware/stm32f405-flight
-cargo build --locked --features "bench_equal_motors"
+<pre><code class="language-powershell">cd firmware/foxeer-f405-v2
+cargo build --release --locked --features "bench_actuator_validation bench_equal_motors"
 </code></pre>
 <p>Physical selected-motor modes and multiple logical-motor selections are compile-time errors. The base bench image
 sends the same requested throttle to all four lanes. For props-off mapping
@@ -2293,9 +2273,9 @@ low-to-high arm request are then required. See <a href="#dshot">DShot</a> for th
 and target-evidence details.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sbus"><a class="header" href="#sbus">SBUS</a></h1>
-<p>SBUS is the active FerroWasp RC input path. The FCU3 and Foxeer profiles route
-it to USART2 RX on PA3; PA2 is the corresponding TX pin but is not required for
-receive-only SBUS.</p>
+<p>SBUS is the active FerroWasp RC input path. Foxeer binds it to UART2 by
+default, receiving on PA3; PA2 is the corresponding TX pin but is not required
+for receive-only SBUS. The TBS Lucid H7 binds it to UART6 by default.</p>
 <h2 id="uart-configuration"><a class="header" href="#uart-configuration">UART Configuration</a></h2>
 <ul>
 <li>Baud rate: 100 000 bps</li>
@@ -2514,9 +2494,8 @@ row 8, col 2: WARN ...
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The reusable STM32F4 UART DMA mechanism lives in
-<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. FerroWasp FCU3 pin conversion,
-storage shape, and device construction live in
-<code>firmware/stm32f405-flight/src/board/</code>.</p>
+<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. Each board’s pin conversion,
+storage shape, and device construction live in its app’s <code>src/board/</code>.</p>
 <p>It provides:</p>
 <ul>
 <li>mode-specific UART configuration</li>
@@ -2817,7 +2796,7 @@ pasting code.</p>
 <p>Current important paths:</p>
 <pre><code class="language-text">.
 |-- firmware/
-|   |-- stm32f405-flight/        # FCU3 (obsolete): board support and F405 shell
+|   |-- tbs-lucid-h7/            # TBS Lucid H7 board support and H743 RTIC shell
 |   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
 |   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
 |       |-- src/board/           # Immutable board facts and typed construction
@@ -2854,7 +2833,7 @@ Foxeer is the golden flight app.</p>
 <li>reusable safety, signal, and actuator conversion types in <code>crates/ferrowasp-core/</code></li>
 <li>board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
 construction policy under each app’s <code>src/board/</code></li>
-<li>isolated Foxeer flight, NUCLEO-F401RE bring-up, and obsolete FCU3 apps with
+<li>isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
 independent Cargo and RTIC resource contracts</li>
 <li>reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
 <code>crates/ferrowasp-stm32f4/</code></li>
@@ -3342,8 +3321,12 @@ damage, injury, loss, or other liability arising from the software or its use.</
 <p>This page records notable FerroWasp changes without implying that a firmware
 artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
-<p>No user-facing changes have been recorded after the <code>v0.1.0</code> release
-candidate.</p>
+<h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
+<ul>
+<li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
+2026-09-22. It is no longer built; its retained evidence stays in the
+project archive.</li>
+</ul>
 <h2 id="010---2026-07-28"><a class="header" href="#010---2026-07-28">0.1.0 - 2026-07-28</a></h2>
 <p>First public experimental pre-release.</p>
 <h3 id="added"><a class="header" href="#added">Added</a></h3>
@@ -3374,7 +3357,7 @@ association.</li>
 <li>Corrected FCU3 motor mapping, output polarity, scheduling cadence, and
 roll/pitch control direction issues found during prototype validation.</li>
 </ul>
-<h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
+<h3 id="removed-1"><a class="header" href="#removed-1">Removed</a></h3>
 <ul>
 <li>Removed the standalone <code>ferrowasp-bsp</code> crate. Board facts now live with each
 isolated app, while reusable STM32F4 behavior lives in

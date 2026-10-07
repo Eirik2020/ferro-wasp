@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
+            window.path_to_searchindex_js = "searchindex-a702dd90.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -178,8 +178,12 @@
 <p>This page records notable FerroWasp changes without implying that a firmware
 artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
-<p>No user-facing changes have been recorded after the <code>v0.1.0</code> release
-candidate.</p>
+<h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
+<ul>
+<li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
+2026-09-22. It is no longer built; its retained evidence stays in the
+project archive.</li>
+</ul>
 <h2 id="010---2026-07-28"><a class="header" href="#010---2026-07-28">0.1.0 - 2026-07-28</a></h2>
 <p>First public experimental pre-release.</p>
 <h3 id="added"><a class="header" href="#added">Added</a></h3>
@@ -210,7 +214,7 @@ association.</li>
 <li>Corrected FCU3 motor mapping, output polarity, scheduling cadence, and
 roll/pitch control direction issues found during prototype validation.</li>
 </ul>
-<h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
+<h3 id="removed-1"><a class="header" href="#removed-1">Removed</a></h3>
 <ul>
 <li>Removed the standalone <code>ferrowasp-bsp</code> crate. Board facts now live with each
 isolated app, while reusable STM32F4 behavior lives in
