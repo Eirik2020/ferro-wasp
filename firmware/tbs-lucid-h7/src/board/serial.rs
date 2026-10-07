@@ -1,16 +1,16 @@
-//! Serial routes. The logical ports keep the Foxeer F405 V2 numbering, so
-//! stored configuration and the app's `uart1`/`uart2`/`uart4` resources mean
-//! the same function on both boards: logical UART1 is ESC telemetry on UART8,
-//! UART2 is SBUS on USART6, and UART4 is MSP DisplayPort on USART3.
+//! Serial routes. Each logical port is the UART's number on the chip, the
+//! name a pilot sees on the board and types in `serial <port> <function>`:
+//! USART3 is `uart3`, USART6 `uart6` and UART8 `uart8`.
 
 #[cfg(test)]
 use ferrowasp_io_core::serial::SerialRouteError;
 use ferrowasp_io_core::serial::{
-    LogicalSerialPort, SerialCapabilities, SerialProfile, SerialRoute,
+    LogicalSerialPort, SerialBindings, SerialCapabilities, SerialFunction, SerialProfile,
+    SerialRoute,
 };
 
 pub const USART6_SBUS: SerialRoute = SerialRoute {
-    logical: LogicalSerialPort::Uart2,
+    logical: LogicalSerialPort::Uart6,
     peripheral: "USART6",
     tx_pin: "PC6 AF7",
     rx_pin: "PC7 AF7",
@@ -28,7 +28,7 @@ pub const USART6_SBUS: SerialRoute = SerialRoute {
 };
 
 pub const USART3_MSP: SerialRoute = SerialRoute {
-    logical: LogicalSerialPort::Uart4,
+    logical: LogicalSerialPort::Uart3,
     peripheral: "USART3",
     tx_pin: "PD8 AF7",
     rx_pin: "PD9 AF7",
@@ -46,7 +46,7 @@ pub const USART3_MSP: SerialRoute = SerialRoute {
 };
 
 pub const UART8_ESC_TELEMETRY: SerialRoute = SerialRoute {
-    logical: LogicalSerialPort::Uart1,
+    logical: LogicalSerialPort::Uart8,
     peripheral: "UART8",
     tx_pin: "unused",
     rx_pin: "PE0 AF8",
@@ -63,11 +63,55 @@ pub const UART8_ESC_TELEMETRY: SerialRoute = SerialRoute {
     },
 };
 
-pub const ACTIVE_SERIAL_ROUTES: &[SerialRoute] = &[USART6_SBUS, USART3_MSP];
+/// Every UART the board routes; config may bind each to any function its
+/// capabilities accept.
+pub const SERIAL_ROUTES: &[SerialRoute] = &[USART3_MSP, USART6_SBUS, UART8_ESC_TELEMETRY];
+
+/// The wiring the board shipped with, used until a pilot saves bindings.
+pub const DEFAULT_SERIAL_BINDINGS: SerialBindings = SerialBindings::none()
+    .with(LogicalSerialPort::Uart3, SerialFunction::MspDisplayPort)
+    .with(LogicalSerialPort::Uart6, SerialFunction::RcInput)
+    .with(LogicalSerialPort::Uart8, SerialFunction::EscTelemetry);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_bindings_resolve_cleanly_and_ports_refuse_what_they_cannot_carry() {
+        use ferrowasp_io_core::serial::resolve_bindings;
+
+        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES);
+        assert_eq!(defaults.issues(), &[]);
+        assert_eq!(
+            defaults.profile(LogicalSerialPort::Uart6),
+            Some(SerialProfile::sbus())
+        );
+        // A port the board does not route cannot be bound.
+        let unrouted = resolve_bindings(
+            DEFAULT_SERIAL_BINDINGS
+                .with(LogicalSerialPort::Uart6, SerialFunction::None)
+                .with(LogicalSerialPort::Uart1, SerialFunction::RcInput),
+            SERIAL_ROUTES,
+        );
+        assert_eq!(unrouted.issues().len(), 1);
+        assert_eq!(
+            unrouted.function(LogicalSerialPort::Uart1),
+            SerialFunction::None
+        );
+        // RC on the MSP port is refused, so RC stays unbound.
+        let refused = resolve_bindings(
+            DEFAULT_SERIAL_BINDINGS
+                .with(LogicalSerialPort::Uart6, SerialFunction::None)
+                .with(LogicalSerialPort::Uart3, SerialFunction::RcInput),
+            SERIAL_ROUTES,
+        );
+        assert_eq!(refused.issues().len(), 1);
+        assert_eq!(
+            refused.function(LogicalSerialPort::Uart3),
+            SerialFunction::None
+        );
+    }
 
     #[test]
     fn active_profiles_match_the_supported_ferrowasp_protocols() {

@@ -1,4 +1,4 @@
-pub use super::serial::ACTIVE_SERIAL_ROUTES;
+pub use super::serial::SERIAL_ROUTES;
 use ferrowasp_stm32f4::board_routes::{DmaDirection, DmaRoute, SpiRoute};
 
 pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 6] = [

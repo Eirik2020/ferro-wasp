@@ -46,11 +46,7 @@ pub mod snapshots;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod spi1;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod uart1;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod uart2;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod uart4;
+mod uart_port;
 
 #[cfg(all(
     target_arch = "arm",
@@ -88,13 +84,12 @@ pub use spi1::{
     spi1_timeout,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use uart1::{usart1_rx_dma_transfer, usart1_rx_peripheral};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use uart2::{
-    Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
-    usart2_rx_dma_transfer, usart2_rx_peripheral,
-};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use uart4::{
-    uart4_rx_dma_transfer, uart4_rx_peripheral, uart4_tx_dma_transfer, uart4_tx_worker,
+pub use uart_port::{
+    uart1_rx_dma, uart1_rx_idle, uart1_tx_dma_complete, uart1_tx_worker, uart2_rx_dma,
+    uart2_rx_idle, uart2_tx_dma_complete, uart2_tx_worker, uart3_rx_dma, uart3_rx_idle,
+    uart3_tx_dma_complete, uart3_tx_worker, uart4_rx_dma, uart4_rx_idle, uart4_tx_dma_complete,
+    uart4_tx_worker, uart5_rx_dma, uart5_rx_idle, uart5_tx_dma_complete, uart5_tx_worker,
+    uart6_rx_dma, uart6_rx_idle, uart6_tx_dma_complete, uart6_tx_worker, uart7_rx_dma,
+    uart7_rx_idle, uart7_tx_dma_complete, uart7_tx_worker, uart8_rx_dma, uart8_rx_idle,
+    uart8_tx_dma_complete, uart8_tx_worker,
 };

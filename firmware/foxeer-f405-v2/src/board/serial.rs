@@ -1,7 +1,8 @@
 #[cfg(test)]
 use ferrowasp_io_core::serial::SerialRouteError;
 use ferrowasp_io_core::serial::{
-    LogicalSerialPort, SerialCapabilities, SerialProfile, SerialRoute,
+    LogicalSerialPort, SerialBindings, SerialCapabilities, SerialFunction, SerialProfile,
+    SerialRoute,
 };
 
 pub const USART2_SBUS: SerialRoute = SerialRoute {
@@ -30,12 +31,13 @@ pub const UART4_MSP: SerialRoute = SerialRoute {
     profile: SerialProfile::msp(),
     rx_dma: "DMA1 Stream 2 Channel 4",
     tx_dma: Some("DMA1 Stream 4 Channel 4"),
+    // A plain 8N1 port with DMA both ways; it has no inverter, so no SBUS.
     capabilities: SerialCapabilities {
         sbus: false,
         crsf: false,
         mavlink: false,
         msp: true,
-        esc_telemetry: false,
+        esc_telemetry: true,
         tx: true,
     },
 };
@@ -58,11 +60,50 @@ pub const USART1_ESC_TELEMETRY: SerialRoute = SerialRoute {
     },
 };
 
-pub const ACTIVE_SERIAL_ROUTES: &[SerialRoute] = &[USART2_SBUS, UART4_MSP];
+/// Every UART the board routes; config may bind each to any function its
+/// capabilities accept.
+pub const SERIAL_ROUTES: &[SerialRoute] = &[USART1_ESC_TELEMETRY, USART2_SBUS, UART4_MSP];
+
+/// The wiring the board shipped with, used until a pilot saves bindings.
+pub const DEFAULT_SERIAL_BINDINGS: SerialBindings = SerialBindings::none()
+    .with(LogicalSerialPort::Uart1, SerialFunction::EscTelemetry)
+    .with(LogicalSerialPort::Uart2, SerialFunction::RcInput)
+    .with(LogicalSerialPort::Uart4, SerialFunction::MspDisplayPort);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_bindings_resolve_cleanly_and_uart4_can_take_esc_telemetry() {
+        use ferrowasp_io_core::serial::resolve_bindings;
+
+        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES);
+        assert_eq!(defaults.issues(), &[]);
+        let moved = resolve_bindings(
+            DEFAULT_SERIAL_BINDINGS
+                .with(LogicalSerialPort::Uart1, SerialFunction::None)
+                .with(LogicalSerialPort::Uart4, SerialFunction::EscTelemetry),
+            SERIAL_ROUTES,
+        );
+        assert_eq!(moved.issues(), &[]);
+        assert_eq!(
+            moved.profile(LogicalSerialPort::Uart4),
+            Some(SerialProfile::esc_telemetry())
+        );
+        // RC on a port without an inverter is refused, so RC stays unbound.
+        let refused = resolve_bindings(
+            DEFAULT_SERIAL_BINDINGS
+                .with(LogicalSerialPort::Uart2, SerialFunction::None)
+                .with(LogicalSerialPort::Uart4, SerialFunction::RcInput),
+            SERIAL_ROUTES,
+        );
+        assert_eq!(refused.issues().len(), 1);
+        assert_eq!(
+            refused.function(LogicalSerialPort::Uart4),
+            SerialFunction::None
+        );
+    }
 
     #[test]
     fn active_profiles_match_the_supported_ferrowasp_protocols() {

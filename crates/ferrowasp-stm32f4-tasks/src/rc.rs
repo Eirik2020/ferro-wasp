@@ -1,4 +1,4 @@
-//! RC input: SBUS frames from the USART2 stream become stick rates,
+//! RC input: SBUS frames from the port config bound to RC become stick rates,
 //! throttle and the arm switch, and arm and disarm requests to the safety
 //! master. Any transport, parser or failsafe fault neutralizes the sticks and
 //! invalidates the RC link, so a lost receiver fails closed.
@@ -19,13 +19,17 @@ pub fn neutralize_rc_input(
     arm_high.write(false);
 }
 
-/// Read SBUS from USART2, publish stick state, qualify the RC link, and
-/// report arm and disarm requests and link invalidations to the safety
-/// master.
+/// Read SBUS from the bound port, publish stick state, qualify the RC link,
+/// and report arm and disarm requests and link invalidations to the safety
+/// master. With no port bound the task ends at once: the RC link never
+/// becomes valid, so the craft cannot arm.
+///
+/// The port's transport records faults on the stream rather than reporting
+/// them itself, and a fault wakes this task even when no bytes follow, so it
+/// invalidates the link here as soon as the transport sees the fault.
 #[ferroforge::task(
     local = [
-        rc_rx_reader: stm32_memory::UartOwnedReader<'static>,
-        rc_rx_discontinuities: stm32_memory::UartOwnedDiscontinuities<'static>,
+        rc_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
         sbus: StreamingParser,
         arm_qualifier: safety::ArmQualifier,
         rc_rates_writer: signals::RcRatesWriter,
@@ -40,9 +44,13 @@ pub fn neutralize_rc_input(
     monotonic = Mono,
 )]
 pub async fn rc_input(mut cx: rc_input::Context) {
+    let Some(port) = cx.local.rc_port.as_mut() else {
+        warn!("RC input has no serial port bound; the RC link stays invalid");
+        return;
+    };
     loop {
         let mut bytes = [0; stm32_uart::UART_RX_BUFFER_SIZE];
-        let read_len = match cx.local.rc_rx_reader.read(&mut bytes).await {
+        let read_len = match port.reader.read(&mut bytes).await {
             Ok(read_len) => read_len,
             Err(_) => {
                 let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
@@ -55,15 +63,19 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     cx.local.rc_arm_high_writer,
                 );
                 *cx.local.rc_link_reported_valid = false;
-                warn!("USART2 owned RX reader stopped");
+                warn!("RC input stream stopped");
                 return;
             }
         };
 
-        if let Some(event) = cx.local.rc_rx_discontinuities.take_new() {
-            let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
-                safety::RcLinkInvalidation::TransportDiscontinuity,
-            ));
+        if let Some(event) = port.discontinuities.take_new() {
+            let reason = match event.cause {
+                Discontinuity::DmaError => safety::RcLinkInvalidation::DmaError,
+                _ => safety::RcLinkInvalidation::TransportDiscontinuity,
+            };
+            let _ = cx
+                .spawn
+                .safety_master(safety::SafetyEvent::RcLinkInvalid(reason));
             cx.local.sbus.reset();
             neutralize_rc_input(
                 cx.local.arm_qualifier,
@@ -72,7 +84,7 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 cx.local.rc_arm_high_writer,
             );
             *cx.local.rc_link_reported_valid = false;
-            warn!("USART2 RX discontinuity sequence {}", event.sequence);
+            warn!("RC input discontinuity sequence {}", event.sequence);
         }
 
         for packet in cx.local.sbus.push_bytes(&bytes[..read_len]) {

@@ -1,5 +1,11 @@
 pub use crate::uart_common::*;
-use ferrowasp_io_core::serial::SerialProtocol as Mode;
+use crate::uart_port::{
+    SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
+    place_endpoint, rx_port, tx_port,
+};
+use ferrowasp_io_core::serial::{
+    LogicalSerialPort, ResolvedBindings, SerialFunctionSlots, SerialProtocol as Mode,
+};
 use stm32f4xx_hal::{
     ClearFlags, ReadFlags,
     dma::{
@@ -18,35 +24,31 @@ pub type Uart1RxIrq = UartRxIrqSide<UartRxTransfer<Stream5<DMA2>, USART1, 4>>;
 pub type Uart2RxIrq = UartRxIrqSide<UartRxTransfer<Stream5<DMA1>, USART2, 4>>;
 pub type Uart4RxIrq = UartRxIrqSide<UartRxTransfer<Stream2<DMA1>, UART4, 4>>;
 pub type Uart4TxTransfer =
-    Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, Uart4TxBuf>;
+    Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, UartTxBuf>;
 pub type Uart4TxDmaSide = UartTxDmaSide<Uart4TxDma>;
 
-pub struct Usart2SbusResources {
+/// UART2 (the USART2 peripheral) on PA2/PA3, RX on DMA1 Stream 5.
+pub struct Uart2PortResources {
     pub tx_pin: PA2<Input>,
     pub rx_pin: PA3<Input>,
-    pub usart: USART2,
+    pub uart: USART2,
     pub rx_dma: Stream5<DMA1>,
 }
 
-pub struct Usart1EscTelemetryResources {
+/// UART1 (the USART1 peripheral) receive-only on PA10, RX on DMA2 Stream 5.
+pub struct Uart1PortResources {
     pub rx_pin: PA10<Input>,
-    pub usart: USART1,
+    pub uart: USART1,
     pub rx_dma: Stream5<DMA2>,
 }
 
-pub struct Uart4MspResources {
+/// UART4 on PA0/PA1, RX on DMA1 Stream 2 and TX on DMA1 Stream 4.
+pub struct Uart4PortResources {
     pub tx_pin: PA0<Input>,
     pub rx_pin: PA1<Input>,
     pub uart: UART4,
     pub rx_dma: Stream2<DMA1>,
     pub tx_dma: Stream4<DMA1>,
-}
-
-pub struct Uart4MspRxResources {
-    pub tx_pin: PA0<Input>,
-    pub rx_pin: PA1<Input>,
-    pub uart: UART4,
-    pub rx_dma: Stream2<DMA1>,
 }
 
 /// UART4's transmit DMA stream and its fixed buffer. Each chunk re-creates
@@ -103,16 +105,10 @@ impl UartTxDmaTransfer for Uart4TxDma {
     }
 }
 
-pub struct Uart4MspParts {
-    pub rx_irq: Uart4RxIrq,
-    pub parser: UartRxParserSide,
-    pub tx_dma: Uart4TxDmaSide,
-}
-
 pub fn init_uart4_tx_dma(
     tx_dma: Stream4<DMA1>,
     tx: serial::Tx<UART4>,
-    tx_buffer: Uart4TxBuf,
+    tx_buffer: UartTxBuf,
 ) -> Uart4TxDmaSide {
     let dma_config = DmaConfig::default()
         .memory_increment(true)
@@ -319,96 +315,142 @@ where
     }
 }
 
-pub fn init_usart2_sbus_rx_dma(
-    resources: Usart2SbusResources,
-    rcc: &mut Rcc,
-    storage: UartRxStorage,
-) -> UartRxParts<UartRxTransfer<Stream5<DMA1>, USART2, 4>> {
-    init_uart_rx_dma::<_, _, _, _, 4>(
-        resources.tx_pin.into_alternate::<7>(),
-        resources.rx_pin.into_alternate::<7>(),
-        resources.usart,
-        resources.rx_dma,
-        rcc,
-        Mode::Sbus,
-        storage,
-    )
+/// Every UART the STM32F405 flight boards route, by logical port.
+pub struct F405UartPortResources {
+    pub uart1: Uart1PortResources,
+    pub uart2: Uart2PortResources,
+    pub uart4: Uart4PortResources,
 }
 
-pub fn init_usart1_esc_telemetry_rx_dma(
-    resources: Usart1EscTelemetryResources,
-    rcc: &mut Rcc,
-    storage: UartRxStorage,
-) -> UartRxParts<UartRxTransfer<Stream5<DMA2>, USART1, 4>> {
-    init_uart_rx_only_dma::<_, _, _, 4>(
-        resources.rx_pin.into_alternate::<7>(),
-        resources.usart,
-        resources.rx_dma,
-        rcc,
-        Mode::EscTelemetry,
-        storage,
-    )
+/// Static buffers and stream owners for each port.
+pub struct F405UartPortStorage {
+    pub uart1: UartRxPortStorage,
+    pub uart2: UartRxPortStorage,
+    pub uart4: UartRxTxPortStorage,
 }
 
-pub fn init_uart4_msp_rx_dma_with_tx(
-    resources: Uart4MspRxResources,
-    rcc: &mut Rcc,
-    storage: UartRxStorage,
-) -> UartRxTxParts<Stream2<DMA1>, UART4, 4> {
-    init_uart_rx_dma_with_tx::<_, _, _, _, 4>(
-        resources.tx_pin.into_alternate::<8>(),
-        resources.rx_pin.into_alternate::<8>(),
-        resources.uart,
-        resources.rx_dma,
-        rcc,
-        Mode::Msp,
-        storage,
-    )
+/// The started ports. A port left unbound stays `None`: its peripheral is
+/// never enabled, so its interrupts never fire.
+pub struct F405UartPorts {
+    pub uart1_rx: Option<UartRxPort<Uart1RxIrq>>,
+    pub uart2_rx: Option<UartRxPort<Uart2RxIrq>>,
+    pub uart4_rx: Option<UartRxPort<Uart4RxIrq>>,
+    pub uart4_tx: UartTxPort<Uart4TxDmaSide>,
+    pub functions: SerialFunctionSlots<SerialPortEndpoint>,
 }
 
-pub fn init_usart2_sbus(
-    resources: Usart2SbusResources,
+/// Start every bound port with its function's line settings and give each
+/// function its endpoint.
+pub fn init_f405_uart_ports(
+    resources: F405UartPortResources,
     rcc: &mut Rcc,
-    storage: crate::app_storage::UartRxStorageResources,
-) -> UartRxParts<UartRxTransfer<Stream5<DMA1>, USART2, 4>> {
-    init_usart2_sbus_rx_dma(resources, rcc, storage.into_backend())
-}
+    storage: F405UartPortStorage,
+    bindings: &ResolvedBindings,
+) -> F405UartPorts {
+    let mut ports = F405UartPorts {
+        uart1_rx: None,
+        uart2_rx: None,
+        uart4_rx: None,
+        uart4_tx: UartTxPort::unbound(),
+        functions: SerialFunctionSlots::empty(),
+    };
 
-pub fn init_usart1_esc_telemetry(
-    resources: Usart1EscTelemetryResources,
-    rcc: &mut Rcc,
-    storage: crate::app_storage::UartRxStorageResources,
-) -> UartRxParts<UartRxTransfer<Stream5<DMA2>, USART1, 4>> {
-    init_usart1_esc_telemetry_rx_dma(resources, rcc, storage.into_backend())
-}
-
-pub fn init_uart4_msp_osd(
-    resources: Uart4MspResources,
-    rcc: &mut Rcc,
-    rx_storage: crate::app_storage::UartRxStorageResources,
-    tx_buffer: Uart4TxBuf,
-) -> Uart4MspParts {
-    let Uart4MspResources {
-        tx_pin,
-        rx_pin,
-        uart,
-        rx_dma,
-        tx_dma,
-    } = resources;
-    let uart4 = init_uart4_msp_rx_dma_with_tx(
-        Uart4MspRxResources {
-            tx_pin,
-            rx_pin,
-            uart,
-            rx_dma,
-        },
-        rcc,
-        rx_storage.into_backend(),
-    );
-
-    Uart4MspParts {
-        rx_irq: uart4.irq,
-        parser: uart4.parser,
-        tx_dma: init_uart4_tx_dma(tx_dma, uart4.tx, tx_buffer),
+    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart1) {
+        let parts = init_uart_rx_only_dma::<_, _, _, 4>(
+            resources.uart1.rx_pin.into_alternate::<7>(),
+            resources.uart1.uart,
+            resources.uart1.rx_dma,
+            rcc,
+            profile.protocol,
+            storage.uart1.rx.into_backend(),
+        );
+        let (port, endpoint) = rx_port(
+            LogicalSerialPort::Uart1,
+            parts.irq,
+            parts.parser,
+            storage.uart1.stream,
+            None,
+        );
+        ports.uart1_rx = Some(port);
+        place_endpoint(
+            &mut ports.functions,
+            bindings,
+            LogicalSerialPort::Uart1,
+            endpoint,
+        );
     }
+
+    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart2) {
+        let parts = init_uart_rx_dma::<_, _, _, _, 4>(
+            resources.uart2.tx_pin.into_alternate::<7>(),
+            resources.uart2.rx_pin.into_alternate::<7>(),
+            resources.uart2.uart,
+            resources.uart2.rx_dma,
+            rcc,
+            profile.protocol,
+            storage.uart2.rx.into_backend(),
+        );
+        let (port, endpoint) = rx_port(
+            LogicalSerialPort::Uart2,
+            parts.irq,
+            parts.parser,
+            storage.uart2.stream,
+            None,
+        );
+        ports.uart2_rx = Some(port);
+        place_endpoint(
+            &mut ports.functions,
+            bindings,
+            LogicalSerialPort::Uart2,
+            endpoint,
+        );
+    }
+
+    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart4) {
+        let tx_pin = resources.uart4.tx_pin.into_alternate::<8>();
+        let rx_pin = resources.uart4.rx_pin.into_alternate::<8>();
+        let (irq, parser, writer) = if profile.protocol.needs_tx() {
+            let parts = init_uart_rx_dma_with_tx::<_, _, _, _, 4>(
+                tx_pin,
+                rx_pin,
+                resources.uart4.uart,
+                resources.uart4.rx_dma,
+                rcc,
+                profile.protocol,
+                storage.uart4.rx.into_backend(),
+            );
+            let tx_dma =
+                init_uart4_tx_dma(resources.uart4.tx_dma, parts.tx, storage.uart4.tx_buffer);
+            let (tx, writer) = tx_port(tx_dma, storage.uart4.tx_stream);
+            ports.uart4_tx = tx;
+            (parts.irq, parts.parser, Some(writer))
+        } else {
+            let parts = init_uart_rx_dma::<_, _, _, _, 4>(
+                tx_pin,
+                rx_pin,
+                resources.uart4.uart,
+                resources.uart4.rx_dma,
+                rcc,
+                profile.protocol,
+                storage.uart4.rx.into_backend(),
+            );
+            (parts.irq, parts.parser, None)
+        };
+        let (port, endpoint) = rx_port(
+            LogicalSerialPort::Uart4,
+            irq,
+            parser,
+            storage.uart4.stream,
+            writer,
+        );
+        ports.uart4_rx = Some(port);
+        place_endpoint(
+            &mut ports.functions,
+            bindings,
+            LogicalSerialPort::Uart4,
+            endpoint,
+        );
+    }
+
+    ports
 }

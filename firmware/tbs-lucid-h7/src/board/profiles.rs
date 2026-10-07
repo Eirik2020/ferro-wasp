@@ -1,4 +1,8 @@
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+use ferrowasp_tasks::drone_toolbox::{
+    IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, TuningProfile,
+};
+use ferrowasp_tasks::flash_storage::StoredConfig;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AdcObservationProfile {
@@ -79,6 +83,41 @@ pub const FLIGHT_ARMING_ENABLED: bool = IMU_SENSOR_IDENTITY_VERIFIED
     && MOTOR_OUTPUT_ORDER_VERIFIED;
 pub const ARMING_INHIBIT_REASON: &str =
     "TBS Lucid H7 IMU orientation, motor order, and ADC scale are not bench-verified";
+
+/// The TBS Lucid H7's fallback tune when storage holds no valid
+/// configuration. It starts at the Foxeer F405 V2's approved P-only values
+/// and is not yet tuned on this board; persisted configuration takes
+/// precedence.
+pub const DEFAULT_TUNING: TuningProfile = TuningProfile {
+    rate_gains: RateControllerGains {
+        roll: PidGains {
+            p: 2.5,
+            i: 0.0,
+            d: 0.0,
+        },
+        pitch: PidGains {
+            p: 2.5,
+            i: 0.0,
+            d: 0.0,
+        },
+        yaw: PidGains {
+            p: 2.0,
+            i: 0.0,
+            d: 0.0,
+        },
+    },
+    imu_lpf_hz: IMU_GYRO_LPF_HZ,
+    rc_rates: RC_RATE_PROFILE,
+};
+
+/// The configuration this board boots with when storage holds none, and the
+/// one a configurator reset restores. The serial bindings stay unset, so the
+/// board's default bindings apply.
+pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
+    tuning: DEFAULT_TUNING,
+    log_rate_divisor: 1,
+    serial_bindings: None,
+};
 
 #[cfg(test)]
 mod tests {

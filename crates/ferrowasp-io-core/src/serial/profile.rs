@@ -1,9 +1,50 @@
+/// A UART by its number on the chip, the name a pilot sees on the board:
+/// USART3 is `Uart3` whichever function it serves. Eight covers the UARTs of
+/// every supported family; the STM32H743 numbers its eighth UART8.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LogicalSerialPort {
     Uart1,
     Uart2,
     Uart3,
     Uart4,
+    Uart5,
+    Uart6,
+    Uart7,
+    Uart8,
+}
+
+impl LogicalSerialPort {
+    pub const ALL: [Self; 8] = [
+        Self::Uart1,
+        Self::Uart2,
+        Self::Uart3,
+        Self::Uart4,
+        Self::Uart5,
+        Self::Uart6,
+        Self::Uart7,
+        Self::Uart8,
+    ];
+
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Uart1 => "uart1",
+            Self::Uart2 => "uart2",
+            Self::Uart3 => "uart3",
+            Self::Uart4 => "uart4",
+            Self::Uart5 => "uart5",
+            Self::Uart6 => "uart6",
+            Self::Uart7 => "uart7",
+            Self::Uart8 => "uart8",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|port| port.name() == name)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -24,6 +65,11 @@ pub const MSP_V1_MAX_FRAME_LEN: usize = MSP_V1_MAX_PAYLOAD_LEN + 6;
 pub const ESC_TELEMETRY_FRAME_LEN: usize = 10;
 
 impl SerialProtocol {
+    /// The protocol talks back, so its port needs a transmit path.
+    pub const fn needs_tx(self) -> bool {
+        matches!(self, SerialProtocol::Crsf | SerialProtocol::Msp)
+    }
+
     pub const fn frame_size(self) -> usize {
         match self {
             SerialProtocol::Disabled => 0,

@@ -46,7 +46,6 @@ pub static IMU_TRANSPORT_READY: AtomicBool = AtomicBool::new(false);
 pub static IMU_DRDY_IRQ_COUNT: AtomicU32 = AtomicU32::new(0);
 pub static IMU_DRDY_REJECTED_COUNT: AtomicU32 = AtomicU32::new(0);
 pub static IMU_DRDY_LAST_US: AtomicU32 = AtomicU32::new(0);
-pub static ESC_TELEMETRY_DISCONTINUITY: AtomicBool = AtomicBool::new(false);
 pub static ACTIVE_IMU_KIND: AtomicU8 = AtomicU8::new(0);
 pub static BATTERY_VOLTAGE_V10_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
 pub static BATTERY_CURRENT_CA_SNAPSHOT: AtomicI32 = AtomicI32::new(0);

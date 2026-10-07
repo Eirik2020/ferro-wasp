@@ -68,7 +68,7 @@ pub mod board;
 pub use ferrowasp_core::actuator::throttle_to_u16;
 pub use ferrowasp_core::safety;
 pub use ferrowasp_drivers::mpu6500 as imu;
-pub use ferrowasp_io_core::serial::{UART2_CONSUMER, UART4_CONSUMER, route_uart_to_task};
+pub use ferrowasp_io_core::serial::resolve_bindings;
 pub use ferrowasp_io_core::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
     SpiRequestMailbox,
@@ -91,20 +91,18 @@ pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
 pub use ferrowasp_stm32f4::spi_dma::*;
 pub use ferrowasp_stm32f4::timebase as stm32_timebase;
 pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
+pub use ferrowasp_stm32f4::uart_port as stm32_port;
 pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
 pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
 pub use ferrowasp_stm32f4_tasks as flight_tasks;
 pub use ferrowasp_stm32f4_tasks::snapshots::{
     CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW, CONTROL_RATE_SEQ, CONTROL_ROLL_DPS10,
-    CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW, ESC_TELEMETRY_DISCONTINUITY,
-    IMU_BIAS_CALIBRATED, IMU_LATEST_PITCH_RAW, IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ,
-    IMU_LATEST_YAW_RAW, IMU_STALE, RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED,
+    CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW, IMU_BIAS_CALIBRATED,
+    IMU_LATEST_PITCH_RAW, IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE,
+    RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED,
 };
 pub use ferrowasp_stm32f4_tasks::warn_arming_abort;
 pub use ferrowasp_stm32f4_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
-pub use ferrowasp_stm32f4_tasks::{
-    Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
-};
 pub use ferrowasp_tasks::actuator as actuator_task;
 pub use ferrowasp_tasks::drone_toolbox as dt;
 pub use ferrowasp_tasks::esc_manager as esc;
@@ -122,17 +120,10 @@ pub type AdcTransfer = stm32_adc::Adc1ObservationTransfer;
 pub type ControlScheduler = board::aliases::ControlScheduler;
 pub type IoTimebase = stm32_timebase::MicrosecondTimebase<board::aliases::IoTimebaseTimer>;
 pub type IoWatchdog = board::aliases::IoWatchdog;
-pub type Uart4OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
-pub type Uart4OwnedRxProducer = stm32_memory::UartOwnedRxProducer<'static>;
-pub type Uart4OwnedReader = stm32_memory::UartOwnedReader<'static>;
-pub type Uart4Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-pub type Uart2OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
-pub type Uart2OwnedReader = stm32_memory::UartOwnedReader<'static>;
-pub type Uart2Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-pub type Uart4OwnedTxChannel = stm32_memory::UartOwnedTxChannel;
-pub type Uart4OwnedWriter = stm32_memory::UartOwnedWriter<'static>;
-pub type Uart4OwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
-pub type Uart4OwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
+pub type UartOwnedRxChannel = stm32_memory::UartOwnedRxChannel;
+pub type UartOwnedTxChannel = stm32_memory::UartOwnedTxChannel;
+pub type UartOwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
+pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
 pub type UsbDebugDevice = stm32_usb::UsbCdcDevice;
 pub type UsbDebugSerial = stm32_usb::BufferedUsbCdcSerial;
 
@@ -203,8 +194,7 @@ where
         }
     }
 }
-pub type EscTelemetryUartIrq = stm32_uart::Uart1RxIrq;
-pub type EscTelemetryUartParser = stm32_uart::UartRxParserSide;
+pub type SerialPortEndpoint = stm32_port::SerialPortEndpoint;
 
 pub use board::profiles::{ADC_OBSERVATION_PROFILE, IMU_CONTROL_AXIS_PROFILE};
 pub use board::profiles::{DSHOT_FOUR_MOTOR_PROFILE, DSHOT_IDLE_TUNING_MAX_COMMAND};

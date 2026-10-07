@@ -119,7 +119,7 @@ pub mod board;
 pub use ferrowasp_core::actuator::{remap_motor_outputs, throttle_to_u16};
 pub use ferrowasp_core::safety;
 pub use ferrowasp_drivers::{icm42688p as icm, mpu6500 as imu};
-pub use ferrowasp_io_core::serial::{UART2_CONSUMER, UART4_CONSUMER, route_uart_to_task};
+pub use ferrowasp_io_core::serial::ResolvedBindings;
 pub use ferrowasp_io_core::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
     SpiRequestMailbox,
@@ -136,18 +136,18 @@ pub use ferrowasp_stm32f4::app_config::{
 };
 pub use ferrowasp_stm32f4::app_storage as stm32_storage;
 pub use ferrowasp_stm32f4::memory as stm32_memory;
+pub use ferrowasp_stm32f4::uart_port as stm32_port;
 pub use ferrowasp_stm32f4_tasks as flight_tasks;
 pub use ferrowasp_stm32f4_tasks::snapshots::{
     ACTIVE_IMU_KIND, ADC_CURRENT_MV_SNAPSHOT, ADC_VOLTAGE_MV_SNAPSHOT, BATTERY_CURRENT_CA_SNAPSHOT,
     BATTERY_VOLTAGE_V10_SNAPSHOT, CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW,
     CONTROL_RATE_SEQ, CONTROL_ROLL_DPS10, CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW,
-    ESC_TELEMETRY_DISCONTINUITY, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE,
-    FLASH_JEDEC_MANUFACTURER, FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN,
-    FLASH_READY, FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_BIAS_CALIBRATED,
-    IMU_DRDY_IRQ_COUNT, IMU_DRDY_LAST_US, IMU_DRDY_REJECTED_COUNT, IMU_LATEST_PITCH_RAW,
-    IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY,
-    RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED, USB_DEBUG_DUE, USB_RC_ARMABLE_SNAPSHOT,
-    USB_RC_VALID_SNAPSHOT,
+    FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE, FLASH_JEDEC_MANUFACTURER,
+    FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN, FLASH_READY,
+    FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_BIAS_CALIBRATED, IMU_DRDY_IRQ_COUNT,
+    IMU_DRDY_LAST_US, IMU_DRDY_REJECTED_COUNT, IMU_LATEST_PITCH_RAW, IMU_LATEST_ROLL_RAW,
+    IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY, RC_ARM_HIGH, RC_THROTTLE,
+    SAFETY_ARMED, USB_DEBUG_DUE, USB_RC_ARMABLE_SNAPSHOT, USB_RC_VALID_SNAPSHOT,
 };
 #[cfg(feature = "imu_orientation_rtt")]
 pub use ferrowasp_stm32f4_tasks::snapshots::{
@@ -156,9 +156,6 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     imu_orientation_snapshot,
 };
 pub use ferrowasp_stm32f4_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
-pub use ferrowasp_stm32f4_tasks::{
-    Uart2OwnedRxBridge, publish_uart2_owned, record_uart2_discontinuity, record_uart2_dma_error,
-};
 pub use ferrowasp_stm32h7::adc as stm32_adc;
 pub use ferrowasp_stm32h7::clocks as stm32_clocks;
 pub use ferrowasp_stm32h7::hal_prelude::*;
@@ -186,8 +183,7 @@ pub use stm32_usb::UsbDeviceState;
 
 pub type DshotShared = board::init::DshotMotorBank;
 
-pub type EscTelemetryUartIrq = board::aliases::Uart1RxIrq;
-pub type EscTelemetryUartParser = stm32_uart::UartRxParserSide;
+pub type SerialPortEndpoint = stm32_port::SerialPortEndpoint;
 pub type EscManagerState = esc::EscManager;
 pub type EscRequestProducer = esc::EscRequestProducer;
 pub type EscRequestConsumer = esc::EscRequestConsumer;
@@ -200,17 +196,10 @@ pub type AdcTransfer = board::aliases::Adc1ObservationTransfer;
 pub type ControlScheduler = board::aliases::ControlScheduler;
 pub type IoTimebase = board::aliases::IoTimebase;
 pub type IoWatchdog = board::aliases::IoWatchdog;
-pub type Uart4OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
-pub type Uart4OwnedRxProducer = stm32_memory::UartOwnedRxProducer<'static>;
-pub type Uart4OwnedReader = stm32_memory::UartOwnedReader<'static>;
-pub type Uart4Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-pub type Uart2OwnedRxChannel = stm32_memory::UartOwnedRxChannel;
-pub type Uart2OwnedReader = stm32_memory::UartOwnedReader<'static>;
-pub type Uart2Discontinuities = stm32_memory::UartOwnedDiscontinuities<'static>;
-pub type Uart4OwnedTxChannel = stm32_memory::UartOwnedTxChannel;
-pub type Uart4OwnedWriter = stm32_memory::UartOwnedWriter<'static>;
-pub type Uart4OwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
-pub type Uart4OwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
+pub type UartOwnedRxChannel = stm32_memory::UartOwnedRxChannel;
+pub type UartOwnedTxChannel = stm32_memory::UartOwnedTxChannel;
+pub type UartOwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
+pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
 pub type UsbDebugDevice = stm32_usb::UsbCdcDevice;
 pub type UsbDebugSerial = stm32_usb::BufferedUsbCdcSerial;
 /// The microSD card as SPI NOR, so the flash manager and blackbox are the
@@ -283,8 +272,8 @@ impl Default for ConfiguratorUsbState {
 
 pub use board::Spi1ImuKind;
 pub use board::profiles::{
-    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, FLIGHT_ARMING_ENABLED,
-    IMU_CONTROL_AXIS_PROFILE, imu_kind_flight_verified,
+    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, DEFAULT_STORED_CONFIG, DEFAULT_TUNING,
+    FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE, imu_kind_flight_verified,
 };
 pub const BENCH_ACTUATOR_VALIDATION_ENABLED: bool = cfg!(feature = "bench_actuator_validation");
 pub const SMOKE_ACTUATOR_INHIBIT_ENABLED: bool = cfg!(feature = "smoke_actuator_inhibit");
@@ -514,8 +503,26 @@ pub fn load_flash_config(
         layout,
         // The Foxeer defaults: the Lucid flies the same airframe profile until
         // it has its own.
-        flash_task::StoredConfig::foxeer_f405_v2_default(),
+        DEFAULT_STORED_CONFIG,
         |address, page| flash.read(address, page),
+    )
+}
+
+/// The serial bindings to start the ports with: the saved table when the
+/// card holds one, else the board's defaults. Read once in init, so a
+/// changed binding applies after a reboot.
+pub fn boot_serial_bindings(flash: &mut FlashDevice) -> ResolvedBindings {
+    let saved = if FLASH_READY.load(Ordering::Acquire) {
+        flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
+            .and_then(|layout| load_flash_config(flash, layout).ok())
+            .and_then(|(config, _, _)| config.serial_bindings)
+    } else {
+        None
+    };
+    stm32_port::resolve_boot_serial_bindings(
+        saved,
+        board::serial::DEFAULT_SERIAL_BINDINGS,
+        board::serial::SERIAL_ROUTES,
     )
 }
 

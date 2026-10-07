@@ -86,7 +86,7 @@ pub fn assert_active_routes_compile() {
     ferrowasp_stm32f4::board_routes::assert_timer_instance::<TIM8>();
 }
 
-pub fn assert_usart1_esc_telemetry_route_compile() {
+pub fn assert_uart1_esc_telemetry_route_compile() {
     ferrowasp_stm32f4::board_routes::assert_dma_route::<
         Stream5<DMA2>,
         serial::Rx<USART1>,

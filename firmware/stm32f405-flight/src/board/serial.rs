@@ -1,7 +1,8 @@
 #[cfg(test)]
 use ferrowasp_io_core::serial::SerialRouteError;
 use ferrowasp_io_core::serial::{
-    LogicalSerialPort, SerialCapabilities, SerialProfile, SerialRoute,
+    LogicalSerialPort, SerialBindings, SerialCapabilities, SerialFunction, SerialProfile,
+    SerialRoute,
 };
 
 pub const USART2_SBUS: SerialRoute = SerialRoute {
@@ -59,6 +60,14 @@ pub const USART1_ESC_TELEMETRY: SerialRoute = SerialRoute {
 };
 
 pub const ACTIVE_SERIAL_ROUTES: &[SerialRoute] = &[USART1_ESC_TELEMETRY, USART2_SBUS, UART4_MSP];
+
+/// FCU3's fixed wiring. This app has no saved bindings yet, so these always
+/// apply; the ports are still started through the same boot-time binding as
+/// Foxeer.
+pub const DEFAULT_SERIAL_BINDINGS: SerialBindings = SerialBindings::none()
+    .with(LogicalSerialPort::Uart1, SerialFunction::EscTelemetry)
+    .with(LogicalSerialPort::Uart2, SerialFunction::RcInput)
+    .with(LogicalSerialPort::Uart4, SerialFunction::MspDisplayPort);
 
 #[cfg(test)]
 mod tests {
