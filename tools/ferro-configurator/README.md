@@ -55,6 +55,8 @@ ferro-configurator.exe --port COM6 config show
 ferro-configurator.exe --port COM6 config export backup.toml
 ferro-configurator.exe --port COM6 config set roll.p 2.5
 ferro-configurator.exe --port COM6 config apply profile.toml
+ferro-configurator.exe --port COM6 config ports
+ferro-configurator.exe --port COM6 config bind uart4 esc_telemetry
 
 ferro-configurator.exe --port COM6 blackbox flights
 ferro-configurator.exe --port COM6 blackbox download `

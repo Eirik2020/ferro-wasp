@@ -21,7 +21,8 @@ use ferro_configurator_bridge::{
     BridgeError, DEFAULT_TIMEOUT, Safety, Session, ports as discover,
 };
 use ferro_configurator_core::{
-    DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, PortInfo, SerialTransport,
+    DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, PortInfo, SerialBindings,
+    SerialTransport,
 };
 use serde::Serialize;
 use tauri::{Emitter, Manager, State};
@@ -123,6 +124,24 @@ async fn apply_config(
 }
 
 #[tauri::command]
+async fn serial_bindings(state: State<'_, AppState>) -> Result<SerialBindings, BridgeError> {
+    blocking(&state.session, Session::serial_bindings).await
+}
+
+/// Refused by the session unless the controller reports itself disarmed.
+#[tauri::command]
+async fn apply_serial_binding(
+    state: State<'_, AppState>,
+    port: String,
+    function: String,
+) -> Result<SerialBindings, BridgeError> {
+    blocking(&state.session, move |session| {
+        session.apply_serial_binding(&port, &function)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn flights(state: State<'_, AppState>) -> Result<FlightCatalog, BridgeError> {
     blocking(&state.session, Session::flights).await
 }
@@ -172,6 +191,8 @@ fn main() {
             safety,
             read_config,
             apply_config,
+            serial_bindings,
+            apply_serial_binding,
             flights,
             download_flight,
         ])

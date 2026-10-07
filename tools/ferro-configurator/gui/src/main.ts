@@ -1,11 +1,19 @@
 // The prototype interface.
 //
-// Three panels over one connection: the safety banner, the tuning form, and
-// the flight log. The banner is not decoration - it is the thing that decides
+// Four panels over one connection: the safety banner, the tuning form, the
+// serial ports, and the flight log. The banner is not decoration - it is the thing that decides
 // whether the form can be submitted at all, and it is deliberately the first
 // thing on screen.
 
-import { BridgeError, toBridgeError, type Api, type FerroConfig, type Safety } from "./api";
+import {
+  BridgeError,
+  SERIAL_FUNCTIONS,
+  toBridgeError,
+  type Api,
+  type FerroConfig,
+  type Safety,
+  type SerialBindings,
+} from "./api";
 import { MockApi } from "./mock";
 import { TauriApi, isTauri } from "./tauri";
 
@@ -18,6 +26,7 @@ const SAFETY_POLL_MS = 1_000;
 let connected = false;
 let safetyState: Safety | null = null;
 let config: FerroConfig | null = null;
+let bindings: SerialBindings | null = null;
 let pollTimer: number | undefined;
 
 function element<T extends HTMLElement>(id: string): T {
@@ -127,6 +136,7 @@ async function connect(): Promise<void> {
     setStatusLine(`Connected to ${description}.`);
     await pollSafety();
     await loadConfig();
+    await loadPorts();
     pollTimer = window.setInterval(() => void pollSafety(), SAFETY_POLL_MS);
   } catch (error) {
     connected = false;
@@ -142,9 +152,11 @@ async function disconnect(): Promise<void> {
   connected = false;
   safetyState = null;
   config = null;
+  bindings = null;
   element("device-description").textContent = "";
   renderSafety();
   renderConfig();
+  renderPorts();
   setStatusLine("Disconnected.");
 }
 
@@ -197,11 +209,19 @@ function renderConfig(): void {
  * that cannot work.
  */
 function updateWriteControls(): void {
-  const allowed = connected && safetyState?.writes_allowed === true && config !== null;
+  const writable = connected && safetyState?.writes_allowed === true;
+  const allowed = writable && config !== null;
   const apply = element<HTMLButtonElement>("apply");
   apply.disabled = !allowed;
   apply.title = allowed
     ? "Stage, save and verify this configuration"
+    : "Available when a disarmed controller is connected";
+
+  const portsAllowed = writable && bindings !== null;
+  const applyPorts = element<HTMLButtonElement>("apply-ports");
+  applyPorts.disabled = !portsAllowed;
+  applyPorts.title = portsAllowed
+    ? "Save and verify the changed ports; reboot the controller to apply them"
     : "Available when a disarmed controller is connected";
 }
 
@@ -250,6 +270,67 @@ async function applyConfig(): Promise<void> {
     // A refusal here is the expected outcome of an armed controller, so it is
     // reported the same way the banner reports it rather than as a fault.
     report(error);
+    if (error instanceof BridgeError && error.kind === "refused") {
+      await pollSafety();
+    }
+  }
+}
+
+// --------------------------------------------------------- serial ports ---
+
+function renderPorts(): void {
+  const table = element<HTMLTableElement>("serial-ports");
+  table.replaceChildren();
+  element("serial-source").textContent = bindings
+    ? bindings.saved
+      ? "Saved bindings."
+      : "Board defaults; nothing saved yet."
+    : "";
+  for (const binding of bindings?.ports ?? []) {
+    const row = table.insertRow();
+    row.insertCell().textContent = binding.port.toUpperCase();
+    const select = document.createElement("select");
+    select.dataset["port"] = binding.port;
+    select.setAttribute("aria-label", `${binding.port} function`);
+    for (const name of SERIAL_FUNCTIONS) {
+      select.add(new Option(name, name, false, name === binding.function));
+    }
+    row.insertCell().append(select);
+  }
+  updateWriteControls();
+}
+
+async function loadPorts(): Promise<void> {
+  try {
+    bindings = await api.serialBindings();
+    renderPorts();
+  } catch (error) {
+    report(error);
+  }
+}
+
+/** Saves each changed port in turn; every one is verified by read-back. */
+async function applyPorts(): Promise<void> {
+  if (!bindings) {
+    return;
+  }
+  const changes = [...document.querySelectorAll<HTMLSelectElement>("#serial-ports select")]
+    .map((select) => ({ port: select.dataset["port"] ?? "", func: select.value }))
+    .filter(({ port, func }) => bindings?.ports.find((b) => b.port === port)?.function !== func);
+  if (changes.length === 0) {
+    setStatusLine("No port changed.");
+    return;
+  }
+  setStatusLine("Saving and verifying ports…", "busy");
+  try {
+    for (const { port, func } of changes) {
+      bindings = await api.applySerialBinding(port, func);
+    }
+    renderPorts();
+    setStatusLine("Ports saved and verified. Reboot the controller to apply them.");
+  } catch (error) {
+    report(error);
+    await loadPorts();
     if (error instanceof BridgeError && error.kind === "refused") {
       await pollSafety();
     }
@@ -316,6 +397,8 @@ function wire(): void {
   element("disconnect").addEventListener("click", () => void disconnect());
   element("reload-config").addEventListener("click", () => void loadConfig());
   element("apply").addEventListener("click", () => void applyConfig());
+  element("reload-ports").addEventListener("click", () => void loadPorts());
+  element("apply-ports").addEventListener("click", () => void applyPorts());
   element("load-flights").addEventListener("click", () => void loadFlights());
   element("download").addEventListener("click", () => void downloadLatest());
 
@@ -331,6 +414,7 @@ function wire(): void {
 
   renderSafety();
   renderConfig();
+  renderPorts();
   void refreshPorts();
 }
 

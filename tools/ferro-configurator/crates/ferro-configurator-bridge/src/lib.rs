@@ -22,8 +22,8 @@ use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
     CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo,
-    FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, SerialTransport,
-    StatusSnapshot, catalog_device, discover_ports, download_flight, open_device,
+    FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, SerialBindings,
+    SerialTransport, StatusSnapshot, catalog_device, discover_ports, download_flight, open_device,
     resolve_device_flight,
 };
 use serde::Serialize;
@@ -178,6 +178,21 @@ impl<T: LineTransport> Session<T> {
         Ok(self.client_mut()?.apply_config(config)?)
     }
 
+    /// Which function each serial port is bound to. A read, so it is allowed
+    /// while armed.
+    pub fn serial_bindings(&mut self) -> Result<SerialBindings> {
+        Ok(self.client_mut()?.read_serial_bindings()?)
+    }
+
+    /// Binds one serial port to a function, persists, and verifies.
+    ///
+    /// Gated on [`Session::require_disarmed`]. The controller applies the
+    /// binding when it next boots; the returned table is what it read back.
+    pub fn apply_serial_binding(&mut self, port: &str, function: &str) -> Result<SerialBindings> {
+        self.require_disarmed()?;
+        Ok(self.client_mut()?.apply_serial_binding(port, function)?)
+    }
+
     /// The stored flights, grouped by recorded boot session.
     pub fn flights(&mut self) -> Result<FlightCatalog> {
         Ok(catalog_device(self.client_mut()?)?)
@@ -293,6 +308,30 @@ mod tests {
             .require_disarmed()
             .expect_err("the second read is armed and must refuse");
         assert!(matches!(error, BridgeError::Refused { .. }));
+    }
+
+    #[test]
+    fn an_armed_controller_refuses_a_port_binding() {
+        let mut session = session_answering(&[status_line(true)]);
+        let error = session.apply_serial_binding("uart3", "rc").unwrap_err();
+        assert!(matches!(error, BridgeError::Refused { .. }));
+    }
+
+    #[test]
+    fn a_disarmed_controller_binds_and_verifies_a_port() {
+        let lines = [
+            status_line(false),
+            "OK serial default ports=1; applies after save and reboot".to_owned(),
+            "OK uart3=osd".to_owned(),
+            "OK staged; use config save, then reboot".to_owned(),
+            "OK config saved".to_owned(),
+            "OK serial saved ports=1; applies after save and reboot".to_owned(),
+            "OK uart3=rc".to_owned(),
+        ];
+        let mut session = session_answering(&lines);
+        let readback = session.apply_serial_binding("uart3", "rc").unwrap();
+        assert!(readback.saved);
+        assert_eq!(readback.function("uart3"), Some("rc"));
     }
 
     #[test]

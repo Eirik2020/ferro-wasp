@@ -17,6 +17,7 @@ import {
   type FlightCatalog,
   type PortInfo,
   type Safety,
+  type SerialBindings,
 } from "./api";
 
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -50,6 +51,14 @@ export class TauriApi implements Api {
 
   applyConfig(config: FerroConfig): Promise<FerroConfig> {
     return call<FerroConfig>("apply_config", { config });
+  }
+
+  serialBindings(): Promise<SerialBindings> {
+    return call<SerialBindings>("serial_bindings");
+  }
+
+  applySerialBinding(port: string, func: string): Promise<SerialBindings> {
+    return call<SerialBindings>("apply_serial_binding", { port, function: func });
   }
 
   flights(): Promise<FlightCatalog> {

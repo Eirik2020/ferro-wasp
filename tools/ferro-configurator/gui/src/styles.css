@@ -110,6 +110,25 @@ section {
   align-items: center;
 }
 
+.note {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+}
+
+#serial-ports {
+  border-collapse: collapse;
+  margin-bottom: 0.4rem;
+}
+
+#serial-ports td {
+  padding: 0.2rem 0.9rem 0.2rem 0;
+}
+
+#serial-source {
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));

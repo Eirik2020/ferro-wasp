@@ -193,6 +193,20 @@ For a complete profile:
 .\ferro-configurator.exe --port $Port config show
 ```
 
+## Change serial ports
+
+Each UART is named by its number on the chip. List what each port serves,
+then bind one to a function (`none`, `rc`, `osd` or `esc_telemetry`):
+
+```powershell
+.\ferro-configurator.exe --port $Port config ports
+.\ferro-configurator.exe --port $Port config bind uart4 esc_telemetry
+```
+
+The change is saved and verified by readback, and takes effect when the
+controller reboots. A function the port cannot carry is dropped at boot and
+logged; with no port bound to `rc`, the craft cannot arm.
+
 Legacy schema-v1 profiles contain only the original eleven fields. Applying
 one overlays those fields onto the connected board and preserves its current
 RC-rate settings.
