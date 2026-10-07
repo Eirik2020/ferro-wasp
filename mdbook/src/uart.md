@@ -48,7 +48,8 @@ telemetry) is chosen at boot from that table:
 - Until a pilot saves bindings the board's defaults apply. Over USB,
   `serial` shows them and `serial <port> <function>` stages a change, which
   takes effect after `config save` and a reboot. Changes are refused while
-  armed.
+  armed. FerroConfigurator's `config ports` and `config bind` do the same and
+  verify the saved table by readback.
 - Port transports are role-free and chip-neutral
   (`crates/ferrowasp-stm32f4/src/uart_port.rs`): they record faults on the
   stream, and the function task decides what a fault means. Each family's
@@ -93,7 +94,9 @@ PA9/USART1 TX is not configured.
 
 On the TBS Lucid H7, USART6 (`uart6`) carries SBUS, inverted in the UART;
 USART3 (`uart3`) carries MSP DisplayPort with TX DMA; and UART8 (`uart8`)
-carries ESC telemetry on PE0. In the standard flight image, the manager sends typed telemetry requests through
+carries ESC telemetry on PE0. Every H743 UART inverts in hardware, so any of
+the three can take SBUS or ESC telemetry; only `uart3` has the transmit DMA
+MSP needs. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output

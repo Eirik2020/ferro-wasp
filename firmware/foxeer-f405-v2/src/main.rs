@@ -1387,14 +1387,14 @@ ferroforge::app! {
                             );
                         }
                         flash_task::StorageCommand::SerialShow => {
-                            let _ = write!(response, "OK ");
-                            let _ = stm32_port::write_serial_bindings(
-                                &mut response,
+                            stm32_port::write_serial_bindings(
                                 stored_config.serial_bindings,
                                 board::serial::DEFAULT_SERIAL_BINDINGS,
                                 board::serial::SERIAL_ROUTES,
+                                |line| {
+                                    queue_storage_response(flash_response_producer, line);
+                                },
                             );
-                            queue_storage_response(flash_response_producer, response.as_str());
                         }
                         flash_task::StorageCommand::SerialSet(port, function) => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {

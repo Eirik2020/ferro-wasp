@@ -13,6 +13,7 @@ import {
   type FlightCatalog,
   type PortInfo,
   type Safety,
+  type SerialBindings,
   type DownloadProgress,
   type DownloadSummary,
 } from "./api";
@@ -54,6 +55,15 @@ export class MockApi implements Api {
   armed = false;
   private connected = false;
   private config = baselineConfig();
+  // The Foxeer F405 V2's default wiring.
+  private bindings: SerialBindings = {
+    saved: false,
+    ports: [
+      { port: "uart1", function: "esc_telemetry" },
+      { port: "uart2", function: "rc" },
+      { port: "uart4", function: "osd" },
+    ],
+  };
 
   async ports(): Promise<PortInfo[]> {
     await sleep(80);
@@ -117,6 +127,30 @@ export class MockApi implements Api {
     await sleep(300);
     this.config = structuredClone(config);
     return structuredClone(this.config);
+  }
+
+  async serialBindings(): Promise<SerialBindings> {
+    this.requireConnection();
+    await sleep(80);
+    return structuredClone(this.bindings);
+  }
+
+  async applySerialBinding(port: string, func: string): Promise<SerialBindings> {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError(
+        "refused",
+        "the controller is armed; disarm it before changing configuration",
+      );
+    }
+    const binding = this.bindings.ports.find((entry) => entry.port === port);
+    if (!binding) {
+      throw new BridgeError("device", `this board does not route \`${port}\``);
+    }
+    await sleep(200);
+    binding.function = func;
+    this.bindings.saved = true;
+    return structuredClone(this.bindings);
   }
 
   async flights(): Promise<FlightCatalog> {

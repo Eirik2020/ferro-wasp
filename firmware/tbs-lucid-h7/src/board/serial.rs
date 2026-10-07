@@ -1,6 +1,11 @@
 //! Serial routes. Each logical port is the UART's number on the chip, the
 //! name a pilot sees on the board and types in `serial <port> <function>`:
 //! USART3 is `uart3`, USART6 `uart6` and UART8 `uart8`.
+//!
+//! Every STM32H743 UART inverts its receive line in hardware, so any port can
+//! take SBUS without an external inverter, and any port can take receive-only
+//! ESC telemetry. MSP DisplayPort needs a transmit DMA stream, which only
+//! UART3 has.
 
 #[cfg(test)]
 use ferrowasp_io_core::serial::SerialRouteError;
@@ -22,7 +27,7 @@ pub const USART6_SBUS: SerialRoute = SerialRoute {
         crsf: false,
         mavlink: false,
         msp: false,
-        esc_telemetry: false,
+        esc_telemetry: true,
         tx: false,
     },
 };
@@ -36,11 +41,11 @@ pub const USART3_MSP: SerialRoute = SerialRoute {
     rx_dma: "DMA1 Stream 1 DMAMUX request 45",
     tx_dma: Some("DMA1 Stream 3 DMAMUX request 46"),
     capabilities: SerialCapabilities {
-        sbus: false,
+        sbus: true,
         crsf: false,
         mavlink: false,
         msp: true,
-        esc_telemetry: false,
+        esc_telemetry: true,
         tx: true,
     },
 };
@@ -54,7 +59,7 @@ pub const UART8_ESC_TELEMETRY: SerialRoute = SerialRoute {
     rx_dma: "DMA1 Stream 2 DMAMUX request 81",
     tx_dma: None,
     capabilities: SerialCapabilities {
-        sbus: false,
+        sbus: true,
         crsf: false,
         mavlink: false,
         msp: false,
@@ -78,7 +83,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_bindings_resolve_cleanly_and_ports_refuse_what_they_cannot_carry() {
+    fn bindings_follow_each_ports_capabilities() {
         use ferrowasp_io_core::serial::resolve_bindings;
 
         let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES);
@@ -99,16 +104,23 @@ mod tests {
             unrouted.function(LogicalSerialPort::Uart1),
             SerialFunction::None
         );
-        // RC on the MSP port is refused, so RC stays unbound.
+        // Every port inverts in hardware, so RC moves to UART3 or UART8.
+        for port in [LogicalSerialPort::Uart3, LogicalSerialPort::Uart8] {
+            let moved = resolve_bindings(
+                SerialBindings::none().with(port, SerialFunction::RcInput),
+                SERIAL_ROUTES,
+            );
+            assert_eq!(moved.issues(), &[]);
+            assert_eq!(moved.profile(port), Some(SerialProfile::sbus()));
+        }
+        // MSP needs transmit DMA, which UART6 does not have, so it is refused.
         let refused = resolve_bindings(
-            DEFAULT_SERIAL_BINDINGS
-                .with(LogicalSerialPort::Uart6, SerialFunction::None)
-                .with(LogicalSerialPort::Uart3, SerialFunction::RcInput),
+            SerialBindings::none().with(LogicalSerialPort::Uart6, SerialFunction::MspDisplayPort),
             SERIAL_ROUTES,
         );
         assert_eq!(refused.issues().len(), 1);
         assert_eq!(
-            refused.function(LogicalSerialPort::Uart3),
+            refused.function(LogicalSerialPort::Uart6),
             SerialFunction::None
         );
     }

@@ -13,9 +13,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
     BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
     DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
-    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::lpf_alpha_for_corner,
-    convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight, find_bundled_firmware,
-    flash_firmware, open_device, prepare_elf, resolve_device_flight,
+    PreparedImage, ProfileStore, SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, catalog_device,
+    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu, discover_ports,
+    download_flight, find_bundled_firmware, flash_firmware, open_device, prepare_elf,
+    resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -285,6 +286,17 @@ enum ConfigCommand {
     Set { key: ConfigKey, value: String },
     /// List accepted setting names and ranges.
     Keys,
+    /// Show which function each serial port is bound to.
+    Ports,
+    /// Bind a serial port to a function, persist, and verify by readback.
+    ///
+    /// The controller applies bindings at boot, so reboot it afterwards.
+    Bind {
+        /// The UART by its number on the chip, as `config ports` lists it.
+        port: String,
+        #[arg(value_parser = clap::builder::PossibleValuesParser::new(SERIAL_FUNCTIONS))]
+        function: String,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -506,6 +518,23 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
             ConfigCommand::Keys => {
                 let keys = ConfigKey::ALL.map(|key| key.name());
                 emit(cli.format, "config.keys", &keys, print_keys)
+            }
+            ConfigCommand::Ports => {
+                let mut client = connect(cli, timeout)?;
+                let bindings = client.read_serial_bindings()?;
+                emit(cli.format, "config.ports", &bindings, || {
+                    print_serial_bindings(&bindings)
+                })
+            }
+            ConfigCommand::Bind { port, function } => {
+                let mut client = connect(cli, timeout)?;
+                let readback = client.apply_serial_binding(port, function)?;
+                emit(cli.format, "config.bind", &readback, || {
+                    println!(
+                        "{port} was saved as {function} and verified by readback. \
+                         Reboot the controller to apply it."
+                    );
+                })
             }
         },
         Command::Blackbox(args) => match &args.command {
@@ -1409,6 +1438,18 @@ fn print_conversion_summary(summary: &ConversionSummary) {
         summary.dropout_count,
         summary.output_bytes
     );
+}
+
+fn print_serial_bindings(bindings: &SerialBindings) {
+    let source = if bindings.saved {
+        "saved"
+    } else {
+        "board defaults"
+    };
+    println!("Serial ports ({source}; a change applies after a reboot):");
+    for binding in &bindings.ports {
+        println!("  {:<8} {}", binding.port, binding.function);
+    }
 }
 
 fn print_keys() {

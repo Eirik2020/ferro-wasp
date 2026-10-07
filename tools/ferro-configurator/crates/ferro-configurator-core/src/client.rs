@@ -46,6 +46,39 @@ pub struct LogInfo {
     pub writable: bool,
 }
 
+/// The functions a serial port can be bound to, as the firmware names them.
+pub const SERIAL_FUNCTIONS: [&str; 4] = ["none", "rc", "osd", "esc_telemetry"];
+
+/// One port the board routes, and the function bound to it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SerialPortBinding {
+    /// The UART by its number on the chip, as the pilot sees it: `uart3`.
+    pub port: String,
+    pub function: String,
+}
+
+/// The controller's port-to-function table.
+///
+/// It is the staged table: what the controller boots with after the next
+/// `config save` and reboot, not necessarily what is running now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SerialBindings {
+    /// Whether a pilot has saved a table. Otherwise these are the board's
+    /// defaults.
+    pub saved: bool,
+    pub ports: Vec<SerialPortBinding>,
+}
+
+impl SerialBindings {
+    /// The function bound to `port`, `None` when the board does not route it.
+    pub fn function(&self, port: &str) -> Option<&str> {
+        self.ports
+            .iter()
+            .find(|binding| binding.port == port)
+            .map(|binding| binding.function.as_str())
+    }
+}
+
 /// A line the controller refuses whatever is already in its command buffer.
 ///
 /// Every storage command takes a fixed number of words, so one more word makes
@@ -163,6 +196,75 @@ impl<T: LineTransport> FerroClient<T> {
         }
         config.ensure_valid()?;
         Ok(config)
+    }
+
+    /// The staged port-to-function table, one port per line after a header
+    /// that says how many follow.
+    pub fn read_serial_bindings(&mut self) -> Result<SerialBindings> {
+        let header = self.request("serial", 2)?;
+        let (saved, count) =
+            parse_serial_header(&header).ok_or_else(|| FerroError::UnexpectedResponse {
+                operation: "serial".to_owned(),
+                response: header.clone(),
+            })?;
+        let mut ports = Vec::with_capacity(count);
+        for _ in 0..count {
+            let line = self
+                .wait_for_response("serial", self.timeout, |line| {
+                    line.starts_with("OK ") || line.starts_with("ERR ")
+                })
+                .and_then(|line| self.accept_response("serial", line))?;
+            let binding =
+                parse_serial_port_line(&line).ok_or_else(|| FerroError::UnexpectedResponse {
+                    operation: "serial".to_owned(),
+                    response: line.clone(),
+                })?;
+            ports.push(binding);
+        }
+        Ok(SerialBindings { saved, ports })
+    }
+
+    /// Binds `port` to `function`, saves, and verifies the readback.
+    ///
+    /// The controller applies a binding only at boot, so the change takes
+    /// effect after it is rebooted. A port the board does not route, or a
+    /// function the firmware does not know, is refused before anything is
+    /// sent. `config save` also persists any other value already staged.
+    pub fn apply_serial_binding(&mut self, port: &str, function: &str) -> Result<SerialBindings> {
+        if !SERIAL_FUNCTIONS.contains(&function) {
+            return Err(FerroError::InvalidConfiguration(format!(
+                "`{function}` is not a serial function; use one of {}",
+                SERIAL_FUNCTIONS.join(", ")
+            )));
+        }
+        let current = self.read_serial_bindings()?;
+        if current.function(port).is_none() {
+            let routed: Vec<&str> = current.ports.iter().map(|p| p.port.as_str()).collect();
+            return Err(FerroError::InvalidConfiguration(format!(
+                "this board does not route `{port}`; it routes {}",
+                routed.join(", ")
+            )));
+        }
+        let operation = format!("serial {port} {function}");
+        let response = self.request(&operation, 1)?;
+        if response != "OK staged; use config save, then reboot" {
+            return Err(FerroError::UnexpectedResponse {
+                operation,
+                response,
+            });
+        }
+        self.save_config()?;
+        let readback = self.read_serial_bindings()?;
+        if readback.saved && readback.function(port) == Some(function) {
+            Ok(readback)
+        } else {
+            Err(FerroError::VerificationFailed {
+                details: format!(
+                    "{port} reads back as {} after saving {function}",
+                    readback.function(port).unwrap_or("unrouted")
+                ),
+            })
+        }
     }
 
     pub fn log_info(&mut self) -> Result<LogInfo> {
@@ -455,6 +557,39 @@ fn complete_value(config: &FerroConfig, key: ConfigKey) -> Result<f32> {
     })
 }
 
+/// `OK serial saved ports=3; applies after save and reboot`
+fn parse_serial_header(line: &str) -> Option<(bool, usize)> {
+    let mut words = line.strip_prefix("OK serial ")?.split_whitespace();
+    let saved = match words.next()? {
+        "saved" => true,
+        "default" => false,
+        _ => return None,
+    };
+    let count = words
+        .next()?
+        .strip_prefix("ports=")?
+        .trim_end_matches(';')
+        .parse()
+        .ok()?;
+    Some((saved, count))
+}
+
+/// `OK uart3=osd`
+fn parse_serial_port_line(line: &str) -> Option<SerialPortBinding> {
+    let (port, function) = line.strip_prefix("OK ")?.trim().split_once('=')?;
+    let number = port.strip_prefix("uart")?;
+    if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    if !SERIAL_FUNCTIONS.contains(&function) {
+        return None;
+    }
+    Some(SerialPortBinding {
+        port: port.to_owned(),
+        function: function.to_owned(),
+    })
+}
+
 fn parse_flash_info(line: &str) -> Option<FlashInfo> {
     let fields = parse_fields(line.strip_prefix("OK ")?);
     Some(FlashInfo {
@@ -623,6 +758,116 @@ mod tests {
             client.resynchronize(),
             Err(FerroError::Timeout { .. })
         ));
+    }
+
+    fn serial_reply(source: &str, ports: &[(&str, &str)]) -> Vec<String> {
+        let mut lines = vec![format!(
+            "OK serial {source} ports={}; applies after save and reboot",
+            ports.len()
+        )];
+        lines.extend(
+            ports
+                .iter()
+                .map(|(port, function)| format!("OK {port}={function}")),
+        );
+        lines
+    }
+
+    #[test]
+    fn reads_the_counted_serial_table() {
+        let mock = MockTransport::with_lines(serial_reply(
+            "default",
+            &[
+                ("uart3", "osd"),
+                ("uart6", "rc"),
+                ("uart8", "esc_telemetry"),
+            ],
+        ));
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+
+        let bindings = client.read_serial_bindings().unwrap();
+
+        assert!(!bindings.saved);
+        assert_eq!(bindings.ports.len(), 3);
+        assert_eq!(bindings.function("uart6"), Some("rc"));
+        assert_eq!(bindings.function("uart1"), None);
+        assert_eq!(client.transport.writes, ["serial"]);
+    }
+
+    #[test]
+    fn applying_a_binding_stages_saves_and_verifies() {
+        let mut lines = serial_reply("default", &[("uart3", "osd"), ("uart6", "rc")]);
+        lines.push("OK staged; use config save, then reboot".to_owned());
+        lines.push("OK config saved".to_owned());
+        lines.extend(serial_reply("saved", &[("uart3", "rc"), ("uart6", "none")]));
+        let mut client =
+            FerroClient::new(MockTransport::with_lines(lines), Duration::from_millis(20));
+
+        let readback = client.apply_serial_binding("uart3", "rc").unwrap();
+
+        assert!(readback.saved);
+        assert_eq!(readback.function("uart3"), Some("rc"));
+        assert_eq!(
+            client.transport.writes,
+            ["serial", "serial uart3 rc", "config save", "serial"]
+        );
+    }
+
+    #[test]
+    fn a_binding_that_does_not_read_back_fails_verification() {
+        let mut lines = serial_reply("default", &[("uart3", "osd")]);
+        lines.push("OK staged; use config save, then reboot".to_owned());
+        lines.push("OK config saved".to_owned());
+        lines.extend(serial_reply("saved", &[("uart3", "osd")]));
+        let mut client =
+            FerroClient::new(MockTransport::with_lines(lines), Duration::from_millis(20));
+
+        assert!(matches!(
+            client.apply_serial_binding("uart3", "rc"),
+            Err(FerroError::VerificationFailed { .. })
+        ));
+    }
+
+    #[test]
+    fn unknown_functions_and_unrouted_ports_are_refused_before_staging() {
+        let mut client = FerroClient::new(
+            MockTransport::with_lines(serial_reply("default", &[("uart3", "osd")])),
+            Duration::from_millis(20),
+        );
+        assert!(matches!(
+            client.apply_serial_binding("uart3", "gps"),
+            Err(FerroError::InvalidConfiguration(_))
+        ));
+        assert!(client.transport.writes.is_empty());
+
+        assert!(matches!(
+            client.apply_serial_binding("uart1", "rc"),
+            Err(FerroError::InvalidConfiguration(_))
+        ));
+        assert_eq!(client.transport.writes, ["serial"]);
+    }
+
+    #[test]
+    fn the_device_refusing_a_binding_is_reported() {
+        let mut lines = serial_reply("default", &[("uart3", "osd")]);
+        lines.push("ERR config changes disabled while armed".to_owned());
+        let mut client =
+            FerroClient::new(MockTransport::with_lines(lines), Duration::from_millis(20));
+
+        assert!(matches!(
+            client.apply_serial_binding("uart3", "rc"),
+            Err(FerroError::DeviceRejected { .. })
+        ));
+        assert!(!client.transport.writes.contains(&"config save".to_owned()));
+    }
+
+    #[test]
+    fn rejects_malformed_serial_lines() {
+        assert_eq!(parse_serial_header("OK serial maybe ports=3;"), None);
+        assert_eq!(parse_serial_header("OK serial saved ports=x;"), None);
+        assert_eq!(parse_serial_port_line("OK uartX=rc"), None);
+        assert_eq!(parse_serial_port_line("OK uart3=gps"), None);
+        assert_eq!(parse_serial_port_line("OK uart3"), None);
     }
 
     #[test]

@@ -78,6 +78,18 @@
     </section>
 
     <section>
+      <h2>Serial ports</h2>
+      <p class="note">Each UART by its number on the chip. A change is saved
+        and verified, and takes effect when the controller reboots.</p>
+      <table id="serial-ports"></table>
+      <div id="serial-source"></div>
+      <div class="row">
+        <button id="reload-ports" type="button">Read from controller</button>
+        <button id="apply-ports" type="button" disabled>Save &amp; verify</button>
+      </div>
+    </section>
+
+    <section>
       <h2>Flight logs</h2>
       <div class="row">
         <button id="load-flights" type="button">Catalogue flights</button>

@@ -56,6 +56,26 @@ export interface FerroConfig {
   yaw_expo?: number;
 }
 
+/** The functions a serial port can serve, as the firmware names them. */
+export const SERIAL_FUNCTIONS = ["none", "rc", "osd", "esc_telemetry"] as const;
+
+/** Mirrors `SerialPortBinding` in ferro-configurator-core. */
+export interface SerialPortBinding {
+  /** The UART by its number on the chip, such as `uart3`. */
+  port: string;
+  function: string;
+}
+
+/**
+ * Mirrors `SerialBindings`. The staged table: the controller boots with it
+ * after the next save and reboot.
+ */
+export interface SerialBindings {
+  /** False while the board's defaults apply. */
+  saved: boolean;
+  ports: SerialPortBinding[];
+}
+
 export interface PortInfo {
   port: string;
   is_ferrowasp: boolean;
@@ -139,6 +159,9 @@ export interface Api {
   readConfig(): Promise<FerroConfig>;
   /** Refused unless the controller reports itself disarmed. */
   applyConfig(config: FerroConfig): Promise<FerroConfig>;
+  serialBindings(): Promise<SerialBindings>;
+  /** Refused unless disarmed. Takes effect when the controller reboots. */
+  applySerialBinding(port: string, func: string): Promise<SerialBindings>;
   flights(): Promise<FlightCatalog>;
   downloadFlight(
     flightId: number | "latest",
