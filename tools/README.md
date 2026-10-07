@@ -16,9 +16,8 @@ Connect the probe and target, then run from the repository root:
 python tools\terminal_embed.py
 ```
 
-The default board is FerroWasp FCU3. After an SWD connection has been fitted to
-the Foxeer F405 V2, select its isolated app explicitly. The Foxeer app now also
-defaults to its normal DShot600/eRPM-qualified flight path:
+The default board is the Foxeer F405 V2, once an SWD connection has been fitted
+to it. Its app defaults to the normal DShot600/eRPM-qualified flight path:
 
 ```powershell
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
@@ -102,7 +101,7 @@ python tools\terminal_embed.py --log-file logs\bench_rtt.log
 To pass a custom command:
 
 ```powershell
-python tools\terminal_embed.py -- probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps firmware\stm32f405-flight\target\thumbv7em-none-eabihf\debug\FerroWasp
+python tools\terminal_embed.py -- probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps firmware\foxeer-f405-v2\target\thumbv7em-none-eabihf\debug\FerroWaspFoxeerF405V2
 ```
 
 ## IMU Live View
@@ -376,15 +375,15 @@ requested throttle to `250` PWM-style units, logs PID as zero, and logs motors a
 `[throttle; 4]`. Use it only with propellers removed, and stop immediately if a
 motor or ESC smokes, smells hot, jitters abnormally, or heats rapidly.
 
-For the normal FCU3 DShot600 firmware, build without `bench_equal_motors`:
+For the normal Foxeer DShot600 firmware, build without `bench_equal_motors`:
 
 ```powershell
 .\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
 ```
 
-The current normal profile is intentionally conservative: roll P/I/D
-`0.20 / 0.00 / 0.00`, pitch P/I/D `0.25 / 0.00 / 0.00`, and yaw P/I/D
-`0.30 / 0.04 / 0.00`.
+Without a stored configuration the board boots with its own default tune,
+`DEFAULT_TUNING` in `firmware/foxeer-f405-v2/src/board/profiles.rs`; a stored
+configuration takes precedence.
 
 The legacy `bench_motorN_only` modes select physical PWM outputs and are
 compile-time incompatible with the default DShot image. Do not add them to the
@@ -680,17 +679,16 @@ output, motor output, and zooms around the worst tracking-error events.
 
 ## App Context Router
 
-`app_context.py` is a deterministic, read-only map for the large FCU3 and
-Foxeer RTIC app shells. It reports relevant task/helper ranges, priorities,
+`app_context.py` is a deterministic, read-only map for the large Foxeer RTIC
+app shell. It reports relevant task/helper ranges, priorities,
 interrupt bindings, feature gates, resource-block anchors, companion files,
 and potential test-catalog routes without printing the complete source.
-Foxeer topics include the matching FCU3 golden-app anchors.
 
 Run it from the repository root:
 
 ```powershell
 python tools\app_context.py --list-topics
-python tools\app_context.py --board fcu3 --topic control
+python tools\app_context.py --topic control
 python tools\app_context.py --board foxeer-f405-v2 --topic arming
 python tools\app_context.py --validate
 ```

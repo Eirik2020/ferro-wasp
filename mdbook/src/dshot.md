@@ -1,8 +1,9 @@
 # DShot
 
 FerroWasp uses four-motor DShot600 as the standard ESC protocol on Foxeer, the
-golden flight target. FCU3 is obsolete since 2026-09-22: its sections below
-record how that board was set up and what it measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
+golden flight target. FCU3, obsolete since 2026-09-22, was removed on
+2026-10-07: its sections below record how that board was set up and what it
+measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
 path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
 RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
 it is not a flight-app ESC fallback.
@@ -10,8 +11,8 @@ it is not a flight-app ESC fallback.
 The capped bench image remains behind the existing equal-motor gate:
 
 ```powershell
-cd firmware/stm32f405-flight
-cargo build --locked --features "bench_equal_motors"
+cd firmware/foxeer-f405-v2
+cargo build --release --locked --features "bench_actuator_validation bench_equal_motors"
 ```
 
 Physical selected-motor modes and multiple logical-motor selections are compile-time errors. The base bench image

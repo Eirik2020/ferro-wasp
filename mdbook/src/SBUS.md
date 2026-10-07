@@ -1,8 +1,8 @@
 # SBUS
 
-SBUS is the active FerroWasp RC input path. The FCU3 and Foxeer profiles route
-it to USART2 RX on PA3; PA2 is the corresponding TX pin but is not required for
-receive-only SBUS.
+SBUS is the active FerroWasp RC input path. Foxeer binds it to UART2 by
+default, receiving on PA3; PA2 is the corresponding TX pin but is not required
+for receive-only SBUS. The TBS Lucid H7 binds it to UART6 by default.
 
 ## UART Configuration
 

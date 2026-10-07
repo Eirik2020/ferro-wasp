@@ -54,7 +54,7 @@
         ]
       },
       "procedure": {
-        "path": "firmware/stm32f405-flight/README.md",
+        "path": "project_meta/archive/FCU3_APP_README_2026-10-07.md",
         "heading": "Build"
       },
       "prerequisites": [

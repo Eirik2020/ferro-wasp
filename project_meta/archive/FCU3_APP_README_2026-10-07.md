@@ -1,3 +1,9 @@
+> **Archived 2026-10-07.** Source: `firmware/stm32f405-flight/README.md`.
+> FCU3 was retired and its app removed from the tree; the last commit that
+> holds it is the parent of the commit that archived this file. Kept so the
+> retired `BUILD-FCU3-001` catalog entry still names its procedure. Never
+> selected for a new run.
+
 # STM32F405 Flight App
 
 This is the RTIC 2 flight-runtime contract for STM32F405-class flight

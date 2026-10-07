@@ -5,8 +5,11 @@ artifact is stable, airworthy, or production-ready.
 
 ## Unreleased
 
-No user-facing changes have been recorded after the `v0.1.0` release
-candidate.
+### Removed
+
+- The FerroWasp FCU3 app (`firmware/stm32f405-flight`), obsolete since
+  2026-09-22. It is no longer built; its retained evidence stays in the
+  project archive.
 
 ## 0.1.0 - 2026-07-28
 

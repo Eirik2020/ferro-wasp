@@ -60,7 +60,7 @@ function Resolve-FerroWaspElf {
 
     $repoRoot = Get-FerroWaspRepoRoot
     if ([string]::IsNullOrWhiteSpace($ElfPath)) {
-        $ElfPath = Join-Path $TargetDir "thumbv7em-none-eabihf\release\FerroWasp"
+        $ElfPath = Join-Path $TargetDir "thumbv7em-none-eabihf\release\FerroWaspFoxeerF405V2"
     }
 
     if (-not [System.IO.Path]::IsPathRooted($ElfPath)) {
@@ -102,7 +102,7 @@ function Invoke-FerroWaspBuild {
     )
 
     $repoRoot = Get-FerroWaspRepoRoot
-    $appRoot = Join-Path $repoRoot "firmware\stm32f405-flight"
+    $appRoot = Join-Path $repoRoot "firmware\foxeer-f405-v2"
     $resolvedTargetDir = if ([System.IO.Path]::IsPathRooted($TargetDir)) {
         $TargetDir
     } else {

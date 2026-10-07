@@ -96,31 +96,24 @@ ferroforge::app! {
         with self.assertRaisesRegex(RouteError, "routed symbol `missing`"):
             _select_symbols({}, ("missing",), label="fixture")
 
-    def test_rejects_foxeer_only_topic_for_fcu3(self) -> None:
-        with self.assertRaisesRegex(RouteError, "topic is not supported"):
-            build_route("fcu3", "storage")
-
     def test_current_routes_have_no_drift(self) -> None:
         self.assertEqual(validate_routes(), [])
 
-    def test_fcu3_arming_route_is_bounded_and_includes_foxeer_golden_app(self) -> None:
-        route = build_route("fcu3", "arming")
+    def test_foxeer_arming_route_is_bounded_and_names_its_test_chain(self) -> None:
+        route = build_route("foxeer-f405-v2", "arming")
 
         self.assertIn("actuator_output [task priority=15]", route)
-        self.assertIn("Foxeer golden-app comparison anchors:", route)
         self.assertIn("firmware/foxeer-f405-v2/src/main.rs", route)
-        self.assertIn("BENCH-FCU3-DSHOT-001", route)
+        self.assertIn("BENCH-FOX-001", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
 
     def test_overview_reports_interrupt_and_resource_anchors(self) -> None:
-        route = build_route("fcu3", "overview")
+        route = build_route("foxeer-f405-v2", "overview")
 
         self.assertIn("control_loop [task priority=14 binds=TIM4]", route)
         self.assertIn("Shared:", route)
         self.assertIn("Local:", route)
-        self.assertNotIn("Foxeer golden-app comparison anchors:", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
-
 
 if __name__ == "__main__":
     unittest.main()

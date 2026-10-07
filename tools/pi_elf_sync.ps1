@@ -1,7 +1,7 @@
 param(
     [ValidateSet("Auto", "Cable", "Mobile", "Zero", "ZeroMobile")]
     [string]$Link = "Auto",
-    [string]$ElfPath = "target-codex-fresh\thumbv7em-none-eabihf\release\FerroWasp",
+    [string]$ElfPath = "target-codex-fresh\thumbv7em-none-eabihf\release\FerroWaspFoxeerF405V2",
     [string]$PiHost = "",
     [string]$PiUser = "",
     [string]$RemoteElf = "",
