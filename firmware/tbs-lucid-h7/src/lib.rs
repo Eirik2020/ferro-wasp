@@ -283,7 +283,8 @@ impl Default for ConfiguratorUsbState {
 
 pub use board::Spi1ImuKind;
 pub use board::profiles::{
-    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE,
+    ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, FLIGHT_ARMING_ENABLED,
+    IMU_CONTROL_AXIS_PROFILE, imu_kind_flight_verified,
 };
 pub const BENCH_ACTUATOR_VALIDATION_ENABLED: bool = cfg!(feature = "bench_actuator_validation");
 pub const SMOKE_ACTUATOR_INHIBIT_ENABLED: bool = cfg!(feature = "smoke_actuator_inhibit");
@@ -346,6 +347,7 @@ pub fn active_usb_debug_imu_kind() -> usb_debug::ImuKind {
     match Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Relaxed)) {
         Some(Spi1ImuKind::Mpu6500) => usb_debug::ImuKind::Mpu6500,
         Some(Spi1ImuKind::Icm42688P) => usb_debug::ImuKind::Icm42688P,
+        Some(Spi1ImuKind::Mpu6000) => usb_debug::ImuKind::Mpu6000,
         None => usb_debug::ImuKind::None,
     }
 }
@@ -635,7 +637,8 @@ pub fn validate_live_arming_guard(
     safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
     safety::validate_prearm_health(safety::PreArmHealth {
         imu_ready: IMU_TRANSPORT_READY.load(Ordering::Acquire)
-            && Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Acquire)).is_some()
+            && Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Acquire))
+                .is_some_and(imu_kind_flight_verified)
             && IMU_LATEST_SEQ.load(Ordering::Acquire) != 0,
         imu_bias_calibrated: IMU_BIAS_CALIBRATED.load(Ordering::Acquire),
         imu_fresh: !cfg!(feature = "bench_prearm_imu_stale") && !IMU_STALE.load(Ordering::Acquire),

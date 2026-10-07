@@ -264,7 +264,7 @@ pub const CLAIMS: &[ResourceClaim] = &[
     ResourceClaim::new(
         ResourceKind::Peripheral,
         "SPI1",
-        "IMU identity probe and MPU6500/ICM42688-P data path",
+        "IMU identity probe and MPU6500/ICM42688-P/MPU-6000 data path",
     ),
     ResourceClaim::new(ResourceKind::Pin, "PC15", "SPI1 IMU CS"),
     ResourceClaim::new(ResourceKind::Pin, "PA5", "SPI1 SCK"),

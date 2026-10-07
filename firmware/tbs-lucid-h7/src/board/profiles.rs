@@ -28,8 +28,9 @@ pub const ADC_OBSERVATION_PROFILE: AdcObservationProfile = AdcObservationProfile
 /// How fast this board runs its rate loop, and the scheduler tick that drives
 /// it.
 ///
-/// Kept equal to the Foxeer F405 V2: the ICM42688P runs at a 2 kHz ODR, so
-/// every cycle has a new sample. An MPU6500 would limit the loop to 1 kHz.
+/// Kept equal to the Foxeer F405 V2: the ICM42688P and MPU-6000 run at a 2 kHz
+/// ODR, so every cycle has a new sample. An MPU6500 would limit the loop to
+/// 1 kHz.
 pub const CONTROL_LOOP_RATE_HZ: u32 = 2_000;
 pub const SCHEDULER_TICK_RATE_HZ: u32 = 2_000;
 
@@ -60,6 +61,18 @@ pub const IMU_SENSOR_IDENTITY_VERIFIED: bool = false;
 pub const IMU_ORIENTATION_VERIFIED: bool = false;
 pub const MOTOR_OUTPUT_ORDER_VERIFIED: bool = false;
 pub const LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT: [usize; 4] = [1, 2, 3, 4];
+/// Whether the identity and orientation checks above cover this fitted IMU.
+///
+/// None has been checked on this board yet. When the orientation is verified,
+/// mark the kind it was verified with; any other part may sit in a different
+/// package orientation, so it samples and reports but cannot arm.
+pub const fn imu_kind_flight_verified(kind: super::manifest::Spi1ImuKind) -> bool {
+    use super::manifest::Spi1ImuKind;
+    match kind {
+        Spi1ImuKind::Icm42688P | Spi1ImuKind::Mpu6500 | Spi1ImuKind::Mpu6000 => false,
+    }
+}
+
 pub const FLIGHT_ARMING_ENABLED: bool = IMU_SENSOR_IDENTITY_VERIFIED
     && IMU_ORIENTATION_VERIFIED
     && ADC_OBSERVATION_PROFILE.documented_baseline_verified
@@ -82,6 +95,14 @@ mod tests {
         ];
 
         assert_eq!(verification_flags, [false; 5]);
+    }
+
+    #[test]
+    fn no_fitted_imu_is_verified_for_flight_yet() {
+        use super::super::manifest::Spi1ImuKind;
+        assert!(!imu_kind_flight_verified(Spi1ImuKind::Icm42688P));
+        assert!(!imu_kind_flight_verified(Spi1ImuKind::Mpu6500));
+        assert!(!imu_kind_flight_verified(Spi1ImuKind::Mpu6000));
     }
 
     #[test]

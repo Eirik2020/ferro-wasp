@@ -589,6 +589,9 @@ ferroforge::app! {
                 Spi1ImuKind::Icm42688P => {
                     info!("TBS Lucid H7 ICM42688-P ready; WHO_AM_I {}", who_am_i);
                 }
+                Spi1ImuKind::Mpu6000 => {
+                    info!("TBS Lucid H7 MPU-6000 ready; WHO_AM_I {}", who_am_i);
+                }
             },
             board::init::Spi1ImuBringupStatus::UnsupportedIdentity { who_am_i } => {
                 warn!(
@@ -613,6 +616,12 @@ ferroforge::app! {
                         who_am_i
                     );
                 }
+                Spi1ImuKind::Mpu6000 => {
+                    warn!(
+                        "TBS Lucid H7 MPU-6000 configuration failed; WHO_AM_I {}, sampling disabled",
+                        who_am_i
+                    );
+                }
             },
         }
         if SMOKE_ACTUATOR_INHIBIT_ENABLED {
@@ -622,6 +631,8 @@ ferroforge::app! {
             warn!("Normal mixer output is not active in this commissioning image");
         } else if !FLIGHT_ARMING_ENABLED {
             warn!("Flight arming inhibited: {}", ARMING_INHIBIT_REASON);
+        } else if !spi1_imu.bringup.kind().is_some_and(imu_kind_flight_verified) {
+            warn!("Flight arming inhibited: the fitted IMU is not verified on this board");
         } else {
             info!("TBS Lucid H7 flight arming enabled with runtime IMU health checks");
             info!("TBS Lucid H7 ADC uses Betaflight target voltage/current values");

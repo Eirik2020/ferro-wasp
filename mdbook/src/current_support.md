@@ -57,7 +57,7 @@ orientation, motor order, and ADC scale are verified on it.
 
 | Function | Lucid H7 resource |
 |---|---|
-| IMU | SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2 |
+| IMU | SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000 |
 | SBUS | USART6 RX PC7, inverted in the UART |
 | MSP DisplayPort | USART3 (PD8 TX, PD9 RX) |
 | ESC telemetry | UART8 RX PE0 |

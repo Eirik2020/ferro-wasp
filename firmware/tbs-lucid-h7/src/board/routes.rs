@@ -103,7 +103,7 @@ pub const SPI1_IMU: SpiRoute = SpiRoute {
     mode: 3,
     rx_dma: "DMA1 Stream 4 DMAMUX request 37",
     tx_dma: "DMA1 Stream 5 DMAMUX request 38",
-    device: "WHO_AM_I probe; MPU6500 0x70 or ICM42688-P 0x47 data path",
+    device: "WHO_AM_I probe; MPU6500 0x70, ICM42688-P 0x47 or MPU-6000 0x68 data path",
 };
 
 pub const ACTIVE_SPI_ROUTES: &[SpiRoute] = &[SPI1_IMU];
