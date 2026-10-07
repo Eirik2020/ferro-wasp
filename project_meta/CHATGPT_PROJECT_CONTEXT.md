@@ -116,9 +116,6 @@ Deployable applications are isolated from the root workspace because
 different PAC features and RTIC resource contracts must not be unified:
 
 ```text
-firmware/stm32f405-flight
-    FerroWasp FCU3 secondary flight application with retained target evidence
-
 firmware/foxeer-f405-v2
     Foxeer F405 V2 golden flight application and runtime baseline
 

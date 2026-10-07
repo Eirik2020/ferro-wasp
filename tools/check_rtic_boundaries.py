@@ -214,11 +214,6 @@ def _validate_foxeer_required_usb(root: Path, errors: list[str]) -> None:
 
 
 FLIGHT_APP_CONTRACTS = {
-    "stm32f405-flight": {
-        "board_feature": "board-ferrowasp-fcu3",
-        "mandatory_features": ("dshot", "pwm_cal"),
-        "required_calls": ("init_dshot_motor_bank(",),
-    },
     "foxeer-f405-v2": {
         "board_feature": "board-foxeer-f405-v2",
         "mandatory_features": (
