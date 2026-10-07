@@ -1,13 +1,14 @@
 # IMU
 
-FerroWasp currently supports MPU6500 and ICM42688-P devices over SPI1.
+FerroWasp currently supports MPU6500, MPU-6000 and ICM42688-P devices over
+SPI1.
 
 ## Target Selection
 
 | Board | IMU behavior |
 |---|---|
 | FerroWasp FCU3 (obsolete) | Fixed MPU6500 path, `WHO_AM_I=0x70` |
-| Foxeer F405 V2 | Mode-3 probe selects MPU6500 `0x70` or ICM42688-P `0x47` |
+| Foxeer F405 V2 | Mode-3 probe selects MPU6500 `0x70`, ICM42688-P `0x47` or MPU-6000 `0x68` |
 | NUCLEO-F401RE | No attached IMU in the board contract |
 
 An unsupported identity, failed probe, failed reset, or configuration
@@ -16,7 +17,7 @@ bring-up services continue, while the runtime IMU health gate rejects arming.
 
 ## Driver Behavior
 
-Both drivers are allocation-free modules in `ferrowasp-drivers` and use
+All three drivers are allocation-free modules in `ferrowasp-drivers` and use
 `embedded-hal` 1.0 traits for blocking boot configuration.
 
 MPU6500 support includes:
@@ -26,6 +27,24 @@ MPU6500 support includes:
 - 1 kHz gyro sampling with DLPF
 - +/-2000 dps gyro and +/-8 g accelerometer ranges
 - the 14-byte accel/temperature/gyro burst beginning at `0x3b`
+
+MPU-6000 support includes:
+
+- the SPI reset sequence: device reset, then gyro, accelerometer and
+  temperature signal-path reset, each followed by 100 ms
+- the Z-gyro PLL clock, SPI-only mode and `WHO_AM_I=0x68` validation
+- a 2 kHz data-ready rate by default: the DLPF is bypassed so the gyro samples
+  at 8 kHz (256 Hz bandwidth) and `SMPLRT_DIV` decimates it, because any other
+  filter setting caps the gyro at 1 kHz; the accelerometer updates at 1 kHz
+- +/-2000 dps gyro and +/-16 g accelerometer ranges
+- register read-back of every configuration write
+- active-high, push-pull, 50 us data-ready pulses cleared by any read
+- the 14-byte accel/temperature/gyro burst beginning at `0x3b`, the MPU6500's
+  layout, with its own temperature scale
+
+The part accepts 1 MHz SPI for configuration and 20 MHz only for sensor reads.
+The IMU bus stays at 1 MHz, so a burst takes about 120 us, which rules out an
+8 kHz rate.
 
 ICM42688-P support includes:
 
@@ -46,7 +65,7 @@ decoders reject short, all-zero, and all-`0xff` frames.
 
 ## Runtime Flow
 
-The two sensor layouts both fit the existing fixed 15-byte full-duplex DMA
+The sensor layouts all fit the existing fixed 15-byte full-duplex DMA
 transaction: one read-command byte plus 14 response bytes.
 
 ```mermaid
@@ -71,7 +90,7 @@ flowchart LR
 recovery, and static receive buffers. The parser returns each receive buffer
 after valid and invalid frames.
 
-Foxeer configures both supported sensors for active-high, push-pull data-ready
+Foxeer configures every supported sensor for active-high, push-pull data-ready
 pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
 edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
@@ -99,6 +118,9 @@ have been checked on the physical board: its profile sets
 `M4_COMPLEMENTARY_POLARITY_VERIFIED` and `MOTOR_OUTPUT_ORDER_VERIFIED`, which
 together enable `FLIGHT_ARMING_ENABLED`. Any change to the sensor, its
 orientation or the motor order withdraws that and requires the checks again.
+Those checks were made with the ICM42688-P, so a Foxeer that detects an
+MPU-6000 samples and reports it but fails the pre-arm IMU check until its axes
+and signs are verified on a board that carries one.
 The obsolete FCU3's mapping and gyro bias behaviour had bench evidence of its
 own.
 
@@ -112,8 +134,8 @@ IMU viewer.
 ## Foxeer Bring-Up Checklist
 
 1. Flash with motor power and props disconnected.
-2. Record the supported identity log: decimal `112` for MPU6500 or `71` for
-   ICM42688-P.
+2. Record the supported identity log: decimal `112` for MPU6500, `71` for
+   ICM42688-P, or `104` for MPU-6000.
 3. Confirm the PC4/EXTI4 delta is approximately 2,000 per two-second heartbeat,
    sequence numbers advance, rejected-trigger counts remain zero or explainably
    bounded, and no SPI timeout or invalid-frame warning appears.

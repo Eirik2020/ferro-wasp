@@ -13,8 +13,9 @@ Implemented board subset:
 
 - 8 MHz HSE and 168 MHz system clock;
 - SPI1 mode-3 IMU identity probe on PA4-PA7;
-- runtime-selected MPU6500 `WHO_AM_I=0x70` or ICM42688-P
-  `WHO_AM_I=0x47` configuration and DMA sampling;
+- runtime-selected MPU6500 `WHO_AM_I=0x70`, ICM42688-P `WHO_AM_I=0x47` or
+  MPU-6000 `WHO_AM_I=0x68` configuration and DMA sampling; an MPU-6000 cannot
+  arm until its orientation is verified;
 - USART2 SBUS receiver path on PA2/PA3;
 - UART4 DJI MSP DisplayPort path on PA0/PA1;
 - ADC1 battery/current observation on PC0/PC1;
@@ -257,10 +258,10 @@ never use the fault-injection image for flight.
 
 An unsupported or failed IMU identity/configuration is nonfatal: firmware
 logs the result once, disables periodic IMU transactions, and continues the
-RTT/RC/OSD/ADC bring-up paths. MPU6000 is not yet implemented.
+RTT/RC/OSD/ADC bring-up paths.
 
 Foxeer IMU sampling is now driven by PC4/EXTI4 rather than the TIM4 poll
-trigger. Both supported drivers configure an active-high, push-pull data-ready
+trigger. Every supported driver configures an active-high, push-pull data-ready
 pulse; the EXTI handler timestamps the edge, clears it, and defers one bounded
 SPI DMA request without doing blocking bus work. Routine builds omit periodic
 IMU raw/DRDY RTT reports. Feature `imu_transport_rtt` restores the totals,
