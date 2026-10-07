@@ -1,6 +1,6 @@
 use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxTransfer};
 use super::manifest::Spi1ImuKind;
-use ferrowasp_drivers::{icm42688p, mpu6500};
+use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
 use ferrowasp_stm32f4 as backend;
 use ferrowasp_stm32f4::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32f4::hal_prelude::*;
@@ -8,8 +8,10 @@ use ferrowasp_stm32f4::hal_prelude::*;
 const _: () = {
     assert!(Spi1ImuKind::MPU6500_WHO_AM_I == mpu6500::WHO_AM_I_EXPECTED);
     assert!(Spi1ImuKind::ICM42688P_WHO_AM_I == icm42688p::WHO_AM_I_EXPECTED);
+    assert!(Spi1ImuKind::MPU6000_WHO_AM_I == mpu6000::WHO_AM_I_EXPECTED);
     assert!(Spi1ImuKind::Mpu6500.dma_burst_register() == mpu6500::Register::AccelXoutH as u8);
     assert!(Spi1ImuKind::Icm42688P.dma_burst_register() == icm42688p::Register::TempData1 as u8);
+    assert!(Spi1ImuKind::Mpu6000.dma_burst_register() == mpu6000::Register::AccelXoutH as u8);
 };
 
 pub use backend::adc::Adc1BatteryResources;
@@ -137,6 +139,7 @@ where
                 let configured = match kind {
                     Spi1ImuKind::Mpu6500 => mpu6500::init(&mut spi, &mut cs, delay).is_ok(),
                     Spi1ImuKind::Icm42688P => icm42688p::init(&mut spi, &mut cs, delay).is_ok(),
+                    Spi1ImuKind::Mpu6000 => mpu6000::init(&mut spi, &mut cs, delay).is_ok(),
                 };
 
                 if configured {

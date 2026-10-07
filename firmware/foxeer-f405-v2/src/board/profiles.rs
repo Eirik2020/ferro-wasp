@@ -63,6 +63,20 @@ pub const IMU_ORIENTATION_VERIFIED: bool = true;
 pub const M4_COMPLEMENTARY_POLARITY_VERIFIED: bool = true;
 pub const MOTOR_OUTPUT_ORDER_VERIFIED: bool = true;
 pub const LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT: [usize; 4] = [1, 2, 3, 4];
+/// Whether the identity and orientation checks above cover this fitted IMU.
+///
+/// They were made with the ICM42688-P. The MPU6500 predates this gate and
+/// keeps the behaviour it had. An MPU-6000 may sit in a different package
+/// orientation, so it samples and reports but cannot arm until its axes and
+/// signs are checked on a board that carries one.
+pub const fn imu_kind_flight_verified(kind: super::manifest::Spi1ImuKind) -> bool {
+    use super::manifest::Spi1ImuKind;
+    match kind {
+        Spi1ImuKind::Icm42688P | Spi1ImuKind::Mpu6500 => true,
+        Spi1ImuKind::Mpu6000 => false,
+    }
+}
+
 pub const FLIGHT_ARMING_ENABLED: bool = IMU_SENSOR_IDENTITY_VERIFIED
     && IMU_ORIENTATION_VERIFIED
     && ADC_OBSERVATION_PROFILE.documented_baseline_verified
@@ -92,6 +106,13 @@ mod tests {
         assert_eq!(ADC_OBSERVATION_PROFILE.battery_max_cell_mv, 4_300);
         assert_eq!(ADC_OBSERVATION_PROFILE.battery_detect_cell_mv, 3_000);
         assert_eq!(ADC_OBSERVATION_PROFILE.battery_max_cells, 8);
+    }
+
+    #[test]
+    fn an_unverified_mpu6000_cannot_arm() {
+        use super::super::manifest::Spi1ImuKind;
+        assert!(imu_kind_flight_verified(Spi1ImuKind::Icm42688P));
+        assert!(!imu_kind_flight_verified(Spi1ImuKind::Mpu6000));
     }
 
     #[test]

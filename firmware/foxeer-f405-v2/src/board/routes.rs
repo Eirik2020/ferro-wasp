@@ -108,7 +108,7 @@ pub const SPI1_IMU: SpiRoute = SpiRoute {
     mode: 3,
     rx_dma: "DMA2 Stream 0 Channel 3",
     tx_dma: "DMA2 Stream 3 Channel 3",
-    device: "WHO_AM_I probe; MPU6500 0x70 or ICM42688-P 0x47 data path",
+    device: "WHO_AM_I probe; MPU6500 0x70, ICM42688-P 0x47 or MPU-6000 0x68 data path",
 };
 
 pub const SPI2_FLASH: SpiRoute = SpiRoute {

@@ -217,6 +217,7 @@ TOPIC_ROUTES = {
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-drivers/src/mpu6500.rs"),
+            PurePosixPath("crates/ferrowasp-drivers/src/mpu6000.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/icm42688p.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/spi_dma.rs"),
         ),

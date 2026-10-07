@@ -242,7 +242,7 @@ pub const CLAIMS: &[ResourceClaim] = &[
     ResourceClaim::new(
         ResourceKind::Peripheral,
         "SPI1",
-        "IMU identity probe and MPU6500/ICM42688-P data path",
+        "IMU identity probe and MPU6500/ICM42688-P/MPU-6000 data path",
     ),
     ResourceClaim::new(ResourceKind::Pin, "PA4", "SPI1 IMU CS"),
     ResourceClaim::new(ResourceKind::Pin, "PA5", "SPI1 SCK"),
@@ -430,6 +430,13 @@ mod tests {
         assert_eq!(mpu.dma_burst_register(), 0x3b);
         assert_eq!(icm, Spi1ImuKind::Icm42688P);
         assert_eq!(icm.dma_burst_register(), 0x1d);
+        let mpu6000 = Spi1ImuKind::from_who_am_i(0x68).unwrap();
+        assert_eq!(mpu6000, Spi1ImuKind::Mpu6000);
+        assert_eq!(mpu6000.dma_burst_register(), 0x3b);
+        assert_eq!(
+            Spi1ImuKind::from_discriminant(Spi1ImuKind::Mpu6000 as u8),
+            Some(Spi1ImuKind::Mpu6000)
+        );
         assert_eq!(Spi1ImuKind::from_who_am_i(0x00), None);
         assert_eq!(Spi1ImuKind::from_discriminant(0), None);
     }

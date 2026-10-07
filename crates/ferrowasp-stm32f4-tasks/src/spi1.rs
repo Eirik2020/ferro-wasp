@@ -22,16 +22,19 @@ pub type Spi1Device = AsyncSpiDevice<Spi1Executor, SPI1_JOB_MAX_OPERATIONS, SPI1
 pub enum Spi1ImuKind {
     Mpu6500 = 1,
     Icm42688P = 2,
+    Mpu6000 = 3,
 }
 
 impl Spi1ImuKind {
     pub const MPU6500_WHO_AM_I: u8 = 0x70;
     pub const ICM42688P_WHO_AM_I: u8 = 0x47;
+    pub const MPU6000_WHO_AM_I: u8 = 0x68;
 
     pub const fn from_who_am_i(who_am_i: u8) -> Option<Self> {
         match who_am_i {
             Self::MPU6500_WHO_AM_I => Some(Self::Mpu6500),
             Self::ICM42688P_WHO_AM_I => Some(Self::Icm42688P),
+            Self::MPU6000_WHO_AM_I => Some(Self::Mpu6000),
             _ => None,
         }
     }
@@ -40,6 +43,7 @@ impl Spi1ImuKind {
         match value {
             value if value == Self::Mpu6500 as u8 => Some(Self::Mpu6500),
             value if value == Self::Icm42688P as u8 => Some(Self::Icm42688P),
+            value if value == Self::Mpu6000 as u8 => Some(Self::Mpu6000),
             _ => None,
         }
     }
@@ -48,12 +52,13 @@ impl Spi1ImuKind {
         match self {
             Self::Mpu6500 => Self::MPU6500_WHO_AM_I,
             Self::Icm42688P => Self::ICM42688P_WHO_AM_I,
+            Self::Mpu6000 => Self::MPU6000_WHO_AM_I,
         }
     }
 
     pub const fn dma_burst_register(self) -> u8 {
         match self {
-            Self::Mpu6500 => 0x3b,
+            Self::Mpu6500 | Self::Mpu6000 => 0x3b,
             Self::Icm42688P => 0x1d,
         }
     }
@@ -314,6 +319,19 @@ pub async fn spi1_parser(cx: spi1_parser::Context) {
                             temp: sample.temperature_c(),
                         })
                 }
+                Spi1ImuKind::Mpu6000 => {
+                    mpu6000::decode_accel_temp_gyro_burst(frame)
+                        .ok()
+                        .map(|sample| {
+                            let config = mpu6000::Config::default();
+                            ParsedImuSample {
+                                acc: sample.accel_g(config.accel_full_scale),
+                                gyro: sample.gyro_dps(config.gyro_full_scale),
+                                gyro_raw: sample.gyro_raw,
+                                temp: sample.temperature_c(),
+                            }
+                        })
+                }
             }
         });
 
@@ -356,6 +374,9 @@ pub async fn spi1_parser(cx: spi1_parser::Context) {
                 }
                 Some(Spi1ImuKind::Icm42688P) => {
                     warn!("Invalid ICM42688-P temp/accel/gyro frame");
+                }
+                Some(Spi1ImuKind::Mpu6000) => {
+                    warn!("Invalid MPU-6000 accel/temp/gyro frame");
                 }
                 None => warn!("IMU frame received without an active sensor"),
             },

@@ -14,6 +14,7 @@ pub enum ImuKind {
     None,
     Mpu6500,
     Icm42688P,
+    Mpu6000,
 }
 
 impl ImuKind {
@@ -22,6 +23,7 @@ impl ImuKind {
             Self::None => "none",
             Self::Mpu6500 => "mpu6500",
             Self::Icm42688P => "icm42688p",
+            Self::Mpu6000 => "mpu6000",
         }
     }
 }
@@ -126,6 +128,7 @@ mod tests {
             (ImuKind::None, "imu=none"),
             (ImuKind::Mpu6500, "imu=mpu6500"),
             (ImuKind::Icm42688P, "imu=icm42688p"),
+            (ImuKind::Mpu6000, "imu=mpu6000"),
         ] {
             snapshot.imu_kind = kind;
             assert!(format_status(snapshot).unwrap().contains(expected));
