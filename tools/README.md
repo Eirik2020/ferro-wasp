@@ -723,6 +723,23 @@ thin-app rules: internal-only RTIC imports, RTIC-only declarations, shared
 board data models, no direct timer-register sequencing in board support, and
 no exact cross-board Rust source copies.
 
+## Foxeer Bench Gates
+
+`tools/foxeer_bench_gates.py` runs BENCH-COMMON-001 (`boot-idle`) and
+BENCH-FOX-USB-001 (`usb-config`) on a connected Foxeer. The operator confirms
+propellers removed and actuator power disconnected, and performs each USB power
+cycle when prompted; the tool drives the rest, stops at the first failed check,
+keeps every capture in a new `logs/bench/` directory, and drafts a run record
+for review. It never commits.
+
+```text
+python3 tools/foxeer_bench_gates.py boot-idle --build-record <BUILD-FOX-001 record>
+python3 tools/foxeer_bench_gates.py usb-config --build-record <BUILD-FOX-001 record>
+```
+
+`check-boot-idle` and `check-usb-config` apply the same checks to existing
+captures, so a manual run is held to the same standard.
+
 ## Troubleshooting
 
 - Check that the probe is visible to `probe-rs`.

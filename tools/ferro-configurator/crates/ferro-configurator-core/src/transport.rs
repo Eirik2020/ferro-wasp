@@ -124,6 +124,10 @@ impl MockTransport {
     pub fn push_timeout(&mut self) {
         self.responses.push_back(Ok(None));
     }
+
+    pub fn push_line(&mut self, line: impl Into<String>) {
+        self.responses.push_back(Ok(Some(line.into())));
+    }
 }
 
 impl LineTransport for MockTransport {

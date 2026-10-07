@@ -461,19 +461,6 @@ d = 0.0
     }
 }
 
-/// The loop rate the firmware runs its gyro filter at.
-///
-/// The configuration stores the filter's corner in hertz, so it describes the
-/// same filter whatever the loop rate. This is only used to report the
-/// coefficient that corner produces on the controller.
-///
-/// It mirrors `CONTROL_LOOP_RATE_HZ` in the firmware and has to move with it.
-/// That duplication is the same trap the stored corner exists to avoid, and it
-/// has already been wrong once: the host kept saying 400 Hz after the firmware
-/// moved to 1 kHz. The fix is for the device to report its own rate, which the
-/// status line does not carry yet.
-pub const CONTROL_LOOP_RATE_HZ: f32 = 1_000.0;
-
 /// The corner frequency a one-pole coefficient produces at `sample_rate_hz`.
 ///
 /// Returns `None` for coefficients that are not a filter: zero passes nothing

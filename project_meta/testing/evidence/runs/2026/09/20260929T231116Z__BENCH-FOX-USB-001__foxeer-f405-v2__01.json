@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "run_id": "20260929T231116Z__BENCH-FOX-USB-001__foxeer-f405-v2__01",
+  "test_id": "BENCH-FOX-USB-001",
+  "started_at_utc": "2026-09-29T23:07:11Z",
+  "completed_at_utc": "2026-09-29T23:11:16Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-unpowered",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "c0c62764cf2594ae6a61b987f8aba65158b1d618c14b0d65881a57e5610d9216",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer USB RC Configuration Gate",
+    "procedure_sha256": "411b23bf51cebe217e1cb3c8af4b85945530936dc4a978feb627d964694816cd"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "5a9aaa4ec6508c74b114a404b473f7229b5d5432",
+    "working_tree": "clean",
+    "firmware_sha256": "b020bdfe1ad9056fbab034752828fbf28be3e63241da60efdd18924dd7c3863f",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "final": "reviewed baseline with log_rate_divisor 2",
+      "log_rate_divisor": 2
+    }
+  },
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "disconnected",
+    "equipment": [
+      "USB host power",
+      "FerroConfigurator CLI built from this revision on Linux",
+      "SWD probe attached, not used"
+    ],
+    "environment": [
+      "bench",
+      "battery disconnected",
+      "no RC link"
+    ]
+  },
+  "commands": [
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 1
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config export logs/bench/20260930-usb-gate/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config set roll-expo 1.1",
+      "exit_code": 2
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config set roll-max-rate 250",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config set roll-center-rate 60",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config set roll-expo 0.4",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator config validate logs/bench/20260930-usb-gate/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config apply logs/bench/20260930-usb-gate/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config set log_rate_divisor 2",
+      "exit_code": 0
+    },
+    {
+      "command": "tools/ferro-configurator/target/release/ferro-configurator --port /dev/ttyACM0 config show",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "baseline-export",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/foxeer-baseline.toml",
+      "bytes": 478,
+      "sha256": "aaf0271273e236b8860a1898dc8944ea33d3ee9b368745c54443f36d29c734e8"
+    },
+    {
+      "id": "initial-snapshot",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/1-initial.txt",
+      "bytes": 435,
+      "sha256": "0d2b1a87137e0e1d87c2a3b3c91b08eb1773a186e81fd1a7c7826b3227fa205b"
+    },
+    {
+      "id": "rejection-and-readback",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/3-reject.txt",
+      "bytes": 442,
+      "sha256": "b4c00125c071d02cb40f853b39a5ee4da021a97646b2a2e011b204767d70c28c"
+    },
+    {
+      "id": "same-boot-temporary",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/5-same-boot.txt",
+      "bytes": 435,
+      "sha256": "57b8b93ca1e438f6bbce8815e768c6e630e7d139048d1b7e9fd0e8fd7b96f44b"
+    },
+    {
+      "id": "cold-boot-temporary",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/6-cold-boot-temp.txt",
+      "bytes": 435,
+      "sha256": "57b8b93ca1e438f6bbce8815e768c6e630e7d139048d1b7e9fd0e8fd7b96f44b"
+    },
+    {
+      "id": "restored",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/7-restored.txt",
+      "bytes": 435,
+      "sha256": "0d2b1a87137e0e1d87c2a3b3c91b08eb1773a186e81fd1a7c7826b3227fa205b"
+    },
+    {
+      "id": "restored-cold-boot",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/8-restored-cold.txt",
+      "bytes": 435,
+      "sha256": "0d2b1a87137e0e1d87c2a3b3c91b08eb1773a186e81fd1a7c7826b3227fa205b"
+    },
+    {
+      "id": "divisor-2",
+      "kind": "configuration",
+      "path": "logs/bench/20260930-usb-gate/9-divisor-2.txt",
+      "bytes": 435,
+      "sha256": "5d86c148109de4cada128b7b67b08e27b9df57dbcf39ceb779fab7643bca7c6c"
+    }
+  ],
+  "measurements": {
+    "cold_boots": 2,
+    "first_command_rejections": 1
+  },
+  "observations": [
+    "The board was running the candidate from the BENCH-COMMON-001 session; it was not reflashed. Its USB status reported ctl_hz=2000, armed=0.",
+    "Initial configuration matched the reviewed baseline: P 2.5/2.5/2.0, every I and D zero, center 70, max 300/300/200, expo 0.5, deadband 8; also imu_lpf_hz 50.8346 and log_rate_divisor 1.",
+    "roll-expo 1.1 exited 2 and the readback kept roll expo 0.5. The configurator rejected it host-side before sending; the firmware's own range check was not exercised.",
+    "The temporary roll profile 60/250/0.4 read back in the same boot and after a cold USB power cycle, with every other value unchanged.",
+    "The captured baseline validated, applied, and read back identically before and after a cold USB power cycle.",
+    "The first `config show` failed with `device rejected config get roll_p: invalid command` after a serial monitor had held the port; the next command succeeded. cbc892b clears the parser only on USB deconfigure, not on a port close and reopen, so bytes left by another program still spoil one command.",
+    "After the gate, log_rate_divisor was set to 2 as a separate change, so 2 kHz logging fits the store's 250 pages/s; the readback changed nothing else.",
+    "The configurator annotates imu_lpf_hz with alpha 0.273 at a 1000 Hz loop rate; the board runs 2000 Hz. Firmware derives the coefficient from its own rate, so only the host annotation is wrong."
+  ],
+  "limitations": [
+    "Cold boots were USB power cycles with actuator power disconnected; no brownout was induced.",
+    "The operator reported completion without separate observations; no motor activity, arming or fault was reported."
+  ],
+  "stop_conditions_triggered": []
+}

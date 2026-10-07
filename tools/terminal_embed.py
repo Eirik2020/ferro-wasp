@@ -12,7 +12,7 @@ import subprocess
 import sys
 import threading
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +28,20 @@ FIRMWARE_MARKERS = (
 )
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOG_DIR = REPO_ROOT / "logs" / "terminal_embed"
+FOXEER_PROFILES = REPO_ROOT / "firmware/foxeer-f405-v2/src/board/profiles.rs"
+# The heartbeat in `ferrowasp-stm32f4-tasks/src/diagnostics.rs` reports the
+# data-ready count once every two seconds.
+HEARTBEAT_SECONDS = 2
+
+
+def foxeer_imu_rate_hz(profiles: Path = FOXEER_PROFILES) -> int:
+    """The board's loop rate, which its IMU's data-ready runs at."""
+    match = re.search(
+        r"pub const CONTROL_LOOP_RATE_HZ: u32 = ([\d_]+);", profiles.read_text()
+    )
+    if match is None:
+        raise ValueError(f"{profiles} does not declare CONTROL_LOOP_RATE_HZ")
+    return int(match.group(1).replace("_", ""))
 
 
 @dataclass(frozen=True)
@@ -45,6 +59,7 @@ class FoxeerSmokeEvidence:
     imu_ready: bool = False
     drdy_in_range: int = 0
     fatal_line: str | None = None
+    imu_rate_hz: int = field(default_factory=foxeer_imu_rate_hz)
 
     def observe(self, line: str) -> None:
         clean = ANSI_ESCAPE_RE.sub("", line)
@@ -53,7 +68,8 @@ class FoxeerSmokeEvidence:
         self.arming_inhibited |= "Flight arming inhibited" in clean
         self.imu_ready |= "Foxeer MPU6500 ready" in clean or "Foxeer ICM42688-P ready" in clean
         match = re.search(r"IMU DRDY IRQ \d+, delta (\d+)", clean)
-        if match is not None and 1_500 <= int(match.group(1)) <= 2_500:
+        expected = self.imu_rate_hz * HEARTBEAT_SECONDS
+        if match is not None and expected * 3 <= int(match.group(1)) * 4 <= expected * 5:
             self.drdy_in_range += 1
         if any(marker in clean.lower() for marker in ("panicked at", "hardfault", "[error")):
             self.fatal_line = clean
@@ -69,7 +85,9 @@ class FoxeerSmokeEvidence:
         if not self.imu_ready:
             failures.append("supported IMU did not become ready")
         if self.drdy_in_range < 2:
-            failures.append("fewer than two approximately 1 kHz IMU DRDY intervals")
+            failures.append(
+                f"fewer than two IMU DRDY intervals near the board's {self.imu_rate_hz} Hz"
+            )
         if self.fatal_line is not None:
             failures.append(f"fatal firmware output: {self.fatal_line}")
         return failures

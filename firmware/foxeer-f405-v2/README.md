@@ -377,7 +377,8 @@ It builds the default DShot release image with the dedicated
 `smoke_actuator_inhibit` lockout, programs it over SWD,
 collects RTT for 14 seconds after firmware boot, and exits with PASS only after observing successful
 Foxeer initialization, the RTT hello, the smoke actuator lockout, a supported IMU
-identity, and at least two approximately 1 kHz PC4/EXTI4 data-ready intervals.
+identity, and at least two PC4/EXTI4 data-ready intervals near the board's
+`CONTROL_LOOP_RATE_HZ`, which the harness reads from `src/board/profiles.rs`.
 The full transcript and firmware hash are retained under
 `logs/terminal_embed`. Keep propellers removed and ESC power disconnected.
 The preset uses the target-validated 1.8 MHz ceiling of the attached ST-Link

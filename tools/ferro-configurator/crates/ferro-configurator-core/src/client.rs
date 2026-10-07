@@ -46,6 +46,17 @@ pub struct LogInfo {
     pub writable: bool,
 }
 
+/// A line the controller refuses whatever is already in its command buffer.
+///
+/// Every storage command takes a fixed number of words, so one more word makes
+/// any partial line another program left behind invalid instead of completing
+/// it, and on an empty buffer the line is an unknown command.
+pub const RESYNC_LINE: &str = " #resync";
+
+/// How long to keep reading after the refusal, for a reply that was already on
+/// its way from a command another program sent.
+const RESYNC_QUIET: Duration = Duration::from_millis(50);
+
 pub struct FerroClient<T: LineTransport> {
     transport: T,
     timeout: Duration,
@@ -67,6 +78,27 @@ impl<T: LineTransport> FerroClient<T> {
 
     pub fn into_transport(self) -> T {
         self.transport
+    }
+
+    /// Clears whatever another program left half-sent in the controller's
+    /// command buffer, so the first real command is not refused.
+    ///
+    /// The firmware clears that buffer when USB deconfigures, not when a port
+    /// is closed and reopened, so a serial monitor's bytes would otherwise
+    /// prefix the next command. [`RESYNC_LINE`] is refused whatever precedes
+    /// it; the refusal, and any reply still in flight, are consumed here.
+    pub fn resynchronize(&mut self) -> Result<()> {
+        self.transport.write_line(RESYNC_LINE)?;
+        self.wait_for_response("resynchronize", self.timeout, |line| {
+            line.starts_with("ERR ")
+        })?;
+        while let Some(line) = self.transport.read_line(RESYNC_QUIET)? {
+            let (line, status) = split_status_suffix(&line);
+            if let Some(status) = status.or_else(|| parse_status(line)) {
+                self.last_status = Some(status);
+            }
+        }
+        Ok(())
     }
 
     pub fn flash_info(&mut self) -> Result<FlashInfo> {
@@ -553,6 +585,45 @@ mod tests {
         }
     }
     impl<T> Pipe for T {}
+
+    #[test]
+    fn resynchronizing_consumes_the_refusal_before_the_first_command() {
+        let mut mock = MockTransport::with_lines(["ERR invalid command; type help"]);
+        mock.push_timeout();
+        mock.push_line("OK jedec=ef:40:18 bytes=16777216 ready=1");
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+
+        client.resynchronize().unwrap();
+        let info = client.flash_info().unwrap();
+
+        assert_eq!(info.jedec_id, "ef:40:18");
+        assert_eq!(client.transport.writes, [RESYNC_LINE, "flash info"]);
+    }
+
+    #[test]
+    fn a_reply_already_in_flight_is_drained_with_the_refusal() {
+        let mut mock =
+            MockTransport::with_lines(["ERR invalid command; type help", "OK roll_p=2.5000"]);
+        mock.push_timeout();
+        mock.push_line("OK jedec=ef:40:18 bytes=16777216 ready=1");
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+
+        client.resynchronize().unwrap();
+
+        assert_eq!(client.flash_info().unwrap().jedec_id, "ef:40:18");
+    }
+
+    #[test]
+    fn resynchronizing_times_out_on_a_controller_that_never_refuses() {
+        let mut mock = MockTransport::with_lines(Vec::<String>::new());
+        mock.push_timeout();
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+
+        assert!(matches!(
+            client.resynchronize(),
+            Err(FerroError::Timeout { .. })
+        ));
+    }
 
     #[test]
     fn parses_current_flash_info() {

@@ -13,10 +13,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
     BoardProfile, CatalogEntry, ConfigKey, ConversionSummary, DeviceSelector, DfuDetection,
     DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo,
-    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::CONTROL_LOOP_RATE_HZ,
-    config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu, discover_ports,
-    download_flight, find_bundled_firmware, flash_firmware, open_device, prepare_elf,
-    resolve_device_flight,
+    PreparedImage, ProfileStore, StatusSnapshot, catalog_device, config::lpf_alpha_for_corner,
+    convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight, find_bundled_firmware,
+    flash_firmware, open_device, prepare_elf, resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -387,9 +386,13 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 let mut client = connect(cli, timeout)?;
                 let config = client.read_config()?;
                 let rendered = config.to_toml()?;
+                let loop_hz = match cli.format {
+                    OutputFormat::Human => client.read_status().ok().map(|s| s.control_loop_hz),
+                    OutputFormat::Json => None,
+                };
                 emit(cli.format, "config.show", &config, || {
                     print!("{rendered}");
-                    print_lpf_note(config.imu_lpf_hz);
+                    print_lpf_note(config.imu_lpf_hz, loop_hz);
                 })
             }
             ConfigCommand::Export { path, force } => {
@@ -1148,11 +1151,19 @@ fn bench_watch(
 /// The configuration carries a frequency, which is what an operator can reason
 /// about. The firmware turns it into a one-pole coefficient against its own
 /// loop rate, and seeing that number is useful when comparing against logs or
-/// against Betaflight, where the coefficient is what gets quoted.
-fn print_lpf_note(corner_hz: f32) {
-    if let Some(alpha) = lpf_alpha_for_corner(corner_hz, CONTROL_LOOP_RATE_HZ) {
+/// against Betaflight, where the coefficient is what gets quoted. The rate is
+/// the one the controller reports in its status line; the host keeps no copy,
+/// because its copy has been wrong twice.
+fn print_lpf_note(corner_hz: f32, loop_hz: Option<u32>) {
+    let Some(loop_hz) = loop_hz else {
         println!(
-            "# imu_lpf_hz {corner_hz} is a one-pole alpha of {alpha:.3} at the {CONTROL_LOOP_RATE_HZ:.0} Hz loop rate."
+            "# imu_lpf_hz {corner_hz} is a corner; the controller did not report its loop rate."
+        );
+        return;
+    };
+    if let Some(alpha) = lpf_alpha_for_corner(corner_hz, loop_hz as f32) {
+        println!(
+            "# imu_lpf_hz {corner_hz} is a one-pole alpha of {alpha:.3} at the controller's {loop_hz} Hz loop rate."
         );
     }
 }
