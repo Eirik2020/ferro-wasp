@@ -11,6 +11,11 @@ pitch_expo = 0.5
 yaw_center_rate = 70.0
 yaw_max_rate = 200.0
 yaw_expo = 0.5
+# AETR stick order, arm switch on channel 9, SBUS receiver. The receiver
+# protocol applies after the controller reboots.
+rc_map = 1234
+rc_arm_channel = 9
+rc_protocol = "sbus"
 
 [roll]
 p = 2.5

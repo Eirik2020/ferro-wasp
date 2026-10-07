@@ -135,6 +135,17 @@ impl SerialProfile {
         }
     }
 
+    /// CRSF at the 420 kbaud receivers default to, 8N1, not inverted.
+    pub const fn crsf() -> Self {
+        Self {
+            protocol: SerialProtocol::Crsf,
+            baud: 420_000,
+            word_bits: 8,
+            stop_bits: 1,
+            parity_even: false,
+        }
+    }
+
     pub const fn msp() -> Self {
         Self {
             protocol: SerialProtocol::Msp,

@@ -140,9 +140,15 @@ pub enum RcLinkInvalidation {
     TransportDiscontinuity,
     DmaError,
     ParserError,
-    SbusFrameLost,
-    SbusFailsafe,
+    /// The receiver flagged the frame as lost: SBUS's frame-lost flag, or a
+    /// CRSF uplink reporting zero link quality.
+    FrameLost,
+    /// SBUS's failsafe flag.
+    Failsafe,
     Timeout,
+    /// The channel map changed, so the arm switch may now be read from a
+    /// different channel; it must be seen low there before arming again.
+    ChannelMapChanged,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -242,9 +248,9 @@ pub const fn classify_rc_frame_flags(
     frame_lost: bool,
 ) -> Result<(), RcLinkInvalidation> {
     if failsafe {
-        Err(RcLinkInvalidation::SbusFailsafe)
+        Err(RcLinkInvalidation::Failsafe)
     } else if frame_lost {
-        Err(RcLinkInvalidation::SbusFrameLost)
+        Err(RcLinkInvalidation::FrameLost)
     } else {
         Ok(())
     }
@@ -761,15 +767,15 @@ mod tests {
         assert_eq!(classify_rc_frame_flags(false, false), Ok(()));
         assert_eq!(
             classify_rc_frame_flags(false, true),
-            Err(RcLinkInvalidation::SbusFrameLost)
+            Err(RcLinkInvalidation::FrameLost)
         );
         assert_eq!(
             classify_rc_frame_flags(true, false),
-            Err(RcLinkInvalidation::SbusFailsafe)
+            Err(RcLinkInvalidation::Failsafe)
         );
         assert_eq!(
             classify_rc_frame_flags(true, true),
-            Err(RcLinkInvalidation::SbusFailsafe)
+            Err(RcLinkInvalidation::Failsafe)
         );
     }
 

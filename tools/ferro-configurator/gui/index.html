@@ -70,6 +70,17 @@
           <label>IMU LPF Hz <input id="imu-lpf" type="number" step="1" min="1" max="180" /></label>
           <label>Log divisor <input id="log-divisor" type="number" step="1" /></label>
         </fieldset>
+        <fieldset>
+          <legend>Receiver</legend>
+          <label>Protocol
+            <select id="rc-protocol" title="Applies after the controller reboots">
+              <option value="sbus">SBUS</option>
+              <option value="crsf">CRSF</option>
+            </select>
+          </label>
+          <label>Stick order <input id="rc-map" type="number" step="1" title="Channels for roll, pitch, throttle, yaw: 1234 is AETR" /></label>
+          <label>Arm channel <input id="rc-arm-channel" type="number" step="1" min="5" max="16" /></label>
+        </fieldset>
       </div>
       <div class="row">
         <button id="reload-config" type="button">Read from controller</button>

@@ -235,16 +235,14 @@ pub const TIMER_GROUPS: &[TimerGroupDescription] = &[
 
 // DMA claims name the stream and, as `_CH`, its DMAMUX request line.
 pub const CLAIMS: &[ResourceClaim] = &[
-    ResourceClaim::new(ResourceKind::Peripheral, "USART6", "SBUS RC input"),
+    ResourceClaim::new(ResourceKind::Peripheral, "USART6", "UART6 RC input"),
     ResourceClaim::new(ResourceKind::Pin, "PC6", "USART6 TX receiver"),
     ResourceClaim::new(ResourceKind::Pin, "PC7", "USART6 RX receiver"),
-    ResourceClaim::new(
-        ResourceKind::DmaStream,
-        "DMA1_STREAM0_CH71",
-        "USART6 RX SBUS",
-    ),
-    ResourceClaim::new(ResourceKind::Irq, "USART6", "USART6 RX IDLE"),
-    ResourceClaim::new(ResourceKind::Irq, "DMA1_STR0", "USART6 RX DMA"),
+    ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM0_CH71", "UART6 RC RX"),
+    ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM6_CH72", "UART6 RC TX"),
+    ResourceClaim::new(ResourceKind::Irq, "USART6", "UART6 RX IDLE"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA1_STR0", "UART6 RX DMA"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA1_STR6", "UART6 TX DMA"),
     ResourceClaim::new(ResourceKind::Peripheral, "USART3", "DJI MSP DisplayPort"),
     ResourceClaim::new(ResourceKind::Pin, "PD8", "USART3 TX MSP"),
     ResourceClaim::new(ResourceKind::Pin, "PD9", "USART3 RX MSP"),

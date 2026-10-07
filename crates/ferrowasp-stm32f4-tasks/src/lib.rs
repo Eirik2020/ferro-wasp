@@ -76,7 +76,7 @@ pub use esc::esc_manager_task;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use rc::{neutralize_rc_input, rc_input};
+pub use rc::{neutralize_rc_input, rc_input, rc_telemetry};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use spi1::{
     ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1ImuKind, Spi1Mailbox,

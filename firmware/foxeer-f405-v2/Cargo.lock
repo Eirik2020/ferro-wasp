@@ -320,7 +320,6 @@ dependencies = [
  "panic-probe",
  "rtic",
  "rtic-monotonics",
- "sbus-rs",
  "stm32f4xx-hal",
 ]
 
@@ -408,7 +407,6 @@ dependencies = [
  "fugit",
  "rtic",
  "rtic-monotonics",
- "sbus-rs",
 ]
 
 [[package]]
@@ -424,6 +422,7 @@ dependencies = [
  "ferrowasp-pid",
  "heapless 0.9.2",
  "libm",
+ "sbus-rs",
 ]
 
 [[package]]

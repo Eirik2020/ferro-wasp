@@ -51,6 +51,9 @@ CONFIG_KEYS = (
     "yaw_center_rate",
     "yaw_max_rate",
     "yaw_expo",
+    "rc_map",
+    "rc_arm_channel",
+    "rc_protocol",
 )
 
 

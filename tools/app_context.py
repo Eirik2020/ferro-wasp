@@ -203,15 +203,21 @@ TOPIC_ROUTES = {
         ),
     ),
     "rc": TopicRoute(
-        summary="SBUS DMA/peripheral ingress, discontinuity handling, link state, and commands.",
+        summary="SBUS or CRSF ingress, discontinuity handling, link state, commands, and CRSF telemetry.",
         common_symbols=(
             "uart2_rx_dma",
             "uart2_rx_idle",
             "rc_input",
         ),
+        foxeer_symbols=(
+            "uart2_tx_worker",
+            "uart2_tx_dma_complete",
+            "rc_telemetry",
+        ),
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
+            PurePosixPath("crates/ferrowasp-tasks/src/rc_receiver.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/uart_dma.rs"),
         ),

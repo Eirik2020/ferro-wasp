@@ -4,8 +4,8 @@
 //!
 //! Every STM32H743 UART inverts its receive line in hardware, so any port can
 //! take SBUS without an external inverter, and any port can take receive-only
-//! ESC telemetry. MSP DisplayPort needs a transmit DMA stream, which only
-//! UART3 has.
+//! ESC telemetry. MSP DisplayPort and CRSF talk back, so they need a transmit
+//! DMA stream, which UART3 and UART6 have.
 
 #[cfg(test)]
 use ferrowasp_io_core::serial::SerialRouteError;
@@ -21,14 +21,14 @@ pub const USART6_SBUS: SerialRoute = SerialRoute {
     rx_pin: "PC7 AF7",
     profile: SerialProfile::sbus(),
     rx_dma: "DMA1 Stream 0 DMAMUX request 71",
-    tx_dma: None,
+    tx_dma: Some("DMA1 Stream 6 DMAMUX request 72"),
     capabilities: SerialCapabilities {
         sbus: true,
-        crsf: false,
+        crsf: true,
         mavlink: false,
-        msp: false,
+        msp: true,
         esc_telemetry: true,
-        tx: false,
+        tx: true,
     },
 };
 
@@ -42,7 +42,7 @@ pub const USART3_MSP: SerialRoute = SerialRoute {
     tx_dma: Some("DMA1 Stream 3 DMAMUX request 46"),
     capabilities: SerialCapabilities {
         sbus: true,
-        crsf: false,
+        crsf: true,
         mavlink: false,
         msp: true,
         esc_telemetry: true,
@@ -84,9 +84,9 @@ mod tests {
 
     #[test]
     fn bindings_follow_each_ports_capabilities() {
-        use ferrowasp_io_core::serial::resolve_bindings;
+        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
 
-        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES);
+        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Sbus);
         assert_eq!(defaults.issues(), &[]);
         assert_eq!(
             defaults.profile(LogicalSerialPort::Uart6),
@@ -98,6 +98,7 @@ mod tests {
                 .with(LogicalSerialPort::Uart6, SerialFunction::None)
                 .with(LogicalSerialPort::Uart1, SerialFunction::RcInput),
             SERIAL_ROUTES,
+            RcProtocol::Sbus,
         );
         assert_eq!(unrouted.issues().len(), 1);
         assert_eq!(
@@ -109,18 +110,37 @@ mod tests {
             let moved = resolve_bindings(
                 SerialBindings::none().with(port, SerialFunction::RcInput),
                 SERIAL_ROUTES,
+                RcProtocol::Sbus,
             );
             assert_eq!(moved.issues(), &[]);
             assert_eq!(moved.profile(port), Some(SerialProfile::sbus()));
         }
-        // MSP needs transmit DMA, which UART6 does not have, so it is refused.
+        // MSP needs transmit DMA, which UART8 does not have, so it is refused.
         let refused = resolve_bindings(
-            SerialBindings::none().with(LogicalSerialPort::Uart6, SerialFunction::MspDisplayPort),
+            SerialBindings::none().with(LogicalSerialPort::Uart8, SerialFunction::MspDisplayPort),
             SERIAL_ROUTES,
+            RcProtocol::Sbus,
         );
         assert_eq!(refused.issues().len(), 1);
         assert_eq!(
-            refused.function(LogicalSerialPort::Uart6),
+            refused.function(LogicalSerialPort::Uart8),
+            SerialFunction::None
+        );
+        // CRSF RC on UART6 starts at CRSF's line settings; UART8 cannot
+        // transmit, so CRSF RC there is refused.
+        let crsf = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Crsf);
+        assert_eq!(crsf.issues(), &[]);
+        assert_eq!(
+            crsf.profile(LogicalSerialPort::Uart6),
+            Some(SerialProfile::crsf())
+        );
+        let no_tx = resolve_bindings(
+            SerialBindings::none().with(LogicalSerialPort::Uart8, SerialFunction::RcInput),
+            SERIAL_ROUTES,
+            RcProtocol::Crsf,
+        );
+        assert_eq!(
+            no_tx.function(LogicalSerialPort::Uart8),
             SerialFunction::None
         );
     }

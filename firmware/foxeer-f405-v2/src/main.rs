@@ -28,6 +28,7 @@ ferroforge::app! {
         uart1_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart1RxIrq>>,
         #[lock_free]
         uart2_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart2RxIrq>>,
+        uart2_tx_dma: Option<stm32_uart::Uart2TxDmaSide>,
         #[lock_free]
         uart4_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart4RxIrq>>,
         uart4_tx_dma: Option<stm32_uart::Uart4TxDmaSide>,
@@ -57,7 +58,8 @@ ferroforge::app! {
         arm_qualifier: safety::ArmQualifier,
 
         // UART
-        sbus: StreamingParser,
+        rc_receiver: RcReceiver,
+        rc_telemetry_writer: Option<UartOwnedWriter>,
         esc_telemetry_port: Option<SerialPortEndpoint>,
         esc_manager_state: EscManagerState,
         esc_request_producer: EscRequestProducer,
@@ -106,6 +108,8 @@ ferroforge::app! {
         rc_port: Option<SerialPortEndpoint>,
         osd_port: Option<SerialPortEndpoint>,
         osd_tx_healthy: bool,
+        uart2_tx_owner: Option<UartOwnedTxOwner>,
+        uart2_tx_completion: Option<UartOwnedTxCompletion>,
         uart4_tx_owner: Option<UartOwnedTxOwner>,
         uart4_tx_completion: Option<UartOwnedTxCompletion>,
         osd_task: osd::OsdTask,
@@ -180,6 +184,7 @@ ferroforge::app! {
             stm32_storage::UartRxFreeQueue::new(),
         uart4_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
+        uart2_tx_buffer: stm32_storage::UartTxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
         uart4_tx_buffer: stm32_storage::UartTxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
         spi1_dma_buffers: stm32_storage::SpiDmaBufferBank =
             stm32_storage::new_spi_dma_buffer_bank(),
@@ -455,6 +460,12 @@ ferroforge::app! {
         let stm32_uart::F405UartPorts {
             uart1_rx,
             uart2_rx,
+            uart2_tx:
+                stm32_port::UartTxPort {
+                    dma: uart2_tx_dma,
+                    owner: uart2_tx_owner,
+                    completion: uart2_tx_completion,
+                },
             uart4_rx,
             uart4_tx:
                 stm32_port::UartTxPort {
@@ -475,6 +486,7 @@ ferroforge::app! {
                     rx_pin: gpioa.pa3,
                     uart: dp.USART2,
                     rx_dma: dma1.5,
+                    tx_dma: dma1.6,
                 },
                 uart4: stm32_uart::Uart4PortResources {
                     tx_pin: gpioa.pa0,
@@ -497,7 +509,7 @@ ferroforge::app! {
                     )
                     .unwrap(),
                 },
-                uart2: stm32_port::UartRxPortStorage {
+                uart2: stm32_port::UartRxTxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart2_rx_buffers,
                         free_queue: cx.local.uart2_free_queue,
@@ -505,6 +517,11 @@ ferroforge::app! {
                     },
                     stream: cortex_m::singleton!(
                         : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                    tx_buffer: cx.local.uart2_tx_buffer,
+                    tx_stream: cortex_m::singleton!(
+                        : UartOwnedTxChannel = UartOwnedTxChannel::new()
                     )
                     .unwrap(),
                 },
@@ -527,6 +544,11 @@ ferroforge::app! {
             },
             &serial_bindings,
         );
+        // RC input reads the receiver; battery telemetry back to it, when the
+        // protocol talks back, has its own low-priority task and writer.
+        let rc_receiver = rc_receiver_for(serial_bindings.rc_protocol());
+        let mut rc_port = serial_functions.rc_input;
+        let rc_telemetry_writer = rc_port.as_mut().and_then(|port| port.writer.take());
 
         // Init rate controller
         let tuning_profile = DEFAULT_TUNING;
@@ -621,8 +643,10 @@ ferroforge::app! {
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         heartbeat::spawn().unwrap();
         adc1_polling::spawn().ok();
+        uart2_tx_worker::spawn().unwrap();
         uart4_tx_worker::spawn().unwrap();
         rc_input::spawn().unwrap();
+        rc_telemetry::spawn().unwrap();
         osd_refresh::spawn().ok();
         dshot_service::spawn().unwrap();
         esc_manager_task::spawn().unwrap();
@@ -632,6 +656,7 @@ ferroforge::app! {
             Shared {
                 uart1_rx,
                 uart2_rx,
+                uart2_tx_dma,
                 uart4_rx,
                 uart4_tx_dma,
 
@@ -660,7 +685,8 @@ ferroforge::app! {
                 arm_qualifier: safety::ArmQualifier::default(),
 
                 // UART
-                sbus: StreamingParser::new(),
+                rc_receiver,
+                rc_telemetry_writer,
                 esc_telemetry_port: serial_functions.esc_telemetry,
                 esc_manager_state,
                 esc_request_producer,
@@ -710,9 +736,11 @@ ferroforge::app! {
                 applied_tuning_seq: 0,
 
                 // Parser
-                rc_port: serial_functions.rc_input,
+                rc_port,
                 osd_port: serial_functions.msp_display_port,
                 osd_tx_healthy: true,
+                uart2_tx_owner,
+                uart2_tx_completion,
                 uart4_tx_owner,
                 uart4_tx_completion,
                 osd_task: osd::OsdTask::new(),
@@ -2153,6 +2181,23 @@ ferroforge::app! {
     async fn osd_refresh(cx: osd_refresh::Context);
 
     #[task(
+        from = flight_tasks::uart2_tx_worker,
+        priority = 11,
+        local = [uart2_tx_owner = uart2_tx_owner],
+        shared = [uart2_tx_dma = uart2_tx_dma],
+    )]
+    async fn uart2_tx_worker(cx: uart2_tx_worker::Context);
+
+    #[task(
+        from = flight_tasks::uart2_tx_dma_complete,
+        binds = DMA1_STREAM6,
+        priority = 11,
+        local = [uart2_tx_completion],
+        shared = [uart2_tx_dma]
+    )]
+    fn uart2_tx_dma_complete(cx: uart2_tx_dma_complete::Context);
+
+    #[task(
         from = flight_tasks::uart4_tx_worker,
         priority = 11,
         local = [uart4_tx_owner = uart4_tx_owner],
@@ -2174,7 +2219,7 @@ ferroforge::app! {
         priority = 10,
         local = [
             rc_port,
-            sbus,
+            rc_receiver,
             arm_qualifier,
             rc_rates_writer,
             rc_throttle_writer,
@@ -2185,6 +2230,11 @@ ferroforge::app! {
         spawn = [safety_master]
     )]
     async fn rc_input(cx: rc_input::Context);
+
+    // Battery telemetry back through the RC receiver, when the RC protocol
+    // talks back. Lowest priority: it only reads snapshots.
+    #[task(from = flight_tasks::rc_telemetry, priority = 1, local = [rc_telemetry_writer])]
+    async fn rc_telemetry(cx: rc_telemetry::Context);
 
     // ---- ADC1 ----
     #[task(

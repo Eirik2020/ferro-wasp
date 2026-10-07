@@ -193,6 +193,22 @@ For a complete profile:
 .\ferro-configurator.exe --port $Port config show
 ```
 
+## Use a CRSF receiver
+
+Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the
+SBUS pad: CRSF must not pass through the board's SBUS inverter. Then select
+the protocol and, for a stock EdgeTX radio, the arm switch on channel 5:
+
+```powershell
+.\ferro-configurator.exe --port $Port config set rc-protocol crsf
+.\ferro-configurator.exe --port $Port config set rc-arm-channel 5
+```
+
+Reboot the controller: the protocol applies at boot. Props off, confirm in the
+status output that `rc` becomes valid and that `arm_sw` follows the intended
+switch before flight. The radio shows the pack voltage and current the board
+measures.
+
 ## Change serial ports
 
 Each UART is named by its number on the chip. List what each port serves,

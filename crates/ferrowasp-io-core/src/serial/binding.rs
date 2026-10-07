@@ -14,9 +14,41 @@ use super::{LogicalSerialPort, SerialProfile, SerialRoute, SerialRouteError};
 /// One slot per UART the logical port numbering can name.
 pub const SERIAL_PORT_SLOTS: usize = LogicalSerialPort::ALL.len();
 
-/// What a port is used for. Each function speaks one protocol today, so the
-/// protocol follows from the function; a function with several protocols
-/// gets its own protocol setting when the second one arrives.
+/// Which receiver protocol RC input speaks. It decides the line settings of
+/// whichever port is bound to RC input, so it applies at boot like a binding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum RcProtocol {
+    Sbus = 0,
+    Crsf = 1,
+}
+
+impl RcProtocol {
+    pub const fn profile(self) -> SerialProfile {
+        match self {
+            Self::Sbus => SerialProfile::sbus(),
+            Self::Crsf => SerialProfile::crsf(),
+        }
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Sbus => "sbus",
+            Self::Crsf => "crsf",
+        }
+    }
+
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Sbus),
+            1 => Some(Self::Crsf),
+            _ => None,
+        }
+    }
+}
+
+/// What a port is used for. RC input's protocol is its own setting,
+/// [`RcProtocol`]; every other function speaks one protocol.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum SerialFunction {
@@ -34,10 +66,11 @@ impl SerialFunction {
         Self::EscTelemetry,
     ];
 
-    pub const fn profile(self) -> SerialProfile {
+    /// The line settings this function needs, RC input in `rc`'s protocol.
+    pub const fn profile(self, rc: RcProtocol) -> SerialProfile {
         match self {
             Self::None => SerialProfile::disabled(),
-            Self::RcInput => SerialProfile::sbus(),
+            Self::RcInput => rc.profile(),
             Self::MspDisplayPort => SerialProfile::msp(),
             Self::EscTelemetry => SerialProfile::esc_telemetry(),
         }
@@ -131,6 +164,7 @@ pub struct BindingIssue {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedBindings {
     functions: [SerialFunction; SERIAL_PORT_SLOTS],
+    rc_protocol: RcProtocol,
     issues: heapless::Vec<BindingIssue, SERIAL_PORT_SLOTS>,
 }
 
@@ -144,8 +178,13 @@ impl ResolvedBindings {
     pub const fn profile(&self, port: LogicalSerialPort) -> Option<SerialProfile> {
         match self.function(port) {
             SerialFunction::None => None,
-            function => Some(function.profile()),
+            function => Some(function.profile(self.rc_protocol)),
         }
+    }
+
+    /// The protocol RC input was resolved with.
+    pub const fn rc_protocol(&self) -> RcProtocol {
+        self.rc_protocol
     }
 
     pub fn issues(&self) -> &[BindingIssue] {
@@ -153,10 +192,16 @@ impl ResolvedBindings {
     }
 }
 
-/// Check every binding against the board's routes.
-pub fn resolve_bindings(bindings: SerialBindings, routes: &[SerialRoute]) -> ResolvedBindings {
+/// Check every binding against the board's routes, RC input in
+/// `rc_protocol`.
+pub fn resolve_bindings(
+    bindings: SerialBindings,
+    routes: &[SerialRoute],
+    rc_protocol: RcProtocol,
+) -> ResolvedBindings {
     let mut resolved = ResolvedBindings {
         functions: [SerialFunction::None; SERIAL_PORT_SLOTS],
+        rc_protocol,
         issues: heapless::Vec::new(),
     };
     let mut report = |port, function, fault| {
@@ -185,7 +230,7 @@ pub fn resolve_bindings(bindings: SerialBindings, routes: &[SerialRoute]) -> Res
             report(port, function, BindingFault::NoSuchPort);
             continue;
         };
-        if let Err(error) = route.validate_profile(function.profile()) {
+        if let Err(error) = route.validate_profile(function.profile(rc_protocol)) {
             report(port, function, BindingFault::Unsupported(error));
             continue;
         }
@@ -275,11 +320,48 @@ mod tests {
     ];
 
     #[test]
+    fn rc_input_takes_the_configured_protocol_and_crsf_needs_a_transmit_path() {
+        let mut both_ways = RX_ONLY;
+        both_ways.crsf = true;
+        both_ways.tx = true;
+        let routes = [
+            route(LogicalSerialPort::Uart1, RX_ONLY),
+            route(LogicalSerialPort::Uart2, both_ways),
+        ];
+        let bindings =
+            SerialBindings::none().with(LogicalSerialPort::Uart2, SerialFunction::RcInput);
+
+        let crsf = resolve_bindings(bindings, &routes, RcProtocol::Crsf);
+        assert_eq!(crsf.issues(), &[]);
+        assert_eq!(
+            crsf.profile(LogicalSerialPort::Uart2),
+            Some(SerialProfile::crsf())
+        );
+
+        let mut rx_only_crsf = RX_ONLY;
+        rx_only_crsf.crsf = true;
+        let refused = resolve_bindings(
+            SerialBindings::none().with(LogicalSerialPort::Uart1, SerialFunction::RcInput),
+            &[route(LogicalSerialPort::Uart1, rx_only_crsf)],
+            RcProtocol::Crsf,
+        );
+        assert_eq!(
+            refused.issues()[0].fault,
+            BindingFault::Unsupported(SerialRouteError::MissingTxDma)
+        );
+        assert_eq!(
+            RcProtocol::from_u8(RcProtocol::Crsf as u8),
+            Some(RcProtocol::Crsf)
+        );
+        assert_eq!(RcProtocol::from_u8(2), None);
+    }
+
+    #[test]
     fn valid_bindings_resolve_to_their_profiles() {
         let bindings = SerialBindings::none()
             .with(LogicalSerialPort::Uart2, SerialFunction::RcInput)
             .with(LogicalSerialPort::Uart4, SerialFunction::EscTelemetry);
-        let resolved = resolve_bindings(bindings, &ROUTES);
+        let resolved = resolve_bindings(bindings, &ROUTES, RcProtocol::Sbus);
         assert_eq!(resolved.issues(), &[]);
         assert_eq!(
             resolved.profile(LogicalSerialPort::Uart2),
@@ -298,7 +380,7 @@ mod tests {
             .with(LogicalSerialPort::Uart1, SerialFunction::RcInput)
             .with(LogicalSerialPort::Uart2, SerialFunction::MspDisplayPort)
             .with(LogicalSerialPort::Uart3, SerialFunction::EscTelemetry);
-        let resolved = resolve_bindings(bindings, &ROUTES);
+        let resolved = resolve_bindings(bindings, &ROUTES, RcProtocol::Sbus);
         assert_eq!(
             resolved.issues(),
             &[
@@ -329,7 +411,7 @@ mod tests {
         let bindings = SerialBindings::none()
             .with(LogicalSerialPort::Uart1, SerialFunction::EscTelemetry)
             .with(LogicalSerialPort::Uart4, SerialFunction::EscTelemetry);
-        let resolved = resolve_bindings(bindings, &ROUTES);
+        let resolved = resolve_bindings(bindings, &ROUTES, RcProtocol::Sbus);
         assert_eq!(resolved.issues().len(), 2);
         assert!(
             resolved

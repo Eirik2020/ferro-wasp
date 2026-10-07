@@ -54,6 +54,12 @@ export interface FerroConfig {
   yaw_center_rate?: number;
   yaw_max_rate?: number;
   yaw_expo?: number;
+  /** Channels for roll, pitch, throttle and yaw, like 1234 for AETR. */
+  rc_map?: number;
+  /** One-based arm switch channel, 5-16. */
+  rc_arm_channel?: number;
+  /** Applies after the controller reboots. */
+  rc_protocol?: "sbus" | "crsf";
 }
 
 /** The functions a serial port can serve, as the firmware names them. */

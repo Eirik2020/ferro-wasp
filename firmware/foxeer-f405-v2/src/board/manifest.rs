@@ -221,16 +221,14 @@ pub const TIMER_GROUPS: &[TimerGroupDescription] = &[
 ];
 
 pub const CLAIMS: &[ResourceClaim] = &[
-    ResourceClaim::new(ResourceKind::Peripheral, "USART2", "SBUS RC input"),
+    ResourceClaim::new(ResourceKind::Peripheral, "USART2", "UART2 RC input"),
     ResourceClaim::new(ResourceKind::Pin, "PA2", "USART2 TX receiver"),
     ResourceClaim::new(ResourceKind::Pin, "PA3", "USART2 RX receiver"),
-    ResourceClaim::new(
-        ResourceKind::DmaStream,
-        "DMA1_STREAM5_CH4",
-        "USART2 RX SBUS",
-    ),
-    ResourceClaim::new(ResourceKind::Irq, "USART2", "USART2 RX IDLE"),
-    ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM5", "USART2 RX DMA"),
+    ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM5_CH4", "UART2 RC RX"),
+    ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM6_CH4", "UART2 RC TX"),
+    ResourceClaim::new(ResourceKind::Irq, "USART2", "UART2 RX IDLE"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM5", "UART2 RX DMA"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM6", "UART2 TX DMA"),
     ResourceClaim::new(ResourceKind::Peripheral, "UART4", "DJI MSP DisplayPort"),
     ResourceClaim::new(ResourceKind::Pin, "PA0", "UART4 TX MSP"),
     ResourceClaim::new(ResourceKind::Pin, "PA1", "UART4 RX MSP"),
