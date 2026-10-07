@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
+            window.path_to_searchindex_js = "searchindex-0b688843.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -190,7 +190,7 @@ list every peripheral or diagnostic feature.</p>
 <tr><td>Role</td><td>Golden flight target</td><td>Obsolete, compiled only</td><td>Non-actuating bring-up target</td></tr>
 <tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
 <tr><td>RC input</td><td>SBUS over USART2 DMA</td><td>SBUS over USART2 DMA</td><td>None</td></tr>
-<tr><td>IMU</td><td>Runtime-selected MPU6500 or ICM42688-P; EXTI data-ready sampling</td><td>MPU6500; timer-driven polling</td><td>None</td></tr>
+<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>MPU6500; timer-driven polling</td><td>None</td></tr>
 <tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
 <tr><td>ESC output</td><td>Four-lane DShot600</td><td>Four-lane DShot600</td><td>None</td></tr>
 <tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
@@ -208,9 +208,9 @@ list every peripheral or diagnostic feature.</p>
 <p>The Foxeer app lives in <code>firmware/foxeer-f405-v2</code>. USB, DShot, ESC telemetry,
 persistent configuration, onboard blackbox storage, and MSP OSD are standard
 parts of its flight image rather than optional board capabilities.</p>
-<p>The fitted SPI1 IMU is detected at boot. MPU6500 and ICM42688-P share the
-bounded DMA transport and board orientation contract; PC4/EXTI4 supplies the
-normal data-ready event. The controller consumes fresh samples at 400 Hz.</p>
+<p>The fitted SPI1 IMU is detected at boot. MPU6500, ICM42688-P and MPU-6000
+share the bounded DMA transport and board orientation contract; PC4/EXTI4
+supplies the normal data-ready event. The controller consumes fresh samples at 400 Hz.</p>
 <p>Four DShot600 lanes use TIM1 and TIM8 with board-local pin and DMA routes. The
 actuator path continuously selects stop while disarmed, rejects stale motor
 commands, and contains a lane or DMA failure across the whole four-output

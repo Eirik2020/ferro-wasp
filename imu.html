@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b2f1f7d8.js";
+            window.path_to_searchindex_js = "searchindex-0b688843.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -175,7 +175,8 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="imu"><a class="header" href="#imu">IMU</a></h1>
-<p>FerroWasp currently supports MPU6500 and ICM42688-P devices over SPI1.</p>
+<p>FerroWasp currently supports MPU6500, MPU-6000 and ICM42688-P devices over
+SPI1.</p>
 <h2 id="target-selection"><a class="header" href="#target-selection">Target Selection</a></h2>
 <div class="table-wrapper">
 <table>
@@ -184,7 +185,7 @@
 </thead>
 <tbody>
 <tr><td>FerroWasp FCU3 (obsolete)</td><td>Fixed MPU6500 path, <code>WHO_AM_I=0x70</code></td></tr>
-<tr><td>Foxeer F405 V2</td><td>Mode-3 probe selects MPU6500 <code>0x70</code> or ICM42688-P <code>0x47</code></td></tr>
+<tr><td>Foxeer F405 V2</td><td>Mode-3 probe selects MPU6500 <code>0x70</code>, ICM42688-P <code>0x47</code> or MPU-6000 <code>0x68</code></td></tr>
 <tr><td>NUCLEO-F401RE</td><td>No attached IMU in the board contract</td></tr>
 </tbody>
 </table>
@@ -193,7 +194,7 @@
 read-back failure leaves Foxeer sampling disabled. The heartbeat and unrelated
 bring-up services continue, while the runtime IMU health gate rejects arming.</p>
 <h2 id="driver-behavior"><a class="header" href="#driver-behavior">Driver Behavior</a></h2>
-<p>Both drivers are allocation-free modules in <code>ferrowasp-drivers</code> and use
+<p>All three drivers are allocation-free modules in <code>ferrowasp-drivers</code> and use
 <code>embedded-hal</code> 1.0 traits for blocking boot configuration.</p>
 <p>MPU6500 support includes:</p>
 <ul>
@@ -203,6 +204,23 @@ bring-up services continue, while the runtime IMU health gate rejects arming.</p
 <li>+/-2000 dps gyro and +/-8 g accelerometer ranges</li>
 <li>the 14-byte accel/temperature/gyro burst beginning at <code>0x3b</code></li>
 </ul>
+<p>MPU-6000 support includes:</p>
+<ul>
+<li>the SPI reset sequence: device reset, then gyro, accelerometer and
+temperature signal-path reset, each followed by 100 ms</li>
+<li>the Z-gyro PLL clock, SPI-only mode and <code>WHO_AM_I=0x68</code> validation</li>
+<li>a 2 kHz data-ready rate by default: the DLPF is bypassed so the gyro samples
+at 8 kHz (256 Hz bandwidth) and <code>SMPLRT_DIV</code> decimates it, because any other
+filter setting caps the gyro at 1 kHz; the accelerometer updates at 1 kHz</li>
+<li>+/-2000 dps gyro and +/-16 g accelerometer ranges</li>
+<li>register read-back of every configuration write</li>
+<li>active-high, push-pull, 50 us data-ready pulses cleared by any read</li>
+<li>the 14-byte accel/temperature/gyro burst beginning at <code>0x3b</code>, the MPU6500’s
+layout, with its own temperature scale</li>
+</ul>
+<p>The part accepts 1 MHz SPI for configuration and 20 MHz only for sensor reads.
+The IMU bus stays at 1 MHz, so a burst takes about 120 us, which rules out an
+8 kHz rate.</p>
 <p>ICM42688-P support includes:</p>
 <ul>
 <li>soft reset and reset-complete validation</li>
@@ -220,7 +238,7 @@ bring-up services continue, while the runtime IMU health gate rejects arming.</p
 <p>SPI helpers always attempt to deassert chip select after a bus failure. Burst
 decoders reject short, all-zero, and all-<code>0xff</code> frames.</p>
 <h2 id="runtime-flow"><a class="header" href="#runtime-flow">Runtime Flow</a></h2>
-<p>The two sensor layouts both fit the existing fixed 15-byte full-duplex DMA
+<p>The sensor layouts all fit the existing fixed 15-byte full-duplex DMA
 transaction: one read-command byte plus 14 response bytes.</p>
 <pre class="mermaid">flowchart LR
     fcu[FCU3 TIM4&lt;br/&gt;800 Hz poll]
@@ -242,7 +260,7 @@ transaction: one read-command byte plus 14 response bytes.</p>
 <p><code>SpiDmaOwner</code> exclusively owns SPI1, both DMA halves, chip select, timeout
 recovery, and static receive buffers. The parser returns each receive buffer
 after valid and invalid frames.</p>
-<p>Foxeer configures both supported sensors for active-high, push-pull data-ready
+<p>Foxeer configures every supported sensor for active-high, push-pull data-ready
 pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
 edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
@@ -264,6 +282,9 @@ have been checked on the physical board: its profile sets
 <code>M4_COMPLEMENTARY_POLARITY_VERIFIED</code> and <code>MOTOR_OUTPUT_ORDER_VERIFIED</code>, which
 together enable <code>FLIGHT_ARMING_ENABLED</code>. Any change to the sensor, its
 orientation or the motor order withdraws that and requires the checks again.
+Those checks were made with the ICM42688-P, so a Foxeer that detects an
+MPU-6000 samples and reports it but fails the pre-arm IMU check until its axes
+and signs are verified on a board that carries one.
 The obsolete FCU3’s mapping and gyro bias behaviour had bench evidence of its
 own.</p>
 <p>The optional BB2 <code>gyro10</code> values use the same measured-rate convention passed
@@ -274,8 +295,8 @@ IMU viewer.</p>
 <h2 id="foxeer-bring-up-checklist"><a class="header" href="#foxeer-bring-up-checklist">Foxeer Bring-Up Checklist</a></h2>
 <ol>
 <li>Flash with motor power and props disconnected.</li>
-<li>Record the supported identity log: decimal <code>112</code> for MPU6500 or <code>71</code> for
-ICM42688-P.</li>
+<li>Record the supported identity log: decimal <code>112</code> for MPU6500, <code>71</code> for
+ICM42688-P, or <code>104</code> for MPU-6000.</li>
 <li>Confirm the PC4/EXTI4 delta is approximately 2,000 per two-second heartbeat,
 sequence numbers advance, rejected-trigger counts remain zero or explainably
 bounded, and no SPI timeout or invalid-frame warning appears.</li>
