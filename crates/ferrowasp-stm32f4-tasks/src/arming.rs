@@ -196,19 +196,22 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                     warn!("RC link invalidated by transport discontinuity")
                 }
                 safety::RcLinkInvalidation::DmaError => {
-                    warn!("RC link invalidated by USART2 DMA error")
+                    warn!("RC link invalidated by an RC port DMA error")
                 }
                 safety::RcLinkInvalidation::ParserError => {
-                    warn!("RC link invalidated by SBUS parser error")
+                    warn!("RC link invalidated by a receiver parser error")
                 }
-                safety::RcLinkInvalidation::SbusFrameLost => {
-                    warn!("RC link invalidated by SBUS frame-lost flag")
+                safety::RcLinkInvalidation::FrameLost => {
+                    warn!("RC link invalidated by a receiver frame-lost report")
                 }
-                safety::RcLinkInvalidation::SbusFailsafe => {
-                    warn!("RC link invalidated by SBUS failsafe flag")
+                safety::RcLinkInvalidation::Failsafe => {
+                    warn!("RC link invalidated by the receiver failsafe flag")
                 }
                 safety::RcLinkInvalidation::Timeout => {
                     warn!("RC link invalidated by frame timeout")
+                }
+                safety::RcLinkInvalidation::ChannelMapChanged => {
+                    warn!("RC link invalidated: the channel map changed; arm switch must read low")
                 }
             }
         }

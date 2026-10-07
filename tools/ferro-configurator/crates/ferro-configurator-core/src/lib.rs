@@ -23,7 +23,7 @@ pub use client::{
     FerroClient, FlashInfo, LogInfo, SERIAL_FUNCTIONS, SerialBindings, SerialPortBinding,
     StatusSnapshot,
 };
-pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig};
+pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
 pub use device::{DeviceSelector, PortInfo, discover_ports, open_device};
 pub use error::{FerroError, Result};
 pub use firmware::{

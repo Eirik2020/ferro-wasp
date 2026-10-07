@@ -1,13 +1,20 @@
 pub use super::serial::SERIAL_ROUTES;
 use ferrowasp_stm32f4::board_routes::{DmaDirection, DmaRoute, SpiRoute};
 
-pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 6] = [
+pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 7] = [
     DmaRoute {
         controller: 1,
         stream: 5,
         channel: 4,
         direction: DmaDirection::PeripheralToMemory,
-        owner: "USART2 SBUS RX",
+        owner: "UART2 RC RX",
+    },
+    DmaRoute {
+        controller: 1,
+        stream: 6,
+        channel: 4,
+        direction: DmaDirection::MemoryToPeripheral,
+        owner: "UART2 RC TX (CRSF telemetry)",
     },
     DmaRoute {
         controller: 1,
@@ -85,13 +92,14 @@ pub const ESC_TELEMETRY_DMA_ROUTE: DmaRoute = DmaRoute {
     owner: "USART1 BLHeli ESC telemetry RX",
 };
 
-pub const ACTIVE_DMA_ROUTES: [DmaRoute; 11] = [
+pub const ACTIVE_DMA_ROUTES: [DmaRoute; 12] = [
     ACTIVE_IO_DMA_ROUTES[0],
     ACTIVE_IO_DMA_ROUTES[1],
     ACTIVE_IO_DMA_ROUTES[2],
     ACTIVE_IO_DMA_ROUTES[3],
     ACTIVE_IO_DMA_ROUTES[4],
     ACTIVE_IO_DMA_ROUTES[5],
+    ACTIVE_IO_DMA_ROUTES[6],
     MOTOR_DSHOT_DMA_ROUTES[0],
     MOTOR_DSHOT_DMA_ROUTES[1],
     MOTOR_DSHOT_DMA_ROUTES[2],
@@ -134,7 +142,7 @@ mod tests {
     #[test]
     fn active_routes_have_no_exclusive_claim_conflicts() {
         assert_eq!(find_duplicate_claim(CLAIMS), None);
-        assert_eq!(ACTIVE_DMA_ROUTES.len(), 11);
+        assert_eq!(ACTIVE_DMA_ROUTES.len(), 12);
         assert_eq!(ACTIVE_SPI_ROUTES.len(), 2);
         for (index, route) in ACTIVE_DMA_ROUTES.iter().enumerate() {
             assert!(!ACTIVE_DMA_ROUTES[index + 1..].iter().any(|other| {

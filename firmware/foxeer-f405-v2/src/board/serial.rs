@@ -12,14 +12,16 @@ pub const USART2_SBUS: SerialRoute = SerialRoute {
     rx_pin: "PA3 AF7",
     profile: SerialProfile::sbus(),
     rx_dma: "DMA1 Stream 5 Channel 4",
-    tx_dma: None,
+    tx_dma: Some("DMA1 Stream 6 Channel 4"),
+    // SBUS reaches PA3 from the board's SBUS pad through its inverter; CRSF
+    // uses the plain R2/T2 pads, straight to PA3/PA2, both ways.
     capabilities: SerialCapabilities {
         sbus: true,
-        crsf: false,
+        crsf: true,
         mavlink: false,
         msp: false,
         esc_telemetry: false,
-        tx: false,
+        tx: true,
     },
 };
 
@@ -34,7 +36,7 @@ pub const UART4_MSP: SerialRoute = SerialRoute {
     // A plain 8N1 port with DMA both ways; it has no inverter, so no SBUS.
     capabilities: SerialCapabilities {
         sbus: false,
-        crsf: false,
+        crsf: true,
         mavlink: false,
         msp: true,
         esc_telemetry: true,
@@ -76,15 +78,16 @@ mod tests {
 
     #[test]
     fn default_bindings_resolve_cleanly_and_uart4_can_take_esc_telemetry() {
-        use ferrowasp_io_core::serial::resolve_bindings;
+        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
 
-        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES);
+        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Sbus);
         assert_eq!(defaults.issues(), &[]);
         let moved = resolve_bindings(
             DEFAULT_SERIAL_BINDINGS
                 .with(LogicalSerialPort::Uart1, SerialFunction::None)
                 .with(LogicalSerialPort::Uart4, SerialFunction::EscTelemetry),
             SERIAL_ROUTES,
+            RcProtocol::Sbus,
         );
         assert_eq!(moved.issues(), &[]);
         assert_eq!(
@@ -97,10 +100,35 @@ mod tests {
                 .with(LogicalSerialPort::Uart2, SerialFunction::None)
                 .with(LogicalSerialPort::Uart4, SerialFunction::RcInput),
             SERIAL_ROUTES,
+            RcProtocol::Sbus,
         );
         assert_eq!(refused.issues().len(), 1);
         assert_eq!(
             refused.function(LogicalSerialPort::Uart4),
+            SerialFunction::None
+        );
+    }
+
+    #[test]
+    fn crsf_rc_input_needs_a_port_that_transmits() {
+        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
+
+        let crsf = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Crsf);
+        assert_eq!(crsf.issues(), &[]);
+        assert_eq!(
+            crsf.profile(LogicalSerialPort::Uart2),
+            Some(SerialProfile::crsf())
+        );
+        // UART1 is receive-only, so CRSF RC there is refused.
+        let refused = resolve_bindings(
+            DEFAULT_SERIAL_BINDINGS
+                .with(LogicalSerialPort::Uart2, SerialFunction::None)
+                .with(LogicalSerialPort::Uart1, SerialFunction::RcInput),
+            SERIAL_ROUTES,
+            RcProtocol::Crsf,
+        );
+        assert_eq!(
+            refused.function(LogicalSerialPort::Uart1),
             SerialFunction::None
         );
     }

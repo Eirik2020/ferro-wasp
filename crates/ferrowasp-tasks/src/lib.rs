@@ -9,4 +9,5 @@ pub mod drone_toolbox;
 pub mod esc_manager;
 pub mod flash_storage;
 pub mod osd;
+pub mod rc_receiver;
 pub mod usb_debug;

@@ -119,7 +119,7 @@ pub mod board;
 pub use ferrowasp_core::actuator::{remap_motor_outputs, throttle_to_u16};
 pub use ferrowasp_core::safety;
 pub use ferrowasp_drivers::{icm42688p as icm, mpu6500 as imu};
-pub use ferrowasp_io_core::serial::ResolvedBindings;
+pub use ferrowasp_io_core::serial::{RcProtocol, ResolvedBindings};
 pub use ferrowasp_io_core::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
     SpiRequestMailbox,
@@ -176,12 +176,12 @@ pub use ferrowasp_tasks::esc_manager::{
 };
 pub use ferrowasp_tasks::flash_storage as flash_task;
 pub use ferrowasp_tasks::osd;
+pub use ferrowasp_tasks::rc_receiver::RcReceiver;
 #[cfg(not(feature = "mspv2_configurator"))]
 pub use ferrowasp_tasks::usb_debug;
 pub use fugit::Rate;
 use panic_probe as _;
 pub use rtic_monotonics::systick::prelude::*;
-pub use sbus_rs::StreamingParser;
 pub use stm32_usb::UsbDeviceState;
 
 pub type DshotShared = board::init::DshotMotorBank;
@@ -201,6 +201,7 @@ pub type IoTimebase = stm32_timebase::MicrosecondTimebase<board::aliases::IoTime
 pub type IoWatchdog = board::aliases::IoWatchdog;
 pub type UartOwnedRxChannel = stm32_memory::UartOwnedRxChannel;
 pub type UartOwnedTxChannel = stm32_memory::UartOwnedTxChannel;
+pub type UartOwnedWriter = stm32_memory::UartOwnedWriter<'static>;
 pub type UartOwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
 pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
 pub type UsbDebugDevice = stm32_usb::UsbCdcDevice;
@@ -515,22 +516,33 @@ pub fn load_flash_config(
     })
 }
 
-/// The serial bindings to start the ports with: the saved table when flash
-/// holds one, else the board's defaults. Read once in init, so a changed
-/// binding applies after a reboot.
+/// The serial bindings to start the ports with, and the RC protocol of the
+/// port bound to RC input: the saved values when storage holds a
+/// configuration, else the board's defaults. Read once in init, so a changed
+/// binding or protocol applies after a reboot.
 pub fn boot_serial_bindings(flash: &mut FlashDevice) -> ResolvedBindings {
     let saved = if FLASH_READY.load(Ordering::Acquire) {
         flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
             .and_then(|layout| load_flash_config(flash, layout).ok())
-            .and_then(|(config, _, _)| config.serial_bindings)
+            .map(|(config, _, _)| config)
     } else {
         None
     };
+    let config = saved.unwrap_or(DEFAULT_STORED_CONFIG);
     stm32_port::resolve_boot_serial_bindings(
-        saved,
+        config.serial_bindings,
         board::serial::DEFAULT_SERIAL_BINDINGS,
         board::serial::SERIAL_ROUTES,
+        config.rc_protocol,
     )
+}
+
+/// The receiver decoder for the protocol RC input was started with.
+pub fn rc_receiver_for(protocol: RcProtocol) -> RcReceiver {
+    match protocol {
+        RcProtocol::Sbus => RcReceiver::sbus(),
+        RcProtocol::Crsf => RcReceiver::crsf(),
+    }
 }
 
 pub fn queue_storage_response(producer: &mut flash_task::ResponseProducer, text: &str) -> bool {

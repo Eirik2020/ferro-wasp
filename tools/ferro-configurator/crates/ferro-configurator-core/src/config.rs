@@ -17,6 +17,43 @@ pub struct AxisPid {
     pub d: f32,
 }
 
+/// The receiver protocol on the port bound to RC input. The controller reads
+/// it at boot, so a change applies after a reboot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RcProtocol {
+    Sbus,
+    Crsf,
+}
+
+impl RcProtocol {
+    /// The firmware's number for it, as `config get/set rc_protocol` uses.
+    pub const fn wire_value(self) -> f32 {
+        match self {
+            Self::Sbus => 0.0,
+            Self::Crsf => 1.0,
+        }
+    }
+
+    pub fn from_wire_value(value: f32) -> Option<Self> {
+        if value == 0.0 {
+            Some(Self::Sbus)
+        } else if value == 1.0 {
+            Some(Self::Crsf)
+        } else {
+            None
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "sbus" => Some(Self::Sbus),
+            "crsf" => Some(Self::Crsf),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FerroConfig {
@@ -47,6 +84,16 @@ pub struct FerroConfig {
     pub yaw_max_rate: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub yaw_expo: Option<f32>,
+    /// Stick order as one-based channels for roll, pitch, throttle and yaw;
+    /// AETR is 1234. Optional in schema v2 files written before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rc_map: Option<u16>,
+    /// The one-based arm switch channel, 5-16.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rc_arm_channel: Option<u16>,
+    /// `sbus` or `crsf`; applies after the controller reboots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rc_protocol: Option<RcProtocol>,
 }
 
 const fn schema_version() -> u16 {
@@ -84,6 +131,9 @@ impl Default for FerroConfig {
             yaw_center_rate: Some(70.0),
             yaw_max_rate: Some(200.0),
             yaw_expo: Some(0.5),
+            rc_map: Some(1234),
+            rc_arm_channel: Some(9),
+            rc_protocol: Some(RcProtocol::Sbus),
         }
     }
 }
@@ -132,7 +182,9 @@ impl FerroConfig {
                         ),
                     });
                 }
-                None if self.schema_version == CONFIG_SCHEMA_VERSION => {
+                None if self.schema_version == CONFIG_SCHEMA_VERSION
+                    && !added_after_schema_v2(key) =>
+                {
                     errors.push(ConfigValidationError {
                         field: key.name(),
                         reason: "is required by configuration schema v2".to_owned(),
@@ -160,6 +212,15 @@ impl FerroConfig {
             self.yaw_max_rate,
             &mut errors,
         );
+
+        if let Some(order) = self.rc_map
+            && !is_stick_order(order)
+        {
+            errors.push(ConfigValidationError {
+                field: "rc_map",
+                reason: "must use each of channels 1-4 exactly once, like 1234 for AETR".to_owned(),
+            });
+        }
 
         if errors.is_empty() {
             Ok(())
@@ -254,13 +315,25 @@ impl FerroConfig {
             ConfigKey::YawCenterRate => self.yaw_center_rate,
             ConfigKey::YawMaxRate => self.yaw_max_rate,
             ConfigKey::YawExpo => self.yaw_expo,
+            ConfigKey::RcMap => self.rc_map.map(f32::from),
+            ConfigKey::RcArmChannel => self.rc_arm_channel.map(f32::from),
+            ConfigKey::RcProtocol => self.rc_protocol.map(RcProtocol::wire_value),
         }
     }
 
     pub fn set_from_str(&mut self, key: ConfigKey, value: &str) -> Result<()> {
-        let parsed = value.parse::<f32>().map_err(|_| {
-            FerroError::InvalidConfiguration(format!("{} must be a number", key.name()))
-        })?;
+        let named_protocol = (key == ConfigKey::RcProtocol)
+            .then(|| RcProtocol::parse(value))
+            .flatten();
+        let parsed = match named_protocol {
+            Some(protocol) => protocol.wire_value(),
+            None => value.parse::<f32>().map_err(|_| {
+                FerroError::InvalidConfiguration(match key {
+                    ConfigKey::RcProtocol => "rc_protocol must be sbus or crsf".to_owned(),
+                    _ => format!("{} must be a number", key.name()),
+                })
+            })?,
+        };
         let mut candidate = self.clone();
         candidate.set(key, parsed)?;
         candidate.ensure_valid()?;
@@ -297,6 +370,9 @@ impl FerroConfig {
             ConfigKey::YawCenterRate => self.yaw_center_rate = Some(value),
             ConfigKey::YawMaxRate => self.yaw_max_rate = Some(value),
             ConfigKey::YawExpo => self.yaw_expo = Some(value),
+            ConfigKey::RcMap => self.rc_map = Some(value as u16),
+            ConfigKey::RcArmChannel => self.rc_arm_channel = Some(value as u16),
+            ConfigKey::RcProtocol => self.rc_protocol = RcProtocol::from_wire_value(value),
         }
         Ok(())
     }
@@ -352,9 +428,58 @@ fn validate_rate_axis(
     }
 }
 
+/// Keys a schema v2 file may omit because they were added after it shipped;
+/// a device snapshot fills them in before staging.
+fn added_after_schema_v2(key: ConfigKey) -> bool {
+    matches!(
+        key,
+        ConfigKey::RcMap | ConfigKey::RcArmChannel | ConfigKey::RcProtocol
+    )
+}
+
+/// Whether the digits of `order` are channels 1-4, each used once.
+fn is_stick_order(order: u16) -> bool {
+    let digits = [order / 1000, order / 100 % 10, order / 10 % 10, order % 10];
+    (1000..=9999).contains(&order)
+        && (1..=4).all(|channel| digits.iter().filter(|digit| **digit == channel).count() == 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rc_settings_validate_and_take_protocol_names() {
+        let mut config = FerroConfig::default();
+        assert!(config.set_from_str(ConfigKey::RcMap, "2314").is_ok());
+        assert!(config.set_from_str(ConfigKey::RcMap, "1224").is_err());
+        assert!(config.set_from_str(ConfigKey::RcArmChannel, "4").is_err());
+        assert!(config.set_from_str(ConfigKey::RcProtocol, "crsf").is_ok());
+        assert_eq!(config.rc_protocol, Some(RcProtocol::Crsf));
+        assert_eq!(config.get(ConfigKey::RcProtocol), Some(1.0));
+        assert!(config.set_from_str(ConfigKey::RcProtocol, "0").is_ok());
+        assert_eq!(config.rc_protocol, Some(RcProtocol::Sbus));
+        assert!(config.set_from_str(ConfigKey::RcProtocol, "ppm").is_err());
+        assert_eq!(config.rc_map, Some(2314));
+    }
+
+    #[test]
+    fn a_schema_v2_file_without_the_rc_settings_is_still_valid() {
+        let config = FerroConfig {
+            rc_map: None,
+            rc_arm_channel: None,
+            rc_protocol: None,
+            ..FerroConfig::default()
+        };
+        assert!(config.ensure_valid().is_ok());
+    }
+
+    #[test]
+    fn the_rc_protocol_is_written_by_name() {
+        let text = FerroConfig::default().to_toml().unwrap();
+        assert!(text.contains("rc_protocol = \"sbus\""), "{text}");
+        assert!(text.contains("rc_arm_channel = 9"), "{text}");
+    }
 
     #[test]
     fn defaults_match_the_approved_foxeer_f405_v2_baseline() {
@@ -444,6 +569,9 @@ d = 0.0
                 | ConfigKey::YawCenterRate => "50",
                 ConfigKey::RollMaxRate | ConfigKey::PitchMaxRate | ConfigKey::YawMaxRate => "300",
                 ConfigKey::ImuLpfHz => "50",
+                ConfigKey::RcMap => "2314",
+                ConfigKey::RcArmChannel => "5",
+                ConfigKey::RcProtocol => "crsf",
                 _ => "0.5",
             };
             config.set_from_str(key, value).unwrap();

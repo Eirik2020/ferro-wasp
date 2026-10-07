@@ -6,7 +6,7 @@ use ferrowasp_core::blackbox::{
 };
 pub use ferrowasp_core::config::ConfigKey;
 use ferrowasp_io_core::serial::{
-    LogicalSerialPort, SERIAL_PORT_SLOTS, SerialBindings, SerialFunction,
+    LogicalSerialPort, RcProtocol, SERIAL_PORT_SLOTS, SerialBindings, SerialFunction,
 };
 use heapless::String;
 use heapless::spsc::{Consumer, Producer, Queue};
@@ -15,8 +15,8 @@ use heapless::spsc::{Consumer, Producer, Queue};
 use ferrowasp_mspv2::rpc;
 
 use crate::drone_toolbox::{
-    ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcRateProfile, TuningProfile,
-    gyro_lpf_corner_hz,
+    ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, RcRateProfile,
+    TuningProfile, gyro_lpf_corner_hz,
 };
 
 pub const RECORD_QUEUE_CAPACITY: usize = 64;
@@ -388,15 +388,25 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
 pub const LEGACY_STORED_CONFIG_LEN: usize = 44;
 /// Versions 2 and 3.
 pub const V3_STORED_CONFIG_LEN: usize = 84;
-pub const STORED_CONFIG_LEN: usize = V3_STORED_CONFIG_LEN + SERIAL_PORT_SLOTS;
-/// Version 4 adds the serial port bindings after the version 3 payload.
+/// Version 4.
+pub const V4_STORED_CONFIG_LEN: usize = V3_STORED_CONFIG_LEN + SERIAL_PORT_SLOTS;
+/// Where version 5's receiver fields start: stick order (two bytes), arm
+/// channel, and RC protocol.
+const RC_FIELDS_OFFSET: usize = V4_STORED_CONFIG_LEN;
+pub const STORED_CONFIG_LEN: usize = RC_FIELDS_OFFSET + 4;
+/// Version 5 adds the RC channel map and RC protocol after the version 4
+/// payload. Every earlier payload decodes with [`RcChannelMap::AETR_ARM_CH9`]
+/// and SBUS, the fixed map and protocol firmware used before, so updating
+/// never moves a pilot's arm switch.
 ///
+/// Version 4 adds the serial port bindings after the version 3 payload.
 /// Version 3 stores the gyro filter as a corner in hertz. Versions 1 and 2
 /// stored a one-pole smoothing factor, which only means what it is meant to
 /// mean at one loop rate. A version 2 payload is still read: its coefficient
 /// is converted at the rate it was authored for, so a tune saved before this
 /// change keeps the filter it had.
-const STORED_CONFIG_SCHEMA_VERSION: u16 = 4;
+const STORED_CONFIG_SCHEMA_VERSION: u16 = 5;
+const STORED_CONFIG_SCHEMA_VERSION_BINDINGS: u16 = 4;
 const STORED_CONFIG_SCHEMA_VERSION_CORNER: u16 = 3;
 const STORED_CONFIG_SCHEMA_VERSION_ALPHA: u16 = 2;
 /// Bindings bytes meaning "never set": the board's defaults apply.
@@ -412,6 +422,9 @@ pub struct StoredConfig {
     /// Which function each serial port serves; `None` until a pilot sets
     /// one, and then the board's own defaults apply. Read once at boot.
     pub serial_bindings: Option<SerialBindings>,
+    /// The receiver protocol on the port bound to RC input. Read once at
+    /// boot, since it sets that port's line settings.
+    pub rc_protocol: RcProtocol,
 }
 
 impl StoredConfig {
@@ -420,6 +433,7 @@ impl StoredConfig {
             tuning: TuningProfile::default_first_hop(),
             log_rate_divisor: 1,
             serial_bindings: None,
+            rc_protocol: RcProtocol::Sbus,
         }
     }
 
@@ -468,6 +482,24 @@ impl StoredConfig {
             }
             ConfigKey::YawMaxRate => candidate.tuning.rc_rates.yaw.max_rate_dps = value,
             ConfigKey::YawExpo => candidate.tuning.rc_rates.yaw.expo = value,
+            ConfigKey::RcMap => {
+                match RcChannelMap::from_config(value as u16, candidate.tuning.rc_map.arm_channel())
+                {
+                    Some(map) => candidate.tuning.rc_map = map,
+                    None => return false,
+                }
+            }
+            ConfigKey::RcArmChannel => {
+                match RcChannelMap::from_config(candidate.tuning.rc_map.stick_order(), value as u8)
+                {
+                    Some(map) => candidate.tuning.rc_map = map,
+                    None => return false,
+                }
+            }
+            ConfigKey::RcProtocol => match RcProtocol::from_u8(value as u8) {
+                Some(protocol) => candidate.rc_protocol = protocol,
+                None => return false,
+            },
         }
         if candidate.tuning.sanitized() != candidate.tuning {
             return false;
@@ -499,6 +531,9 @@ impl StoredConfig {
             ConfigKey::YawCenterRate => self.tuning.rc_rates.yaw.center_sensitivity_dps,
             ConfigKey::YawMaxRate => self.tuning.rc_rates.yaw.max_rate_dps,
             ConfigKey::YawExpo => self.tuning.rc_rates.yaw.expo,
+            ConfigKey::RcMap => self.tuning.rc_map.stick_order() as f32,
+            ConfigKey::RcArmChannel => self.tuning.rc_map.arm_channel() as f32,
+            ConfigKey::RcProtocol => self.rc_protocol as u8 as f32,
         }
     }
 
@@ -538,11 +573,15 @@ impl StoredConfig {
             output[start..start + 4].copy_from_slice(&value.to_bits().to_le_bytes());
         }
         output[80..82].copy_from_slice(&self.tuning.rc_rates.deadband.to_le_bytes());
-        output[V3_STORED_CONFIG_LEN..].copy_from_slice(
+        output[V3_STORED_CONFIG_LEN..V4_STORED_CONFIG_LEN].copy_from_slice(
             &self
                 .serial_bindings
                 .map_or(SERIAL_BINDINGS_UNSET, |bindings| bindings.encode()),
         );
+        output[RC_FIELDS_OFFSET..RC_FIELDS_OFFSET + 2]
+            .copy_from_slice(&self.tuning.rc_map.stick_order().to_le_bytes());
+        output[RC_FIELDS_OFFSET + 2] = self.tuning.rc_map.arm_channel();
+        output[RC_FIELDS_OFFSET + 3] = self.rc_protocol as u8;
         output
     }
 
@@ -550,6 +589,7 @@ impl StoredConfig {
         if ![
             LEGACY_STORED_CONFIG_LEN,
             V3_STORED_CONFIG_LEN,
+            V4_STORED_CONFIG_LEN,
             STORED_CONFIG_LEN,
         ]
         .contains(&input.len())
@@ -574,6 +614,7 @@ impl StoredConfig {
             let stored_version = u16::from_le_bytes([input[42], input[43]]);
             let expected_len = match stored_version {
                 STORED_CONFIG_SCHEMA_VERSION => STORED_CONFIG_LEN,
+                STORED_CONFIG_SCHEMA_VERSION_BINDINGS => V4_STORED_CONFIG_LEN,
                 STORED_CONFIG_SCHEMA_VERSION_CORNER | STORED_CONFIG_SCHEMA_VERSION_ALPHA => {
                     V3_STORED_CONFIG_LEN
                 }
@@ -599,6 +640,15 @@ impl StoredConfig {
                 yaw: ActualRateAxis::new(rate_values[6], rate_values[7], rate_values[8]),
                 deadband: u16::from_le_bytes([input[80], input[81]]),
             }
+        };
+        let (rc_map, rc_protocol) = if schema_version == STORED_CONFIG_SCHEMA_VERSION {
+            let fields = &input[RC_FIELDS_OFFSET..STORED_CONFIG_LEN];
+            (
+                RcChannelMap::from_config(u16::from_le_bytes([fields[0], fields[1]]), fields[2])?,
+                RcProtocol::from_u8(fields[3])?,
+            )
+        } else {
+            (RcChannelMap::AETR_ARM_CH9, RcProtocol::Sbus)
         };
         let candidate = Self {
             tuning: TuningProfile {
@@ -628,9 +678,11 @@ impl StoredConfig {
                     gyro_lpf_corner_hz(values[9], LEGACY_LPF_SAMPLE_RATE_HZ)
                 },
                 rc_rates,
+                rc_map,
             },
             log_rate_divisor: u16::from_le_bytes([input[40], input[41]]),
-            serial_bindings: match input.get(V3_STORED_CONFIG_LEN..) {
+            rc_protocol,
+            serial_bindings: match input.get(V3_STORED_CONFIG_LEN..V4_STORED_CONFIG_LEN) {
                 Some(bytes) if bytes.len() == SERIAL_PORT_SLOTS => {
                     let bytes: &[u8; SERIAL_PORT_SLOTS] = bytes.try_into().ok()?;
                     if *bytes == SERIAL_BINDINGS_UNSET {
@@ -1160,6 +1212,60 @@ mod tests {
         assert_eq!(StoredConfig::decode(&unknown_function), None);
         // A version 4 header on a version 3 length is not trusted.
         assert_eq!(StoredConfig::decode(&encoded[..V3_STORED_CONFIG_LEN]), None);
+    }
+
+    /// A configuration saved before the map was configurable armed on
+    /// channel 9 over SBUS. Reading it must keep both: moving the arm switch
+    /// under a pilot who has not changed their radio could arm from another
+    /// switch.
+    #[test]
+    fn a_version_four_config_keeps_its_bindings_the_channel_nine_arm_switch_and_sbus() {
+        let mut config = StoredConfig::first_hop_default();
+        config.serial_bindings =
+            Some(SerialBindings::none().with(LogicalSerialPort::Uart2, SerialFunction::RcInput));
+        let mut version_four = [0u8; V4_STORED_CONFIG_LEN];
+        version_four.copy_from_slice(&config.encode()[..V4_STORED_CONFIG_LEN]);
+        version_four[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION_BINDINGS.to_le_bytes());
+
+        let decoded =
+            StoredConfig::decode(&version_four).expect("version 4 must still be readable");
+        assert_eq!(decoded.serial_bindings, config.serial_bindings);
+        assert_eq!(decoded.tuning.rc_map, RcChannelMap::AETR_ARM_CH9);
+        assert_eq!(decoded.get(ConfigKey::RcArmChannel), 9.0);
+        assert_eq!(decoded.rc_protocol, RcProtocol::Sbus);
+        // A version 5 header on a version 4 length is not trusted.
+        let mut short = version_four;
+        short[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION.to_le_bytes());
+        assert_eq!(StoredConfig::decode(&short), None);
+    }
+
+    #[test]
+    fn rc_map_and_protocol_are_configured_saved_and_validated() {
+        let mut config = StoredConfig::first_hop_default();
+        assert_eq!(config.get(ConfigKey::RcMap), 1234.0);
+        assert_eq!(config.get(ConfigKey::RcArmChannel), 9.0);
+        assert_eq!(config.get(ConfigKey::RcProtocol), 0.0);
+        assert!(config.set(ConfigKey::RcMap, 2314.0));
+        assert!(config.set(ConfigKey::RcArmChannel, 5.0));
+        assert!(config.set(ConfigKey::RcProtocol, 1.0));
+        assert!(!config.set(ConfigKey::RcMap, 1224.0));
+        assert!(!config.set(ConfigKey::RcMap, 1234.5));
+        assert!(!config.set(ConfigKey::RcArmChannel, 4.0));
+        assert!(!config.set(ConfigKey::RcArmChannel, 17.0));
+        assert!(!config.set(ConfigKey::RcProtocol, 2.0));
+
+        let encoded = config.encode();
+        let decoded = StoredConfig::decode(&encoded).unwrap();
+        assert_eq!(decoded, config);
+        assert_eq!(decoded.rc_protocol, RcProtocol::Crsf);
+        assert_eq!(decoded.tuning.rc_map.stick_order(), 2314);
+
+        let mut bad_protocol = encoded;
+        bad_protocol[STORED_CONFIG_LEN - 1] = 7;
+        assert_eq!(StoredConfig::decode(&bad_protocol), None);
+        let mut bad_map = encoded;
+        bad_map[RC_FIELDS_OFFSET..RC_FIELDS_OFFSET + 2].copy_from_slice(&1224u16.to_le_bytes());
+        assert_eq!(StoredConfig::decode(&bad_map), None);
     }
 
     #[test]

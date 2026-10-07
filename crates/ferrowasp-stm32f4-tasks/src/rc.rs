@@ -1,7 +1,8 @@
-//! RC input: SBUS frames from the port config bound to RC become stick rates,
-//! throttle and the arm switch, and arm and disarm requests to the safety
-//! master. Any transport, parser or failsafe fault neutralizes the sticks and
-//! invalidates the RC link, so a lost receiver fails closed.
+//! RC input: SBUS or CRSF frames from the port config bound to RC, read
+//! through the configured channel map, become stick rates, throttle and the
+//! arm switch, and arm and disarm requests to the safety master. Any
+//! transport, parser or failsafe fault neutralizes the sticks and invalidates
+//! the RC link, so a lost receiver fails closed.
 
 use crate::prelude::*;
 
@@ -19,18 +20,25 @@ pub fn neutralize_rc_input(
     arm_high.write(false);
 }
 
-/// Read SBUS from the bound port, publish stick state, qualify the RC link,
-/// and report arm and disarm requests and link invalidations to the safety
-/// master. With no port bound the task ends at once: the RC link never
+/// Read the receiver from the bound port, publish stick state, qualify the RC
+/// link, and report arm and disarm requests and link invalidations to the
+/// safety master. With no port bound the task ends at once: the RC link never
 /// becomes valid, so the craft cannot arm.
 ///
 /// The port's transport records faults on the stream rather than reporting
 /// them itself, and a fault wakes this task even when no bytes follow, so it
 /// invalidates the link here as soon as the transport sees the fault.
+///
+/// The channel map comes from the tuning profile, which a disarmed
+/// configuration change can replace. A changed map may read the arm switch
+/// from a channel that is already high, which would otherwise look like the
+/// pilot flipping it; so a change invalidates the link like a lost receiver,
+/// and arming needs the new arm channel seen low first.
 #[ferroforge::task(
     local = [
         rc_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
-        sbus: StreamingParser,
+        rc_receiver: RcReceiver,
+        rc_map_in_use: Option<dt::RcChannelMap> = None,
         arm_qualifier: safety::ArmQualifier,
         rc_rates_writer: signals::RcRatesWriter,
         rc_throttle_writer: signals::RcThrottleWriter,
@@ -76,7 +84,7 @@ pub async fn rc_input(mut cx: rc_input::Context) {
             let _ = cx
                 .spawn
                 .safety_master(safety::SafetyEvent::RcLinkInvalid(reason));
-            cx.local.sbus.reset();
+            cx.local.rc_receiver.reset();
             neutralize_rc_input(
                 cx.local.arm_qualifier,
                 cx.local.rc_rates_writer,
@@ -87,9 +95,12 @@ pub async fn rc_input(mut cx: rc_input::Context) {
             warn!("RC input discontinuity sequence {}", event.sequence);
         }
 
-        for packet in cx.local.sbus.push_bytes(&bytes[..read_len]) {
-            let pkt = match packet {
-                Ok(packet) => packet,
+        for &byte in &bytes[..read_len] {
+            let Some(frame) = cx.local.rc_receiver.push_byte(byte) else {
+                continue;
+            };
+            let frame = match frame {
+                Ok(frame) => frame,
                 Err(_) => {
                     let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
                         safety::RcLinkInvalidation::ParserError,
@@ -105,9 +116,7 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 }
             };
 
-            if let Err(reason) =
-                safety::classify_rc_frame_flags(pkt.flags.failsafe, pkt.flags.frame_lost)
-            {
+            if let Err(reason) = safety::classify_rc_frame_flags(frame.failsafe, frame.frame_lost) {
                 let _ = cx
                     .spawn
                     .safety_master(safety::SafetyEvent::RcLinkInvalid(reason));
@@ -121,15 +130,37 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 continue;
             }
 
-            let rc_rate_profile = cx.shared.tuning_profile.lock(|profile| profile.rc_rates);
+            let (rc_rate_profile, rc_map) = cx
+                .shared
+                .tuning_profile
+                .lock(|profile| (profile.rc_rates, profile.rc_map));
+            let map_changed = cx
+                .local
+                .rc_map_in_use
+                .replace(rc_map)
+                .is_some_and(|in_use| in_use != rc_map);
+            if map_changed {
+                let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
+                    safety::RcLinkInvalidation::ChannelMapChanged,
+                ));
+                neutralize_rc_input(
+                    cx.local.arm_qualifier,
+                    cx.local.rc_rates_writer,
+                    cx.local.rc_throttle_writer,
+                    cx.local.rc_arm_high_writer,
+                );
+                *cx.local.rc_link_reported_valid = false;
+                continue;
+            }
+            let sticks = rc_map.sticks(&frame.channels);
             let rc_cmd = dt::remap_rc_channels_with_profile(
-                pkt.channels[0],
-                pkt.channels[1],
-                pkt.channels[3],
-                pkt.channels[2],
+                sticks.roll,
+                sticks.pitch,
+                sticks.yaw,
+                sticks.throttle,
                 rc_rate_profile,
             );
-            let arm_high = pkt.channels[8] > safety::ARM_THRESHOLD;
+            let arm_high = rc_map.arm(&frame.channels) > safety::ARM_THRESHOLD;
             let now_us = Mono::now().duration_since_epoch().to_micros();
             cx.local.rc_rates_writer.write(safety::RcRates {
                 roll: rc_cmd.roll_dps as i16,
@@ -168,5 +199,43 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 cx.spawn.safety_master(event).ok();
             }
         }
+    }
+}
+
+/// How often battery telemetry goes back to the receiver.
+const RC_TELEMETRY_PERIOD_MS: u64 = 200;
+
+/// Send battery telemetry back through the RC receiver, for the radio to
+/// show. It owns the RC port's writer, so RC input never waits on a
+/// transmit; it runs at a low priority and only reads snapshots.
+///
+/// Ends at once when the RC port has no transmit path: SBUS, or a port
+/// without transmit DMA. Stops, with a warning, if the transmit path faults,
+/// which leaves RC input untouched.
+#[ferroforge::task(
+    local = [rc_telemetry_writer: Option<stm32_memory::UartOwnedWriter<'static>>],
+    monotonic = Mono,
+)]
+pub async fn rc_telemetry(cx: rc_telemetry::Context) {
+    use embedded_io_async::Write;
+    use ferrowasp_drivers::crsf;
+
+    let Some(writer) = cx.local.rc_telemetry_writer.as_mut() else {
+        return;
+    };
+    loop {
+        let voltage_dv = crate::snapshots::BATTERY_VOLTAGE_V10_SNAPSHOT.load(Ordering::Relaxed);
+        let current_ca = crate::snapshots::BATTERY_CURRENT_CA_SNAPSHOT.load(Ordering::Relaxed);
+        let frame = crsf::encode_battery(crsf::BatteryTelemetry {
+            voltage_dv: u16::try_from(voltage_dv).unwrap_or(u16::MAX),
+            current_da: u16::try_from(current_ca.max(0) / 10).unwrap_or(u16::MAX),
+            used_mah: 0,
+            remaining_percent: 0,
+        });
+        if writer.write_all(&frame).await.is_err() {
+            warn!("RC telemetry stopped: the RC port transmit path faulted");
+            return;
+        }
+        Mono::delay(RC_TELEMETRY_PERIOD_MS.millis()).await;
     }
 }

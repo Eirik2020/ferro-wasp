@@ -712,7 +712,7 @@ mod tests {
         })
     }
 
-    const STAGE_COMMAND_COUNT: usize = 24;
+    const STAGE_COMMAND_COUNT: usize = 27;
 
     trait Pipe: Sized {
         fn pipe<R>(self, function: impl FnOnce(Self) -> R) -> R {
@@ -987,7 +987,7 @@ mod tests {
         assert!(client.apply_config(&desired).is_err());
         let mock = client.into_transport();
         assert!(mock.writes.contains(&"config set roll_p 0.4000".to_owned()));
-        assert_eq!(mock.writes.last().unwrap(), "config set yaw_expo 0.5000");
+        assert_eq!(mock.writes.last().unwrap(), "config set rc_protocol 0");
         assert!(!mock.writes.contains(&"config save".to_owned()));
     }
 

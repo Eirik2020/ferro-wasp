@@ -27,6 +27,7 @@ Current UART modes:
 | `Sbus` | 100000 baud, even parity, 2 stop bits, RX DMA | Active RC input path |
 | `Msp` | 115200 baud, TX/RX DMA | Active DJI O4 OSD path on UART4 |
 | `EscTelemetry` | 115200 baud, 8N1, RX DMA | Standard flight-board BLHeli legacy telemetry path on USART1 |
+| `Crsf` | 420000 baud, 8N1, not inverted, TX/RX DMA | RC input with battery telemetry when `rc_protocol` is `crsf` |
 | `Mavlink` | 57600 baud, RX DMA | Future telemetry/config subset |
 
 ## Port Binding

@@ -1455,6 +1455,10 @@ fn print_serial_bindings(bindings: &SerialBindings) {
 fn print_keys() {
     println!("Firmware-whitelisted configuration:");
     for key in ConfigKey::ALL {
+        if key == ConfigKey::RcProtocol {
+            println!("  {:<24} sbus or crsf, applied at boot", key.name());
+            continue;
+        }
         let spec = key.value_spec();
         let kind = if spec.integer { "integer" } else { "finite" };
         println!(
@@ -1466,6 +1470,7 @@ fn print_keys() {
         );
     }
     println!("  each maximum rate must also be greater than or equal to its center rate");
+    println!("  rc_map is the channels for roll, pitch, throttle and yaw, like 1234 for AETR");
 }
 
 fn print_error(format: OutputFormat, error: &FerroError) {

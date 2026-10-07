@@ -9,7 +9,8 @@ use ferrowasp_io_core::serial::{
 use stm32f4xx_hal::{
     ClearFlags, ReadFlags,
     dma::{
-        ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream2, Stream4, Stream5, Transfer,
+        ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream2, Stream4, Stream5, Stream6,
+        Transfer,
         config::DmaConfig,
         traits::{Channel, DMASet, DmaFlagExt, Stream},
     },
@@ -23,16 +24,17 @@ use stm32f4xx_hal::{
 pub type Uart1RxIrq = UartRxIrqSide<UartRxTransfer<Stream5<DMA2>, USART1, 4>>;
 pub type Uart2RxIrq = UartRxIrqSide<UartRxTransfer<Stream5<DMA1>, USART2, 4>>;
 pub type Uart4RxIrq = UartRxIrqSide<UartRxTransfer<Stream2<DMA1>, UART4, 4>>;
-pub type Uart4TxTransfer =
-    Transfer<Stream4<DMA1>, 4, serial::Tx<UART4>, MemoryToPeripheral, UartTxBuf>;
-pub type Uart4TxDmaSide = UartTxDmaSide<Uart4TxDma>;
+pub type Uart2TxDmaSide = UartTxDmaSide<UartTxDma<Stream6<DMA1>, USART2, 4>>;
+pub type Uart4TxDmaSide = UartTxDmaSide<UartTxDma<Stream4<DMA1>, UART4, 4>>;
 
-/// UART2 (the USART2 peripheral) on PA2/PA3, RX on DMA1 Stream 5.
+/// UART2 (the USART2 peripheral) on PA2/PA3, RX on DMA1 Stream 5 and TX on
+/// DMA1 Stream 6.
 pub struct Uart2PortResources {
     pub tx_pin: PA2<Input>,
     pub rx_pin: PA3<Input>,
     pub uart: USART2,
     pub rx_dma: Stream5<DMA1>,
+    pub tx_dma: Stream6<DMA1>,
 }
 
 /// UART1 (the USART1 peripheral) receive-only on PA10, RX on DMA2 Stream 5.
@@ -51,14 +53,29 @@ pub struct Uart4PortResources {
     pub tx_dma: Stream4<DMA1>,
 }
 
-/// UART4's transmit DMA stream and its fixed buffer. Each chunk re-creates
+pub type UartTxTransfer<StreamT, UsartT, const CHANNEL: u8> =
+    Transfer<StreamT, CHANNEL, serial::Tx<UsartT>, MemoryToPeripheral, UartTxBuf>;
+
+/// A UART's transmit DMA stream and its fixed buffer. Each chunk re-creates
 /// the HAL transfer around the same buffer.
-pub struct Uart4TxDma {
-    transfer: Option<Uart4TxTransfer>,
+pub struct UartTxDma<StreamT, UsartT, const CHANNEL: u8>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
+    transfer: Option<UartTxTransfer<StreamT, UsartT, CHANNEL>>,
     dma_config: DmaConfig,
 }
 
-impl UartTxDmaTransfer for Uart4TxDma {
+impl<StreamT, UsartT, const CHANNEL: u8> UartTxDmaTransfer for UartTxDma<StreamT, UsartT, CHANNEL>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
     fn start_padded(&mut self, bytes: &[u8]) {
         let Some(old_transfer) = self.transfer.take() else {
             return;
@@ -105,11 +122,18 @@ impl UartTxDmaTransfer for Uart4TxDma {
     }
 }
 
-pub fn init_uart4_tx_dma(
-    tx_dma: Stream4<DMA1>,
-    tx: serial::Tx<UART4>,
+/// Start a UART's transmit DMA side on `tx_dma`.
+pub fn init_uart_tx_dma<StreamT, UsartT, const CHANNEL: u8>(
+    tx_dma: StreamT,
+    tx: serial::Tx<UsartT>,
     tx_buffer: UartTxBuf,
-) -> Uart4TxDmaSide {
+) -> UartTxDmaSide<UartTxDma<StreamT, UsartT, CHANNEL>>
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Tx<UsartT>: DMASet<StreamT, CHANNEL, MemoryToPeripheral>,
+{
     let dma_config = DmaConfig::default()
         .memory_increment(true)
         .fifo_enable(true)
@@ -119,7 +143,7 @@ pub fn init_uart4_tx_dma(
         .transfer_complete_interrupt(true);
     let tx_transfer = Transfer::init_memory_to_peripheral(tx_dma, tx, tx_buffer, None, dma_config);
 
-    UartTxDmaSide::new(Uart4TxDma {
+    UartTxDmaSide::new(UartTxDma {
         transfer: Some(tx_transfer),
         dma_config,
     })
@@ -199,9 +223,10 @@ pub fn stm32f4_uart_config(mode: Mode) -> serial::Config {
             .baudrate(57_600.bps())
             .dma(serial::config::DmaConfig::Rx),
 
+        // CRSF talks back: telemetry leaves by TX DMA.
         Mode::Crsf => serial::Config::default()
             .baudrate(420_000.bps())
-            .dma(serial::config::DmaConfig::Rx),
+            .dma(serial::config::DmaConfig::TxRx),
 
         Mode::EscTelemetry => serial::Config::default()
             .baudrate(115_200.bps())
@@ -325,7 +350,7 @@ pub struct F405UartPortResources {
 /// Static buffers and stream owners for each port.
 pub struct F405UartPortStorage {
     pub uart1: UartRxPortStorage,
-    pub uart2: UartRxPortStorage,
+    pub uart2: UartRxTxPortStorage,
     pub uart4: UartRxTxPortStorage,
 }
 
@@ -334,6 +359,7 @@ pub struct F405UartPortStorage {
 pub struct F405UartPorts {
     pub uart1_rx: Option<UartRxPort<Uart1RxIrq>>,
     pub uart2_rx: Option<UartRxPort<Uart2RxIrq>>,
+    pub uart2_tx: UartTxPort<Uart2TxDmaSide>,
     pub uart4_rx: Option<UartRxPort<Uart4RxIrq>>,
     pub uart4_tx: UartTxPort<Uart4TxDmaSide>,
     pub functions: SerialFunctionSlots<SerialPortEndpoint>,
@@ -350,6 +376,7 @@ pub fn init_f405_uart_ports(
     let mut ports = F405UartPorts {
         uart1_rx: None,
         uart2_rx: None,
+        uart2_tx: UartTxPort::unbound(),
         uart4_rx: None,
         uart4_tx: UartTxPort::unbound(),
         functions: SerialFunctionSlots::empty(),
@@ -381,21 +408,44 @@ pub fn init_f405_uart_ports(
     }
 
     if let Some(profile) = bindings.profile(LogicalSerialPort::Uart2) {
-        let parts = init_uart_rx_dma::<_, _, _, _, 4>(
-            resources.uart2.tx_pin.into_alternate::<7>(),
-            resources.uart2.rx_pin.into_alternate::<7>(),
-            resources.uart2.uart,
-            resources.uart2.rx_dma,
-            rcc,
-            profile.protocol,
-            storage.uart2.rx.into_backend(),
-        );
+        let tx_pin = resources.uart2.tx_pin.into_alternate::<7>();
+        let rx_pin = resources.uart2.rx_pin.into_alternate::<7>();
+        let (irq, parser, writer) = if profile.protocol.needs_tx() {
+            let parts = init_uart_rx_dma_with_tx::<_, _, _, _, 4>(
+                tx_pin,
+                rx_pin,
+                resources.uart2.uart,
+                resources.uart2.rx_dma,
+                rcc,
+                profile.protocol,
+                storage.uart2.rx.into_backend(),
+            );
+            let tx_dma = init_uart_tx_dma::<_, _, 4>(
+                resources.uart2.tx_dma,
+                parts.tx,
+                storage.uart2.tx_buffer,
+            );
+            let (tx, writer) = tx_port(tx_dma, storage.uart2.tx_stream);
+            ports.uart2_tx = tx;
+            (parts.irq, parts.parser, Some(writer))
+        } else {
+            let parts = init_uart_rx_dma::<_, _, _, _, 4>(
+                tx_pin,
+                rx_pin,
+                resources.uart2.uart,
+                resources.uart2.rx_dma,
+                rcc,
+                profile.protocol,
+                storage.uart2.rx.into_backend(),
+            );
+            (parts.irq, parts.parser, None)
+        };
         let (port, endpoint) = rx_port(
             LogicalSerialPort::Uart2,
-            parts.irq,
-            parts.parser,
+            irq,
+            parser,
             storage.uart2.stream,
-            None,
+            writer,
         );
         ports.uart2_rx = Some(port);
         place_endpoint(
@@ -419,8 +469,11 @@ pub fn init_f405_uart_ports(
                 profile.protocol,
                 storage.uart4.rx.into_backend(),
             );
-            let tx_dma =
-                init_uart4_tx_dma(resources.uart4.tx_dma, parts.tx, storage.uart4.tx_buffer);
+            let tx_dma = init_uart_tx_dma::<_, _, 4>(
+                resources.uart4.tx_dma,
+                parts.tx,
+                storage.uart4.tx_buffer,
+            );
             let (tx, writer) = tx_port(tx_dma, storage.uart4.tx_stream);
             ports.uart4_tx = tx;
             (parts.irq, parts.parser, Some(writer))

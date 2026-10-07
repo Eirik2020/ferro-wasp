@@ -1,6 +1,7 @@
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+use ferrowasp_io_core::serial::RcProtocol;
 use ferrowasp_tasks::drone_toolbox::{
-    IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, TuningProfile,
+    IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, TuningProfile,
 };
 use ferrowasp_tasks::flash_storage::StoredConfig;
 
@@ -110,6 +111,8 @@ pub const DEFAULT_TUNING: TuningProfile = TuningProfile {
     },
     imu_lpf_hz: IMU_GYRO_LPF_HZ,
     rc_rates: RC_RATE_PROFILE,
+    // AETR with the arm switch on channel 9, as this board has always read it.
+    rc_map: RcChannelMap::AETR_ARM_CH9,
 };
 
 /// The configuration this board boots with when storage holds none, and the
@@ -119,6 +122,7 @@ pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
     tuning: DEFAULT_TUNING,
     log_rate_divisor: 1,
     serial_bindings: None,
+    rc_protocol: RcProtocol::Sbus,
 };
 
 // The approved P-only baseline: changing it is a tuning change and re-gates
@@ -128,6 +132,8 @@ const _: () = {
     assert!(gains.roll.p == 2.5 && gains.pitch.p == 2.5 && gains.yaw.p == 2.0);
     assert!(gains.roll.i == 0.0 && gains.pitch.i == 0.0 && gains.yaw.i == 0.0);
     assert!(gains.roll.d == 0.0 && gains.pitch.d == 0.0 && gains.yaw.d == 0.0);
+    // The arm switch it flew with.
+    assert!(DEFAULT_TUNING.rc_map.arm_channel() == 9);
 };
 
 #[cfg(test)]

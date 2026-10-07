@@ -189,6 +189,8 @@ const NUMERIC_FIELDS: ReadonlyArray<{
   { id: "yaw-expo", read: (c) => c.yaw_expo, write: (c, v) => { c.yaw_expo = v; } },
   { id: "imu-lpf", read: (c) => c.imu_lpf_hz, write: (c, v) => { c.imu_lpf_hz = v; } },
   { id: "log-divisor", read: (c) => c.log_rate_divisor, write: (c, v) => { c.log_rate_divisor = v; } },
+  { id: "rc-map", read: (c) => c.rc_map, write: (c, v) => { c.rc_map = v; } },
+  { id: "rc-arm-channel", read: (c) => c.rc_arm_channel, write: (c, v) => { c.rc_arm_channel = v; } },
 ];
 
 function renderConfig(): void {
@@ -198,6 +200,9 @@ function renderConfig(): void {
     input.value = value === undefined ? "" : String(value);
     input.disabled = config === null;
   }
+  const protocol = element<HTMLSelectElement>("rc-protocol");
+  protocol.value = config?.rc_protocol ?? "sbus";
+  protocol.disabled = config?.rc_protocol === undefined;
   updateWriteControls();
 }
 
@@ -252,6 +257,10 @@ function collectConfig(): FerroConfig | null {
       return null;
     }
     field.write(draft, value);
+  }
+  if (draft.rc_protocol !== undefined) {
+    const protocol = element<HTMLSelectElement>("rc-protocol").value;
+    draft.rc_protocol = protocol === "crsf" ? "crsf" : "sbus";
   }
   return draft;
 }

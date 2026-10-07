@@ -37,6 +37,9 @@ function baselineConfig(): FerroConfig {
     yaw_center_rate: 70,
     yaw_max_rate: 200,
     yaw_expo: 0.5,
+    rc_map: 1234,
+    rc_arm_channel: 9,
+    rc_protocol: "sbus",
   };
 }
 

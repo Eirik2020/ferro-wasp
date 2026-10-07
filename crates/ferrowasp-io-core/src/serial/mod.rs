@@ -9,7 +9,7 @@ mod tx_chunk;
 mod writer;
 
 pub use binding::{
-    BindingFault, BindingIssue, ResolvedBindings, SERIAL_PORT_SLOTS, SerialBindings,
+    BindingFault, BindingIssue, RcProtocol, ResolvedBindings, SERIAL_PORT_SLOTS, SerialBindings,
     SerialFunction, SerialFunctionSlots, resolve_bindings,
 };
 pub use chunk::{RxChunk, RxChunkError, RxCompletion};

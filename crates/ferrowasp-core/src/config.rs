@@ -25,6 +25,9 @@ pub enum ConfigKey {
     YawCenterRate,
     YawMaxRate,
     YawExpo,
+    RcMap,
+    RcArmChannel,
+    RcProtocol,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -83,7 +86,7 @@ impl FromStr for ConfigKey {
 }
 
 impl ConfigKey {
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 24] = [
         Self::RollP,
         Self::RollI,
         Self::RollD,
@@ -105,6 +108,9 @@ impl ConfigKey {
         Self::YawCenterRate,
         Self::YawMaxRate,
         Self::YawExpo,
+        Self::RcMap,
+        Self::RcArmChannel,
+        Self::RcProtocol,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -130,6 +136,9 @@ impl ConfigKey {
             Self::YawCenterRate => "yaw_center_rate",
             Self::YawMaxRate => "yaw_max_rate",
             Self::YawExpo => "yaw_expo",
+            Self::RcMap => "rc_map",
+            Self::RcArmChannel => "rc_arm_channel",
+            Self::RcProtocol => "rc_protocol",
         }
     }
 
@@ -184,6 +193,28 @@ impl ConfigKey {
                 minimum: 10.0,
                 maximum: 1200.0,
                 integer: false,
+            },
+            // Stick order: one-based channels for roll, pitch, throttle and
+            // yaw as four digits, AETR = 1234. The range only bounds the
+            // number; the firmware also requires the digits to be a
+            // permutation of 1-4.
+            Self::RcMap => ConfigValueSpec {
+                minimum: 1234.0,
+                maximum: 4321.0,
+                integer: true,
+            },
+            // Channels 1-4 are the sticks.
+            Self::RcArmChannel => ConfigValueSpec {
+                minimum: 5.0,
+                maximum: 16.0,
+                integer: true,
+            },
+            // The receiver protocol on the port bound to RC input:
+            // 0 is SBUS, 1 is CRSF. Read once at boot.
+            Self::RcProtocol => ConfigValueSpec {
+                minimum: 0.0,
+                maximum: 1.0,
+                integer: true,
             },
         }
     }

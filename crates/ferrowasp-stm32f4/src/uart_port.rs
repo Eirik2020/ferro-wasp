@@ -26,8 +26,8 @@ use crate::uart_common::{
 use core::fmt::Write as _;
 use defmt::{info, warn};
 use ferrowasp_io_core::serial::{
-    Discontinuity, LogicalSerialPort, MSP_V1_MAX_FRAME_LEN, ResolvedBindings, SerialBindings,
-    SerialFunction, SerialFunctionSlots, SerialRoute, TxChunk, resolve_bindings,
+    Discontinuity, LogicalSerialPort, MSP_V1_MAX_FRAME_LEN, RcProtocol, ResolvedBindings,
+    SerialBindings, SerialFunction, SerialFunctionSlots, SerialRoute, TxChunk, resolve_bindings,
 };
 use ferrowasp_io_core::time::TimestampMicros;
 
@@ -243,17 +243,20 @@ pub fn place_endpoint(
 }
 
 /// Resolve the bindings to start the ports with: `saved` when flash holds a
-/// table, else the board's `defaults`. Every binding the board cannot carry
-/// is logged and left off, and each bound port is logged.
+/// table, else the board's `defaults`, with RC input in `rc_protocol`. Every
+/// binding the board cannot carry is logged and left off, and each bound port
+/// is logged.
 pub fn resolve_boot_serial_bindings(
     saved: Option<SerialBindings>,
     defaults: SerialBindings,
     routes: &[SerialRoute],
+    rc_protocol: RcProtocol,
 ) -> ResolvedBindings {
     if saved.is_none() {
         info!("Serial ports use the board's default bindings");
     }
-    let resolved = resolve_bindings(saved.unwrap_or(defaults), routes);
+    info!("RC input protocol: {=str}", rc_protocol.name());
+    let resolved = resolve_bindings(saved.unwrap_or(defaults), routes, rc_protocol);
     for issue in resolved.issues() {
         warn!(
             "Serial binding {=str} -> {=str} dropped: the port cannot carry it",

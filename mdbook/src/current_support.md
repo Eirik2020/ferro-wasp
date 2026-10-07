@@ -13,7 +13,7 @@ list every peripheral or diagnostic feature.
 |---|---|---|
 | Role | Golden flight target | Non-actuating bring-up target |
 | MCU / runtime | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
-| RC input | SBUS over USART2 DMA by default; ports bound at boot from saved config | None |
+| RC input | SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config | None |
 | IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | None |
 | Control | 400 Hz rate controller and Quad X mixer | None |
 | ESC output | Four-lane DShot600 | None |
@@ -126,7 +126,7 @@ Important open work includes:
 - finish estimator and controller validation, bounded I-term repair, and
   airframe-specific tuning;
 - fine-calibrate Foxeer voltage and current scaling;
-- add CRSF/ELRS while retaining SBUS;
+- validate CRSF/ELRS and its telemetry on the target, link loss included;
 - validate any experimental MSPv2 configurator endpoint before making it part
   of the standard image;
 - extend self-describing blackbox data with the remaining configuration,
