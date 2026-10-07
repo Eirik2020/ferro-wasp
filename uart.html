@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f92ec8ce.js";
+            window.path_to_searchindex_js = "searchindex-c2c1ecde.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -207,23 +207,56 @@ storage shape, and device construction live in
 </tbody>
 </table>
 </div>
-<h2 id="active-use"><a class="header" href="#active-use">Active Use</a></h2>
-<p>USART2 is currently routed to RC input in SBUS mode:</p>
+<h2 id="port-binding"><a class="header" href="#port-binding">Port Binding</a></h2>
+<p>Pins, DMA streams and interrupts are fixed per port at compile time, in each
+board’s <code>src/board/serial.rs</code> route table. A port is named by the UART’s
+number on the chip, as the pilot sees it on the board: USART3 is <code>uart3</code>
+whatever it serves. Saved configuration holds a function for each of
+<code>uart1</code> to <code>uart8</code>. Which function a port serves (RC input, MSP OSD, ESC
+telemetry) is chosen at boot from that table:</p>
+<ul>
+<li>Init reads the saved bindings once, checks each against the port’s
+capabilities (<code>resolve_bindings</code> in <code>ferrowasp-io-core</code>), starts every bound
+port with its function’s line settings, and moves the port’s stream into the
+function’s task. A port with nothing bound is never enabled.</li>
+<li>A binding the port cannot carry, or a function bound to two ports, is
+dropped and logged; the rest still apply. With no RC port the RC link never
+becomes valid, so the craft cannot arm.</li>
+<li>Until a pilot saves bindings the board’s defaults apply. Over USB,
+<code>serial</code> shows them and <code>serial &lt;port&gt; &lt;function&gt;</code> stages a change, which
+takes effect after <code>config save</code> and a reboot. Changes are refused while
+armed.</li>
+<li>Port transports are role-free and chip-neutral
+(<code>crates/ferrowasp-stm32f4/src/uart_port.rs</code>): they record faults on the
+stream, and the function task decides what a fault means. Each family’s
+backend starts its ports (<code>init_f405_uart_ports</code>, <code>init_h743_uart_ports</code>),
+and <code>crates/ferrowasp-stm32f4-tasks/src/uart_port.rs</code> defines the receive
+and transmit tasks of every logical port for a board to bind. All UART
+transports run at priority 11, since any port may serve any function; the
+function tasks keep their own priorities.</li>
+</ul>
+<p>Each function speaks one protocol today, so the protocol follows from the
+function. A function gains a protocol setting when it gets a second protocol.</p>
+<h2 id="default-bindings"><a class="header" href="#default-bindings">Default Bindings</a></h2>
+<p>On the F405 boards, USART2 is routed to RC input in SBUS mode:</p>
 <pre><code class="language-text">USART2 RX DMA/IDLE IRQ -&gt; owned RxChunk -&gt; persistent async SBUS parser
     -&gt; RC validity + rates/throttle/arm
 </code></pre>
 <p>The current prototype uses PA2/PA3 for USART2 TX/RX.</p>
-<p>UART4 is currently routed to the DJI O4 MSP OSD path:</p>
-<pre><code class="language-text">UART4 RX DMA -&gt; filled buffer queue -&gt; osd_refresh task -&gt; MSP parser/responder
+<p>UART4 is routed to the DJI O4 MSP OSD path:</p>
+<pre><code class="language-text">UART4 RX DMA/IDLE IRQ -&gt; owned RxChunk -&gt; osd_refresh task -&gt; MSP parser/responder
 OSD frame queue -&gt; UART4 TX DMA -&gt; DJI O4 air unit
 </code></pre>
 <p>The current prototype uses PA0/PA1 for UART4 TX/RX.</p>
-<p>In the default DShot image, USART1 is routed to the combined BLHeli legacy ESC
-telemetry wire:</p>
+<p>USART1 is routed to the combined BLHeli legacy ESC telemetry wire. On Foxeer,
+UART4 can carry ESC telemetry instead:</p>
 <pre><code class="language-text">PA10 USART1 RX DMA -&gt; bounded chunks -&gt; ESC manager parser/association
     -&gt; timestamped per-motor observations
 </code></pre>
-<p>PA9/USART1 TX is not configured. In the standard flight image, the manager sends typed telemetry requests through
+<p>PA9/USART1 TX is not configured.</p>
+<p>On the TBS Lucid H7, USART6 (<code>uart6</code>) carries SBUS, inverted in the UART;
+USART3 (<code>uart3</code>) carries MSP DisplayPort with TX DMA; and UART8 (<code>uart8</code>)
+carries ESC telemetry on PE0. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output
