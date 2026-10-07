@@ -5,6 +5,9 @@ use ferrowasp_core::blackbox::{
     encode_page,
 };
 pub use ferrowasp_core::config::ConfigKey;
+use ferrowasp_io_core::serial::{
+    LogicalSerialPort, SERIAL_PORT_SLOTS, SerialBindings, SerialFunction,
+};
 use heapless::String;
 use heapless::spsc::{Consumer, Producer, Queue};
 
@@ -126,6 +129,10 @@ pub enum StorageCommand {
     ConfigGet(ConfigKey),
     ConfigSet(ConfigKey, f32),
     ConfigSave,
+    /// Show each port's saved function.
+    SerialShow,
+    /// Stage a port's function; it applies after `config save` and a reboot.
+    SerialSet(LogicalSerialPort, SerialFunction),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -363,20 +370,37 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
             Ok(StorageCommand::ConfigSet(key, value))
         }
         (Some("config"), Some("save")) if words.next().is_none() => Ok(StorageCommand::ConfigSave),
+        (Some("serial"), None) => Ok(StorageCommand::SerialShow),
+        (Some("serial"), Some(port)) => {
+            let port = LogicalSerialPort::parse(port).ok_or(CommandParseError::InvalidArgument)?;
+            let function =
+                SerialFunction::parse(words.next().ok_or(CommandParseError::MissingArgument)?)
+                    .ok_or(CommandParseError::InvalidArgument)?;
+            if words.next().is_some() {
+                return Err(CommandParseError::InvalidArgument);
+            }
+            Ok(StorageCommand::SerialSet(port, function))
+        }
         _ => Err(CommandParseError::UnknownCommand),
     }
 }
 
 pub const LEGACY_STORED_CONFIG_LEN: usize = 44;
-pub const STORED_CONFIG_LEN: usize = 84;
-/// Version 3 stores the gyro filter as a corner in hertz.
+/// Versions 2 and 3.
+pub const V3_STORED_CONFIG_LEN: usize = 84;
+pub const STORED_CONFIG_LEN: usize = V3_STORED_CONFIG_LEN + SERIAL_PORT_SLOTS;
+/// Version 4 adds the serial port bindings after the version 3 payload.
 ///
-/// Versions 1 and 2 stored a one-pole smoothing factor, which only means what
-/// it is meant to mean at one loop rate. A version 2 payload is still read:
-/// its coefficient is converted at the rate it was authored for, so a tune
-/// saved before this change keeps the filter it had.
-const STORED_CONFIG_SCHEMA_VERSION: u16 = 3;
+/// Version 3 stores the gyro filter as a corner in hertz. Versions 1 and 2
+/// stored a one-pole smoothing factor, which only means what it is meant to
+/// mean at one loop rate. A version 2 payload is still read: its coefficient
+/// is converted at the rate it was authored for, so a tune saved before this
+/// change keeps the filter it had.
+const STORED_CONFIG_SCHEMA_VERSION: u16 = 4;
+const STORED_CONFIG_SCHEMA_VERSION_CORNER: u16 = 3;
 const STORED_CONFIG_SCHEMA_VERSION_ALPHA: u16 = 2;
+/// Bindings bytes meaning "never set": the board's defaults apply.
+const SERIAL_BINDINGS_UNSET: [u8; SERIAL_PORT_SLOTS] = [0xff; SERIAL_PORT_SLOTS];
 
 /// The loop rate every version 1 and 2 coefficient was authored for.
 const LEGACY_LPF_SAMPLE_RATE_HZ: f32 = 400.0;
@@ -385,6 +409,9 @@ const LEGACY_LPF_SAMPLE_RATE_HZ: f32 = 400.0;
 pub struct StoredConfig {
     pub tuning: TuningProfile,
     pub log_rate_divisor: u16,
+    /// Which function each serial port serves; `None` until a pilot sets
+    /// one, and then the board's own defaults apply. Read once at boot.
+    pub serial_bindings: Option<SerialBindings>,
 }
 
 impl StoredConfig {
@@ -392,6 +419,7 @@ impl StoredConfig {
         Self {
             tuning: TuningProfile::default_first_hop(),
             log_rate_divisor: 1,
+            serial_bindings: None,
         }
     }
 
@@ -399,6 +427,7 @@ impl StoredConfig {
         Self {
             tuning: TuningProfile::default_foxeer_f405_v2(),
             log_rate_divisor: 1,
+            serial_bindings: None,
         }
     }
 
@@ -517,11 +546,22 @@ impl StoredConfig {
             output[start..start + 4].copy_from_slice(&value.to_bits().to_le_bytes());
         }
         output[80..82].copy_from_slice(&self.tuning.rc_rates.deadband.to_le_bytes());
+        output[V3_STORED_CONFIG_LEN..].copy_from_slice(
+            &self
+                .serial_bindings
+                .map_or(SERIAL_BINDINGS_UNSET, |bindings| bindings.encode()),
+        );
         output
     }
 
     pub fn decode(input: &[u8]) -> Option<Self> {
-        if input.len() != LEGACY_STORED_CONFIG_LEN && input.len() != STORED_CONFIG_LEN {
+        if ![
+            LEGACY_STORED_CONFIG_LEN,
+            V3_STORED_CONFIG_LEN,
+            STORED_CONFIG_LEN,
+        ]
+        .contains(&input.len())
+        {
             return None;
         }
         let mut values = [0.0f32; 10];
@@ -540,9 +580,14 @@ impl StoredConfig {
             RC_RATE_PROFILE
         } else {
             let stored_version = u16::from_le_bytes([input[42], input[43]]);
-            if stored_version != STORED_CONFIG_SCHEMA_VERSION
-                && stored_version != STORED_CONFIG_SCHEMA_VERSION_ALPHA
-            {
+            let expected_len = match stored_version {
+                STORED_CONFIG_SCHEMA_VERSION => STORED_CONFIG_LEN,
+                STORED_CONFIG_SCHEMA_VERSION_CORNER | STORED_CONFIG_SCHEMA_VERSION_ALPHA => {
+                    V3_STORED_CONFIG_LEN
+                }
+                _ => return None,
+            };
+            if input.len() != expected_len {
                 return None;
             }
             schema_version = stored_version;
@@ -585,7 +630,7 @@ impl StoredConfig {
                 // Older payloads stored a one-pole coefficient. Convert it at
                 // the rate it was authored for, so the filter a stored tune
                 // had is the filter it keeps.
-                imu_lpf_hz: if schema_version == STORED_CONFIG_SCHEMA_VERSION {
+                imu_lpf_hz: if schema_version != STORED_CONFIG_SCHEMA_VERSION_ALPHA {
                     values[9]
                 } else {
                     gyro_lpf_corner_hz(values[9], LEGACY_LPF_SAMPLE_RATE_HZ)
@@ -593,6 +638,19 @@ impl StoredConfig {
                 rc_rates,
             },
             log_rate_divisor: u16::from_le_bytes([input[40], input[41]]),
+            serial_bindings: match input.get(V3_STORED_CONFIG_LEN..) {
+                Some(bytes) if bytes.len() == SERIAL_PORT_SLOTS => {
+                    let bytes: &[u8; SERIAL_PORT_SLOTS] = bytes.try_into().ok()?;
+                    if *bytes == SERIAL_BINDINGS_UNSET {
+                        None
+                    } else {
+                        // A function this firmware does not know rejects the
+                        // whole payload, like any other invalid field.
+                        Some(SerialBindings::decode(bytes)?)
+                    }
+                }
+                _ => None,
+            },
         };
         if candidate.log_rate_divisor == 0
             || candidate.log_rate_divisor > 16
@@ -1045,7 +1103,9 @@ mod tests {
     /// authored for, or every saved tune silently changes.
     #[test]
     fn a_version_two_coefficient_survives_as_the_same_filter() {
-        let mut payload = StoredConfig::first_hop_default().encode();
+        let mut payload = [0u8; V3_STORED_CONFIG_LEN];
+        payload
+            .copy_from_slice(&StoredConfig::first_hop_default().encode()[..V3_STORED_CONFIG_LEN]);
         payload[36..40].copy_from_slice(&0.55f32.to_bits().to_le_bytes());
         payload[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION_ALPHA.to_le_bytes());
 
@@ -1076,6 +1136,58 @@ mod tests {
             let back = gyro_lpf_corner_hz(alpha, rate);
             assert!((back - corner).abs() < 0.1, "{rate} Hz -> {back}");
         }
+    }
+
+    #[test]
+    fn serial_bindings_round_trip_and_older_payloads_use_board_defaults() {
+        let mut config = StoredConfig::first_hop_default();
+        let encoded = config.encode();
+        assert_eq!(
+            StoredConfig::decode(&encoded).unwrap().serial_bindings,
+            None
+        );
+
+        config.serial_bindings = Some(
+            SerialBindings::none()
+                .with(LogicalSerialPort::Uart2, SerialFunction::RcInput)
+                .with(LogicalSerialPort::Uart4, SerialFunction::EscTelemetry),
+        );
+        let encoded = config.encode();
+        assert_eq!(StoredConfig::decode(&encoded), Some(config));
+
+        let mut version_three = [0u8; V3_STORED_CONFIG_LEN];
+        version_three.copy_from_slice(&encoded[..V3_STORED_CONFIG_LEN]);
+        version_three[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION_CORNER.to_le_bytes());
+        let decoded =
+            StoredConfig::decode(&version_three).expect("version 3 must still be readable");
+        assert_eq!(decoded.serial_bindings, None);
+        assert_eq!(decoded.tuning, config.tuning);
+
+        let mut unknown_function = encoded;
+        unknown_function[V3_STORED_CONFIG_LEN] = 0x40;
+        assert_eq!(StoredConfig::decode(&unknown_function), None);
+        // A version 4 header on a version 3 length is not trusted.
+        assert_eq!(StoredConfig::decode(&encoded[..V3_STORED_CONFIG_LEN]), None);
+    }
+
+    #[test]
+    fn serial_commands_parse() {
+        assert_eq!(parse_command("serial"), Ok(StorageCommand::SerialShow));
+        assert_eq!(
+            parse_command("serial uart4 esc_telemetry"),
+            Ok(StorageCommand::SerialSet(
+                LogicalSerialPort::Uart4,
+                SerialFunction::EscTelemetry
+            ))
+        );
+        assert_eq!(
+            parse_command("serial uart9 rc"),
+            Err(CommandParseError::InvalidArgument)
+        );
+        assert_eq!(
+            parse_command("serial uart2"),
+            Err(CommandParseError::MissingArgument)
+        );
     }
 
     #[test]

@@ -1,18 +1,18 @@
-//! The ESC telemetry manager: polls each ESC for telemetry over the USART1
-//! return line and publishes what comes back.
+//! The ESC telemetry manager: polls each ESC for telemetry over the return
+//! line config binds to it, and publishes what comes back.
 
 use crate::prelude::*;
-use crate::snapshots::*;
 
 /// Every `ESC_MANAGER_PERIOD_MS`: drain actuator acknowledgements and wire
 /// bytes into the manager, request the next ESC's telemetry, and log a
 /// summary once per thousand periods. It never commands a motor.
 ///
 /// Which logical motor each physical ESC output drives is the board's, so it
-/// is configuration.
+/// is configuration. With no port bound the task ends at once and no ESC is
+/// asked for telemetry.
 #[ferroforge::task(
     local = [
-        esc_telemetry_uart: stm32_uart::UartRxParserSide,
+        esc_telemetry_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
         esc_manager_state: esc::EscManager,
         esc_request_producer: esc::EscRequestProducer,
         esc_ack_consumer: esc::EscAckConsumer,
@@ -23,12 +23,15 @@ use crate::snapshots::*;
     monotonic = Mono,
 )]
 pub async fn esc_manager_task(cx: esc_manager_task::Context) {
+    let Some(port) = cx.local.esc_telemetry_port.as_mut() else {
+        return;
+    };
     loop {
         let release = Mono::now();
         let next_release = release + u64::from(ESC_MANAGER_PERIOD_MS).millis();
         let now_ms = release.duration_since_epoch().to_millis();
 
-        if ESC_TELEMETRY_DISCONTINUITY.swap(false, Ordering::Relaxed) {
+        if port.discontinuities.take_new().is_some() {
             cx.local.esc_manager_state.record_wire_discontinuity();
         }
         while let Some(ack) = cx.local.esc_ack_consumer.dequeue() {
@@ -38,24 +41,19 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
                 let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
             }
         }
-        while let Some(filled) = cx.local.esc_telemetry_uart.filled_consumer.dequeue() {
-            if filled.uart_error_seen {
+        let mut bytes = [0; stm32_uart::UART_RX_BUFFER_SIZE];
+        while let Ok(read_len @ 1..) = port.reader.try_read(&mut bytes) {
+            if port
+                .reader
+                .current_chunk()
+                .is_some_and(|chunk| chunk.uart_error_seen)
+            {
                 cx.local.esc_manager_state.record_wire_discontinuity();
             }
-            let len = filled.len.min(filled.buf.len());
-            for byte in &filled.buf[..len] {
+            for byte in &bytes[..read_len] {
                 if let Some(update) = cx.local.esc_manager_state.push_wire_byte(*byte, now_ms) {
                     let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
                 }
-            }
-            if cx
-                .local
-                .esc_telemetry_uart
-                .free_producer
-                .enqueue(filled.buf)
-                .is_err()
-            {
-                warn!("Foxeer USART1 ESC telemetry DMA buffer recycle failed");
             }
         }
 

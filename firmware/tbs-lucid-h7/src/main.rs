@@ -22,14 +22,15 @@ ferroforge::app! {
 
     #[shared]
     struct Shared {
+        // UART ports. Each is started at boot for the function saved config
+        // binds to it, or left off (`None`) when nothing is bound.
         #[lock_free]
-        uart1_rx: EscTelemetryUartIrq,
+        uart3_rx: Option<board::aliases::Uart3RxPort>,
+        uart3_tx_dma: Option<board::aliases::Uart3TxDmaSide>,
         #[lock_free]
-        uart2_rx: board::aliases::Uart2RxIrq,
-        uart2_bridge: Uart2OwnedRxBridge,
+        uart6_rx: Option<board::aliases::Uart6RxPort>,
         #[lock_free]
-        uart4_rx: board::aliases::Uart4RxIrq,
-        uart4_tx_dma: board::aliases::Uart4TxDmaSide,
+        uart8_rx: Option<board::aliases::Uart8RxPort>,
 
         // IMU
         imu_data: imu::ImuData,
@@ -57,7 +58,7 @@ ferroforge::app! {
 
         // UART
         sbus: StreamingParser,
-        esc_telemetry_uart: EscTelemetryUartParser,
+        esc_telemetry_port: Option<SerialPortEndpoint>,
         esc_manager_state: EscManagerState,
         esc_request_producer: EscRequestProducer,
         esc_request_consumer: EscRequestConsumer,
@@ -101,22 +102,15 @@ ferroforge::app! {
         imu_stale_ticks: u32,
         applied_tuning_seq: u32,
 
-        // Logical UART2 (USART6) and UART4 (USART3)
-        rc_rx_reader: Uart2OwnedReader,
-        rc_rx_discontinuities: Uart2Discontinuities,
-        osd_uart: Option<stm32_uart::UartRxParserSide>,
-        osd_rx_producer: Uart4OwnedRxProducer,
-        osd_rx_reader: Uart4OwnedReader,
-        osd_rx_discontinuities: Uart4Discontinuities,
-        osd_tx_writer: Uart4OwnedWriter,
+        // Serial functions: each owns the port config bound to it, if any.
+        rc_port: Option<SerialPortEndpoint>,
+        osd_port: Option<SerialPortEndpoint>,
         osd_tx_healthy: bool,
-        uart4_tx_owner: Uart4OwnedTxOwner,
-        uart4_tx_completion: Uart4OwnedTxCompletion,
+        uart3_tx_owner: Option<UartOwnedTxOwner>,
+        uart3_tx_completion: Option<UartOwnedTxCompletion>,
         osd_task: osd::OsdTask,
         osd_tx_buffer: [u8; mspv1::OSD_TX_BUFFER_LEN],
         osd_refresh_tick: u8,
-        //tele_uart: Option<stm32_uart::UartRxParserSide>,
-        //gps_uart: Option<stm32_uart::UartRxParserSide>,
 
         // ----  SAFETY  ----
         // owned by rc_input only
@@ -166,25 +160,25 @@ ferroforge::app! {
         configurator_usb: ConfiguratorUsbState,
     }
     #[init(local = [
-        uart1_rx_buffers: stm32_storage::UartRxBufferBank =
+        uart8_rx_buffers: stm32_storage::UartRxBufferBank =
             stm32_storage::new_uart_rx_buffer_bank(),
-        uart1_free_queue: stm32_storage::UartRxFreeQueue =
+        uart8_free_queue: stm32_storage::UartRxFreeQueue =
             stm32_storage::UartRxFreeQueue::new(),
-        uart1_filled_queue: stm32_storage::UartRxFilledQueue =
+        uart8_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
-        uart2_rx_buffers: stm32_storage::UartRxBufferBank =
+        uart6_rx_buffers: stm32_storage::UartRxBufferBank =
             stm32_storage::new_uart_rx_buffer_bank(),
-        uart2_free_queue: stm32_storage::UartRxFreeQueue =
+        uart6_free_queue: stm32_storage::UartRxFreeQueue =
             stm32_storage::UartRxFreeQueue::new(),
-        uart2_filled_queue: stm32_storage::UartRxFilledQueue =
+        uart6_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
-        uart4_rx_buffers: stm32_storage::UartRxBufferBank =
+        uart3_rx_buffers: stm32_storage::UartRxBufferBank =
             stm32_storage::new_uart_rx_buffer_bank(),
-        uart4_free_queue: stm32_storage::UartRxFreeQueue =
+        uart3_free_queue: stm32_storage::UartRxFreeQueue =
             stm32_storage::UartRxFreeQueue::new(),
-        uart4_filled_queue: stm32_storage::UartRxFilledQueue =
+        uart3_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
-        uart4_tx_buffer: stm32_storage::Uart4TxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
+        uart3_tx_buffer: stm32_storage::Uart4TxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
         spi1_dma_buffers: stm32_storage::SpiDmaBufferBank =
             stm32_storage::new_spi_dma_buffer_bank(),
         spi1_free_queue: stm32_storage::SpiFreeQueue =
@@ -262,101 +256,6 @@ ferroforge::app! {
             board::USB_CDC_IDENTITY,
         )
         .unwrap();
-
-        // Set-up Routing
-        let mut rc_input_uart = None;
-        let mut osd_uart = None;
-        let mut tele_uart = None;
-        let mut gps_uart = None;
-
-        // ------------  Logical UART1: UART8 / BLHeli legacy ESC telemetry  ------------
-        // Optional observational bring-up path: ESC TLM -> PE0 UART8_RX.
-        let (uart1_rx, esc_telemetry_uart) = {
-            let uart1 = stm32_uart::init_uart8_esc_telemetry(
-                stm32_uart::Uart8EscTelemetryResources {
-                    rx_pin: gpioe.pe0,
-                    uart: dp.UART8,
-                    prec: rec.UART8,
-                    rx_dma: dma1.2,
-                },
-                &clocks,
-                stm32_storage::UartRxStorageResources {
-                    buffers: cx.local.uart1_rx_buffers,
-                    free_queue: cx.local.uart1_free_queue,
-                    filled_queue: cx.local.uart1_filled_queue,
-                }
-                .into_backend(),
-            );
-            (uart1.irq, uart1.parser)
-        };
-
-        // ------------  Logical UART2: USART6 / SBUS RC  ------------
-        let uart2 = stm32_uart::init_usart6_sbus(
-            stm32_uart::Usart6SbusResources {
-                tx_pin: gpioc.pc6,
-                rx_pin: gpioc.pc7,
-                usart: dp.USART6,
-                prec: rec.USART6,
-                rx_dma: dma1.0,
-            },
-            &clocks,
-            stm32_storage::UartRxStorageResources {
-                buffers: cx.local.uart2_rx_buffers,
-                free_queue: cx.local.uart2_free_queue,
-                filled_queue: cx.local.uart2_filled_queue,
-            }
-            .into_backend(),
-        );
-        route_uart_to_task(
-            UART2_CONSUMER,
-            uart2.parser,
-            &mut rc_input_uart,
-            &mut osd_uart,
-            &mut tele_uart,
-            &mut gps_uart,
-        );
-        // ------------  Logical UART4: USART3 / DJI MSP OSD  ------------
-        // Board connection: PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
-        let uart4 = stm32_uart::init_usart3_msp_osd(
-            stm32_uart::Usart3MspResources {
-                tx_pin: gpiod.pd8,
-                rx_pin: gpiod.pd9,
-                usart: dp.USART3,
-                prec: rec.USART3,
-                rx_dma: dma1.1,
-                tx_dma: dma1.3,
-            },
-            &clocks,
-            stm32_storage::UartRxStorageResources {
-                buffers: cx.local.uart4_rx_buffers,
-                free_queue: cx.local.uart4_free_queue,
-                filled_queue: cx.local.uart4_filled_queue,
-            }
-            .into_backend(),
-            cx.local.uart4_tx_buffer,
-        );
-        route_uart_to_task(
-            UART4_CONSUMER,
-            uart4.parser,
-            &mut rc_input_uart,
-            &mut osd_uart,
-            &mut tele_uart,
-            &mut gps_uart,
-        );
-        let rc_input_uart = rc_input_uart
-            .take()
-            .expect("board support must route USART6 to the RC input task");
-        let uart2_owned_rx =
-            cortex_m::singleton!(: Uart2OwnedRxChannel = Uart2OwnedRxChannel::new()).unwrap();
-        let (rc_rx_producer, rc_rx_reader, rc_rx_discontinuities) = uart2_owned_rx.split();
-        let uart2_bridge = Uart2OwnedRxBridge::new(rc_input_uart, rc_rx_producer);
-        let osd_tx_dma = uart4.tx_dma;
-        let uart4_owned_rx =
-            cortex_m::singleton!(: Uart4OwnedRxChannel = Uart4OwnedRxChannel::new()).unwrap();
-        let (osd_rx_producer, osd_rx_reader, osd_rx_discontinuities) = uart4_owned_rx.split();
-        let uart4_owned_tx =
-            cortex_m::singleton!(: Uart4OwnedTxChannel = Uart4OwnedTxChannel::new()).unwrap();
-        let (osd_tx_writer, uart4_tx_owner, uart4_tx_completion) = uart4_owned_tx.split();
 
         let (
             esc_manager_state,
@@ -444,7 +343,7 @@ ferroforge::app! {
         IMU_TRANSPORT_READY.store(spi1_imu.bringup.is_ready(), Ordering::Relaxed);
 
         let (
-            flash_device,
+            mut flash_device,
             flash_record_producer,
             flash_record_consumer,
             flash_command_producer,
@@ -552,6 +451,92 @@ ferroforge::app! {
             )
         };
 
+        // ------------  UART ports, bound at boot  ------------
+        // Pins and DMA streams are fixed per port. Saved config chooses each
+        // port's function and line settings; it is read once, here, so a
+        // changed binding applies after a reboot.
+        let serial_bindings = boot_serial_bindings(&mut flash_device);
+        let board::aliases::UartPorts {
+            uart3_rx,
+            uart3_tx:
+                stm32_port::UartTxPort {
+                    dma: uart3_tx_dma,
+                    owner: uart3_tx_owner,
+                    completion: uart3_tx_completion,
+                },
+            uart6_rx,
+            uart8_rx,
+            functions: serial_functions,
+        } = stm32_uart::init_h743_uart_ports(
+            stm32_uart::H743UartPortResources {
+                // PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
+                usart3: stm32_uart::Usart3PortResources {
+                    tx_pin: gpiod.pd8,
+                    rx_pin: gpiod.pd9,
+                    usart: dp.USART3,
+                    prec: rec.USART3,
+                    rx_dma: dma1.1,
+                    tx_dma: dma1.3,
+                },
+                usart6: stm32_uart::Usart6PortResources {
+                    tx_pin: gpioc.pc6,
+                    rx_pin: gpioc.pc7,
+                    usart: dp.USART6,
+                    prec: rec.USART6,
+                    rx_dma: dma1.0,
+                },
+                // ESC TLM -> PE0 UART8_RX.
+                uart8: stm32_uart::Uart8PortResources {
+                    rx_pin: gpioe.pe0,
+                    uart: dp.UART8,
+                    prec: rec.UART8,
+                    rx_dma: dma1.2,
+                },
+            },
+            &clocks,
+            stm32_uart::H743UartPortStorage {
+                usart3: stm32_port::UartRxTxPortStorage {
+                    rx: stm32_storage::UartRxStorageResources {
+                        buffers: cx.local.uart3_rx_buffers,
+                        free_queue: cx.local.uart3_free_queue,
+                        filled_queue: cx.local.uart3_filled_queue,
+                    },
+                    stream: cortex_m::singleton!(
+                        : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                    tx_buffer: cx.local.uart3_tx_buffer,
+                    tx_stream: cortex_m::singleton!(
+                        : UartOwnedTxChannel = UartOwnedTxChannel::new()
+                    )
+                    .unwrap(),
+                },
+                usart6: stm32_port::UartRxPortStorage {
+                    rx: stm32_storage::UartRxStorageResources {
+                        buffers: cx.local.uart6_rx_buffers,
+                        free_queue: cx.local.uart6_free_queue,
+                        filled_queue: cx.local.uart6_filled_queue,
+                    },
+                    stream: cortex_m::singleton!(
+                        : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                },
+                uart8: stm32_port::UartRxPortStorage {
+                    rx: stm32_storage::UartRxStorageResources {
+                        buffers: cx.local.uart8_rx_buffers,
+                        free_queue: cx.local.uart8_free_queue,
+                        filled_queue: cx.local.uart8_filled_queue,
+                    },
+                    stream: cortex_m::singleton!(
+                        : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                },
+            },
+            &serial_bindings,
+        );
+
         // Init rate controller
         // The Foxeer tuning: the Lucid starts from the same airframe profile.
         let tuning_profile = dt::TuningProfile::default_foxeer_f405_v2();
@@ -637,7 +622,7 @@ ferroforge::app! {
             info!("TBS Lucid H7 flight arming enabled with runtime IMU health checks");
             info!("TBS Lucid H7 ADC uses Betaflight target voltage/current values");
         }
-        info!("TBS Lucid H7 BLHeli telemetry-qualified DShot arming active on PE0 UART8 RX");
+        info!("TBS Lucid H7 BLHeli telemetry-qualified DShot arming reads the port bound to esc_telemetry");
         #[cfg(feature = "bench_dshot_idle_output1_not_running")]
         warn!(
             "FAULT INJECTION ACTIVE: TBS Lucid H7 physical ESC output 1 (logical M1/rear-right) idle qualification eRPM forced to zero; arming must fail"
@@ -646,7 +631,7 @@ ferroforge::app! {
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         heartbeat::spawn().unwrap();
         adc1_polling::spawn().ok();
-        uart4_tx_worker::spawn().unwrap();
+        uart3_tx_worker::spawn().unwrap();
         rc_input::spawn().unwrap();
         osd_refresh::spawn().ok();
         dshot_service::spawn().unwrap();
@@ -655,11 +640,10 @@ ferroforge::app! {
 
         (
             Shared {
-                uart1_rx,
-                uart2_rx: uart2.irq,
-                uart2_bridge,
-                uart4_rx: uart4.rx_irq,
-                uart4_tx_dma: osd_tx_dma,
+                uart3_rx,
+                uart3_tx_dma,
+                uart6_rx,
+                uart8_rx,
 
                 // SPI1
                 spi1_owner: spi1_imu.owner,
@@ -687,7 +671,7 @@ ferroforge::app! {
 
                 // UART
                 sbus: StreamingParser::new(),
-                esc_telemetry_uart,
+                esc_telemetry_port: serial_functions.esc_telemetry,
                 esc_manager_state,
                 esc_request_producer,
                 esc_request_consumer,
@@ -736,21 +720,14 @@ ferroforge::app! {
                 applied_tuning_seq: 0,
 
                 // Parser
-                rc_rx_reader,
-                rc_rx_discontinuities,
-                osd_uart,
-                osd_rx_producer,
-                osd_rx_reader,
-                osd_rx_discontinuities,
-                osd_tx_writer,
+                rc_port: serial_functions.rc_input,
+                osd_port: serial_functions.msp_display_port,
                 osd_tx_healthy: true,
-                uart4_tx_owner,
-                uart4_tx_completion,
+                uart3_tx_owner,
+                uart3_tx_completion,
                 osd_task: osd::OsdTask::new(),
                 osd_tx_buffer: [0; mspv1::OSD_TX_BUFFER_LEN],
                 osd_refresh_tick: 0,
-                //tele_uart,
-                //gps_uart,
 
                 // ----  SAFETY  ----
                 // rc_input Writer
@@ -1412,6 +1389,38 @@ ferroforge::app! {
                                 flash_response_producer,
                                 "OK logs erase CONFIRM | config get/set KEY | config save\r\n",
                             );
+                            queue_storage_response(
+                                flash_response_producer,
+                                "OK serial | serial PORT none/rc/osd/esc_telemetry\r\n",
+                            );
+                        }
+                        flash_task::StorageCommand::SerialShow => {
+                            let _ = write!(response, "OK ");
+                            let _ = stm32_port::write_serial_bindings(
+                                &mut response,
+                                stored_config.serial_bindings,
+                                board::serial::DEFAULT_SERIAL_BINDINGS,
+                                board::serial::SERIAL_ROUTES,
+                            );
+                            queue_storage_response(flash_response_producer, response.as_str());
+                        }
+                        flash_task::StorageCommand::SerialSet(port, function) => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "ERR config changes disabled while armed\r\n",
+                                );
+                            } else {
+                                let mut bindings = stored_config
+                                    .serial_bindings
+                                    .unwrap_or(board::serial::DEFAULT_SERIAL_BINDINGS);
+                                bindings.set(port, function);
+                                stored_config.serial_bindings = Some(bindings);
+                                queue_storage_response(
+                                    flash_response_producer,
+                                    "OK staged; use config save, then reboot\r\n",
+                                );
+                            }
                         }
                         flash_task::StorageCommand::FlashInfo => {
                             let _ = write!(
@@ -1994,28 +2003,11 @@ ferroforge::app! {
     )]
     fn dshot_motor4_dma_complete(cx: dshot_motor4_dma_complete::Context);
 
-    // ########### Logical UART1: UART8 / BLHeli legacy ESC telemetry ########
-    #[task(
-        from = flight_tasks::usart1_rx_dma_transfer,
-        binds = DMA1_STR2,
-        priority = 5,
-        shared = [uart1_rx]
-    )]
-    fn usart1_rx_dma_transfer(cx: usart1_rx_dma_transfer::Context);
-
-    #[task(
-        from = flight_tasks::usart1_rx_peripheral,
-        binds = UART8,
-        priority = 5,
-        shared = [uart1_rx]
-    )]
-    fn usart1_rx_peripheral(cx: usart1_rx_peripheral::Context);
-
     #[task(
         from = flight_tasks::esc_manager_task,
         priority = 4,
         local = [
-            esc_telemetry_uart,
+            esc_telemetry_port,
             esc_manager_state,
             esc_request_producer,
             esc_ack_consumer,
@@ -2118,53 +2110,33 @@ ferroforge::app! {
     )]
     async fn spi1_parser(cx: spi1_parser::Context);
 
-    // ########### Logical UART2: USART6 / SBUS ###################################
-    #[task(
-        from = flight_tasks::usart2_rx_dma_transfer,
-        binds = DMA1_STR0,
-        priority = 11,
-        shared = [uart2_rx, uart2_bridge],
-        spawn = [safety_master]
-    )]
-    fn usart2_rx_dma_transfer(cx: usart2_rx_dma_transfer::Context);
+    // ########### UART ports ##############################################
+    // Every UART transport runs at priority 11, whatever function its port
+    // serves; the function tasks reading the streams keep their own
+    // priorities. SPI transports run at 13.
+    #[task(from = flight_tasks::uart3_rx_dma, binds = DMA1_STR1, priority = 11, shared = [uart3_rx])]
+    fn uart3_rx_dma(cx: uart3_rx_dma::Context);
 
-    #[task(
-        from = flight_tasks::usart2_rx_peripheral,
-        binds = USART6,
-        priority = 11,
-        shared = [uart2_rx, uart2_bridge],
-        spawn = [safety_master]
-    )]
-    fn usart2_rx_peripheral(cx: usart2_rx_peripheral::Context);
+    #[task(from = flight_tasks::uart3_rx_idle, binds = USART3, priority = 11, shared = [uart3_rx])]
+    fn uart3_rx_idle(cx: uart3_rx_idle::Context);
 
-    // ########### Logical UART4: USART3 / DJI MSP OSD ###########################
-    #[task(
-        from = flight_tasks::uart4_rx_dma_transfer,
-        binds = DMA1_STR1,
-        priority = 6,
-        shared = [uart4_rx],
-        spawn = [osd_refresh]
-    )]
-    fn uart4_rx_dma_transfer(cx: uart4_rx_dma_transfer::Context);
+    #[task(from = flight_tasks::uart6_rx_dma, binds = DMA1_STR0, priority = 11, shared = [uart6_rx])]
+    fn uart6_rx_dma(cx: uart6_rx_dma::Context);
 
-    #[task(
-        from = flight_tasks::uart4_rx_peripheral,
-        binds = USART3,
-        priority = 6,
-        shared = [uart4_rx],
-        spawn = [osd_refresh]
-    )]
-    fn uart4_rx_peripheral(cx: uart4_rx_peripheral::Context);
+    #[task(from = flight_tasks::uart6_rx_idle, binds = USART6, priority = 11, shared = [uart6_rx])]
+    fn uart6_rx_idle(cx: uart6_rx_idle::Context);
+
+    #[task(from = flight_tasks::uart8_rx_dma, binds = DMA1_STR2, priority = 11, shared = [uart8_rx])]
+    fn uart8_rx_dma(cx: uart8_rx_dma::Context);
+
+    #[task(from = flight_tasks::uart8_rx_idle, binds = UART8, priority = 11, shared = [uart8_rx])]
+    fn uart8_rx_idle(cx: uart8_rx_idle::Context);
 
     #[task(
         from = flight_tasks::osd_refresh,
         priority = 3,
         local = [
-            osd_uart,
-            osd_rx_producer,
-            osd_rx_reader,
-            osd_rx_discontinuities,
-            osd_tx_writer,
+            osd_port,
             osd_tx_healthy,
             osd_task,
             osd_tx_buffer,
@@ -2188,28 +2160,27 @@ ferroforge::app! {
     async fn osd_refresh(cx: osd_refresh::Context);
 
     #[task(
-        from = flight_tasks::uart4_tx_worker,
-        priority = 4,
-        local = [uart4_tx_owner = uart4_tx_owner],
-        shared = [uart4_tx_dma = uart4_tx_dma],
+        from = flight_tasks::uart3_tx_worker,
+        priority = 11,
+        local = [uart3_tx_owner = uart3_tx_owner],
+        shared = [uart3_tx_dma = uart3_tx_dma],
     )]
-    async fn uart4_tx_worker(cx: uart4_tx_worker::Context);
+    async fn uart3_tx_worker(cx: uart3_tx_worker::Context);
 
     #[task(
-        from = flight_tasks::uart4_tx_dma_transfer,
+        from = flight_tasks::uart3_tx_dma_complete,
         binds = DMA1_STR3,
-        priority = 6,
-        local = [uart4_tx_completion],
-        shared = [uart4_tx_dma]
+        priority = 11,
+        local = [uart3_tx_completion],
+        shared = [uart3_tx_dma]
     )]
-    fn uart4_tx_dma_transfer(cx: uart4_tx_dma_transfer::Context);
+    fn uart3_tx_dma_complete(cx: uart3_tx_dma_complete::Context);
 
     #[task(
         from = flight_tasks::rc_input,
         priority = 10,
         local = [
-            rc_rx_reader,
-            rc_rx_discontinuities,
+            rc_port,
             sbus,
             arm_qualifier,
             rc_rates_writer,

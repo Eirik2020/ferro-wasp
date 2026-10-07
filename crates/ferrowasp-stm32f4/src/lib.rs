@@ -36,5 +36,6 @@ pub mod timer_tick;
 pub mod uart_common;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod uart_dma;
+pub mod uart_port;
 pub mod usb_serial;
 pub mod watchdog;

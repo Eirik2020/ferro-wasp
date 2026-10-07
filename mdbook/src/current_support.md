@@ -14,7 +14,7 @@ list every peripheral or diagnostic feature.
 |---|---|---|---|
 | Role | Golden flight target | Obsolete, compiled only | Non-actuating bring-up target |
 | MCU / runtime | STM32F405, RTIC 2 | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
-| RC input | SBUS over USART2 DMA | SBUS over USART2 DMA | None |
+| RC input | SBUS over USART2 DMA by default; ports bound at boot from saved config | SBUS over USART2 DMA | None |
 | IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | MPU6500; timer-driven polling | None |
 | Control | 400 Hz rate controller and Quad X mixer | 400 Hz rate controller and Quad X mixer | None |
 | ESC output | Four-lane DShot600 | Four-lane DShot600 | None |
@@ -58,9 +58,9 @@ orientation, motor order, and ADC scale are verified on it.
 | Function | Lucid H7 resource |
 |---|---|
 | IMU | SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000 |
-| SBUS | USART6 RX PC7, inverted in the UART |
-| MSP DisplayPort | USART3 (PD8 TX, PD9 RX) |
-| ESC telemetry | UART8 RX PE0 |
+| SBUS (default `uart6`) | USART6 RX PC7, inverted in the UART |
+| MSP DisplayPort (default `uart3`) | USART3 (PD8 TX, PD9 RX) |
+| ESC telemetry (default `uart8`) | UART8 RX PE0 |
 | DShot600 | PB0, PB1 (TIM3), PA0, PA1 (TIM5), DMA2 streams 0-3 |
 | ADC | Voltage PC0, current PC1 |
 | Storage | microSD on SDMMC1 |

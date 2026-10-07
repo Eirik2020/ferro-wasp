@@ -1,3 +1,4 @@
+mod binding;
 mod chunk;
 mod discontinuity;
 mod fault;
@@ -7,6 +8,10 @@ mod routing;
 mod tx_chunk;
 mod writer;
 
+pub use binding::{
+    BindingFault, BindingIssue, ResolvedBindings, SERIAL_PORT_SLOTS, SerialBindings,
+    SerialFunction, SerialFunctionSlots, resolve_bindings,
+};
 pub use chunk::{RxChunk, RxChunkError, RxCompletion};
 pub use discontinuity::{Discontinuity, DiscontinuityRecord, StreamGeneration};
 pub use fault::SerialFault;
@@ -17,10 +22,7 @@ pub use profile::{
 pub use reader::{
     DiscontinuityReader, SerialReader, SerialRxChannel, SerialRxProducer, SerialRxStatus,
 };
-pub use routing::{
-    SerialCapabilities, SerialRoute, SerialRouteError, UART1_CONSUMER, UART2_CONSUMER,
-    UART3_CONSUMER, UART4_CONSUMER, UartConsumer, route_uart_to_task,
-};
+pub use routing::{SerialCapabilities, SerialRoute, SerialRouteError};
 pub use tx_chunk::{TxChunk, TxChunkError};
 pub use writer::{
     SerialTxChannel, SerialTxCompletion, SerialTxOwner, SerialTxStatus, SerialWriter,

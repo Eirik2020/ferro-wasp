@@ -192,8 +192,8 @@ TOPIC_ROUTES = {
     "telemetry": TopicRoute(
         summary="Legacy ESC telemetry UART ownership, association, and manager service.",
         common_symbols=(
-            "usart1_rx_dma_transfer",
-            "usart1_rx_peripheral",
+            "uart1_rx_dma",
+            "uart1_rx_idle",
             "esc_manager_task",
             "dshot_service",
         ),
@@ -225,8 +225,8 @@ TOPIC_ROUTES = {
     "rc": TopicRoute(
         summary="SBUS DMA/peripheral ingress, discontinuity handling, link state, and commands.",
         common_symbols=(
-            "usart2_rx_dma_transfer",
-            "usart2_rx_peripheral",
+            "uart2_rx_dma",
+            "uart2_rx_idle",
             "rc_input",
         ),
         companions=(
@@ -239,11 +239,11 @@ TOPIC_ROUTES = {
     "osd": TopicRoute(
         summary="MSP OSD receive, refresh, transmit queue, and DMA completion.",
         common_symbols=(
-            "uart4_rx_dma_transfer",
-            "uart4_rx_peripheral",
+            "uart4_rx_dma",
+            "uart4_rx_idle",
             "osd_refresh",
             "uart4_tx_worker",
-            "uart4_tx_dma_transfer",
+            "uart4_tx_dma_complete",
         ),
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),

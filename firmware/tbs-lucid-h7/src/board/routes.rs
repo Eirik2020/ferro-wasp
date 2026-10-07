@@ -1,7 +1,7 @@
 //! DMA and SPI routes. On the STM32H743 any stream can serve any request
 //! through DMAMUX1, so a route's `channel` is the DMAMUX request line.
 
-pub use super::serial::ACTIVE_SERIAL_ROUTES;
+pub use super::serial::SERIAL_ROUTES;
 use ferrowasp_stm32f4::board_routes::{DmaDirection, DmaRoute, SpiRoute};
 
 pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 5] = [

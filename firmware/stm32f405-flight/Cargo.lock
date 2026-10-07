@@ -399,6 +399,7 @@ dependencies = [
  "defmt 1.0.1",
  "ferrowasp-core",
  "ferrowasp-drivers",
+ "ferrowasp-io-core",
  "ferrowasp-mspv1",
  "ferrowasp-pid",
  "heapless 0.9.2",

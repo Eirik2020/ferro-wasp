@@ -17,6 +17,8 @@ struct SerialRxMailbox<const N: usize, const DEPTH: usize> {
     waiter: Option<Waker>,
     enabled: bool,
     discontinuity_pending: bool,
+    /// A discontinuity the reader has not been woken for yet.
+    reader_notice: bool,
     discontinuity_count: u32,
     overflow_count: u32,
     latest_discontinuity: Option<DiscontinuityRecord>,
@@ -29,6 +31,7 @@ impl<const N: usize, const DEPTH: usize> SerialRxMailbox<N, DEPTH> {
             waiter: None,
             enabled: true,
             discontinuity_pending: false,
+            reader_notice: false,
             discontinuity_count: 0,
             overflow_count: 0,
             latest_discontinuity: None,
@@ -43,6 +46,7 @@ impl<const N: usize, const DEPTH: usize> SerialRxMailbox<N, DEPTH> {
     ) {
         self.discontinuity_count = self.discontinuity_count.wrapping_add(1);
         self.discontinuity_pending = true;
+        self.reader_notice = true;
         self.latest_discontinuity = Some(DiscontinuityRecord {
             sequence: self.discontinuity_count,
             cause,
@@ -51,12 +55,21 @@ impl<const N: usize, const DEPTH: usize> SerialRxMailbox<N, DEPTH> {
         });
     }
 
-    fn poll_chunk(&mut self, cx: &mut Context<'_>) -> Poll<Result<RxChunk<N>, SerialFault>> {
+    /// The next chunk, or `None` when a discontinuity arrived with no data, so
+    /// a reader waiting on a dead line still learns of it.
+    fn poll_chunk(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<Option<RxChunk<N>>, SerialFault>> {
         if let Some(chunk) = self.chunks.pop_front() {
-            return Poll::Ready(Ok(chunk));
+            return Poll::Ready(Ok(Some(chunk)));
         }
         if !self.enabled {
             return Poll::Ready(Err(SerialFault::Disabled));
+        }
+        if self.reader_notice {
+            self.reader_notice = false;
+            return Poll::Ready(Ok(None));
         }
         if self
             .waiter
@@ -135,6 +148,7 @@ impl<const N: usize, const DEPTH: usize> SerialRxProducer<'_, N, DEPTH> {
             match mailbox.chunks.push_back(chunk) {
                 Ok(()) => {
                     mailbox.discontinuity_pending = false;
+                    mailbox.reader_notice = false;
                     (Ok(()), mailbox.waiter.take())
                 }
                 Err(_) => {
@@ -144,7 +158,7 @@ impl<const N: usize, const DEPTH: usize> SerialRxProducer<'_, N, DEPTH> {
                         generation,
                         timestamp,
                     );
-                    (Err(SerialFault::QueueOverflow), None)
+                    (Err(SerialFault::QueueOverflow), mailbox.waiter.take())
                 }
             }
         });
@@ -161,11 +175,14 @@ impl<const N: usize, const DEPTH: usize> SerialRxProducer<'_, N, DEPTH> {
         generation: StreamGeneration,
         observed_at: TimestampMicros,
     ) {
-        critical_section::with(|cs| {
-            self.mailbox
-                .borrow_ref_mut(cs)
-                .record_discontinuity(cause, generation, observed_at);
+        let waiter = critical_section::with(|cs| {
+            let mut mailbox = self.mailbox.borrow_ref_mut(cs);
+            mailbox.record_discontinuity(cause, generation, observed_at);
+            mailbox.waiter.take()
         });
+        if let Some(waiter) = waiter {
+            waiter.wake();
+        }
     }
 
     pub fn disable(&mut self) {
@@ -188,7 +205,10 @@ impl<const N: usize, const DEPTH: usize> SerialRxProducer<'_, N, DEPTH> {
 
 /// Bounded byte-stream view over owned UART DMA chunks.
 ///
-/// Reads consume at most one chunk per call. Dropping a pending read is safe:
+/// Reads consume at most one chunk per call. A read returns `Ok(0)` when the
+/// producer records a discontinuity while no data is queued, so a consumer
+/// waiting on a line that has gone quiet still sees the fault at once; check
+/// the stream's [`DiscontinuityReader`] after every read. Dropping a pending read is safe:
 /// no caller buffer is retained and the next read replaces the stored waker.
 pub struct SerialReader<'a, const N: usize, const DEPTH: usize> {
     mailbox: &'a SharedSerialRxMailbox<N, DEPTH>,
@@ -215,6 +235,18 @@ impl<const N: usize, const DEPTH: usize> SerialReader<'_, N, DEPTH> {
         self.current.as_ref()
     }
 
+    /// Read without waiting, for consumers that poll on their own period:
+    /// `Ok(0)` when nothing is queued.
+    pub fn try_read(&mut self, output: &mut [u8]) -> Result<usize, SerialFault> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        match self.poll_read(&mut Context::from_waker(Waker::noop()), output) {
+            Poll::Ready(result) => result,
+            Poll::Pending => Ok(0),
+        }
+    }
+
     fn poll_read(
         &mut self,
         cx: &mut Context<'_>,
@@ -239,7 +271,8 @@ impl<const N: usize, const DEPTH: usize> SerialReader<'_, N, DEPTH> {
             }
 
             match critical_section::with(|cs| self.mailbox.borrow_ref_mut(cs).poll_chunk(cx)) {
-                Poll::Ready(Ok(chunk)) => self.current = Some(chunk),
+                Poll::Ready(Ok(Some(chunk))) => self.current = Some(chunk),
+                Poll::Ready(Ok(None)) => return Poll::Ready(Ok(0)),
                 Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
                 Poll::Pending => return Poll::Pending,
             }
@@ -446,6 +479,43 @@ mod tests {
             Err(SerialFault::Disabled)
         );
         assert!(!control.status().enabled);
+    }
+
+    #[test]
+    fn discontinuity_wakes_a_waiting_reader_with_no_data() {
+        let mut channel = SerialRxChannel::<8, 2>::new();
+        let (mut producer, mut reader, mut discontinuities) = channel.split();
+        let counter = Arc::new(CountWake(AtomicUsize::new(0)));
+        let waker = Waker::from(counter.clone());
+        let mut output = [0; 4];
+        {
+            let mut pending = Box::pin(reader.read(&mut output));
+            assert_eq!(poll_once(pending.as_mut(), &waker), Poll::Pending);
+            producer.record_discontinuity(
+                Discontinuity::DmaError,
+                StreamGeneration(3),
+                TimestampMicros(9),
+            );
+            assert_eq!(counter.0.load(Ordering::Relaxed), 1);
+            assert_eq!(poll_once(pending.as_mut(), &waker), Poll::Ready(Ok(0)));
+        }
+        assert_eq!(
+            discontinuities.take_new().unwrap().cause,
+            Discontinuity::DmaError
+        );
+        assert_eq!(reader.try_read(&mut output), Ok(0));
+    }
+
+    #[test]
+    fn try_read_returns_queued_bytes_and_zero_when_empty() {
+        let mut channel = SerialRxChannel::<8, 2>::new();
+        let (mut producer, mut reader, _) = channel.split();
+        let mut output = [0; 8];
+        assert_eq!(reader.try_read(&mut output), Ok(0));
+        producer.try_send(chunk(b"esc", 1)).unwrap();
+        assert_eq!(reader.try_read(&mut output), Ok(3));
+        assert_eq!(&output[..3], b"esc");
+        assert_eq!(reader.try_read(&mut output), Ok(0));
     }
 
     #[test]
