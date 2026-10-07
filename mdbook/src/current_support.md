@@ -15,7 +15,7 @@ list every peripheral or diagnostic feature.
 | Role | Golden flight target | Obsolete, compiled only | Non-actuating bring-up target |
 | MCU / runtime | STM32F405, RTIC 2 | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
 | RC input | SBUS over USART2 DMA | SBUS over USART2 DMA | None |
-| IMU | Runtime-selected MPU6500 or ICM42688-P; EXTI data-ready sampling | MPU6500; timer-driven polling | None |
+| IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | MPU6500; timer-driven polling | None |
 | Control | 400 Hz rate controller and Quad X mixer | 400 Hz rate controller and Quad X mixer | None |
 | ESC output | Four-lane DShot600 | Four-lane DShot600 | None |
 | ESC telemetry | Standard BLHeli legacy UART eRPM path | Standard BLHeli legacy UART eRPM path | None |
@@ -33,9 +33,9 @@ The Foxeer app lives in `firmware/foxeer-f405-v2`. USB, DShot, ESC telemetry,
 persistent configuration, onboard blackbox storage, and MSP OSD are standard
 parts of its flight image rather than optional board capabilities.
 
-The fitted SPI1 IMU is detected at boot. MPU6500 and ICM42688-P share the
-bounded DMA transport and board orientation contract; PC4/EXTI4 supplies the
-normal data-ready event. The controller consumes fresh samples at 400 Hz.
+The fitted SPI1 IMU is detected at boot. MPU6500, ICM42688-P and MPU-6000
+share the bounded DMA transport and board orientation contract; PC4/EXTI4
+supplies the normal data-ready event. The controller consumes fresh samples at 400 Hz.
 
 Four DShot600 lanes use TIM1 and TIM8 with board-local pin and DMA routes. The
 actuator path continuously selects stop while disarmed, rejects stale motor

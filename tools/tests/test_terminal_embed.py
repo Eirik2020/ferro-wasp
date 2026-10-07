@@ -4,6 +4,7 @@ from pathlib import Path
 from tools.terminal_embed import (
     FIRMWARE_TARGETS,
     FoxeerSmokeEvidence,
+    foxeer_imu_rate_hz,
     add_required_feature,
     commands_from_args,
     is_probe_flash_activity_line,
@@ -55,12 +56,19 @@ class FoxeerSmokeEvidenceTests(unittest.TestCase):
             "[INFO ] FerroWasp RTT hello from Foxeer",
             "[INFO ] Foxeer ICM42688-P ready; WHO_AM_I 71",
             "[WARN ] Flight arming inhibited: Foxeer smoke-test actuator lockout is active",
-            "[INFO ] IMU DRDY IRQ 2040, delta 2001, rejected 0, delta 0, last 1 us",
-            "[INFO ] IMU DRDY IRQ 4040, delta 2000, rejected 0, delta 0, last 1 us",
+            "[INFO ] IMU DRDY IRQ 4066, delta 4051, rejected 0, delta 0, last 1 us",
+            "[INFO ] IMU DRDY IRQ 8116, delta 4050, rejected 0, delta 0, last 1 us",
         ):
             evidence.observe(line)
 
         self.assertEqual(evidence.failures(), [])
+
+    def test_drdy_is_judged_against_the_board_rate(self) -> None:
+        self.assertEqual(foxeer_imu_rate_hz(), 2_000)
+        evidence = FoxeerSmokeEvidence(imu_rate_hz=1_000)
+        for delta in (2001, 4050):
+            evidence.observe(f"[INFO ] IMU DRDY IRQ 1, delta {delta}, rejected 0, delta 0")
+        self.assertEqual(evidence.drdy_in_range, 1)
 
     def test_reports_missing_progress_and_fatal_output(self) -> None:
         evidence = FoxeerSmokeEvidence()

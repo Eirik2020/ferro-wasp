@@ -1131,6 +1131,45 @@ mod tests {
         assert_eq!(result, Some(Ok(StorageCommand::ConfigGet(ConfigKey::YawI))));
     }
 
+    /// FerroConfigurator opens the port with this line to flush whatever
+    /// another program left half-sent. It must be refused after any prefix of
+    /// any command: completing one would run it. That holds while every command
+    /// takes a fixed number of words.
+    #[test]
+    fn the_configurator_resync_line_is_refused_after_any_partial_command() {
+        use core::fmt::Write as _;
+
+        fn refused_after_every_prefix(command: &str) {
+            assert!(parse_command(command).is_ok(), "{command} should parse");
+            for end in 0..=command.len() {
+                let mut line: String<64> = String::new();
+                line.push_str(&command[..end]).unwrap();
+                line.push_str(" #resync").unwrap();
+                assert!(parse_command(&line).is_err(), "`{line}` was accepted");
+            }
+        }
+
+        for command in [
+            "help",
+            "flash info",
+            "flash test CONFIRM",
+            "logs list",
+            "logs read-page 12",
+            "logs erase CONFIRM",
+            "config save",
+        ] {
+            refused_after_every_prefix(command);
+        }
+        for key in ConfigKey::ALL {
+            let mut get: String<48> = String::new();
+            write!(get, "config get {}", key.name()).unwrap();
+            refused_after_every_prefix(&get);
+            let mut set: String<48> = String::new();
+            write!(set, "config set {} 2.5", key.name()).unwrap();
+            refused_after_every_prefix(&set);
+        }
+    }
+
     #[test]
     fn a_partial_line_left_by_a_closed_port_does_not_spoil_the_next_command() {
         let mut parser = CommandParser::new();

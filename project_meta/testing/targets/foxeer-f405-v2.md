@@ -84,6 +84,9 @@ those electrical measurements remain open.
 
 Catalog ID: `BENCH-FOX-USB-001`.
 
+`tools/foxeer_bench_gates.py usb-config` runs and checks these steps; see
+`tools/README.md`.
+
 Keep the aircraft disarmed, stationary during boot gyro calibration, and with
 propellers removed. Keep actuator/ESC power disconnected. If the installation
 cannot isolate actuator power, stop and treat the work as a powered

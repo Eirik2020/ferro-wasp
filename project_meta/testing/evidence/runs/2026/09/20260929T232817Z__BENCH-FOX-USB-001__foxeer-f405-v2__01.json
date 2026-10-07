@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "run_id": "20260929T232817Z__BENCH-FOX-USB-001__foxeer-f405-v2__01",
+  "test_id": "BENCH-FOX-USB-001",
+  "started_at_utc": "2026-09-29T23:27:42Z",
+  "completed_at_utc": "2026-09-29T23:28:17Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-unpowered",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "c0c62764cf2594ae6a61b987f8aba65158b1d618c14b0d65881a57e5610d9216",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer USB RC Configuration Gate",
+    "procedure_sha256": "5aa55afe6a6462f7c1a89c98e64d5d9c1a1ae7ca5d87762d61c4cdbbb9eb138a"
+  },
+  "execution": {
+    "performed_by": "user",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "5a9aaa4ec6508c74b114a404b473f7229b5d5432",
+    "working_tree": "clean",
+    "firmware_sha256": "b020bdfe1ad9056fbab034752828fbf28be3e63241da60efdd18924dd7c3863f",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "log_rate_divisor": 2
+    }
+  },
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "disconnected",
+    "equipment": [
+      "SWD probe",
+      "USB host power",
+      "no oscilloscope or logic analyzer"
+    ],
+    "environment": [
+      "bench",
+      "battery disconnected",
+      "no RC link"
+    ]
+  },
+  "commands": [
+    {
+      "command": "ferro-configurator --port <foxeer> --format json device info",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config export logs/bench/20260929T232742Z-usb-config/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config set roll-expo 1.1",
+      "exit_code": 2
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config set roll-max-rate 250",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config set roll-center-rate 60",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config set roll-expo 0.4",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config validate logs/bench/20260929T232742Z-usb-config/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config apply logs/bench/20260929T232742Z-usb-config/foxeer-baseline.toml",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> config show",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port <foxeer> --format json device info",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "foxeer-baseline",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/foxeer-baseline.toml",
+      "bytes": 478,
+      "sha256": "459bce06b1d39322af94f863a277ec6e427105c8a69ec1d838b51a2d161e329c"
+    },
+    {
+      "id": "capture-3-reject-stderr",
+      "kind": "log",
+      "path": "logs/bench/20260929T232742Z-usb-config/3-reject-stderr.txt",
+      "bytes": 181,
+      "sha256": "81829859dff014303e0b8b49e7c1baf29e212e20b69ecb7dc2fef271f645b353"
+    },
+    {
+      "id": "capture-1-initial",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/1-initial.txt",
+      "bytes": 448,
+      "sha256": "b6596a758f946b20ae56d4dc89802c66c7459dc8b48477d968df788e1c0cef3c"
+    },
+    {
+      "id": "capture-3-reject",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/3-reject.txt",
+      "bytes": 455,
+      "sha256": "ee68fadd9f05c8026a872edb862e8e1c2995028b9e457be02d5ea6ef4f81d7c0"
+    },
+    {
+      "id": "capture-5-same-boot",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/5-same-boot.txt",
+      "bytes": 448,
+      "sha256": "5ded93962e87a69f1f4b5a78e3fe9559dc2af803965072cfc7f3f0615ad0dfe6"
+    },
+    {
+      "id": "capture-6-cold-boot-temp",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/6-cold-boot-temp.txt",
+      "bytes": 448,
+      "sha256": "5ded93962e87a69f1f4b5a78e3fe9559dc2af803965072cfc7f3f0615ad0dfe6"
+    },
+    {
+      "id": "capture-7-restored",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/7-restored.txt",
+      "bytes": 448,
+      "sha256": "b6596a758f946b20ae56d4dc89802c66c7459dc8b48477d968df788e1c0cef3c"
+    },
+    {
+      "id": "capture-8-restored-cold",
+      "kind": "configuration",
+      "path": "logs/bench/20260929T232742Z-usb-config/8-restored-cold.txt",
+      "bytes": 448,
+      "sha256": "b6596a758f946b20ae56d4dc89802c66c7459dc8b48477d968df788e1c0cef3c"
+    }
+  ],
+  "measurements": {
+    "cold_boots": 2,
+    "control_loop_hz": 2000
+  },
+  "observations": [
+    "Initial configuration matched the reviewed baseline; imu_lpf_hz 50.8346 and log_rate_divisor 2 stayed as found.",
+    "`config set roll-expo 1.1` exited nonzero and the readback kept the initial profile.",
+    "The temporary roll profile 60/250/0.4 read back in the same boot and after a cold USB power cycle, with every other value unchanged.",
+    "The exported baseline validated, applied and read back identically before and after a cold USB power cycle.",
+    "The controller reported disarmed before and after. Run by tools/foxeer_bench_gates.py usb-config.",
+    "The operator answered 'none' when asked about anything abnormal. The tool took that word for a note and drafted `inconclusive`; the result was corrected to pass on review, and the tool fixed."
+  ],
+  "limitations": [
+    "The image on the board is taken from the operator's confirmation; USB does not report it.",
+    "Cold boots were USB power cycles with actuator power disconnected; no brownout was induced."
+  ],
+  "stop_conditions_triggered": []
+}

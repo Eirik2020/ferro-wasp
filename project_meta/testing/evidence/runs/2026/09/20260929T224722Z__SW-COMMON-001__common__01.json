@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "run_id": "20260929T224722Z__SW-COMMON-001__common__01",
+  "test_id": "SW-COMMON-001",
+  "started_at_utc": "2026-09-29T22:47:19Z",
+  "completed_at_utc": "2026-09-29T22:47:22Z",
+  "target": "common",
+  "tier": "software",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "c0c62764cf2594ae6a61b987f8aba65158b1d618c14b0d65881a57e5610d9216",
+    "procedure_path": "mdbook/src/contributing.md",
+    "procedure_heading": "Development Workflow",
+    "procedure_sha256": "20e88fae266f7da753bfc42459861995c67dd149c8c43ffd0a770e6d403c9845"
+  },
+  "execution": {
+    "performed_by": "agent",
+    "user_confirmed": false
+  },
+  "candidate": {
+    "revision": "5a9aaa4ec6508c74b114a404b473f7229b5d5432",
+    "working_tree": "clean",
+    "firmware_sha256": null,
+    "features": [],
+    "target_triple": null,
+    "configuration": {}
+  },
+  "conditions": {
+    "propellers": "not-applicable",
+    "actuator_power": "not-applicable",
+    "equipment": [],
+    "environment": []
+  },
+  "commands": [
+    {
+      "command": "cargo fmt --all --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --workspace --locked",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --locked -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tools/check_repository_context.py",
+      "exit_code": 0
+    },
+    {
+      "command": "mdbook build mdbook",
+      "exit_code": 0
+    }
+  ],
+  "artifacts": [],
+  "measurements": {},
+  "observations": [
+    "All five baseline commands exit 0 on the recorded revision.",
+    "The first candidate on FerroForge 0.4 (crates.io), with u64 internal timestamps."
+  ],
+  "limitations": [
+    "Software checks only; establishes no hardware behavior."
+  ],
+  "stop_conditions_triggered": []
+}

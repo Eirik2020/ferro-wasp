@@ -13,8 +13,9 @@ Implemented board subset:
 
 - 8 MHz HSE and 168 MHz system clock;
 - SPI1 mode-3 IMU identity probe on PA4-PA7;
-- runtime-selected MPU6500 `WHO_AM_I=0x70` or ICM42688-P
-  `WHO_AM_I=0x47` configuration and DMA sampling;
+- runtime-selected MPU6500 `WHO_AM_I=0x70`, ICM42688-P `WHO_AM_I=0x47` or
+  MPU-6000 `WHO_AM_I=0x68` configuration and DMA sampling; an MPU-6000 cannot
+  arm until its orientation is verified;
 - USART2 SBUS receiver path on PA2/PA3;
 - UART4 DJI MSP DisplayPort path on PA0/PA1;
 - ADC1 battery/current observation on PC0/PC1;
@@ -257,10 +258,10 @@ never use the fault-injection image for flight.
 
 An unsupported or failed IMU identity/configuration is nonfatal: firmware
 logs the result once, disables periodic IMU transactions, and continues the
-RTT/RC/OSD/ADC bring-up paths. MPU6000 is not yet implemented.
+RTT/RC/OSD/ADC bring-up paths.
 
 Foxeer IMU sampling is now driven by PC4/EXTI4 rather than the TIM4 poll
-trigger. Both supported drivers configure an active-high, push-pull data-ready
+trigger. Every supported driver configures an active-high, push-pull data-ready
 pulse; the EXTI handler timestamps the edge, clears it, and defers one bounded
 SPI DMA request without doing blocking bus work. Routine builds omit periodic
 IMU raw/DRDY RTT reports. Feature `imu_transport_rtt` restores the totals,
@@ -377,7 +378,8 @@ It builds the default DShot release image with the dedicated
 `smoke_actuator_inhibit` lockout, programs it over SWD,
 collects RTT for 14 seconds after firmware boot, and exits with PASS only after observing successful
 Foxeer initialization, the RTT hello, the smoke actuator lockout, a supported IMU
-identity, and at least two approximately 1 kHz PC4/EXTI4 data-ready intervals.
+identity, and at least two PC4/EXTI4 data-ready intervals near the board's
+`CONTROL_LOOP_RATE_HZ`, which the harness reads from `src/board/profiles.rs`.
 The full transcript and firmware hash are retained under
 `logs/terminal_embed`. Keep propellers removed and ESC power disconnected.
 The preset uses the target-validated 1.8 MHz ceiling of the attached ST-Link

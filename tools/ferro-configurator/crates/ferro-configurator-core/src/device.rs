@@ -85,7 +85,9 @@ pub fn open_device(
         }
     };
     let transport = SerialTransport::open(&port, timeout)?;
-    Ok(FerroClient::new(transport, timeout))
+    let mut client = FerroClient::new(transport, timeout);
+    client.resynchronize()?;
+    Ok(client)
 }
 
 #[cfg(test)]

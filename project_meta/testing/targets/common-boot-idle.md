@@ -12,6 +12,10 @@ clear an aircraft for flight. The user operates target hardware.
 Purpose: establish common boot, idle, and actuator-inhibit behavior without
 actuator power.
 
+On the Foxeer, `python3 tools/foxeer_bench_gates.py boot-idle --build-record
+<BUILD-FOX-001 record>` runs this gate: the operator confirms the bench state and
+power-cycles when asked, and the tool checks each capture and drafts the record.
+
 Prerequisite:
 
 - complete `SW-COMMON-001` from the test catalog;
