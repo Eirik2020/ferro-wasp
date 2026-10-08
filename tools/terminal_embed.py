@@ -29,7 +29,7 @@ FIRMWARE_MARKERS = (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOG_DIR = REPO_ROOT / "logs" / "terminal_embed"
 FOXEER_PROFILES = REPO_ROOT / "firmware/foxeer-f405-v2/src/board/profiles.rs"
-# The heartbeat in `ferrowasp-stm32f4-tasks/src/diagnostics.rs` reports the
+# The heartbeat in `ferrowasp-stm32-tasks/src/diagnostics.rs` reports the
 # data-ready count once every two seconds.
 HEARTBEAT_SECONDS = 2
 

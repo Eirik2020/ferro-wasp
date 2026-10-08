@@ -90,7 +90,7 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
     for match in DIRECT_USB_CONSTRUCTION.finditer(text):
         errors.append(
             f"{label}:{_line_number(text, match.start())}: "
-            "USB construction belongs in ferrowasp-stm32f4"
+            "USB construction belongs in the chip family's backend crate"
         )
 
     for match in FORBIDDEN_MAIN_DECLARATION.finditer(text):
@@ -237,7 +237,7 @@ FLIGHT_APP_CONTRACTS = {
     # blackbox storage on the microSD card.
     "tbs-lucid-h7": {
         "board_feature": "board-tbs-lucid-h7",
-        "dshot_feature": "ferrowasp-stm32f4-tasks/dshot",
+        "dshot_feature": "ferrowasp-stm32-tasks/dshot",
         "mandatory_features": (
             "dshot",
             "pwm_cal",
@@ -334,7 +334,7 @@ STATIC_DEFINITION = re.compile(
     r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?static[ \t]+(?:mut[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]*:",
     re.MULTILINE,
 )
-SHARED_TASK_CRATE = Path("crates/ferrowasp-stm32f4-tasks/src")
+SHARED_TASK_CRATE = Path("crates/ferrowasp-stm32-tasks/src")
 
 
 def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
@@ -355,7 +355,7 @@ def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
             if match.group(1) in shared:
                 errors.append(
                     f"{_relative(source, root)}:{_line_number(text, match.start())}: "
-                    f"static {match.group(1)!r} belongs to ferrowasp-stm32f4-tasks; "
+                    f"static {match.group(1)!r} belongs to ferrowasp-stm32-tasks; "
                     "re-export it instead of defining a second copy"
                 )
 

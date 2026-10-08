@@ -1,7 +1,7 @@
 //! STM32H743 four-motor DShot600 transmitter.
 //!
 //! The command lease, telemetry, completion, and fault policy are the shared
-//! `DshotBank` state machine from `ferrowasp_stm32f4::dshot_bank`; this module
+//! `DshotBank` state machine from `ferrowasp_stm32::dshot_bank`; this module
 //! is the H7 hardware under it. The bank owns TIM3 and TIM5, DMA2 streams 0-3,
 //! every motor pin, and all DMA buffers as one fault-containment unit.
 //!
@@ -30,7 +30,7 @@ use stm32h7xx_hal::{
     rcc::{CoreClocks, ResetEnable, rec},
 };
 
-pub use ferrowasp_stm32f4::dshot_bank::{
+pub use ferrowasp_stm32::dshot_bank::{
     COMPARE_DMA_SLOTS, DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS,
     DSHOT600_BITRATE_HZ, DshotBank, DshotCommandError, DshotCommandSequence, DshotInitError,
     DshotInterruptEvent, DshotLanes, DshotMotor, DshotServiceEvent, DshotSpecialCommandError,

@@ -67,8 +67,8 @@ pub fn rc_channels_us() -> [u16; 16] {
 }
 
 /// What the `live` command reports, on whichever link asked.
-pub fn live_snapshot() -> ferrowasp_tasks::usb_debug::LiveSnapshot {
-    ferrowasp_tasks::usb_debug::LiveSnapshot {
+pub fn live_snapshot() -> ferrowasp_flight::usb_debug::LiveSnapshot {
+    ferrowasp_flight::usb_debug::LiveSnapshot {
         armed: SAFETY_ARMED.load(Ordering::Relaxed),
         arm_switch: RC_ARM_HIGH.load(Ordering::Relaxed),
         attitude_deg10: [
