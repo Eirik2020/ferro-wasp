@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-614360c5.js";
+            window.path_to_searchindex_js = "searchindex-763d1cfa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -415,7 +415,8 @@ keeps the board wiring. A wrong order flips the craft on takeoff, so after
 any change hold each motor and check it is where the diagram says.</p>
 <h2 id="change-serial-ports"><a class="header" href="#change-serial-ports">Change serial ports</a></h2>
 <p>Each UART is named by its number on the chip. List what each port serves,
-then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code> or <code>esc_telemetry</code>):</p>
+then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code>, <code>esc_telemetry</code> or
+<code>configurator</code>):</p>
 <pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config ports
 .\ferro-configurator.exe --port $Port config bind uart4 esc_telemetry
 </code></pre>
@@ -468,6 +469,25 @@ identity, and per-flight page-sequence validation:</p>
 </code></pre>
 <p>Keep each <code>.fwbb</code> file. It is the CRC-protected acquisition evidence; ULog is
 a derived analysis file.</p>
+<h2 id="sync-flights-over-bluetooth"><a class="header" href="#sync-flights-over-bluetooth">Sync flights over Bluetooth</a></h2>
+<p><code>uart3</code> (the R3/T3 pads) carries the configurator command line by default, so
+a Bluetooth serial module set to 115200 baud, wired TX to R3 and RX to T3,
+lets a PC or phone collect the logs without a cable. Pair the module, then
+point <code>--port</code> at its serial port (a COM port on Windows, <code>/dev/rfcomm0</code> on
+Linux):</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port blackbox sync --directory .\flights
+</code></pre>
+<p>Sync downloads every flight no host has stored yet, one file each, named after
+the flight and its first page so a second flight 1 after an erase does not
+overwrite the first. The controller then records each flight as stored. An
+interrupted sync picks up where it stopped. USB works the same way.</p>
+<p>Add <code>--erase</code> to erase the onboard log afterwards. The controller refuses
+unless every flight on it has been stored, and the configurator verifies the
+empty catalogue. Bluetooth cannot run motor tests or the unconditional
+<code>blackbox erase</code>; use USB for those.</p>
+<p>At 115200 baud a 1 MiB flight takes about seven minutes.</p>
+<p>Flashing the first firmware with log sync moves the end of the log region down
+by 4 KiB. Download every flight before flashing it.</p>
 <h2 id="convert-an-existing-fwbb-file"><a class="header" href="#convert-an-existing-fwbb-file">Convert an existing FWBB file</a></h2>
 <pre><code class="language-powershell">.\ferro-configurator.exe convert flight-34.fwbb `
   --flight latest `
@@ -2588,6 +2608,7 @@ storage shape, and device construction live in its app’s <code>src/board/</cod
 <tr><td><code>Msp</code></td><td>115200 baud, TX/RX DMA</td><td>Active DJI O4 OSD path on UART4</td></tr>
 <tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Standard flight-board BLHeli legacy telemetry path on USART1</td></tr>
 <tr><td><code>Crsf</code></td><td>420000 baud, 8N1, not inverted, TX/RX DMA</td><td>RC input with battery telemetry when <code>rc_protocol</code> is <code>crsf</code></td></tr>
+<tr><td><code>Cli</code></td><td>115200 baud, 8N1, TX/RX DMA</td><td>The text command line, for a configurator over a cable or Bluetooth (<code>configurator</code>)</td></tr>
 <tr><td><code>Mavlink</code></td><td>57600 baud, RX DMA</td><td>Future telemetry/config subset</td></tr>
 </tbody>
 </table>
@@ -2598,7 +2619,7 @@ board’s <code>src/board/serial.rs</code> route table. A port is named by the U
 number on the chip, as the pilot sees it on the board: USART3 is <code>uart3</code>
 whatever it serves. Saved configuration holds a function for each of
 <code>uart1</code> to <code>uart8</code>. Which function a port serves (RC input, MSP OSD, ESC
-telemetry) is chosen at boot from that table:</p>
+telemetry, configurator) is chosen at boot from that table:</p>
 <ul>
 <li>Init reads the saved bindings once, checks each against the port’s
 capabilities (<code>resolve_bindings</code> in <code>ferrowasp-io-core</code>), starts every bound
@@ -2640,11 +2661,20 @@ UART4 can carry ESC telemetry instead:</p>
     -&gt; timestamped per-motor observations
 </code></pre>
 <p>PA9/USART1 TX is not configured.</p>
+<p>On Foxeer, USART3 (<code>uart3</code>, PC10/PC11, the R3/T3 pads) carries the
+configurator command line for log sync over a Bluetooth serial module:</p>
+<pre><code class="language-text">USART3 RX DMA/IDLE IRQ -&gt; owned RxChunk -&gt; configurator_link -&gt; command queue
+    -&gt; flash manager -&gt; response queue -&gt; configurator_link -&gt; USART3 TX DMA
+</code></pre>
+<p>USB and the configurator port each have their own command and response queue
+into the flash manager, which answers every command on the link it came from
+(<code>crates/ferrowasp-tasks/src/command_link.rs</code>). Motor commands and the
+unconditional log erase stay on USB.</p>
 <p>On the TBS Lucid H7, USART6 (<code>uart6</code>) carries SBUS, inverted in the UART;
 USART3 (<code>uart3</code>) carries MSP DisplayPort with TX DMA; and UART8 (<code>uart8</code>)
 carries ESC telemetry on PE0. Every H743 UART inverts in hardware, so any of
-the three can take SBUS or ESC telemetry; only <code>uart3</code> has the transmit DMA
-MSP needs. In the standard flight image, the manager sends typed telemetry requests through
+the three can take SBUS or ESC telemetry; <code>uart3</code> and <code>uart6</code> have the transmit
+DMA that MSP and CRSF need. The Lucid has no configurator port yet. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output
@@ -3395,6 +3425,16 @@ damage, injury, loss, or other liability arising from the software or its use.</
 <p>This page records notable FerroWasp changes without implying that a firmware
 artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
+<h3 id="added"><a class="header" href="#added">Added</a></h3>
+<ul>
+<li>Log sync. The firmware lists the flights no host has stored, a host
+acknowledges each one after downloading it, and <code>logs erase-synced</code> erases
+only when every flight is acknowledged. A sync ledger in the flash’s last
+4 KiB sector records the acknowledgements, so the log region ends one sector
+lower. FerroConfigurator’s <code>blackbox sync</code> and the GUI’s Sync button run it.</li>
+<li>A <code>configurator</code> serial function: the text command line on a UART, for a
+Bluetooth serial module. Foxeer binds it to <code>uart3</code> (PC10/PC11) by default.</li>
+</ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
@@ -3403,7 +3443,7 @@ project archive.</li>
 </ul>
 <h2 id="010---2026-07-28"><a class="header" href="#010---2026-07-28">0.1.0 - 2026-07-28</a></h2>
 <p>First public experimental pre-release.</p>
-<h3 id="added"><a class="header" href="#added">Added</a></h3>
+<h3 id="added-1"><a class="header" href="#added-1">Added</a></h3>
 <ul>
 <li>Isolated RTIC applications for FerroWasp FCU3, Foxeer F405 V2, and
 NUCLEO-F401RE.</li>

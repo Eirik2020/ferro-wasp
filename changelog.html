@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-614360c5.js";
+            window.path_to_searchindex_js = "searchindex-763d1cfa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -178,6 +178,16 @@
 <p>This page records notable FerroWasp changes without implying that a firmware
 artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
+<h3 id="added"><a class="header" href="#added">Added</a></h3>
+<ul>
+<li>Log sync. The firmware lists the flights no host has stored, a host
+acknowledges each one after downloading it, and <code>logs erase-synced</code> erases
+only when every flight is acknowledged. A sync ledger in the flash’s last
+4 KiB sector records the acknowledgements, so the log region ends one sector
+lower. FerroConfigurator’s <code>blackbox sync</code> and the GUI’s Sync button run it.</li>
+<li>A <code>configurator</code> serial function: the text command line on a UART, for a
+Bluetooth serial module. Foxeer binds it to <code>uart3</code> (PC10/PC11) by default.</li>
+</ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
@@ -186,7 +196,7 @@ project archive.</li>
 </ul>
 <h2 id="010---2026-07-28"><a class="header" href="#010---2026-07-28">0.1.0 - 2026-07-28</a></h2>
 <p>First public experimental pre-release.</p>
-<h3 id="added"><a class="header" href="#added">Added</a></h3>
+<h3 id="added-1"><a class="header" href="#added-1">Added</a></h3>
 <ul>
 <li>Isolated RTIC applications for FerroWasp FCU3, Foxeer F405 V2, and
 NUCLEO-F401RE.</li>
