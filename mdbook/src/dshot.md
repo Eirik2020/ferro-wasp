@@ -91,8 +91,13 @@ quarantines at most that pending response and publishes it only after receiving
 the matching sequence/output frame-start acknowledgement. A mismatched
 acknowledgement cannot relabel the response. The manager distinguishes a
 missing actuator acknowledgement from a missing ESC response and never
-overlaps requests. An association timeout latches telemetry off until reboot,
-so a late acknowledgement or wire frame cannot be assigned to a later output.
+overlaps requests. An association timeout stops telemetry, so a late
+acknowledgement or wire frame cannot be assigned to a later output. The DShot
+service drops a request it has held for `ESC_REQUEST_EXPIRY_MS` (20 ms)
+without sending it, the time after which the manager gives up on its
+acknowledgement, so nothing stale reaches an ESC later. Telemetry resumes only
+while disarmed, after 500 ms with no wire byte and no acknowledgement, with
+every stored sample dropped.
 An unanswered response expires after 100 ms. The aggregate request limit is
 50 Hz, or 12.5 Hz per ESC when all respond.
 
@@ -119,8 +124,9 @@ low-to-high arm request can qualify.
 
 For a powered telemetry or arming test, power the ESCs before that first
 post-delay request. If the FC remains on without ESC power, the request receives
-no response and the association timeout latches telemetry off. Powering the
-ESCs afterward is not enough; reboot the FC after ESC power is present.
+no response and the association timeout stops telemetry. Once the ESCs are
+powered, telemetry resumes on its own about half a second later while
+disarmed; no reboot is needed.
 
 ### Powered props-off result
 
@@ -308,8 +314,8 @@ messages but not the equal/unequal bench identities or legacy PWM
 5. Reset several times, including once with the transmitter arm toggle high.
    No reset or link recovery may request arming until a fresh low-to-high arm
    transition is observed.
-6. Before a later powered stage, apply ESC power and reboot the FC so the
-   telemetry latch starts clear.
+6. Before a later powered stage, apply ESC power and wait a second for
+   telemetry to resume (RTT logs `ESC telemetry resumed`).
 
 The first retained unpowered capture,
 `logs/terminal_embed/20260719_172718_rtt.log`, used the earlier candidate with
@@ -468,8 +474,8 @@ attempt during that interval can therefore enter guarded idle, receive no
 qualifying samples, stop at the 1.2-second deadline, and remain disarmed. Move
 the arm switch low and make a fresh arm request after telemetry is available.
 If the FC has already issued a request while the ESC bank was unpowered, its
-response timeout latches telemetry off; power the ESCs and reboot the FC before
-retrying.
+response timeout stops telemetry; power the ESCs, wait a second for it to
+resume, then retry.
 
 Use this props-off checkpoint before any prop-on work:
 

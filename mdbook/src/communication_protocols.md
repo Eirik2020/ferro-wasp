@@ -112,9 +112,9 @@ The safety-owned DShot service acknowledges an exact sequence/output request
 only after the selected telemetry bit was present in a frame that actually
 started. If a CRC-valid response completes while that request is still queued,
 the manager may buffer it, but it remains quarantined and cannot be published
-until the matching acknowledgement arrives. Association timeouts latch the
-manager off until reboot so a late response cannot be attributed to a later
-output.
+until the matching acknowledgement arrives. Association timeouts stop the
+manager so a late response cannot be attributed to a later output. It resumes
+only while disarmed, after 500 ms with no wire byte and no acknowledgement.
 
 The physical-output association maps to the logical Quad X layout as follows:
 output 1 is M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right,

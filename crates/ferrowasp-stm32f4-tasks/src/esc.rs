@@ -2,6 +2,7 @@
 //! line config binds to it, and publishes what comes back.
 
 use crate::prelude::*;
+use crate::snapshots::SAFETY_ARMED;
 
 /// Every `ESC_MANAGER_PERIOD_MS`: drain actuator acknowledgements and wire
 /// bytes into the manager, request the next ESC's telemetry, and log a
@@ -61,18 +62,26 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
         if let Some(timeout) = cx.local.esc_manager_state.poll_timeout(now_ms) {
             match timeout {
                 esc::EscManagerTimeout::ActuatorAck(request) => warn!(
-                    "Foxeer ESC telemetry manager latched fault after actuator acknowledgement timeout for physical output {} (logical M{}), request {}",
+                    "Foxeer ESC telemetry stopped after actuator acknowledgement timeout for physical output {} (logical M{}), request {}; resumes after a quiet window while disarmed",
                     request.output.index() + 1,
                     CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[request.output.index()],
                     request.sequence
                 ),
                 esc::EscManagerTimeout::TelemetryResponse(request) => warn!(
-                    "Foxeer ESC telemetry manager latched fault after response timeout for physical output {} (logical M{}), request {}",
+                    "Foxeer ESC telemetry stopped after response timeout for physical output {} (logical M{}), request {}; resumes after a quiet window while disarmed",
                     request.output.index() + 1,
                     CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[request.output.index()],
                     request.sequence
                 ),
             }
+        }
+
+        if cx
+            .local
+            .esc_manager_state
+            .try_recover(now_ms, SAFETY_ARMED.load(Ordering::Acquire))
+        {
+            info!("Foxeer ESC telemetry resumed after a quiet window; old samples dropped");
         }
 
         if let Some(request) = cx.local.esc_manager_state.next_request(now_ms)
@@ -106,12 +115,13 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
                 }
             }
             info!(
-                "Foxeer ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, mismatched acks {}, unsolicited {}, valid {}, CRC failures {}, discarded {}",
+                "Foxeer ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, recoveries {}, mismatched acks {}, unsolicited {}, valid {}, CRC failures {}, discarded {}",
                 stats.requests_queued,
                 stats.requests_started,
                 cx.local.esc_manager_state.is_faulted(),
                 stats.actuator_ack_timeouts,
                 stats.telemetry_response_timeouts,
+                stats.recoveries,
                 stats.mismatched_acks,
                 stats.unsolicited_frames,
                 stats.wire.valid_frames,
