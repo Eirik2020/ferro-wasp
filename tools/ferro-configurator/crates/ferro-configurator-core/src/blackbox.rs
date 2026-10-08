@@ -87,6 +87,9 @@ pub struct DownloadSummary {
     pub bytes: u64,
     pub output: PathBuf,
     pub resumed_pages: u32,
+    /// The flight's last page on the device was torn by a power cut while it
+    /// was written, so it was left out; `pages` counts what was stored.
+    pub torn_last_page: bool,
 }
 
 pub fn summarize_page(page: &[u8; FLASH_PAGE_LEN], page_index: u32) -> Result<PageSummary> {
@@ -114,6 +117,25 @@ pub fn summarize_page(page: &[u8; FLASH_PAGE_LEN], page_index: u32) -> Result<Pa
     })
 }
 
+/// The flight a stored page belongs to. A page that does not decode, right
+/// after one that does, was torn by a power cut while the firmware wrote it;
+/// like the firmware, count it as the last page of the flight before it.
+pub fn page_flight_id(
+    page_index: u32,
+    mut read: impl FnMut(u32) -> Result<[u8; FLASH_PAGE_LEN]>,
+) -> Result<u32> {
+    let page = read(page_index)?;
+    match summarize_page(&page, page_index) {
+        Ok(summary) => Ok(summary.flight_id),
+        Err(error) => match page_index.checked_sub(1) {
+            Some(previous) => summarize_page(&read(previous)?, previous)
+                .map(|summary| summary.flight_id)
+                .map_err(|_| error),
+            None => Err(error),
+        },
+    }
+}
+
 pub fn lower_bound_flight_id(
     page_count: u32,
     flight_id: u32,
@@ -123,8 +145,7 @@ pub fn lower_bound_flight_id(
     let mut high = page_count;
     while low < high {
         let middle = low + (high - low) / 2;
-        let metadata = summarize_page(&read(middle)?, middle)?;
-        if metadata.flight_id < flight_id {
+        if page_flight_id(middle, &mut read)? < flight_id {
             low = middle + 1;
         } else {
             high = middle;
@@ -142,7 +163,7 @@ pub fn resolve_flight_span(
         return Err(FerroError::Blackbox("no stored flights".to_owned()));
     }
     let selected_id = match selector {
-        FlightSelector::Latest => summarize_page(&read(used_pages - 1)?, used_pages - 1)?.flight_id,
+        FlightSelector::Latest => page_flight_id(used_pages - 1, &mut read)?,
         FlightSelector::Id(id) => id,
     };
     let start = lower_bound_flight_id(used_pages, selected_id, &mut read)?;
@@ -173,11 +194,11 @@ pub fn catalog_flights(
     let mut spans = Vec::new();
     let mut cursor = used_pages;
     while cursor != 0 {
-        let last = summarize_page(&read(cursor - 1)?, cursor - 1)?;
-        let start = lower_bound_flight_id(cursor, last.flight_id, &mut read)?;
+        let last = page_flight_id(cursor - 1, &mut read)?;
+        let start = lower_bound_flight_id(cursor, last, &mut read)?;
         let first = summarize_page(&read(start)?, start)?;
         spans.push(FlightSpan {
-            flight_id: last.flight_id,
+            flight_id: last,
             start_page: start,
             end_page: cursor,
             boot_session_start: first.boot_session_start,
@@ -266,10 +287,20 @@ pub fn download_flight<T: LineTransport>(
         .open(&partial)
         .map_err(|error| file_error("open", &partial, error))?;
 
+    let mut torn_last_page = false;
     for local_index in resumed_pages..span.page_count() {
         let device_index = span.start_page + local_index;
         let page = client.read_log_page(device_index)?;
-        let summary = summarize_page(&page, device_index)?;
+        let summary = match summarize_page(&page, device_index) {
+            Ok(summary) => summary,
+            // A torn page can only be a flight's last; it holds nothing
+            // usable, and the file stays a run of valid pages.
+            Err(_) if local_index != 0 && local_index + 1 == span.page_count() => {
+                torn_last_page = true;
+                break;
+            }
+            Err(error) => return Err(error),
+        };
         if summary.flight_id != span.flight_id || summary.page_sequence != local_index {
             return Err(FerroError::Blackbox(format!(
                 "flight changed or page order became inconsistent at device page {device_index}"
@@ -283,12 +314,14 @@ pub fn download_flight<T: LineTransport>(
         .map_err(|error| file_error("flush", &partial, error))?;
     drop(file);
     fs::rename(&partial, output).map_err(|error| file_error("finalize", output, error))?;
+    let pages = span.page_count() - u32::from(torn_last_page);
     Ok(DownloadSummary {
         flight_id: span.flight_id,
-        pages: span.page_count(),
-        bytes: span.byte_count(),
+        pages,
+        bytes: u64::from(pages) * FLASH_PAGE_LEN as u64,
         output: output.to_path_buf(),
         resumed_pages,
+        torn_last_page,
     })
 }
 
@@ -371,7 +404,14 @@ fn sync_one_flight<T: LineTransport>(
     let already_stored = output.exists();
     if already_stored {
         let stored = validate_partial_download(&output, span)?;
-        if stored != span.page_count() {
+        // A file one page short is complete when the device's last page is
+        // torn, as a download leaves that page out.
+        let complete = stored == span.page_count()
+            || (stored + 1 == span.page_count()
+                && stored != 0
+                && summarize_page(&client.read_log_page(span.end_page - 1)?, span.end_page - 1)
+                    .is_err());
+        if !complete {
             return Err(FerroError::Blackbox(format!(
                 "{} holds {stored} of flight {}'s {} pages; move it aside and sync again",
                 output.display(),
@@ -453,8 +493,9 @@ fn cached_page<T: LineTransport>(
     if let Some(page) = cache.get(&index) {
         return Ok(*page);
     }
+    // Not validated here: a torn last page is read too, and the callers
+    // decide what it means.
     let page = client.read_log_page(index)?;
-    summarize_page(&page, index)?;
     cache.insert(index, page);
     Ok(page)
 }
@@ -581,6 +622,102 @@ mod tests {
         assert_eq!(
             client.into_transport().writes,
             ["logs unsynced", "logs read-page 0", "logs ack 3 2"]
+        );
+    }
+
+    fn torn(flight: u32, sequence: u32) -> [u8; FLASH_PAGE_LEN] {
+        let mut page = page(flight, sequence, false);
+        page[100..].fill(0xff);
+        page
+    }
+
+    #[test]
+    fn a_torn_page_is_the_last_page_of_the_flight_before_it() {
+        let pages = [
+            page(1, 0, true),
+            page(1, 1, false),
+            torn(1, 2),
+            page(2, 0, false),
+            page(2, 1, false),
+        ];
+        let read = |index: u32| Ok(pages[index as usize]);
+        let spans = catalog_flights(pages.len() as u32, read).unwrap();
+        assert_eq!(
+            spans
+                .iter()
+                .map(|span| (span.flight_id, span.start_page, span.end_page))
+                .collect::<Vec<_>>(),
+            [(1, 0, 3), (2, 3, 5)]
+        );
+        let latest = catalog_flights(3, read).unwrap();
+        assert_eq!(latest[0].page_count(), 3);
+    }
+
+    #[test]
+    fn a_download_leaves_a_torn_last_page_out() {
+        use crate::transport::MockTransport;
+        use std::time::Duration;
+
+        let mut mock = MockTransport::with_lines(Vec::<String>::new());
+        for (index, page) in [
+            (0, page(1, 0, true)),
+            (1, page(1, 1, false)),
+            (2, torn(1, 2)),
+        ] {
+            for line in page_lines(index, &page) {
+                mock.push_line(line);
+            }
+        }
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        let directory = tempdir().unwrap();
+        let output = directory.path().join("flight-1.fwbb");
+        let span = FlightSpan {
+            flight_id: 1,
+            start_page: 0,
+            end_page: 3,
+            boot_session_start: true,
+        };
+
+        let summary = download_flight(&mut client, span, &output, false, |_, _| {}).unwrap();
+
+        assert!(summary.torn_last_page);
+        assert_eq!(summary.pages, 2);
+        assert_eq!(fs::read(&output).unwrap().len(), 2 * FLASH_PAGE_LEN);
+    }
+
+    #[test]
+    fn a_stored_flight_one_page_short_is_complete_when_the_device_page_is_torn() {
+        use crate::transport::MockTransport;
+        use std::time::Duration;
+
+        let first = page(1, 0, false);
+        let directory = tempdir().unwrap();
+        fs::write(
+            directory.path().join(sync_file_name(1, &first)),
+            [first, page(1, 1, false)].concat(),
+        )
+        .unwrap();
+        let mut mock =
+            MockTransport::with_lines(["OK unsynced n=1 more=0", "OK flight=1 start=0 pages=3"]);
+        for (index, page) in [(0, first), (2, torn(1, 2))] {
+            for line in page_lines(index, &page) {
+                mock.push_line(line);
+            }
+        }
+        mock.push_line("OK synced flight=1");
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+
+        let synced = sync_flights(&mut client, directory.path(), |_, _, _| {}).unwrap();
+
+        assert!(synced[0].already_stored);
+        assert_eq!(
+            client.into_transport().writes,
+            [
+                "logs unsynced",
+                "logs read-page 0",
+                "logs read-page 2",
+                "logs ack 1 3"
+            ]
         );
     }
 
