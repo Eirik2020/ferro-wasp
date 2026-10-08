@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-ef6578a7.js";
+            window.path_to_searchindex_js = "../searchindex-614360c5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-0cbe97ab.js"></script>
@@ -319,6 +319,25 @@ the protocol and, for a stock EdgeTX radio, the arm switch on channel 5:</p>
 status output that <code>rc</code> becomes valid and that <code>arm_sw</code> follows the intended
 switch before flight. The radio shows the pack voltage and current the board
 measures.</p>
+<h2 id="test-motors-props-off"><a class="header" href="#test-motors-props-off">Test motors, props off</a></h2>
+<p><strong>Remove every propeller first.</strong> FerroConfigurator’s Motors tab spins one
+motor at idle while its button is held, sets an ESC’s spin direction, and
+walks through the motor order. Connect a flight battery: on USB power alone
+the ESCs cannot spin.</p>
+<p>The firmware decides every request. Its safety master refuses a motor test
+unless the controller is disarmed, not arming, and the arm switch is off. A
+spin is one 250 ms lease that the configurator renews while the button is
+held; release it, leave the window or press Escape and the renewals stop, and
+the firmware stops the motor when the lease runs out. Arming is refused for
+two seconds after the last test. The same requests are available over USB as
+<code>motor spin N CONFIRM</code>, <code>motor dir N normal|reversed CONFIRM</code> and
+<code>motor stop</code>.</p>
+<p>Setting a direction sends DShot commands that change and save the ESC’s own
+setting; hold the motor afterwards to check it. The motor order is the
+<code>motor_map</code> setting: for logical motors 1-4 (Betaflight Quad X: rear-right,
+front-right, rear-left, front-left), which board output each drives. <code>1234</code>
+keeps the board wiring. A wrong order flips the craft on takeoff, so after
+any change hold each motor and check it is where the diagram says.</p>
 <h2 id="change-serial-ports"><a class="header" href="#change-serial-ports">Change serial ports</a></h2>
 <p>Each UART is named by its number on the chip. List what each port serves,
 then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code> or <code>esc_telemetry</code>):</p>
