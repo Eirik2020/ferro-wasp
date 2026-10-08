@@ -2,7 +2,7 @@
 
 use ferrowasp_core::blackbox::{
     FLASH_PAGE_LEN, FLIGHT_RECORD_FLAG_BOOT_SESSION_START, FlightRecord, RECORDS_PER_PAGE,
-    encode_page,
+    decode_page, encode_page,
 };
 pub use ferrowasp_core::config::ConfigKey;
 use ferrowasp_io_core::serial::{
@@ -161,6 +161,13 @@ pub enum StorageReadError<E> {
 }
 
 /// Finds the append point and next flight identifier in an append-only log.
+///
+/// Pages are only ever written in order, so the append point is the first
+/// blank page. A page that does not decode, right after one that does, is a
+/// page program cut short by power loss: it stays as the last page of its
+/// flight, and the next flight follows it (see [`page_flight_id`]). Anything
+/// else that does not decode means the region holds something other than
+/// FerroWasp's log; it reads as empty and stays read-only until erased.
 pub fn scan_log<E, Read>(
     layout: StorageLayout,
     mut read: Read,
@@ -168,58 +175,61 @@ pub fn scan_log<E, Read>(
 where
     Read: FnMut(u32, &mut [u8]) -> Result<(), E>,
 {
-    use ferrowasp_core::blackbox::decode_page;
+    let mut page = [0xff; FLASH_PAGE_LEN];
+    let mut read_page = |index: u32, page: &mut [u8; FLASH_PAGE_LEN]| {
+        let address = layout
+            .log_page_address(index)
+            .ok_or(StorageReadError::InvalidLayout)?;
+        read(address, page).map_err(StorageReadError::Device)
+    };
 
     let mut low = 0u32;
     let mut high = layout.log_page_count;
-    let mut page = [0xff; FLASH_PAGE_LEN];
     while low < high {
         let middle = low + (high - low) / 2;
-        let address = layout
-            .log_page_address(middle)
-            .ok_or(StorageReadError::InvalidLayout)?;
-        read(address, &mut page).map_err(StorageReadError::Device)?;
-        if decode_page(&page).is_ok() {
-            low = middle + 1;
-        } else {
-            high = middle;
-        }
-    }
-
-    let last_valid_page = low.checked_sub(1);
-    let mut next_page = low;
-    let mut writable = false;
-    if next_page < layout.log_page_count {
-        let address = layout
-            .log_page_address(next_page)
-            .ok_or(StorageReadError::InvalidLayout)?;
-        read(address, &mut page).map_err(StorageReadError::Device)?;
+        read_page(middle, &mut page)?;
         if page.iter().all(|byte| *byte == 0xff) {
-            writable = true;
-        } else if last_valid_page.is_some() {
-            let following = next_page.saturating_add(1);
-            if let Some(address) = layout.log_page_address(following) {
-                read(address, &mut page).map_err(StorageReadError::Device)?;
-                if page.iter().all(|byte| *byte == 0xff) {
-                    next_page = following;
-                    writable = true;
-                }
-            }
+            high = middle;
+        } else {
+            low = middle + 1;
         }
     }
+    let next_page = low;
+    if next_page == 0 {
+        return Ok((0, 1, true));
+    }
 
-    let next_flight_id = if let Some(previous) = last_valid_page {
-        let address = layout
-            .log_page_address(previous)
-            .ok_or(StorageReadError::InvalidLayout)?;
-        read(address, &mut page).map_err(StorageReadError::Device)?;
-        decode_page(&page)
-            .map(|metadata| metadata.flight_id.wrapping_add(1).max(1))
-            .unwrap_or(1)
-    } else {
-        1
+    const FOREIGN: (u32, u32, bool) = (0, 1, false);
+    read_page(0, &mut page)?;
+    if decode_page(&page).is_err() {
+        return Ok(FOREIGN);
+    }
+    let newest = match page_flight_id(next_page - 1, |index, page| read_page(index, page))? {
+        Some(flight_id) => flight_id,
+        None => return Ok(FOREIGN),
     };
-    Ok((next_page, next_flight_id, writable))
+    // A full log has no blank page left to write.
+    let writable = next_page < layout.log_page_count;
+    Ok((next_page, newest.wrapping_add(1).max(1), writable))
+}
+
+/// The flight that log page `index` belongs to. A page that does not decode
+/// right after one that does is a torn last page of that flight; `None` for
+/// anything else that does not decode.
+pub fn page_flight_id<E, Read>(index: u32, mut read: Read) -> Result<Option<u32>, E>
+where
+    Read: FnMut(u32, &mut [u8; FLASH_PAGE_LEN]) -> Result<(), E>,
+{
+    let mut page = [0xff; FLASH_PAGE_LEN];
+    read(index, &mut page)?;
+    if let Ok(metadata) = decode_page(&page) {
+        return Ok(Some(metadata.flight_id));
+    }
+    let Some(previous) = index.checked_sub(1) else {
+        return Ok(None);
+    };
+    read(previous, &mut page)?;
+    Ok(decode_page(&page).ok().map(|metadata| metadata.flight_id))
 }
 
 /// Loads the newest valid copy-on-write configuration slot.
@@ -1203,6 +1213,71 @@ mod tests {
             Some(layout.log_start_address)
         );
         assert_eq!(layout.log_erase_sector_address(steps), None);
+    }
+
+    /// A 64 KiB flash holding `pages` from the log start: `Some((flight,
+    /// sequence))` for a whole page, `None` for one torn by a power cut.
+    fn log_with(layout: StorageLayout, pages: &[Option<(u32, u32)>]) -> [u8; 64 * 1024] {
+        let mut flash = [0xff_u8; 64 * 1024];
+        for (index, entry) in pages.iter().enumerate() {
+            let address = layout.log_page_address(index as u32).unwrap() as usize;
+            let (flight, sequence) = entry.unwrap_or((9, 9));
+            let mut page = encode_page(flight, sequence, &[record(0); RECORDS_PER_PAGE]).unwrap();
+            if entry.is_none() {
+                // The program stopped part-way: the rest is still erased.
+                page[100..].fill(0xff);
+            }
+            flash[address..address + FLASH_PAGE_LEN].copy_from_slice(&page);
+        }
+        flash
+    }
+
+    fn scan_flash(layout: StorageLayout, flash: &[u8]) -> (u32, u32, bool) {
+        scan_log(layout, |address, output: &mut [u8]| {
+            let start = address as usize;
+            output.copy_from_slice(&flash[start..start + output.len()]);
+            Ok::<(), ()>(())
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn a_torn_page_ends_its_flight_and_logging_carries_on_after_it() {
+        let layout = StorageLayout::new(64 * 1024).unwrap();
+        let torn = [Some((1, 0)), Some((1, 1)), Some((1, 2)), None];
+        assert_eq!(scan_flash(layout, &log_with(layout, &torn)), (4, 2, true));
+
+        // The next flight, written after the torn page. The old scan stopped
+        // at the torn page here, found data after it, and stopped logging.
+        let mut later = torn.to_vec();
+        later.extend([Some((2, 0)), Some((2, 1))]);
+        assert_eq!(scan_flash(layout, &log_with(layout, &later)), (6, 3, true));
+    }
+
+    #[test]
+    fn the_scan_tells_an_empty_full_or_foreign_region_apart() {
+        let layout = StorageLayout::new(64 * 1024).unwrap();
+        assert_eq!(scan_flash(layout, &log_with(layout, &[])), (0, 1, true));
+
+        let mut foreign = [0xff_u8; 64 * 1024];
+        let start = layout.log_start_address as usize;
+        foreign[start..start + 3000].fill(0x5a);
+        assert_eq!(scan_flash(layout, &foreign), (0, 1, false));
+
+        // Two pages that do not decode in a row are not one torn page.
+        let garbled = [Some((1, 0)), None, None];
+        assert_eq!(
+            scan_flash(layout, &log_with(layout, &garbled)),
+            (0, 1, false)
+        );
+
+        let full: heapless::Vec<_, 256> = (0..layout.log_page_count)
+            .map(|sequence| Some((4, sequence)))
+            .collect();
+        assert_eq!(
+            scan_flash(layout, &log_with(layout, &full)),
+            (layout.log_page_count, 5, false)
+        );
     }
 
     #[test]
