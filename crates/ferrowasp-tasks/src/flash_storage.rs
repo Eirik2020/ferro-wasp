@@ -1151,6 +1151,46 @@ mod tests {
     }
 
     #[test]
+    fn a_log_erase_stopped_part_way_scans_back_to_the_pages_it_left() {
+        use ferrowasp_core::blackbox::{RECORDS_PER_PAGE, encode_page};
+
+        let layout = StorageLayout::new(64 * 1024).unwrap();
+        let mut flash = [0xff_u8; 64 * 1024];
+        // Flights 1 and 2, twenty pages each, across the first three
+        // sixteen-page sectors.
+        for page_index in 0..40 {
+            let flight = page_index / 20 + 1;
+            let page =
+                encode_page(flight, page_index % 20, &[record(0); RECORDS_PER_PAGE]).unwrap();
+            let address = layout.log_page_address(page_index).unwrap() as usize;
+            flash[address..address + FLASH_PAGE_LEN].copy_from_slice(&page);
+        }
+        let scan = |flash: &[u8]| {
+            scan_log(layout, |address, output: &mut [u8]| {
+                let start = address as usize;
+                output.copy_from_slice(&flash[start..start + output.len()]);
+                Ok::<(), ()>(())
+            })
+        };
+        assert_eq!(scan(&flash), Ok((40, 3, true)));
+
+        // Arming stopped the erase after it cleared the second sector, which
+        // held the end of flight 1 and the start of flight 2.
+        let mut step = 0;
+        while let Some(address) = layout.log_erase_sector_address(step) {
+            let start = address as usize;
+            flash[start..start + CONFIG_SECTOR_SIZE as usize].fill(0xff);
+            step += 1;
+            if address == layout.log_start_address + CONFIG_SECTOR_SIZE {
+                break;
+            }
+        }
+        // Only flight 1's first sixteen pages are left; the append point and
+        // the next flight move down to them.
+        assert_eq!(scan(&flash), Ok((16, 2, true)));
+    }
+
+    #[test]
     fn log_erase_clears_the_ledger_first_then_walks_down_to_the_log_start() {
         let layout = StorageLayout::new(64 * 1024).unwrap();
         let steps = layout.log_sector_count();
@@ -1578,7 +1618,7 @@ mod tests {
         assert_eq!(updated.get(ConfigKey::YawMaxRate), 350.0);
 
         let mut invalid = stored.to_rpc();
-        invalid.imu_lpf_hz = 1.1;
+        invalid.imu_lpf_hz = 0.5;
         assert_eq!(
             StoredConfig::from_rpc(invalid),
             Err(rpc::ConfigFieldId::ImuLpfHz)

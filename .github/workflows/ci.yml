@@ -4,9 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    # The adoption work lives on its own branch until it merges, and CI is
-    # what keeps it honest meanwhile.
-    branches: [main, ferroforge-adoption]
+    branches: [main]
     tags:
       - "v*"
 
