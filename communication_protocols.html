@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-763d1cfa.js";
+            window.path_to_searchindex_js = "searchindex-b0d6cd9d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -273,9 +273,9 @@ rotates physical-output requests. Both directions use bounded SPSC queues.</p>
 only after the selected telemetry bit was present in a frame that actually
 started. If a CRC-valid response completes while that request is still queued,
 the manager may buffer it, but it remains quarantined and cannot be published
-until the matching acknowledgement arrives. Association timeouts latch the
-manager off until reboot so a late response cannot be attributed to a later
-output.</p>
+until the matching acknowledgement arrives. Association timeouts stop the
+manager so a late response cannot be attributed to a later output. It resumes
+only while disarmed, after 500 ms with no wire byte and no acknowledgement.</p>
 <p>The physical-output association maps to the logical Quad X layout as follows:
 output 1 is M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right,
 and output 4 is M2/front-right.</p>
