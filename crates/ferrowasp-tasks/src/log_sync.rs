@@ -8,10 +8,9 @@
 //! line answers with the lines formatted here, each within one response
 //! frame.
 
-use crate::flash_storage::{StorageLayout, USB_RESPONSE_CAPACITY};
+use crate::flash_storage::{StorageLayout, USB_RESPONSE_CAPACITY, page_flight_id};
 use crate::sync_ledger::{self, LedgerError};
 use core::fmt::Write as _;
-use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, decode_page};
 use heapless::{String, Vec};
 
 /// Flights one `logs unsynced` answer lists; the host acknowledges them and
@@ -57,6 +56,8 @@ impl AckRefusal {
     }
 }
 
+/// The flight log page `page_index` belongs to; a torn last page belongs
+/// to the flight before it ([`page_flight_id`]).
 fn flight_id_at<E, Read>(
     layout: StorageLayout,
     read: &mut Read,
@@ -65,14 +66,13 @@ fn flight_id_at<E, Read>(
 where
     Read: FnMut(u32, &mut [u8]) -> Result<(), E>,
 {
-    let address = layout
-        .log_page_address(page_index)
-        .ok_or(LogSyncError::Corrupt)?;
-    let mut page = [0xff; FLASH_PAGE_LEN];
-    read(address, &mut page).map_err(LogSyncError::Device)?;
-    decode_page(&page)
-        .map(|metadata| metadata.flight_id)
-        .map_err(|_| LogSyncError::Corrupt)
+    let flight_id = page_flight_id(page_index, |index, page| {
+        let address = layout
+            .log_page_address(index)
+            .ok_or(LogSyncError::Corrupt)?;
+        read(address, page).map_err(LogSyncError::Device)
+    })?;
+    flight_id.ok_or(LogSyncError::Corrupt)
 }
 
 /// The first page in `0..end` whose flight identifier is at least `flight_id`.
@@ -291,7 +291,7 @@ mod tests {
 
     use super::*;
     use crate::sync_ledger::{MarkStep, SYNC_LEDGER_MAGIC, next_mark_step};
-    use ferrowasp_core::blackbox::{FlightRecord, RECORDS_PER_PAGE, encode_page};
+    use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, FlightRecord, RECORDS_PER_PAGE, encode_page};
     use std::vec::Vec as StdVec;
 
     const CAPACITY: u32 = 64 * 1024;
@@ -413,6 +413,36 @@ mod tests {
         nor.mark(layout, 1);
         assert!(all_synced(layout, &mut nor.reader(), used, None).unwrap());
         assert!(!all_synced(layout, &mut nor.reader(), used, Some(3)).unwrap());
+    }
+
+    #[test]
+    fn a_torn_page_counts_as_the_last_page_of_its_flight() {
+        let layout = StorageLayout::new(CAPACITY).unwrap();
+        let (mut nor, used) = Nor::with_flights(layout, &[3, 2]);
+        // Tear flight 1's last page: power was cut while it was written.
+        let torn = layout.log_page_address(2).unwrap() as usize;
+        nor.0[torn + 100..torn + FLASH_PAGE_LEN].fill(0xff);
+
+        let (listed, _) = unsynced_flights(layout, &mut nor.reader(), used, None).unwrap();
+        assert_eq!(
+            listed.as_slice(),
+            [
+                StoredFlight {
+                    flight_id: 2,
+                    start_page: 3,
+                    pages: 2
+                },
+                StoredFlight {
+                    flight_id: 1,
+                    start_page: 0,
+                    pages: 3
+                }
+            ]
+        );
+        assert_eq!(
+            check_ack(layout, &mut nor.reader(), used, None, 1, 3).unwrap(),
+            Ok(())
+        );
     }
 
     #[test]

@@ -509,7 +509,10 @@ Configuration input is limited to the firmware-owned whitelist: PID gains,
 IMU LPF alpha, log-rate divisor, RC deadband, and per-axis Actual Rates
 center/max/expo values. Firmware-owned ranges and cross-field constraints are
 enforced before a disarmed-only atomic save. A foreign/non-FerroWasp log region
-stays read-only until an explicit confirmed erase.
+stays read-only until an explicit confirmed erase. The boot scan puts the
+append point at the first blank page. A page cut short by a power cut while it
+was written counts as the last page of its flight and logging carries on after
+it; downloads leave that page out and say so.
 
 Build the standard image from the repository root:
 

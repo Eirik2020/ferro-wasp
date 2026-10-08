@@ -608,6 +608,11 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                         report.download.pages,
                         report.download.bytes
                     );
+                    if report.download.torn_last_page {
+                        println!(
+                            "The flight's last page was torn by a power cut while it was written; it was left out."
+                        );
+                    }
                     if report.download.resumed_pages != 0 {
                         println!(
                             "Resumed after {} previously validated pages.",
