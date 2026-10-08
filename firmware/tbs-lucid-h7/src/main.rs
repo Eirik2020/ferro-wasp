@@ -1213,6 +1213,23 @@ ferroforge::app! {
                         || *config_save_phase != 0
                         || sync_mark.is_some())
                 {
+                    // An erase stopped part-way has cleared the top of the log
+                    // and maybe some of its newest pages. Find the append
+                    // point again, or new pages would land above a blank gap
+                    // that hides them from every later scan.
+                    if erase_sector_index.is_some() {
+                        match scan_flash_log(flash_device, layout) {
+                            Ok((page, flight, writable)) => {
+                                *next_page_index = page;
+                                *next_flight_id = flight;
+                                *log_region_writable = writable;
+                            }
+                            Err(_) => {
+                                FLASH_READY.store(false, Ordering::Release);
+                                warn!("SD storage log rescan after aborted erase failed; storage disabled");
+                            }
+                        }
+                    }
                     *erase_sector_index = None;
                     *flash_test_phase = 0;
                     *config_save_phase = 0;
