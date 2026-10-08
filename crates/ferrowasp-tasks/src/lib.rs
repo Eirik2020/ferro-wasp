@@ -5,9 +5,12 @@ pub mod actuator;
 pub mod arming;
 #[cfg(feature = "mspv2_configurator")]
 pub mod blackbox_storage;
+pub mod command_link;
 pub mod drone_toolbox;
 pub mod esc_manager;
 pub mod flash_storage;
+pub mod log_sync;
 pub mod osd;
 pub mod rc_receiver;
+pub mod sync_ledger;
 pub mod usb_debug;

@@ -553,6 +553,39 @@ async function downloadLatest(): Promise<void> {
   }
 }
 
+/**
+ * Stores every flight the controller holds that no host has stored, then
+ * acknowledges them. Works over USB or a Bluetooth link bound to
+ * `configurator`. Erasing stays with the CLI's explicit `blackbox sync --erase`.
+ */
+async function syncFlights(): Promise<void> {
+  const progress = element<HTMLProgressElement>("download-progress");
+  const directory = element<HTMLInputElement>("sync-directory").value.trim();
+  if (directory === "") {
+    setStatusLine("Choose a log folder first.", "bad");
+    return;
+  }
+  progress.hidden = false;
+  progress.value = 0;
+  setStatusLine("Syncing…", "busy");
+  try {
+    const synced = await api.syncFlights(directory, ({ flight, page, total }) => {
+      progress.max = total;
+      progress.value = page;
+      setStatusLine(`Syncing flight ${String(flight)}: ${String(page)}/${String(total)} pages…`, "busy");
+    });
+    setStatusLine(
+      synced.length === 0
+        ? "Every flight on the controller was already stored."
+        : `Stored and acknowledged ${String(synced.length)} flight(s) in ${directory}.`,
+    );
+  } catch (error) {
+    report(error);
+  } finally {
+    progress.hidden = true;
+  }
+}
+
 // ------------------------------------------------------------------ wire ---
 
 function wire(): void {
@@ -576,6 +609,7 @@ function wire(): void {
   element("apply-ports").addEventListener("click", () => void applyPorts());
   element("load-flights").addEventListener("click", () => void loadFlights());
   element("download").addEventListener("click", () => void downloadLatest());
+  element("sync").addEventListener("click", () => void syncFlights());
   element("find-control").addEventListener("click", startFinding);
   for (const axis of ["roll", "pitch", "yaw"]) {
     for (const suffix of ["center", "max", "expo"]) {

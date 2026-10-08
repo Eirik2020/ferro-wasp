@@ -66,7 +66,23 @@ pub struct LogInfo {
 }
 
 /// The functions a serial port can be bound to, as the firmware names them.
-pub const SERIAL_FUNCTIONS: [&str; 4] = ["none", "rc", "osd", "esc_telemetry"];
+pub const SERIAL_FUNCTIONS: [&str; 5] = ["none", "rc", "osd", "esc_telemetry", "configurator"];
+
+/// A complete flight no host has acknowledged storing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct UnsyncedFlight {
+    pub flight_id: u32,
+    pub start_page: u32,
+    pub pages: u32,
+}
+
+/// One `logs unsynced` answer. The firmware lists a bounded number of
+/// flights, newest first; `more` says others wait behind them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UnsyncedFlights {
+    pub flights: Vec<UnsyncedFlight>,
+    pub more: bool,
+}
 
 /// One port the board routes, and the function bound to it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -380,18 +396,80 @@ impl<T: LineTransport> FerroClient<T> {
         }
     }
 
+    /// Complete flights the controller holds that no host has acknowledged.
+    pub fn unsynced_flights(&mut self) -> Result<UnsyncedFlights> {
+        const OPERATION: &str = "logs unsynced";
+        let header = self.request(OPERATION, 2)?;
+        let (count, more) =
+            parse_unsynced_header(&header).ok_or_else(|| FerroError::UnexpectedResponse {
+                operation: OPERATION.to_owned(),
+                response: header.clone(),
+            })?;
+        let mut flights = Vec::with_capacity(count);
+        for _ in 0..count {
+            let line = self
+                .wait_for_response(OPERATION, self.timeout, |line| {
+                    line.starts_with("OK ") || line.starts_with("ERR ")
+                })
+                .and_then(|line| self.accept_response(OPERATION, line))?;
+            flights.push(parse_unsynced_flight(&line).ok_or_else(|| {
+                FerroError::UnexpectedResponse {
+                    operation: OPERATION.to_owned(),
+                    response: line.clone(),
+                }
+            })?);
+        }
+        Ok(UnsyncedFlights { flights, more })
+    }
+
+    /// Tells the controller this host stored `flight_id`, `pages` long. The
+    /// controller checks the length against the flight it holds and refuses
+    /// a mismatch, then records the flight in its sync ledger.
+    ///
+    /// One attempt only: a retry after a lost reply is refused as already
+    /// busy or answered again harmlessly, never doubled.
+    pub fn acknowledge_flight(&mut self, flight_id: u32, pages: u32) -> Result<()> {
+        let operation = format!("logs ack {flight_id} {pages}");
+        let response = self.request(&operation, 1)?;
+        if response == format!("OK synced flight={flight_id}") {
+            Ok(())
+        } else {
+            Err(FerroError::UnexpectedResponse {
+                operation,
+                response,
+            })
+        }
+    }
+
     pub fn erase_logs(&mut self) -> Result<()> {
         self.erase_logs_with_progress(|_| {})
     }
 
-    pub fn erase_logs_with_progress(&mut self, mut progress: impl FnMut(Duration)) -> Result<()> {
-        let response = self.request("logs erase CONFIRM", 1)?;
+    pub fn erase_logs_with_progress(&mut self, progress: impl FnMut(Duration)) -> Result<()> {
+        self.erase_with_progress("logs erase CONFIRM", progress)
+    }
+
+    /// Erases the log only if every flight on it is acknowledged; the
+    /// controller refuses otherwise.
+    pub fn erase_synced_logs_with_progress(
+        &mut self,
+        progress: impl FnMut(Duration),
+    ) -> Result<()> {
+        self.erase_with_progress("logs erase-synced CONFIRM", progress)
+    }
+
+    fn erase_with_progress(
+        &mut self,
+        operation: &str,
+        mut progress: impl FnMut(Duration),
+    ) -> Result<()> {
+        let response = self.request(operation, 1)?;
         if response == "OK logs erased" {
             return Ok(());
         }
         if response != "OK log erase started" {
             return Err(FerroError::UnexpectedResponse {
-                operation: "logs erase CONFIRM".to_owned(),
+                operation: operation.to_owned(),
                 response,
             });
         }
@@ -425,9 +503,7 @@ impl<T: LineTransport> FerroClient<T> {
                 continue;
             }
             if line == "OK logs erased" || line.starts_with("ERR ") {
-                return self
-                    .accept_response("logs erase CONFIRM", line.to_owned())
-                    .map(|_| ());
+                return self.accept_response(operation, line.to_owned()).map(|_| ());
             }
         }
         Err(FerroError::Timeout {
@@ -612,6 +688,37 @@ fn complete_value(config: &FerroConfig, key: ConfigKey) -> Result<f32> {
 }
 
 /// `OK serial saved ports=3; applies after save and reboot`
+/// `OK unsynced n=2 more=0`
+fn parse_unsynced_header(line: &str) -> Option<(usize, bool)> {
+    let mut words = line.strip_prefix("OK unsynced ")?.split_whitespace();
+    let count = words.next()?.strip_prefix("n=")?.parse().ok()?;
+    let more = match words.next()?.strip_prefix("more=")? {
+        "0" => false,
+        "1" => true,
+        _ => return None,
+    };
+    words.next().is_none().then_some((count, more))
+}
+
+/// `OK flight=7 start=120 pages=412`
+fn parse_unsynced_flight(line: &str) -> Option<UnsyncedFlight> {
+    let mut words = line.strip_prefix("OK ")?.split_whitespace();
+    let mut field = |name: &str| -> Option<u32> {
+        words
+            .next()?
+            .strip_prefix(name)?
+            .strip_prefix('=')?
+            .parse()
+            .ok()
+    };
+    let flight = UnsyncedFlight {
+        flight_id: field("flight")?,
+        start_page: field("start")?,
+        pages: field("pages")?,
+    };
+    (words.next().is_none() && flight.flight_id != 0 && flight.pages != 0).then_some(flight)
+}
+
 fn parse_serial_header(line: &str) -> Option<(bool, usize)> {
     let mut words = line.strip_prefix("OK serial ")?.split_whitespace();
     let saved = match words.next()? {
@@ -805,6 +912,59 @@ mod tests {
         }
     }
     impl<T> Pipe for T {}
+
+    #[test]
+    fn unsynced_flights_are_read_with_their_page_runs() {
+        let mock = MockTransport::with_lines([
+            "OK unsynced n=2 more=1",
+            "OK flight=7 start=120 pages=412",
+            "OK flight=5 start=40 pages=80",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        let listed = client.unsynced_flights().unwrap();
+        assert!(listed.more);
+        assert_eq!(
+            listed.flights,
+            [
+                UnsyncedFlight {
+                    flight_id: 7,
+                    start_page: 120,
+                    pages: 412
+                },
+                UnsyncedFlight {
+                    flight_id: 5,
+                    start_page: 40,
+                    pages: 80
+                }
+            ]
+        );
+        assert_eq!(client.transport.writes, ["logs unsynced"]);
+    }
+
+    #[test]
+    fn an_acknowledgement_needs_the_matching_confirmation() {
+        let mock = MockTransport::with_lines([
+            "OK synced flight=7",
+            "ERR flight length changed; download it again",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        client.acknowledge_flight(7, 412).unwrap();
+        assert!(client.acknowledge_flight(8, 3).is_err());
+        assert_eq!(client.transport.writes, ["logs ack 7 412", "logs ack 8 3"]);
+    }
+
+    #[test]
+    fn malformed_sync_lines_are_rejected() {
+        assert_eq!(
+            parse_unsynced_header("OK unsynced n=0 more=0"),
+            Some((0, false))
+        );
+        assert_eq!(parse_unsynced_header("OK unsynced n=1 more=2"), None);
+        assert_eq!(parse_unsynced_header("OK unsynced n=1"), None);
+        assert_eq!(parse_unsynced_flight("OK flight=0 start=1 pages=1"), None);
+        assert_eq!(parse_unsynced_flight("OK flight=3 start=1 pages=0"), None);
+        assert_eq!(parse_unsynced_flight("OK flight=3 pages=1 start=1"), None);
+    }
 
     #[test]
     fn resynchronizing_consumes_the_refusal_before_the_first_command() {

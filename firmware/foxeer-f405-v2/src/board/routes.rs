@@ -1,7 +1,7 @@
 pub use super::serial::SERIAL_ROUTES;
 use ferrowasp_stm32f4::board_routes::{DmaDirection, DmaRoute, SpiRoute};
 
-pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 7] = [
+pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 9] = [
     DmaRoute {
         controller: 1,
         stream: 5,
@@ -15,6 +15,20 @@ pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 7] = [
         channel: 4,
         direction: DmaDirection::MemoryToPeripheral,
         owner: "UART2 RC TX (CRSF telemetry)",
+    },
+    DmaRoute {
+        controller: 1,
+        stream: 1,
+        channel: 4,
+        direction: DmaDirection::PeripheralToMemory,
+        owner: "UART3 configurator RX",
+    },
+    DmaRoute {
+        controller: 1,
+        stream: 3,
+        channel: 4,
+        direction: DmaDirection::MemoryToPeripheral,
+        owner: "UART3 configurator TX",
     },
     DmaRoute {
         controller: 1,
@@ -92,7 +106,7 @@ pub const ESC_TELEMETRY_DMA_ROUTE: DmaRoute = DmaRoute {
     owner: "USART1 BLHeli ESC telemetry RX",
 };
 
-pub const ACTIVE_DMA_ROUTES: [DmaRoute; 12] = [
+pub const ACTIVE_DMA_ROUTES: [DmaRoute; 14] = [
     ACTIVE_IO_DMA_ROUTES[0],
     ACTIVE_IO_DMA_ROUTES[1],
     ACTIVE_IO_DMA_ROUTES[2],
@@ -100,6 +114,8 @@ pub const ACTIVE_DMA_ROUTES: [DmaRoute; 12] = [
     ACTIVE_IO_DMA_ROUTES[4],
     ACTIVE_IO_DMA_ROUTES[5],
     ACTIVE_IO_DMA_ROUTES[6],
+    ACTIVE_IO_DMA_ROUTES[7],
+    ACTIVE_IO_DMA_ROUTES[8],
     MOTOR_DSHOT_DMA_ROUTES[0],
     MOTOR_DSHOT_DMA_ROUTES[1],
     MOTOR_DSHOT_DMA_ROUTES[2],
@@ -142,7 +158,7 @@ mod tests {
     #[test]
     fn active_routes_have_no_exclusive_claim_conflicts() {
         assert_eq!(find_duplicate_claim(CLAIMS), None);
-        assert_eq!(ACTIVE_DMA_ROUTES.len(), 12);
+        assert_eq!(ACTIVE_DMA_ROUTES.len(), 14);
         assert_eq!(ACTIVE_SPI_ROUTES.len(), 2);
         for (index, route) in ACTIVE_DMA_ROUTES.iter().enumerate() {
             assert!(!ACTIVE_DMA_ROUTES[index + 1..].iter().any(|other| {
@@ -153,8 +169,8 @@ mod tests {
 
     #[test]
     fn dshot_telemetry_and_flash_routes_are_active() {
-        assert_eq!(&ACTIVE_DMA_ROUTES[6..10], &MOTOR_DSHOT_DMA_ROUTES);
-        assert_eq!(ACTIVE_DMA_ROUTES[10], ESC_TELEMETRY_DMA_ROUTE);
+        assert_eq!(&ACTIVE_DMA_ROUTES[9..13], &MOTOR_DSHOT_DMA_ROUTES);
+        assert_eq!(ACTIVE_DMA_ROUTES[13], ESC_TELEMETRY_DMA_ROUTE);
         assert_eq!(ACTIVE_SPI_ROUTES[1], SPI2_FLASH);
     }
 

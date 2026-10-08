@@ -17,12 +17,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ferro_configurator_bridge::{
-    BridgeError, DEFAULT_TIMEOUT, Safety, Session, ports as discover,
-};
+use ferro_configurator_bridge::{BridgeError, DEFAULT_TIMEOUT, Safety, Session, ports as discover};
 use ferro_configurator_core::{
     DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, LiveSnapshot, PortInfo,
-    SerialBindings, SerialTransport,
+    SerialBindings, SerialTransport, SyncedFlight,
 };
 use serde::Serialize;
 use tauri::{Emitter, Manager, State};
@@ -44,6 +42,14 @@ struct DownloadReport {
 /// One page of a download in flight.
 #[derive(Debug, Clone, Serialize)]
 struct DownloadProgress {
+    page: u32,
+    total: u32,
+}
+
+/// One page of a log sync in flight.
+#[derive(Debug, Clone, Serialize)]
+struct SyncProgress {
+    flight: u32,
     page: u32,
     total: u32,
 }
@@ -151,10 +157,7 @@ async fn apply_config(
     state: State<'_, AppState>,
     config: FerroConfig,
 ) -> Result<FerroConfig, BridgeError> {
-    blocking(&state.session, move |session| {
-        session.apply_config(&config)
-    })
-    .await
+    blocking(&state.session, move |session| session.apply_config(&config)).await
 }
 
 #[tauri::command]
@@ -210,6 +213,29 @@ async fn download_flight(
     .await
 }
 
+#[tauri::command]
+async fn sync_flights(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    directory: String,
+) -> Result<Vec<SyncedFlight>, BridgeError> {
+    let directory = PathBuf::from(directory);
+    blocking(&state.session, move |session| {
+        session.sync_flights(&directory, |flight, page, total| {
+            // Best effort, as for a download.
+            let _ = app.emit(
+                "sync-progress",
+                SyncProgress {
+                    flight,
+                    page,
+                    total,
+                },
+            );
+        })
+    })
+    .await
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -234,6 +260,7 @@ fn main() {
             apply_serial_binding,
             flights,
             download_flight,
+            sync_flights,
         ])
         .run(tauri::generate_context!())
         .expect("the FerroConfigurator window failed to start");

@@ -145,7 +145,7 @@ pub fn stm32h7_uart_config(mode: Mode) -> Config {
             .parity_even()
             .stopbits(StopBits::Stop2)
             .invertrx(true),
-        Mode::Msp | Mode::EscTelemetry => Config::new(115_200.Hz()),
+        Mode::Msp | Mode::EscTelemetry | Mode::Cli => Config::new(115_200.Hz()),
         Mode::Mavlink => Config::new(57_600.Hz()),
         Mode::Crsf => Config::new(420_000.Hz()),
         Mode::Disabled => Config::new(115_200.Hz()),

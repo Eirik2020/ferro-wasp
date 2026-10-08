@@ -13,6 +13,8 @@ import {
   type Api,
   type DownloadProgress,
   type DownloadSummary,
+  type SyncedFlight,
+  type SyncProgress,
   type FerroConfig,
   type FlightCatalog,
   type LiveSnapshot,
@@ -101,6 +103,17 @@ export class TauriApi implements Api {
         flight: flightId,
         output,
       });
+    } finally {
+      stop();
+    }
+  }
+
+  async syncFlights(directory: string, onProgress: (progress: SyncProgress) => void): Promise<SyncedFlight[]> {
+    const stop = await listen<SyncProgress>("sync-progress", (event) => {
+      onProgress(event.payload);
+    });
+    try {
+      return await call<SyncedFlight[]>("sync_flights", { directory });
     } finally {
       stop();
     }

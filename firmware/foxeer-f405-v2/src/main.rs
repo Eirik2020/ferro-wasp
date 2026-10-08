@@ -30,6 +30,9 @@ ferroforge::app! {
         uart2_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart2RxIrq>>,
         uart2_tx_dma: Option<stm32_uart::Uart2TxDmaSide>,
         #[lock_free]
+        uart3_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart3RxIrq>>,
+        uart3_tx_dma: Option<stm32_uart::Uart3TxDmaSide>,
+        #[lock_free]
         uart4_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart4RxIrq>>,
         uart4_tx_dma: Option<stm32_uart::Uart4TxDmaSide>,
 
@@ -78,10 +81,14 @@ ferroforge::app! {
         flash_device: FlashDevice,
         flash_record_producer: FlashRecordProducer,
         flash_record_consumer: FlashRecordConsumer,
+        // USB and the configurator port each have a command queue and a
+        // response queue; the flash manager answers each on its own.
         flash_command_producer: FlashCommandProducer,
-        flash_command_consumer: FlashCommandConsumer,
-        flash_response_producer: FlashResponseProducer,
+        flash_commands: CommandSources,
+        flash_responses: ResponseRouter,
         flash_response_consumer: FlashResponseConsumer,
+        configurator_commands: Option<FlashCommandProducer>,
+        configurator_responses: Option<FlashResponseConsumer>,
         flash_rpc_command_producer: FlashRpcCommandProducer,
         flash_rpc_command_consumer: FlashRpcCommandConsumer,
         flash_rpc_response_producer: FlashRpcResponseProducer,
@@ -108,8 +115,11 @@ ferroforge::app! {
         rc_port: Option<SerialPortEndpoint>,
         osd_port: Option<SerialPortEndpoint>,
         osd_tx_healthy: bool,
+        configurator_port: Option<SerialPortEndpoint>,
         uart2_tx_owner: Option<UartOwnedTxOwner>,
         uart2_tx_completion: Option<UartOwnedTxCompletion>,
+        uart3_tx_owner: Option<UartOwnedTxOwner>,
+        uart3_tx_completion: Option<UartOwnedTxCompletion>,
         uart4_tx_owner: Option<UartOwnedTxOwner>,
         uart4_tx_completion: Option<UartOwnedTxCompletion>,
         osd_task: osd::OsdTask,
@@ -178,6 +188,12 @@ ferroforge::app! {
             stm32_storage::UartRxFreeQueue::new(),
         uart2_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
+        uart3_rx_buffers: stm32_storage::UartRxBufferBank =
+            stm32_storage::new_uart_rx_buffer_bank(),
+        uart3_free_queue: stm32_storage::UartRxFreeQueue =
+            stm32_storage::UartRxFreeQueue::new(),
+        uart3_filled_queue: stm32_storage::UartRxFilledQueue =
+            stm32_storage::UartRxFilledQueue::new(),
         uart4_rx_buffers: stm32_storage::UartRxBufferBank =
             stm32_storage::new_uart_rx_buffer_bank(),
         uart4_free_queue: stm32_storage::UartRxFreeQueue =
@@ -185,6 +201,7 @@ ferroforge::app! {
         uart4_filled_queue: stm32_storage::UartRxFilledQueue =
             stm32_storage::UartRxFilledQueue::new(),
         uart2_tx_buffer: stm32_storage::UartTxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
+        uart3_tx_buffer: stm32_storage::UartTxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
         uart4_tx_buffer: stm32_storage::UartTxBuffer = [0; mspv1::OSD_TX_BUFFER_LEN],
         spi1_dma_buffers: stm32_storage::SpiDmaBufferBank =
             stm32_storage::new_spi_dma_buffer_bank(),
@@ -356,6 +373,10 @@ ferroforge::app! {
             flash_command_consumer,
             flash_response_producer,
             flash_response_consumer,
+            configurator_command_producer,
+            configurator_command_consumer,
+            configurator_response_producer,
+            configurator_response_consumer,
             flash_rpc_command_producer,
             flash_rpc_command_consumer,
             flash_rpc_response_producer,
@@ -405,6 +426,18 @@ ferroforge::app! {
             .unwrap();
             let (command_producer, command_consumer) = commands.split();
             let (response_producer, response_consumer) = responses.split();
+            let configurator_commands = cortex_m::singleton!(
+                : flash_task::CommandQueue = flash_task::CommandQueue::new()
+            )
+            .unwrap();
+            let configurator_responses = cortex_m::singleton!(
+                : flash_task::ResponseQueue = flash_task::ResponseQueue::new()
+            )
+            .unwrap();
+            let (configurator_command_producer, configurator_command_consumer) =
+                configurator_commands.split();
+            let (configurator_response_producer, configurator_response_consumer) =
+                configurator_responses.split();
             #[cfg(feature = "mspv2_configurator")]
             let (
                 rpc_command_producer,
@@ -444,6 +477,10 @@ ferroforge::app! {
                 command_consumer,
                 response_producer,
                 response_consumer,
+                configurator_command_producer,
+                configurator_command_consumer,
+                configurator_response_producer,
+                configurator_response_consumer,
                 rpc_command_producer,
                 rpc_command_consumer,
                 rpc_response_producer,
@@ -466,6 +503,13 @@ ferroforge::app! {
                     owner: uart2_tx_owner,
                     completion: uart2_tx_completion,
                 },
+            uart3_rx,
+            uart3_tx:
+                stm32_port::UartTxPort {
+                    dma: uart3_tx_dma,
+                    owner: uart3_tx_owner,
+                    completion: uart3_tx_completion,
+                },
             uart4_rx,
             uart4_tx:
                 stm32_port::UartTxPort {
@@ -487,6 +531,13 @@ ferroforge::app! {
                     uart: dp.USART2,
                     rx_dma: dma1.5,
                     tx_dma: dma1.6,
+                },
+                uart3: stm32_uart::Uart3PortResources {
+                    tx_pin: gpioc.pc10,
+                    rx_pin: gpioc.pc11,
+                    uart: dp.USART3,
+                    rx_dma: dma1.1,
+                    tx_dma: dma1.3,
                 },
                 uart4: stm32_uart::Uart4PortResources {
                     tx_pin: gpioa.pa0,
@@ -525,6 +576,22 @@ ferroforge::app! {
                     )
                     .unwrap(),
                 },
+                uart3: stm32_port::UartRxTxPortStorage {
+                    rx: stm32_storage::UartRxStorageResources {
+                        buffers: cx.local.uart3_rx_buffers,
+                        free_queue: cx.local.uart3_free_queue,
+                        filled_queue: cx.local.uart3_filled_queue,
+                    },
+                    stream: cortex_m::singleton!(
+                        : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                    tx_buffer: cx.local.uart3_tx_buffer,
+                    tx_stream: cortex_m::singleton!(
+                        : UartOwnedTxChannel = UartOwnedTxChannel::new()
+                    )
+                    .unwrap(),
+                },
                 uart4: stm32_port::UartRxTxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart4_rx_buffers,
@@ -549,6 +616,20 @@ ferroforge::app! {
         let rc_receiver = rc_receiver_for(serial_bindings.rc_protocol());
         let mut rc_port = serial_functions.rc_input;
         let rc_telemetry_writer = rc_port.as_mut().and_then(|port| port.writer.take());
+        // The configurator port, when one is bound, gets its own command and
+        // response queues into the flash manager.
+        let configurator_port = serial_functions.configurator;
+        let configurator_bound = configurator_port.is_some();
+        let flash_commands = CommandSources::new(
+            flash_command_consumer,
+            configurator_bound.then_some(configurator_command_consumer),
+        );
+        let flash_responses = ResponseRouter::new(
+            flash_response_producer,
+            configurator_bound.then_some(configurator_response_producer),
+        );
+        let configurator_commands = configurator_bound.then_some(configurator_command_producer);
+        let configurator_responses = configurator_bound.then_some(configurator_response_consumer);
 
         // Init rate controller
         let tuning_profile = DEFAULT_TUNING;
@@ -644,6 +725,7 @@ ferroforge::app! {
         heartbeat::spawn().unwrap();
         adc1_polling::spawn().ok();
         uart2_tx_worker::spawn().unwrap();
+        uart3_tx_worker::spawn().unwrap();
         uart4_tx_worker::spawn().unwrap();
         rc_input::spawn().unwrap();
         rc_telemetry::spawn().unwrap();
@@ -651,12 +733,15 @@ ferroforge::app! {
         dshot_service::spawn().unwrap();
         esc_manager_task::spawn().unwrap();
         flash_manager_task::spawn().unwrap();
+        configurator_link::spawn().ok();
 
         (
             Shared {
                 uart1_rx,
                 uart2_rx,
                 uart2_tx_dma,
+                uart3_rx,
+                uart3_tx_dma,
                 uart4_rx,
                 uart4_tx_dma,
 
@@ -704,9 +789,11 @@ ferroforge::app! {
                 flash_record_producer,
                 flash_record_consumer,
                 flash_command_producer,
-                flash_command_consumer,
-                flash_response_producer,
+                flash_commands,
+                flash_responses,
                 flash_response_consumer,
+                configurator_commands,
+                configurator_responses,
                 flash_rpc_command_producer,
                 flash_rpc_command_consumer,
                 flash_rpc_response_producer,
@@ -739,8 +826,11 @@ ferroforge::app! {
                 rc_port,
                 osd_port: serial_functions.msp_display_port,
                 osd_tx_healthy: true,
+                configurator_port,
                 uart2_tx_owner,
                 uart2_tx_completion,
+                uart3_tx_owner,
+                uart3_tx_completion,
                 uart4_tx_owner,
                 uart4_tx_completion,
                 osd_task: osd::OsdTask::new(),
@@ -863,17 +953,7 @@ ferroforge::app! {
             };
             match parsed {
                 Ok(flash_task::StorageCommand::Live) => {
-                    let mut line = heapless::String::<64>::new();
-                    let _ = write!(
-                        line,
-                        "OK live armed={} arm_sw={} att={},{},{} mot={}\r\n",
-                        u8::from(SAFETY_ARMED.load(Ordering::Relaxed)),
-                        u8::from(RC_ARM_HIGH.load(Ordering::Relaxed)),
-                        ATTITUDE_ROLL_DEG10.load(Ordering::Relaxed),
-                        ATTITUDE_PITCH_DEG10.load(Ordering::Relaxed),
-                        ATTITUDE_YAW_DEG10.load(Ordering::Relaxed),
-                        DSHOT_ACTIVE_LANES.load(Ordering::Relaxed),
-                    );
+                    let line = usb_debug::format_live(live_snapshot());
                     let _ = serial.write(line.as_bytes());
                 }
                 // Bench motor requests go straight to the safety master, which
@@ -1051,8 +1131,8 @@ ferroforge::app! {
         local = [
             flash_device,
             flash_record_consumer,
-            flash_command_consumer,
-            flash_response_producer,
+            flash_commands,
+            flash_responses,
             flash_rpc_command_consumer,
             flash_rpc_response_producer,
             assembler: flash_task::PageAssembler = flash_task::PageAssembler::new(),
@@ -1069,6 +1149,8 @@ ferroforge::app! {
             erase_sector_index: Option<u32> = None,
             flash_test_phase: u8 = 0,
             config_save_phase: u8 = 0,
+            sync_mark: Option<u32> = None,
+            sync_mark_steps: u8 = 0,
             config_save_slot: u8 = 0,
             config_save_candidate: flash_task::StoredConfig =
                 DEFAULT_STORED_CONFIG,
@@ -1083,8 +1165,8 @@ ferroforge::app! {
         let flash_manager_task::LocalResources {
             flash_device,
             flash_record_consumer,
-            flash_command_consumer,
-            flash_response_producer,
+            flash_commands,
+            flash_responses,
             flash_rpc_command_consumer,
             flash_rpc_response_producer,
             assembler,
@@ -1100,6 +1182,8 @@ ferroforge::app! {
             erase_sector_index,
             flash_test_phase,
             config_save_phase,
+            sync_mark,
+            sync_mark_steps,
             config_save_slot,
             config_save_candidate,
             config_save_page,
@@ -1201,14 +1285,20 @@ ferroforge::app! {
                     continue;
                 }
 
+                // Whatever flash operation is running answers the link that
+                // started it; a new command below switches to its own link.
+                flash_responses.answer_maintenance();
+
                 if SAFETY_ARMED.load(Ordering::Acquire)
                     && (erase_sector_index.is_some()
                         || *flash_test_phase != 0
-                        || *config_save_phase != 0)
+                        || *config_save_phase != 0
+                        || sync_mark.is_some())
                 {
                     *erase_sector_index = None;
                     *flash_test_phase = 0;
                     *config_save_phase = 0;
+                    *sync_mark = None;
                     #[cfg(feature = "mspv2_configurator")]
                     let rpc_notified = finish_config_rpc_error(
                         flash_rpc_response_producer,
@@ -1219,34 +1309,67 @@ ferroforge::app! {
                     let rpc_notified = false;
                     if !rpc_notified {
                         queue_storage_response(
-                            flash_response_producer,
+                            flash_responses,
                             "ERR maintenance aborted because system armed\r\n",
                         );
                     }
                 }
 
-                if let Some(sector) = *erase_sector_index {
-                    if sector >= layout.log_sector_count() {
-                        *erase_sector_index = None;
-                        *next_page_index = 0;
-                        *next_flight_id = 1;
-                        *log_region_writable = true;
-                        queue_storage_response(flash_response_producer, "OK logs erased\r\n");
-                    } else {
-                        let address =
-                            layout.log_start_address + sector * flash_task::CONFIG_SECTOR_SIZE;
+                // Top down, sync ledger first: see `log_erase_sector_address`.
+                if let Some(step) = *erase_sector_index {
+                    if let Some(address) = layout.log_erase_sector_address(step) {
                         if flash_device.erase_sector_4k(address).is_err() {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                             *erase_sector_index = None;
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "ERR log sector erase failed\r\n",
                             );
                         } else {
-                            *erase_sector_index = Some(sector + 1);
+                            *erase_sector_index = Some(step + 1);
                         }
+                    } else {
+                        *erase_sector_index = None;
+                        *next_page_index = 0;
+                        *next_flight_id = 1;
+                        *log_region_writable = true;
+                        queue_storage_response(flash_responses, "OK logs erased\r\n");
                     }
                     Mono::delay(1u64.millis()).await;
+                    continue;
+                }
+
+                // A host's acknowledgement, written to the sync ledger one
+                // operation per pass, each awaited by the busy check above.
+                if let Some(flight_id) = *sync_mark {
+                    let failed = match sync_mark_step(flash_device, layout, flight_id) {
+                        Ok(sync_ledger::MarkStep::Done) => Some(false),
+                        Ok(_) if *sync_mark_steps >= MAX_SYNC_MARK_STEPS => Some(true),
+                        Ok(step) => {
+                            *sync_mark_steps += 1;
+                            if start_sync_mark_step(flash_device, step).is_err() {
+                                FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                                Some(true)
+                            } else {
+                                None
+                            }
+                        }
+                        Err(_) => Some(true),
+                    };
+                    if let Some(failed) = failed {
+                        *sync_mark = None;
+                        if failed {
+                            queue_storage_response(
+                                flash_responses,
+                                "ERR sync ledger write failed\r\n",
+                            );
+                        } else {
+                            let mut line =
+                                heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
+                            let _ = write!(line, "OK synced flight={flight_id}\r\n");
+                            queue_storage_response(flash_responses, line.as_str());
+                        }
+                    }
                     continue;
                 }
 
@@ -1259,7 +1382,7 @@ ferroforge::app! {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                             *flash_test_phase = 0;
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "ERR flash test scratch erase failed\r\n",
                             );
                         } else {
@@ -1276,7 +1399,7 @@ ferroforge::app! {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                             *flash_test_phase = 0;
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "ERR flash test scratch program failed\r\n",
                             );
                         } else {
@@ -1294,13 +1417,13 @@ ferroforge::app! {
                             && actual == expected
                         {
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "OK flash scratch erase/program/read verified\r\n",
                             );
                         } else {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "ERR flash test readback mismatch\r\n",
                             );
                         }
@@ -1325,7 +1448,7 @@ ferroforge::app! {
                             let rpc_notified = false;
                             if !rpc_notified {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR config slot erase failed\r\n",
                                 );
                             }
@@ -1352,7 +1475,7 @@ ferroforge::app! {
                             let rpc_notified = false;
                             if !rpc_notified {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR config page program failed\r\n",
                                 );
                             }
@@ -1386,7 +1509,7 @@ ferroforge::app! {
                             let rpc_notified = false;
                             if !rpc_notified {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR config persistence verification failed\r\n",
                                 );
                             }
@@ -1433,35 +1556,61 @@ ferroforge::app! {
                         #[cfg(not(feature = "mspv2_configurator"))]
                         let rpc_notified = false;
                         if !rpc_notified {
-                            queue_storage_response(flash_response_producer, "OK config saved\r\n");
+                            queue_storage_response(flash_responses, "OK config saved\r\n");
                         }
                     }
                     _ => {}
                 }
 
-                if let Some(command) = flash_command_consumer.dequeue() {
+                if let Some((command, link)) = flash_commands.take_next() {
+                    flash_responses.answer(link);
                     let mut response =
                         heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
+                    let maintenance_busy = erase_sector_index.is_some()
+                        || *flash_test_phase != 0
+                        || *config_save_phase != 0
+                        || sync_mark.is_some();
+                    let unfinished_flight = assembler.unfinished_flight(pending_page.is_some());
                     match command {
+                        // The configurator link refuses these before queueing
+                        // them; this is the second check.
+                        command if link == CommandLink::Serial && command.usb_only() => {
+                            queue_storage_response(
+                                flash_responses,
+                                "ERR USB only for this command\r\n",
+                            );
+                        }
                         flash_task::StorageCommand::Help => {
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "OK flash info | flash test CONFIRM | logs list\r\n",
                             );
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "OK logs erase CONFIRM | config get/set KEY | config save\r\n",
                             );
                             queue_storage_response(
-                                flash_response_producer,
-                                "OK serial | serial PORT none/rc/osd/esc_telemetry\r\n",
+                                flash_responses,
+                                "OK logs unsynced | logs ack FLIGHT PAGES\r\n",
                             );
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
+                                "OK logs erase-synced CONFIRM\r\n",
+                            );
+                            queue_storage_response(
+                                flash_responses,
+                                "OK serial | serial PORT FUNCTION\r\n",
+                            );
+                            queue_storage_response(
+                                flash_responses,
+                                "OK FUNCTION none/rc/osd/esc_telemetry/configurator\r\n",
+                            );
+                            queue_storage_response(
+                                flash_responses,
                                 "OK live | motor stop | motor spin N CONFIRM\r\n",
                             );
                             queue_storage_response(
-                                flash_response_producer,
+                                flash_responses,
                                 "OK motor dir N normal|reversed CONFIRM\r\n",
                             );
                         }
@@ -1474,14 +1623,14 @@ ferroforge::app! {
                                 board::serial::DEFAULT_SERIAL_BINDINGS,
                                 board::serial::SERIAL_ROUTES,
                                 |line| {
-                                    queue_storage_response(flash_response_producer, line);
+                                    queue_storage_response(flash_responses, line);
                                 },
                             );
                         }
                         flash_task::StorageCommand::SerialSet(port, function) => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR config changes disabled while armed\r\n",
                                 );
                             } else {
@@ -1491,7 +1640,7 @@ ferroforge::app! {
                                 bindings.set(port, function);
                                 stored_config.serial_bindings = Some(bindings);
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "OK staged; use config save, then reboot\r\n",
                                 );
                             }
@@ -1505,26 +1654,28 @@ ferroforge::app! {
                                 FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
                                 layout.capacity_bytes
                             );
-                            queue_storage_response(flash_response_producer, response.as_str());
+                            queue_storage_response(flash_responses, response.as_str());
                         }
                         flash_task::StorageCommand::FlashTestConfirmed => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR flash test disabled while armed\r\n",
                                 );
                             } else if erase_sector_index.is_some()
                                 || *flash_test_phase != 0
                                 || *config_save_phase != 0
+                                || sync_mark.is_some()
                             {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR flash maintenance already active\r\n",
                                 );
                             } else {
                                 *flash_test_phase = 1;
+                                flash_responses.start_maintenance();
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "OK flash scratch test started\r\n",
                                 );
                             }
@@ -1536,10 +1687,10 @@ ferroforge::app! {
                                 layout.log_page_count,
                                 *log_region_writable,
                             ) {
-                                queue_storage_response(flash_response_producer, response.as_str());
+                                queue_storage_response(flash_responses, response.as_str());
                             } else {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR log summary formatting failed\r\n",
                                 );
                             }
@@ -1547,21 +1698,21 @@ ferroforge::app! {
                         flash_task::StorageCommand::LogsReadPage(page_index) => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR log reads disabled while armed\r\n",
                                 );
                             } else if page_index >= *next_page_index {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR log page is not present\r\n",
                                 );
                             } else if let Some(address) = layout.log_page_address(page_index) {
                                 let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
                                 if flash_device.read(address, &mut page).is_err()
-                                    || !queue_page_hex(flash_response_producer, page_index, &page)
+                                    || !queue_page_hex(flash_responses, page_index, &page)
                                 {
                                     queue_storage_response(
-                                        flash_response_producer,
+                                        flash_responses,
                                         "ERR log page read/response failed\r\n",
                                     );
                                 }
@@ -1570,23 +1721,151 @@ ferroforge::app! {
                         flash_task::StorageCommand::LogsEraseConfirmed => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR log erase disabled while armed\r\n",
                                 );
                             } else if erase_sector_index.is_some()
                                 || *flash_test_phase != 0
                                 || *config_save_phase != 0
+                                || sync_mark.is_some()
                             {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR flash maintenance already active\r\n",
                                 );
                             } else {
                                 *erase_sector_index = Some(0);
+                                flash_responses.start_maintenance();
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "OK log erase started\r\n",
                                 );
+                            }
+                        }
+                        flash_task::StorageCommand::LogsUnsynced => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR log reads disabled while armed\r\n",
+                                );
+                            } else {
+                                let mut read = |address, output: &mut [u8]| {
+                                    flash_device.read(address, output)
+                                };
+                                match log_sync::unsynced_flights(
+                                    layout,
+                                    &mut read,
+                                    *next_page_index,
+                                    unfinished_flight,
+                                ) {
+                                    Ok((flights, more)) => {
+                                        log_sync::emit_unsynced_lines(&flights, more, |line| {
+                                            queue_storage_response(flash_responses, line)
+                                        });
+                                    }
+                                    Err(_) => {
+                                        queue_storage_response(
+                                            flash_responses,
+                                            "ERR log scan failed\r\n",
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        flash_task::StorageCommand::LogsAck { flight, pages } => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR log sync disabled while armed\r\n",
+                                );
+                            } else if maintenance_busy {
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR flash maintenance already active\r\n",
+                                );
+                            } else {
+                                let mut read = |address, output: &mut [u8]| {
+                                    flash_device.read(address, output)
+                                };
+                                match log_sync::check_ack(
+                                    layout,
+                                    &mut read,
+                                    *next_page_index,
+                                    unfinished_flight,
+                                    flight,
+                                    pages,
+                                ) {
+                                    Ok(Ok(())) => {
+                                        *sync_mark = Some(flight);
+                                        *sync_mark_steps = 0;
+                                        flash_responses.start_maintenance();
+                                    }
+                                    Ok(Err(refusal)) => {
+                                        queue_storage_response(
+                                            flash_responses,
+                                            refusal.response(),
+                                        );
+                                    }
+                                    Err(_) => {
+                                        queue_storage_response(
+                                            flash_responses,
+                                            "ERR log scan failed\r\n",
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        flash_task::StorageCommand::LogsEraseSyncedConfirmed => {
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR log erase disabled while armed\r\n",
+                                );
+                            } else if !*log_region_writable
+                                && *next_page_index < layout.log_page_count
+                            {
+                                // Something other than flights follows the
+                                // last one, so nothing says it was stored.
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR log holds data that is not a flight; erase over USB\r\n",
+                                );
+                            } else if maintenance_busy {
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR flash maintenance already active\r\n",
+                                );
+                            } else {
+                                let mut read = |address, output: &mut [u8]| {
+                                    flash_device.read(address, output)
+                                };
+                                match log_sync::all_synced(
+                                    layout,
+                                    &mut read,
+                                    *next_page_index,
+                                    unfinished_flight,
+                                ) {
+                                    Ok(true) => {
+                                        *erase_sector_index = Some(0);
+                                        flash_responses.start_maintenance();
+                                        queue_storage_response(
+                                            flash_responses,
+                                            "OK log erase started\r\n",
+                                        );
+                                    }
+                                    Ok(false) => {
+                                        queue_storage_response(
+                                            flash_responses,
+                                            "ERR unsynced flights remain\r\n",
+                                        );
+                                    }
+                                    Err(_) => {
+                                        queue_storage_response(
+                                            flash_responses,
+                                            "ERR log scan failed\r\n",
+                                        );
+                                    }
+                                }
                             }
                         }
                         flash_task::StorageCommand::ConfigGet(key) => {
@@ -1596,22 +1875,22 @@ ferroforge::app! {
                                 key.name(),
                                 stored_config.get(key)
                             );
-                            queue_storage_response(flash_response_producer, response.as_str());
+                            queue_storage_response(flash_responses, response.as_str());
                         }
                         flash_task::StorageCommand::ConfigSet(key, value) => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR config changes disabled while armed\r\n",
                                 );
                             } else if stored_config.set(key, value) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "OK staged; use config save\r\n",
                                 );
                             } else {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR value outside allowed range\r\n",
                                 );
                             }
@@ -1619,15 +1898,16 @@ ferroforge::app! {
                         flash_task::StorageCommand::ConfigSave => {
                             if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR config save disabled while armed\r\n",
                                 );
                             } else if erase_sector_index.is_some()
                                 || *flash_test_phase != 0
                                 || *config_save_phase != 0
+                                || sync_mark.is_some()
                             {
                                 queue_storage_response(
-                                    flash_response_producer,
+                                    flash_responses,
                                     "ERR flash maintenance already active\r\n",
                                 );
                             } else {
@@ -1641,14 +1921,15 @@ ferroforge::app! {
                                         *config_save_page = page;
                                         *config_save_slot = 1 - *config_active_slot;
                                         *config_save_phase = 1;
+                                        flash_responses.start_maintenance();
                                         queue_storage_response(
-                                            flash_response_producer,
+                                            flash_responses,
                                             "OK config save started\r\n",
                                         );
                                     }
                                     Err(_) => {
                                         queue_storage_response(
-                                            flash_response_producer,
+                                            flash_responses,
                                             "ERR config encoding failed\r\n",
                                         );
                                     }
@@ -1663,7 +1944,8 @@ ferroforge::app! {
                     let request_id = request.request_id;
                     let maintenance_busy = erase_sector_index.is_some()
                         || *flash_test_phase != 0
-                        || *config_save_phase != 0;
+                        || *config_save_phase != 0
+                        || sync_mark.is_some();
                     let active_blackbox_id = assembler
                         .recording()
                         .then(|| next_flight_id.wrapping_sub(1).max(1));
@@ -2201,6 +2483,12 @@ ferroforge::app! {
     #[task(from = flight_tasks::uart2_rx_idle, binds = USART2, priority = 11, shared = [uart2_rx])]
     fn uart2_rx_idle(cx: uart2_rx_idle::Context);
 
+    #[task(from = flight_tasks::uart3_rx_dma, binds = DMA1_STREAM1, priority = 11, shared = [uart3_rx])]
+    fn uart3_rx_dma(cx: uart3_rx_dma::Context);
+
+    #[task(from = flight_tasks::uart3_rx_idle, binds = USART3, priority = 11, shared = [uart3_rx])]
+    fn uart3_rx_idle(cx: uart3_rx_idle::Context);
+
     #[task(from = flight_tasks::uart4_rx_dma, binds = DMA1_STREAM2, priority = 11, shared = [uart4_rx])]
     fn uart4_rx_dma(cx: uart4_rx_dma::Context);
 
@@ -2250,6 +2538,32 @@ ferroforge::app! {
         shared = [uart2_tx_dma]
     )]
     fn uart2_tx_dma_complete(cx: uart2_tx_dma_complete::Context);
+
+    #[task(
+        from = flight_tasks::uart3_tx_worker,
+        priority = 11,
+        local = [uart3_tx_owner = uart3_tx_owner],
+        shared = [uart3_tx_dma = uart3_tx_dma],
+    )]
+    async fn uart3_tx_worker(cx: uart3_tx_worker::Context);
+
+    #[task(
+        from = flight_tasks::uart3_tx_dma_complete,
+        binds = DMA1_STREAM3,
+        priority = 11,
+        local = [uart3_tx_completion],
+        shared = [uart3_tx_dma]
+    )]
+    fn uart3_tx_dma_complete(cx: uart3_tx_dma_complete::Context);
+
+    // The text command line on the port bound to `configurator`, beside USB.
+    // Below USB, above the flash manager it feeds; it shares the OSD's level.
+    #[task(
+        from = flight_tasks::configurator_link,
+        priority = 3,
+        local = [configurator_port, configurator_commands, configurator_responses]
+    )]
+    async fn configurator_link(cx: configurator_link::Context);
 
     #[task(
         from = flight_tasks::uart4_tx_worker,

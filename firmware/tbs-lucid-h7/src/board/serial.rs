@@ -28,6 +28,7 @@ pub const USART6_SBUS: SerialRoute = SerialRoute {
         mavlink: false,
         msp: true,
         esc_telemetry: true,
+        cli: false,
         tx: true,
     },
 };
@@ -46,6 +47,7 @@ pub const USART3_MSP: SerialRoute = SerialRoute {
         mavlink: false,
         msp: true,
         esc_telemetry: true,
+        cli: false,
         tx: true,
     },
 };
@@ -64,6 +66,7 @@ pub const UART8_ESC_TELEMETRY: SerialRoute = SerialRoute {
         mavlink: false,
         msp: false,
         esc_telemetry: true,
+        cli: false,
         tx: false,
     },
 };

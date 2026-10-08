@@ -73,7 +73,10 @@ impl LineTransport for SerialTransport {
             match self.port.read(&mut chunk) {
                 Ok(0) => {}
                 Ok(count) => {
-                    self.input.extend_from_slice(&chunk[..count]);
+                    // A UART link pads its last transmit chunk with NUL
+                    // bytes; no answer contains one.
+                    self.input
+                        .extend(chunk[..count].iter().copied().filter(|byte| *byte != 0));
                     if self.input.len() > MAX_LINE_BUFFER {
                         self.input.clear();
                         return Err(FerroError::Transport {

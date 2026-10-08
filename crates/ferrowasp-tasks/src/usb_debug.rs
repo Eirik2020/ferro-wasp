@@ -90,6 +90,37 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
     Ok(line)
 }
 
+/// What the `live` command reports: arming, attitude and motor activity.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct LiveSnapshot {
+    pub armed: bool,
+    pub arm_switch: bool,
+    /// Roll, pitch and yaw in tenths of a degree.
+    pub attitude_deg10: [i16; 3],
+    /// Bit per physical motor output commanded above zero.
+    pub active_motor_lanes: u8,
+}
+
+/// The `live` answer, one response frame long at any value.
+pub fn format_live(
+    snapshot: LiveSnapshot,
+) -> String<{ crate::flash_storage::USB_RESPONSE_CAPACITY }> {
+    let mut line = String::new();
+    let [roll, pitch, yaw] = snapshot.attitude_deg10;
+    // At most 59 bytes, so the write cannot fail.
+    let _ = write!(
+        line,
+        "OK live armed={} arm_sw={} att={},{},{} mot={}\r\n",
+        u8::from(snapshot.armed),
+        u8::from(snapshot.arm_switch),
+        roll,
+        pitch,
+        yaw,
+        snapshot.active_motor_lanes,
+    );
+    line
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +202,16 @@ mod tests {
 
         assert!(line.len() <= STATUS_LINE_CAPACITY);
         assert!(line.ends_with("\r\n"));
+    }
+
+    #[test]
+    fn the_widest_live_line_fits_one_response_frame() {
+        let line = format_live(LiveSnapshot {
+            armed: true,
+            arm_switch: true,
+            attitude_deg10: [i16::MIN; 3],
+            active_motor_lanes: u8::MAX,
+        });
+        assert!(line.ends_with("mot=255\r\n"), "{line}");
     }
 }

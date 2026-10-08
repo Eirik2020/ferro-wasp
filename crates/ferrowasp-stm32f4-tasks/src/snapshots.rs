@@ -65,6 +65,20 @@ pub static RC_CHANNELS_US: [AtomicU16; 16] = [const { AtomicU16::new(0) }; 16];
 pub fn rc_channels_us() -> [u16; 16] {
     core::array::from_fn(|index| RC_CHANNELS_US[index].load(Ordering::Relaxed))
 }
+
+/// What the `live` command reports, on whichever link asked.
+pub fn live_snapshot() -> ferrowasp_tasks::usb_debug::LiveSnapshot {
+    ferrowasp_tasks::usb_debug::LiveSnapshot {
+        armed: SAFETY_ARMED.load(Ordering::Relaxed),
+        arm_switch: RC_ARM_HIGH.load(Ordering::Relaxed),
+        attitude_deg10: [
+            ATTITUDE_ROLL_DEG10.load(Ordering::Relaxed),
+            ATTITUDE_PITCH_DEG10.load(Ordering::Relaxed),
+            ATTITUDE_YAW_DEG10.load(Ordering::Relaxed),
+        ],
+        active_motor_lanes: DSHOT_ACTIVE_LANES.load(Ordering::Relaxed),
+    }
+}
 pub static BATTERY_VOLTAGE_V10_SNAPSHOT: AtomicU32 = AtomicU32::new(0);
 pub static BATTERY_CURRENT_CA_SNAPSHOT: AtomicI32 = AtomicI32::new(0);
 pub static ADC_VOLTAGE_MV_SNAPSHOT: AtomicU32 = AtomicU32::new(0);

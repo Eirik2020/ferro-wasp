@@ -23,8 +23,8 @@ use std::{path::Path, time::Duration};
 use ferro_configurator_core::{
     CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo,
     FlightCatalog, FlightSelector, LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck,
-    SerialBindings, SerialTransport, StatusSnapshot, catalog_device, discover_ports,
-    download_flight, open_device, prearm_checks, resolve_device_flight,
+    SerialBindings, SerialTransport, StatusSnapshot, SyncedFlight, catalog_device, discover_ports,
+    download_flight, open_device, prearm_checks, resolve_device_flight, sync_flights,
 };
 use serde::Serialize;
 
@@ -281,6 +281,21 @@ impl<T: LineTransport> Session<T> {
         // download only needs the span.
         let (_storage, span) = resolve_device_flight(client, selector)?;
         Ok(download_flight(client, span, output, resume, progress)?)
+    }
+
+    /// Stores every flight no host has stored into `directory`, and
+    /// acknowledges each, reporting `(flight, page, total)` as it goes.
+    ///
+    /// Not gated here on the disarmed state: it reads the log and writes only
+    /// the controller's sync ledger, which never loses a flight, and the
+    /// controller refuses both while armed. Erasing stays a separate,
+    /// explicit step.
+    pub fn sync_flights(
+        &mut self,
+        directory: &Path,
+        progress: impl FnMut(u32, u32, u32),
+    ) -> Result<Vec<SyncedFlight>> {
+        Ok(sync_flights(self.client_mut()?, directory, progress)?)
     }
 }
 

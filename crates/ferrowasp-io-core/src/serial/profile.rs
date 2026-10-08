@@ -55,6 +55,9 @@ pub enum SerialProtocol {
     Mavlink,
     Msp,
     EscTelemetry,
+    /// FerroWasp's text command line, as on USB: a configurator over a
+    /// serial or Bluetooth link.
+    Cli,
 }
 
 pub const SBUS_FRAME_LEN: usize = 25;
@@ -63,11 +66,16 @@ pub const MAVLINK_MIN_FRAME_LEN: usize = 25;
 pub const MSP_V1_MAX_PAYLOAD_LEN: usize = 64;
 pub const MSP_V1_MAX_FRAME_LEN: usize = MSP_V1_MAX_PAYLOAD_LEN + 6;
 pub const ESC_TELEMETRY_FRAME_LEN: usize = 10;
+/// The command line has no frames; this is the most one receive chunk holds.
+pub const CLI_CHUNK_LEN: usize = 64;
 
 impl SerialProtocol {
     /// The protocol talks back, so its port needs a transmit path.
     pub const fn needs_tx(self) -> bool {
-        matches!(self, SerialProtocol::Crsf | SerialProtocol::Msp)
+        matches!(
+            self,
+            SerialProtocol::Crsf | SerialProtocol::Msp | SerialProtocol::Cli
+        )
     }
 
     pub const fn frame_size(self) -> usize {
@@ -78,6 +86,7 @@ impl SerialProtocol {
             SerialProtocol::Mavlink => MAVLINK_MIN_FRAME_LEN,
             SerialProtocol::Msp => MSP_V1_MAX_FRAME_LEN,
             SerialProtocol::EscTelemetry => ESC_TELEMETRY_FRAME_LEN,
+            SerialProtocol::Cli => CLI_CHUNK_LEN,
         }
     }
 
@@ -88,6 +97,7 @@ impl SerialProtocol {
             SerialProtocol::Mavlink.frame_size(),
             SerialProtocol::Msp.frame_size(),
             SerialProtocol::EscTelemetry.frame_size(),
+            SerialProtocol::Cli.frame_size(),
         ];
 
         let mut max = 0;
@@ -149,6 +159,18 @@ impl SerialProfile {
     pub const fn msp() -> Self {
         Self {
             protocol: SerialProtocol::Msp,
+            baud: 115_200,
+            word_bits: 8,
+            stop_bits: 1,
+            parity_even: false,
+        }
+    }
+
+    /// The command line at 115200 8N1, the rate Bluetooth serial modules
+    /// default to.
+    pub const fn cli() -> Self {
+        Self {
+            protocol: SerialProtocol::Cli,
             baud: 115_200,
             word_bits: 8,
             stop_bits: 1,

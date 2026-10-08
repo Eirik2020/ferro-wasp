@@ -5,6 +5,16 @@ artifact is stable, airworthy, or production-ready.
 
 ## Unreleased
 
+### Added
+
+- Log sync. The firmware lists the flights no host has stored, a host
+  acknowledges each one after downloading it, and `logs erase-synced` erases
+  only when every flight is acknowledged. A sync ledger in the flash's last
+  4 KiB sector records the acknowledgements, so the log region ends one sector
+  lower. FerroConfigurator's `blackbox sync` and the GUI's Sync button run it.
+- A `configurator` serial function: the text command line on a UART, for a
+  Bluetooth serial module. Foxeer binds it to `uart3` (PC10/PC11) by default.
+
 ### Removed
 
 - The FerroWasp FCU3 app (`firmware/stm32f405-flight`), obsolete since

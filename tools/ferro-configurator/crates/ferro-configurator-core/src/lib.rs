@@ -17,12 +17,12 @@ pub mod transport;
 pub mod ulog;
 
 pub use blackbox::{
-    CatalogEntry, DownloadSummary, FlightCatalog, FlightSelector, FlightSpan, catalog_device,
-    download_flight, resolve_device_flight,
+    CatalogEntry, DownloadSummary, FlightCatalog, FlightSelector, FlightSpan, SyncedFlight,
+    catalog_device, download_flight, resolve_device_flight, sync_file_name, sync_flights,
 };
 pub use client::{
     FerroClient, FlashInfo, LiveSnapshot, LogInfo, SERIAL_FUNCTIONS, SerialBindings,
-    SerialPortBinding, StatusSnapshot,
+    SerialPortBinding, StatusSnapshot, UnsyncedFlight, UnsyncedFlights,
 };
 pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
 pub use device::{DeviceSelector, PortInfo, discover_ports, open_device};

@@ -14,9 +14,9 @@ use ferro_configurator_core::{
     BoardProfile, CatalogEntry, CheckState, ConfigKey, ConversionSummary, DeviceSelector,
     DfuDetection, DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress,
     FlightSelector, PortInfo, PreparedImage, ProfileStore, SERIAL_FUNCTIONS, SerialBindings,
-    StatusSnapshot, catalog_device, config::lpf_alpha_for_corner, convert_fwbb_to_ulog, detect_dfu,
-    discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
-    prearm_checks, prepare_elf, resolve_device_flight,
+    StatusSnapshot, SyncedFlight, catalog_device, config::lpf_alpha_for_corner,
+    convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight, find_bundled_firmware,
+    flash_firmware, open_device, prearm_checks, prepare_elf, resolve_device_flight, sync_flights,
 };
 use serde::Serialize;
 
@@ -159,11 +159,31 @@ enum BlackboxCommand {
         #[arg(long)]
         ulog: bool,
     },
+    /// Store every flight no host has stored yet, and acknowledge each one.
+    ///
+    /// Works over USB or over a UART bound to `configurator`, such as a
+    /// Bluetooth serial module; select that link with --port. Each flight
+    /// lands in its own file named after the flight and its first page, so an
+    /// interrupted sync picks up where it stopped.
+    Sync {
+        #[arg(long)]
+        directory: PathBuf,
+        /// Afterwards, erase the onboard log. The controller refuses unless
+        /// every flight on it is acknowledged.
+        #[arg(long)]
+        erase: bool,
+    },
     /// Erase every onboard log after explicit confirmation.
     Erase {
         #[arg(long)]
         confirm: bool,
     },
+}
+
+#[derive(Debug, Serialize)]
+struct BlackboxSyncReport {
+    flights: Vec<SyncedFlight>,
+    erased: bool,
 }
 
 #[derive(Debug, Args)]
@@ -683,6 +703,64 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                             report.download.flight_id,
                             report.download.output.display()
                         );
+                    }
+                })
+            }
+            BlackboxCommand::Sync { directory, erase } => {
+                let mut client = connect(cli, timeout)?;
+                let human_output = cli.format == OutputFormat::Human;
+                let flights = sync_flights(&mut client, directory, |id, completed, total| {
+                    if human_output
+                        && (completed == 1 || completed % 128 == 0 || completed == total)
+                    {
+                        eprintln!("Downloaded {completed}/{total} pages for flight {id}.");
+                    }
+                })?;
+                if *erase {
+                    client.erase_synced_logs_with_progress(|elapsed| {
+                        if human_output && elapsed.is_zero() {
+                            eprintln!(
+                                "Every flight is stored; erasing the onboard log. This may take several minutes."
+                            );
+                        } else if human_output {
+                            eprintln!(
+                                "Still erasing onboard logs ({} seconds elapsed)...",
+                                elapsed.as_secs()
+                            );
+                        }
+                    })?;
+                    let info = client.log_info()?;
+                    if info.used_pages != 0 {
+                        return Err(FerroError::VerificationFailed {
+                            details: format!(
+                                "erase completed but device still reports {} used pages",
+                                info.used_pages
+                            ),
+                        });
+                    }
+                }
+                let report = BlackboxSyncReport {
+                    flights,
+                    erased: *erase,
+                };
+                emit(cli.format, "blackbox.sync", &report, || {
+                    if report.flights.is_empty() {
+                        println!("Every onboard flight was already stored.");
+                    }
+                    for flight in &report.flights {
+                        let note = if flight.already_stored {
+                            " (already stored)"
+                        } else {
+                            ""
+                        };
+                        println!(
+                            "  flight {}: {}{note}",
+                            flight.flight_id,
+                            flight.output.display()
+                        );
+                    }
+                    if report.erased {
+                        println!("The onboard log was erased and empty storage was verified.");
                     }
                 })
             }

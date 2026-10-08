@@ -21,6 +21,7 @@ pub const USART2_SBUS: SerialRoute = SerialRoute {
         mavlink: false,
         msp: false,
         esc_telemetry: false,
+        cli: true,
         tx: true,
     },
 };
@@ -40,6 +41,28 @@ pub const UART4_MSP: SerialRoute = SerialRoute {
         mavlink: false,
         msp: true,
         esc_telemetry: true,
+        cli: true,
+        tx: true,
+    },
+};
+
+pub const USART3_CONFIGURATOR: SerialRoute = SerialRoute {
+    logical: LogicalSerialPort::Uart3,
+    peripheral: "USART3",
+    tx_pin: "PC10 AF7",
+    rx_pin: "PC11 AF7",
+    profile: SerialProfile::cli(),
+    rx_dma: "DMA1 Stream 1 Channel 4",
+    tx_dma: Some("DMA1 Stream 3 Channel 4"),
+    // The R3/T3 pads, plain 8N1 both ways with no inverter, so no SBUS. A
+    // Bluetooth serial module here carries the configurator for log sync.
+    capabilities: SerialCapabilities {
+        sbus: false,
+        crsf: true,
+        mavlink: false,
+        msp: true,
+        esc_telemetry: true,
+        cli: true,
         tx: true,
     },
 };
@@ -58,18 +81,25 @@ pub const USART1_ESC_TELEMETRY: SerialRoute = SerialRoute {
         mavlink: false,
         msp: false,
         esc_telemetry: true,
+        cli: false,
         tx: false,
     },
 };
 
 /// Every UART the board routes; config may bind each to any function its
 /// capabilities accept.
-pub const SERIAL_ROUTES: &[SerialRoute] = &[USART1_ESC_TELEMETRY, USART2_SBUS, UART4_MSP];
+pub const SERIAL_ROUTES: &[SerialRoute] = &[
+    USART1_ESC_TELEMETRY,
+    USART2_SBUS,
+    USART3_CONFIGURATOR,
+    UART4_MSP,
+];
 
 /// The wiring the board shipped with, used until a pilot saves bindings.
 pub const DEFAULT_SERIAL_BINDINGS: SerialBindings = SerialBindings::none()
     .with(LogicalSerialPort::Uart1, SerialFunction::EscTelemetry)
     .with(LogicalSerialPort::Uart2, SerialFunction::RcInput)
+    .with(LogicalSerialPort::Uart3, SerialFunction::Configurator)
     .with(LogicalSerialPort::Uart4, SerialFunction::MspDisplayPort);
 
 #[cfg(test)]
@@ -129,6 +159,28 @@ mod tests {
         );
         assert_eq!(
             refused.function(LogicalSerialPort::Uart1),
+            SerialFunction::None
+        );
+    }
+
+    #[test]
+    fn the_configurator_defaults_to_uart3_and_needs_a_port_that_transmits() {
+        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
+
+        let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Sbus);
+        assert_eq!(
+            defaults.profile(LogicalSerialPort::Uart3),
+            Some(SerialProfile::cli())
+        );
+        let receive_only = resolve_bindings(
+            DEFAULT_SERIAL_BINDINGS
+                .with(LogicalSerialPort::Uart3, SerialFunction::None)
+                .with(LogicalSerialPort::Uart1, SerialFunction::Configurator),
+            SERIAL_ROUTES,
+            RcProtocol::Sbus,
+        );
+        assert_eq!(
+            receive_only.function(LogicalSerialPort::Uart1),
             SerialFunction::None
         );
     }

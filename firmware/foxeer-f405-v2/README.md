@@ -18,6 +18,8 @@ Implemented board subset:
   arm until its orientation is verified;
 - USART2 SBUS receiver path on PA2/PA3;
 - UART4 DJI MSP DisplayPort path on PA0/PA1;
+- USART3 configurator command line on PC10/PC11 (the R3/T3 pads) for log sync
+  over a Bluetooth serial module;
 - ADC1 battery/current observation on PC0/PC1;
 - standard four-lane DShot600 on PA8, PC9, PC8, and PB15;
 - standard BLHeli legacy telemetry RX on PA10 / USART1;
@@ -441,6 +443,43 @@ control snapshots while armed, flushes the final partial page on disarm, and
 permits disarmed-only configuration saves, confirmed log erase, and a dedicated
 scratch-sector erase/program/readback self-test.
 
+### Log sync over UART3
+
+The same command line also runs on the UART bound to `configurator`, by
+default `uart3`: USART3 at 115200 8N1 on PC10 (T3) and PC11 (R3), RX on DMA1
+Stream 1 and TX on DMA1 Stream 3. A Bluetooth serial module there lets a
+phone or PC sync the logs without a cable:
+
+```text
+logs unsynced                -> OK unsynced n=2 more=0
+                                OK flight=7 start=120 pages=412
+                                OK flight=5 start=40 pages=80
+logs read-page 120           -> sixteen PAGE lines, as over USB
+logs ack 7 412               -> OK synced flight=7
+logs erase-synced CONFIRM    -> OK log erase started ... OK logs erased
+```
+
+The host downloads each listed flight, then acknowledges it with its length;
+the firmware checks the length against the flight on flash and records it in
+a sync ledger, the last 4 KiB sector of the flash, one bit per flight.
+`logs erase-synced` erases only when every flight is acknowledged, and the
+erase runs top down, ledger first, so a power cut part-way leaves old flights
+looking unsynced rather than new ones looking synced. The flight still being
+written is never listed or acknowledged.
+
+Motor commands, `logs erase CONFIRM` and `flash test CONFIRM` answer
+`ERR USB only for this command` on the UART: a Bluetooth module can be paired
+by anyone in range. `live` is answered by the link task itself. The UART link
+pads the last transmit chunk of a burst with NUL bytes, which a host skips.
+FerroConfigurator's `blackbox sync` runs the whole exchange over either link.
+
+At 115200 baud the hex page format moves about 2.5 KiB of log a second, so a
+1 MiB flight takes roughly seven minutes.
+
+The ledger takes the last sector away from the log. Download every flight
+before flashing the first image with it: pages a nearly full log had written
+there are lost when the first acknowledgement claims the sector.
+
 The separate `mspv2_configurator` gate replaces the ASCII/status stream on the
 CDC endpoint with bounded native MSPv2 frames. It uses the same standard storage owner and
 implements the common read-only `MSP_API_VERSION`, `MSP_FC_VARIANT` (`FWSP`),
@@ -464,7 +503,8 @@ hardware, rejects destructive commands while armed, and aborts maintenance if
 the system arms.
 
 The first two 4 KiB sectors are copy-on-write configuration slots, the third
-is reserved for the destructive self-test, and logs begin at `0x3000`.
+is reserved for the destructive self-test, and logs begin at `0x3000`. The
+last 4 KiB sector is the log-sync ledger.
 Configuration input is limited to the firmware-owned whitelist: PID gains,
 IMU LPF alpha, log-rate divisor, RC deadband, and per-axis Actual Rates
 center/max/expo values. Firmware-owned ranges and cross-field constraints are
