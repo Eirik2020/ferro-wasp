@@ -45,6 +45,18 @@ pub struct StatusSnapshot {
     pub channels: Option<Vec<u16>>,
 }
 
+/// The fast `live` answer: attitude for a 3D view and which motors are
+/// spinning, read without waiting for the periodic status line.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct LiveSnapshot {
+    pub armed: bool,
+    pub arm_switch: bool,
+    /// Roll, pitch and yaw in degrees, from the firmware's estimator.
+    pub attitude_deg: [f32; 3],
+    /// Bit per physical motor output commanded above zero.
+    pub active_outputs: u8,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LogInfo {
     pub used_pages: u32,
@@ -272,6 +284,41 @@ impl<T: LineTransport> FerroClient<T> {
                 ),
             })
         }
+    }
+
+    /// Attitude and motor activity, answered at once.
+    pub fn live(&mut self) -> Result<LiveSnapshot> {
+        let response = self.request("live", 2)?;
+        parse_live(&response).ok_or_else(|| FerroError::UnexpectedResponse {
+            operation: "live".to_owned(),
+            response,
+        })
+    }
+
+    /// Asks the firmware to idle one logical motor (Betaflight Quad X, 1-4)
+    /// for one short lease. Call again within about 100 ms to keep it
+    /// spinning; stop calling and it stops. The firmware refuses unless it is
+    /// disarmed with the arm switch off.
+    ///
+    /// One attempt only: a retried spin would extend a lease the caller has
+    /// already decided to let lapse.
+    pub fn motor_spin(&mut self, logical_motor: u8) -> Result<()> {
+        self.request(&format!("motor spin {logical_motor} CONFIRM"), 1)
+            .map(|_| ())
+    }
+
+    /// Stops every motor now. Refused while armed: the configurator has no
+    /// authority over a flying aircraft.
+    pub fn motor_stop(&mut self) -> Result<()> {
+        self.request("motor stop", 3).map(|_| ())
+    }
+
+    /// Sets and saves one ESC's spin direction with DShot commands. The
+    /// motors must be stopped.
+    pub fn motor_direction(&mut self, logical_motor: u8, reversed: bool) -> Result<()> {
+        let direction = if reversed { "reversed" } else { "normal" };
+        self.request(&format!("motor dir {logical_motor} {direction} CONFIRM"), 1)
+            .map(|_| ())
     }
 
     pub fn log_info(&mut self) -> Result<LogInfo> {
@@ -597,6 +644,35 @@ fn parse_serial_port_line(line: &str) -> Option<SerialPortBinding> {
     })
 }
 
+fn parse_live(line: &str) -> Option<LiveSnapshot> {
+    let fields = parse_fields(line.strip_prefix("OK live ")?);
+    let get = |key: &str| {
+        fields
+            .iter()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| *value)
+    };
+    let flag = |key: &str| match get(key)? {
+        "0" => Some(false),
+        "1" => Some(true),
+        _ => None,
+    };
+    let mut attitude = get("att")?.split(',').map(|v| v.parse::<i16>().ok());
+    let mut next = || {
+        attitude
+            .next()
+            .flatten()
+            .map(|deg10| f32::from(deg10) / 10.0)
+    };
+    let attitude_deg = [next()?, next()?, next()?];
+    Some(LiveSnapshot {
+        armed: flag("armed")?,
+        arm_switch: flag("arm_sw")?,
+        attitude_deg,
+        active_outputs: get("mot")?.parse().ok()?,
+    })
+}
+
 fn parse_flash_info(line: &str) -> Option<FlashInfo> {
     let fields = parse_fields(line.strip_prefix("OK ")?);
     Some(FlashInfo {
@@ -721,7 +797,7 @@ mod tests {
         })
     }
 
-    const STAGE_COMMAND_COUNT: usize = 27;
+    const STAGE_COMMAND_COUNT: usize = 28;
 
     trait Pipe: Sized {
         fn pipe<R>(self, function: impl FnOnce(Self) -> R) -> R {
@@ -897,6 +973,30 @@ mod tests {
     }
 
     #[test]
+    fn parses_live_attitude_and_motors() {
+        let live = parse_live("OK live armed=0 arm_sw=1 att=-125,40,1800 mot=4").unwrap();
+        assert!(!live.armed);
+        assert!(live.arm_switch);
+        assert_eq!(live.attitude_deg, [-12.5, 4.0, 180.0]);
+        assert_eq!(live.active_outputs, 4);
+        assert_eq!(parse_live("OK live armed=0 arm_sw=0 att=1,2 mot=0"), None);
+    }
+
+    #[test]
+    fn motor_commands_carry_confirmation_and_surface_refusals() {
+        let mock = MockTransport::with_lines(["OK motor", "ERR motor arm switch is on"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        client.motor_spin(2).unwrap();
+        let error = client.motor_direction(3, true).unwrap_err();
+        assert!(error.to_string().contains("arm switch"));
+        let mock = client.into_transport();
+        assert_eq!(
+            mock.writes,
+            ["motor spin 2 CONFIRM", "motor dir 3 reversed CONFIRM"]
+        );
+    }
+
+    #[test]
     fn parses_current_flash_info() {
         let info = parse_flash_info("OK jedec=ef:40:18 bytes=16777216 ready=1").unwrap();
         assert_eq!(info.capacity_bytes, 16 * 1024 * 1024);
@@ -1013,7 +1113,7 @@ mod tests {
         assert!(client.apply_config(&desired).is_err());
         let mock = client.into_transport();
         assert!(mock.writes.contains(&"config set roll_p 0.4000".to_owned()));
-        assert_eq!(mock.writes.last().unwrap(), "config set rc_protocol 0");
+        assert_eq!(mock.writes.last().unwrap(), "config set motor_map 1234");
         assert!(!mock.writes.contains(&"config save".to_owned()));
     }
 

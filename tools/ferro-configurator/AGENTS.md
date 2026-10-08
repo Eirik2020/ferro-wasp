@@ -9,7 +9,8 @@ FerroConfigurator is a bounded host-side companion for FerroWasp. It may
 discover devices, read and persist firmware-whitelisted configuration, acquire
 and validate logs, convert retained evidence, and flash an explicitly selected
 release image. It never owns arming, actuator gating, failsafe, watchdog, or
-motor authority.
+motor authority. Bench motor tests are requests the firmware safety master
+validates and may refuse; never add a host-side path that drives outputs.
 
 Keep this workspace isolated from the embedded root Cargo workspace. It has a
 separate lockfile and host dependency graph so Windows serial and DFU tooling

@@ -28,6 +28,29 @@ pub const PWM_CAL_MOTOR: usize = 1;
 pub const MOTOR_CMD_QUEUE_CAP: usize = 4;
 pub const MOTOR_CMD_MAX_AGE_MS: u32 = 20;
 
+/// How long one bench motor request keeps a motor at idle.
+///
+/// The configurator renews it about every 100 ms while its button is held,
+/// so a released button, a closed window or a pulled cable stops the motor
+/// within this lease, through the same DShot lease expiry that stops a
+/// motor when flight commands go stale.
+pub const BENCH_MOTOR_LEASE_MS: u32 = 250;
+
+/// How long after the last accepted bench motor request an arm request is
+/// refused. Betaflight disables arming while its motor test is enabled; this
+/// is the same protection without a separate mode to forget to leave.
+pub const BENCH_ARMING_BLOCK_MS: u32 = 2_000;
+
+/// Whether a bench request at `last_bench_ms` still blocks arming at
+/// `now_ms`, both in milliseconds since boot; `None` means no bench request
+/// has been accepted since boot.
+pub const fn bench_blocks_arming(last_bench_ms: Option<u64>, now_ms: u64) -> bool {
+    match last_bench_ms {
+        Some(last) => now_ms.saturating_sub(last) < BENCH_ARMING_BLOCK_MS as u64,
+        None => false,
+    }
+}
+
 #[cfg(test)]
 extern crate std;
 
@@ -40,6 +63,82 @@ pub enum SafetyEvent {
     ArmingAborted(ArmingAbortReason),
     DisarmRequested,
     RcLinkInvalid(RcLinkInvalidation),
+    BenchMotor(BenchMotorRequest),
+}
+
+/// A disarmed, props-off motor check requested over USB.
+///
+/// Motors are named by logical mixer number (Betaflight Quad X, 1-4), so a
+/// request means the same motor before and after a motor-order change.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BenchMotorRequest {
+    /// Idle one motor for one [`BENCH_MOTOR_LEASE_MS`] lease.
+    Spin { logical_motor: u8 },
+    /// Stop every motor now rather than at lease expiry.
+    Stop,
+    /// Set and save one ESC's spin direction with DShot commands.
+    Direction { logical_motor: u8, reversed: bool },
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BenchMotorRefusal {
+    Armed,
+    ArmingInProgress,
+    /// The arm switch is high: a bench spin must never race an arm request.
+    ArmSwitchHigh,
+    OutputDisabled,
+    InvalidMotor,
+    /// The motor map has not been published yet.
+    MotorMapUnavailable,
+}
+
+impl BenchMotorRefusal {
+    /// Pilot-facing reason, also used verbatim in USB `ERR` responses.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Armed => "armed",
+            Self::ArmingInProgress => "arming in progress",
+            Self::ArmSwitchHigh => "arm switch is on",
+            Self::OutputDisabled => "motor output disabled in this firmware",
+            Self::InvalidMotor => "motor must be 1-4",
+            Self::MotorMapUnavailable => "motor map not ready",
+        }
+    }
+}
+
+/// The safety kernel's decision on a bench motor request.
+///
+/// Every request, `Stop` included, is refused while armed or arming: the
+/// configurator has no authority over a flying aircraft, and a USB stop that
+/// cut motors in flight would be its own hazard. Disarm is the pilot's.
+pub const fn validate_bench_motor_request(
+    request: BenchMotorRequest,
+    system_armed: bool,
+    arming_in_progress: bool,
+    arm_switch_high: bool,
+    output_enabled: bool,
+) -> Result<(), BenchMotorRefusal> {
+    if system_armed {
+        return Err(BenchMotorRefusal::Armed);
+    }
+    if arming_in_progress {
+        return Err(BenchMotorRefusal::ArmingInProgress);
+    }
+    let motor = match request {
+        BenchMotorRequest::Stop => return Ok(()),
+        BenchMotorRequest::Spin { logical_motor }
+        | BenchMotorRequest::Direction { logical_motor, .. } => logical_motor,
+    };
+    if arm_switch_high {
+        return Err(BenchMotorRefusal::ArmSwitchHigh);
+    }
+    if !output_enabled {
+        return Err(BenchMotorRefusal::OutputDisabled);
+    }
+    if motor < 1 || motor > 4 {
+        return Err(BenchMotorRefusal::InvalidMotor);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -49,6 +148,10 @@ pub enum ActuatorCmd {
     EnterIdle,
     Disarm,
     Calibrate,
+
+    /// A bench motor request the safety master has already accepted. The
+    /// actuator re-checks the disarmed state before touching the bank.
+    BenchMotor(BenchMotorRequest),
 
     // Wake actuator_output and make it consume the latest SPSC motor command.
     ApplyLatestThrottle,
@@ -437,6 +540,10 @@ pub mod signals {
 
         pub fn disarm(&self) {
             self.write(false);
+        }
+
+        pub fn is_armed(&self) -> bool {
+            self.0.load(Ordering::Acquire)
         }
     }
 
@@ -974,5 +1081,73 @@ mod tests {
                 Err(MotorOutputValidationError::InvalidIdleThrottle)
             );
         }
+    }
+
+    #[test]
+    fn bench_motor_requests_are_refused_unless_disarmed_and_idle() {
+        let spin = BenchMotorRequest::Spin { logical_motor: 1 };
+        assert_eq!(
+            validate_bench_motor_request(spin, false, false, false, true),
+            Ok(())
+        );
+        assert_eq!(
+            validate_bench_motor_request(spin, true, false, false, true),
+            Err(BenchMotorRefusal::Armed)
+        );
+        assert_eq!(
+            validate_bench_motor_request(spin, false, true, false, true),
+            Err(BenchMotorRefusal::ArmingInProgress)
+        );
+        assert_eq!(
+            validate_bench_motor_request(spin, false, false, true, true),
+            Err(BenchMotorRefusal::ArmSwitchHigh)
+        );
+        assert_eq!(
+            validate_bench_motor_request(spin, false, false, false, false),
+            Err(BenchMotorRefusal::OutputDisabled)
+        );
+        for logical_motor in [0, 5] {
+            assert_eq!(
+                validate_bench_motor_request(
+                    BenchMotorRequest::Direction {
+                        logical_motor,
+                        reversed: true
+                    },
+                    false,
+                    false,
+                    false,
+                    true
+                ),
+                Err(BenchMotorRefusal::InvalidMotor)
+            );
+        }
+    }
+
+    /// Stop is allowed with the arm switch high, so a pilot reaching for the
+    /// switch never blocks it, but never while armed.
+    #[test]
+    fn bench_stop_never_reaches_an_armed_aircraft() {
+        let stop = BenchMotorRequest::Stop;
+        assert_eq!(
+            validate_bench_motor_request(stop, false, false, true, false),
+            Ok(())
+        );
+        assert_eq!(
+            validate_bench_motor_request(stop, true, false, false, true),
+            Err(BenchMotorRefusal::Armed)
+        );
+    }
+
+    #[test]
+    fn a_recent_bench_request_blocks_arming_then_expires() {
+        assert!(!bench_blocks_arming(None, 5_000));
+        assert!(bench_blocks_arming(Some(5_000), 5_000));
+        assert!(bench_blocks_arming(Some(5_000), 6_999));
+        assert!(!bench_blocks_arming(Some(5_000), 7_000));
+        let past_u32 = u64::from(u32::MAX) + 10;
+        assert!(
+            bench_blocks_arming(Some(past_u32), past_u32 + 1_999),
+            "past the old u32 wrap"
+        );
     }
 }

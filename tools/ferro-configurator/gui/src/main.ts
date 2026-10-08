@@ -17,20 +17,28 @@ import {
 } from "./api";
 import { MockApi } from "./mock";
 import { drawRates, type RateAxis } from "./rates";
+import { MotorsTab, motorOrder } from "./motors";
 import { ControlFinder, channelName, drawChannels } from "./receiver";
+import { QuadViewer } from "./viewer";
 import { TauriApi, isTauri } from "./tauri";
 
 const api: Api = isTauri() ? new TauriApi() : new MockApi();
 const usingMock = !isTauri();
 
-/** How often the banner and receiver re-read the controller while connected. */
-const SAFETY_POLL_MS = 200;
+/** How often the banner and receiver redraw from the last status received. */
+const SAFETY_POLL_MS = 500;
+/** How often attitude and motor activity are read for the 3D view. */
+const LIVE_POLL_MS = 100;
 
 let connected = false;
 let safetyState: Safety | null = null;
 let config: FerroConfig | null = null;
 let bindings: SerialBindings | null = null;
 let pollTimer: number | undefined;
+let liveTimer: number | undefined;
+let liveInFlight = false;
+let viewer: QuadViewer;
+let motors: MotorsTab;
 let finder: ControlFinder | null = null;
 let finderTimeout: number | undefined;
 
@@ -183,13 +191,42 @@ async function pollSafety(): Promise<void> {
     return;
   }
   try {
-    safetyState = await api.safety();
+    // The cached report: polling the fresh one would hold the connection
+    // waiting for the next periodic status line, stalling the 3D view and
+    // any held motor button. Writes still check fresh.
+    safetyState = await api.safetyDisplay();
     renderSafety();
   } catch (error) {
     if (toBridgeError(error).kind === "notConnected") {
       connected = false;
     }
     renderSafety();
+  }
+}
+
+// ------------------------------------------------------------ live view ---
+
+async function pollLive(): Promise<void> {
+  if (!connected || liveInFlight) {
+    return;
+  }
+  liveInFlight = true;
+  try {
+    const live = await api.live();
+    viewer.render(live.attitude_deg);
+    motors.showActive(live.active_outputs);
+    const order = motorOrder(config);
+    const spinning = new Set<number>();
+    order.forEach((output, index) => {
+      if ((live.active_outputs & (1 << (output - 1))) !== 0) {
+        spinning.add(index + 1);
+      }
+    });
+    viewer.showSpinning(spinning);
+  } catch {
+    viewer.render(null);
+  } finally {
+    liveInFlight = false;
   }
 }
 
@@ -224,7 +261,9 @@ async function connect(): Promise<void> {
     await pollSafety();
     await loadConfig();
     await loadPorts();
+    motors.setConnected(true);
     pollTimer = window.setInterval(() => void pollSafety(), SAFETY_POLL_MS);
+    liveTimer = window.setInterval(() => void pollLive(), LIVE_POLL_MS);
   } catch (error) {
     connected = false;
     report(error);
@@ -235,7 +274,12 @@ async function connect(): Promise<void> {
 async function disconnect(): Promise<void> {
   window.clearInterval(pollTimer);
   pollTimer = undefined;
+  window.clearInterval(liveTimer);
+  liveTimer = undefined;
+  // Stops any held motor before the port closes.
+  motors.setConnected(false);
   await api.disconnect();
+  viewer.render(null);
   connected = false;
   if (finder) {
     stopFinding("");
@@ -512,6 +556,17 @@ async function downloadLatest(): Promise<void> {
 // ------------------------------------------------------------------ wire ---
 
 function wire(): void {
+  viewer = new QuadViewer(element("quad-viewer"));
+  motors = new MotorsTab(element("motors-tab"), {
+    api,
+    config: () => config,
+    save: async (draft) => {
+      config = await api.applyConfig(draft);
+      renderConfig();
+    },
+    status: setStatusLine,
+  });
+
   element("refresh-ports").addEventListener("click", () => void refreshPorts());
   element("connect").addEventListener("click", () => void connect());
   element("disconnect").addEventListener("click", () => void disconnect());
@@ -539,6 +594,11 @@ function wire(): void {
     element("toggle-radio").addEventListener("click", () => {
       const mock = api as MockApi;
       mock.radioOn = !mock.radioOn;
+      void pollSafety();
+    });
+    element("toggle-arm-switch").addEventListener("click", () => {
+      const mock = api as MockApi;
+      mock.armSwitch = !mock.armSwitch;
       void pollSafety();
     });
     element("flip-switch").addEventListener("click", () => {

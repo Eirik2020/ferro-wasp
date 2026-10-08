@@ -21,8 +21,8 @@ use ferro_configurator_bridge::{
     BridgeError, DEFAULT_TIMEOUT, Safety, Session, ports as discover,
 };
 use ferro_configurator_core::{
-    DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, PortInfo, SerialBindings,
-    SerialTransport,
+    DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, LiveSnapshot, PortInfo,
+    SerialBindings, SerialTransport,
 };
 use serde::Serialize;
 use tauri::{Emitter, Manager, State};
@@ -104,6 +104,40 @@ async fn disconnect(state: State<'_, AppState>) -> Result<(), BridgeError> {
 #[tauri::command]
 async fn safety(state: State<'_, AppState>) -> Result<Safety, BridgeError> {
     blocking(&state.session, Session::safety).await
+}
+
+#[tauri::command]
+async fn safety_display(state: State<'_, AppState>) -> Result<Safety, BridgeError> {
+    blocking(&state.session, Session::safety_display).await
+}
+
+#[tauri::command]
+async fn live(state: State<'_, AppState>) -> Result<LiveSnapshot, BridgeError> {
+    blocking(&state.session, Session::live).await
+}
+
+/// One renewal of a held motor button. Gated in the session and decided by
+/// the firmware's safety master; nothing here can make it spin.
+#[tauri::command]
+async fn motor_spin(state: State<'_, AppState>, motor: u8) -> Result<(), BridgeError> {
+    blocking(&state.session, move |session| session.motor_spin(motor)).await
+}
+
+#[tauri::command]
+async fn motor_stop(state: State<'_, AppState>) -> Result<(), BridgeError> {
+    blocking(&state.session, Session::motor_stop).await
+}
+
+#[tauri::command]
+async fn motor_direction(
+    state: State<'_, AppState>,
+    motor: u8,
+    reversed: bool,
+) -> Result<(), BridgeError> {
+    blocking(&state.session, move |session| {
+        session.motor_direction(motor, reversed)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -189,6 +223,11 @@ fn main() {
             connect,
             disconnect,
             safety,
+            safety_display,
+            live,
+            motor_spin,
+            motor_stop,
+            motor_direction,
             read_config,
             apply_config,
             serial_bindings,

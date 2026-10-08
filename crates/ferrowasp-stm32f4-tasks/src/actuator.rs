@@ -6,6 +6,7 @@
 
 use crate::prelude::backend::dshot;
 use crate::prelude::*;
+use crate::snapshots::MOTOR_OUTPUT_MAP_SNAPSHOT;
 
 /// A live arming guard: permit, RC link armable, arm switch high, throttle.
 /// Which pre-arm health it also requires is the board's safety policy.
@@ -109,6 +110,63 @@ where
         delay_ms,
     )
     .await
+}
+
+/// Carries out a bench motor request the safety master and the actuator have
+/// both accepted. Motors are logical; the published motor map names the
+/// physical lane, so a test spins the motor the pilot will see in the mixer.
+pub fn apply_bench_motor_request<SharedDshot>(
+    dshot: &mut SharedDshot,
+    request: safety::BenchMotorRequest,
+    idle_command: f32,
+    now_ms: u64,
+) where
+    SharedDshot: rtic::Mutex<T = dshot::DshotMotorBank>,
+{
+    let lane = |logical_motor: u8| {
+        ferrowasp_core::actuator::unpack_motor_map(
+            MOTOR_OUTPUT_MAP_SNAPSHOT.load(Ordering::Acquire),
+        )
+        .and_then(|map| ferrowasp_core::actuator::physical_output_for_logical(map, logical_motor))
+        .map(|output| output - 1)
+    };
+    match request {
+        safety::BenchMotorRequest::Stop => {
+            ActuatorHardware::new(dshot).force_off();
+        }
+        safety::BenchMotorRequest::Spin { logical_motor } => {
+            let Some(lane) = lane(logical_motor) else {
+                warn!("Bench motor spin refused: motor map not ready");
+                return;
+            };
+            let mut outputs = [safety::ESC_LOW_THROTTLE; 4];
+            outputs[lane] = idle_command;
+            // One short lease per request: the configurator renews it while
+            // its button is held, and the DShot bank stops the motor itself
+            // when renewals stop.
+            ActuatorHardware::new(dshot).apply_with_lease(
+                outputs,
+                now_ms,
+                safety::BENCH_MOTOR_LEASE_MS,
+            );
+        }
+        safety::BenchMotorRequest::Direction {
+            logical_motor,
+            reversed,
+        } => {
+            let Some(motor) = lane(logical_motor).and_then(dshot::DshotMotor::from_index) else {
+                warn!("Bench motor direction refused: motor map not ready");
+                return;
+            };
+            let sequence = dshot::DshotCommandSequence::spin_direction(reversed);
+            if dshot
+                .lock(|bank| bank.command_special(motor, sequence))
+                .is_err()
+            {
+                warn!("Bench motor direction refused: motors running or command pending");
+            }
+        }
+    }
 }
 
 pub fn take_fresh_motor_outputs(
@@ -424,6 +482,29 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
             }
 
             prepared_output
+        }
+
+        safety::ActuatorCmd::BenchMotor(request) => {
+            // Re-checked here because the system may have started arming
+            // since the safety master accepted the request. A refusal leaves
+            // the bank untouched: it may be driving an armed aircraft.
+            if let Err(refusal) = safety::validate_bench_motor_request(
+                request,
+                safety_armed,
+                cx.local.actuator_arm_permit_reader.read(),
+                cx.local.actuator_rc_arm_high_reader.read(),
+                true,
+            ) {
+                warn!("Bench motor request refused: {}", refusal.as_str());
+                return;
+            }
+            apply_bench_motor_request(
+                &mut cx.shared.dshot_motors,
+                request,
+                CONFIG::DSHOT_IDLE_COMMAND,
+                Mono::now().duration_since_epoch().to_millis(),
+            );
+            return;
         }
 
         safety::ActuatorCmd::ApplyLatestThrottle if safety_armed => {

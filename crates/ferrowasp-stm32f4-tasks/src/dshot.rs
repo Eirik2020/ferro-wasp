@@ -3,6 +3,7 @@
 
 use crate::prelude::backend::dshot;
 use crate::prelude::*;
+use crate::snapshots::DSHOT_ACTIVE_LANES;
 
 pub fn service_dshot_dma_irq(
     bank: &mut impl rtic::Mutex<T = dshot::DshotMotorBank>,
@@ -81,6 +82,19 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
 
             let event = dshot.service(now_ms);
             let telemetry_sent = dshot.take_telemetry_request_sent();
+            let active =
+                dshot
+                    .requested_values()
+                    .iter()
+                    .enumerate()
+                    .fold(0u8, |mask, (lane, value)| {
+                        if *value != 0 {
+                            mask | (1 << lane)
+                        } else {
+                            mask
+                        }
+                    });
+            DSHOT_ACTIVE_LANES.store(active, Ordering::Relaxed);
             (event, telemetry_sent)
         });
         if let (Some(request), Some(sent_motor)) = (*cx.local.esc_actuator_request, telemetry_sent)

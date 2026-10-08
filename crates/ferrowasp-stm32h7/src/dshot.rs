@@ -32,8 +32,9 @@ use stm32h7xx_hal::{
 
 pub use ferrowasp_stm32f4::dshot_bank::{
     COMPARE_DMA_SLOTS, DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS,
-    DSHOT600_BITRATE_HZ, DshotBank, DshotCommandError, DshotInitError, DshotInterruptEvent,
-    DshotLanes, DshotMotor, DshotServiceEvent, DshotStats, DshotTelemetryRequestError,
+    DSHOT600_BITRATE_HZ, DshotBank, DshotCommandError, DshotCommandSequence, DshotInitError,
+    DshotInterruptEvent, DshotLanes, DshotMotor, DshotServiceEvent, DshotSpecialCommandError,
+    DshotStats, DshotTelemetryRequestError,
 };
 
 pub type DshotDmaBuffer = [u32; COMPARE_DMA_SLOTS];

@@ -11,6 +11,7 @@ import {
   type Api,
   type FerroConfig,
   type FlightCatalog,
+  type LiveSnapshot,
   type PrearmCheck,
   type PortInfo,
   type Safety,
@@ -41,6 +42,7 @@ function baselineConfig(): FerroConfig {
     rc_map: 1234,
     rc_arm_channel: 9,
     rc_protocol: "sbus",
+    motor_map: 1234,
   };
 }
 
@@ -59,6 +61,14 @@ export class MockApi implements Api {
   armed = false;
   /** Lets the demo show the checklist failing on a lost receiver link. */
   radioOn = true;
+  /** Lets the demo show a motor test refused with the arm switch on. */
+  armSwitch = false;
+  /** The scripted board's wiring: logical motor i is on output BOARD[i]. */
+  private static readonly BOARD = [1, 2, 3, 4];
+  private spinningOutput = 0;
+  private spinUntil = 0;
+  /** Directions the scripted ESCs have saved, by physical output. */
+  readonly escReversed = [false, false, false, false];
   private aux = 988;
   private connected = false;
   private config = baselineConfig();
@@ -143,7 +153,7 @@ export class MockApi implements Api {
         rc_valid: this.radioOn,
         armable: this.radioOn && !this.armed,
         throttle: this.armed ? 112 : 0,
-        arm_switch: this.armed,
+        arm_switch: this.armed || this.armSwitch,
         armed: this.armed,
         battery_decivolts: 251,
         imu_stale: false,
@@ -172,6 +182,60 @@ export class MockApi implements Api {
         check("esc_idle", "ESCs report idle", null, "Not reported over USB yet."),
       ],
     };
+  }
+
+  async safetyDisplay(): Promise<Safety> {
+    return this.safety();
+  }
+
+  private outputFor(motor: number): number {
+    const order = String(this.config.motor_map ?? 1234);
+    const position = Number(order[motor - 1]);
+    return MockApi.BOARD[position - 1] ?? 0;
+  }
+
+  private refuseUnlessBenchReady(): void {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError("refused", "the controller is armed; motor tests run only when disarmed");
+    }
+    if (this.armSwitch) {
+      throw new BridgeError("refused", "turn the arm switch off before testing motors");
+    }
+  }
+
+  async live(): Promise<LiveSnapshot> {
+    this.requireConnection();
+    await sleep(5);
+    const t = Date.now() / 1000;
+    const active = Date.now() < this.spinUntil ? 1 << (this.spinningOutput - 1) : 0;
+    return {
+      armed: this.armed,
+      arm_switch: this.armSwitch || this.armed,
+      // A slow hand-held wobble, so the view visibly follows the "board".
+      attitude_deg: [18 * Math.sin(t * 0.9), 12 * Math.sin(t * 0.6 + 1), (t * 8) % 360],
+      active_outputs: active,
+    };
+  }
+
+  async motorSpin(motor: number): Promise<void> {
+    this.refuseUnlessBenchReady();
+    await sleep(4);
+    this.spinningOutput = this.outputFor(motor);
+    // The firmware's lease: the motor stops unless renewed within 250 ms.
+    this.spinUntil = Date.now() + 250;
+  }
+
+  async motorStop(): Promise<void> {
+    this.requireConnection();
+    this.spinUntil = 0;
+  }
+
+  async motorDirection(motor: number, reversed: boolean): Promise<void> {
+    this.refuseUnlessBenchReady();
+    await sleep(60);
+    const output = this.outputFor(motor);
+    this.escReversed[output - 1] = reversed;
   }
 
   async readConfig(): Promise<FerroConfig> {

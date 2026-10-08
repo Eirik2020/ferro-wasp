@@ -65,6 +65,9 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         rc_link_invalidator: signals::RcLinkInvalidator,
         actuator_arm_permit_writer: signals::ActuatorArmPermitWriter,
         actuator_arm_done_reader: signals::ActuatorArmDoneReader,
+        // When a bench motor request was last accepted, in milliseconds
+        // since boot; arming is refused for a short while after it.
+        last_bench_request_ms: Option<u64> = None,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
@@ -88,6 +91,12 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
     match event {
         safety::SafetyEvent::ArmRequested => {
             system_arm.disarm();
+
+            if safety::bench_blocks_arming(*cx.local.last_bench_request_ms, now_us / 1_000) {
+                arm_permit.revoke();
+                warn!("Arming refused: a motor test ran in the last two seconds");
+                return;
+            }
 
             if !CONFIG::ACTUATOR_OUTPUT_ENABLED {
                 arm_permit.revoke();
@@ -171,6 +180,33 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 && !arming_active
             {
                 warn!("Failed to spawn actuator Disarm");
+            }
+        }
+
+        // A props-off motor check from the configurator. Decided here, like
+        // every other request that can reach the motors, and refused unless
+        // the system is disarmed, not arming, and the arm switch is off.
+        safety::SafetyEvent::BenchMotor(request) => {
+            match safety::validate_bench_motor_request(
+                request,
+                system_arm.is_armed(),
+                arm_permit.is_allowed(),
+                rc_arm_high.read(),
+                CONFIG::ACTUATOR_OUTPUT_ENABLED,
+            ) {
+                Ok(()) => {
+                    if request != safety::BenchMotorRequest::Stop {
+                        *cx.local.last_bench_request_ms = Some(now_us / 1_000);
+                    }
+                    if cx
+                        .spawn
+                        .actuator_output(safety::ActuatorCmd::BenchMotor(request))
+                        .is_err()
+                    {
+                        warn!("Bench motor request dropped: actuator busy");
+                    }
+                }
+                Err(refusal) => warn!("Bench motor request refused: {}", refusal.as_str()),
             }
         }
 

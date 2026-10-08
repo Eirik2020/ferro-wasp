@@ -94,6 +94,11 @@ pub struct FerroConfig {
     /// `sbus` or `crsf`; applies after the controller reboots.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rc_protocol: Option<RcProtocol>,
+    /// Motor order: for logical motors 1-4 (Betaflight Quad X: rear-right,
+    /// front-right, rear-left, front-left), which board output each drives.
+    /// 1234 keeps the board wiring.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub motor_map: Option<u16>,
 }
 
 const fn schema_version() -> u16 {
@@ -134,6 +139,7 @@ impl Default for FerroConfig {
             rc_map: Some(1234),
             rc_arm_channel: Some(9),
             rc_protocol: Some(RcProtocol::Sbus),
+            motor_map: Some(1234),
         }
     }
 }
@@ -219,6 +225,15 @@ impl FerroConfig {
             errors.push(ConfigValidationError {
                 field: "rc_map",
                 reason: "must use each of channels 1-4 exactly once, like 1234 for AETR".to_owned(),
+            });
+        }
+
+        if let Some(order) = self.motor_map
+            && !is_stick_order(order)
+        {
+            errors.push(ConfigValidationError {
+                field: "motor_map",
+                reason: "must use each of outputs 1-4 exactly once, like 1234".to_owned(),
             });
         }
 
@@ -318,6 +333,7 @@ impl FerroConfig {
             ConfigKey::RcMap => self.rc_map.map(f32::from),
             ConfigKey::RcArmChannel => self.rc_arm_channel.map(f32::from),
             ConfigKey::RcProtocol => self.rc_protocol.map(RcProtocol::wire_value),
+            ConfigKey::MotorMap => self.motor_map.map(f32::from),
         }
     }
 
@@ -373,6 +389,7 @@ impl FerroConfig {
             ConfigKey::RcMap => self.rc_map = Some(value as u16),
             ConfigKey::RcArmChannel => self.rc_arm_channel = Some(value as u16),
             ConfigKey::RcProtocol => self.rc_protocol = RcProtocol::from_wire_value(value),
+            ConfigKey::MotorMap => self.motor_map = Some(value as u16),
         }
         Ok(())
     }
@@ -433,7 +450,7 @@ fn validate_rate_axis(
 fn added_after_schema_v2(key: ConfigKey) -> bool {
     matches!(
         key,
-        ConfigKey::RcMap | ConfigKey::RcArmChannel | ConfigKey::RcProtocol
+        ConfigKey::RcMap | ConfigKey::RcArmChannel | ConfigKey::RcProtocol | ConfigKey::MotorMap
     )
 }
 
@@ -447,6 +464,14 @@ fn is_stick_order(order: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn motor_order_must_use_each_output_once() {
+        let mut config = FerroConfig::default();
+        assert!(config.set_from_str(ConfigKey::MotorMap, "2143").is_ok());
+        assert!(config.set_from_str(ConfigKey::MotorMap, "1134").is_err());
+        assert_eq!(config.motor_map, Some(2143));
+    }
 
     #[test]
     fn rc_settings_validate_and_take_protocol_names() {
@@ -469,6 +494,7 @@ mod tests {
             rc_map: None,
             rc_arm_channel: None,
             rc_protocol: None,
+            motor_map: None,
             ..FerroConfig::default()
         };
         assert!(config.ensure_valid().is_ok());
@@ -572,6 +598,7 @@ d = 0.0
                 ConfigKey::RcMap => "2314",
                 ConfigKey::RcArmChannel => "5",
                 ConfigKey::RcProtocol => "crsf",
+                ConfigKey::MotorMap => "4321",
                 _ => "0.5",
             };
             config.set_from_str(key, value).unwrap();

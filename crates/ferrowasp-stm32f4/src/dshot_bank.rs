@@ -12,7 +12,9 @@ use ferrowasp_waveform::dshot::{
     DshotPacket, DshotTiming, command_lease_expired, four_motor_packets, throttles_to_dshot,
 };
 
-pub use ferrowasp_waveform::dshot::{COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotTimingError};
+pub use ferrowasp_waveform::dshot::{
+    COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotCommandSequence, DshotTimingError,
+};
 
 pub const DSHOT_COMMAND_MAX: u16 = 2000;
 pub const DSHOT_SERVICE_PERIOD_MS: u32 = 2;
@@ -43,6 +45,17 @@ impl DshotMotor {
         }
     }
 
+    /// The motor on zero-based lane `index`, the order motor commands use.
+    pub const fn from_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(Self::Motor1),
+            1 => Some(Self::Motor2),
+            2 => Some(Self::Motor3),
+            3 => Some(Self::Motor4),
+            _ => None,
+        }
+    }
+
     const fn completion_bit(self) -> u8 {
         1 << self.index()
     }
@@ -57,6 +70,15 @@ pub enum DshotInitError {
 pub enum DshotCommandError {
     ThrottleOutOfRange,
     Faulted,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DshotSpecialCommandError {
+    Faulted,
+    /// A special command needs every motor stopped and no command lease.
+    MotorsRunning,
+    /// A special-command run is already being sent.
+    CommandPending,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -149,6 +171,9 @@ where
     busy: bool,
     faulted: bool,
     stats: DshotStats,
+    /// Special-command frames still to send, for one motor. Sent only while
+    /// every throttle is zero; any throttle demand cancels it.
+    command_sequence: Option<(DshotMotor, DshotCommandSequence)>,
 }
 
 impl<L> DshotBank<L>
@@ -178,6 +203,7 @@ where
             busy: false,
             faulted: false,
             stats: DshotStats::default(),
+            command_sequence: None,
         }
     }
 
@@ -207,6 +233,52 @@ where
         self.lease_started_ms = now_ms;
         self.lease_duration_ms = Some(lease_duration_ms);
         Ok(())
+    }
+
+    /// Queues a run of special-command frames for one motor, such as a spin
+    /// direction change and save.
+    ///
+    /// Refused unless every motor is stopped with no command lease, so a
+    /// command frame never replaces a throttle frame on a spinning motor.
+    pub fn command_special(
+        &mut self,
+        motor: DshotMotor,
+        sequence: DshotCommandSequence,
+    ) -> Result<(), DshotSpecialCommandError> {
+        if self.faulted {
+            return Err(DshotSpecialCommandError::Faulted);
+        }
+        if self.lease_duration_ms.is_some() || self.requested_values.iter().any(|v| *v != 0) {
+            return Err(DshotSpecialCommandError::MotorsRunning);
+        }
+        if self.command_sequence.is_some() {
+            return Err(DshotSpecialCommandError::CommandPending);
+        }
+        self.command_sequence = Some((motor, sequence));
+        Ok(())
+    }
+
+    /// Whether a special-command run is still being sent.
+    pub const fn command_pending(&self) -> bool {
+        self.command_sequence.is_some()
+    }
+
+    /// The next special-command frame, as (motor, value); `None` when there
+    /// is none or a throttle demand has cancelled it.
+    fn next_command_frame(&mut self) -> Option<(DshotMotor, u16)> {
+        if self.requested_values.iter().any(|v| *v != 0) {
+            self.command_sequence = None;
+            return None;
+        }
+        let (motor, sequence) = self.command_sequence.as_mut()?;
+        let motor = *motor;
+        match sequence.next_value() {
+            Some(value) => Some((motor, value)),
+            None => {
+                self.command_sequence = None;
+                None
+            }
+        }
     }
 
     /// Requests legacy UART telemetry from exactly one motor in the next
@@ -333,11 +405,21 @@ where
             self.spares[3].take(),
         ];
 
-        let telemetry_request = self.telemetry_request;
-        let packets = four_motor_packets(
-            self.requested_values,
-            telemetry_request.map(DshotMotor::index),
-        );
+        // A special command needs the telemetry bit on its own lane, so a
+        // pending telemetry request waits for the next ordinary frame.
+        let (values, telemetry_lane, telemetry_request) = match self.next_command_frame() {
+            Some((motor, command)) => {
+                let mut values = [0; 4];
+                values[motor.index()] = command;
+                (values, Some(motor.index()), None)
+            }
+            None => (
+                self.requested_values,
+                self.telemetry_request.map(DshotMotor::index),
+                self.telemetry_request,
+            ),
+        };
+        let packets = four_motor_packets(values, telemetry_lane);
         let mut first_duties = [0; 4];
         for (index, packet) in packets.into_iter().enumerate() {
             if let Some(buffer) = next[index].as_deref_mut() {
@@ -373,8 +455,10 @@ where
             self.lanes.start_dma(motor);
         }
         self.lanes.start_frame(first_duties);
-        self.telemetry_request_sent = telemetry_request;
-        self.telemetry_request = None;
+        if telemetry_request.is_some() {
+            self.telemetry_request_sent = telemetry_request;
+            self.telemetry_request = None;
+        }
         Ok(())
     }
 
@@ -404,10 +488,164 @@ where
         self.busy = false;
         self.telemetry_request = None;
         self.telemetry_request_sent = None;
+        self.command_sequence = None;
         self.command_stop();
         self.lanes.force_outputs_low();
         for motor in DshotMotor::ALL {
             self.lanes.pause_and_clear(motor);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use ferrowasp_waveform::dshot::{
+        DSHOT_CMD_SAVE_SETTINGS, DSHOT_CMD_SPIN_DIRECTION_REVERSED, DSHOT_COMMAND_REPEATS,
+    };
+    use std::{boxed::Box, vec::Vec};
+
+    /// Lanes that record, for each started frame, every lane's DShot value
+    /// and telemetry bit, and complete every DMA transfer.
+    #[derive(Default)]
+    struct RecordingLanes {
+        frames: Vec<[(u16, bool); 4]>,
+    }
+
+    impl DshotLanes for RecordingLanes {
+        type Buffer = u16;
+
+        fn encode(packet: DshotPacket, _timing: DshotTiming, buffer: &mut u16) -> u16 {
+            *buffer = packet.0;
+            0
+        }
+
+        fn exchange_buffer(
+            &mut self,
+            motor: DshotMotor,
+            next: &'static mut u16,
+        ) -> Result<&'static mut u16, &'static mut u16> {
+            if motor == DshotMotor::Motor1 {
+                self.frames.push([(0, false); 4]);
+            }
+            let frame = self.frames.last_mut().expect("motor 1 starts each frame");
+            frame[motor.index()] = (*next >> 5, (*next >> 4) & 1 == 1);
+            Ok(next)
+        }
+
+        fn start_dma(&mut self, _motor: DshotMotor) {}
+        fn start_frame(&mut self, _first_duties: [u16; 4]) {}
+        fn stop_frame(&mut self) {}
+        fn force_outputs_low(&mut self) {}
+
+        fn dma_status(&self, _motor: DshotMotor) -> (bool, bool) {
+            (true, false)
+        }
+
+        fn pause_and_clear(&mut self, _motor: DshotMotor) {}
+    }
+
+    fn bank() -> DshotBank<RecordingLanes> {
+        let spares = core::array::from_fn(|_| Box::leak(Box::new(0u16)));
+        let timing = DshotTiming::from_clocks(168_000_000, DSHOT600_BITRATE_HZ).unwrap();
+        DshotBank::from_lanes(RecordingLanes::default(), spares, timing)
+    }
+
+    /// Start a frame and complete it on every lane.
+    fn frame(bank: &mut DshotBank<RecordingLanes>, now_ms: u64) {
+        assert_eq!(bank.service(now_ms), DshotServiceEvent::FrameStarted);
+        for motor in DshotMotor::ALL {
+            assert_eq!(bank.on_dma_interrupt(motor), DshotInterruptEvent::Completed);
+        }
+    }
+
+    #[test]
+    fn a_direction_run_sends_each_command_ten_times_on_its_lane_with_telemetry() {
+        let mut bank = bank();
+        let sequence = DshotCommandSequence::spin_direction(true);
+        bank.command_special(DshotMotor::Motor3, sequence).unwrap();
+        assert!(bank.command_pending());
+
+        let frames = usize::from(DSHOT_COMMAND_REPEATS) * 2;
+        for now in 0..=frames as u64 {
+            frame(&mut bank, now);
+        }
+        assert!(!bank.command_pending());
+
+        let sent = &bank.lanes.frames;
+        for (index, lanes) in sent[..frames].iter().enumerate() {
+            let expected = if index < usize::from(DSHOT_COMMAND_REPEATS) {
+                DSHOT_CMD_SPIN_DIRECTION_REVERSED
+            } else {
+                DSHOT_CMD_SAVE_SETTINGS
+            };
+            assert_eq!(lanes[2], (expected, true), "frame {index}");
+            for lane in [0, 1, 3] {
+                assert_eq!(lanes[lane], (0, false), "frame {index} lane {lane}");
+            }
+        }
+        // The run is spent: the next frame is an ordinary stopped frame.
+        assert_eq!(sent[frames], [(0, false); 4]);
+    }
+
+    #[test]
+    fn a_command_run_is_refused_while_any_motor_runs_or_a_lease_holds() {
+        let mut bank = bank();
+        bank.command_throttles([0, 100, 0, 0], 0, 250).unwrap();
+        assert_eq!(
+            bank.command_special(
+                DshotMotor::Motor1,
+                DshotCommandSequence::spin_direction(false)
+            ),
+            Err(DshotSpecialCommandError::MotorsRunning)
+        );
+
+        let mut bank = self::bank();
+        bank.command_special(
+            DshotMotor::Motor1,
+            DshotCommandSequence::spin_direction(false),
+        )
+        .unwrap();
+        assert_eq!(
+            bank.command_special(
+                DshotMotor::Motor2,
+                DshotCommandSequence::spin_direction(false)
+            ),
+            Err(DshotSpecialCommandError::CommandPending)
+        );
+    }
+
+    #[test]
+    fn a_throttle_demand_cancels_a_command_run() {
+        let mut bank = bank();
+        bank.command_special(
+            DshotMotor::Motor1,
+            DshotCommandSequence::spin_direction(true),
+        )
+        .unwrap();
+        frame(&mut bank, 0);
+        bank.command_throttles([100, 0, 0, 0], 1, 250).unwrap();
+        frame(&mut bank, 1);
+
+        assert!(!bank.command_pending());
+        let last = bank.lanes.frames.last().unwrap();
+        assert_ne!(last[0].0, DSHOT_CMD_SPIN_DIRECTION_REVERSED);
+        assert!(last[0].0 >= 48, "a throttle value, not a command");
+    }
+
+    #[test]
+    fn a_telemetry_request_waits_for_the_command_run() {
+        let mut bank = bank();
+        bank.command_special(
+            DshotMotor::Motor2,
+            DshotCommandSequence::spin_direction(false),
+        )
+        .unwrap();
+        bank.request_telemetry(DshotMotor::Motor4).unwrap();
+        frame(&mut bank, 0);
+        assert_eq!(bank.take_telemetry_request_sent(), None);
+        assert_eq!(bank.lanes.frames[0][3], (0, false));
     }
 }

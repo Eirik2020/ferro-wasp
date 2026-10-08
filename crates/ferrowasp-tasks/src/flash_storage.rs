@@ -14,6 +14,9 @@ use heapless::spsc::{Consumer, Producer, Queue};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2::rpc;
 
+use ferrowasp_core::actuator::MotorOutputMap;
+use ferrowasp_core::safety::BenchMotorRequest;
+
 use crate::drone_toolbox::{
     ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, RcRateProfile,
     TuningProfile, gyro_lpf_corner_hz,
@@ -133,6 +136,12 @@ pub enum StorageCommand {
     SerialShow,
     /// Stage a port's function; it applies after `config save` and a reboot.
     SerialSet(LogicalSerialPort, SerialFunction),
+    /// Attitude and motor activity, answered at once by the USB task rather
+    /// than waiting for the next periodic status line.
+    Live,
+    /// A props-off motor check. Handled by the USB task, which hands it to
+    /// the safety master; never by the storage task.
+    Motor(BenchMotorRequest),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -371,6 +380,37 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
         }
         (Some("config"), Some("save")) if words.next().is_none() => Ok(StorageCommand::ConfigSave),
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
+        (Some("live"), None) => Ok(StorageCommand::Live),
+        (Some("motor"), Some("stop")) if words.next().is_none() => {
+            Ok(StorageCommand::Motor(BenchMotorRequest::Stop))
+        }
+        (Some("motor"), Some("spin")) => {
+            let logical_motor = parse_motor(words.next())?;
+            match (words.next(), words.next()) {
+                (Some("CONFIRM"), None) => Ok(StorageCommand::Motor(BenchMotorRequest::Spin {
+                    logical_motor,
+                })),
+                _ => Err(CommandParseError::ConfirmationRequired),
+            }
+        }
+        (Some("motor"), Some("dir")) => {
+            let logical_motor = parse_motor(words.next())?;
+            let reversed = match words.next() {
+                Some("normal") => false,
+                Some("reversed") => true,
+                Some(_) => return Err(CommandParseError::InvalidArgument),
+                None => return Err(CommandParseError::MissingArgument),
+            };
+            match (words.next(), words.next()) {
+                (Some("CONFIRM"), None) => {
+                    Ok(StorageCommand::Motor(BenchMotorRequest::Direction {
+                        logical_motor,
+                        reversed,
+                    }))
+                }
+                _ => Err(CommandParseError::ConfirmationRequired),
+            }
+        }
         (Some("serial"), Some(port)) => {
             let port = LogicalSerialPort::parse(port).ok_or(CommandParseError::InvalidArgument)?;
             let function =
@@ -385,6 +425,16 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
     }
 }
 
+fn parse_motor(word: Option<&str>) -> Result<u8, CommandParseError> {
+    match word
+        .ok_or(CommandParseError::MissingArgument)?
+        .parse::<u8>()
+    {
+        Ok(motor @ 1..=4) => Ok(motor),
+        _ => Err(CommandParseError::InvalidArgument),
+    }
+}
+
 pub const LEGACY_STORED_CONFIG_LEN: usize = 44;
 /// Versions 2 and 3.
 pub const V3_STORED_CONFIG_LEN: usize = 84;
@@ -393,7 +443,11 @@ pub const V4_STORED_CONFIG_LEN: usize = V3_STORED_CONFIG_LEN + SERIAL_PORT_SLOTS
 /// Where version 5's receiver fields start: stick order (two bytes), arm
 /// channel, and RC protocol.
 const RC_FIELDS_OFFSET: usize = V4_STORED_CONFIG_LEN;
-pub const STORED_CONFIG_LEN: usize = RC_FIELDS_OFFSET + 4;
+/// Version 5.
+pub const V5_STORED_CONFIG_LEN: usize = RC_FIELDS_OFFSET + 4;
+/// Where version 6's motor order starts (two bytes).
+const MOTOR_MAP_OFFSET: usize = V5_STORED_CONFIG_LEN;
+pub const STORED_CONFIG_LEN: usize = MOTOR_MAP_OFFSET + 2;
 /// Version 5 adds the RC channel map and RC protocol after the version 4
 /// payload. Every earlier payload decodes with [`RcChannelMap::AETR_ARM_CH9`]
 /// and SBUS, the fixed map and protocol firmware used before, so updating
@@ -405,7 +459,10 @@ pub const STORED_CONFIG_LEN: usize = RC_FIELDS_OFFSET + 4;
 /// mean at one loop rate. A version 2 payload is still read: its coefficient
 /// is converted at the rate it was authored for, so a tune saved before this
 /// change keeps the filter it had.
-const STORED_CONFIG_SCHEMA_VERSION: u16 = 5;
+/// Version 6 adds the motor order after the version 5 payload; earlier
+/// payloads decode with [`MotorOutputMap::IDENTITY`], the board's wiring.
+const STORED_CONFIG_SCHEMA_VERSION: u16 = 6;
+const STORED_CONFIG_SCHEMA_VERSION_RC: u16 = 5;
 const STORED_CONFIG_SCHEMA_VERSION_BINDINGS: u16 = 4;
 const STORED_CONFIG_SCHEMA_VERSION_CORNER: u16 = 3;
 const STORED_CONFIG_SCHEMA_VERSION_ALPHA: u16 = 2;
@@ -500,6 +557,10 @@ impl StoredConfig {
                 Some(protocol) => candidate.rc_protocol = protocol,
                 None => return false,
             },
+            ConfigKey::MotorMap => match MotorOutputMap::from_config(value as u16) {
+                Some(map) => candidate.tuning.motor_map = map,
+                None => return false,
+            },
         }
         if candidate.tuning.sanitized() != candidate.tuning {
             return false;
@@ -534,6 +595,7 @@ impl StoredConfig {
             ConfigKey::RcMap => self.tuning.rc_map.stick_order() as f32,
             ConfigKey::RcArmChannel => self.tuning.rc_map.arm_channel() as f32,
             ConfigKey::RcProtocol => self.rc_protocol as u8 as f32,
+            ConfigKey::MotorMap => self.tuning.motor_map.to_config() as f32,
         }
     }
 
@@ -582,6 +644,8 @@ impl StoredConfig {
             .copy_from_slice(&self.tuning.rc_map.stick_order().to_le_bytes());
         output[RC_FIELDS_OFFSET + 2] = self.tuning.rc_map.arm_channel();
         output[RC_FIELDS_OFFSET + 3] = self.rc_protocol as u8;
+        output[MOTOR_MAP_OFFSET..STORED_CONFIG_LEN]
+            .copy_from_slice(&self.tuning.motor_map.to_config().to_le_bytes());
         output
     }
 
@@ -590,6 +654,7 @@ impl StoredConfig {
             LEGACY_STORED_CONFIG_LEN,
             V3_STORED_CONFIG_LEN,
             V4_STORED_CONFIG_LEN,
+            V5_STORED_CONFIG_LEN,
             STORED_CONFIG_LEN,
         ]
         .contains(&input.len())
@@ -614,6 +679,7 @@ impl StoredConfig {
             let stored_version = u16::from_le_bytes([input[42], input[43]]);
             let expected_len = match stored_version {
                 STORED_CONFIG_SCHEMA_VERSION => STORED_CONFIG_LEN,
+                STORED_CONFIG_SCHEMA_VERSION_RC => V5_STORED_CONFIG_LEN,
                 STORED_CONFIG_SCHEMA_VERSION_BINDINGS => V4_STORED_CONFIG_LEN,
                 STORED_CONFIG_SCHEMA_VERSION_CORNER | STORED_CONFIG_SCHEMA_VERSION_ALPHA => {
                     V3_STORED_CONFIG_LEN
@@ -641,14 +707,22 @@ impl StoredConfig {
                 deadband: u16::from_le_bytes([input[80], input[81]]),
             }
         };
-        let (rc_map, rc_protocol) = if schema_version == STORED_CONFIG_SCHEMA_VERSION {
-            let fields = &input[RC_FIELDS_OFFSET..STORED_CONFIG_LEN];
+        let (rc_map, rc_protocol) = if schema_version >= STORED_CONFIG_SCHEMA_VERSION_RC {
+            let fields = &input[RC_FIELDS_OFFSET..V5_STORED_CONFIG_LEN];
             (
                 RcChannelMap::from_config(u16::from_le_bytes([fields[0], fields[1]]), fields[2])?,
                 RcProtocol::from_u8(fields[3])?,
             )
         } else {
             (RcChannelMap::AETR_ARM_CH9, RcProtocol::Sbus)
+        };
+        let motor_map = if schema_version == STORED_CONFIG_SCHEMA_VERSION {
+            MotorOutputMap::from_config(u16::from_le_bytes([
+                input[MOTOR_MAP_OFFSET],
+                input[MOTOR_MAP_OFFSET + 1],
+            ]))?
+        } else {
+            MotorOutputMap::IDENTITY
         };
         let candidate = Self {
             tuning: TuningProfile {
@@ -679,6 +753,7 @@ impl StoredConfig {
                 },
                 rc_rates,
                 rc_map,
+                motor_map,
             },
             log_rate_divisor: u16::from_le_bytes([input[40], input[41]]),
             rc_protocol,
@@ -1266,6 +1341,63 @@ mod tests {
         let mut bad_map = encoded;
         bad_map[RC_FIELDS_OFFSET..RC_FIELDS_OFFSET + 2].copy_from_slice(&1224u16.to_le_bytes());
         assert_eq!(StoredConfig::decode(&bad_map), None);
+    }
+
+    #[test]
+    fn motor_order_is_saved_and_older_payloads_keep_the_board_wiring() {
+        let mut config = StoredConfig::first_hop_default();
+        assert_eq!(config.get(ConfigKey::MotorMap), 1234.0);
+        assert!(config.set(ConfigKey::MotorMap, 2143.0));
+        assert!(!config.set(ConfigKey::MotorMap, 1123.0));
+        assert!(!config.set(ConfigKey::MotorMap, 1235.0));
+        let encoded = config.encode();
+        assert_eq!(StoredConfig::decode(&encoded), Some(config));
+
+        let mut version_five = [0u8; V5_STORED_CONFIG_LEN];
+        version_five.copy_from_slice(&encoded[..V5_STORED_CONFIG_LEN]);
+        version_five[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION_RC.to_le_bytes());
+        let decoded =
+            StoredConfig::decode(&version_five).expect("version 5 must still be readable");
+        assert_eq!(decoded.tuning.motor_map, MotorOutputMap::IDENTITY);
+        assert_eq!(decoded.tuning.rc_map, config.tuning.rc_map);
+
+        let mut bad = encoded;
+        bad[MOTOR_MAP_OFFSET..STORED_CONFIG_LEN].copy_from_slice(&1123u16.to_le_bytes());
+        assert_eq!(StoredConfig::decode(&bad), None);
+    }
+
+    #[test]
+    fn motor_commands_need_confirmation_and_a_motor_number() {
+        assert_eq!(
+            parse_command("motor spin 3 CONFIRM"),
+            Ok(StorageCommand::Motor(BenchMotorRequest::Spin {
+                logical_motor: 3
+            }))
+        );
+        assert_eq!(
+            parse_command("motor spin 3"),
+            Err(CommandParseError::ConfirmationRequired)
+        );
+        assert_eq!(
+            parse_command("motor spin 5 CONFIRM"),
+            Err(CommandParseError::InvalidArgument)
+        );
+        assert_eq!(
+            parse_command("motor dir 2 reversed CONFIRM"),
+            Ok(StorageCommand::Motor(BenchMotorRequest::Direction {
+                logical_motor: 2,
+                reversed: true
+            }))
+        );
+        assert_eq!(
+            parse_command("motor dir 2 backwards CONFIRM"),
+            Err(CommandParseError::InvalidArgument)
+        );
+        assert_eq!(
+            parse_command("motor stop"),
+            Ok(StorageCommand::Motor(BenchMotorRequest::Stop))
+        );
+        assert_eq!(parse_command("live"), Ok(StorageCommand::Live));
     }
 
     #[test]

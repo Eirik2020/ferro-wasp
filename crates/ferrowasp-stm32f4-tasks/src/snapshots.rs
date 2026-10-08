@@ -4,7 +4,9 @@
 //! task that reads it must name the same static, so a firmware re-exports
 //! these by name and never defines its own.
 
-use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU16, AtomicU32, Ordering};
+use core::sync::atomic::{
+    AtomicBool, AtomicI16, AtomicI32, AtomicU8, AtomicU16, AtomicU32, Ordering,
+};
 
 pub static IMU_LATEST_SEQ: AtomicU32 = AtomicU32::new(0);
 pub static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
@@ -23,6 +25,16 @@ pub static CONTROL_YAW_DPS10: AtomicI32 = AtomicI32::new(0);
 pub static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
 pub static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
 pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
+/// The mixer's logical-to-physical motor map as four digits, published by the
+/// control loop; `0` until it first runs. Bench motor requests use it so a
+/// test spins the motor the mixer would.
+pub static MOTOR_OUTPUT_MAP_SNAPSHOT: AtomicU16 = AtomicU16::new(0);
+/// Estimated attitude, tenths of a degree: roll, pitch, and yaw.
+pub static ATTITUDE_ROLL_DEG10: AtomicI16 = AtomicI16::new(0);
+pub static ATTITUDE_PITCH_DEG10: AtomicI16 = AtomicI16::new(0);
+pub static ATTITUDE_YAW_DEG10: AtomicI16 = AtomicI16::new(0);
+/// Bit per physical DShot lane currently commanded above zero.
+pub static DSHOT_ACTIVE_LANES: AtomicU8 = AtomicU8::new(0);
 pub static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "imu_orientation_rtt")]
 pub static IMU_ORIENTATION_VERSION: AtomicU32 = AtomicU32::new(0);

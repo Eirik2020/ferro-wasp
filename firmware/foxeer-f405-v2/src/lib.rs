@@ -160,6 +160,9 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY, RC_ARM_HIGH, RC_THROTTLE,
     SAFETY_ARMED, USB_DEBUG_DUE, USB_RC_ARMABLE_SNAPSHOT, USB_RC_VALID_SNAPSHOT,
 };
+pub use ferrowasp_stm32f4_tasks::snapshots::{
+    ATTITUDE_PITCH_DEG10, ATTITUDE_ROLL_DEG10, ATTITUDE_YAW_DEG10, DSHOT_ACTIVE_LANES,
+};
 #[cfg(feature = "imu_orientation_rtt")]
 pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_LATEST_ACCEL_X_MG, IMU_LATEST_ACCEL_Y_MG, IMU_LATEST_ACCEL_Z_MG, IMU_LATEST_GYRO_X_DPS10,

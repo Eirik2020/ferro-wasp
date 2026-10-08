@@ -817,6 +817,9 @@ pub struct TuningProfile {
     pub imu_lpf_hz: f32,
     pub rc_rates: RcRateProfile,
     pub rc_map: RcChannelMap,
+    /// Which board output each logical motor drives, over the board's
+    /// wiring. Applied by the control loop only while disarmed.
+    pub motor_map: ferrowasp_core::actuator::MotorOutputMap,
 }
 
 impl TuningProfile {
@@ -842,6 +845,7 @@ impl TuningProfile {
             imu_lpf_hz: IMU_GYRO_LPF_HZ,
             rc_rates: RC_RATE_PROFILE,
             rc_map: RcChannelMap::AETR_ARM_CH9,
+            motor_map: ferrowasp_core::actuator::MotorOutputMap::IDENTITY,
         }
     }
 
@@ -867,6 +871,7 @@ impl TuningProfile {
             imu_lpf_hz: IMU_GYRO_LPF_HZ,
             rc_rates: RC_RATE_PROFILE,
             rc_map: RcChannelMap::AETR_ARM_CH9,
+            motor_map: ferrowasp_core::actuator::MotorOutputMap::IDENTITY,
         }
     }
 
