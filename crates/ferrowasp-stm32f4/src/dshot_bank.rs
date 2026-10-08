@@ -297,6 +297,12 @@ where
         Ok(())
     }
 
+    /// Withdraws a telemetry request no frame has carried yet. The ESC
+    /// manager has given up on it, so it must not reach an ESC later.
+    pub fn cancel_telemetry_request(&mut self) {
+        self.telemetry_request = None;
+    }
+
     pub fn service(&mut self, now_ms: u64) -> DshotServiceEvent {
         self.telemetry_request_sent = None;
         if self.faulted {
@@ -647,5 +653,26 @@ mod tests {
         frame(&mut bank, 0);
         assert_eq!(bank.take_telemetry_request_sent(), None);
         assert_eq!(bank.lanes.frames[0][3], (0, false));
+    }
+
+    #[test]
+    fn a_withdrawn_telemetry_request_is_never_sent() {
+        let mut bank = bank();
+        bank.command_special(
+            DshotMotor::Motor2,
+            DshotCommandSequence::spin_direction(false),
+        )
+        .unwrap();
+        bank.request_telemetry(DshotMotor::Motor4).unwrap();
+        frame(&mut bank, 0);
+        bank.cancel_telemetry_request();
+        while bank.command_pending() {
+            frame(&mut bank, 1);
+        }
+        frame(&mut bank, 1);
+        assert_eq!(bank.take_telemetry_request_sent(), None);
+        assert!(bank.lanes.frames.iter().all(|lanes| !lanes[3].1));
+        // The slot is free for the next request.
+        bank.request_telemetry(DshotMotor::Motor1).unwrap();
     }
 }

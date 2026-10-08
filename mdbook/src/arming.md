@@ -85,9 +85,9 @@ fail closed, and stop all outputs. The switch must then be observed low before
 a fresh low-to-high request can start another attempt.
 
 Power the ESCs before the manager's first post-delay request. If the FC runs
-without ESC power long enough for that request to time out, telemetry is
-latched off until reboot. After applying ESC power, reboot the FC and complete a
-fresh switch-low/low-to-high arm sequence.
+without ESC power long enough for that request to time out, telemetry stops.
+After applying ESC power, wait a second for it to resume while disarmed, then
+complete a fresh switch-low/low-to-high arm sequence.
 
 The ESC manager does not decide whether RPM is sufficient and cannot change
 the safety state. It only owns UART parsing, request rotation, response
@@ -97,8 +97,10 @@ actuator path owns the qualification decision.
 A CRC-valid UART frame can complete while its operation is still queued. The
 manager may buffer that frame, but it remains quarantined and is published only
 after the exact sequence/output frame-start acknowledgement arrives from the
-DShot service. Association timeouts latch telemetry off until reboot so late
-traffic cannot be relabeled. UART, parser, bounded-queue, and timeout failures
+DShot service. Association timeouts stop telemetry so late traffic cannot be
+relabeled; it resumes only while disarmed, after a 500 ms quiet window in
+which the DShot service has dropped any request the manager gave up on, and
+with every stored sample dropped, so qualification still needs fresh eRPM. UART, parser, bounded-queue, and timeout failures
 cannot grant authority; when they prevent required pre-arm samples,
 qualification fails closed. Telemetry loss after `Armed` is currently
 observational and does not itself disarm.

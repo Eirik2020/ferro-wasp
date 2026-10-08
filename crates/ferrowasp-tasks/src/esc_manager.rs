@@ -6,6 +6,10 @@ use heapless::spsc::{Consumer, Producer, Queue};
 pub const ESC_REQUEST_QUEUE_CAPACITY: usize = 4;
 pub const ESC_ACK_QUEUE_CAPACITY: usize = 4;
 pub const ESC_TELEMETRY_UPDATE_QUEUE_CAPACITY: usize = 16;
+/// How long the actuator side may hold a telemetry request before it drops
+/// it unsent. The manager gives up on an acknowledgement after the same
+/// time, so a request it has given up on never reaches an ESC later.
+pub const ESC_REQUEST_EXPIRY_MS: u32 = 20;
 
 pub type EscRequestQueue = Queue<EscActuatorRequest, ESC_REQUEST_QUEUE_CAPACITY>;
 pub type EscRequestProducer = Producer<'static, EscActuatorRequest>;
@@ -99,6 +103,9 @@ pub struct EscManagerConfig {
     pub request_period_ms: u32,
     pub actuator_ack_timeout_ms: u32,
     pub telemetry_response_timeout_ms: u32,
+    /// After a timeout, how long the telemetry line and the acknowledgement
+    /// queue must stay silent, disarmed, before requests resume.
+    pub recovery_quiet_ms: u32,
 }
 
 impl EscManagerConfig {
@@ -106,8 +113,9 @@ impl EscManagerConfig {
         Self {
             boot_delay_ms: 5_000,
             request_period_ms: 20,
-            actuator_ack_timeout_ms: 20,
+            actuator_ack_timeout_ms: ESC_REQUEST_EXPIRY_MS,
             telemetry_response_timeout_ms: 100,
+            recovery_quiet_ms: 500,
         }
     }
 }
@@ -120,6 +128,8 @@ pub struct EscManagerStats {
     pub telemetry_response_timeouts: u32,
     pub mismatched_acks: u32,
     pub unsolicited_frames: u32,
+    /// Times telemetry resumed after a timeout.
+    pub recoveries: u32,
     pub wire: WireParserStats,
 }
 
@@ -145,9 +155,13 @@ pub struct EscManager {
     pending: Option<PendingRequest>,
     // Legacy BLHeli frames carry no output identity. Once either side of a
     // request times out, a late acknowledgement or frame cannot be safely
-    // associated with a later request, so telemetry remains fail-closed until
-    // reboot.
+    // associated with a later request, so telemetry stops. It resumes only
+    // while disarmed, after `recovery_quiet_ms` with no wire byte and no
+    // acknowledgement: by then the actuator has dropped the request
+    // (`ESC_REQUEST_EXPIRY_MS`) and nothing it caused can still arrive.
     faulted: bool,
+    /// The fault, or the last byte or acknowledgement seen since.
+    quiet_since_ms: u64,
     parser: StreamParser,
     samples: [Option<EscTelemetryObservation>; 4],
     stats: EscManagerStats,
@@ -163,6 +177,7 @@ impl EscManager {
             last_request_ms: None,
             pending: None,
             faulted: false,
+            quiet_since_ms: 0,
             parser: StreamParser::new(),
             samples: [None; 4],
             stats: EscManagerStats {
@@ -172,6 +187,7 @@ impl EscManager {
                 telemetry_response_timeouts: 0,
                 mismatched_acks: 0,
                 unsolicited_frames: 0,
+                recoveries: 0,
                 wire: WireParserStats {
                     valid_frames: 0,
                     crc_failures: 0,
@@ -220,6 +236,10 @@ impl EscManager {
     }
 
     pub fn on_actuator_ack(&mut self, ack: EscActuatorAck) -> EscAckOutcome {
+        if self.faulted {
+            // The actuator was still busy with a request: not quiet yet.
+            self.quiet_since_ms = self.quiet_since_ms.max(ack.started_at_ms);
+        }
         let Some(PendingRequest::Queued {
             request,
             early_observation,
@@ -260,6 +280,7 @@ impl EscManager {
             }) if elapsed_at_least(queued_at_ms, now_ms, self.config.actuator_ack_timeout_ms) => {
                 self.pending = None;
                 self.faulted = true;
+                self.quiet_since_ms = now_ms;
                 self.stats.actuator_ack_timeouts = self.stats.actuator_ack_timeouts.wrapping_add(1);
                 Some(EscManagerTimeout::ActuatorAck(request))
             }
@@ -274,6 +295,7 @@ impl EscManager {
             {
                 self.pending = None;
                 self.faulted = true;
+                self.quiet_since_ms = now_ms;
                 self.stats.telemetry_response_timeouts =
                     self.stats.telemetry_response_timeouts.wrapping_add(1);
                 Some(EscManagerTimeout::TelemetryResponse(request))
@@ -283,6 +305,9 @@ impl EscManager {
     }
 
     pub fn push_wire_byte(&mut self, byte: u8, observed_at_ms: u64) -> Option<EscTelemetryUpdate> {
+        if self.faulted {
+            self.quiet_since_ms = self.quiet_since_ms.max(observed_at_ms);
+        }
         let sample = self.parser.push(byte)?;
         self.stats.wire = self.parser.stats();
 
@@ -342,9 +367,29 @@ impl EscManager {
         self.samples
     }
 
-    /// Whether an association timeout has latched telemetry off until reboot.
+    /// Whether an association timeout has stopped telemetry.
     pub const fn is_faulted(&self) -> bool {
         self.faulted
+    }
+
+    /// Resumes telemetry after a timeout, once the craft is disarmed and
+    /// the line and acknowledgements have been silent for
+    /// `recovery_quiet_ms`. Every stored sample is dropped, so arming
+    /// qualification still needs fresh eRPM from each motor. `true` when it
+    /// resumed.
+    pub fn try_recover(&mut self, now_ms: u64, armed: bool) -> bool {
+        // Saturating, unlike `elapsed_at_least`: an acknowledgement stamped
+        // after `now_ms` must keep the window open, not end it.
+        let quiet_ms = now_ms.saturating_sub(self.quiet_since_ms);
+        if !self.faulted || armed || quiet_ms < u64::from(self.config.recovery_quiet_ms) {
+            return false;
+        }
+        self.faulted = false;
+        self.pending = None;
+        self.parser.reset();
+        self.samples = [None; 4];
+        self.stats.recoveries = self.stats.recoveries.wrapping_add(1);
+        true
     }
 
     pub const fn stats(&self) -> EscManagerStats {
@@ -584,7 +629,7 @@ mod tests {
     }
 
     #[test]
-    fn actuator_ack_timeout_latches_manager_fault() {
+    fn actuator_ack_timeout_stops_telemetry() {
         let mut manager = EscManager::new(EscManagerConfig::legacy_uart(), 0);
         let request = manager.next_request(5_000).unwrap();
         assert!(manager.mark_request_queued(request, 5_000));
@@ -611,7 +656,7 @@ mod tests {
     }
 
     #[test]
-    fn telemetry_response_timeout_latches_manager_fault() {
+    fn telemetry_response_timeout_stops_telemetry() {
         let mut manager = EscManager::new(EscManagerConfig::legacy_uart(), 0);
         let request = manager.next_request(5_000).unwrap();
         assert!(manager.mark_request_queued(request, 5_000));
@@ -634,6 +679,61 @@ mod tests {
         }
         assert_eq!(manager.samples(), [None; 4]);
         assert_eq!(manager.stats().unsolicited_frames, 1);
+    }
+
+    #[test]
+    fn telemetry_resumes_only_disarmed_after_a_quiet_window_with_no_old_sample() {
+        let mut manager = EscManager::new(EscManagerConfig::legacy_uart(), 0);
+        let first = manager.next_request(5_000).unwrap();
+        assert!(manager.mark_request_queued(first, 5_000));
+        manager.on_actuator_ack(EscActuatorAck {
+            request: first,
+            started_at_ms: 5_001,
+        });
+        for byte in frame() {
+            manager.push_wire_byte(byte, 5_002);
+        }
+        let second = manager.next_request(5_020).unwrap();
+        assert!(manager.mark_request_queued(second, 5_020));
+        assert!(manager.poll_timeout(5_040).is_some());
+
+        // Armed, or too soon: still stopped.
+        assert!(!manager.try_recover(6_000, true));
+        assert!(!manager.try_recover(5_539, false));
+        // A late frame keeps the line from counting as quiet and is not
+        // credited to anything.
+        for byte in frame() {
+            assert_eq!(manager.push_wire_byte(byte, 5_300), None);
+        }
+        assert!(!manager.try_recover(5_799, false));
+        assert!(manager.is_faulted());
+
+        assert!(manager.try_recover(5_800, false));
+        assert!(!manager.is_faulted());
+        assert_eq!(manager.samples(), [None; 4]);
+        assert_eq!(manager.stats().recoveries, 1);
+        // Requests resume where they left off.
+        let next = manager.next_request(5_800).unwrap();
+        assert_eq!(next.sequence, second.sequence + 1);
+    }
+
+    #[test]
+    fn an_old_acknowledgement_keeps_the_quiet_window_open() {
+        let mut manager = EscManager::new(EscManagerConfig::legacy_uart(), 0);
+        let request = manager.next_request(5_000).unwrap();
+        assert!(manager.mark_request_queued(request, 5_000));
+        assert!(manager.poll_timeout(5_020).is_some());
+        // The actuator sent it after all, later than this pass's clock read.
+        assert_eq!(
+            manager.on_actuator_ack(EscActuatorAck {
+                request,
+                started_at_ms: 5_530,
+            }),
+            EscAckOutcome::Rejected
+        );
+        assert!(!manager.try_recover(5_525, false));
+        assert!(!manager.try_recover(6_029, false));
+        assert!(manager.try_recover(6_030, false));
     }
 
     #[test]

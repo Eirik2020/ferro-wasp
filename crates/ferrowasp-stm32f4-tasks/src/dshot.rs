@@ -47,6 +47,7 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
         esc_ack_producer: esc::EscAckProducer,
         esc_actuator_request: Option<esc::EscActuatorRequest> = None,
         esc_actuator_request_submitted: bool = false,
+        esc_actuator_request_taken_ms: u64 = 0,
     ],
     spawn = [safety_master(event: safety::SafetyEvent)],
     config = [dshot_motor_for_output: fn(esc::EscOutput) -> dshot::DshotMotor],
@@ -60,9 +61,23 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
         if cx.local.esc_actuator_request.is_none() {
             *cx.local.esc_actuator_request = cx.local.esc_request_consumer.dequeue();
             *cx.local.esc_actuator_request_submitted = false;
+            *cx.local.esc_actuator_request_taken_ms = now_ms;
         }
+        // The ESC manager gives up on an acknowledgement after the same
+        // time. Drop the request unsent, so no frame it would cause can be
+        // credited to a later one.
+        let expired = cx.local.esc_actuator_request.is_some()
+            && now_ms.saturating_sub(*cx.local.esc_actuator_request_taken_ms)
+                >= u64::from(esc::ESC_REQUEST_EXPIRY_MS);
 
         let (event, telemetry_sent) = cx.shared.dshot_motors.lock(|dshot| {
+            if expired {
+                if *cx.local.esc_actuator_request_submitted {
+                    dshot.cancel_telemetry_request();
+                }
+                *cx.local.esc_actuator_request = None;
+                *cx.local.esc_actuator_request_submitted = false;
+            }
             if let Some(request) = *cx.local.esc_actuator_request
                 && !*cx.local.esc_actuator_request_submitted
             {

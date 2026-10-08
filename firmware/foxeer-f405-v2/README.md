@@ -179,8 +179,9 @@ parser/request statistics to RTT. Only the actuator-owned DShot service can
 set a frame's telemetry-request bit; it returns a sequenced acknowledgement to
 the manager after the request is actually emitted. The manager additionally
 publishes bounded, timestamped updates to the actuator owner for idle
-qualification. A request/response-association timeout latches telemetry off
-until reboot and therefore causes later arm attempts to fail closed.
+qualification. A request/response-association timeout stops telemetry, so arm
+attempts fail closed until it resumes: only while disarmed, after 500 ms with
+no wire byte and no acknowledgement, with every stored sample dropped.
 RTT identifies both physical output and logical motor, and reports request,
 acknowledgement, response, mismatch, unsolicited-frame, CRC, and discarded-byte
 counters so the checkpoint can distinguish wiring faults from association
