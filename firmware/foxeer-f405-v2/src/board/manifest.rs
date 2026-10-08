@@ -175,6 +175,9 @@ pub const DISPATCHER_IRQS: &[&str] = &[
 pub const HARDWARE_IRQS: &[&str] = &[
     "USART2",
     "DMA1_STREAM5",
+    "USART3",
+    "DMA1_STREAM1",
+    "DMA1_STREAM3",
     "UART4",
     "DMA1_STREAM2",
     "DMA1_STREAM4",
@@ -229,6 +232,14 @@ pub const CLAIMS: &[ResourceClaim] = &[
     ResourceClaim::new(ResourceKind::Irq, "USART2", "UART2 RX IDLE"),
     ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM5", "UART2 RX DMA"),
     ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM6", "UART2 TX DMA"),
+    ResourceClaim::new(ResourceKind::Peripheral, "USART3", "UART3 configurator"),
+    ResourceClaim::new(ResourceKind::Pin, "PC10", "USART3 TX configurator"),
+    ResourceClaim::new(ResourceKind::Pin, "PC11", "USART3 RX configurator"),
+    ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM1_CH4", "UART3 RX"),
+    ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM3_CH4", "UART3 TX"),
+    ResourceClaim::new(ResourceKind::Irq, "USART3", "UART3 RX IDLE"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM1", "UART3 RX DMA"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA1_STREAM3", "UART3 TX DMA"),
     ResourceClaim::new(ResourceKind::Peripheral, "UART4", "DJI MSP DisplayPort"),
     ResourceClaim::new(ResourceKind::Pin, "PA0", "UART4 TX MSP"),
     ResourceClaim::new(ResourceKind::Pin, "PA1", "UART4 RX MSP"),
@@ -555,9 +566,9 @@ mod tests {
 
     #[test]
     fn active_claim_counts_match_the_standard_runtime_contract() {
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 11);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 13);
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::TimerChannel), 4);
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 12);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 13);
     }
 
     #[test]

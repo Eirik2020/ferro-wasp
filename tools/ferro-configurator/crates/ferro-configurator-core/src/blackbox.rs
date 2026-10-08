@@ -9,9 +9,10 @@ use ferrowasp_core::blackbox::{
     FLASH_PAGE_LEN, FLIGHT_RECORD_FLAG_BOOT_SESSION_START, decode_page, record_from_page,
 };
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 use crate::{
-    client::{FerroClient, LogInfo},
+    client::{FerroClient, LogInfo, UnsyncedFlight},
     error::{FerroError, Result},
     transport::LineTransport,
 };
@@ -291,6 +292,107 @@ pub fn download_flight<T: LineTransport>(
     })
 }
 
+/// One flight a log sync stored and the controller acknowledged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SyncedFlight {
+    pub flight_id: u32,
+    pub pages: u32,
+    pub output: PathBuf,
+    /// The file was already complete from an earlier, interrupted sync.
+    pub already_stored: bool,
+}
+
+/// The file a sync stores a flight in. Flight identifiers restart at 1
+/// after every erase, so the name also carries a digest of the flight's
+/// first page: the same flight always lands in the same file, so an
+/// interrupted sync resumes, and a later flight with the same number does
+/// not collide with it.
+pub fn sync_file_name(flight_id: u32, first_page: &[u8; FLASH_PAGE_LEN]) -> String {
+    let digest = Sha256::digest(first_page);
+    format!(
+        "flight-{flight_id}-{:02x}{:02x}{:02x}{:02x}.fwbb",
+        digest[0], digest[1], digest[2], digest[3]
+    )
+}
+
+/// Downloads every flight the controller lists as unsynced into
+/// `directory`, then acknowledges each one so the controller may later
+/// erase it. A flight already stored completely by an earlier sync is
+/// checked and acknowledged without downloading it again. `progress` gets
+/// the flight, pages done and pages in the flight.
+pub fn sync_flights<T: LineTransport>(
+    client: &mut FerroClient<T>,
+    directory: &Path,
+    mut progress: impl FnMut(u32, u32, u32),
+) -> Result<Vec<SyncedFlight>> {
+    fs::create_dir_all(directory)
+        .map_err(|error| file_error("create directory", directory, error))?;
+    let mut synced = Vec::new();
+    loop {
+        let listed = client.unsynced_flights()?;
+        if listed.flights.is_empty() {
+            if listed.more {
+                return Err(FerroError::Blackbox(
+                    "controller listed no flights but reported more".to_owned(),
+                ));
+            }
+            return Ok(synced);
+        }
+        for flight in listed.flights {
+            synced.push(sync_one_flight(client, directory, flight, &mut progress)?);
+        }
+        if !listed.more {
+            return Ok(synced);
+        }
+    }
+}
+
+fn sync_one_flight<T: LineTransport>(
+    client: &mut FerroClient<T>,
+    directory: &Path,
+    flight: UnsyncedFlight,
+    progress: &mut impl FnMut(u32, u32, u32),
+) -> Result<SyncedFlight> {
+    let first_page = client.read_log_page(flight.start_page)?;
+    let first = summarize_page(&first_page, flight.start_page)?;
+    if first.flight_id != flight.flight_id || first.page_sequence != 0 {
+        return Err(FerroError::Blackbox(format!(
+            "device page {} does not start flight {}",
+            flight.start_page, flight.flight_id
+        )));
+    }
+    let span = FlightSpan {
+        flight_id: flight.flight_id,
+        start_page: flight.start_page,
+        end_page: flight.start_page + flight.pages,
+        boot_session_start: first.boot_session_start,
+    };
+    let output = directory.join(sync_file_name(flight.flight_id, &first_page));
+    let already_stored = output.exists();
+    if already_stored {
+        let stored = validate_partial_download(&output, span)?;
+        if stored != span.page_count() {
+            return Err(FerroError::Blackbox(format!(
+                "{} holds {stored} of flight {}'s {} pages; move it aside and sync again",
+                output.display(),
+                flight.flight_id,
+                span.page_count()
+            )));
+        }
+    } else {
+        download_flight(client, span, &output, true, |completed, total| {
+            progress(flight.flight_id, completed, total)
+        })?;
+    }
+    client.acknowledge_flight(flight.flight_id, flight.pages)?;
+    Ok(SyncedFlight {
+        flight_id: flight.flight_id,
+        pages: flight.pages,
+        output,
+        already_stored,
+    })
+}
+
 pub fn validate_partial_download(path: &Path, span: FlightSpan) -> Result<u32> {
     if !path.exists() {
         return Ok(0);
@@ -398,6 +500,96 @@ mod tests {
             page(4, 0, false),
             page(5, 0, true),
         ]
+    }
+
+    /// The `logs read-page` answer for one page.
+    fn page_lines(index: u32, page: &[u8; FLASH_PAGE_LEN]) -> Vec<String> {
+        page.chunks(16)
+            .enumerate()
+            .map(|(chunk, bytes)| {
+                let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+                format!("PAGE {index} {:03} {hex}", chunk * 16)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_sync_stores_each_unsynced_flight_then_acknowledges_it() {
+        use crate::transport::MockTransport;
+        use std::time::Duration;
+
+        let first = page(3, 0, true);
+        let second = page(3, 1, false);
+        let mut mock =
+            MockTransport::with_lines(["OK unsynced n=1 more=0", "OK flight=3 start=4 pages=2"]);
+        for (index, page) in [(4, &first), (4, &first), (5, &second)] {
+            for line in page_lines(index, page) {
+                mock.push_line(line);
+            }
+        }
+        mock.push_line("OK synced flight=3");
+        mock.push_line("OK unsynced n=0 more=0");
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        let directory = tempdir().unwrap();
+
+        let synced = sync_flights(&mut client, directory.path(), |_, _, _| {}).unwrap();
+
+        assert_eq!(synced.len(), 1);
+        assert!(!synced[0].already_stored);
+        assert_eq!(
+            synced[0].output.file_name().unwrap(),
+            &*sync_file_name(3, &first)
+        );
+        let stored = fs::read(&synced[0].output).unwrap();
+        assert_eq!(stored, [first, second].concat());
+        assert_eq!(
+            client.into_transport().writes,
+            [
+                "logs unsynced",
+                "logs read-page 4",
+                "logs read-page 4",
+                "logs read-page 5",
+                "logs ack 3 2"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_flight_stored_by_an_interrupted_sync_is_acknowledged_without_downloading() {
+        use crate::transport::MockTransport;
+        use std::time::Duration;
+
+        let first = page(3, 0, false);
+        let second = page(3, 1, false);
+        let directory = tempdir().unwrap();
+        fs::write(
+            directory.path().join(sync_file_name(3, &first)),
+            [first, second].concat(),
+        )
+        .unwrap();
+        let mut mock =
+            MockTransport::with_lines(["OK unsynced n=1 more=0", "OK flight=3 start=0 pages=2"]);
+        for line in page_lines(0, &first) {
+            mock.push_line(line);
+        }
+        mock.push_line("OK synced flight=3");
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+
+        let synced = sync_flights(&mut client, directory.path(), |_, _, _| {}).unwrap();
+
+        assert!(synced[0].already_stored);
+        assert_eq!(
+            client.into_transport().writes,
+            ["logs unsynced", "logs read-page 0", "logs ack 3 2"]
+        );
+    }
+
+    #[test]
+    fn same_numbered_flights_from_different_logs_get_different_files() {
+        assert_ne!(
+            sync_file_name(1, &page(1, 0, true)),
+            sync_file_name(1, &page(1, 0, false))
+        );
     }
 
     #[test]

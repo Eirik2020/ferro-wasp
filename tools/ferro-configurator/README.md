@@ -66,6 +66,7 @@ ferro-configurator.exe --port COM6 blackbox download `
   --flight latest --output latest.fwbb --ulog latest.ulg
 ferro-configurator.exe --port COM6 blackbox download-range `
   --from 29 --to latest --directory flights --ulog
+ferro-configurator.exe --port COM6 blackbox sync --directory flights
 ferro-configurator.exe --port COM6 blackbox erase --confirm
 
 ferro-configurator.exe convert retained.fwbb --output retained.ulg

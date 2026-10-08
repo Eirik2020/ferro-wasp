@@ -332,6 +332,7 @@ mod tests {
                 mavlink: false,
                 msp: false,
                 esc_telemetry: true,
+                cli: false,
                 tx: false,
             },
         }

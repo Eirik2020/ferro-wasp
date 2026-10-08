@@ -56,14 +56,18 @@ pub enum SerialFunction {
     RcInput = 1,
     MspDisplayPort = 2,
     EscTelemetry = 3,
+    /// The text command line, for a configurator on a serial or Bluetooth
+    /// link. USB carries it too and needs no binding.
+    Configurator = 4,
 }
 
 impl SerialFunction {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::None,
         Self::RcInput,
         Self::MspDisplayPort,
         Self::EscTelemetry,
+        Self::Configurator,
     ];
 
     /// The line settings this function needs, RC input in `rc`'s protocol.
@@ -73,6 +77,7 @@ impl SerialFunction {
             Self::RcInput => rc.profile(),
             Self::MspDisplayPort => SerialProfile::msp(),
             Self::EscTelemetry => SerialProfile::esc_telemetry(),
+            Self::Configurator => SerialProfile::cli(),
         }
     }
 
@@ -82,6 +87,7 @@ impl SerialFunction {
             Self::RcInput => "rc",
             Self::MspDisplayPort => "osd",
             Self::EscTelemetry => "esc_telemetry",
+            Self::Configurator => "configurator",
         }
     }
 
@@ -97,6 +103,7 @@ impl SerialFunction {
             1 => Some(Self::RcInput),
             2 => Some(Self::MspDisplayPort),
             3 => Some(Self::EscTelemetry),
+            4 => Some(Self::Configurator),
             _ => None,
         }
     }
@@ -245,6 +252,7 @@ pub struct SerialFunctionSlots<E> {
     pub rc_input: Option<E>,
     pub msp_display_port: Option<E>,
     pub esc_telemetry: Option<E>,
+    pub configurator: Option<E>,
 }
 
 impl<E> SerialFunctionSlots<E> {
@@ -253,6 +261,7 @@ impl<E> SerialFunctionSlots<E> {
             rc_input: None,
             msp_display_port: None,
             esc_telemetry: None,
+            configurator: None,
         }
     }
 
@@ -264,6 +273,7 @@ impl<E> SerialFunctionSlots<E> {
             SerialFunction::RcInput => &mut self.rc_input,
             SerialFunction::MspDisplayPort => &mut self.msp_display_port,
             SerialFunction::EscTelemetry => &mut self.esc_telemetry,
+            SerialFunction::Configurator => &mut self.configurator,
         };
         if slot.is_some() {
             return Err(endpoint);
@@ -284,6 +294,7 @@ mod tests {
         mavlink: false,
         msp: false,
         esc_telemetry: true,
+        cli: false,
         tx: false,
     };
 
@@ -354,6 +365,40 @@ mod tests {
             Some(RcProtocol::Crsf)
         );
         assert_eq!(RcProtocol::from_u8(2), None);
+    }
+
+    #[test]
+    fn the_configurator_needs_a_port_that_carries_the_command_line_and_transmits() {
+        let mut cli = RX_ONLY;
+        cli.cli = true;
+        let mut cli_tx = cli;
+        cli_tx.tx = true;
+        let routes = [
+            route(LogicalSerialPort::Uart1, RX_ONLY),
+            route(LogicalSerialPort::Uart2, cli),
+            route(LogicalSerialPort::Uart3, cli_tx),
+        ];
+        let on = |port| {
+            resolve_bindings(
+                SerialBindings::none().with(port, SerialFunction::Configurator),
+                &routes,
+                RcProtocol::Sbus,
+            )
+        };
+        let bound = on(LogicalSerialPort::Uart3);
+        assert_eq!(bound.issues(), &[]);
+        assert_eq!(
+            bound.profile(LogicalSerialPort::Uart3),
+            Some(SerialProfile::cli())
+        );
+        assert_eq!(
+            on(LogicalSerialPort::Uart1).issues()[0].fault,
+            BindingFault::Unsupported(SerialRouteError::UnsupportedProtocol)
+        );
+        assert_eq!(
+            on(LogicalSerialPort::Uart2).issues()[0].fault,
+            BindingFault::Unsupported(SerialRouteError::MissingTxDma)
+        );
     }
 
     #[test]

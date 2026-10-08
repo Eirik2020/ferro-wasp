@@ -138,7 +138,6 @@ pub use ferrowasp_stm32f4::app_storage as stm32_storage;
 pub use ferrowasp_stm32f4::memory as stm32_memory;
 pub use ferrowasp_stm32f4::uart_port as stm32_port;
 pub use ferrowasp_stm32f4_tasks as flight_tasks;
-pub use ferrowasp_stm32f4_tasks::snapshots::rc_channels_us;
 pub use ferrowasp_stm32f4_tasks::snapshots::{
     ACTIVE_IMU_KIND, ADC_CURRENT_MV_SNAPSHOT, ADC_VOLTAGE_MV_SNAPSHOT, BATTERY_CURRENT_CA_SNAPSHOT,
     BATTERY_VOLTAGE_V10_SNAPSHOT, CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW,
@@ -159,6 +158,7 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10, IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION,
     imu_orientation_snapshot,
 };
+pub use ferrowasp_stm32f4_tasks::snapshots::{live_snapshot, rc_channels_us};
 pub use ferrowasp_stm32f4_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 pub use ferrowasp_stm32h7::adc as stm32_adc;
 pub use ferrowasp_stm32h7::clocks as stm32_clocks;
@@ -170,6 +170,7 @@ pub use ferrowasp_stm32h7::usb_serial as stm32_usb;
 pub use ferrowasp_tasks::actuator as actuator_task;
 #[cfg(feature = "mspv2_configurator")]
 pub use ferrowasp_tasks::blackbox_storage as blackbox_task;
+pub use ferrowasp_tasks::command_link::{CommandLink, CommandSources, ResponseRouter};
 pub use ferrowasp_tasks::drone_toolbox as dt;
 pub use ferrowasp_tasks::esc_manager as esc;
 pub use ferrowasp_tasks::esc_manager::{
@@ -180,6 +181,7 @@ pub use ferrowasp_tasks::osd;
 pub use ferrowasp_tasks::rc_receiver::RcReceiver;
 #[cfg(not(feature = "mspv2_configurator"))]
 pub use ferrowasp_tasks::usb_debug;
+pub use ferrowasp_tasks::{log_sync, sync_ledger};
 pub use fugit::Rate;
 use panic_probe as _;
 pub use rtic_monotonics::systick::prelude::*;
@@ -542,15 +544,49 @@ pub fn rc_receiver_for(protocol: RcProtocol) -> RcReceiver {
     }
 }
 
-pub fn queue_storage_response(producer: &mut flash_task::ResponseProducer, text: &str) -> bool {
+/// Queue one answer line for the link the storage owner is answering.
+pub fn queue_storage_response(responses: &mut ResponseRouter, text: &str) -> bool {
     let Some(frame) = flash_task::ResponseFrame::from_text(text) else {
         return false;
     };
-    if producer.enqueue(frame).is_err() {
+    if !responses.send(frame) {
         return false;
     }
-    cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+    // The configurator link polls its queue; USB is woken.
+    if responses.replying_to() == CommandLink::Usb {
+        cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+    }
     true
+}
+
+/// Erase, header and bit are the most one acknowledgement can take.
+pub const MAX_SYNC_MARK_STEPS: u8 = 3;
+
+/// The next ledger operation toward acknowledging `flight_id`.
+pub fn sync_mark_step(
+    flash: &mut FlashDevice,
+    layout: flash_task::StorageLayout,
+    flight_id: u32,
+) -> Result<sync_ledger::MarkStep, sync_ledger::LedgerError<board::aliases::SdFlashError>> {
+    let mut read = |address, output: &mut [u8]| flash.read(address, output);
+    sync_ledger::next_mark_step(layout, &mut read, flight_id)
+}
+
+/// Starts one ledger operation; the storage owner waits for it to finish.
+pub fn start_sync_mark_step(
+    flash: &mut FlashDevice,
+    step: sync_ledger::MarkStep,
+) -> Result<(), board::aliases::SdFlashError> {
+    match step {
+        sync_ledger::MarkStep::EraseLedger { address } => flash.erase_sector_4k(address),
+        sync_ledger::MarkStep::ProgramHeader { address } => {
+            flash.page_program(address, &sync_ledger::SYNC_LEDGER_MAGIC)
+        }
+        sync_ledger::MarkStep::ProgramBit { address, value } => {
+            flash.page_program(address, &[value])
+        }
+        sync_ledger::MarkStep::Done => Ok(()),
+    }
 }
 
 #[cfg(feature = "mspv2_configurator")]
@@ -638,7 +674,7 @@ pub fn read_blackbox_chunk(
 }
 
 pub fn queue_page_hex(
-    producer: &mut flash_task::ResponseProducer,
+    producer: &mut ResponseRouter,
     page_index: u32,
     page: &[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
 ) -> bool {

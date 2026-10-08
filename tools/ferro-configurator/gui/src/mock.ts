@@ -18,6 +18,8 @@ import {
   type SerialBindings,
   type DownloadProgress,
   type DownloadSummary,
+  type SyncedFlight,
+  type SyncProgress,
 } from "./api";
 
 /** The reviewed Foxeer baseline. */
@@ -78,6 +80,7 @@ export class MockApi implements Api {
     ports: [
       { port: "uart1", function: "esc_telemetry" },
       { port: "uart2", function: "rc" },
+      { port: "uart3", function: "configurator" },
       { port: "uart4", function: "osd" },
     ],
   };
@@ -317,5 +320,28 @@ export class MockApi implements Api {
       bytes: total * 256,
       path: output || `flight-${String(flightId)}.fwbb`,
     };
+  }
+
+  async syncFlights(directory: string, onProgress: (progress: SyncProgress) => void): Promise<SyncedFlight[]> {
+    this.requireConnection();
+    const flights = [
+      { flight_id: 8, pages: 1_379, digest: "5e0a91c2" },
+      { flight_id: 1, pages: 2_643, digest: "c4d07b13" },
+    ];
+    const synced: SyncedFlight[] = [];
+    for (const { flight_id, pages, digest } of flights) {
+      for (let page = 1; page <= pages; page += 211) {
+        onProgress({ flight: flight_id, page, total: pages });
+        await sleep(40);
+      }
+      onProgress({ flight: flight_id, page: pages, total: pages });
+      synced.push({
+        flight_id,
+        pages,
+        output: `${directory}/flight-${String(flight_id)}-${digest}.fwbb`,
+        already_stored: false,
+      });
+    }
+    return synced;
   }
 }

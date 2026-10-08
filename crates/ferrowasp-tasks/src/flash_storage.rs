@@ -129,6 +129,16 @@ pub enum StorageCommand {
     LogsList,
     LogsReadPage(u32),
     LogsEraseConfirmed,
+    /// Complete flights no host has acknowledged storing.
+    LogsUnsynced,
+    /// A host stored `flight`, `pages` long. The firmware checks the length
+    /// against the flight on the device, then records it in the sync ledger.
+    LogsAck {
+        flight: u32,
+        pages: u32,
+    },
+    /// Erase the log, refused while any flight is unacknowledged.
+    LogsEraseSyncedConfirmed,
     ConfigGet(ConfigKey),
     ConfigSet(ConfigKey, f32),
     ConfigSave,
@@ -354,6 +364,28 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
         }
         (Some("logs"), Some("erase")) => match (words.next(), words.next()) {
             (Some("CONFIRM"), None) => Ok(StorageCommand::LogsEraseConfirmed),
+            _ => Err(CommandParseError::ConfirmationRequired),
+        },
+        (Some("logs"), Some("unsynced")) if words.next().is_none() => {
+            Ok(StorageCommand::LogsUnsynced)
+        }
+        (Some("logs"), Some("ack")) => {
+            let mut number = || -> Result<u32, CommandParseError> {
+                words
+                    .next()
+                    .ok_or(CommandParseError::MissingArgument)?
+                    .parse::<u32>()
+                    .map_err(|_| CommandParseError::InvalidArgument)
+            };
+            let flight = number()?;
+            let pages = number()?;
+            if words.next().is_some() {
+                return Err(CommandParseError::InvalidArgument);
+            }
+            Ok(StorageCommand::LogsAck { flight, pages })
+        }
+        (Some("logs"), Some("erase-synced")) => match (words.next(), words.next()) {
+            (Some("CONFIRM"), None) => Ok(StorageCommand::LogsEraseSyncedConfirmed),
             _ => Err(CommandParseError::ConfirmationRequired),
         },
         (Some("config"), Some("get")) => {
@@ -864,7 +896,7 @@ pub struct StorageLayout {
 
 impl StorageLayout {
     pub const fn new(capacity_bytes: u32) -> Option<Self> {
-        if capacity_bytes <= LOG_START_ADDRESS
+        if capacity_bytes <= LOG_START_ADDRESS + CONFIG_SECTOR_SIZE
             || capacity_bytes > 0x0100_0000
             || !capacity_bytes.is_multiple_of(CONFIG_SECTOR_SIZE)
         {
@@ -874,7 +906,9 @@ impl StorageLayout {
             capacity_bytes,
             config_slot_addresses: [0, CONFIG_SECTOR_SIZE],
             log_start_address: LOG_START_ADDRESS,
-            log_page_count: (capacity_bytes - LOG_START_ADDRESS) / FLASH_PAGE_LEN as u32,
+            // The last sector holds the sync ledger, not log pages.
+            log_page_count: (capacity_bytes - LOG_START_ADDRESS - CONFIG_SECTOR_SIZE)
+                / FLASH_PAGE_LEN as u32,
         })
     }
 
@@ -886,8 +920,27 @@ impl StorageLayout {
         }
     }
 
+    /// Sectors a log erase clears: every log sector plus the sync ledger.
     pub const fn log_sector_count(self) -> u32 {
         (self.capacity_bytes - self.log_start_address) / CONFIG_SECTOR_SIZE
+    }
+
+    /// The last sector of the flash, which records synced flights.
+    pub const fn sync_ledger_address(self) -> u32 {
+        self.capacity_bytes - CONFIG_SECTOR_SIZE
+    }
+
+    /// The sector a log erase clears at `step`, from the end of the flash down.
+    ///
+    /// The ledger goes first so that a power cut part-way through leaves old
+    /// flights looking unsynced. Erasing upward would leave the old ledger
+    /// marking the next flights, whose identifiers restart at 1, as synced.
+    pub const fn log_erase_sector_address(self, step: u32) -> Option<u32> {
+        if step >= self.log_sector_count() {
+            None
+        } else {
+            Some(self.capacity_bytes - (step + 1) * CONFIG_SECTOR_SIZE)
+        }
     }
 }
 
@@ -977,6 +1030,17 @@ impl PageAssembler {
         } else {
             self.finish_page()?;
             Ok(true)
+        }
+    }
+
+    /// The flight not yet wholly on flash: still recording, its last page
+    /// not taken, or, with `page_pending`, a taken page not yet written.
+    /// Log sync leaves it alone until it is complete.
+    pub const fn unfinished_flight(&self, page_pending: bool) -> Option<u32> {
+        if self.flight_id != 0 && (self.recording || self.page_ready || page_pending) {
+            Some(self.flight_id)
+        } else {
+            None
         }
     }
 
@@ -1080,9 +1144,25 @@ mod tests {
         assert_eq!(layout.log_page_address(0), Some(12288));
         assert_eq!(
             layout.log_page_address(layout.log_page_count - 1),
-            Some(16 * 1024 * 1024 - 256)
+            Some(16 * 1024 * 1024 - 4096 - 256)
         );
         assert_eq!(layout.log_page_address(layout.log_page_count), None);
+        assert_eq!(layout.sync_ledger_address(), 16 * 1024 * 1024 - 4096);
+    }
+
+    #[test]
+    fn log_erase_clears_the_ledger_first_then_walks_down_to_the_log_start() {
+        let layout = StorageLayout::new(64 * 1024).unwrap();
+        let steps = layout.log_sector_count();
+        assert_eq!(
+            layout.log_erase_sector_address(0),
+            Some(layout.sync_ledger_address())
+        );
+        assert_eq!(
+            layout.log_erase_sector_address(steps - 1),
+            Some(layout.log_start_address)
+        );
+        assert_eq!(layout.log_erase_sector_address(steps), None);
     }
 
     #[test]
@@ -1133,6 +1213,20 @@ mod tests {
     }
 
     #[test]
+    fn a_flight_is_unfinished_until_its_last_page_is_written() {
+        let mut assembler = PageAssembler::new();
+        assert_eq!(assembler.unfinished_flight(false), None);
+        assembler.start(4, false);
+        assert_eq!(assembler.unfinished_flight(false), Some(4));
+        assembler.push(record(1)).unwrap();
+        assembler.stop().unwrap();
+        assert_eq!(assembler.unfinished_flight(false), Some(4));
+        assembler.take_ready_page().unwrap();
+        assert_eq!(assembler.unfinished_flight(true), Some(4));
+        assert_eq!(assembler.unfinished_flight(false), None);
+    }
+
+    #[test]
     fn configuration_sequence_comparison_handles_wrap() {
         assert!(sequence_is_newer(11, 10));
         assert!(!sequence_is_newer(10, 10));
@@ -1163,6 +1257,37 @@ mod tests {
         assert_eq!(
             parse_command("logs erase CONFIRM"),
             Ok(StorageCommand::LogsEraseConfirmed)
+        );
+    }
+
+    #[test]
+    fn log_sync_commands_parse_and_erase_still_needs_confirmation() {
+        assert_eq!(
+            parse_command("logs unsynced"),
+            Ok(StorageCommand::LogsUnsynced)
+        );
+        assert_eq!(
+            parse_command("logs ack 7 412"),
+            Ok(StorageCommand::LogsAck {
+                flight: 7,
+                pages: 412
+            })
+        );
+        assert_eq!(
+            parse_command("logs ack 7"),
+            Err(CommandParseError::MissingArgument)
+        );
+        assert_eq!(
+            parse_command("logs ack 7 -1"),
+            Err(CommandParseError::InvalidArgument)
+        );
+        assert_eq!(
+            parse_command("logs erase-synced"),
+            Err(CommandParseError::ConfirmationRequired)
+        );
+        assert_eq!(
+            parse_command("logs erase-synced CONFIRM"),
+            Ok(StorageCommand::LogsEraseSyncedConfirmed)
         );
     }
 
@@ -1498,6 +1623,9 @@ mod tests {
             "logs list",
             "logs read-page 12",
             "logs erase CONFIRM",
+            "logs unsynced",
+            "logs ack 3 40",
+            "logs erase-synced CONFIRM",
             "config save",
         ] {
             refused_after_every_prefix(command);

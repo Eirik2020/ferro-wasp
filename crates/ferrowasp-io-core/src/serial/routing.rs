@@ -17,6 +17,8 @@ pub struct SerialCapabilities {
     pub mavlink: bool,
     pub msp: bool,
     pub esc_telemetry: bool,
+    /// The text command line; it answers, so it also needs `tx`.
+    pub cli: bool,
     pub tx: bool,
 }
 
@@ -29,6 +31,7 @@ impl SerialCapabilities {
             super::SerialProtocol::Mavlink => self.mavlink,
             super::SerialProtocol::Msp => self.msp,
             super::SerialProtocol::EscTelemetry => self.esc_telemetry,
+            super::SerialProtocol::Cli => self.cli,
         }
     }
 }

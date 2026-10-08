@@ -1,9 +1,11 @@
-use ferrowasp_stm32f4::hal_prelude::hal::gpio::{PB12, PB13, PC2, PC3};
-use ferrowasp_stm32f4::hal_prelude::hal::pac::{SPI2, TIM8};
+use ferrowasp_stm32f4::hal_prelude::hal::gpio::{PB12, PB13, PC2, PC3, PC10, PC11};
+use ferrowasp_stm32f4::hal_prelude::hal::pac::{SPI2, TIM8, USART3};
 use ferrowasp_stm32f4::{adc, hal_prelude::*, spi_dma};
 
 pub type Usart2TxPin = PA2<Input>;
 pub type Usart2RxPin = PA3<Input>;
+pub type Usart3TxPin = PC10<Input>;
+pub type Usart3RxPin = PC11<Input>;
 pub type Uart4TxPin = PA0<Input>;
 pub type Uart4RxPin = PA1<Input>;
 pub type Usart1EscTelemetryRxPin = PA10<Input>;
@@ -51,6 +53,18 @@ pub fn assert_active_routes_compile() {
         serial::Rx<USART2>,
         4,
         PeripheralToMemory,
+    >();
+    ferrowasp_stm32f4::board_routes::assert_dma_route::<
+        Stream1<DMA1>,
+        serial::Rx<USART3>,
+        4,
+        PeripheralToMemory,
+    >();
+    ferrowasp_stm32f4::board_routes::assert_dma_route::<
+        Stream3<DMA1>,
+        serial::Tx<USART3>,
+        4,
+        MemoryToPeripheral,
     >();
     ferrowasp_stm32f4::board_routes::assert_dma_route::<
         Stream2<DMA1>,

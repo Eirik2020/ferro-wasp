@@ -246,12 +246,20 @@ TOPIC_ROUTES = {
         ),
     ),
     "usb": TopicRoute(
-        summary="USB task plus Foxeer debug/configurator request handling.",
+        summary="USB task, the Foxeer UART configurator link, and debug/configurator request handling.",
         common_symbols=("usb_fs",),
+        foxeer_symbols=(
+            "configurator_link",
+            "uart3_rx_dma",
+            "uart3_rx_idle",
+            "uart3_tx_worker",
+            "uart3_tx_dma_complete",
+        ),
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-tasks/src/usb_debug.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/flash_storage.rs"),
+            PurePosixPath("crates/ferrowasp-tasks/src/command_link.rs"),
         ),
     ),
     "storage": TopicRoute(
@@ -265,6 +273,8 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/spi_nor.rs"),
             PurePosixPath("crates/ferrowasp-tasks/src/flash_storage.rs"),
+            PurePosixPath("crates/ferrowasp-tasks/src/log_sync.rs"),
+            PurePosixPath("crates/ferrowasp-tasks/src/sync_ledger.rs"),
         ),
     ),
     "logging": TopicRoute(

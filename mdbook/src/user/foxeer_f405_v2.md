@@ -235,7 +235,8 @@ any change hold each motor and check it is where the diagram says.
 ## Change serial ports
 
 Each UART is named by its number on the chip. List what each port serves,
-then bind one to a function (`none`, `rc`, `osd` or `esc_telemetry`):
+then bind one to a function (`none`, `rc`, `osd`, `esc_telemetry` or
+`configurator`):
 
 ```powershell
 .\ferro-configurator.exe --port $Port config ports
@@ -310,6 +311,33 @@ Download a range without retrieving earlier flights:
 
 Keep each `.fwbb` file. It is the CRC-protected acquisition evidence; ULog is
 a derived analysis file.
+
+## Sync flights over Bluetooth
+
+`uart3` (the R3/T3 pads) carries the configurator command line by default, so
+a Bluetooth serial module set to 115200 baud, wired TX to R3 and RX to T3,
+lets a PC or phone collect the logs without a cable. Pair the module, then
+point `--port` at its serial port (a COM port on Windows, `/dev/rfcomm0` on
+Linux):
+
+```powershell
+.\ferro-configurator.exe --port $Port blackbox sync --directory .\flights
+```
+
+Sync downloads every flight no host has stored yet, one file each, named after
+the flight and its first page so a second flight 1 after an erase does not
+overwrite the first. The controller then records each flight as stored. An
+interrupted sync picks up where it stopped. USB works the same way.
+
+Add `--erase` to erase the onboard log afterwards. The controller refuses
+unless every flight on it has been stored, and the configurator verifies the
+empty catalogue. Bluetooth cannot run motor tests or the unconditional
+`blackbox erase`; use USB for those.
+
+At 115200 baud a 1 MiB flight takes about seven minutes.
+
+Flashing the first firmware with log sync moves the end of the log region down
+by 4 KiB. Download every flight before flashing it.
 
 ## Convert an existing FWBB file
 

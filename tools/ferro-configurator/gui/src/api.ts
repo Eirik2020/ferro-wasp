@@ -92,7 +92,7 @@ export interface LiveSnapshot {
 }
 
 /** The functions a serial port can serve, as the firmware names them. */
-export const SERIAL_FUNCTIONS = ["none", "rc", "osd", "esc_telemetry"] as const;
+export const SERIAL_FUNCTIONS = ["none", "rc", "osd", "esc_telemetry", "configurator"] as const;
 
 /** Mirrors `SerialPortBinding` in ferro-configurator-core. */
 export interface SerialPortBinding {
@@ -179,6 +179,21 @@ export interface DownloadProgress {
   total: number;
 }
 
+export interface SyncProgress {
+  flight: number;
+  page: number;
+  total: number;
+}
+
+/** One flight a log sync stored and the controller acknowledged. */
+export interface SyncedFlight {
+  flight_id: number;
+  pages: number;
+  output: string;
+  /** Already complete from an earlier, interrupted sync. */
+  already_stored: boolean;
+}
+
 export interface DownloadSummary {
   pages: number;
   bytes: number;
@@ -215,4 +230,9 @@ export interface Api {
     output: string,
     onProgress: (progress: DownloadProgress) => void,
   ): Promise<DownloadSummary>;
+  /**
+   * Stores every flight no host has stored into `directory`, one file each,
+   * and acknowledges them so the controller may later erase its log.
+   */
+  syncFlights(directory: string, onProgress: (progress: SyncProgress) => void): Promise<SyncedFlight[]>;
 }

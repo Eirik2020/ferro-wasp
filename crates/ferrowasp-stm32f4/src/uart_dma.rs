@@ -9,13 +9,13 @@ use ferrowasp_io_core::serial::{
 use stm32f4xx_hal::{
     ClearFlags, ReadFlags,
     dma::{
-        ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream2, Stream4, Stream5, Stream6,
-        Transfer,
+        ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream1, Stream2, Stream3, Stream4,
+        Stream5, Stream6, Transfer,
         config::DmaConfig,
         traits::{Channel, DMASet, DmaFlagExt, Stream},
     },
-    gpio::{Input, PA0, PA1, PA2, PA3, PA10, PushPull},
-    pac::{DMA1, DMA2, UART4, USART1, USART2},
+    gpio::{Input, PA0, PA1, PA2, PA3, PA10, PC10, PC11, PushPull},
+    pac::{DMA1, DMA2, UART4, USART1, USART2, USART3},
     prelude::*,
     rcc::Rcc,
     serial::{self, RxISR, RxListen, Serial},
@@ -23,8 +23,10 @@ use stm32f4xx_hal::{
 
 pub type Uart1RxIrq = UartRxIrqSide<UartRxTransfer<Stream5<DMA2>, USART1, 4>>;
 pub type Uart2RxIrq = UartRxIrqSide<UartRxTransfer<Stream5<DMA1>, USART2, 4>>;
+pub type Uart3RxIrq = UartRxIrqSide<UartRxTransfer<Stream1<DMA1>, USART3, 4>>;
 pub type Uart4RxIrq = UartRxIrqSide<UartRxTransfer<Stream2<DMA1>, UART4, 4>>;
 pub type Uart2TxDmaSide = UartTxDmaSide<UartTxDma<Stream6<DMA1>, USART2, 4>>;
+pub type Uart3TxDmaSide = UartTxDmaSide<UartTxDma<Stream3<DMA1>, USART3, 4>>;
 pub type Uart4TxDmaSide = UartTxDmaSide<UartTxDma<Stream4<DMA1>, UART4, 4>>;
 
 /// UART2 (the USART2 peripheral) on PA2/PA3, RX on DMA1 Stream 5 and TX on
@@ -42,6 +44,16 @@ pub struct Uart1PortResources {
     pub rx_pin: PA10<Input>,
     pub uart: USART1,
     pub rx_dma: Stream5<DMA2>,
+}
+
+/// UART3 (the USART3 peripheral) on PC10/PC11, RX on DMA1 Stream 1 and TX
+/// on DMA1 Stream 3.
+pub struct Uart3PortResources {
+    pub tx_pin: PC10<Input>,
+    pub rx_pin: PC11<Input>,
+    pub uart: USART3,
+    pub rx_dma: Stream1<DMA1>,
+    pub tx_dma: Stream3<DMA1>,
 }
 
 /// UART4 on PA0/PA1, RX on DMA1 Stream 2 and TX on DMA1 Stream 4.
@@ -232,6 +244,11 @@ pub fn stm32f4_uart_config(mode: Mode) -> serial::Config {
             .baudrate(115_200.bps())
             .dma(serial::config::DmaConfig::Rx),
 
+        // The command line answers every request.
+        Mode::Cli => serial::Config::default()
+            .baudrate(115_200.bps())
+            .dma(serial::config::DmaConfig::TxRx),
+
         Mode::Disabled => serial::Config::default(),
     }
 }
@@ -344,6 +361,7 @@ where
 pub struct F405UartPortResources {
     pub uart1: Uart1PortResources,
     pub uart2: Uart2PortResources,
+    pub uart3: Uart3PortResources,
     pub uart4: Uart4PortResources,
 }
 
@@ -351,6 +369,7 @@ pub struct F405UartPortResources {
 pub struct F405UartPortStorage {
     pub uart1: UartRxPortStorage,
     pub uart2: UartRxTxPortStorage,
+    pub uart3: UartRxTxPortStorage,
     pub uart4: UartRxTxPortStorage,
 }
 
@@ -360,6 +379,8 @@ pub struct F405UartPorts {
     pub uart1_rx: Option<UartRxPort<Uart1RxIrq>>,
     pub uart2_rx: Option<UartRxPort<Uart2RxIrq>>,
     pub uart2_tx: UartTxPort<Uart2TxDmaSide>,
+    pub uart3_rx: Option<UartRxPort<Uart3RxIrq>>,
+    pub uart3_tx: UartTxPort<Uart3TxDmaSide>,
     pub uart4_rx: Option<UartRxPort<Uart4RxIrq>>,
     pub uart4_tx: UartTxPort<Uart4TxDmaSide>,
     pub functions: SerialFunctionSlots<SerialPortEndpoint>,
@@ -377,6 +398,8 @@ pub fn init_f405_uart_ports(
         uart1_rx: None,
         uart2_rx: None,
         uart2_tx: UartTxPort::unbound(),
+        uart3_rx: None,
+        uart3_tx: UartTxPort::unbound(),
         uart4_rx: None,
         uart4_tx: UartTxPort::unbound(),
         functions: SerialFunctionSlots::empty(),
@@ -452,6 +475,61 @@ pub fn init_f405_uart_ports(
             &mut ports.functions,
             bindings,
             LogicalSerialPort::Uart2,
+            endpoint,
+        );
+    }
+
+    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart3) {
+        let tx_pin = resources.uart3.tx_pin.into_alternate::<7>();
+        // Often nothing is plugged into R3; the pull-up holds an open line
+        // idle instead of letting noise reach the command line.
+        let rx_pin = resources
+            .uart3
+            .rx_pin
+            .into_alternate::<7>()
+            .internal_pull_up(true);
+        let (irq, parser, writer) = if profile.protocol.needs_tx() {
+            let parts = init_uart_rx_dma_with_tx::<_, _, _, _, 4>(
+                tx_pin,
+                rx_pin,
+                resources.uart3.uart,
+                resources.uart3.rx_dma,
+                rcc,
+                profile.protocol,
+                storage.uart3.rx.into_backend(),
+            );
+            let tx_dma = init_uart_tx_dma::<_, _, 4>(
+                resources.uart3.tx_dma,
+                parts.tx,
+                storage.uart3.tx_buffer,
+            );
+            let (tx, writer) = tx_port(tx_dma, storage.uart3.tx_stream);
+            ports.uart3_tx = tx;
+            (parts.irq, parts.parser, Some(writer))
+        } else {
+            let parts = init_uart_rx_dma::<_, _, _, _, 4>(
+                tx_pin,
+                rx_pin,
+                resources.uart3.uart,
+                resources.uart3.rx_dma,
+                rcc,
+                profile.protocol,
+                storage.uart3.rx.into_backend(),
+            );
+            (parts.irq, parts.parser, None)
+        };
+        let (port, endpoint) = rx_port(
+            LogicalSerialPort::Uart3,
+            irq,
+            parser,
+            storage.uart3.stream,
+            writer,
+        );
+        ports.uart3_rx = Some(port);
+        place_endpoint(
+            &mut ports.functions,
+            bindings,
+            LogicalSerialPort::Uart3,
             endpoint,
         );
     }

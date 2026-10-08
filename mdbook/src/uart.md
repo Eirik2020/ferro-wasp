@@ -28,6 +28,7 @@ Current UART modes:
 | `Msp` | 115200 baud, TX/RX DMA | Active DJI O4 OSD path on UART4 |
 | `EscTelemetry` | 115200 baud, 8N1, RX DMA | Standard flight-board BLHeli legacy telemetry path on USART1 |
 | `Crsf` | 420000 baud, 8N1, not inverted, TX/RX DMA | RC input with battery telemetry when `rc_protocol` is `crsf` |
+| `Cli` | 115200 baud, 8N1, TX/RX DMA | The text command line, for a configurator over a cable or Bluetooth (`configurator`) |
 | `Mavlink` | 57600 baud, RX DMA | Future telemetry/config subset |
 
 ## Port Binding
@@ -37,7 +38,7 @@ board's `src/board/serial.rs` route table. A port is named by the UART's
 number on the chip, as the pilot sees it on the board: USART3 is `uart3`
 whatever it serves. Saved configuration holds a function for each of
 `uart1` to `uart8`. Which function a port serves (RC input, MSP OSD, ESC
-telemetry) is chosen at boot from that table:
+telemetry, configurator) is chosen at boot from that table:
 
 - Init reads the saved bindings once, checks each against the port's
   capabilities (`resolve_bindings` in `ferrowasp-io-core`), starts every bound
@@ -93,11 +94,24 @@ PA10 USART1 RX DMA -> bounded chunks -> ESC manager parser/association
 
 PA9/USART1 TX is not configured.
 
+On Foxeer, USART3 (`uart3`, PC10/PC11, the R3/T3 pads) carries the
+configurator command line for log sync over a Bluetooth serial module:
+
+```text
+USART3 RX DMA/IDLE IRQ -> owned RxChunk -> configurator_link -> command queue
+    -> flash manager -> response queue -> configurator_link -> USART3 TX DMA
+```
+
+USB and the configurator port each have their own command and response queue
+into the flash manager, which answers every command on the link it came from
+(`crates/ferrowasp-tasks/src/command_link.rs`). Motor commands and the
+unconditional log erase stay on USB.
+
 On the TBS Lucid H7, USART6 (`uart6`) carries SBUS, inverted in the UART;
 USART3 (`uart3`) carries MSP DisplayPort with TX DMA; and UART8 (`uart8`)
 carries ESC telemetry on PE0. Every H743 UART inverts in hardware, so any of
-the three can take SBUS or ESC telemetry; only `uart3` has the transmit DMA
-MSP needs. In the standard flight image, the manager sends typed telemetry requests through
+the three can take SBUS or ESC telemetry; `uart3` and `uart6` have the transmit
+DMA that MSP and CRSF need. The Lucid has no configurator port yet. In the standard flight image, the manager sends typed telemetry requests through
 a bounded queue to the DShot actuator service; it never writes motor hardware
 itself. A CRC-valid response seen before the matching frame-start
 acknowledgement remains quarantined until that exact sequence/output
