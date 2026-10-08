@@ -14,7 +14,7 @@ pub mod clocks;
 #[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
 #[allow(unsafe_code)]
 pub mod dshot;
-#[cfg(feature = "dshot")]
+#[cfg(any(test, feature = "dshot"))]
 pub mod dshot_bank;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub mod exti;

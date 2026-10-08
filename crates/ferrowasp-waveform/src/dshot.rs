@@ -144,6 +144,57 @@ pub fn throttles_to_dshot(values: [u16; 4]) -> [u16; 4] {
     values.map(throttle_to_dshot)
 }
 
+/// DShot special commands this firmware sends. Values 1-47 are commands, not
+/// throttle; ESCs act on them only with the telemetry bit set, while the motor
+/// is stopped, and after several identical frames.
+pub const DSHOT_CMD_SAVE_SETTINGS: u16 = 12;
+pub const DSHOT_CMD_SPIN_DIRECTION_NORMAL: u16 = 20;
+pub const DSHOT_CMD_SPIN_DIRECTION_REVERSED: u16 = 21;
+
+/// Frames per command. The protocol asks for at least six; Betaflight sends
+/// ten, and so does this.
+pub const DSHOT_COMMAND_REPEATS: u8 = 10;
+
+/// A short run of special-command frames for one motor, e.g. "set direction,
+/// then save". Each call to [`Self::next_value`] yields the value for the next
+/// frame until the run is spent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DshotCommandSequence {
+    commands: [u16; 2],
+    index: u8,
+    repeats_left: u8,
+}
+
+impl DshotCommandSequence {
+    /// Sets the spin direction and saves it in the ESC.
+    pub const fn spin_direction(reversed: bool) -> Self {
+        Self {
+            commands: [
+                if reversed {
+                    DSHOT_CMD_SPIN_DIRECTION_REVERSED
+                } else {
+                    DSHOT_CMD_SPIN_DIRECTION_NORMAL
+                },
+                DSHOT_CMD_SAVE_SETTINGS,
+            ],
+            index: 0,
+            repeats_left: DSHOT_COMMAND_REPEATS,
+        }
+    }
+
+    /// The command value for the next frame, or `None` once every command has
+    /// been sent its full number of times.
+    pub fn next_value(&mut self) -> Option<u16> {
+        let command = *self.commands.get(self.index as usize)?;
+        self.repeats_left -= 1;
+        if self.repeats_left == 0 {
+            self.index += 1;
+            self.repeats_left = DSHOT_COMMAND_REPEATS;
+        }
+        Some(command)
+    }
+}
+
 /// Returns true once a bounded command lease is older than its duration.
 ///
 /// Timestamps are a `u64` millisecond count, which does not wrap. The
@@ -336,5 +387,32 @@ mod tests {
             LEASE_MS,
             now_ms + u64::from(LEASE_MS) + 1
         ));
+    }
+
+    #[test]
+    fn direction_sequence_sends_each_command_ten_times_then_stops() {
+        let mut sequence = DshotCommandSequence::spin_direction(true);
+        let mut sent = [0u16; 20];
+        for slot in &mut sent {
+            *slot = sequence.next_value().expect("twenty frames");
+        }
+        assert!(
+            sent[..10]
+                .iter()
+                .all(|v| *v == DSHOT_CMD_SPIN_DIRECTION_REVERSED)
+        );
+        assert!(sent[10..].iter().all(|v| *v == DSHOT_CMD_SAVE_SETTINGS));
+        assert_eq!(sequence.next_value(), None);
+        assert_eq!(sequence.next_value(), None);
+    }
+
+    #[test]
+    fn direction_commands_are_not_throttle_values() {
+        const { assert!(DSHOT_CMD_SPIN_DIRECTION_NORMAL < DSHOT_MIN_THROTTLE) };
+        const { assert!(DSHOT_CMD_SPIN_DIRECTION_REVERSED < DSHOT_MIN_THROTTLE) };
+        assert_eq!(
+            DshotCommandSequence::spin_direction(false).next_value(),
+            Some(DSHOT_CMD_SPIN_DIRECTION_NORMAL)
+        );
     }
 }

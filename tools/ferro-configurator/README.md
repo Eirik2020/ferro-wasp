@@ -40,9 +40,12 @@ script completes.
   catalogue afterward.
 - Validate and flash the packaged Foxeer F405 V2 image through STM32 ROM DFU.
 
-The configurator cannot arm, command motors, grant actuator authority, bypass
-firmware validation, or alter safety policy. Configuration and log mutation
-remain firmware-gated while disarmed.
+The configurator cannot arm, grant actuator authority, bypass firmware
+validation, or alter safety policy. Configuration and log mutation remain
+firmware-gated while disarmed. The GUI's motor test only requests a bench
+action: the firmware safety master refuses it unless disarmed with the arm
+switch off, idles one motor under a 250 ms lease the GUI must keep renewing,
+and blocks arming for two seconds after the last test.
 
 ## Commands
 

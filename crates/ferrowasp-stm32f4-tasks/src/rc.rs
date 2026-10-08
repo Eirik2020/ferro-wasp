@@ -199,7 +199,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     safety::SafetyEvent::DisarmRequested => info!("RC Requests Disarm!"),
                     safety::SafetyEvent::ActuatorIdling
                     | safety::SafetyEvent::ArmingAborted(_)
-                    | safety::SafetyEvent::RcLinkInvalid(_) => {}
+                    | safety::SafetyEvent::RcLinkInvalid(_)
+                    | safety::SafetyEvent::BenchMotor(_) => {}
                 }
 
                 cx.spawn.safety_master(event).ok();

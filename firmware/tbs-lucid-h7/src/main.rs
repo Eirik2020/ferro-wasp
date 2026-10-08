@@ -869,6 +869,48 @@ ferroforge::app! {
                 continue;
             };
             match parsed {
+                Ok(flash_task::StorageCommand::Live) => {
+                    let mut line = heapless::String::<64>::new();
+                    let _ = write!(
+                        line,
+                        "OK live armed={} arm_sw={} att={},{},{} mot={}\r\n",
+                        u8::from(SAFETY_ARMED.load(Ordering::Relaxed)),
+                        u8::from(RC_ARM_HIGH.load(Ordering::Relaxed)),
+                        ATTITUDE_ROLL_DEG10.load(Ordering::Relaxed),
+                        ATTITUDE_PITCH_DEG10.load(Ordering::Relaxed),
+                        ATTITUDE_YAW_DEG10.load(Ordering::Relaxed),
+                        DSHOT_ACTIVE_LANES.load(Ordering::Relaxed),
+                    );
+                    let _ = serial.write(line.as_bytes());
+                }
+                // Bench motor requests go straight to the safety master, which
+                // outranks this task and decides before `spawn` returns. The
+                // check here only gives the host a reason; the safety master
+                // and the actuator each re-check before a motor moves.
+                Ok(flash_task::StorageCommand::Motor(request)) => {
+                    let precheck = safety::validate_bench_motor_request(
+                        request,
+                        SAFETY_ARMED.load(Ordering::Acquire),
+                        false,
+                        RC_ARM_HIGH.load(Ordering::Acquire),
+                        ACTUATOR_OUTPUT_ENABLED,
+                    );
+                    let reply: &[u8] = match precheck {
+                        Ok(()) => match safety_master::spawn(safety::SafetyEvent::BenchMotor(request)) {
+                            Ok(()) => b"OK motor\r\n",
+                            Err(_) => b"ERR motor safety master busy\r\n",
+                        },
+                        Err(safety::BenchMotorRefusal::Armed) => b"ERR motor armed\r\n",
+                        Err(safety::BenchMotorRefusal::ArmSwitchHigh) => {
+                            b"ERR motor arm switch is on\r\n"
+                        }
+                        Err(safety::BenchMotorRefusal::OutputDisabled) => {
+                            b"ERR motor output disabled in this firmware\r\n"
+                        }
+                        Err(_) => b"ERR motor refused\r\n",
+                    };
+                    let _ = serial.write(reply);
+                }
                 Ok(command) => {
                     if cx.local.flash_command_producer.enqueue(command).is_err() {
                         let _ = serial.write(b"ERR command queue full\r\n");
@@ -1421,7 +1463,18 @@ ferroforge::app! {
                                 flash_response_producer,
                                 "OK serial | serial PORT none/rc/osd/esc_telemetry\r\n",
                             );
+                            queue_storage_response(
+                                flash_response_producer,
+                                "OK live | motor stop | motor spin N CONFIRM\r\n",
+                            );
+                            queue_storage_response(
+                                flash_response_producer,
+                                "OK motor dir N normal|reversed CONFIRM\r\n",
+                            );
                         }
+                        // Answered by the USB task; never queued here.
+                        flash_task::StorageCommand::Live
+                        | flash_task::StorageCommand::Motor(_) => {}
                         flash_task::StorageCommand::SerialShow => {
                             stm32_port::write_serial_bindings(
                                 stored_config.serial_bindings,

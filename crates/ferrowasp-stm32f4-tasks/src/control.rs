@@ -19,6 +19,15 @@ pub fn motor_command_timestamp(now_ms: u64, sequence: u32) -> u64 {
     now_ms
 }
 
+/// Tenths of a degree, saturating; non-finite angles report as zero.
+fn deg10(angle_deg: f32) -> i16 {
+    if angle_deg.is_finite() {
+        (angle_deg * 10.0).clamp(i16::MIN as f32, i16::MAX as f32) as i16
+    } else {
+        0
+    }
+}
+
 /// One control tick. Priority and interrupt are the firmware's.
 ///
 /// The IMU's axis profile, the gyro's raw-to-degrees-per-second scale and
@@ -51,6 +60,8 @@ pub fn motor_command_timestamp(now_ms: u64, sequence: u32) -> u64 {
         motor_cmd_seq: u32,
         flash_record_producer: flash_task::RecordProducer,
         rc_link_was_valid: bool = false,
+        motor_order: ferrowasp_core::actuator::MotorOutputMap =
+            ferrowasp_core::actuator::MotorOutputMap::IDENTITY,
     ],
     shared = [
         imu_data: imu::ImuData,
@@ -243,6 +254,9 @@ pub fn control_loop(mut cx: control_loop::Context) {
             if pending_seq != *cx.local.applied_tuning_seq {
                 let profile = cx.shared.tuning_profile.lock(|profile| *profile);
                 fc.apply_tuning_profile(profile);
+                // Like every tuning change, a new motor order takes effect
+                // only here, while disarmed.
+                *cx.local.motor_order = profile.motor_map;
                 // The stored value is a corner in hertz; the filter wants a
                 // one-pole coefficient, which only exists relative to a rate.
                 cx.local.imu_rate_filter.set_alpha(dt::gyro_lpf_alpha(
@@ -270,6 +284,16 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 );
             }
         }
+
+        // The mixer's map: the pilot's motor order over the board's wiring.
+        let motor_output_map = cx
+            .local
+            .motor_order
+            .compose(CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT);
+        MOTOR_OUTPUT_MAP_SNAPSHOT.store(
+            ferrowasp_core::actuator::pack_motor_map(motor_output_map),
+            Ordering::Release,
+        );
 
         if !imu_fresh {
             *cx.local.imu_stale_ticks = cx.local.imu_stale_ticks.saturating_add(1);
@@ -321,6 +345,9 @@ pub fn control_loop(mut cx: control_loop::Context) {
         cx.shared.imu_angles.lock(|angles| {
             *angles = imu_angles;
         });
+        ATTITUDE_ROLL_DEG10.store(deg10(imu_angles[0]), Ordering::Relaxed);
+        ATTITUDE_PITCH_DEG10.store(deg10(imu_angles[1]), Ordering::Relaxed);
+        ATTITUDE_YAW_DEG10.store(deg10(imu_angles[2]), Ordering::Relaxed);
 
         if control_armed {
             // Read rc_inputs
@@ -461,10 +488,8 @@ pub fn control_loop(mut cx: control_loop::Context) {
             {
                 let requested_throttle = cx.local.control_throttle_reader.read() as f32;
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
-                let motor_commands = remap_motor_outputs(
-                    [bench_throttle, 0.0, 0.0, 0.0],
-                    CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-                );
+                let motor_commands =
+                    remap_motor_outputs([bench_throttle, 0.0, 0.0, 0.0], motor_output_map);
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
@@ -493,10 +518,8 @@ pub fn control_loop(mut cx: control_loop::Context) {
             {
                 let requested_throttle = cx.local.control_throttle_reader.read() as f32;
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
-                let motor_commands = remap_motor_outputs(
-                    [0.0, bench_throttle, 0.0, 0.0],
-                    CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-                );
+                let motor_commands =
+                    remap_motor_outputs([0.0, bench_throttle, 0.0, 0.0], motor_output_map);
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
@@ -525,10 +548,8 @@ pub fn control_loop(mut cx: control_loop::Context) {
             {
                 let requested_throttle = cx.local.control_throttle_reader.read() as f32;
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
-                let motor_commands = remap_motor_outputs(
-                    [0.0, 0.0, bench_throttle, 0.0],
-                    CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-                );
+                let motor_commands =
+                    remap_motor_outputs([0.0, 0.0, bench_throttle, 0.0], motor_output_map);
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
@@ -557,10 +578,8 @@ pub fn control_loop(mut cx: control_loop::Context) {
             {
                 let requested_throttle = cx.local.control_throttle_reader.read() as f32;
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
-                let motor_commands = remap_motor_outputs(
-                    [0.0, 0.0, 0.0, bench_throttle],
-                    CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-                );
+                let motor_commands =
+                    remap_motor_outputs([0.0, 0.0, 0.0, bench_throttle], motor_output_map);
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
@@ -662,17 +681,13 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 ); // deg/s or rad/s, but be consistent
                 fc.update_rate_measured(imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered); // filtered gyro rates
                 fc.update_motor_commands_dt(1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32);
-                let motor_commands = remap_motor_outputs(
-                    fc.get_logical_motor_commands(),
-                    CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-                );
+                let motor_commands =
+                    remap_motor_outputs(fc.get_logical_motor_commands(), motor_output_map);
 
                 {
                     let mut sample = fc.blackbox_sample();
-                    sample.motors = remap_motor_outputs(
-                        fc.get_logical_motor_commands(),
-                        CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-                    );
+                    sample.motors =
+                        remap_motor_outputs(fc.get_logical_motor_commands(), motor_output_map);
                     let compact = dt::CompactRateBlackboxSample::from_rate_sample(
                         CONTROL_RATE_SEQ.load(Ordering::Relaxed),
                         imu_sequence,

@@ -40,8 +40,9 @@ use stm32f4xx_hal::{
 
 pub use crate::dshot_bank::{
     DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotBank,
-    DshotCommandError, DshotInitError, DshotInterruptEvent, DshotLanes, DshotMotor,
-    DshotServiceEvent, DshotStats, DshotTelemetryRequestError,
+    DshotCommandError, DshotCommandSequence, DshotInitError, DshotInterruptEvent, DshotLanes,
+    DshotMotor, DshotServiceEvent, DshotSpecialCommandError, DshotStats,
+    DshotTelemetryRequestError,
 };
 
 pub type DshotDmaBuffer = [u16; COMPARE_DMA_SLOTS];

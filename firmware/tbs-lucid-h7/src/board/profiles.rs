@@ -1,3 +1,4 @@
+use ferrowasp_core::actuator::MotorOutputMap;
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
 use ferrowasp_io_core::serial::RcProtocol;
 use ferrowasp_tasks::drone_toolbox::{
@@ -111,6 +112,8 @@ pub const DEFAULT_TUNING: TuningProfile = TuningProfile {
     rc_rates: RC_RATE_PROFILE,
     // AETR with the arm switch on channel 9, as this board has always read it.
     rc_map: RcChannelMap::AETR_ARM_CH9,
+    // The board's own wiring, `LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT`, unchanged.
+    motor_map: MotorOutputMap::IDENTITY,
 };
 
 /// The configuration this board boots with when storage holds none, and the

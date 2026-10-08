@@ -209,6 +209,29 @@ status output that `rc` becomes valid and that `arm_sw` follows the intended
 switch before flight. The radio shows the pack voltage and current the board
 measures.
 
+## Test motors, props off
+
+**Remove every propeller first.** FerroConfigurator's Motors tab spins one
+motor at idle while its button is held, sets an ESC's spin direction, and
+walks through the motor order. Connect a flight battery: on USB power alone
+the ESCs cannot spin.
+
+The firmware decides every request. Its safety master refuses a motor test
+unless the controller is disarmed, not arming, and the arm switch is off. A
+spin is one 250 ms lease that the configurator renews while the button is
+held; release it, leave the window or press Escape and the renewals stop, and
+the firmware stops the motor when the lease runs out. Arming is refused for
+two seconds after the last test. The same requests are available over USB as
+`motor spin N CONFIRM`, `motor dir N normal|reversed CONFIRM` and
+`motor stop`.
+
+Setting a direction sends DShot commands that change and save the ESC's own
+setting; hold the motor afterwards to check it. The motor order is the
+`motor_map` setting: for logical motors 1-4 (Betaflight Quad X: rear-right,
+front-right, rear-left, front-left), which board output each drives. `1234`
+keeps the board wiring. A wrong order flips the craft on takeoff, so after
+any change hold each motor and check it is where the diagram says.
+
 ## Change serial ports
 
 Each UART is named by its number on the chip. List what each port serves,

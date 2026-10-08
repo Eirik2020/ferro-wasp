@@ -361,3 +361,273 @@ footer[data-tone="busy"] {
   fill: var(--muted);
   font-size: 10px;
 }
+
+/* ---- 3D attitude view ---- */
+
+.quad-scene {
+  height: 240px;
+  perspective: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #232833 0%, #16181c 70%);
+  border-radius: 5px;
+}
+
+/* Looking from behind and above, nose away from the viewer. */
+.quad-camera {
+  transform-style: preserve-3d;
+  transform: rotateX(58deg);
+}
+
+.quad-model {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  transform-style: preserve-3d;
+  transition: transform 90ms linear;
+}
+
+.quad-model > * {
+  position: absolute;
+}
+
+.quad-model .arm {
+  left: 50%;
+  top: 50%;
+  width: 230px;
+  height: 14px;
+  margin: -7px 0 0 -115px;
+  background: #4a5160;
+  border-radius: 7px;
+}
+
+.quad-model .arm-a {
+  transform: rotate(45deg);
+}
+
+.quad-model .arm-b {
+  transform: rotate(-45deg);
+}
+
+.quad-model .plate {
+  left: 60px;
+  top: 50px;
+  width: 60px;
+  height: 80px;
+  background: #2f3540;
+  border: 1px solid #5c6578;
+  border-radius: 8px;
+  transform: translateZ(2px);
+}
+
+.quad-model .plate-top {
+  left: 66px;
+  top: 58px;
+  width: 48px;
+  height: 64px;
+  background: #3a4252;
+  border-radius: 6px;
+  transform: translateZ(16px);
+}
+
+.quad-model .nose {
+  left: 78px;
+  top: 30px;
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 22px solid #e0644f;
+  transform: translateZ(17px);
+}
+
+.quad-model .prop {
+  left: calc(90px + var(--x) * 80px - 34px);
+  top: calc(90px + var(--y) * 80px - 34px);
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 2px solid #7aa6e0;
+  background: rgb(122 166 224 / 12%);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transform: translateZ(8px);
+}
+
+/* The front pair, like Betaflight's model, so the nose reads at any yaw. */
+.quad-model .prop[data-motor="2"],
+.quad-model .prop[data-motor="4"] {
+  border-color: #e0644f;
+  background: rgb(224 100 79 / 12%);
+}
+
+.quad-model .prop.spinning {
+  background: rgb(217 164 65 / 45%);
+  box-shadow: 0 0 18px rgb(217 164 65 / 70%);
+}
+
+.quad-model.no-data {
+  opacity: 0.35;
+}
+
+.quad-readout {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  margin-right: auto;
+}
+
+.quad-viewer .row {
+  margin-top: 0.5rem;
+}
+
+/* ---- Motors ---- */
+
+.motor-notice {
+  border: 1px solid #a33b3b;
+  background: rgb(140 47 47 / 25%);
+  border-radius: 5px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.danger {
+  color: #ff8080;
+}
+
+.motor-consent {
+  white-space: normal;
+  margin: 0.6rem 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.motor-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .motor-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.motor-diagram {
+  width: 100%;
+  max-width: 300px;
+  touch-action: none;
+  user-select: none;
+}
+
+.motor-diagram .frame {
+  stroke: #4a5160;
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.motor-diagram .frame-body {
+  fill: #2f3540;
+  stroke: #5c6578;
+}
+
+.motor-diagram .frame-nose {
+  fill: #e0644f;
+}
+
+.motor-diagram .frame-label {
+  fill: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.motor-diagram .motor {
+  cursor: pointer;
+}
+
+.motor-diagram .prop-disc {
+  fill: rgb(122 166 224 / 10%);
+  stroke: #7aa6e0;
+  stroke-width: 2;
+}
+
+.motor-diagram .prop-arrow {
+  fill: none;
+  stroke: #9aa3ad;
+  stroke-width: 2;
+}
+
+.motor-diagram .prop-arrow-head {
+  fill: #9aa3ad;
+}
+
+.motor-diagram .motor-label {
+  fill: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.motor-diagram .motor.held .prop-disc,
+.motor-diagram .motor.reported .prop-disc {
+  fill: rgb(217 164 65 / 40%);
+  stroke: #d9a441;
+}
+
+.motor-diagram .motor.assigned .prop-disc {
+  fill: rgb(47 111 79 / 50%);
+  stroke: #6fcf97;
+}
+
+.motor-diagram .motor.disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.motor-controls p {
+  margin: 0 0 0.5rem;
+}
+
+.motor-controls fieldset {
+  margin-bottom: 0.6rem;
+}
+
+.motor-controls .row {
+  margin: 0.25rem 0;
+}
+
+.direction-label {
+  min-width: 11rem;
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.danger-button {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.motor-message {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.motor-message[data-tone="bad"] {
+  color: #ff9d9d;
+}
+
+.motor-message[data-tone="busy"] {
+  color: #ffd98a;
+}

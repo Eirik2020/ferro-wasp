@@ -28,6 +28,7 @@ pub enum ConfigKey {
     RcMap,
     RcArmChannel,
     RcProtocol,
+    MotorMap,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,7 +87,7 @@ impl FromStr for ConfigKey {
 }
 
 impl ConfigKey {
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::RollP,
         Self::RollI,
         Self::RollD,
@@ -111,6 +112,7 @@ impl ConfigKey {
         Self::RcMap,
         Self::RcArmChannel,
         Self::RcProtocol,
+        Self::MotorMap,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -139,6 +141,7 @@ impl ConfigKey {
             Self::RcMap => "rc_map",
             Self::RcArmChannel => "rc_arm_channel",
             Self::RcProtocol => "rc_protocol",
+            Self::MotorMap => "motor_map",
         }
     }
 
@@ -214,6 +217,14 @@ impl ConfigKey {
             Self::RcProtocol => ConfigValueSpec {
                 minimum: 0.0,
                 maximum: 1.0,
+                integer: true,
+            },
+            // Motor order: for logical motors 1-4 (Betaflight Quad X), which
+            // board output each drives, as four digits; 1234 keeps the board
+            // wiring. The firmware also requires a permutation of 1-4.
+            Self::MotorMap => ConfigValueSpec {
+                minimum: 1234.0,
+                maximum: 4321.0,
                 integer: true,
             },
         }

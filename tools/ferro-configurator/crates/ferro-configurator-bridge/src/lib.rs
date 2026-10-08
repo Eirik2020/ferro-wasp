@@ -22,9 +22,9 @@ use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
     CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo,
-    FlightCatalog, FlightSelector, LineTransport, LogInfo, PortInfo, PrearmCheck, SerialBindings,
-    SerialTransport, StatusSnapshot, catalog_device, discover_ports, download_flight, open_device,
-    prearm_checks, resolve_device_flight,
+    FlightCatalog, FlightSelector, LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck,
+    SerialBindings, SerialTransport, StatusSnapshot, catalog_device, discover_ports,
+    download_flight, open_device, prearm_checks, resolve_device_flight,
 };
 use serde::Serialize;
 
@@ -196,6 +196,70 @@ impl<T: LineTransport> Session<T> {
         Ok(self.client_mut()?.apply_serial_binding(port, function)?)
     }
 
+    /// The same report from the last status line already received, for a
+    /// display polled alongside [`Session::live`].
+    ///
+    /// Never a precondition: a write's gate reads fresh. Its value is that it
+    /// does not hold the session waiting for the next periodic status line,
+    /// which would stall a 3D view or a held motor button behind it. The
+    /// `live` polling that runs beside it reads those lines as they arrive,
+    /// so the cache stays current.
+    pub fn safety_display(&mut self) -> Result<Safety> {
+        let status = self.client_mut()?.read_status()?;
+        Ok(Safety {
+            writes_allowed: !status.armed,
+            checks: prearm_checks(&status),
+            status,
+        })
+    }
+
+    /// Attitude and motor activity, quick enough to poll for a 3D view.
+    pub fn live(&mut self) -> Result<LiveSnapshot> {
+        Ok(self.client_mut()?.live()?)
+    }
+
+    /// Refuses unless the controller reports itself disarmed with the arm
+    /// switch off, read fresh through `live` so a held motor button is never
+    /// stalled behind the slower periodic status line.
+    fn require_bench_ready(&mut self) -> Result<()> {
+        let live = self.client_mut()?.live()?;
+        if live.armed {
+            return Err(BridgeError::Refused {
+                reason: "the controller is armed; motor tests run only when disarmed".to_owned(),
+            });
+        }
+        if live.arm_switch {
+            return Err(BridgeError::Refused {
+                reason: "turn the arm switch off before testing motors".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Idles one logical motor for one short firmware lease. The front-end
+    /// calls this repeatedly while its button is held.
+    ///
+    /// The firmware makes the decision; this check only gives a clear
+    /// reason before the request is sent.
+    pub fn motor_spin(&mut self, logical_motor: u8) -> Result<()> {
+        self.require_bench_ready()?;
+        Ok(self.client_mut()?.motor_spin(logical_motor)?)
+    }
+
+    /// Stops every motor. Not gated here: stopping is always the safe request,
+    /// and the firmware already refuses it while armed.
+    pub fn motor_stop(&mut self) -> Result<()> {
+        Ok(self.client_mut()?.motor_stop()?)
+    }
+
+    /// Sets and saves one ESC's spin direction.
+    pub fn motor_direction(&mut self, logical_motor: u8, reversed: bool) -> Result<()> {
+        self.require_bench_ready()?;
+        Ok(self
+            .client_mut()?
+            .motor_direction(logical_motor, reversed)?)
+    }
+
     /// The stored flights, grouped by recorded boot session.
     pub fn flights(&mut self) -> Result<FlightCatalog> {
         Ok(catalog_device(self.client_mut()?)?)
@@ -335,6 +399,33 @@ mod tests {
         let readback = session.apply_serial_binding("uart3", "rc").unwrap();
         assert!(readback.saved);
         assert_eq!(readback.function("uart3"), Some("rc"));
+    }
+
+    #[test]
+    fn a_motor_spin_is_refused_with_the_arm_switch_on() {
+        let mut session =
+            session_answering(&["OK live armed=0 arm_sw=1 att=0,0,0 mot=0".to_owned()]);
+        let error = session.motor_spin(1).unwrap_err();
+        assert!(matches!(error, BridgeError::Refused { .. }), "{error:?}");
+    }
+
+    #[test]
+    fn a_motor_spin_is_refused_while_armed() {
+        let mut session =
+            session_answering(&["OK live armed=1 arm_sw=1 att=0,0,0 mot=15".to_owned()]);
+        assert!(matches!(
+            session.motor_spin(1).unwrap_err(),
+            BridgeError::Refused { .. }
+        ));
+    }
+
+    #[test]
+    fn a_disarmed_controller_accepts_a_motor_spin() {
+        let mut session = session_answering(&[
+            "OK live armed=0 arm_sw=0 att=0,0,0 mot=0".to_owned(),
+            "OK motor".to_owned(),
+        ]);
+        session.motor_spin(3).expect("disarmed with the switch off");
     }
 
     #[test]

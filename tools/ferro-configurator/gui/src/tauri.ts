@@ -15,6 +15,7 @@ import {
   type DownloadSummary,
   type FerroConfig,
   type FlightCatalog,
+  type LiveSnapshot,
   type PortInfo,
   type Safety,
   type SerialBindings,
@@ -43,6 +44,26 @@ export class TauriApi implements Api {
 
   safety(): Promise<Safety> {
     return call<Safety>("safety");
+  }
+
+  safetyDisplay(): Promise<Safety> {
+    return call<Safety>("safety_display");
+  }
+
+  live(): Promise<LiveSnapshot> {
+    return call<LiveSnapshot>("live");
+  }
+
+  motorSpin(motor: number): Promise<void> {
+    return call<void>("motor_spin", { motor });
+  }
+
+  motorStop(): Promise<void> {
+    return call<void>("motor_stop");
+  }
+
+  motorDirection(motor: number, reversed: boolean): Promise<void> {
+    return call<void>("motor_direction", { motor, reversed });
   }
 
   readConfig(): Promise<FerroConfig> {

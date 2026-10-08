@@ -74,6 +74,21 @@ export interface FerroConfig {
   rc_arm_channel?: number;
   /** Applies after the controller reboots. */
   rc_protocol?: "sbus" | "crsf";
+  /**
+   * Motor order: for logical motors 1-4 (rear-right, front-right, rear-left,
+   * front-left), which board output each drives. 1234 keeps the wiring.
+   */
+  motor_map?: number;
+}
+
+/** Mirrors `LiveSnapshot`: the fast answer polled for the 3D view. */
+export interface LiveSnapshot {
+  armed: boolean;
+  arm_switch: boolean;
+  /** Roll, pitch and yaw in degrees. */
+  attitude_deg: [number, number, number];
+  /** Bit per physical motor output commanded above zero. */
+  active_outputs: number;
 }
 
 /** The functions a serial port can serve, as the firmware names them. */
@@ -175,7 +190,19 @@ export interface Api {
   /** `null` selects the only FerroWasp port, matching the CLI's auto mode. */
   connect(port: string | null): Promise<string>;
   disconnect(): Promise<void>;
+  /** Fresh: waits for the next status line. Use before acting on it. */
   safety(): Promise<Safety>;
+  /** The last status line received; cheap enough to poll for display. */
+  safetyDisplay(): Promise<Safety>;
+  live(): Promise<LiveSnapshot>;
+  /**
+   * Idles one logical motor for one short firmware lease. Call about every
+   * 100 ms while the button is held; stop calling and the motor stops.
+   */
+  motorSpin(motor: number): Promise<void>;
+  motorStop(): Promise<void>;
+  /** Sets and saves one ESC's spin direction. Motors must be stopped. */
+  motorDirection(motor: number, reversed: boolean): Promise<void>;
   readConfig(): Promise<FerroConfig>;
   /** Refused unless the controller reports itself disarmed. */
   applyConfig(config: FerroConfig): Promise<FerroConfig>;

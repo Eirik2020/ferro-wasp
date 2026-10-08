@@ -21,8 +21,8 @@ pub use blackbox::{
     download_flight, resolve_device_flight,
 };
 pub use client::{
-    FerroClient, FlashInfo, LogInfo, SERIAL_FUNCTIONS, SerialBindings, SerialPortBinding,
-    StatusSnapshot,
+    FerroClient, FlashInfo, LiveSnapshot, LogInfo, SERIAL_FUNCTIONS, SerialBindings,
+    SerialPortBinding, StatusSnapshot,
 };
 pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
 pub use device::{DeviceSelector, PortInfo, discover_ports, open_device};
