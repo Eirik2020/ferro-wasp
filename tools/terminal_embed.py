@@ -268,6 +268,10 @@ def commands_from_args(
 
 def is_firmware_line(text: str) -> bool:
     clean = ANSI_ESCAPE_RE.sub("", text).strip()
+    # probe-rs logs its own errors in the same level-prefixed shape, for
+    # example "ERROR probe_rs::session: ...", and they are not the firmware.
+    if "probe_rs::" in clean:
+        return False
     return DEFMT_LINE_RE.match(clean) is not None or any(
         marker in clean for marker in FIRMWARE_MARKERS
     )
@@ -384,7 +388,14 @@ def run_and_prefix(
                 ):
                     programming_completed = True
                     logger.line("HOST: === FLASH PROGRAMMED: waiting for firmware boot/RTT ===")
-                if probe_run and firmware_line and not firmware_boot_observed:
+                # Only after probe-rs finished programming: a firmware line
+                # before that is the old image still running, or noise.
+                if (
+                    probe_run
+                    and programming_completed
+                    and firmware_line
+                    and not firmware_boot_observed
+                ):
                     firmware_boot_observed = True
                     logger.line("HOST: === FLASH SUCCEEDED: firmware boot and RTT observed ===")
 

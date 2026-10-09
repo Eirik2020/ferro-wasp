@@ -7,6 +7,7 @@ from tools.terminal_embed import (
     foxeer_imu_rate_hz,
     add_required_feature,
     commands_from_args,
+    is_firmware_line,
     is_probe_flash_activity_line,
     is_probe_programming_complete_line,
     is_probe_run_command,
@@ -30,6 +31,15 @@ class FoxeerSmokeEvidenceTests(unittest.TestCase):
         self.assertFalse(is_probe_flash_activity_line("Connecting to target"))
         self.assertTrue(is_probe_programming_complete_line("Finished in 6.34s"))
         self.assertFalse(is_probe_programming_complete_line("Finished release profile"))
+
+    def test_probe_rs_errors_are_not_firmware_output(self) -> None:
+        self.assertFalse(
+            is_firmware_line(
+                "ERROR probe_rs::session: Unable to wait for 0 halted: An ARM specific error occurred."
+            )
+        )
+        self.assertTrue(is_firmware_line("INFO  Begin system init.."))
+        self.assertTrue(is_firmware_line("WARN  Flight arming inhibited: bench"))
 
     def test_probe_command_keeps_flags_and_elf_as_separate_arguments(self) -> None:
         _, commands = commands_from_args(
