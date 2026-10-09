@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cdb00ad5.js";
+            window.path_to_searchindex_js = "searchindex-19e0bd34.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -1207,7 +1207,7 @@ fail closed, and stop all outputs. The switch must then be observed low before
 a fresh low-to-high request can start another attempt.</p>
 <p>Power the ESCs before the manager’s first post-delay request. If the FC runs
 without ESC power long enough for that request to time out, telemetry stops.
-After applying ESC power, wait a second for it to resume while disarmed, then
+After applying ESC power, wait up to 4 seconds for it to resume while disarmed, then
 complete a fresh switch-low/low-to-high arm sequence.</p>
 <p>The ESC manager does not decide whether RPM is sufficient and cannot change
 the safety state. It only owns UART parsing, request rotation, response
@@ -1217,7 +1217,8 @@ actuator path owns the qualification decision.</p>
 manager may buffer that frame, but it remains quarantined and is published only
 after the exact sequence/output frame-start acknowledgement arrives from the
 DShot service. Association timeouts stop telemetry so late traffic cannot be
-relabeled; it resumes only while disarmed, after a 500 ms quiet window in
+relabeled; it resumes only while disarmed, after a quiet window (500 ms,
+doubling to at most 4 s while retries bring nothing back) in
 which the DShot service has dropped any request the manager gave up on, and
 with every stored sample dropped, so qualification still needs fresh eRPM. UART, parser, bounded-queue, and timeout failures
 cannot grant authority; when they prevent required pre-arm samples,
@@ -1394,7 +1395,9 @@ service drops a request it has held for <code>ESC_REQUEST_EXPIRY_MS</code> (20 m
 without sending it, the time after which the manager gives up on its
 acknowledgement, so nothing stale reaches an ESC later. Telemetry resumes only
 while disarmed, after 500 ms with no wire byte and no acknowledgement, with
-every stored sample dropped.
+every stored sample dropped. Each retry that brings no frame back doubles that
+window, up to 4 s, so unpowered ESCs are asked rarely and log one warning per
+outage; the first frame resets it and logs <code>ESC telemetry back</code>.
 An unanswered response expires after 100 ms. The aggregate request limit is
 50 Hz, or 12.5 Hz per ESC when all respond.</p>
 <p>Telemetry identity is physical-output identity, not mixer motor order:</p>
@@ -1424,8 +1427,8 @@ low-to-high arm request can qualify.</p>
 <p>For a powered telemetry or arming test, power the ESCs before that first
 post-delay request. If the FC remains on without ESC power, the request receives
 no response and the association timeout stops telemetry. Once the ESCs are
-powered, telemetry resumes on its own about half a second later while
-disarmed; no reboot is needed.</p>
+powered, telemetry resumes on its own within about 4 seconds while disarmed;
+no reboot is needed.</p>
 <h3 id="powered-props-off-result"><a class="header" href="#powered-props-off-result">Powered props-off result</a></h3>
 <p>The PA10 legacy telemetry path passed a powered props-off run on 2026-07-20.
 The retained log is
@@ -1577,8 +1580,8 @@ which must remain zero.</li>
 <li>Reset several times, including once with the transmitter arm toggle high.
 No reset or link recovery may request arming until a fresh low-to-high arm
 transition is observed.</li>
-<li>Before a later powered stage, apply ESC power and wait a second for
-telemetry to resume (RTT logs <code>ESC telemetry resumed</code>).</li>
+<li>Before a later powered stage, apply ESC power and wait up to 4 seconds
+for telemetry to resume (RTT logs <code>ESC telemetry back</code>).</li>
 </ol>
 <p>The first retained unpowered capture,
 <code>logs/terminal_embed/20260719_172718_rtt.log</code>, used the earlier candidate with
@@ -1723,8 +1726,8 @@ attempt during that interval can therefore enter guarded idle, receive no
 qualifying samples, stop at the 1.2-second deadline, and remain disarmed. Move
 the arm switch low and make a fresh arm request after telemetry is available.
 If the FC has already issued a request while the ESC bank was unpowered, its
-response timeout stops telemetry; power the ESCs, wait a second for it to
-resume, then retry.</p>
+response timeout stops telemetry; power the ESCs, wait up to 4 seconds for it
+to resume, then retry.</p>
 <p>Use this props-off checkpoint before any prop-on work:</p>
 <ol>
 <li>Inspect every motor and ESC, remove all propellers, and flash
@@ -2354,7 +2357,8 @@ started. If a CRC-valid response completes while that request is still queued,
 the manager may buffer it, but it remains quarantined and cannot be published
 until the matching acknowledgement arrives. Association timeouts stop the
 manager so a late response cannot be attributed to a later output. It resumes
-only while disarmed, after 500 ms with no wire byte and no acknowledgement.</p>
+only while disarmed, after 500 ms with no wire byte and no acknowledgement,
+doubling to at most 4 s while retries bring nothing back.</p>
 <p>The physical-output association maps to the logical Quad X layout as follows:
 output 1 is M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right,
 and output 4 is M2/front-right.</p>

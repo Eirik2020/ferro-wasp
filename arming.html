@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cdb00ad5.js";
+            window.path_to_searchindex_js = "searchindex-19e0bd34.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -255,7 +255,7 @@ fail closed, and stop all outputs. The switch must then be observed low before
 a fresh low-to-high request can start another attempt.</p>
 <p>Power the ESCs before the manager’s first post-delay request. If the FC runs
 without ESC power long enough for that request to time out, telemetry stops.
-After applying ESC power, wait a second for it to resume while disarmed, then
+After applying ESC power, wait up to 4 seconds for it to resume while disarmed, then
 complete a fresh switch-low/low-to-high arm sequence.</p>
 <p>The ESC manager does not decide whether RPM is sufficient and cannot change
 the safety state. It only owns UART parsing, request rotation, response
@@ -265,7 +265,8 @@ actuator path owns the qualification decision.</p>
 manager may buffer that frame, but it remains quarantined and is published only
 after the exact sequence/output frame-start acknowledgement arrives from the
 DShot service. Association timeouts stop telemetry so late traffic cannot be
-relabeled; it resumes only while disarmed, after a 500 ms quiet window in
+relabeled; it resumes only while disarmed, after a quiet window (500 ms,
+doubling to at most 4 s while retries bring nothing back) in
 which the DShot service has dropped any request the manager gave up on, and
 with every stored sample dropped, so qualification still needs fresh eRPM. UART, parser, bounded-queue, and timeout failures
 cannot grant authority; when they prevent required pre-arm samples,
