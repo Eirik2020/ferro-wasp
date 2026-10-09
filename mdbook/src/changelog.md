@@ -17,6 +17,10 @@ artifact is stable, airworthy, or production-ready.
 
 ### Changed
 
+- Arming is refused while a computer is connected: a USB host has the board
+  configured, or the configurator link was used in the last 2 seconds. The
+  configurator's pre-arm checklist shows it as "USB unplugged".
+
 - Crate layout. `ferrowasp-tasks` is now `ferrowasp-flight` (portable flight
   logic) and `ferrowasp-stm32f4-tasks` is `ferrowasp-stm32-tasks` (RTIC task
   bodies for every STM32 board). The HAL-neutral half of `ferrowasp-stm32f4`

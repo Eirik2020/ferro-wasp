@@ -173,7 +173,9 @@ pub use ferrowasp_stm32_tasks::snapshots::{
     IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10, IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION,
     imu_orientation_snapshot,
 };
-pub use ferrowasp_stm32_tasks::snapshots::{live_snapshot, rc_channels_us};
+pub use ferrowasp_stm32_tasks::snapshots::{
+    USB_HOST_CONNECTED, host_connected, live_snapshot, rc_channels_us,
+};
 pub use ferrowasp_stm32_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 pub use ferrowasp_stm32h7::adc as stm32_adc;
 pub use ferrowasp_stm32h7::clocks as stm32_clocks;
@@ -695,6 +697,7 @@ pub fn validate_live_arming_guard(
 ) -> Result<(), safety::ArmingAbortReason> {
     safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
     safety::validate_prearm_health(safety::PreArmHealth {
+        host_connected: host_connected(),
         imu_ready: IMU_TRANSPORT_READY.load(Ordering::Acquire)
             && Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Acquire))
                 .is_some_and(imu_kind_flight_verified)

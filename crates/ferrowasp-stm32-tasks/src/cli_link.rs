@@ -14,6 +14,8 @@ use crate::snapshots::*;
 const CHUNK_LEN: usize = stm32_memory::UART_RX_BUFFER_BYTES;
 /// How often the link looks for input and answers when idle.
 const POLL_MS: u64 = 2;
+/// How long after its last command the link still blocks arming.
+const ACTIVE_HOLD_MS: u64 = 2_000;
 
 /// Packs answer lines into transmit chunks.
 struct Outbox {
@@ -81,6 +83,7 @@ pub async fn configurator_link(cx: configurator_link::Context) {
         healthy: true,
     };
     let mut input = [0u8; 32];
+    let mut last_command_ms: Option<u64> = None;
     loop {
         // A break in the stream would splice two half lines into one command.
         if port.discontinuities.take_new().is_some() {
@@ -101,6 +104,7 @@ pub async fn configurator_link(cx: configurator_link::Context) {
                 let Some(parsed) = parser.ingest(*byte) else {
                     continue;
                 };
+                last_command_ms = Some(Mono::now().duration_since_epoch().to_millis());
                 match parsed {
                     Ok(flash_task::StorageCommand::Live) => {
                         let line = ferrowasp_flight::usb_debug::format_live(live_snapshot());
@@ -130,6 +134,11 @@ pub async fn configurator_link(cx: configurator_link::Context) {
             outbox.push(&mut writer, frame.as_bytes()).await;
         }
         outbox.flush(&mut writer).await;
+        let now_ms = Mono::now().duration_since_epoch().to_millis();
+        CONFIGURATOR_LINK_ACTIVE.store(
+            last_command_ms.is_some_and(|last| now_ms.saturating_sub(last) < ACTIVE_HOLD_MS),
+            Ordering::Release,
+        );
         Mono::delay(POLL_MS.millis()).await;
     }
 }

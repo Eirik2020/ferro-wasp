@@ -34,6 +34,10 @@ An arm attempt requires:
 - a newly observed low-to-high arm transition;
 - arm high for the configured 200 ms hold;
 - throttle at or below `ARMING_MAX_THROTTLE`, currently 65 command counts;
+- no computer connected: a USB host has not configured the board, and the
+  UART configurator link has sent no command in the last 2 seconds. The
+  Foxeer has no VBUS sense pin, so a USB supply that only gives power does not
+  count;
 - a supported IMU that has produced a sample;
 - completed stationary startup gyro-bias calibration;
 - a fresh IMU sample in the control loop;
