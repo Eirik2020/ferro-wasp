@@ -2393,9 +2393,13 @@ ferroforge::app! {
     #[task(from = flight_tasks::spi1_timeout, priority = 13, shared = [spi1_owner])]
     async fn spi1_timeout(cx: spi1_timeout::Context, observed_at_us: u64);
 
+    // Above every UART transport (11): a gyro sample published late makes
+    // the next control tick stale, and one stale tick disarms. UART work at
+    // the same level delayed it enough, with ESC telemetry and the OSD busy,
+    // to disarm moments after arming. See mdbook/src/priority.md.
     #[task(
         from = flight_tasks::spi1_parser,
-        priority = 11,
+        priority = 12,
         local = [spi1_parser],
         shared = [imu_data]
     )]
