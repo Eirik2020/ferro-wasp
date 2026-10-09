@@ -1,9 +1,9 @@
 // The prototype interface.
 //
-// Four panels over one connection: the safety banner, the tuning form, the
-// serial ports, and the flight log. The banner is not decoration - it is the thing that decides
-// whether the form can be submitted at all, and it is deliberately the first
-// thing on screen.
+// Tabs over one connection, laid out like the Betaflight Configurator: Setup,
+// Ports, Receiver, Motors, PID Tuning, Rates and Blackbox. The safety banner
+// sits above every tab. It is not decoration - it is the thing that decides
+// whether anything can be written at all, so no tab may hide it.
 
 import {
   BridgeError,
@@ -29,6 +29,8 @@ const usingMock = !isTauri();
 const SAFETY_POLL_MS = 500;
 /** How often attitude and motor activity are read for the 3D view. */
 const LIVE_POLL_MS = 100;
+/** How often the Receiver tab reads the channels while it is open. */
+const RC_POLL_MS = 100;
 
 let connected = false;
 let safetyState: Safety | null = null;
@@ -37,10 +39,21 @@ let bindings: SerialBindings | null = null;
 let pollTimer: number | undefined;
 let liveTimer: number | undefined;
 let liveInFlight = false;
+let rcTimer: number | undefined;
+let rcInFlight = false;
+/** Channels read fast while the Receiver tab is open; null falls back to the status line. */
+let fastChannels: number[] | null = null;
+/** Older firmware has no `rc` command; stop asking once it says so. */
+let rcUnsupported = false;
 let viewer: QuadViewer;
 let motors: MotorsTab;
 let finder: ControlFinder | null = null;
 let finderTimeout: number | undefined;
+/** Tabs holding a setting edited since the configuration was last read. */
+const dirtyTabs = new Set<string>();
+let activeTab = "setup";
+
+const TAB_STORAGE_KEY = "ferro-configurator.tab";
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -115,6 +128,13 @@ function renderSafety(): void {
 function renderChecks(checks: PrearmCheck[]): void {
   const list = element("prearm-checks");
   list.replaceChildren();
+  const empty = element("prearm-empty");
+  empty.hidden = checks.length !== 0;
+  empty.textContent = !connected
+    ? "Connect a disarmed controller to see what stops it arming."
+    : safetyState?.status.armed
+      ? "Armed."
+      : "No checks reported yet.";
   for (const check of checks) {
     const row = document.createElement("li");
     row.dataset["state"] = check.state;
@@ -138,7 +158,10 @@ function renderReceiver(): void {
   const unavailable = element("receiver-unavailable");
   const container = element("channels");
   const findButton = element<HTMLButtonElement>("find-control");
-  const channels = connected ? safetyState?.status.channels : null;
+  // No signal wins over the last frame's values, which the board keeps.
+  const signal = safetyState?.status.rc_valid !== false;
+  const channels =
+    connected && signal ? (fastChannels ?? safetyState?.status.channels ?? null) : null;
 
   if (!channels) {
     container.replaceChildren();
@@ -204,6 +227,25 @@ async function pollSafety(): Promise<void> {
   }
 }
 
+/** Reads the channels at once, between the two-second status lines. */
+async function pollRc(): Promise<void> {
+  if (!connected || activeTab !== "receiver" || rcInFlight || rcUnsupported) {
+    return;
+  }
+  rcInFlight = true;
+  try {
+    fastChannels = await api.rcChannels();
+    renderReceiver();
+  } catch (error) {
+    fastChannels = null;
+    if (toBridgeError(error).kind !== "notConnected") {
+      rcUnsupported = true;
+    }
+  } finally {
+    rcInFlight = false;
+  }
+}
+
 // ------------------------------------------------------------ live view ---
 
 async function pollLive(): Promise<void> {
@@ -264,6 +306,8 @@ async function connect(): Promise<void> {
     motors.setConnected(true);
     pollTimer = window.setInterval(() => void pollSafety(), SAFETY_POLL_MS);
     liveTimer = window.setInterval(() => void pollLive(), LIVE_POLL_MS);
+    rcUnsupported = false;
+    rcTimer = window.setInterval(() => void pollRc(), RC_POLL_MS);
   } catch (error) {
     connected = false;
     report(error);
@@ -276,6 +320,9 @@ async function disconnect(): Promise<void> {
   pollTimer = undefined;
   window.clearInterval(liveTimer);
   liveTimer = undefined;
+  window.clearInterval(rcTimer);
+  rcTimer = undefined;
+  fastChannels = null;
   // Stops any held motor before the port closes.
   motors.setConnected(false);
   await api.disconnect();
@@ -337,8 +384,37 @@ function renderConfig(): void {
   const protocol = element<HTMLSelectElement>("rc-protocol");
   protocol.value = config?.rc_protocol ?? "sbus";
   protocol.disabled = config?.rc_protocol === undefined;
+  dirtyTabs.clear();
   renderRates();
+  renderDirty();
   updateWriteControls();
+}
+
+/** Marks the tab holding an edited setting, until it is saved or re-read. */
+function markDirty(input: HTMLElement): void {
+  const tab = input.closest<HTMLElement>("[data-panel]")?.dataset["panel"];
+  if (tab !== undefined && config !== null) {
+    dirtyTabs.add(tab);
+    renderDirty();
+  }
+}
+
+function renderDirty(): void {
+  for (const button of document.querySelectorAll<HTMLElement>("#tabs [data-tab]")) {
+    const tab = button.dataset["tab"] ?? "";
+    button.classList.toggle("dirty", dirtyTabs.has(tab));
+  }
+  const text =
+    dirtyTabs.size === 0
+      ? ""
+      : `Unsaved changes on ${[...dirtyTabs].map(tabLabel).join(", ")}`;
+  for (const state of document.querySelectorAll<HTMLElement>(".config-state")) {
+    state.textContent = text;
+  }
+}
+
+function tabLabel(tab: string): string {
+  return document.querySelector<HTMLElement>(`#tabs [data-tab="${tab}"]`)?.textContent ?? tab;
 }
 
 /** Reads the form, not `config`, so the curve follows edits before Apply. */
@@ -371,11 +447,15 @@ function renderRates(): void {
 function updateWriteControls(): void {
   const writable = connected && safetyState?.writes_allowed === true;
   const allowed = writable && config !== null;
-  const apply = element<HTMLButtonElement>("apply");
-  apply.disabled = !allowed;
-  apply.title = allowed
-    ? "Stage, save and verify this configuration"
-    : "Available when a disarmed controller is connected";
+  for (const apply of document.querySelectorAll<HTMLButtonElement>(".apply-config")) {
+    apply.disabled = !allowed;
+    apply.title = allowed
+      ? "Stage, save and verify every setting on every tab"
+      : "Available when a disarmed controller is connected";
+  }
+  for (const reload of document.querySelectorAll<HTMLButtonElement>(".reload-config")) {
+    reload.disabled = !connected;
+  }
 
   const portsAllowed = writable && bindings !== null;
   const applyPorts = element<HTMLButtonElement>("apply-ports");
@@ -586,6 +666,65 @@ async function syncFlights(): Promise<void> {
   }
 }
 
+// ------------------------------------------------------------------- tabs ---
+
+function showTab(tab: string): void {
+  if (!document.querySelector(`[data-panel="${tab}"]`)) {
+    tab = "setup";
+  }
+  // Like Betaflight: leaving the motor test stops every motor and turns the
+  // test off, so it is never live on a tab nobody is looking at.
+  if (activeTab === "motors" && tab !== "motors") {
+    motors.leave();
+  }
+  activeTab = tab;
+  for (const panel of document.querySelectorAll<HTMLElement>("[data-panel]")) {
+    panel.hidden = panel.dataset["panel"] !== tab;
+  }
+  for (const button of document.querySelectorAll<HTMLElement>("#tabs [data-tab]")) {
+    const selected = button.dataset["tab"] === tab;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  }
+  history.replaceState(null, "", `#${tab}`);
+  try {
+    localStorage.setItem(TAB_STORAGE_KEY, tab);
+  } catch {
+    // Storage may be unavailable; the tab is only a convenience.
+  }
+}
+
+/** The tab named in the address (`#rates`), else the one last open. */
+function savedTab(): string {
+  const fromHash = location.hash.slice(1);
+  if (fromHash !== "") {
+    return fromHash;
+  }
+  try {
+    return localStorage.getItem(TAB_STORAGE_KEY) ?? "setup";
+  } catch {
+    return "setup";
+  }
+}
+
+function wireTabs(): void {
+  const buttons = [...document.querySelectorAll<HTMLElement>("#tabs [data-tab]")];
+  for (const [index, button] of buttons.entries()) {
+    button.addEventListener("click", () => showTab(button.dataset["tab"] ?? "setup"));
+    button.addEventListener("keydown", (event) => {
+      const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+      if (step === 0) {
+        return;
+      }
+      event.preventDefault();
+      const next = buttons[(index + step + buttons.length) % buttons.length];
+      next?.focus();
+      showTab(next?.dataset["tab"] ?? "setup");
+    });
+  }
+  showTab(savedTab());
+}
+
 // ------------------------------------------------------------------ wire ---
 
 function wire(): void {
@@ -603,8 +742,18 @@ function wire(): void {
   element("refresh-ports").addEventListener("click", () => void refreshPorts());
   element("connect").addEventListener("click", () => void connect());
   element("disconnect").addEventListener("click", () => void disconnect());
-  element("reload-config").addEventListener("click", () => void loadConfig());
-  element("apply").addEventListener("click", () => void applyConfig());
+  const template = element<HTMLTemplateElement>("config-actions-template");
+  for (const slot of document.querySelectorAll<HTMLElement>(".config-actions")) {
+    slot.append(template.content.cloneNode(true));
+    slot.querySelector(".reload-config")?.addEventListener("click", () => void loadConfig());
+    slot.querySelector(".apply-config")?.addEventListener("click", () => void applyConfig());
+  }
+  for (const field of NUMERIC_FIELDS) {
+    const input = element(field.id);
+    input.addEventListener("input", () => markDirty(input));
+  }
+  const protocol = element("rc-protocol");
+  protocol.addEventListener("change", () => markDirty(protocol));
   element("reload-ports").addEventListener("click", () => void loadPorts());
   element("apply-ports").addEventListener("click", () => void applyPorts());
   element("load-flights").addEventListener("click", () => void loadFlights());
@@ -641,10 +790,15 @@ function wire(): void {
     });
   }
 
+  wireTabs();
   renderSafety();
   renderConfig();
   renderPorts();
   void refreshPorts();
+  // For previews of the mock: `?connect` connects at once.
+  if (usingMock && new URLSearchParams(location.search).has("connect")) {
+    void connect();
+  }
 }
 
 wire();

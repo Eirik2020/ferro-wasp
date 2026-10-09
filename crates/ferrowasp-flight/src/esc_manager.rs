@@ -10,6 +10,8 @@ pub const ESC_TELEMETRY_UPDATE_QUEUE_CAPACITY: usize = 16;
 /// it unsent. The manager gives up on an acknowledgement after the same
 /// time, so a request it has given up on never reaches an ESC later.
 pub const ESC_REQUEST_EXPIRY_MS: u32 = 20;
+/// Doublings of the recovery quiet window: 0.5 s grows to at most 4 s.
+pub const ESC_RETRY_BACKOFF_STEPS: u32 = 3;
 
 pub type EscRequestQueue = Queue<EscActuatorRequest, ESC_REQUEST_QUEUE_CAPACITY>;
 pub type EscRequestProducer = Producer<'static, EscActuatorRequest>;
@@ -104,7 +106,10 @@ pub struct EscManagerConfig {
     pub actuator_ack_timeout_ms: u32,
     pub telemetry_response_timeout_ms: u32,
     /// After a timeout, how long the telemetry line and the acknowledgement
-    /// queue must stay silent, disarmed, before requests resume.
+    /// queue must stay silent, disarmed, before requests resume. It doubles
+    /// for each retry that brings no frame back, up to
+    /// `ESC_RETRY_BACKOFF_STEPS` doublings, so unpowered ESCs are asked
+    /// rarely; a frame resets it.
     pub recovery_quiet_ms: u32,
 }
 
@@ -162,6 +167,10 @@ pub struct EscManager {
     faulted: bool,
     /// The fault, or the last byte or acknowledgement seen since.
     quiet_since_ms: u64,
+    /// Recoveries since the last frame: the ESCs may be unpowered.
+    retries_without_frame: u32,
+    /// Set when a frame arrives after retries, until taken for the log.
+    back_after_retries: Option<u32>,
     parser: StreamParser,
     samples: [Option<EscTelemetryObservation>; 4],
     stats: EscManagerStats,
@@ -178,6 +187,8 @@ impl EscManager {
             pending: None,
             faulted: false,
             quiet_since_ms: 0,
+            retries_without_frame: 0,
+            back_after_retries: None,
             parser: StreamParser::new(),
             samples: [None; 4],
             stats: EscManagerStats {
@@ -258,6 +269,7 @@ impl EscManager {
         if let Some(observation) = early_observation {
             self.pending = None;
             self.samples[request.output.index()] = Some(observation);
+            self.note_frame();
             EscAckOutcome::Sample(EscTelemetryUpdate {
                 output: request.output,
                 observation,
@@ -343,6 +355,7 @@ impl EscManager {
                 };
                 self.pending = None;
                 self.samples[request.output.index()] = Some(observation);
+                self.note_frame();
                 Some(EscTelemetryUpdate {
                     output: request.output,
                     observation,
@@ -372,6 +385,30 @@ impl EscManager {
         self.faulted
     }
 
+    /// Whether telemetry is retrying after a timeout and no frame has come
+    /// back since: a further timeout is the same outage, not a new one.
+    pub const fn is_retrying(&self) -> bool {
+        self.retries_without_frame != 0
+    }
+
+    /// Once, after a frame arrives following retries: how many it took.
+    pub fn take_back_after_retries(&mut self) -> Option<u32> {
+        self.back_after_retries.take()
+    }
+
+    /// The quiet window the next recovery needs.
+    fn recovery_quiet_ms(&self) -> u64 {
+        let doublings = self.retries_without_frame.min(ESC_RETRY_BACKOFF_STEPS);
+        u64::from(self.config.recovery_quiet_ms) << doublings
+    }
+
+    fn note_frame(&mut self) {
+        if self.retries_without_frame != 0 {
+            self.back_after_retries = Some(self.retries_without_frame);
+            self.retries_without_frame = 0;
+        }
+    }
+
     /// Resumes telemetry after a timeout, once the craft is disarmed and
     /// the line and acknowledgements have been silent for
     /// `recovery_quiet_ms`. Every stored sample is dropped, so arming
@@ -381,9 +418,10 @@ impl EscManager {
         // Saturating, unlike `elapsed_at_least`: an acknowledgement stamped
         // after `now_ms` must keep the window open, not end it.
         let quiet_ms = now_ms.saturating_sub(self.quiet_since_ms);
-        if !self.faulted || armed || quiet_ms < u64::from(self.config.recovery_quiet_ms) {
+        if !self.faulted || armed || quiet_ms < self.recovery_quiet_ms() {
             return false;
         }
+        self.retries_without_frame = self.retries_without_frame.saturating_add(1);
         self.faulted = false;
         self.pending = None;
         self.parser.reset();
@@ -715,6 +753,53 @@ mod tests {
         // Requests resume where they left off.
         let next = manager.next_request(5_800).unwrap();
         assert_eq!(next.sequence, second.sequence + 1);
+    }
+
+    /// Time out the next request, as unpowered ESCs do.
+    fn time_out_next(manager: &mut EscManager, now_ms: u64) -> u64 {
+        let request = manager.next_request(now_ms).unwrap();
+        assert!(manager.mark_request_queued(request, now_ms));
+        manager.on_actuator_ack(EscActuatorAck {
+            request,
+            started_at_ms: now_ms,
+        });
+        let timed_out_at = now_ms + 100;
+        assert!(manager.poll_timeout(timed_out_at).is_some());
+        timed_out_at
+    }
+
+    #[test]
+    fn retries_back_off_while_no_frame_comes_back_and_reset_on_one() {
+        let mut manager = EscManager::new(EscManagerConfig::legacy_uart(), 0);
+        let mut now = time_out_next(&mut manager, 5_000);
+        assert!(!manager.is_retrying());
+        // 0.5 s, then 1, 2 and 4 s, and no longer than that.
+        for quiet in [500, 1_000, 2_000, 4_000, 4_000] {
+            assert!(!manager.try_recover(now + quiet - 1, false));
+            assert!(manager.try_recover(now + quiet, false));
+            assert!(manager.is_retrying());
+            now = time_out_next(&mut manager, now + quiet);
+        }
+        assert_eq!(manager.take_back_after_retries(), None);
+
+        // Battery in: the next request is answered.
+        assert!(manager.try_recover(now + 4_000, false));
+        let request = manager.next_request(now + 4_000).unwrap();
+        assert!(manager.mark_request_queued(request, now + 4_000));
+        manager.on_actuator_ack(EscActuatorAck {
+            request,
+            started_at_ms: now + 4_001,
+        });
+        for byte in frame() {
+            manager.push_wire_byte(byte, now + 4_002);
+        }
+        assert!(!manager.is_retrying());
+        assert_eq!(manager.take_back_after_retries(), Some(6));
+        assert_eq!(manager.take_back_after_retries(), None);
+
+        // The next outage starts again at 0.5 s.
+        let now = time_out_next(&mut manager, now + 4_100);
+        assert!(manager.try_recover(now + 500, false));
     }
 
     #[test]

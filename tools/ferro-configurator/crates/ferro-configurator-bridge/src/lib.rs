@@ -218,6 +218,12 @@ impl<T: LineTransport> Session<T> {
         Ok(self.client_mut()?.live()?)
     }
 
+    /// The receiver's sixteen channels in microseconds, as fresh as the last
+    /// frame. A read; never gated.
+    pub fn rc_channels(&mut self) -> Result<[u16; 16]> {
+        Ok(self.client_mut()?.rc_channels()?)
+    }
+
     /// Refuses unless the controller reports itself disarmed with the arm
     /// switch off, read fresh through `live` so a held motor button is never
     /// stalled behind the slower periodic status line.

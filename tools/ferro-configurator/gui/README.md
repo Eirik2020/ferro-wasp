@@ -15,6 +15,13 @@ crates/ferro-configurator-bridge/   the session layer both of them sit on
 Connect to a controller, read and apply tuning configuration, and catalogue and
 download flight logs — the read and configure half of the CLI.
 
+It is laid out like the Betaflight Configurator: connection across the top,
+tabs down the left (Setup, Ports, Receiver, Motors, PID Tuning, Rates,
+Blackbox), and the safety banner above every tab. The settings tabs edit one
+configuration, so each has the same Save bar and saving sends all of it; a tab
+with unsaved edits is marked. Leaving the Motors tab stops every motor and
+turns the motor test off.
+
 It also explains why the controller will not arm, as a pre-arm checklist built
 by `ferro-configurator-core::prearm` from the status line; draws the rates
 curve as the form is edited; and shows live receiver channels with a
@@ -61,6 +68,9 @@ a button that flips it to armed so the refusal path can be exercised:
 npm install
 npm run dev
 ```
+
+`#rates` (any tab's name) in the address opens that tab, and `?connect`
+connects the simulated controller at once, for previews.
 
 As a desktop application, which needs the webview libraries:
 

@@ -103,7 +103,7 @@ where
     Delay: FnMut(u32) -> DelayFuture,
     DelayFuture: core::future::Future<Output = ()>,
 {
-    ferrowasp_tasks::arming::wait_hold(
+    ferrowasp_flight::arming::wait_hold(
         hold_ms,
         ARMING_GUARD_POLL_MS,
         || current_live_arming_guard(guard, permit, rc_link, arm_high, throttle, now_us()),

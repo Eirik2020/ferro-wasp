@@ -1,8 +1,8 @@
 use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxTransfer};
 use super::manifest::Spi1ImuKind;
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
+use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32f4 as backend;
-use ferrowasp_stm32f4::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32f4::hal_prelude::*;
 
 const _: () = {
@@ -210,7 +210,7 @@ pub fn init_dshot_motor_bank(
     clocks: &hal::rcc::Clocks,
     storage: &'static mut DshotDmaStorage,
 ) -> Result<DshotMotorBank, DshotInitError> {
-    DshotMotorBank::new_foxeer(
+    backend::dshot::new_foxeer(
         resources.motor1_pin,
         resources.motor2_pin,
         resources.motor3_pin,

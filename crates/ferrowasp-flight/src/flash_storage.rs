@@ -149,6 +149,9 @@ pub enum StorageCommand {
     /// Attitude and motor activity, answered at once by the USB task rather
     /// than waiting for the next periodic status line.
     Live,
+    /// The last receiver frame's sixteen channels, answered at once like
+    /// `Live`, so a configurator can show the sticks as they move.
+    Rc,
     /// A props-off motor check. Handled by the USB task, which hands it to
     /// the safety master; never by the storage task.
     Motor(BenchMotorRequest),
@@ -423,6 +426,7 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
         (Some("config"), Some("save")) if words.next().is_none() => Ok(StorageCommand::ConfigSave),
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
         (Some("live"), None) => Ok(StorageCommand::Live),
+        (Some("rc"), None) => Ok(StorageCommand::Rc),
         (Some("motor"), Some("stop")) if words.next().is_none() => {
             Ok(StorageCommand::Motor(BenchMotorRequest::Stop))
         }
@@ -1638,6 +1642,7 @@ mod tests {
             Ok(StorageCommand::Motor(BenchMotorRequest::Stop))
         );
         assert_eq!(parse_command("live"), Ok(StorageCommand::Live));
+        assert_eq!(parse_command("rc"), Ok(StorageCommand::Rc));
     }
 
     #[test]

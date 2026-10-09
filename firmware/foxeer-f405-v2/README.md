@@ -84,7 +84,7 @@ shared crate without introducing custom macros.
 - [ ] Move the SPI-NOR JEDEC probe, capability derivation, and flash queue
   endpoint assembly into a reusable flash-service initializer.
 - [ ] Bundle the duplicated ESC-manager queues, owned UART channels, and safety
-  signal endpoints in `ferrowasp-tasks`, `ferrowasp-io-core`, and
+  signal endpoints in `ferrowasp-flight`, `ferrowasp-io-core`, and
   `ferrowasp-core`, respectively.
 - [ ] Replace the unused generic `tele_uart` and `gps_uart` routing
   placeholders with a fixed, typed Foxeer flight-UART routing result.
@@ -139,6 +139,11 @@ telemetry/eRPM qualification path:
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --probe-speed-khz 1800 --connect-under-reset
 ```
 
+`--connect-under-reset` needs the probe's reset line wired to the board's
+NRST. Without it the attach times out and nothing is flashed; drop the flag
+(and `--probe-speed-khz`, if the default speed works) on a probe wired with
+SWDIO, SWCLK and ground only.
+
 It owns TIM1/TIM8 and DMA2 Streams 1, 7, 2, and 6 as one synchronized fault
 domain. The 500 Hz actuator service continuously emits frames, enforces the
 bounded nonzero-command lease, and requests disarm on lease expiry, DMA fault,
@@ -181,7 +186,8 @@ the manager after the request is actually emitted. The manager additionally
 publishes bounded, timestamped updates to the actuator owner for idle
 qualification. A request/response-association timeout stops telemetry, so arm
 attempts fail closed until it resumes: only while disarmed, after 500 ms with
-no wire byte and no acknowledgement, with every stored sample dropped.
+no wire byte and no acknowledgement (doubling to at most 4 s while retries
+bring nothing back), with every stored sample dropped.
 RTT identifies both physical output and logical motor, and reports request,
 acknowledgement, response, mismatch, unsolicited-frame, CRC, and discarded-byte
 counters so the checkpoint can distinguish wiring faults from association

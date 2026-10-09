@@ -38,7 +38,7 @@ use stm32f4xx_hal::{
     timer::Timer,
 };
 
-pub use crate::dshot_bank::{
+pub use ferrowasp_stm32::dshot_bank::{
     DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotBank,
     DshotCommandError, DshotCommandSequence, DshotInitError, DshotInterruptEvent, DshotLanes,
     DshotMotor, DshotServiceEvent, DshotSpecialCommandError, DshotStats,
@@ -405,79 +405,77 @@ impl DshotLanes for Stm32f4DshotLanes {
     }
 }
 
-impl DshotBank<Stm32f4DshotLanes> {
-    /// Constructs the Foxeer F405 V2 bank with TIM8_CH3 on DMA2 Stream2
-    /// Channel0.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_foxeer(
-        motor1_pin: PA8<Input>,
-        motor2_pin: PC9<Input>,
-        motor3_pin: PC8<Input>,
-        motor4_pin: PB15<Input>,
-        tim1: Timer<TIM1>,
-        tim8: Timer<TIM8>,
-        motor1_dma: Stream1<DMA2>,
-        motor2_dma: Stream7<DMA2>,
-        motor3_dma: Stream2<DMA2>,
-        motor4_dma: Stream6<DMA2>,
-        clocks: &Clocks,
-        storage: &'static mut DshotDmaStorage,
-    ) -> Result<Self, DshotInitError> {
-        let timing = DshotTiming::from_clocks(clocks.timclk2().raw(), DSHOT600_BITRATE_HZ)
-            .map_err(DshotInitError::InvalidTiming)?;
+/// Constructs the Foxeer F405 V2 DShot bank with TIM8_CH3 on DMA2 Stream2
+/// Channel0.
+#[allow(clippy::too_many_arguments)]
+pub fn new_foxeer(
+    motor1_pin: PA8<Input>,
+    motor2_pin: PC9<Input>,
+    motor3_pin: PC8<Input>,
+    motor4_pin: PB15<Input>,
+    tim1: Timer<TIM1>,
+    tim8: Timer<TIM8>,
+    motor1_dma: Stream1<DMA2>,
+    motor2_dma: Stream7<DMA2>,
+    motor3_dma: Stream2<DMA2>,
+    motor4_dma: Stream6<DMA2>,
+    clocks: &Clocks,
+    storage: &'static mut DshotDmaStorage,
+) -> Result<DshotBank<Stm32f4DshotLanes>, DshotInitError> {
+    let timing = DshotTiming::from_clocks(clocks.timclk2().raw(), DSHOT600_BITRATE_HZ)
+        .map_err(DshotInitError::InvalidTiming)?;
 
-        // Keep all external pads at a GPIO low latch until timer polarity,
-        // off-state behavior, compare values, and output gates are configured.
-        let mut motor1_pin = motor1_pin.into_push_pull_output();
-        let mut motor2_pin = motor2_pin.into_push_pull_output();
-        let mut motor3_pin = motor3_pin.into_push_pull_output();
-        let mut motor4_pin = motor4_pin.into_push_pull_output();
-        motor1_pin.set_low();
-        motor2_pin.set_low();
-        motor3_pin.set_low();
-        motor4_pin.set_low();
+    // Keep all external pads at a GPIO low latch until timer polarity,
+    // off-state behavior, compare values, and output gates are configured.
+    let mut motor1_pin = motor1_pin.into_push_pull_output();
+    let mut motor2_pin = motor2_pin.into_push_pull_output();
+    let mut motor3_pin = motor3_pin.into_push_pull_output();
+    let mut motor4_pin = motor4_pin.into_push_pull_output();
+    motor1_pin.set_low();
+    motor2_pin.set_low();
+    motor3_pin.set_low();
+    motor4_pin.set_low();
 
-        let tim1 = tim1.release();
-        let tim8 = tim8.release();
-        let motor1_endpoint = Tim1Ch1Dma::new(tim1.ccr(0).as_ptr() as u32);
-        let motor2_endpoint = Tim8Ch4Dma::new(tim8.ccr(3).as_ptr() as u32);
-        let motor4_endpoint = Tim1Ch3Dma::new(tim1.ccr(2).as_ptr() as u32);
-        let motor3_endpoint = Tim8Ch3DmaFoxeer::new(tim8.ccr(2).as_ptr() as u32);
-        let timers = DshotTimerBank::new(tim1, tim8, timing);
+    let tim1 = tim1.release();
+    let tim8 = tim8.release();
+    let motor1_endpoint = Tim1Ch1Dma::new(tim1.ccr(0).as_ptr() as u32);
+    let motor2_endpoint = Tim8Ch4Dma::new(tim8.ccr(3).as_ptr() as u32);
+    let motor4_endpoint = Tim1Ch3Dma::new(tim1.ccr(2).as_ptr() as u32);
+    let motor3_endpoint = Tim8Ch3DmaFoxeer::new(tim8.ccr(2).as_ptr() as u32);
+    let timers = DshotTimerBank::new(tim1, tim8, timing);
 
-        let motor1_pin = motor1_pin.into_alternate::<1>().speed(Speed::VeryHigh);
-        let motor2_pin = motor2_pin.into_alternate::<3>().speed(Speed::VeryHigh);
-        let motor3_pin = motor3_pin.into_alternate::<3>().speed(Speed::VeryHigh);
-        let motor4_pin = motor4_pin.into_alternate::<1>().speed(Speed::VeryHigh);
+    let motor1_pin = motor1_pin.into_alternate::<1>().speed(Speed::VeryHigh);
+    let motor2_pin = motor2_pin.into_alternate::<3>().speed(Speed::VeryHigh);
+    let motor3_pin = motor3_pin.into_alternate::<3>().speed(Speed::VeryHigh);
+    let motor4_pin = motor4_pin.into_alternate::<1>().speed(Speed::VeryHigh);
 
-        let buffers = storage.split();
-        let motor1_transfer = init_transfer(motor1_dma, motor1_endpoint, buffers.motor1_active);
-        let motor2_transfer = init_transfer(motor2_dma, motor2_endpoint, buffers.motor2_active);
-        let motor3_transfer = init_transfer(motor3_dma, motor3_endpoint, buffers.motor3_active);
-        let motor4_transfer = init_transfer(motor4_dma, motor4_endpoint, buffers.motor4_active);
+    let buffers = storage.split();
+    let motor1_transfer = init_transfer(motor1_dma, motor1_endpoint, buffers.motor1_active);
+    let motor2_transfer = init_transfer(motor2_dma, motor2_endpoint, buffers.motor2_active);
+    let motor3_transfer = init_transfer(motor3_dma, motor3_endpoint, buffers.motor3_active);
+    let motor4_transfer = init_transfer(motor4_dma, motor4_endpoint, buffers.motor4_active);
 
-        let lanes = Stm32f4DshotLanes {
-            timers,
-            _motor1_pin: motor1_pin,
-            _motor2_pin: motor2_pin,
-            _motor3_pin: motor3_pin,
-            _motor4_pin: motor4_pin,
-            motor1_transfer,
-            motor2_transfer,
-            motor3_transfer,
-            motor4_transfer,
-        };
-        Ok(Self::from_lanes(
-            lanes,
-            [
-                buffers.motor1_spare,
-                buffers.motor2_spare,
-                buffers.motor3_spare,
-                buffers.motor4_spare,
-            ],
-            timing,
-        ))
-    }
+    let lanes = Stm32f4DshotLanes {
+        timers,
+        _motor1_pin: motor1_pin,
+        _motor2_pin: motor2_pin,
+        _motor3_pin: motor3_pin,
+        _motor4_pin: motor4_pin,
+        motor1_transfer,
+        motor2_transfer,
+        motor3_transfer,
+        motor4_transfer,
+    };
+    Ok(DshotBank::from_lanes(
+        lanes,
+        [
+            buffers.motor1_spare,
+            buffers.motor2_spare,
+            buffers.motor3_spare,
+            buffers.motor4_spare,
+        ],
+        timing,
+    ))
 }
 
 fn configure_timer_base(timer: &RegisterBlock, timing: DshotTiming) {

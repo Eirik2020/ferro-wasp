@@ -55,7 +55,7 @@ impl Outbox {
 /// With no port bound the task ends at once.
 #[ferroforge::task(
     local = [
-        configurator_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
+        configurator_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
         configurator_commands: Option<flash_task::CommandProducer>,
         configurator_responses: Option<flash_task::ResponseConsumer>,
     ],
@@ -103,8 +103,13 @@ pub async fn configurator_link(cx: configurator_link::Context) {
                 };
                 match parsed {
                     Ok(flash_task::StorageCommand::Live) => {
-                        let line = ferrowasp_tasks::usb_debug::format_live(live_snapshot());
+                        let line = ferrowasp_flight::usb_debug::format_live(live_snapshot());
                         outbox.push(&mut writer, line.as_bytes()).await;
+                    }
+                    Ok(flash_task::StorageCommand::Rc) => {
+                        for line in ferrowasp_flight::usb_debug::format_rc(rc_channels_us()) {
+                            outbox.push(&mut writer, line.as_bytes()).await;
+                        }
                     }
                     Ok(command) if command.usb_only() => {
                         outbox

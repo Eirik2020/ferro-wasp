@@ -119,6 +119,21 @@ pub mod board;
 pub use ferrowasp_core::actuator::{remap_motor_outputs, throttle_to_u16};
 pub use ferrowasp_core::safety;
 pub use ferrowasp_drivers::{icm42688p as icm, mpu6500 as imu};
+pub use ferrowasp_flight::actuator as actuator_task;
+#[cfg(feature = "mspv2_configurator")]
+pub use ferrowasp_flight::blackbox_storage as blackbox_task;
+pub use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
+pub use ferrowasp_flight::drone_toolbox as dt;
+pub use ferrowasp_flight::esc_manager as esc;
+pub use ferrowasp_flight::esc_manager::{
+    DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_IDLE_THROTTLE_COMMAND, DSHOT_PREARM_STOP_HOLD_MS,
+};
+pub use ferrowasp_flight::flash_storage as flash_task;
+pub use ferrowasp_flight::osd;
+pub use ferrowasp_flight::rc_receiver::RcReceiver;
+#[cfg(not(feature = "mspv2_configurator"))]
+pub use ferrowasp_flight::usb_debug;
+pub use ferrowasp_flight::{log_sync, sync_ledger};
 pub use ferrowasp_io_core::serial::{RcProtocol, ResolvedBindings};
 pub use ferrowasp_io_core::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
@@ -131,24 +146,14 @@ pub use ferrowasp_io_core::{
 pub use ferrowasp_mspv1 as mspv1;
 #[cfg(feature = "mspv2_configurator")]
 pub use ferrowasp_mspv2 as mspv2;
-pub use ferrowasp_stm32f4::adc as stm32_adc;
-pub use ferrowasp_stm32f4::app_config::{
+pub use ferrowasp_stm32::app_config::{
     ARMING_GUARD_POLL_MS, BENCH_EQUAL_MOTOR_MAX_THROTTLE, DELAY_TIMER_HZ, ESC_MANAGER_PERIOD_MS,
 };
-pub use ferrowasp_stm32f4::app_storage as stm32_storage;
-pub use ferrowasp_stm32f4::clocks as stm32_clocks;
-pub use ferrowasp_stm32f4::hal_prelude::*;
-pub use ferrowasp_stm32f4::memory as stm32_memory;
-pub use ferrowasp_stm32f4::scheduler as stm32_scheduler;
-pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
-pub use ferrowasp_stm32f4::spi_dma::*;
-pub use ferrowasp_stm32f4::timebase as stm32_timebase;
-pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
-pub use ferrowasp_stm32f4::uart_port as stm32_port;
-pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
-pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
-pub use ferrowasp_stm32f4_tasks as flight_tasks;
-pub use ferrowasp_stm32f4_tasks::snapshots::{
+pub use ferrowasp_stm32::app_storage as stm32_storage;
+pub use ferrowasp_stm32::memory as stm32_memory;
+pub use ferrowasp_stm32::uart_port as stm32_port;
+pub use ferrowasp_stm32_tasks as flight_tasks;
+pub use ferrowasp_stm32_tasks::snapshots::{
     ACTIVE_IMU_KIND, ADC_CURRENT_MV_SNAPSHOT, ADC_VOLTAGE_MV_SNAPSHOT, BATTERY_CURRENT_CA_SNAPSHOT,
     BATTERY_VOLTAGE_V10_SNAPSHOT, CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW,
     CONTROL_RATE_SEQ, CONTROL_ROLL_DPS10, CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW,
@@ -159,32 +164,27 @@ pub use ferrowasp_stm32f4_tasks::snapshots::{
     IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY, RC_ARM_HIGH, RC_THROTTLE,
     SAFETY_ARMED, USB_DEBUG_DUE, USB_RC_ARMABLE_SNAPSHOT, USB_RC_VALID_SNAPSHOT,
 };
-pub use ferrowasp_stm32f4_tasks::snapshots::{
+pub use ferrowasp_stm32_tasks::snapshots::{
     ATTITUDE_PITCH_DEG10, ATTITUDE_ROLL_DEG10, ATTITUDE_YAW_DEG10, DSHOT_ACTIVE_LANES,
 };
 #[cfg(feature = "imu_orientation_rtt")]
-pub use ferrowasp_stm32f4_tasks::snapshots::{
+pub use ferrowasp_stm32_tasks::snapshots::{
     IMU_LATEST_ACCEL_X_MG, IMU_LATEST_ACCEL_Y_MG, IMU_LATEST_ACCEL_Z_MG, IMU_LATEST_GYRO_X_DPS10,
     IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10, IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION,
     imu_orientation_snapshot,
 };
-pub use ferrowasp_stm32f4_tasks::snapshots::{live_snapshot, rc_channels_us};
-pub use ferrowasp_stm32f4_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
-pub use ferrowasp_tasks::actuator as actuator_task;
-#[cfg(feature = "mspv2_configurator")]
-pub use ferrowasp_tasks::blackbox_storage as blackbox_task;
-pub use ferrowasp_tasks::command_link::{CommandLink, CommandSources, ResponseRouter};
-pub use ferrowasp_tasks::drone_toolbox as dt;
-pub use ferrowasp_tasks::esc_manager as esc;
-pub use ferrowasp_tasks::esc_manager::{
-    DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_IDLE_THROTTLE_COMMAND, DSHOT_PREARM_STOP_HOLD_MS,
-};
-pub use ferrowasp_tasks::flash_storage as flash_task;
-pub use ferrowasp_tasks::osd;
-pub use ferrowasp_tasks::rc_receiver::RcReceiver;
-#[cfg(not(feature = "mspv2_configurator"))]
-pub use ferrowasp_tasks::usb_debug;
-pub use ferrowasp_tasks::{log_sync, sync_ledger};
+pub use ferrowasp_stm32_tasks::snapshots::{live_snapshot, rc_channels_us};
+pub use ferrowasp_stm32_tasks::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
+pub use ferrowasp_stm32f4::adc as stm32_adc;
+pub use ferrowasp_stm32f4::clocks as stm32_clocks;
+pub use ferrowasp_stm32f4::hal_prelude::*;
+pub use ferrowasp_stm32f4::scheduler as stm32_scheduler;
+pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
+pub use ferrowasp_stm32f4::spi_dma::*;
+pub use ferrowasp_stm32f4::timebase as stm32_timebase;
+pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
+pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
+pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
 pub use fugit::Rate;
 use panic_probe as _;
 pub use rtic_monotonics::systick::prelude::*;

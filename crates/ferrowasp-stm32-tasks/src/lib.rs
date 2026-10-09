@@ -14,8 +14,8 @@ compile_error!("select one chip family: `stm32f405` or `stm32h743`");
 // A status line is written to USB in one piece, so the transmit buffer must
 // hold the longest one.
 const _: () = assert!(
-    ferrowasp_stm32f4::usb_serial::USB_CDC_TX_BUFFER_BYTES
-        >= ferrowasp_tasks::usb_debug::STATUS_LINE_CAPACITY
+    ferrowasp_stm32::usb_serial::USB_CDC_TX_BUFFER_BYTES
+        >= ferrowasp_flight::usb_debug::STATUS_LINE_CAPACITY
 );
 
 #[cfg(all(

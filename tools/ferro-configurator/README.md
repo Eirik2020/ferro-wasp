@@ -89,7 +89,7 @@ is intentionally not required by this workspace.
 
 Configuration key names and scalar ranges come from the firmware-owned
 `ferrowasp-core::config` module. Firmware storage remains owned by
-`ferrowasp-tasks`; the host cannot create a second authority.
+`ferrowasp-flight`; the host cannot create a second authority.
 
 Raw log acquisition, validation, ULog conversion, and analysis are separate
 boundaries. A completed `.fwbb` file is retained even if conversion fails.

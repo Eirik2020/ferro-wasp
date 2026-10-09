@@ -1,4 +1,4 @@
-use ferrowasp_stm32f4::board_manifest::{
+use ferrowasp_stm32::board_manifest::{
     BoardIdentity, PinAssignment, ResourceClaim, ResourceKind, TimerGroupDescription, TimerMode,
 };
 
@@ -48,7 +48,7 @@ pub const CONTROL_SCHEDULER_TIMER: &str = "TIM4";
 pub const IO_TIMEBASE_TIMER: &str = "TIM2";
 pub const IO_WATCHDOG_TIMER: &str = "TIM6";
 
-pub use ferrowasp_stm32f4_tasks::Spi1ImuKind;
+pub use ferrowasp_stm32_tasks::Spi1ImuKind;
 
 pub const PIN_MAP: &[PinAssignment] = &[
     PinAssignment {
@@ -431,7 +431,7 @@ pub const SD_STORAGE_CLAIMS: &[ResourceClaim] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrowasp_stm32f4::board_manifest::{
+    use ferrowasp_stm32::board_manifest::{
         ResourceKind, count_claims_by_kind, find_duplicate_claim,
     };
 

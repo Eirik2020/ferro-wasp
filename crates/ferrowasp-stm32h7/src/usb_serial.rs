@@ -2,7 +2,7 @@
 //! PA11/PA12), with the same identity, buffers, and VID/PID policy as the
 //! F4 boards.
 
-pub use ferrowasp_stm32f4::usb_serial::{
+pub use ferrowasp_stm32::usb_serial::{
     FERROWASP_USB_PID, FERROWASP_USB_VID, USB_CDC_RX_BUFFER_BYTES, USB_CDC_TX_BUFFER_BYTES,
     USB_ENDPOINT_MEMORY_WORDS, UsbCdcIdentity,
 };

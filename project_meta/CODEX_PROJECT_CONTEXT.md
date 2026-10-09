@@ -187,11 +187,13 @@ Keep the current implementation moving toward these boundaries without forcing
 a broad refactor before the prototype is stable:
 
 ```text
-ferrowasp-core    pure types, units, actuator commands, safety states
-ferrowasp-mcu     chip-family peripheral support
-ferrowasp-drivers IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-stm32f4 reusable STM32F4 mechanisms and configuration types
-ferrowasp-tasks   reusable task logic
+ferrowasp-core        pure types, units, actuator commands, safety states
+ferrowasp-drivers     IMU, RC, ESC, telemetry, flash, sensor drivers
+ferrowasp-flight      portable flight logic, host-testable
+ferrowasp-stm32       HAL-neutral STM32 mechanisms (DMA state machines, ports)
+ferrowasp-stm32f4     STM32F4 HAL backend
+ferrowasp-stm32h7     STM32H743 HAL backend
+ferrowasp-stm32-tasks RTIC task bodies shared by the STM32 boards
 app src/board     board pin maps, connected devices, DMA/timer assignments
 app src/lib.rs    board composition and internal support facade
 app src/main.rs   thin RTIC shell

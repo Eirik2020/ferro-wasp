@@ -116,7 +116,7 @@
           "firmware/",
           "crates/ferrowasp-core/src/actuator.rs",
           "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-tasks/"
+          "crates/ferrowasp-flight/"
         ],
         "features": [],
         "invocations": [
@@ -155,7 +155,7 @@
         "paths": [
           "firmware/foxeer-f405-v2/",
           "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-tasks/src/flash_storage.rs",
+          "crates/ferrowasp-flight/src/flash_storage.rs",
           "tools/ferrowasp_storage.py"
         ],
         "features": [

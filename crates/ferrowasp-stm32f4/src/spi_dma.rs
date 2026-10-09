@@ -1,4 +1,4 @@
-pub use crate::spi_common::*;
+pub use ferrowasp_stm32::spi_common::*;
 use stm32f4xx_hal::{
     dma::{
         ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream2, Stream3, Transfer,
@@ -12,8 +12,16 @@ use stm32f4xx_hal::{
     spi::{self, Spi},
 };
 
-pub type SpiRxTransfer<RxStream, SpiT, const CHANNEL: u8> =
-    Transfer<RxStream, CHANNEL, spi::Rx<SpiT>, PeripheralToMemory, SpiRxBuf>;
+/// An SPI receive DMA transfer. A type of this crate's own, so it can carry
+/// the chip-neutral `SpiRxTransferExt`.
+pub struct SpiRxTransfer<RxStream, SpiT, const CHANNEL: u8>(
+    pub Transfer<RxStream, CHANNEL, spi::Rx<SpiT>, PeripheralToMemory, SpiRxBuf>,
+)
+where
+    RxStream: Stream,
+    SpiT: spi::Instance,
+    ChannelX<CHANNEL>: Channel,
+    spi::Rx<SpiT>: DMASet<RxStream, CHANNEL, PeripheralToMemory>;
 
 pub type SpiTxTransfer<TxStream, SpiT, const CHANNEL: u8> =
     Transfer<TxStream, CHANNEL, spi::Tx<SpiT>, MemoryToPeripheral, SpiTxBuf>;
@@ -26,8 +34,11 @@ pub type Spi1Mpu6500Cs = Spi1ImuCs;
 pub type Spi1Mpu6500Bus = Spi1ImuBus;
 
 /// An STM32F4 SPI DMA owner: the shared owner over the HAL's transfers.
-pub type SpiDmaOwner<RxTransferT, TxTransferT, CsT> =
-    crate::spi_common::SpiDmaOwner<RxTransferT, SpiPollerSide<TxTransferT, DmaConfig>, CsT>;
+pub type SpiDmaOwner<RxTransferT, TxTransferT, CsT> = ferrowasp_stm32::spi_common::SpiDmaOwner<
+    RxTransferT,
+    SpiPollerSide<TxTransferT, DmaConfig>,
+    CsT,
+>;
 pub type Spi1Mpu6500Owner = SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, Spi1Mpu6500Cs>;
 
 pub struct Spi1Mpu6500Resources {
@@ -171,27 +182,28 @@ where
     spi::Rx<SpiT>: DMASet<RxStream, CHANNEL, PeripheralToMemory>,
 {
     fn spi_rx_has_dma_error(&self) -> bool {
-        let flags = self.flags();
+        let flags = self.0.flags();
         flags.is_transfer_error() || flags.is_direct_mode_error() || flags.is_fifo_error()
     }
 
     fn spi_rx_is_complete(&self) -> bool {
-        self.flags().is_transfer_complete()
+        self.0.flags().is_transfer_complete()
     }
 
     fn clear_spi_rx_flags(&mut self) {
-        self.clear_all_flags();
+        self.0.clear_all_flags();
     }
 
     fn spi_rx_pause(&mut self) {
-        self.pause(|_| {});
+        self.0.pause(|_| {});
     }
 
     fn next_spi_rx_transfer(
         &mut self,
         fresh_buffer: SpiRxBuf,
     ) -> Result<SpiRxBuf, SpiRxRestartFailure> {
-        self.next_transfer(fresh_buffer)
+        self.0
+            .next_transfer(fresh_buffer)
             .map(|(raw_buffer, _)| raw_buffer)
             .map_err(|error| SpiRxRestartFailure {
                 buffer: match error {
@@ -268,7 +280,7 @@ where
         Transfer::init_memory_to_peripheral(tx_stream, spi_tx, tx_buffer, None, tx_dma_config);
 
     SpiDmaParts {
-        irq: SpiRxIrqSide::new(rx_transfer, free_consumer, filled_producer),
+        irq: SpiRxIrqSide::new(SpiRxTransfer(rx_transfer), free_consumer, filled_producer),
         poller: SpiPollerSide {
             tx_transfer: Some(tx_transfer),
             dma_config: tx_dma_config,

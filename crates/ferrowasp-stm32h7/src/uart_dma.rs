@@ -1,5 +1,5 @@
 //! UART receive and transmit DMA on the STM32H7, under the shared UART
-//! mechanisms in `ferrowasp_stm32f4::uart_common`.
+//! mechanisms in `ferrowasp_stm32::uart_common`.
 //!
 //! The HAL configures the UART and is then released: the receive side keeps
 //! the UART for its idle-line flag, and both sides move bytes through a HAL
@@ -11,8 +11,8 @@ use crate::dma_endpoints::{
 use ferrowasp_io_core::serial::{
     LogicalSerialPort, ResolvedBindings, SerialFunctionSlots, SerialProtocol as Mode,
 };
-pub use ferrowasp_stm32f4::uart_common::*;
-use ferrowasp_stm32f4::uart_port::{
+pub use ferrowasp_stm32::uart_common::*;
+use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
     place_endpoint, rx_port, tx_port,
 };

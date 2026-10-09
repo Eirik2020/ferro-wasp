@@ -1,9 +1,9 @@
 //! The H7 timers under the shared timebase, scheduler, and watchdog traits.
 
 use ferrowasp_io_core::time::{TimestampMicros, WrappingCounterExtender};
-use ferrowasp_stm32f4::timebase::{MICROSECOND_TIMEBASE_HZ, Timebase};
-use ferrowasp_stm32f4::timer_tick::TimerTick;
-use ferrowasp_stm32f4::watchdog::IO_WATCHDOG_HZ;
+use ferrowasp_stm32::timebase::{MICROSECOND_TIMEBASE_HZ, Timebase};
+use ferrowasp_stm32::timer_tick::TimerTick;
+use ferrowasp_stm32::watchdog::IO_WATCHDOG_HZ;
 use stm32h7xx_hal::{
     pac::{TIM2, TIM4, TIM6},
     prelude::*,
