@@ -107,7 +107,7 @@ pub async fn configurator_link(cx: configurator_link::Context) {
                         outbox.push(&mut writer, line.as_bytes()).await;
                     }
                     Ok(flash_task::StorageCommand::Rc) => {
-                        for line in ferrowasp_tasks::usb_debug::format_rc(rc_channels_us()) {
+                        for line in ferrowasp_flight::usb_debug::format_rc(rc_channels_us()) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
