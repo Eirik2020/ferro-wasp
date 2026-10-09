@@ -121,6 +121,29 @@ pub fn format_live(
     line
 }
 
+/// The `rc` answer: channels 1-8, then 9-16, in microseconds, each line
+/// within one response frame.
+///
+/// ```text
+/// OK rc1 1500,1500,988,1500,988,988,988,988
+/// OK rc2 988,988,988,988,988,988,988,988
+/// ```
+pub fn format_rc(
+    channels: [u16; 16],
+) -> [String<{ crate::flash_storage::USB_RESPONSE_CAPACITY }>; 2] {
+    core::array::from_fn(|half| {
+        let mut line = String::new();
+        // At most 59 bytes, so the writes cannot fail.
+        let _ = write!(line, "OK rc{} ", half + 1);
+        for (index, value) in channels[half * 8..half * 8 + 8].iter().enumerate() {
+            let separator = if index == 0 { "" } else { "," };
+            let _ = write!(line, "{separator}{value}");
+        }
+        let _ = line.push_str("\r\n");
+        line
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,5 +236,23 @@ mod tests {
             active_motor_lanes: u8::MAX,
         });
         assert!(line.ends_with("mot=255\r\n"), "{line}");
+    }
+
+    #[test]
+    fn rc_lines_carry_every_channel_within_a_response_frame() {
+        let mut channels = [988; 16];
+        channels[0] = 1500;
+        channels[15] = 2011;
+        let [first, second] = format_rc(channels);
+        assert_eq!(
+            first.as_str(),
+            "OK rc1 1500,988,988,988,988,988,988,988\r\n"
+        );
+        assert_eq!(
+            second.as_str(),
+            "OK rc2 988,988,988,988,988,988,988,2011\r\n"
+        );
+        let [widest, _] = format_rc([u16::MAX; 16]);
+        assert!(widest.ends_with("65535\r\n"), "{widest}");
     }
 }

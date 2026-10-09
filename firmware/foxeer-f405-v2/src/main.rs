@@ -956,6 +956,11 @@ ferroforge::app! {
                     let line = usb_debug::format_live(live_snapshot());
                     let _ = serial.write(line.as_bytes());
                 }
+                Ok(flash_task::StorageCommand::Rc) => {
+                    for line in usb_debug::format_rc(rc_channels_us()) {
+                        let _ = serial.write(line.as_bytes());
+                    }
+                }
                 // Bench motor requests go straight to the safety master, which
                 // outranks this task and decides before `spawn` returns. The
                 // check here only gives the host a reason; the safety master
@@ -1624,7 +1629,7 @@ ferroforge::app! {
                             );
                             queue_storage_response(
                                 flash_responses,
-                                "OK live | motor stop | motor spin N CONFIRM\r\n",
+                                "OK live | rc | motor stop | motor spin N CONFIRM\r\n",
                             );
                             queue_storage_response(
                                 flash_responses,
@@ -1633,6 +1638,7 @@ ferroforge::app! {
                         }
                         // Answered by the USB task; never queued here.
                         flash_task::StorageCommand::Live
+                        | flash_task::StorageCommand::Rc
                         | flash_task::StorageCommand::Motor(_) => {}
                         flash_task::StorageCommand::SerialShow => {
                             stm32_port::write_serial_bindings(

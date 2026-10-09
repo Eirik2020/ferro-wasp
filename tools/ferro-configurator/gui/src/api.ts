@@ -210,6 +210,8 @@ export interface Api {
   /** The last status line received; cheap enough to poll for display. */
   safetyDisplay(): Promise<Safety>;
   live(): Promise<LiveSnapshot>;
+  /** The receiver's sixteen channels in µs, as fresh as the last frame. */
+  rcChannels(): Promise<number[]>;
   /**
    * Idles one logical motor for one short firmware lease. Call about every
    * 100 ms while the button is held; stop calling and the motor stops.
