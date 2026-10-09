@@ -311,6 +311,23 @@ impl<T: LineTransport> FerroClient<T> {
         })
     }
 
+    /// The last receiver frame's sixteen channels in microseconds, answered at
+    /// once rather than with the two-second status line, so the sticks can be
+    /// shown as they move.
+    pub fn rc_channels(&mut self) -> Result<[u16; 16]> {
+        const OPERATION: &str = "rc";
+        let first = self.request(OPERATION, 2)?;
+        let second = self
+            .wait_for_response(OPERATION, self.timeout, |line| {
+                line.starts_with("OK ") || line.starts_with("ERR ")
+            })
+            .and_then(|line| self.accept_response(OPERATION, line))?;
+        parse_rc(&first, &second).ok_or_else(|| FerroError::UnexpectedResponse {
+            operation: OPERATION.to_owned(),
+            response: format!("{first} / {second}"),
+        })
+    }
+
     /// Asks the firmware to idle one logical motor (Betaflight Quad X, 1-4)
     /// for one short lease. Call again within about 100 ms to keep it
     /// spinning; stop calling and it stops. The firmware refuses unless it is
@@ -751,6 +768,26 @@ fn parse_serial_port_line(line: &str) -> Option<SerialPortBinding> {
     })
 }
 
+/// `OK rc1 1500,...` (channels 1-8) and `OK rc2 ...` (9-16).
+fn parse_rc(first: &str, second: &str) -> Option<[u16; 16]> {
+    let mut channels = [0u16; 16];
+    for (half, line) in [first, second].into_iter().enumerate() {
+        let values = line.strip_prefix(&format!("OK rc{} ", half + 1))?;
+        let mut count = 0;
+        for (slot, value) in channels[half * 8..half * 8 + 8]
+            .iter_mut()
+            .zip(values.split(','))
+        {
+            *slot = value.trim().parse().ok()?;
+            count += 1;
+        }
+        if count != 8 || values.split(',').count() != 8 {
+            return None;
+        }
+    }
+    Some(channels)
+}
+
 fn parse_live(line: &str) -> Option<LiveSnapshot> {
     let fields = parse_fields(line.strip_prefix("OK live ")?);
     let get = |key: &str| {
@@ -912,6 +949,30 @@ mod tests {
         }
     }
     impl<T> Pipe for T {}
+
+    #[test]
+    fn rc_channels_are_read_from_both_lines() {
+        let mock = MockTransport::with_lines([
+            "OK rc1 1500,1501,988,1502,988,988,988,988",
+            "OK rc2 2012,988,988,988,988,988,988,1000",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        let channels = client.rc_channels().unwrap();
+        assert_eq!(channels[..4], [1500, 1501, 988, 1502]);
+        assert_eq!(channels[8], 2012);
+        assert_eq!(channels[15], 1000);
+        assert_eq!(client.transport.writes, ["rc"]);
+        assert_eq!(
+            parse_rc("OK rc1 1,2,3", "OK rc2 1,2,3,4,5,6,7,8"),
+            None,
+            "a short line is refused"
+        );
+        assert_eq!(
+            parse_rc("OK rc2 1,2,3,4,5,6,7,8", "OK rc1 1,2,3,4,5,6,7,8"),
+            None,
+            "lines out of order are refused"
+        );
+    }
 
     #[test]
     fn unsynced_flights_are_read_with_their_page_runs() {

@@ -52,6 +52,10 @@ export class TauriApi implements Api {
     return call<Safety>("safety_display");
   }
 
+  rcChannels(): Promise<number[]> {
+    return call<number[]>("rc_channels");
+  }
+
   live(): Promise<LiveSnapshot> {
     return call<LiveSnapshot>("live");
   }

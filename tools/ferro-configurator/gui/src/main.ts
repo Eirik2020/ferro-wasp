@@ -29,6 +29,8 @@ const usingMock = !isTauri();
 const SAFETY_POLL_MS = 500;
 /** How often attitude and motor activity are read for the 3D view. */
 const LIVE_POLL_MS = 100;
+/** How often the Receiver tab reads the channels while it is open. */
+const RC_POLL_MS = 100;
 
 let connected = false;
 let safetyState: Safety | null = null;
@@ -37,6 +39,12 @@ let bindings: SerialBindings | null = null;
 let pollTimer: number | undefined;
 let liveTimer: number | undefined;
 let liveInFlight = false;
+let rcTimer: number | undefined;
+let rcInFlight = false;
+/** Channels read fast while the Receiver tab is open; null falls back to the status line. */
+let fastChannels: number[] | null = null;
+/** Older firmware has no `rc` command; stop asking once it says so. */
+let rcUnsupported = false;
 let viewer: QuadViewer;
 let motors: MotorsTab;
 let finder: ControlFinder | null = null;
@@ -150,7 +158,10 @@ function renderReceiver(): void {
   const unavailable = element("receiver-unavailable");
   const container = element("channels");
   const findButton = element<HTMLButtonElement>("find-control");
-  const channels = connected ? safetyState?.status.channels : null;
+  // No signal wins over the last frame's values, which the board keeps.
+  const signal = safetyState?.status.rc_valid !== false;
+  const channels =
+    connected && signal ? (fastChannels ?? safetyState?.status.channels ?? null) : null;
 
   if (!channels) {
     container.replaceChildren();
@@ -216,6 +227,25 @@ async function pollSafety(): Promise<void> {
   }
 }
 
+/** Reads the channels at once, between the two-second status lines. */
+async function pollRc(): Promise<void> {
+  if (!connected || activeTab !== "receiver" || rcInFlight || rcUnsupported) {
+    return;
+  }
+  rcInFlight = true;
+  try {
+    fastChannels = await api.rcChannels();
+    renderReceiver();
+  } catch (error) {
+    fastChannels = null;
+    if (toBridgeError(error).kind !== "notConnected") {
+      rcUnsupported = true;
+    }
+  } finally {
+    rcInFlight = false;
+  }
+}
+
 // ------------------------------------------------------------ live view ---
 
 async function pollLive(): Promise<void> {
@@ -276,6 +306,8 @@ async function connect(): Promise<void> {
     motors.setConnected(true);
     pollTimer = window.setInterval(() => void pollSafety(), SAFETY_POLL_MS);
     liveTimer = window.setInterval(() => void pollLive(), LIVE_POLL_MS);
+    rcUnsupported = false;
+    rcTimer = window.setInterval(() => void pollRc(), RC_POLL_MS);
   } catch (error) {
     connected = false;
     report(error);
@@ -288,6 +320,9 @@ async function disconnect(): Promise<void> {
   pollTimer = undefined;
   window.clearInterval(liveTimer);
   liveTimer = undefined;
+  window.clearInterval(rcTimer);
+  rcTimer = undefined;
+  fastChannels = null;
   // Stops any held motor before the port closes.
   motors.setConnected(false);
   await api.disconnect();
