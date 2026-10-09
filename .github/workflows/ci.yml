@@ -52,12 +52,12 @@ jobs:
       - name: Check embedded workspace
         run: >
           cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32f4-tasks/stm32f405,ferrowasp-stm32f4-tasks/dshot
+          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-tasks/stm32f405,ferrowasp-stm32-tasks/dshot
 
       - name: Lint embedded workspace
         run: >
           cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32f4-tasks/stm32f405,ferrowasp-stm32f4-tasks/dshot
+          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-tasks/stm32f405,ferrowasp-stm32-tasks/dshot
           -- -D warnings
 
       - name: Check STM32F401 bring-up firmware
@@ -94,9 +94,9 @@ jobs:
 
       - name: Check embedded workspace for STM32H743
         run: >
-          cargo check -p ferrowasp-stm32h7 -p ferrowasp-stm32f4-tasks --locked
+          cargo check -p ferrowasp-stm32h7 -p ferrowasp-stm32-tasks --locked
           --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32h7/stm32h743,ferrowasp-stm32f4-tasks/stm32h743,ferrowasp-stm32f4-tasks/dshot
+          --features ferrowasp-stm32h7/stm32h743,ferrowasp-stm32-tasks/stm32h743,ferrowasp-stm32-tasks/dshot
 
       - name: Lint STM32H7 backend
         run: >
@@ -213,6 +213,7 @@ jobs:
             exit 1
           fi
 
+          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32/src/lib.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
           rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4/src/dshot.rs
           rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/foxeer-f405-v2/src/main.rs

@@ -10,10 +10,9 @@ path = "src/lib.rs"
 
 [features]
 default = []
-bench_spi_timeout_recovery = []
-dshot = ["dep:ferrowasp-waveform"]
-# Each chip feature selects the STM32F4 HAL. Without one, only the
-# HAL-neutral mechanisms build, which is what another family's backend uses.
+bench_spi_timeout_recovery = ["ferrowasp-stm32/bench_spi_timeout_recovery"]
+dshot = ["dep:ferrowasp-waveform", "ferrowasp-stm32/dshot"]
+# Each chip feature selects the STM32F4 HAL; without one nothing builds.
 stm32f401 = ["dep:stm32f4xx-hal", "stm32f4xx-hal/stm32f401"]
 stm32f405 = [
     "dep:stm32f4xx-hal",
@@ -24,17 +23,15 @@ stm32f405 = [
 
 [dependencies]
 defmt = "1.0.1"
-embedded-hal = { workspace = true }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
 ferrowasp-waveform = { path = "../ferrowasp-waveform", optional = true }
-heapless = { workspace = true }
 rc-pwm = { path = "../rc-pwm" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
-# Reusable RTIC task definitions, selected by each firmware's `app!`. The
-# versions are the ones the firmware already locks, so selecting a definition
-# does not move RTIC.
+# The F401 bring-up heartbeat is an RTIC task definition. The versions are the
+# ones the firmware already locks, so selecting it does not move RTIC.
 ferroforge = "0.4"
 fugit = "0.3.9"
 rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"] }
@@ -42,6 +39,3 @@ rtic-monotonics = { version = "2.1.0", default-features = false }
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["rtic2", "defmt"], optional = true }
 usb-device = "0.3.2"
 usbd-serial = "0.2.2"
-
-[dev-dependencies]
-ferrowasp-waveform = { path = "../ferrowasp-waveform" }

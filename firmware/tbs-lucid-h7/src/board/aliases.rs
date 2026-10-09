@@ -1,7 +1,7 @@
 //! The concrete STM32H743 types this board's resources resolve to. Stream
 //! numbers here are the DMA plan in `routes.rs`.
 
-use ferrowasp_stm32f4::uart_port;
+use ferrowasp_stm32::uart_port;
 use ferrowasp_stm32h7::hal_prelude::*;
 use ferrowasp_stm32h7::{adc, sd_storage, spi_dma, timers, uart_dma};
 

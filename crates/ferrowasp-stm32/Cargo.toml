@@ -1,0 +1,31 @@
+[package]
+name = "ferrowasp-stm32"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# The STM32 mechanisms that do not depend on a chip family's HAL: UART and SPI
+# DMA state machines, serial port binding, the DShot bank, ADC sample
+# planning, and the shared memory and board-description types. Each family's
+# backend (ferrowasp-stm32f4, ferrowasp-stm32h7) puts its HAL under them, so
+# every board runs the same policy. Host-testable.
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+bench_spi_timeout_recovery = []
+dshot = ["dep:ferrowasp-waveform"]
+
+[dependencies]
+defmt = "1.0.1"
+embedded-hal = { workspace = true }
+ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+ferrowasp-waveform = { path = "../ferrowasp-waveform", optional = true }
+heapless = { workspace = true }
+rc-pwm = { path = "../rc-pwm" }
+
+[dev-dependencies]
+ferrowasp-waveform = { path = "../ferrowasp-waveform" }

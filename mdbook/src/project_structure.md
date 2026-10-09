@@ -18,9 +18,11 @@ Current important paths:
 |   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
 |   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
 |   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
-|   |-- ferrowasp-stm32f4/       # STM32F4 UART/SPI/ADC/PWM/DShot mechanisms
-|   |-- ferrowasp-stm32f4-tasks/ # RTIC task definitions shared by STM32F4 boards
-|   |-- ferrowasp-tasks/         # Control, OSD, and ESC-manager task logic
+|   |-- ferrowasp-flight/        # Portable flight logic: control, OSD, ESC manager, storage
+|   |-- ferrowasp-stm32/         # HAL-neutral STM32 UART/SPI/ADC/DShot mechanisms
+|   |-- ferrowasp-stm32-tasks/   # RTIC task definitions shared by the STM32 boards
+|   |-- ferrowasp-stm32f4/       # STM32F4 HAL backend
+|   |-- ferrowasp-stm32h7/       # STM32H743 HAL backend
 |   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
 |   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
 |   `-- rc-pwm/                  # Local PWM controller crate
@@ -49,12 +51,14 @@ The code already contains early signs of the future shape:
   construction policy under each app's `src/board/`
 - isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
   independent Cargo and RTIC resource contracts
-- reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
-  `crates/ferrowasp-stm32f4/`
+- HAL-neutral STM32 UART/SPI/ADC and DShot mechanisms under
+  `crates/ferrowasp-stm32/`, with each family's HAL under them in
+  `crates/ferrowasp-stm32f4/` (also servo/auxiliary PWM) and
+  `crates/ferrowasp-stm32h7/`
 - software-driver and control helpers, including the BLHeli parser and bounded
-  ESC manager, under `crates/ferrowasp-drivers/` and `crates/ferrowasp-tasks/`
+  ESC manager, under `crates/ferrowasp-drivers/` and `crates/ferrowasp-flight/`
 - local support crates for `rc-pwm`, `ferrowasp-pid`, `ferrowasp-mspv1`, and `ferrowasp-waveform`
-- active MSPv1 / DJI O4 OSD support under `crates/ferrowasp-mspv1/` and `crates/ferrowasp-tasks/`
+- active MSPv1 / DJI O4 OSD support under `crates/ferrowasp-mspv1/` and `crates/ferrowasp-flight/`
 - host-testable pure logic for safety, RC mapping, filters, PID, mixer, DShot,
   BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers
 
@@ -66,9 +70,10 @@ The long-term layout is expected to move toward:
 ferrowasp-core       reusable types, units, safety state, queues
 ferrowasp-mcu        family-neutral MCU contracts
 ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
-ferrowasp-tasks      reusable task logic
-ferrowasp-stm32f4-tasks  RTIC task definitions shared by STM32F4 boards
+ferrowasp-flight     portable flight logic, host-testable
+ferrowasp-stm32      HAL-neutral STM32 mechanisms
+ferrowasp-stm32f4    STM32F4 HAL backend (ferrowasp-stm32h7 for the H743)
+ferrowasp-stm32-tasks RTIC task definitions shared by the STM32 boards
 app src/board        board pin maps, clocks, DMA/timer assignments
 app src/lib.rs       board composition and internal support facade
 app src/main.rs      thin ferroforge::app! shell selecting shared definitions

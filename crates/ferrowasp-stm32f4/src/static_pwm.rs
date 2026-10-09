@@ -6,8 +6,8 @@ use stm32f4xx_hal::{
     timer::{PwmChannel, Timer},
 };
 
-pub use crate::pwm_config::ESC_PWM_CONFIG;
-pub const ESC_PWM_FREQ_HZ: u32 = crate::pwm_config::ESC_PWM_FREQUENCY_HZ;
+pub use ferrowasp_stm32::pwm_config::ESC_PWM_CONFIG;
+pub const ESC_PWM_FREQ_HZ: u32 = ferrowasp_stm32::pwm_config::ESC_PWM_FREQUENCY_HZ;
 
 pub type Motor1Pwm = rc_pwm::PwmController<PwmChannel<TIM1, 0>>;
 pub type Motor2Pwm = rc_pwm::PwmController<PwmChannel<TIM3, 3>>;

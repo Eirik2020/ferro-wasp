@@ -84,7 +84,7 @@ shared crate without introducing custom macros.
 - [ ] Move the SPI-NOR JEDEC probe, capability derivation, and flash queue
   endpoint assembly into a reusable flash-service initializer.
 - [ ] Bundle the duplicated ESC-manager queues, owned UART channels, and safety
-  signal endpoints in `ferrowasp-tasks`, `ferrowasp-io-core`, and
+  signal endpoints in `ferrowasp-flight`, `ferrowasp-io-core`, and
   `ferrowasp-core`, respectively.
 - [ ] Replace the unused generic `tele_uart` and `gps_uart` routing
   placeholders with a fixed, typed Foxeer flight-UART routing result.

@@ -15,6 +15,14 @@ artifact is stable, airworthy, or production-ready.
 - A `configurator` serial function: the text command line on a UART, for a
   Bluetooth serial module. Foxeer binds it to `uart3` (PC10/PC11) by default.
 
+### Changed
+
+- Crate layout. `ferrowasp-tasks` is now `ferrowasp-flight` (portable flight
+  logic) and `ferrowasp-stm32f4-tasks` is `ferrowasp-stm32-tasks` (RTIC task
+  bodies for every STM32 board). The HAL-neutral half of `ferrowasp-stm32f4`
+  moved to a new `ferrowasp-stm32`, which the H7 backend now uses instead of
+  the F4 crate; `ferrowasp-stm32f4` keeps only the F4 HAL code.
+
 ### Removed
 
 - The FerroWasp FCU3 app (`firmware/stm32f405-flight`), obsolete since

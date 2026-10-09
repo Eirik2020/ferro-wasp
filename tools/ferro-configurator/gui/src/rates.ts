@@ -3,7 +3,7 @@
 // FerroWasp uses Betaflight's "Actual" rates, so a pilot can type in the
 // centre sensitivity, max rate and expo they already fly and see the same
 // shape. The formula is a copy of `apply_actual_rate` in
-// `crates/ferrowasp-tasks/src/drone_toolbox.rs`; if that changes, this must too.
+// `crates/ferrowasp-flight/src/drone_toolbox.rs`; if that changes, this must too.
 
 export interface RateAxis {
   center: number;

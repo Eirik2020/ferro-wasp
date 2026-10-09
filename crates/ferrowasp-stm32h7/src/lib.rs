@@ -1,7 +1,7 @@
 //! STM32H7 mechanisms for FerroWasp flight boards.
 //!
 //! Each module puts one H7 peripheral under a HAL-neutral mechanism from
-//! `ferrowasp-stm32f4`: the UART, SPI, ADC, and DShot state machines are
+//! `ferrowasp-stm32`: the UART, SPI, ADC, and DShot state machines are
 //! shared, so an H7 board runs the same receive planning, SPI ownership,
 //! command lease, and fault latching as the flight-tested F405 boards. Board
 //! facts - which pins, streams, and timers - stay in the board's firmware.

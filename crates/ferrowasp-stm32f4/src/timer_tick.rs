@@ -1,20 +1,19 @@
-//! A periodic timer whose update tick a handler acknowledges by clearing its
-//! flags - the control scheduler and the I/O watchdog alike.
+//! The STM32F4 periodic timer behind the control scheduler and the I/O
+//! watchdog.
 
-/// Acknowledge one tick, whichever timer a board uses. What a shared task
-/// definition bounds on, so a board's timer choice stays in the board.
-pub trait TimerTick {
-    fn acknowledge_tick(&mut self);
-}
+pub use ferrowasp_stm32::timer_tick::TimerTick;
+use stm32f4xx_hal::timer::{CounterHz, Instance};
 
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-impl<TIM> TimerTick for stm32f4xx_hal::timer::CounterHz<TIM>
+/// A timer started at a fixed rate with its update interrupt enabled.
+pub struct PeriodicTimer<TIM>(pub CounterHz<TIM>);
+
+impl<TIM> TimerTick for PeriodicTimer<TIM>
 where
-    TIM: stm32f4xx_hal::timer::Instance,
+    TIM: Instance,
 {
     fn acknowledge_tick(&mut self) {
         use stm32f4xx_hal::prelude::*;
 
-        self.clear_all_flags();
+        self.0.clear_all_flags();
     }
 }
