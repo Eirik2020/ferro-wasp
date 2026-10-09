@@ -1,10 +1,10 @@
 use ferrowasp_core::actuator::MotorOutputMap;
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
-use ferrowasp_io_core::serial::RcProtocol;
-use ferrowasp_tasks::drone_toolbox::{
+use ferrowasp_flight::drone_toolbox::{
     IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, TuningProfile,
 };
-use ferrowasp_tasks::flash_storage::StoredConfig;
+use ferrowasp_flight::flash_storage::StoredConfig;
+use ferrowasp_io_core::serial::RcProtocol;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AdcObservationProfile {
@@ -42,7 +42,7 @@ pub const SCHEDULER_TICK_RATE_HZ: u32 = 2_000;
 
 // The scheduler divides down with integer division, so a pair that does not
 // divide exactly would run a rate this board does not claim.
-const _: () = assert!(ferrowasp_tasks::drone_toolbox::scheduler_divides_exactly(
+const _: () = assert!(ferrowasp_flight::drone_toolbox::scheduler_divides_exactly(
     SCHEDULER_TICK_RATE_HZ,
     CONTROL_LOOP_RATE_HZ
 ));

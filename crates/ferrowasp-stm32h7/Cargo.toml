@@ -5,7 +5,7 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 
-# STM32H7 mechanisms under the HAL-neutral ones in ferrowasp-stm32f4: the DMA
+# STM32H7 mechanisms under the HAL-neutral ones in ferrowasp-stm32: the DMA
 # transfers, timers, USB, and storage an H7 flight board wires to the shared
 # UART, SPI, ADC, and DShot state machines.
 
@@ -27,7 +27,7 @@ stm32h743 = [
 defmt = "1.0.1"
 embedded-hal = { workspace = true }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
-ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4", features = ["dshot"] }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32", features = ["dshot"] }
 ferrowasp-waveform = { path = "../ferrowasp-waveform" }
 heapless = { workspace = true }
 

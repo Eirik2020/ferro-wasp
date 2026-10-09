@@ -6,7 +6,7 @@ pub mod board;
 pub mod internal {
     pub use crate::board;
     pub use defmt::info;
-    pub use ferrowasp_stm32f4::app_config::BRINGUP_HEARTBEAT_PERIOD_MS;
+    pub use ferrowasp_stm32::app_config::BRINGUP_HEARTBEAT_PERIOD_MS;
     pub use ferrowasp_stm32f4::bringup::{
         HeartbeatConfig, HeartbeatResourceInputs, HeartbeatResources, heartbeat_task,
         init_heartbeat_resources,

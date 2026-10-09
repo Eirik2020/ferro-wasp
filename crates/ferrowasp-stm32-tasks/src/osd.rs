@@ -41,7 +41,7 @@ pub async fn osd_write(
 /// task ends at once.
 #[ferroforge::task(
     local = [
-        osd_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
+        osd_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
         osd_tx_healthy: bool,
         osd_task: osd::OsdTask,
         osd_tx_buffer: [u8; mspv1::OSD_TX_BUFFER_LEN],

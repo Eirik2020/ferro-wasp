@@ -3,14 +3,15 @@ resolver = "2"
 members = [
     "crates/ferrowasp-core",
     "crates/ferrowasp-drivers",
+    "crates/ferrowasp-flight",
     "crates/ferrowasp-io-core",
     "crates/ferrowasp-mspv1",
     "crates/ferrowasp-mspv2",
     "crates/ferrowasp-pid",
+    "crates/ferrowasp-stm32",
+    "crates/ferrowasp-stm32-tasks",
     "crates/ferrowasp-stm32f4",
-    "crates/ferrowasp-stm32f4-tasks",
     "crates/ferrowasp-stm32h7",
-    "crates/ferrowasp-tasks",
     "crates/ferrowasp-waveform",
     "crates/rc-pwm",
 ]

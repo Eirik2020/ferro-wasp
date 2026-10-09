@@ -13,7 +13,7 @@ use crate::snapshots::SAFETY_ARMED;
 /// asked for telemetry.
 #[ferroforge::task(
     local = [
-        esc_telemetry_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
+        esc_telemetry_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
         esc_manager_state: esc::EscManager,
         esc_request_producer: esc::EscRequestProducer,
         esc_ack_consumer: esc::EscAckConsumer,

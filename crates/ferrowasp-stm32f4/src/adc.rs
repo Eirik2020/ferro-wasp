@@ -1,112 +1,7 @@
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AdcDmaFault {
-    Transfer,
-}
+//! ADC1 battery and current observation on the STM32F4: the HAL transfer
+//! under the chip-neutral planner and sample types.
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AdcDmaIrqFlags {
-    pub transfer_complete: bool,
-    pub dma_error: bool,
-}
-
-impl AdcDmaIrqFlags {
-    pub const NONE: Self = Self {
-        transfer_complete: false,
-        dma_error: false,
-    };
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AdcDmaIrqAction {
-    None,
-    SampleReady,
-    Fault(AdcDmaFault),
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct AdcDmaIrqStats {
-    pub samples: u32,
-    pub dma_errors: u32,
-    pub ignored_events: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct AdcDmaIrqPlanner {
-    stats: AdcDmaIrqStats,
-}
-
-impl AdcDmaIrqPlanner {
-    pub const fn new() -> Self {
-        Self {
-            stats: AdcDmaIrqStats {
-                samples: 0,
-                dma_errors: 0,
-                ignored_events: 0,
-            },
-        }
-    }
-
-    pub const fn stats(self) -> AdcDmaIrqStats {
-        self.stats
-    }
-
-    pub fn handle(&mut self, flags: AdcDmaIrqFlags) -> AdcDmaIrqAction {
-        let action = if flags.dma_error {
-            AdcDmaIrqAction::Fault(AdcDmaFault::Transfer)
-        } else if flags.transfer_complete {
-            AdcDmaIrqAction::SampleReady
-        } else {
-            AdcDmaIrqAction::None
-        };
-
-        match action {
-            AdcDmaIrqAction::SampleReady => {
-                self.stats.samples = self.stats.samples.saturating_add(1);
-            }
-            AdcDmaIrqAction::Fault(_) => {
-                self.stats.dma_errors = self.stats.dma_errors.saturating_add(1);
-            }
-            AdcDmaIrqAction::None => {
-                self.stats.ignored_events = self.stats.ignored_events.saturating_add(1);
-            }
-        }
-
-        action
-    }
-}
-
-/// ADC1's DMA sample buffer. Which conversion lands in which word is the
-/// backend's; `Adc1Sample` carries the converted readings.
-pub type Adc1SampleBuffer = &'static mut [u16; 3];
-
-pub struct Adc1Sample {
-    pub buffer: Adc1SampleBuffer,
-    pub voltage_mv: u16,
-    pub current_mv: u16,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AdcDmaDeliveryError {
-    DmaFault,
-    NoSpareBuffer,
-    TransferNotReady,
-}
-
-/// ADC1's observation transfer, whichever DMA stream a board gives it. What a
-/// shared task definition bounds on; each backend forwards to its own
-/// transfer.
-pub trait Adc1ObservationDma {
-    /// Start one conversion sequence into the current buffer.
-    fn start_conversion(&mut self);
-
-    fn take_completed_sample(
-        &mut self,
-        spare_buffer: &mut Option<Adc1SampleBuffer>,
-        planner: &mut AdcDmaIrqPlanner,
-    ) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError>;
-}
-
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
+pub use ferrowasp_stm32::adc::*;
 use stm32f4xx_hal::{
     ClearFlags, ReadFlags,
     adc::{
@@ -123,13 +18,17 @@ use stm32f4xx_hal::{
     rcc::Rcc,
 };
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
-pub type Adc1ObservationTransferFor<StreamT, const CHANNEL: u8> =
-    Transfer<StreamT, CHANNEL, Adc<ADC1>, PeripheralToMemory, Adc1SampleBuffer>;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
+/// ADC1's observation DMA transfer. A type of this crate's own, so it can
+/// carry the chip-neutral `Adc1ObservationDma`.
+pub struct Adc1ObservationTransferFor<StreamT, const CHANNEL: u8>(
+    pub Transfer<StreamT, CHANNEL, Adc<ADC1>, PeripheralToMemory, Adc1SampleBuffer>,
+)
+where
+    StreamT: Stream,
+    ChannelX<CHANNEL>: Channel,
+    Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>;
 pub type Adc1ObservationTransfer = Adc1ObservationTransferFor<Stream0<DMA2>, 0>;
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub struct Adc1BatteryResources {
     pub adc: ADC1,
     pub voltage_pin: PC0<Input>,
@@ -137,7 +36,6 @@ pub struct Adc1BatteryResources {
     pub dma: Stream0<DMA2>,
 }
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub struct Adc1ObservationPartsFor<StreamT, const CHANNEL: u8>
 where
     StreamT: Stream,
@@ -148,10 +46,8 @@ where
     pub spare_buffer: Adc1SampleBuffer,
 }
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub type Adc1ObservationParts = Adc1ObservationPartsFor<Stream0<DMA2>, 0>;
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn init_adc1_observation(
     adc: ADC1,
     voltage_pin: PC0<Input>,
@@ -172,7 +68,6 @@ pub fn init_adc1_observation(
     )
 }
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn init_adc1_observation_for<StreamT, const CHANNEL: u8>(
     adc: ADC1,
     voltage_pin: PC0<Input>,
@@ -201,7 +96,13 @@ where
         .transfer_complete_interrupt(true)
         .memory_increment(true)
         .double_buffer(false);
-    let transfer = Transfer::init_peripheral_to_memory(dma, adc, primary_buffer, None, dma_config);
+    let transfer = Adc1ObservationTransferFor(Transfer::init_peripheral_to_memory(
+        dma,
+        adc,
+        primary_buffer,
+        None,
+        dma_config,
+    ));
 
     Adc1ObservationPartsFor {
         transfer,
@@ -209,7 +110,6 @@ where
     }
 }
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn take_completed_adc1_sample(
     transfer: &mut Adc1ObservationTransfer,
     spare_buffer: &mut Option<Adc1SampleBuffer>,
@@ -218,7 +118,6 @@ pub fn take_completed_adc1_sample(
     take_completed_adc1_sample_for(transfer, spare_buffer, planner)
 }
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub fn take_completed_adc1_sample_for<StreamT, const CHANNEL: u8>(
     transfer: &mut Adc1ObservationTransferFor<StreamT, CHANNEL>,
     spare_buffer: &mut Option<Adc1SampleBuffer>,
@@ -229,6 +128,7 @@ where
     ChannelX<CHANNEL>: Channel,
     Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
 {
+    let transfer = &mut transfer.0;
     let flags = transfer.flags();
     let action = planner.handle(AdcDmaIrqFlags {
         transfer_complete: flags.is_transfer_complete(),
@@ -266,7 +166,6 @@ where
     }
 }
 
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 impl<StreamT, const CHANNEL: u8> Adc1ObservationDma for Adc1ObservationTransferFor<StreamT, CHANNEL>
 where
     StreamT: Stream,
@@ -274,7 +173,7 @@ where
     Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
 {
     fn start_conversion(&mut self) {
-        Transfer::start(self, |adc| {
+        Transfer::start(&mut self.0, |adc| {
             adc.start_conversion();
         })
     }
@@ -285,47 +184,5 @@ where
         planner: &mut AdcDmaIrqPlanner,
     ) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError> {
         take_completed_adc1_sample_for(self, spare_buffer, planner)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn no_flags_are_ignored() {
-        let mut planner = AdcDmaIrqPlanner::new();
-
-        assert_eq!(planner.handle(AdcDmaIrqFlags::NONE), AdcDmaIrqAction::None);
-        assert_eq!(planner.stats().ignored_events, 1);
-    }
-
-    #[test]
-    fn transfer_complete_produces_sample_ready() {
-        let mut planner = AdcDmaIrqPlanner::new();
-
-        assert_eq!(
-            planner.handle(AdcDmaIrqFlags {
-                transfer_complete: true,
-                dma_error: false,
-            }),
-            AdcDmaIrqAction::SampleReady
-        );
-        assert_eq!(planner.stats().samples, 1);
-    }
-
-    #[test]
-    fn dma_error_preempts_sample_ready() {
-        let mut planner = AdcDmaIrqPlanner::new();
-
-        assert_eq!(
-            planner.handle(AdcDmaIrqFlags {
-                transfer_complete: true,
-                dma_error: true,
-            }),
-            AdcDmaIrqAction::Fault(AdcDmaFault::Transfer)
-        );
-        assert_eq!(planner.stats().dma_errors, 1);
-        assert_eq!(planner.stats().samples, 0);
     }
 }

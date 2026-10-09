@@ -1,6 +1,4 @@
-use ferrowasp_stm32f4::board_manifest::{
-    BoardIdentity, PinAssignment, ResourceClaim, ResourceKind,
-};
+use ferrowasp_stm32::board_manifest::{BoardIdentity, PinAssignment, ResourceClaim, ResourceKind};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BoardCapabilities {
@@ -55,7 +53,7 @@ pub const CLAIMS: &[ResourceClaim] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrowasp_stm32f4::board_manifest::{ResourceKind, find_duplicate_claim};
+    use ferrowasp_stm32::board_manifest::{ResourceKind, find_duplicate_claim};
 
     #[test]
     fn identity_names_the_nucleo_f401re() {

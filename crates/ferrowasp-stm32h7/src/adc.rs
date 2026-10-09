@@ -8,7 +8,7 @@
 
 use cortex_m::peripheral::NVIC;
 use embedded_hal_02::adc::OneShot;
-pub use ferrowasp_stm32f4::adc::{
+pub use ferrowasp_stm32::adc::{
     Adc1ObservationDma, Adc1Sample, Adc1SampleBuffer, AdcDmaDeliveryError, AdcDmaIrqAction,
     AdcDmaIrqFlags, AdcDmaIrqPlanner,
 };
