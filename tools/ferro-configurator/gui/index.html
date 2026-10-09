@@ -10,16 +10,19 @@
     <header>
       <h1>FerroConfigurator</h1>
       <span id="device-description"></span>
+      <div class="row connection">
+        <select id="port-select" aria-label="Serial port"></select>
+        <button id="refresh-ports" type="button">Refresh</button>
+        <button id="connect" type="button">Connect</button>
+        <button id="disconnect" type="button">Disconnect</button>
+      </div>
     </header>
 
-    <!-- First on the page on purpose: it decides whether the form below can
-         be submitted, so it should never be scrolled past. -->
+    <!-- Above the tabs on purpose: it decides whether anything can be
+         written, so no tab may hide it. -->
     <section id="safety" aria-live="polite">
       <div id="safety-banner" data-state="unknown">No controller connected</div>
       <div id="safety-detail"></div>
-      <!-- Why it will or will not arm: the question every new pilot asks
-           first. Rows come from the library, in the firmware's own order. -->
-      <ul id="prearm-checks" aria-label="Pre-arm checks"></ul>
     </section>
 
     <div id="mock-banner" hidden>
@@ -30,123 +33,165 @@
       <button id="toggle-arm-switch" type="button">Toggle arm switch</button>
     </div>
 
-    <section>
-      <h2>Connection</h2>
-      <div class="row">
-        <select id="port-select" aria-label="Serial port"></select>
-        <button id="refresh-ports" type="button">Refresh</button>
-        <button id="connect" type="button">Connect</button>
-        <button id="disconnect" type="button">Disconnect</button>
-      </div>
-    </section>
+    <nav id="tabs" role="tablist" aria-orientation="vertical">
+      <button type="button" role="tab" data-tab="setup">Setup</button>
+      <button type="button" role="tab" data-tab="ports">Ports</button>
+      <button type="button" role="tab" data-tab="receiver" data-config>Receiver</button>
+      <button type="button" role="tab" data-tab="motors">Motors</button>
+      <button type="button" role="tab" data-tab="pid" data-config>PID Tuning</button>
+      <button type="button" role="tab" data-tab="rates" data-config>Rates</button>
+      <button type="button" role="tab" data-tab="blackbox" data-config>Blackbox</button>
+    </nav>
 
-    <section>
-      <h2>Attitude</h2>
-      <div id="quad-viewer"></div>
-    </section>
+    <main>
+      <section id="tab-setup" role="tabpanel" data-panel="setup">
+        <h2>Pre-arm checks</h2>
+        <!-- Why it will or will not arm: the question every new pilot asks
+             first. Rows come from the library, in the firmware's own order. -->
+        <p id="prearm-empty" class="note">Connect a disarmed controller to see what stops it arming.</p>
+        <ul id="prearm-checks" aria-label="Pre-arm checks"></ul>
+        <h2>Attitude</h2>
+        <div id="quad-viewer"></div>
+      </section>
 
-    <section>
-      <h2>Receiver</h2>
-      <div id="receiver-unavailable">Connect to see live channels.</div>
-      <div id="channels"></div>
-      <div class="row">
-        <button id="find-control" type="button" disabled>Find a control…</button>
-        <span id="find-result"></span>
-      </div>
-    </section>
+      <section id="tab-ports" role="tabpanel" data-panel="ports" hidden>
+        <h2>Serial ports</h2>
+        <p class="note">Each UART by its number on the chip. A change is saved
+          and verified, and takes effect when the controller reboots.</p>
+        <table id="serial-ports"></table>
+        <div id="serial-source"></div>
+        <div class="row">
+          <button id="reload-ports" type="button">Read from controller</button>
+          <button id="apply-ports" type="button" disabled>Save &amp; verify</button>
+        </div>
+      </section>
 
-    <section>
-      <h2>Motors</h2>
-      <div id="motors-tab"></div>
-    </section>
+      <section id="tab-receiver" role="tabpanel" data-panel="receiver" hidden>
+        <h2>Receiver</h2>
+        <div class="grid">
+          <fieldset>
+            <legend>Settings</legend>
+            <label>Protocol
+              <select id="rc-protocol" title="Applies after the controller reboots">
+                <option value="sbus">SBUS</option>
+                <option value="crsf">CRSF</option>
+              </select>
+            </label>
+            <label>Stick order <input id="rc-map" type="number" step="1" title="Channels for roll, pitch, throttle, yaw: 1234 is AETR" /></label>
+            <label>Arm channel <input id="rc-arm-channel" type="number" step="1" min="5" max="16" /></label>
+            <label>Deadband <input id="rc-deadband" type="number" step="1" /></label>
+          </fieldset>
+        </div>
+        <div class="config-actions"></div>
+        <h2>Channels</h2>
+        <div id="receiver-unavailable">Connect to see live channels.</div>
+        <div id="channels"></div>
+        <div class="row">
+          <button id="find-control" type="button" disabled>Find a control…</button>
+          <span id="find-result"></span>
+        </div>
+      </section>
 
-    <section>
-      <h2>Tuning</h2>
-      <div class="grid">
-        <fieldset>
-          <legend>Roll</legend>
-          <label>P <input id="roll-p" type="number" step="0.1" /></label>
-          <label>I <input id="roll-i" type="number" step="0.01" /></label>
-          <label>D <input id="roll-d" type="number" step="0.01" /></label>
-          <label>Centre °/s <input id="roll-center" type="number" step="1" /></label>
-          <label>Max °/s <input id="roll-max" type="number" step="1" /></label>
-          <label>Expo <input id="roll-expo" type="number" step="0.05" /></label>
-        </fieldset>
-        <fieldset>
-          <legend>Pitch</legend>
-          <label>P <input id="pitch-p" type="number" step="0.1" /></label>
-          <label>I <input id="pitch-i" type="number" step="0.01" /></label>
-          <label>D <input id="pitch-d" type="number" step="0.01" /></label>
-          <label>Centre °/s <input id="pitch-center" type="number" step="1" /></label>
-          <label>Max °/s <input id="pitch-max" type="number" step="1" /></label>
-          <label>Expo <input id="pitch-expo" type="number" step="0.05" /></label>
-        </fieldset>
-        <fieldset>
-          <legend>Yaw</legend>
-          <label>P <input id="yaw-p" type="number" step="0.1" /></label>
-          <label>I <input id="yaw-i" type="number" step="0.01" /></label>
-          <label>D <input id="yaw-d" type="number" step="0.01" /></label>
-          <label>Centre °/s <input id="yaw-center" type="number" step="1" /></label>
-          <label>Max °/s <input id="yaw-max" type="number" step="1" /></label>
-          <label>Expo <input id="yaw-expo" type="number" step="0.05" /></label>
-        </fieldset>
-        <fieldset>
-          <legend>Other</legend>
-          <label>RC deadband <input id="rc-deadband" type="number" step="1" /></label>
-          <label>IMU LPF Hz <input id="imu-lpf" type="number" step="1" min="1" max="180" /></label>
-          <label>Log divisor <input id="log-divisor" type="number" step="1" /></label>
-        </fieldset>
-        <fieldset>
-          <legend>Receiver</legend>
-          <label>Protocol
-            <select id="rc-protocol" title="Applies after the controller reboots">
-              <option value="sbus">SBUS</option>
-              <option value="crsf">CRSF</option>
-            </select>
-          </label>
-          <label>Stick order <input id="rc-map" type="number" step="1" title="Channels for roll, pitch, throttle, yaw: 1234 is AETR" /></label>
-          <label>Arm channel <input id="rc-arm-channel" type="number" step="1" min="5" max="16" /></label>
-        </fieldset>
-      </div>
-      <figure id="rates-figure">
-        <svg id="rates-curve" role="img" aria-label="Rates curve"></svg>
-        <figcaption>Betaflight "Actual" rates: centre sensitivity, max rate and expo mean the same here.</figcaption>
-      </figure>
-      <div class="row">
-        <button id="reload-config" type="button">Read from controller</button>
-        <button id="apply" type="button" disabled>Apply &amp; verify</button>
-      </div>
-    </section>
+      <section id="tab-motors" role="tabpanel" data-panel="motors" hidden>
+        <h2>Motors</h2>
+        <div id="motors-tab"></div>
+      </section>
 
-    <section>
-      <h2>Serial ports</h2>
-      <p class="note">Each UART by its number on the chip. A change is saved
-        and verified, and takes effect when the controller reboots.</p>
-      <table id="serial-ports"></table>
-      <div id="serial-source"></div>
-      <div class="row">
-        <button id="reload-ports" type="button">Read from controller</button>
-        <button id="apply-ports" type="button" disabled>Save &amp; verify</button>
-      </div>
-    </section>
+      <section id="tab-pid" role="tabpanel" data-panel="pid" hidden>
+        <h2>PID tuning</h2>
+        <div class="grid">
+          <fieldset>
+            <legend>Roll</legend>
+            <label>P <input id="roll-p" type="number" step="0.1" /></label>
+            <label>I <input id="roll-i" type="number" step="0.01" /></label>
+            <label>D <input id="roll-d" type="number" step="0.01" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Pitch</legend>
+            <label>P <input id="pitch-p" type="number" step="0.1" /></label>
+            <label>I <input id="pitch-i" type="number" step="0.01" /></label>
+            <label>D <input id="pitch-d" type="number" step="0.01" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Yaw</legend>
+            <label>P <input id="yaw-p" type="number" step="0.1" /></label>
+            <label>I <input id="yaw-i" type="number" step="0.01" /></label>
+            <label>D <input id="yaw-d" type="number" step="0.01" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Filters</legend>
+            <label>IMU LPF Hz <input id="imu-lpf" type="number" step="1" min="1" max="180" /></label>
+          </fieldset>
+        </div>
+        <div class="config-actions"></div>
+      </section>
 
-    <section>
-      <h2>Flight logs</h2>
-      <div class="row">
-        <button id="load-flights" type="button">Catalogue flights</button>
-        <input id="download-path" type="text" placeholder="output.fwbb" size="28" />
-        <button id="download" type="button">Download latest</button>
-      </div>
-      <div class="row">
-        <input id="sync-directory" type="text" placeholder="log folder" size="28" />
-        <button id="sync" type="button">Sync new flights</button>
-      </div>
-      <div id="storage-summary"></div>
-      <ul id="flight-list"></ul>
-      <progress id="download-progress" value="0" max="100" hidden></progress>
-    </section>
+      <section id="tab-rates" role="tabpanel" data-panel="rates" hidden>
+        <h2>Rates</h2>
+        <div class="grid">
+          <fieldset>
+            <legend>Roll</legend>
+            <label>Centre °/s <input id="roll-center" type="number" step="1" /></label>
+            <label>Max °/s <input id="roll-max" type="number" step="1" /></label>
+            <label>Expo <input id="roll-expo" type="number" step="0.05" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Pitch</legend>
+            <label>Centre °/s <input id="pitch-center" type="number" step="1" /></label>
+            <label>Max °/s <input id="pitch-max" type="number" step="1" /></label>
+            <label>Expo <input id="pitch-expo" type="number" step="0.05" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Yaw</legend>
+            <label>Centre °/s <input id="yaw-center" type="number" step="1" /></label>
+            <label>Max °/s <input id="yaw-max" type="number" step="1" /></label>
+            <label>Expo <input id="yaw-expo" type="number" step="0.05" /></label>
+          </fieldset>
+        </div>
+        <figure id="rates-figure">
+          <svg id="rates-curve" role="img" aria-label="Rates curve"></svg>
+          <figcaption>Betaflight "Actual" rates: centre sensitivity, max rate and expo mean the same here.</figcaption>
+        </figure>
+        <div class="config-actions"></div>
+      </section>
+
+      <section id="tab-blackbox" role="tabpanel" data-panel="blackbox" hidden>
+        <h2>Logging</h2>
+        <div class="grid">
+          <fieldset>
+            <legend>Recording</legend>
+            <label>Log divisor <input id="log-divisor" type="number" step="1" title="Record every Nth control loop" /></label>
+          </fieldset>
+        </div>
+        <div class="config-actions"></div>
+        <h2>Flight logs</h2>
+        <div class="row">
+          <button id="load-flights" type="button">Catalogue flights</button>
+          <input id="download-path" type="text" placeholder="output.fwbb" size="28" />
+          <button id="download" type="button">Download latest</button>
+        </div>
+        <div class="row">
+          <input id="sync-directory" type="text" placeholder="log folder" size="28" />
+          <button id="sync" type="button">Sync new flights</button>
+        </div>
+        <div id="storage-summary"></div>
+        <ul id="flight-list"></ul>
+        <progress id="download-progress" value="0" max="100" hidden></progress>
+      </section>
+    </main>
 
     <footer id="status-line" data-tone="idle">Ready.</footer>
+
+    <!-- Every settings tab edits one configuration; this bar is copied into
+         each of them. -->
+    <template id="config-actions-template">
+      <div class="row">
+        <button class="reload-config" type="button">Read from controller</button>
+        <button class="apply-config" type="button" disabled>Save &amp; verify</button>
+        <span class="config-state"></span>
+      </div>
+      <p class="note">Saving sends every setting on every tab.</p>
+    </template>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
