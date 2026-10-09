@@ -186,7 +186,8 @@ the manager after the request is actually emitted. The manager additionally
 publishes bounded, timestamped updates to the actuator owner for idle
 qualification. A request/response-association timeout stops telemetry, so arm
 attempts fail closed until it resumes: only while disarmed, after 500 ms with
-no wire byte and no acknowledgement, with every stored sample dropped.
+no wire byte and no acknowledgement (doubling to at most 4 s while retries
+bring nothing back), with every stored sample dropped.
 RTT identifies both physical output and logical motor, and reports request,
 acknowledgement, response, mismatch, unsolicited-frame, CRC, and discarded-byte
 counters so the checkpoint can distinguish wiring faults from association
