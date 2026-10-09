@@ -1,10 +1,10 @@
-pub use crate::uart_common::*;
-use crate::uart_port::{
-    SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
-    place_endpoint, rx_port, tx_port,
-};
 use ferrowasp_io_core::serial::{
     LogicalSerialPort, ResolvedBindings, SerialFunctionSlots, SerialProtocol as Mode,
+};
+pub use ferrowasp_stm32::uart_common::*;
+use ferrowasp_stm32::uart_port::{
+    SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
+    place_endpoint, rx_port, tx_port,
 };
 use stm32f4xx_hal::{
     ClearFlags, ReadFlags,
@@ -161,8 +161,16 @@ where
     })
 }
 
-pub type UartRxTransfer<StreamT, UsartT, const CHANNEL: u8> =
-    Transfer<StreamT, CHANNEL, serial::Rx<UsartT>, PeripheralToMemory, UartRxBuf>;
+/// A UART's receive DMA transfer. A type of this crate's own, so it can
+/// carry the chip-neutral `UartRxDmaTransfer`.
+pub struct UartRxTransfer<StreamT, UsartT, const CHANNEL: u8>(
+    pub Transfer<StreamT, CHANNEL, serial::Rx<UsartT>, PeripheralToMemory, UartRxBuf>,
+)
+where
+    StreamT: Stream,
+    UsartT: serial::Instance,
+    ChannelX<CHANNEL>: Channel,
+    serial::Rx<UsartT>: DMASet<StreamT, CHANNEL, PeripheralToMemory>;
 
 impl<StreamT, UsartT, const CHANNEL: u8> UartRxDmaTransfer
     for UartRxTransfer<StreamT, UsartT, CHANNEL>
@@ -173,33 +181,33 @@ where
     serial::Rx<UsartT>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
 {
     fn dma_error(&self) -> bool {
-        let flags = ReadFlags::flags(self);
+        let flags = ReadFlags::flags(&self.0);
         flags.is_transfer_error() || flags.is_direct_mode_error() || flags.is_fifo_error()
     }
 
     fn transfer_complete(&self) -> bool {
-        ReadFlags::flags(self).is_transfer_complete()
+        ReadFlags::flags(&self.0).is_transfer_complete()
     }
 
     fn clear_all_flags(&mut self) {
-        ClearFlags::clear_all_flags(self);
+        ClearFlags::clear_all_flags(&mut self.0);
     }
 
     fn is_idle(&self) -> bool {
-        RxISR::is_idle(self)
+        RxISR::is_idle(&self.0)
     }
 
     fn clear_idle_interrupt(&mut self) {
-        RxISR::clear_idle_interrupt(self);
+        RxISR::clear_idle_interrupt(&self.0);
     }
 
     fn number_of_transfers(&self) -> u16 {
-        Transfer::number_of_transfers(self)
+        Transfer::number_of_transfers(&self.0)
     }
 
     fn next_transfer(&mut self, fresh: UartRxBuf) -> Result<UartRxBuf, UartRxRestartError> {
         Transfer::<StreamT, CHANNEL, serial::Rx<UsartT>, PeripheralToMemory, UartRxBuf>::next_transfer(
-            self, fresh,
+            &mut self.0, fresh,
         )
         .map(|(raw_buffer, _)| raw_buffer)
             .map_err(|_| UartRxRestartError)
@@ -280,7 +288,13 @@ where
         Transfer::init_peripheral_to_memory(dma_stream, rx, first_buffer, None, rx_dma_config());
     transfer.start(|_| {});
 
-    uart_rx_parts(mode, transfer, free_consumer, filled_producer, parser)
+    uart_rx_parts(
+        mode,
+        UartRxTransfer(transfer),
+        free_consumer,
+        filled_producer,
+        parser,
+    )
 }
 
 pub fn init_uart_rx_only_dma<RxPin, UsartT, StreamT, const CHANNEL: u8>(

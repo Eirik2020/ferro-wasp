@@ -42,10 +42,10 @@ pub type Adc1ObservationTransfer = adc::Adc1ObservationTransferFor<Stream4<DMA2>
 pub type Adc1ObservationParts = adc::Adc1ObservationPartsFor<Stream4<DMA2>, 0>;
 
 pub type ControlSchedulerTimer = TIM4;
-pub type ControlScheduler = CounterHz<ControlSchedulerTimer>;
+pub type ControlScheduler = ferrowasp_stm32f4::timer_tick::PeriodicTimer<ControlSchedulerTimer>;
 pub type IoTimebaseTimer = TIM2;
 pub type IoWatchdogTimer = TIM6;
-pub type IoWatchdog = CounterHz<IoWatchdogTimer>;
+pub type IoWatchdog = ferrowasp_stm32f4::timer_tick::PeriodicTimer<IoWatchdogTimer>;
 
 pub fn assert_active_routes_compile() {
     ferrowasp_stm32f4::board_routes::assert_dma_route::<

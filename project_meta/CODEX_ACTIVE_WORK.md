@@ -69,7 +69,7 @@ accepted behaviour.
    armed RC-loss stop, and both later arm attempts correctly aborted on idle
    telemetry qualification. `esc_manager.rs` and `blheli_telemetry.rs` are
    byte-identical to pre-conversion; the moved UART plumbing in
-   `ferrowasp-stm32f4-tasks/src/esc.rs` is new, so a conversion-induced
+   `ferrowasp-stm32-tasks/src/esc.rs` is new, so a conversion-induced
    dropped response is not excluded. A latch also costs per-motor eRPM
    logging for the rest of that power cycle.
 

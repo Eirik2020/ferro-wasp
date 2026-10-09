@@ -60,12 +60,12 @@ mdBook chapter when details belong in the book.
 
 ## Architecture boundary
 
-Keep reusable types and safety state in `ferrowasp-core`; MCU support in
-`ferrowasp-mcu`; protocols and devices in `ferrowasp-drivers`; reusable task
-logic in `ferrowasp-tasks`; and RTIC wiring in thin app shells. Keep each
-board's physical facts in that isolated app's `src/board/` support module.
-Reusable STM32F4 mechanisms and configuration types belong in
-`ferrowasp-stm32f4`, not in board support. Optional generation belongs in
+Keep reusable types and safety state in `ferrowasp-core`; protocols and
+devices in `ferrowasp-drivers`; portable flight logic in `ferrowasp-flight`;
+HAL-neutral STM32 mechanisms in `ferrowasp-stm32`, each family's HAL in
+`ferrowasp-stm32f4` or `ferrowasp-stm32h7`; shared RTIC task bodies in
+`ferrowasp-stm32-tasks`; and RTIC wiring in thin app shells. Keep each board's
+physical facts in its app's `src/board/`. Optional generation belongs in
 `ferrowasp-gen`, manifests, or the isolated builder.
 
 Keep HAL-specific types out of core logic. Put reusable behavior in shared

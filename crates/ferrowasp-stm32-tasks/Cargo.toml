@@ -1,5 +1,5 @@
 [package]
-name = "ferrowasp-stm32f4-tasks"
+name = "ferrowasp-stm32-tasks"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
@@ -9,7 +9,7 @@ publish = false
 # Each flight firmware selects them with its own resources, priorities and
 # interrupts through `ferroforge::app!`, so one definition serves every board
 # instead of each app carrying its own copy. The logic they call stays in
-# ferrowasp-tasks and the mechanisms in ferrowasp-stm32f4.
+# ferrowasp-flight and the mechanisms in ferrowasp-stm32 and its family backends.
 
 [lib]
 path = "src/lib.rs"
@@ -18,9 +18,9 @@ path = "src/lib.rs"
 default = []
 # One chip family per firmware. The definitions are the same for each; only
 # the backend under them changes.
-stm32f405 = ["ferrowasp-stm32f4/stm32f405"]
+stm32f405 = ["dep:ferrowasp-stm32f4", "ferrowasp-stm32f4/stm32f405"]
 stm32h743 = ["dep:ferrowasp-stm32h7", "ferrowasp-stm32h7/stm32h743"]
-dshot = ["ferrowasp-stm32f4/dshot"]
+dshot = ["ferrowasp-stm32/dshot", "ferrowasp-stm32f4?/dshot"]
 # Diagnostics a firmware opts into; forwarded from its own features of the
 # same name.
 imu_transport_rtt = []
@@ -39,7 +39,7 @@ bench_blackbox = []
 bench_dshot_idle_output1_not_running = []
 bench_equal_motors = []
 bench_motor_cmd_stale_rejection = []
-blackbox_defmt = ["ferrowasp-tasks/blackbox_defmt"]
+blackbox_defmt = ["ferrowasp-flight/blackbox_defmt"]
 
 [dependencies]
 critical-section = { workspace = true }
@@ -51,9 +51,10 @@ ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
-ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4" }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
+ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4", optional = true }
 ferrowasp-stm32h7 = { path = "../ferrowasp-stm32h7", optional = true }
-ferrowasp-tasks = { path = "../ferrowasp-tasks" }
+ferrowasp-flight = { path = "../ferrowasp-flight" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }

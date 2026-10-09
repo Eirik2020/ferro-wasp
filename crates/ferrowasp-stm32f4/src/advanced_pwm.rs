@@ -1,4 +1,4 @@
-use crate::pwm_config::{ESC_PWM_FREQUENCY_HZ, pwm_command_to_pulse_width_us};
+use ferrowasp_stm32::pwm_config::{ESC_PWM_FREQUENCY_HZ, pwm_command_to_pulse_width_us};
 use stm32f4xx_hal::{
     gpio::{Alternate, Input, PA8, PB15, PC8, PC9},
     pac::{TIM1, TIM8, tim1::RegisterBlock},

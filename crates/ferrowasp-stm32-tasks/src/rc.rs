@@ -36,7 +36,7 @@ pub fn neutralize_rc_input(
 /// and arming needs the new arm channel seen low first.
 #[ferroforge::task(
     local = [
-        rc_port: Option<ferrowasp_stm32f4::uart_port::SerialPortEndpoint>,
+        rc_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
         rc_receiver: RcReceiver,
         rc_map_in_use: Option<dt::RcChannelMap> = None,
         arm_qualifier: safety::ArmQualifier,
@@ -154,7 +154,7 @@ pub async fn rc_input(mut cx: rc_input::Context) {
             }
             for (snapshot, raw) in crate::snapshots::RC_CHANNELS_US.iter().zip(frame.channels) {
                 snapshot.store(
-                    ferrowasp_tasks::rc_receiver::channel_us(raw),
+                    ferrowasp_flight::rc_receiver::channel_us(raw),
                     Ordering::Relaxed,
                 );
             }

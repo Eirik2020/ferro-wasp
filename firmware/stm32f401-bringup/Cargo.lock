@@ -292,6 +292,7 @@ dependencies = [
  "defmt 1.0.1",
  "defmt-rtt",
  "ferroforge",
+ "ferrowasp-stm32",
  "ferrowasp-stm32f4",
  "panic-probe",
  "rtic",
@@ -312,16 +313,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-stm32"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "embedded-hal 1.0.0",
+ "ferrowasp-io-core",
+ "heapless 0.9.2",
+ "rc-pwm",
+]
+
+[[package]]
 name = "ferrowasp-stm32f4"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
  "defmt 1.0.1",
- "embedded-hal 1.0.0",
  "ferroforge",
  "ferrowasp-io-core",
+ "ferrowasp-stm32",
  "fugit",
- "heapless 0.9.2",
  "rc-pwm",
  "rtic",
  "rtic-monotonics",
