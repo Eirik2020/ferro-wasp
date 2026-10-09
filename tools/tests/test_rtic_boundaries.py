@@ -15,7 +15,7 @@ class RticBoundaryTests(unittest.TestCase):
     def test_rejects_an_app_copy_of_a_shared_static(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            snapshots = root / "crates" / "ferrowasp-stm32f4-tasks" / "src" / "snapshots.rs"
+            snapshots = root / "crates" / "ferrowasp-stm32-tasks" / "src" / "snapshots.rs"
             snapshots.parent.mkdir(parents=True)
             snapshots.write_text(
                 "pub static IMU_STALE: AtomicBool = AtomicBool::new(true);\n",

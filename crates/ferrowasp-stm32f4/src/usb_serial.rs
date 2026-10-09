@@ -1,25 +1,11 @@
-pub const USB_ENDPOINT_MEMORY_WORDS: usize = 1024;
-pub const USB_CDC_RX_BUFFER_BYTES: usize = 64;
-/// Holds a whole `FWDBG1` status line, receiver channels included, so a line
-/// is written in one piece.
-pub const USB_CDC_TX_BUFFER_BYTES: usize = 512;
-pub const FERROWASP_USB_VID: u16 = 0x16c0;
-pub const FERROWASP_USB_PID: u16 = 0x27dd;
+//! USB CDC on the STM32F4's OTG FS peripheral.
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct UsbCdcIdentity {
-    pub manufacturer: &'static str,
-    pub product: &'static str,
-    pub serial_number: &'static str,
-}
+pub use ferrowasp_stm32::usb_serial::*;
 
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub use usb_device::{UsbError, device::UsbDeviceState};
 
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub type UsbCdcDevice = usb_device::device::UsbDevice<'static, stm32f4xx_hal::otg_fs::UsbBusType>;
 
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub type BufferedUsbCdcSerial = usbd_serial::SerialPort<
     'static,
     stm32f4xx_hal::otg_fs::UsbBusType,
@@ -27,7 +13,6 @@ pub type BufferedUsbCdcSerial = usbd_serial::SerialPort<
     [u8; USB_CDC_TX_BUFFER_BYTES],
 >;
 
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UsbCdcInitError {
     EndpointMemoryAlreadyTaken,
@@ -35,7 +20,6 @@ pub enum UsbCdcInitError {
     InvalidStringDescriptors,
 }
 
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub fn init_usb_cdc_serial(
     peripherals: (
         stm32f4xx_hal::pac::OTG_FS_GLOBAL,
@@ -86,17 +70,4 @@ pub fn init_usb_cdc_serial(
         .build();
 
     Ok((device, serial))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn shared_usb_policy_is_bounded_and_stable() {
-        assert_eq!(USB_ENDPOINT_MEMORY_WORDS, 1024);
-        assert_eq!(USB_CDC_RX_BUFFER_BYTES, 64);
-        assert_eq!(USB_CDC_TX_BUFFER_BYTES, 512);
-        assert_eq!((FERROWASP_USB_VID, FERROWASP_USB_PID), (0x16c0, 0x27dd));
-    }
 }

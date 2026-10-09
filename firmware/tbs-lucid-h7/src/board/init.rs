@@ -5,7 +5,7 @@ use super::aliases::{SdFlash, Spi1ImuOwner};
 use super::manifest::Spi1ImuKind;
 use embedded_hal::delay::DelayNs;
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
-use ferrowasp_stm32f4::app_storage::{AdcStorageResources, SpiDmaStorageResources};
+use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32h7 as backend;
 use ferrowasp_stm32h7::eh1::CycleDelay;
 use ferrowasp_stm32h7::hal_prelude::*;

@@ -88,15 +88,24 @@ ferrowasp-io-core
 ferrowasp-drivers
     IMU, ESC telemetry, flash, and other device/protocol drivers
 
-ferrowasp-stm32f4
-    STM32F4 clocks, UART/SPI/ADC DMA, timers, PWM, DShot, and memory mechanisms
+ferrowasp-stm32
+    HAL-neutral STM32 mechanisms: UART/SPI/ADC DMA state machines, serial
+    port binding, the DShot bank, memory and board-description types
+
+ferrowasp-stm32f4, ferrowasp-stm32h7
+    each family's HAL under those mechanisms: clocks, DMA transfers, timers,
+    PWM, DShot lanes, USB
+
+ferrowasp-stm32-tasks
+    RTIC task bodies shared by the STM32 boards, selected by each app's app!
 
 app src/board and src/lib.rs
     board pins, clocks, peripherals, DMA/timer routes, orientation, profiles,
     storage shape, construction policy, and internal support facade
 
-ferrowasp-tasks
-    reusable control, OSD, ESC-manager, storage, and service task logic
+ferrowasp-flight
+    portable control, OSD, ESC-manager, storage, log-sync, and command logic;
+    no HAL or RTIC, so it is tested on the host
 
 protocol/helper crates
     ferrowasp-mspv1, ferrowasp-mspv2, ferrowasp-waveform, ferrowasp-pid, rc-pwm

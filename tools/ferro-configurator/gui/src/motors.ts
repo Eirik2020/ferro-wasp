@@ -212,6 +212,13 @@ export class MotorsTab {
     this.render();
   }
 
+  /** The tab was left: stop every motor and turn the test off. */
+  leave(): void {
+    this.stopAll();
+    this.enable.checked = false;
+    this.render();
+  }
+
   /** Physical outputs the firmware reports as driven, as logical motors. */
   showActive(activeOutputs: number): void {
     const order = motorOrder(this.host.config());

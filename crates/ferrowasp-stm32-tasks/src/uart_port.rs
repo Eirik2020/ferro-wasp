@@ -8,7 +8,7 @@
 //! serve any function.
 
 use crate::prelude::*;
-use ferrowasp_stm32f4::uart_port::{UartRxEvent, UartRxPortService};
+use ferrowasp_stm32::uart_port::{UartRxEvent, UartRxPortService};
 
 macro_rules! uart_port_tasks {
     (

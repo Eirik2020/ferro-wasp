@@ -1,5 +1,5 @@
 //! SPI1 DMA on the STM32H7, under the shared SPI owner in
-//! `ferrowasp_stm32f4::spi_common`.
+//! `ferrowasp_stm32::spi_common`.
 //!
 //! The H7 SPI counts each transfer in hardware: the poller disables the SPI,
 //! loads the frame length, arms the transmit stream, and starts the transfer;
@@ -9,7 +9,7 @@
 
 use crate::dma_endpoints::{Spi1RxEndpoint, Spi1TxEndpoint, StreamErrors, spi1_endpoints};
 use crate::eh1;
-pub use ferrowasp_stm32f4::spi_common::*;
+pub use ferrowasp_stm32::spi_common::*;
 use stm32h7xx_hal::{
     dma::{
         DBTransfer, MemoryToPeripheral, PeripheralToMemory, Transfer,

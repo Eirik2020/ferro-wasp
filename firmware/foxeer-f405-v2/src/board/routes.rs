@@ -153,7 +153,7 @@ pub const ACTIVE_SPI_ROUTES: &[SpiRoute] = &[SPI1_IMU, SPI2_FLASH];
 mod tests {
     use super::*;
     use crate::board::manifest::CLAIMS;
-    use ferrowasp_stm32f4::board_manifest::{ResourceKind, find_duplicate_claim};
+    use ferrowasp_stm32::board_manifest::{ResourceKind, find_duplicate_claim};
 
     #[test]
     fn active_routes_have_no_exclusive_claim_conflicts() {

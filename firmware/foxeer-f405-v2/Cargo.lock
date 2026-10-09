@@ -307,13 +307,14 @@ dependencies = [
  "ferroforge",
  "ferrowasp-core",
  "ferrowasp-drivers",
+ "ferrowasp-flight",
  "ferrowasp-io-core",
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
  "ferrowasp-pid",
+ "ferrowasp-stm32",
+ "ferrowasp-stm32-tasks",
  "ferrowasp-stm32f4",
- "ferrowasp-stm32f4-tasks",
- "ferrowasp-tasks",
  "ferrowasp-waveform",
  "heapless 0.9.2",
  "nb 1.1.0",
@@ -336,6 +337,22 @@ name = "ferrowasp-drivers"
 version = "0.1.0"
 dependencies = [
  "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "ferrowasp-flight"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "ferrowasp-core",
+ "ferrowasp-drivers",
+ "ferrowasp-io-core",
+ "ferrowasp-mspv1",
+ "ferrowasp-mspv2",
+ "ferrowasp-pid",
+ "heapless 0.9.2",
+ "libm",
+ "sbus-rs",
 ]
 
 [[package]]
@@ -368,27 +385,19 @@ name = "ferrowasp-pid"
 version = "0.1.0"
 
 [[package]]
-name = "ferrowasp-stm32f4"
+name = "ferrowasp-stm32"
 version = "0.1.0"
 dependencies = [
- "cortex-m",
  "defmt 1.0.1",
  "embedded-hal 1.0.0",
- "ferroforge",
  "ferrowasp-io-core",
  "ferrowasp-waveform",
- "fugit",
  "heapless 0.9.2",
  "rc-pwm",
- "rtic",
- "rtic-monotonics",
- "stm32f4xx-hal",
- "usb-device",
- "usbd-serial",
 ]
 
 [[package]]
-name = "ferrowasp-stm32f4-tasks"
+name = "ferrowasp-stm32-tasks"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
@@ -400,29 +409,33 @@ dependencies = [
  "ferroforge",
  "ferrowasp-core",
  "ferrowasp-drivers",
+ "ferrowasp-flight",
  "ferrowasp-io-core",
  "ferrowasp-mspv1",
+ "ferrowasp-stm32",
  "ferrowasp-stm32f4",
- "ferrowasp-tasks",
  "fugit",
  "rtic",
  "rtic-monotonics",
 ]
 
 [[package]]
-name = "ferrowasp-tasks"
+name = "ferrowasp-stm32f4"
 version = "0.1.0"
 dependencies = [
+ "cortex-m",
  "defmt 1.0.1",
- "ferrowasp-core",
- "ferrowasp-drivers",
+ "ferroforge",
  "ferrowasp-io-core",
- "ferrowasp-mspv1",
- "ferrowasp-mspv2",
- "ferrowasp-pid",
- "heapless 0.9.2",
- "libm",
- "sbus-rs",
+ "ferrowasp-stm32",
+ "ferrowasp-waveform",
+ "fugit",
+ "rc-pwm",
+ "rtic",
+ "rtic-monotonics",
+ "stm32f4xx-hal",
+ "usb-device",
+ "usbd-serial",
 ]
 
 [[package]]

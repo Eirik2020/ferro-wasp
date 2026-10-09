@@ -2,7 +2,7 @@
 //! through DMAMUX1, so a route's `channel` is the DMAMUX request line.
 
 pub use super::serial::SERIAL_ROUTES;
-use ferrowasp_stm32f4::board_routes::{DmaDirection, DmaRoute, SpiRoute};
+use ferrowasp_stm32::board_routes::{DmaDirection, DmaRoute, SpiRoute};
 
 pub const ACTIVE_IO_DMA_ROUTES: [DmaRoute; 6] = [
     DmaRoute {
@@ -120,7 +120,7 @@ pub const ACTIVE_SPI_ROUTES: &[SpiRoute] = &[SPI1_IMU];
 mod tests {
     use super::*;
     use crate::board::manifest::CLAIMS;
-    use ferrowasp_stm32f4::board_manifest::{ResourceKind, find_duplicate_claim};
+    use ferrowasp_stm32::board_manifest::{ResourceKind, find_duplicate_claim};
 
     #[test]
     fn active_routes_have_no_exclusive_claim_conflicts() {
