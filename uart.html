@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b0d6cd9d.js";
+            window.path_to_searchindex_js = "searchindex-cdb00ad5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -229,10 +229,10 @@ takes effect after <code>config save</code> and a reboot. Changes are refused wh
 armed. FerroConfigurator’s <code>config ports</code> and <code>config bind</code> do the same and
 verify the saved table by readback.</li>
 <li>Port transports are role-free and chip-neutral
-(<code>crates/ferrowasp-stm32f4/src/uart_port.rs</code>): they record faults on the
+(<code>crates/ferrowasp-stm32/src/uart_port.rs</code>): they record faults on the
 stream, and the function task decides what a fault means. Each family’s
 backend starts its ports (<code>init_f405_uart_ports</code>, <code>init_h743_uart_ports</code>),
-and <code>crates/ferrowasp-stm32f4-tasks/src/uart_port.rs</code> defines the receive
+and <code>crates/ferrowasp-stm32-tasks/src/uart_port.rs</code> defines the receive
 and transmit tasks of every logical port for a board to bind. All UART
 transports run at priority 11, since any port may serve any function; the
 function tasks keep their own priorities.</li>
@@ -263,7 +263,7 @@ configurator command line for log sync over a Bluetooth serial module:</p>
 </code></pre>
 <p>USB and the configurator port each have their own command and response queue
 into the flash manager, which answers every command on the link it came from
-(<code>crates/ferrowasp-tasks/src/command_link.rs</code>). Motor commands and the
+(<code>crates/ferrowasp-flight/src/command_link.rs</code>). Motor commands and the
 unconditional log erase stay on USB.</p>
 <p>On the TBS Lucid H7, USART6 (<code>uart6</code>) carries SBUS, inverted in the UART;
 USART3 (<code>uart3</code>) carries MSP DisplayPort with TX DMA; and UART8 (<code>uart8</code>)

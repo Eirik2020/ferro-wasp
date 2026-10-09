@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b0d6cd9d.js";
+            window.path_to_searchindex_js = "searchindex-cdb00ad5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -2642,10 +2642,10 @@ takes effect after <code>config save</code> and a reboot. Changes are refused wh
 armed. FerroConfigurator’s <code>config ports</code> and <code>config bind</code> do the same and
 verify the saved table by readback.</li>
 <li>Port transports are role-free and chip-neutral
-(<code>crates/ferrowasp-stm32f4/src/uart_port.rs</code>): they record faults on the
+(<code>crates/ferrowasp-stm32/src/uart_port.rs</code>): they record faults on the
 stream, and the function task decides what a fault means. Each family’s
 backend starts its ports (<code>init_f405_uart_ports</code>, <code>init_h743_uart_ports</code>),
-and <code>crates/ferrowasp-stm32f4-tasks/src/uart_port.rs</code> defines the receive
+and <code>crates/ferrowasp-stm32-tasks/src/uart_port.rs</code> defines the receive
 and transmit tasks of every logical port for a board to bind. All UART
 transports run at priority 11, since any port may serve any function; the
 function tasks keep their own priorities.</li>
@@ -2676,7 +2676,7 @@ configurator command line for log sync over a Bluetooth serial module:</p>
 </code></pre>
 <p>USB and the configurator port each have their own command and response queue
 into the flash manager, which answers every command on the link it came from
-(<code>crates/ferrowasp-tasks/src/command_link.rs</code>). Motor commands and the
+(<code>crates/ferrowasp-flight/src/command_link.rs</code>). Motor commands and the
 unconditional log erase stay on USB.</p>
 <p>On the TBS Lucid H7, USART6 (<code>uart6</code>) carries SBUS, inverted in the UART;
 USART3 (<code>uart3</code>) carries MSP DisplayPort with TX DMA; and UART8 (<code>uart8</code>)
@@ -2919,9 +2919,11 @@ pasting code.</p>
 |   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
 |   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
 |   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
-|   |-- ferrowasp-stm32f4/       # STM32F4 UART/SPI/ADC/PWM/DShot mechanisms
-|   |-- ferrowasp-stm32f4-tasks/ # RTIC task definitions shared by STM32F4 boards
-|   |-- ferrowasp-tasks/         # Control, OSD, and ESC-manager task logic
+|   |-- ferrowasp-flight/        # Portable flight logic: control, OSD, ESC manager, storage
+|   |-- ferrowasp-stm32/         # HAL-neutral STM32 UART/SPI/ADC/DShot mechanisms
+|   |-- ferrowasp-stm32-tasks/   # RTIC task definitions shared by the STM32 boards
+|   |-- ferrowasp-stm32f4/       # STM32F4 HAL backend
+|   |-- ferrowasp-stm32h7/       # STM32H743 HAL backend
 |   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
 |   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
 |   `-- rc-pwm/                  # Local PWM controller crate
@@ -2947,12 +2949,14 @@ Foxeer is the golden flight app.</p>
 construction policy under each app’s <code>src/board/</code></li>
 <li>isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
 independent Cargo and RTIC resource contracts</li>
-<li>reusable STM32F4 UART/SPI/ADC, servo/auxiliary PWM, and DShot mechanisms under
-<code>crates/ferrowasp-stm32f4/</code></li>
+<li>HAL-neutral STM32 UART/SPI/ADC and DShot mechanisms under
+<code>crates/ferrowasp-stm32/</code>, with each family’s HAL under them in
+<code>crates/ferrowasp-stm32f4/</code> (also servo/auxiliary PWM) and
+<code>crates/ferrowasp-stm32h7/</code></li>
 <li>software-driver and control helpers, including the BLHeli parser and bounded
-ESC manager, under <code>crates/ferrowasp-drivers/</code> and <code>crates/ferrowasp-tasks/</code></li>
+ESC manager, under <code>crates/ferrowasp-drivers/</code> and <code>crates/ferrowasp-flight/</code></li>
 <li>local support crates for <code>rc-pwm</code>, <code>ferrowasp-pid</code>, <code>ferrowasp-mspv1</code>, and <code>ferrowasp-waveform</code></li>
-<li>active MSPv1 / DJI O4 OSD support under <code>crates/ferrowasp-mspv1/</code> and <code>crates/ferrowasp-tasks/</code></li>
+<li>active MSPv1 / DJI O4 OSD support under <code>crates/ferrowasp-mspv1/</code> and <code>crates/ferrowasp-flight/</code></li>
 <li>host-testable pure logic for safety, RC mapping, filters, PID, mixer, DShot,
 BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers</li>
 </ul>
@@ -2961,9 +2965,10 @@ BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers</li>
 <pre><code class="language-text">ferrowasp-core       reusable types, units, safety state, queues
 ferrowasp-mcu        family-neutral MCU contracts
 ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-stm32f4    reusable STM32F4 mechanisms and config types
-ferrowasp-tasks      reusable task logic
-ferrowasp-stm32f4-tasks  RTIC task definitions shared by STM32F4 boards
+ferrowasp-flight     portable flight logic, host-testable
+ferrowasp-stm32      HAL-neutral STM32 mechanisms
+ferrowasp-stm32f4    STM32F4 HAL backend (ferrowasp-stm32h7 for the H743)
+ferrowasp-stm32-tasks RTIC task definitions shared by the STM32 boards
 app src/board        board pin maps, clocks, DMA/timer assignments
 app src/lib.rs       board composition and internal support facade
 app src/main.rs      thin ferroforge::app! shell selecting shared definitions
@@ -3443,6 +3448,14 @@ lower. FerroConfigurator’s <code>blackbox sync</code> and the GUI’s Sync but
 <li>A <code>configurator</code> serial function: the text command line on a UART, for a
 Bluetooth serial module. Foxeer binds it to <code>uart3</code> (PC10/PC11) by default.</li>
 </ul>
+<h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
+<ul>
+<li>Crate layout. <code>ferrowasp-tasks</code> is now <code>ferrowasp-flight</code> (portable flight
+logic) and <code>ferrowasp-stm32f4-tasks</code> is <code>ferrowasp-stm32-tasks</code> (RTIC task
+bodies for every STM32 board). The HAL-neutral half of <code>ferrowasp-stm32f4</code>
+moved to a new <code>ferrowasp-stm32</code>, which the H7 backend now uses instead of
+the F4 crate; <code>ferrowasp-stm32f4</code> keeps only the F4 HAL code.</li>
+</ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
@@ -3461,7 +3474,7 @@ configuration-storage, and blackbox support.</li>
 configuration, blackbox download, and ULog conversion.</li>
 <li>Bounded host-side repository, evidence, and RTIC-boundary checks.</li>
 </ul>
-<h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
+<h3 id="changed-1"><a class="header" href="#changed-1">Changed</a></h3>
 <ul>
 <li>Foxeer F405 V2 is now the golden flight application.</li>
 <li>RTIC <code>main.rs</code> files are thin wiring shells; reusable mechanisms live in
