@@ -45,6 +45,22 @@ precondition, so the session calls `read_status_fresh` instead.
 
 ## Running it
 
+From anywhere in the repository, `tools/configurator.py` runs these in the
+right directory and installs the npm packages first if they are missing. The
+desktop app:
+
+```
+python3 tools/configurator.py
+```
+
+The browser preview, against the simulated controller:
+
+```
+python3 tools/configurator.py preview
+```
+
+Or by hand, from this directory:
+
 Without hardware — the interface runs against a scripted controller, including
 a button that flips it to armed so the refusal path can be exercised:
 
