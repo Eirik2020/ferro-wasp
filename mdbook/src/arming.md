@@ -90,7 +90,7 @@ a fresh low-to-high request can start another attempt.
 
 Power the ESCs before the manager's first post-delay request. If the FC runs
 without ESC power long enough for that request to time out, telemetry stops.
-After applying ESC power, wait a second for it to resume while disarmed, then
+After applying ESC power, wait up to 4 seconds for it to resume while disarmed, then
 complete a fresh switch-low/low-to-high arm sequence.
 
 The ESC manager does not decide whether RPM is sufficient and cannot change
@@ -102,7 +102,8 @@ A CRC-valid UART frame can complete while its operation is still queued. The
 manager may buffer that frame, but it remains quarantined and is published only
 after the exact sequence/output frame-start acknowledgement arrives from the
 DShot service. Association timeouts stop telemetry so late traffic cannot be
-relabeled; it resumes only while disarmed, after a 500 ms quiet window in
+relabeled; it resumes only while disarmed, after a quiet window (500 ms,
+doubling to at most 4 s while retries bring nothing back) in
 which the DShot service has dropped any request the manager gave up on, and
 with every stored sample dropped, so qualification still needs fresh eRPM. UART, parser, bounded-queue, and timeout failures
 cannot grant authority; when they prevent required pre-arm samples,

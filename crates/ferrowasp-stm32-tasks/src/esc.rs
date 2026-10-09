@@ -59,29 +59,35 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
         }
 
         cx.local.esc_manager_state.refresh_wire_stats();
-        if let Some(timeout) = cx.local.esc_manager_state.poll_timeout(now_ms) {
+        // One warning per outage: while retrying with no frame back (the
+        // ESCs unpowered, say), a further timeout is the same outage.
+        let retrying = cx.local.esc_manager_state.is_retrying();
+        if let Some(timeout) = cx.local.esc_manager_state.poll_timeout(now_ms)
+            && !retrying
+        {
             match timeout {
                 esc::EscManagerTimeout::ActuatorAck(request) => warn!(
-                    "Foxeer ESC telemetry stopped after actuator acknowledgement timeout for physical output {} (logical M{}), request {}; resumes after a quiet window while disarmed",
+                    "Foxeer ESC telemetry stopped after actuator acknowledgement timeout for physical output {} (logical M{}), request {}; retrying while disarmed",
                     request.output.index() + 1,
                     CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[request.output.index()],
                     request.sequence
                 ),
                 esc::EscManagerTimeout::TelemetryResponse(request) => warn!(
-                    "Foxeer ESC telemetry stopped after response timeout for physical output {} (logical M{}), request {}; resumes after a quiet window while disarmed",
+                    "Foxeer ESC telemetry stopped after response timeout for physical output {} (logical M{}), request {}; retrying while disarmed",
                     request.output.index() + 1,
                     CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[request.output.index()],
                     request.sequence
                 ),
             }
         }
-
-        if cx
-            .local
+        cx.local
             .esc_manager_state
-            .try_recover(now_ms, SAFETY_ARMED.load(Ordering::Acquire))
-        {
-            info!("Foxeer ESC telemetry resumed after a quiet window; old samples dropped");
+            .try_recover(now_ms, SAFETY_ARMED.load(Ordering::Acquire));
+        if let Some(retries) = cx.local.esc_manager_state.take_back_after_retries() {
+            info!(
+                "Foxeer ESC telemetry back after {} retries; old samples were dropped",
+                retries
+            );
         }
 
         if let Some(request) = cx.local.esc_manager_state.next_request(now_ms)

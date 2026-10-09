@@ -122,6 +122,11 @@ async fn live(state: State<'_, AppState>) -> Result<LiveSnapshot, BridgeError> {
     blocking(&state.session, Session::live).await
 }
 
+#[tauri::command]
+async fn rc_channels(state: State<'_, AppState>) -> Result<[u16; 16], BridgeError> {
+    blocking(&state.session, Session::rc_channels).await
+}
+
 /// One renewal of a held motor button. Gated in the session and decided by
 /// the firmware's safety master; nothing here can make it spin.
 #[tauri::command]
@@ -251,6 +256,7 @@ fn main() {
             safety,
             safety_display,
             live,
+            rc_channels,
             motor_spin,
             motor_stop,
             motor_direction,

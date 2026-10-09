@@ -117,30 +117,7 @@ export class MockApi implements Api {
   async safety(): Promise<Safety> {
     this.requireConnection();
     await sleep(20);
-    // Sticks drift gently so the bars visibly track a live radio.
-    const t = Date.now() / 1000;
-    const stick = (phase: number): number => Math.round(1500 + 120 * Math.sin(t + phase));
-    // AETR with the arm switch on channel 9, every board's default.
-    const channels = this.radioOn
-      ? [
-          stick(0),
-          stick(1.3),
-          988,
-          stick(2.1),
-          this.aux,
-          988,
-          988,
-          1500,
-          this.armed ? 2012 : 988,
-          988,
-          988,
-          988,
-          988,
-          988,
-          988,
-          988,
-        ]
-      : null;
+    const channels = this.channels();
     // Scripted, not computed: the real list comes from the Rust library.
     const check = (id: string, label: string, pass: boolean | null, hint: string): PrearmCheck => ({
       id,
@@ -211,6 +188,39 @@ export class MockApi implements Api {
     if (this.armSwitch) {
       throw new BridgeError("refused", "turn the arm switch off before testing motors");
     }
+  }
+
+  /** Sticks drift gently so the bars visibly track a live radio. */
+  private channels(): number[] | null {
+    const t = Date.now() / 1000;
+    const stick = (phase: number): number => Math.round(1500 + 120 * Math.sin(t + phase));
+    // AETR with the arm switch on channel 9, every board's default.
+    return this.radioOn
+      ? [
+          stick(0),
+          stick(1.3),
+          988,
+          stick(2.1),
+          this.aux,
+          988,
+          988,
+          1500,
+          this.armed ? 2012 : 988,
+          988,
+          988,
+          988,
+          988,
+          988,
+          988,
+          988,
+        ]
+      : null;
+  }
+
+  async rcChannels(): Promise<number[]> {
+    this.requireConnection();
+    await sleep(5);
+    return this.channels() ?? new Array<number>(16).fill(0);
   }
 
   async live(): Promise<LiveSnapshot> {
