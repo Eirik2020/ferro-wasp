@@ -186,6 +186,9 @@ pub enum ArmingAbortReason {
     ImuUnavailable,
     ImuBiasUncalibrated,
     ImuStale,
+    /// A USB host or the configurator link is connected; the craft does not
+    /// arm on the bench cable.
+    HostConnected,
     EscIdleTelemetryTimeout,
     EscIdleRpmOutOfRange,
     EscIdleQualificationInvalid,
@@ -194,13 +197,18 @@ pub enum ArmingAbortReason {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct PreArmHealth {
+    /// A USB host has the board configured, or the configurator link sent a
+    /// command within the last couple of seconds.
+    pub host_connected: bool,
     pub imu_ready: bool,
     pub imu_bias_calibrated: bool,
     pub imu_fresh: bool,
 }
 
 pub const fn validate_prearm_health(health: PreArmHealth) -> Result<(), ArmingAbortReason> {
-    if !health.imu_ready {
+    if health.host_connected {
+        Err(ArmingAbortReason::HostConnected)
+    } else if !health.imu_ready {
         Err(ArmingAbortReason::ImuUnavailable)
     } else if !health.imu_bias_calibrated {
         Err(ArmingAbortReason::ImuBiasUncalibrated)
@@ -947,6 +955,7 @@ mod tests {
     #[test]
     fn prearm_health_requires_ready_calibrated_fresh_imu() {
         let healthy = PreArmHealth {
+            host_connected: false,
             imu_ready: true,
             imu_bias_calibrated: true,
             imu_fresh: true,
@@ -973,6 +982,15 @@ mod tests {
                 ..healthy
             }),
             Err(ArmingAbortReason::ImuStale)
+        );
+        // Plugged into a computer or talking to a configurator: never arms,
+        // whatever else is healthy.
+        assert_eq!(
+            validate_prearm_health(PreArmHealth {
+                host_connected: true,
+                ..healthy
+            }),
+            Err(ArmingAbortReason::HostConnected)
         );
     }
 

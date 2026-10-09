@@ -929,6 +929,11 @@ ferroforge::app! {
             }
         }
 
+        // Arming is refused while a computer has the board configured.
+        USB_HOST_CONNECTED.store(
+            usb_dev.state() == UsbDeviceState::Configured,
+            Ordering::Release,
+        );
         if usb_dev.state() != UsbDeviceState::Configured {
             *cx.local.usb_header_sent = false;
             #[cfg(not(feature = "mspv2_configurator"))]

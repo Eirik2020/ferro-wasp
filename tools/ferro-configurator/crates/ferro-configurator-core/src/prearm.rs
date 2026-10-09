@@ -3,7 +3,8 @@
 //! The firmware decides arming; this module only explains the status line it
 //! already reports. It mirrors the order of `safety::validate_arming_guard`
 //! and `validate_prearm_health` so the first failing row is the reason the
-//! firmware would give. Conditions the status line does not carry (gyro bias
+//! firmware would give. The status line arrives over USB, and the firmware
+//! never arms with USB connected, so the "USB unplugged" row always fails. Conditions the status line does not carry (gyro bias
 //! calibration, ESC idle eRPM qualification) are reported as `Unknown` rather
 //! than guessed, so a fully green list never claims more than was observed.
 
@@ -75,6 +76,15 @@ pub fn prearm_checks(status: &StatusSnapshot) -> Vec<PrearmCheck> {
             "Throttle low",
             Some(status.throttle <= ARMING_MAX_THROTTLE),
             "Move the throttle stick fully down.",
+        ),
+        // The status line only comes over USB, and the firmware refuses to
+        // arm while a computer has the board connected, so this row always
+        // fails here: it says what to do once everything else is green.
+        check(
+            "usb_unplugged",
+            "USB unplugged",
+            Some(false),
+            "The controller never arms while USB is connected to a computer. Unplug it to arm.",
         ),
         check(
             "imu_detected",
@@ -150,6 +160,7 @@ mod tests {
                 "rc_link",
                 "rc_armable",
                 "throttle_low",
+                "usb_unplugged",
                 "imu_detected",
                 "imu_ready",
                 "gyro_calibrated",
@@ -161,9 +172,14 @@ mod tests {
     }
 
     #[test]
-    fn a_ready_controller_fails_nothing() {
+    fn a_ready_controller_fails_only_on_the_usb_cable() {
         let checks = prearm_checks(&ready());
-        assert!(checks.iter().all(|c| c.state != CheckState::Fail));
+        let failing: Vec<_> = checks
+            .iter()
+            .filter(|c| c.state == CheckState::Fail)
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(failing, ["usb_unplugged"]);
     }
 
     #[test]
