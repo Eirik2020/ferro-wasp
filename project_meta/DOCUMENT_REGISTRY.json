@@ -397,11 +397,25 @@
       "context": "exclude"
     },
     {
+      "path": "project_meta/testing/targets/board-bring-up.md",
+      "role": "target-test-procedure",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 12288
+    },
+    {
       "path": "project_meta/testing/targets/foxeer-f405-v2.md",
       "role": "target-test-procedure",
       "lifecycle": "live",
       "context": "targeted",
       "max_bytes": 16384
+    },
+    {
+      "path": "project_meta/testing/targets/tbs-lucid-h7.md",
+      "role": "target-test-procedure",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 6144
     },
     {
       "path": "project_meta/UNIFIED_IO_DMA_HANDOFF.md",

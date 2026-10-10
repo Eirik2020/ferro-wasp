@@ -441,6 +441,243 @@
         "stop-condition observations",
         "post-flight inspection"
       ]
+    },
+    {
+      "id": "BUILD-LUCID-001",
+      "summary": "Build the exact TBS Lucid H7 application and selected feature set.",
+      "target": "tbs-lucid-h7",
+      "tier": "embedded-build",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "firmware/tbs-lucid-h7/",
+          "crates/"
+        ],
+        "features": [],
+        "invocations": [
+          "build",
+          "test"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/tbs-lucid-h7.md",
+        "heading": "Lucid Build and Flash"
+      },
+      "prerequisites": [
+        "SW-COMMON-001"
+      ],
+      "requires_user_execution": false,
+      "stop_conditions": [],
+      "evidence": [
+        "commit or working-tree identity",
+        "exact feature set",
+        "target triple",
+        "image SHA-256",
+        "command and exit status"
+      ]
+    },
+    {
+      "id": "BRINGUP-COMMON-001",
+      "summary": "Verify a new board's clock, IMU identity and orientation, RC decode, arm-high-at-boot refusal, and config persistence without actuator power.",
+      "target": "common",
+      "tier": "bench-unpowered",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "firmware/",
+          "crates/ferrowasp-stm32/",
+          "crates/ferrowasp-stm32f4/",
+          "crates/ferrowasp-stm32h7/",
+          "crates/ferrowasp-stm32-tasks/"
+        ],
+        "features": [
+          "imu_orientation_rtt"
+        ],
+        "invocations": [
+          "bring-up"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/board-bring-up.md",
+        "heading": "Bring-Up Unpowered Board Facts"
+      },
+      "prerequisites": [
+        "BENCH-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "any motor activity or an armed state",
+        "an IMU orientation sign that disagrees with the forward-right-down convention",
+        "exact target, image, or feature set is unknown"
+      ],
+      "evidence": [
+        "commit or working-tree identity, firmware image hash, and exact feature set",
+        "fitted IMU kind",
+        "two status samples giving the measured loop rate",
+        "orientation transcript per fitted IMU kind",
+        "arm-high-at-boot observation",
+        "configuration persistence readback"
+      ]
+    },
+    {
+      "id": "BRINGUP-COMMON-002",
+      "summary": "Run the unpowered fault-injection images on a new board.",
+      "target": "common",
+      "tier": "bench-unpowered",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "firmware/",
+          "crates/ferrowasp-stm32/",
+          "crates/ferrowasp-stm32f4/",
+          "crates/ferrowasp-stm32h7/",
+          "crates/ferrowasp-stm32-tasks/"
+        ],
+        "features": [
+          "bench_prearm_imu_stale",
+          "bench_spi_timeout_recovery"
+        ],
+        "invocations": [
+          "bring-up"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/board-bring-up.md",
+        "heading": "Bring-Up Unpowered Fault Injection"
+      },
+      "prerequisites": [
+        "BRINGUP-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "an arm request is accepted under injected IMU staleness",
+        "the fault-injection warning is missing",
+        "the board does not recover from the injected SPI timeout"
+      ],
+      "evidence": [
+        "each fault image's hash and exact feature set",
+        "RTT transcript per fault image"
+      ]
+    },
+    {
+      "id": "BRINGUP-COMMON-003",
+      "summary": "Verify a new board's motor order, directions, arming, correction signs, disarm, RC loss, and battery voltage with propellers removed.",
+      "target": "common",
+      "tier": "bench-powered-props-off",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "firmware/",
+          "crates/ferrowasp-stm32/",
+          "crates/ferrowasp-stm32f4/",
+          "crates/ferrowasp-stm32h7/",
+          "crates/ferrowasp-stm32-tasks/"
+        ],
+        "features": [],
+        "invocations": [
+          "bring-up"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/board-bring-up.md",
+        "heading": "Bring-Up Powered Props-Off Gate"
+      },
+      "prerequisites": [
+        "BRINGUP-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "propellers are installed",
+        "a motor starts before the armed state",
+        "wrong motor identity, direction, stick sign, or correction sign",
+        "failure to stop on disarm or RC loss, or an automatic rearm",
+        "smoke, heat, rough motor sound, or loss of operator confidence"
+      ],
+      "evidence": [
+        "commit or working-tree identity, firmware image hash, and exact feature set",
+        "power and propeller state",
+        "motor order and direction observations",
+        "stick direction and bound transcript",
+        "arm, disarm, and RC-loss transcript with DShot and eRPM counters",
+        "correction-opposition observations",
+        "metered and reported battery voltage",
+        "recorded-only functional observations and any scope captures"
+      ]
+    },
+    {
+      "id": "BRINGUP-COMMON-004",
+      "summary": "Run the props-off fault-injection images on a new board.",
+      "target": "common",
+      "tier": "bench-powered-props-off",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "firmware/",
+          "crates/ferrowasp-stm32/",
+          "crates/ferrowasp-stm32f4/",
+          "crates/ferrowasp-stm32h7/",
+          "crates/ferrowasp-stm32-tasks/"
+        ],
+        "features": [
+          "bench_dshot_idle_output1_not_running",
+          "bench_motor_cmd_stale_rejection"
+        ],
+        "invocations": [
+          "bring-up"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/board-bring-up.md",
+        "heading": "Bring-Up Powered Fault Injection"
+      },
+      "prerequisites": [
+        "BRINGUP-COMMON-003"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "an armed state with output 1 unqualified",
+        "motor output from a stale command",
+        "any BRINGUP-COMMON-003 stop condition"
+      ],
+      "evidence": [
+        "each fault image's hash and exact feature set",
+        "RTT transcript per fault image"
+      ]
+    },
+    {
+      "id": "BRINGUP-LUCID-001",
+      "summary": "Supply the TBS Lucid H7 facts and board-specific checks for the common bring-up gates.",
+      "target": "tbs-lucid-h7",
+      "tier": "bench-unpowered",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "firmware/tbs-lucid-h7/",
+          "crates/ferrowasp-stm32h7/"
+        ],
+        "features": [],
+        "invocations": [
+          "bring-up"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/tbs-lucid-h7.md",
+        "heading": "Lucid Board-Specific Checks"
+      },
+      "prerequisites": [
+        "BUILD-LUCID-001",
+        "BENCH-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "any stop condition of the common bring-up gate being run",
+        "a fitted IMU that is not a supported kind"
+      ],
+      "evidence": [
+        "fitted IMU kind or kinds",
+        "serial bindings in use",
+        "the common bring-up gates' evidence"
+      ]
     }
   ]
 }

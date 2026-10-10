@@ -45,6 +45,9 @@ candidate.
 ## Target Procedures
 
 - Foxeer F405 V2: `project_meta/testing/targets/foxeer-f405-v2.md`
+- A board under bring-up: `project_meta/testing/targets/board-bring-up.md`,
+  with the board's facts file, such as
+  `project_meta/testing/targets/tbs-lucid-h7.md`.
 - FCU3: obsolete since 2026-09-22; its procedure is archived and its gates
   retired, so it is never selected for a new run.
 

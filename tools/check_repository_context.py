@@ -26,7 +26,7 @@ ALLOWED_CONTEXTS = {"default", "targeted", "exclude"}
 CURRENT_STATE_HEADING = re.compile(r"^## Current State(?:\s|$)", re.MULTILINE)
 MARKDOWN_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 TEST_ID = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){2,}$")
-ALLOWED_TEST_TARGETS = {"common", "fcu3", "foxeer-f405-v2"}
+ALLOWED_TEST_TARGETS = {"common", "fcu3", "foxeer-f405-v2", "tbs-lucid-h7"}
 TEST_TIER_ORDER = {
     "software": 0,
     "embedded-build": 1,
