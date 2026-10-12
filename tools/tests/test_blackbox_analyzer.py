@@ -9,6 +9,7 @@ from tools.blackbox_analyzer import (
     centered_drift_stats,
     flash_log_stats,
     longest_flight_window,
+    measured_control_rate_hz,
     samples_from_flash_bytes,
     select_flight_samples,
     sequence_stats,
@@ -270,6 +271,28 @@ class SequenceStatsTests(unittest.TestCase):
         self.assertIsNotNone(peak)
         assert peak is not None
         self.assertAlmostEqual(peak[0], 12.0, delta=0.3)
+
+
+class ControlRateTests(unittest.TestCase):
+    def test_the_rate_comes_from_the_logs_own_millisecond_timestamps(self) -> None:
+        # Every second record of a 2 kHz loop, stamped to the whole millisecond.
+        samples = [sample(seq, seq, (seq * 500) // 1000 * 1000) for seq in range(0, 8000, 2)]
+
+        self.assertAlmostEqual(measured_control_rate_hz(samples), 2000.0, delta=1.0)
+
+    def test_a_timestamp_wrap_still_measures(self) -> None:
+        start = 0xFFFF_FFFF - 400_000
+        samples = [
+            sample(seq, seq, (start + seq * 2500) & 0xFFFF_FFFF) for seq in range(0, 1000)
+        ]
+
+        self.assertAlmostEqual(measured_control_rate_hz(samples), 400.0, delta=0.5)
+
+    def test_without_a_second_of_timestamps_there_is_no_measurement(self) -> None:
+        self.assertIsNone(measured_control_rate_hz([sample(seq, seq) for seq in range(100)]))
+        self.assertIsNone(
+            measured_control_rate_hz([sample(seq, seq, seq * 500) for seq in range(100)])
+        )
 
 
 if __name__ == "__main__":
