@@ -154,6 +154,12 @@ export class MockApi implements Api {
           "After the link connects the arm switch must be seen off once. Flip it off, then on.",
         ),
         check("throttle_low", "Throttle low", true, "Move the throttle stick fully down."),
+        check(
+          "usb_unplugged",
+          "USB unplugged",
+          false,
+          "The controller never arms while USB is connected to a computer. Unplug it to arm.",
+        ),
         check("imu_detected", "Gyro detected", true, ""),
         check("imu_ready", "Gyro running", true, ""),
         check("gyro_calibrated", "Gyro calibrated", null, "Not reported over USB yet."),

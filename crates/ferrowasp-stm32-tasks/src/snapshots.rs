@@ -36,6 +36,17 @@ pub static ATTITUDE_YAW_DEG10: AtomicI16 = AtomicI16::new(0);
 /// Bit per physical DShot lane currently commanded above zero.
 pub static DSHOT_ACTIVE_LANES: AtomicU8 = AtomicU8::new(0);
 pub static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
+/// A USB host has the board configured, written by the USB task. The
+/// Foxeer has no VBUS sense pin, so a power-only USB supply does not count.
+pub static USB_HOST_CONNECTED: AtomicBool = AtomicBool::new(false);
+/// The configurator link has sent a command within the last couple of
+/// seconds, written by its task.
+pub static CONFIGURATOR_LINK_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// Whether a computer or a configurator is attached, which blocks arming.
+pub fn host_connected() -> bool {
+    USB_HOST_CONNECTED.load(Ordering::Acquire) || CONFIGURATOR_LINK_ACTIVE.load(Ordering::Acquire)
+}
 #[cfg(feature = "imu_orientation_rtt")]
 pub static IMU_ORIENTATION_VERSION: AtomicU32 = AtomicU32::new(0);
 #[cfg(feature = "imu_orientation_rtt")]

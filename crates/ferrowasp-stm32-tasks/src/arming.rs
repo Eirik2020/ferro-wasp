@@ -29,6 +29,9 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         safety::ArmingAbortReason::ImuStale => {
             warn!("Arming aborted: IMU sample is stale")
         }
+        safety::ArmingAbortReason::HostConnected => {
+            warn!("Arming refused: USB or the configurator link is connected; unplug to arm")
+        }
         safety::ArmingAbortReason::EscIdleTelemetryTimeout => {
             warn!("Arming aborted: ESC idle telemetry qualification timed out")
         }
