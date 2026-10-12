@@ -62,6 +62,8 @@ class Board:
     elf: str
     backend: str
     features: tuple[str, ...]
+    # How the app names itself in its IMU bring-up lines.
+    imu_log_prefix: str
     # Warnings a healthy disarmed boot on the bench prints on this board.
     expected_warnings: tuple[str, ...] = ()
     leds: Leds | None = None
@@ -88,6 +90,7 @@ BOARDS = {
         elf="FerroWaspFoxeerF405V2",
         backend="stm32f4",
         features=("board-foxeer-f405-v2",),
+        imu_log_prefix="Foxeer",
     ),
     "tbs-lucid-h7": Board(
         target="tbs-lucid-h7",
@@ -96,6 +99,7 @@ BOARDS = {
         elf="FerroWaspTbsLucidH7",
         backend="stm32h7",
         features=("board-tbs-lucid-h7",),
+        imu_log_prefix="TBS Lucid H7",
         expected_warnings=(
             r"Flight arming inhibited: TBS Lucid H7 IMU orientation, motor order, and ADC "
             r"scale are not bench-verified$",
@@ -169,7 +173,8 @@ class BootEvidence:
         level, text = match.group("level"), match.group("text")
         name = self.board.name
         self.init_ok |= text == f"{name} system init successful"
-        imu = re.match(rf"^{re.escape(name)} (MPU-6000|ICM42688-P|MPU6500) ready", text)
+        prefix = re.escape(self.board.imu_log_prefix)
+        imu = re.match(rf"^{prefix} (MPU-6000|ICM42688-P|MPU6500) ready", text)
         if imu:
             self.imu = imu.group(1)
         self.heartbeat |= text == "Running heartbeat!"

@@ -81,6 +81,24 @@ class BootJudgementTests(unittest.TestCase):
         self.assertEqual(judge(fresh, from_reset=False), [])
         self.assertTrue(any("not a fresh boot" in problem for problem in judge(stale, from_reset=False)))
 
+    def test_a_healthy_foxeer_boot_passes_and_probe_noise_is_ignored(self) -> None:
+        evidence = BootEvidence(BOARDS["foxeer-f405-v2"])
+        for line in [
+            "DRONE: [INFO ] Foxeer F405 V2 system init successful",
+            "DRONE: [INFO ] Foxeer ICM42688-P ready; WHO_AM_I 71",
+            "DRONE: [WARN ] IMU stale in control loop: seq 0, stale ticks 2",
+            "DRONE: [INFO ] Running heartbeat!",
+            "DRONE: [WARN ] Foxeer ESC telemetry stopped after actuator acknowledgement timeout "
+            "for physical output 2 (logical M2), request 0; retrying while disarmed",
+            "DRONE:  WARN probe_rs::probe::stlink: send_jtag_command 242 failed: SwdDpError",
+            *(f"DRONE: {dshot(1999 + 2000 * index)}" for index in range(5)),
+        ]:
+            evidence.observe(line)
+
+        self.assertEqual(evidence.imu, "ICM42688-P")
+        self.assertEqual(evidence.failures(minimum_reports=5, from_reset=True), [])
+        self.assertIn("driver-icm42688p", run_components(BOARDS["foxeer-f405-v2"], evidence.imu))
+
     def test_terminal_embed_prefixed_lines_are_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "boot.log"
