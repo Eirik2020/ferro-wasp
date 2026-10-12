@@ -13,6 +13,8 @@ pub static IMU_LATEST_ROLL_RAW: AtomicI32 = AtomicI32::new(0);
 pub static IMU_LATEST_PITCH_RAW: AtomicI32 = AtomicI32::new(0);
 pub static IMU_LATEST_YAW_RAW: AtomicI32 = AtomicI32::new(0);
 pub static IMU_STALE: AtomicBool = AtomicBool::new(true);
+/// Isolated stale control ticks the loop has ridden through since boot.
+pub static IMU_TOLERATED_STALE_TICKS: AtomicU32 = AtomicU32::new(0);
 pub static CONTROL_ISR_SEQ: AtomicU32 = AtomicU32::new(0);
 pub static CONTROL_RATE_SEQ: AtomicU32 = AtomicU32::new(0);
 pub static CONTROL_ROLL_RAW: AtomicI32 = AtomicI32::new(0);

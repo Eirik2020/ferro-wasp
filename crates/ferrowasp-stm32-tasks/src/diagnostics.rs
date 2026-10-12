@@ -4,7 +4,8 @@
 use crate::prelude::*;
 use crate::snapshots::*;
 
-/// Publish the USB RC-link status for the USB task and wake it, then log
+/// Publish the USB RC-link status for the USB task and wake it, report the
+/// isolated stale IMU ticks the control loop tolerated, then log
 /// storage health - and, with `imu_transport_rtt` or `imu_orientation_rtt`,
 /// IMU transport and orientation - every two seconds.
 ///
@@ -15,6 +16,7 @@ use crate::snapshots::*;
         usb_rc_link_reader: signals::RcLinkReader,
         previous_drdy_count: u32 = 0,
         previous_drdy_rejected: u32 = 0,
+        previous_tolerated_stale_ticks: u32 = 0,
     ],
     config = [
         physical_imu_to_drone_rotation: dt::FrameRotation,
@@ -32,6 +34,16 @@ pub async fn heartbeat(cx: heartbeat::Context) {
         USB_RC_ARMABLE_SNAPSHOT.store(rc_link.armable, Ordering::Relaxed);
         USB_DEBUG_DUE.store(true, Ordering::Release);
         cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+
+        let tolerated_stale_ticks = IMU_TOLERATED_STALE_TICKS.load(Ordering::Relaxed);
+        if tolerated_stale_ticks != *cx.local.previous_tolerated_stale_ticks {
+            info!(
+                "IMU: {} isolated stale ticks tolerated in 2 s, {} since boot",
+                tolerated_stale_ticks.wrapping_sub(*cx.local.previous_tolerated_stale_ticks),
+                tolerated_stale_ticks
+            );
+            *cx.local.previous_tolerated_stale_ticks = tolerated_stale_ticks;
+        }
 
         #[cfg(feature = "imu_transport_rtt")]
         info!(

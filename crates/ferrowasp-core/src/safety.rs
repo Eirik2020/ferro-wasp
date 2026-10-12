@@ -28,6 +28,20 @@ pub const PWM_CAL_MOTOR: usize = 1;
 pub const MOTOR_CMD_QUEUE_CAP: usize = 4;
 pub const MOTOR_CMD_MAX_AGE_MS: u32 = 20;
 
+/// Consecutive control ticks that may find no new IMU sample before the IMU
+/// counts as stale. The IMU's own sample clock and the loop timer differ by a
+/// fraction of a percent, so isolated ticks find no new sample: on the TBS
+/// Lucid H7's MPU-6000, about 5% of ticks, never two in a row. A tolerated
+/// tick skips the control update and the motors hold the previous command,
+/// well inside `MOTOR_CMD_MAX_AGE_MS`. A second stale tick in a row disarms,
+/// and blocks arming, as any stale tick did before.
+pub const IMU_STALE_TICKS_TOLERATED: u32 = 1;
+
+/// Whether this many consecutive stale ticks exceed the tolerance.
+pub const fn imu_stale_beyond_tolerance(consecutive_stale_ticks: u32) -> bool {
+    consecutive_stale_ticks > IMU_STALE_TICKS_TOLERATED
+}
+
 /// How long one bench motor request keeps a motor at idle.
 ///
 /// The configurator renews it about every 100 ms while its button is held,
@@ -950,6 +964,14 @@ mod tests {
             validate_arming_guard(true, true, true, ARMING_MAX_THROTTLE + 1),
             Err(ArmingAbortReason::ThrottleHigh)
         );
+    }
+
+    #[test]
+    fn one_stale_tick_is_tolerated_and_two_in_a_row_are_not() {
+        assert!(!imu_stale_beyond_tolerance(0));
+        assert!(!imu_stale_beyond_tolerance(1));
+        assert!(imu_stale_beyond_tolerance(2));
+        assert!(imu_stale_beyond_tolerance(u32::MAX));
     }
 
     #[test]

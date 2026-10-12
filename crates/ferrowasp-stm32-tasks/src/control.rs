@@ -167,7 +167,15 @@ pub fn control_loop(mut cx: control_loop::Context) {
         let imu_fresh = imu::classify_sample_freshness(*cx.local.imu_last_sequence, imu_sequence)
             == imu::SampleFreshness::Fresh;
         *cx.local.imu_last_sequence = imu_sequence;
-        IMU_STALE.store(!imu_fresh, Ordering::Release);
+        *cx.local.imu_stale_ticks = if imu_fresh {
+            0
+        } else {
+            cx.local.imu_stale_ticks.saturating_add(1)
+        };
+        // Stale for pre-arm, the OSD and USB status means stale beyond the
+        // tolerance, the same rule that disarms below.
+        let imu_stale = safety::imu_stale_beyond_tolerance(*cx.local.imu_stale_ticks);
+        IMU_STALE.store(imu_stale, Ordering::Release);
 
         let control_armed = cx.local.control_safety_arm_reader.read();
         let gyro_bias_update = cx.local.gyro_bias_calibrator.update_if_fresh(
@@ -296,12 +304,20 @@ pub fn control_loop(mut cx: control_loop::Context) {
         );
 
         if !imu_fresh {
-            *cx.local.imu_stale_ticks = cx.local.imu_stale_ticks.saturating_add(1);
+            // A tolerated tick skips this update; the motors hold the
+            // previous command.
+            if !imu_stale {
+                IMU_TOLERATED_STALE_TICKS.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
 
-            if *cx.local.imu_stale_ticks == 1 || (*cx.local.imu_stale_ticks).is_multiple_of(100) {
+            let stale_ticks = *cx.local.imu_stale_ticks;
+            if stale_ticks == safety::IMU_STALE_TICKS_TOLERATED + 1
+                || stale_ticks.is_multiple_of(100)
+            {
                 warn!(
                     "IMU stale in control loop: seq {}, stale ticks {}",
-                    imu_sequence, *cx.local.imu_stale_ticks
+                    imu_sequence, stale_ticks
                 );
             }
 
@@ -312,8 +328,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
             return;
         }
-
-        *cx.local.imu_stale_ticks = 0;
 
         let now_us = Mono::now().duration_since_epoch().to_micros();
         let rc_link = cx.local.control_rc_link_reader.status(now_us);

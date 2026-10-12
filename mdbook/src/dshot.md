@@ -1014,7 +1014,8 @@ measure physical stop latency.
 - continued cold-start, temperature-margin, and controlled flight evidence;
 - a retained BB2 flight capture for quantitative rate tracking and saturation;
 - making IMU initialization, calibration, and freshness an explicit pre-arm
-  prerequisite; the present first post-arm stale-IMU check disarms instead;
+  prerequisite; the present post-arm stale-IMU check disarms instead, after
+  two consecutive stale ticks;
 - bidirectional DShot telemetry;
 - DShot special-command policy;
 - a reviewed pitch-authority tuning progression.
