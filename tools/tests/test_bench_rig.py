@@ -99,6 +99,12 @@ class BootJudgementTests(unittest.TestCase):
         self.assertEqual(evidence.failures(minimum_reports=5, from_reset=True), [])
         self.assertIn("driver-icm42688p", run_components(BOARDS["foxeer-f405-v2"], evidence.imu))
 
+    def test_log_lines_without_the_old_board_prefix_are_read(self) -> None:
+        lines = [
+            line.replace("Foxeer ", "") for line in HEALTHY_RESET
+        ]
+        self.assertEqual(judge(lines), [])
+
     def test_terminal_embed_prefixed_lines_are_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "boot.log"

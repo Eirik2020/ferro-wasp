@@ -78,7 +78,8 @@ class Board:
 # ESC has power.
 COMMON_EXPECTED_WARNINGS = (
     r"IMU stale in control loop: seq 0, stale ticks \d+$",
-    r"Foxeer ESC telemetry stopped after (actuator acknowledgement|response) timeout for "
+    # Firmware before the shared log lines dropped the board name said "Foxeer".
+    r"(Foxeer )?ESC telemetry stopped after (actuator acknowledgement|response) timeout for "
     r"physical output \d \(logical M\d\), request \d+; retrying while disarmed$",
 )
 

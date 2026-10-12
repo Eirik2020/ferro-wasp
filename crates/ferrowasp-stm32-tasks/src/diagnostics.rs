@@ -105,7 +105,7 @@ pub async fn heartbeat(cx: heartbeat::Context) {
             *cx.local.previous_drdy_rejected = drdy_rejected;
         }
         info!(
-            "SPI2 flash ready {}, JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes",
+            "Storage ready {}, JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes",
             FLASH_READY.load(Ordering::Relaxed),
             FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
             FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
@@ -113,7 +113,7 @@ pub async fn heartbeat(cx: heartbeat::Context) {
             FLASH_CAPACITY_BYTES.load(Ordering::Relaxed)
         );
         info!(
-            "SPI2 blackbox pages {}, dropped records {}, write faults {}, divisor {}",
+            "Blackbox pages {}, dropped records {}, write faults {}, divisor {}",
             FLASH_PAGES_WRITTEN.load(Ordering::Relaxed),
             FLASH_RECORDS_DROPPED.load(Ordering::Relaxed),
             FLASH_WRITE_FAULTS.load(Ordering::Relaxed),

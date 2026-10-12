@@ -145,7 +145,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 arm_permit.revoke();
                 system_arm.arm();
                 if CONFIG::BENCH_ACTUATOR_VALIDATION_ENABLED {
-                    warn!("SYSTEM ARMED FOR CAPPED FOXEER ACTUATOR VALIDATION");
+                    warn!("SYSTEM ARMED FOR CAPPED ACTUATOR VALIDATION");
                 } else {
                     info!("SYSTEM ARMED");
                 }

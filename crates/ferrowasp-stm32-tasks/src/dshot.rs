@@ -12,10 +12,7 @@ pub fn service_dshot_dma_irq(
 ) {
     let event = bank.lock(|dshot| dshot.on_dma_interrupt(motor));
     if event == dshot::DshotInterruptEvent::Spurious {
-        warn!(
-            "Foxeer DShot received spurious DMA2 Stream{} interrupt",
-            stream
-        );
+        warn!("DShot received spurious DMA2 Stream{} interrupt", stream);
     }
 }
 
@@ -120,10 +117,10 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
                     started_at_ms: now_ms,
                 };
                 if cx.local.esc_ack_producer.enqueue(ack).is_err() {
-                    warn!("Foxeer ESC actuator acknowledgement queue full");
+                    warn!("ESC actuator acknowledgement queue full");
                 }
             } else {
-                warn!("Foxeer ESC telemetry acknowledgement output mismatch");
+                warn!("ESC telemetry acknowledgement output mismatch");
             }
             *cx.local.esc_actuator_request = None;
             *cx.local.esc_actuator_request_submitted = false;
@@ -131,11 +128,11 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
 
         match event {
             dshot::DshotServiceEvent::LeaseExpired => {
-                warn!("Foxeer DShot command lease expired; stop frames selected");
+                warn!("DShot command lease expired; stop frames selected");
                 *cx.local.disarm_pending = true;
             }
             dshot::DshotServiceEvent::Faulted if !*cx.local.fault_reported => {
-                warn!("Foxeer DShot bank faulted; all outputs forced low");
+                warn!("DShot bank faulted; all outputs forced low");
                 *cx.local.fault_reported = true;
                 *cx.local.disarm_pending = true;
             }
@@ -159,7 +156,7 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
                 .dshot_motors
                 .lock(|dshot| (dshot.requested_values(), dshot.stats()));
             info!(
-                "Foxeer DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
+                "DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
                 requested[0],
                 requested[1],
                 requested[2],

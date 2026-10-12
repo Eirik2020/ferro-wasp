@@ -67,13 +67,13 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
         {
             match timeout {
                 esc::EscManagerTimeout::ActuatorAck(request) => warn!(
-                    "Foxeer ESC telemetry stopped after actuator acknowledgement timeout for physical output {} (logical M{}), request {}; retrying while disarmed",
+                    "ESC telemetry stopped after actuator acknowledgement timeout for physical output {} (logical M{}), request {}; retrying while disarmed",
                     request.output.index() + 1,
                     CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[request.output.index()],
                     request.sequence
                 ),
                 esc::EscManagerTimeout::TelemetryResponse(request) => warn!(
-                    "Foxeer ESC telemetry stopped after response timeout for physical output {} (logical M{}), request {}; retrying while disarmed",
+                    "ESC telemetry stopped after response timeout for physical output {} (logical M{}), request {}; retrying while disarmed",
                     request.output.index() + 1,
                     CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[request.output.index()],
                     request.sequence
@@ -85,7 +85,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
             .try_recover(now_ms, SAFETY_ARMED.load(Ordering::Acquire));
         if let Some(retries) = cx.local.esc_manager_state.take_back_after_retries() {
             info!(
-                "Foxeer ESC telemetry back after {} retries; old samples were dropped",
+                "ESC telemetry back after {} retries; old samples were dropped",
                 retries
             );
         }
@@ -107,7 +107,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
             for (index, observation) in cx.local.esc_manager_state.samples().iter().enumerate() {
                 if let Some(observation) = observation {
                     info!(
-                        "Foxeer physical ESC output {} (logical M{}) telemetry: {}.{}V {}.{}A {}mAh {}00eRPM {}C",
+                        "Physical ESC output {} (logical M{}) telemetry: {}.{}V {}.{}A {}mAh {}00eRPM {}C",
                         index + 1,
                         CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[index],
                         observation.sample.voltage_cv / 100,
@@ -121,7 +121,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
                 }
             }
             info!(
-                "Foxeer ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, recoveries {}, mismatched acks {}, unsolicited {}, valid {}, CRC failures {}, discarded {}",
+                "ESC telemetry manager: queued/started {}/{}, faulted {}, ack timeouts {}, response timeouts {}, recoveries {}, mismatched acks {}, unsolicited {}, valid {}, CRC failures {}, discarded {}",
                 stats.requests_queued,
                 stats.requests_started,
                 cx.local.esc_manager_state.is_faulted(),
