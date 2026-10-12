@@ -2,6 +2,7 @@
   "schema_version": 1,
   "description": "Testable components. A file belongs to the component with the longest matching path; every tracked non-Markdown file under the source roots must belong to one. tools/components.py derives each component's content ID.",
   "source_roots": ["crates", "firmware", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"],
+  "hardware_targets": ["foxeer-f405-v2", "tbs-lucid-h7"],
   "components": [
     {"id": "workspace", "paths": ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]},
     {"id": "app-foxeer-f405-v2", "paths": ["firmware/foxeer-f405-v2"]},

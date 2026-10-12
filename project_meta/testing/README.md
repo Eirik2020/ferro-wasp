@@ -47,8 +47,8 @@ does not establish flight readiness.
 When software changes:
 
 1. identify affected paths, boards, features, protocols, and safety behavior;
-   `python tools/components.py status` lists the components that changed
-   since their last pass and the tests that proved them;
+   `python tools/components.py due` lists, per board, the tests whose
+   components changed since their last pass;
 2. select matching catalog entries by target, tier, path trigger, and feature;
 3. run applicable software/build tests;
 4. add or update a test definition when the behavior, risk, or required

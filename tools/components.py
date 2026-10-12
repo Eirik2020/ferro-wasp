@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Content IDs for FerroWasp's testable components, and which ones a passing
-run record still proves.
+"""Content IDs for FerroWasp's testable components, which ones a passing run
+record still proves, and which catalog tests are due on which board.
 
 A component's content ID is the SHA-256 of its files' SHA-256s and paths, read
 from the working tree, so an uncommitted change is a different ID. Markdown is
@@ -32,11 +32,12 @@ def validate_component_registry(data: Any, label: str) -> list[str]:
     if data.get("schema_version") != 1:
         errors.append(f"{label} schema_version must be 1")
 
-    roots = data.get("source_roots")
-    if not isinstance(roots, list) or not roots or not all(
-        isinstance(item, str) and item for item in roots
-    ):
-        errors.append(f"{label}.source_roots must be a non-empty string list")
+    for field in ("source_roots", "hardware_targets"):
+        values = data.get(field)
+        if not isinstance(values, list) or not values or not all(
+            isinstance(item, str) and item for item in values
+        ):
+            errors.append(f"{label}.{field} must be a non-empty string list")
 
     components = data.get("components")
     if not isinstance(components, list) or not components:
@@ -150,20 +151,88 @@ def coverage_errors(root: Path, data: dict[str, Any]) -> list[str]:
     return errors
 
 
-def _passing_records(records_root: Path) -> list[dict[str, Any]]:
+def _records(records_root: Path, *, with_components: bool) -> list[dict[str, Any]]:
+    """Passing records, oldest first; only schema 2 ones if `with_components`."""
+
     records = []
     for path in sorted(records_root.rglob("*.json")):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if (
-            isinstance(record, dict)
-            and record.get("result") == "pass"
-            and isinstance(record.get("components"), list)
-        ):
-            records.append(record)
+        if not isinstance(record, dict) or record.get("result") != "pass":
+            continue
+        if with_components and not isinstance(record.get("components"), list):
+            continue
+        records.append(record)
     return sorted(records, key=lambda record: str(record.get("completed_at_utc")))
+
+
+def _passing_records(records_root: Path) -> list[dict[str, Any]]:
+    return _records(records_root, with_components=True)
+
+
+TIER_ORDER = [
+    "software",
+    "embedded-build",
+    "bench-unpowered",
+    "bench-powered-props-off",
+    "preflight",
+    "flight",
+]
+HARDWARE_TIERS = set(TIER_ORDER[2:])
+
+
+def due_tests(
+    catalog: dict[str, Any],
+    hardware_targets: list[str],
+    current: dict[str, str],
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """One row per active catalog test and target it runs on.
+
+    A common hardware test runs on every hardware target; a common software
+    or build test runs once, as `common`. A row is `current` when the last
+    pass with component evidence still matches every component it named,
+    `due` when one of them changed, and `never` when no pass names components.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for entry in catalog.get("tests", []):
+        if not isinstance(entry, dict) or entry.get("status") != "active":
+            continue
+        test_id, tier, target = entry.get("id"), entry.get("tier"), entry.get("target")
+        if target == "common" and tier in HARDWARE_TIERS:
+            targets = hardware_targets
+        else:
+            targets = [target]
+        for run_target in targets:
+            passes = [
+                record
+                for record in records
+                if record.get("test_id") == test_id
+                and record.get("target") == run_target
+                and isinstance(record.get("components"), list)
+            ]
+            row = {"test_id": test_id, "tier": tier, "target": run_target}
+            if not passes:
+                row.update(state="never", run_id=None, changed=[])
+            else:
+                last = passes[-1]
+                changed = [
+                    entry["id"]
+                    for entry in last["components"]
+                    if isinstance(entry, dict)
+                    and current.get(entry.get("id")) != entry.get("content_sha256")
+                ]
+                row.update(
+                    state="due" if changed else "current",
+                    run_id=last.get("run_id"),
+                    changed=changed,
+                )
+            rows.append(row)
+    rank = {tier: index for index, tier in enumerate(TIER_ORDER)}
+    return sorted(rows, key=lambda row: (row["target"], rank.get(row["tier"], len(rank))))
 
 
 def component_status(
@@ -190,14 +259,15 @@ def component_status(
     return status
 
 
-def _load(root: Path) -> tuple[dict[str, Any], Path]:
+def _load(root: Path) -> tuple[dict[str, Any], Path, dict[str, Any]]:
     registry = json.loads(root.joinpath(*REGISTRY_PATH.parts).read_text(encoding="utf-8"))
     policy = registry["test_evidence"]
     data = json.loads((root / policy["components"]).read_text(encoding="utf-8"))
     errors = validate_component_registry(data, policy["components"])
     if errors:
         raise ValueError("; ".join(errors))
-    return data, root / policy["records_root"]
+    catalog = json.loads((root / registry["test_catalog"]).read_text(encoding="utf-8"))
+    return data, root / policy["records_root"], catalog
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -219,10 +289,19 @@ def main(argv: list[str] | None = None) -> int:
         help="print the 'components' entry for a run record",
     )
     record.add_argument("component", nargs="+")
+    due = commands.add_parser(
+        "due",
+        help="list catalog tests by board: current, due, or never passed with components",
+    )
+    due.add_argument(
+        "--fail-if-due",
+        action="store_true",
+        help="exit 2 when any test is due or has never passed with components",
+    )
     args = parser.parse_args(argv)
 
     try:
-        data, records_root = _load(args.root)
+        data, records_root, catalog = _load(args.root)
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as error:
         print(f"cannot load the component registry: {error}", file=sys.stderr)
         return 1
@@ -246,6 +325,31 @@ def main(argv: list[str] | None = None) -> int:
         ]
         print(json.dumps(entries, indent=2))
         return 0
+
+    if args.command == "due":
+        rows = due_tests(catalog, data["hardware_targets"], current, _passing_records(records_root))
+        legacy = {
+            (record.get("test_id"), record.get("target"))
+            for record in _records(records_root, with_components=False)
+            if not isinstance(record.get("components"), list)
+        }
+        target = None
+        for row in rows:
+            if row["target"] != target:
+                target = row["target"]
+                print(target)
+            if row["state"] == "current":
+                detail = row["run_id"]
+            elif row["state"] == "due":
+                detail = f"changed {', '.join(row['changed'])} since {row['run_id']}"
+            elif (row["test_id"], row["target"]) in legacy:
+                detail = "only schema 1 passes, which name no components"
+            else:
+                detail = "no pass yet"
+            print(f"  {row['state']:<8} {row['test_id']:<20} {row['tier']:<24} {detail}")
+        outstanding = sum(row["state"] != "current" for row in rows)
+        print(f"{outstanding} of {len(rows)} test runs are due or have no component evidence")
+        return 2 if args.fail_if_due and outstanding else 0
 
     status = component_status(current, _passing_records(records_root))
     unproven = 0

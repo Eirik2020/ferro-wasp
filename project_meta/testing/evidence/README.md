@@ -65,13 +65,17 @@ List only components the run actually exercised: a boot test on one board
 proves its IMU driver, not a driver it never loads.
 
 ```text
+python tools/components.py due
 python tools/components.py record app-tbs-lucid-h7 driver-mpu6000
 python tools/components.py status
 ```
 
-`record` prints the `components` entry for a new record; `status` lists the
-components no passing record proves at their current content, with the tests
-that proved an earlier content. Records before schema 2 name no components
+`due` lists every active catalog test on every board it runs on: `current`
+when its last pass still matches the components it named, `due` with the
+changed components, or `never`. A common hardware test runs on each
+`hardware_targets` board in `../COMPONENTS.json`; a common software test runs
+once. `record` prints the `components` entry for a new record; `status` lists
+the components no passing record proves at their current content. Records before schema 2 name no components
 and prove none.
 
 ## Artifact Rules

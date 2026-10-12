@@ -4,6 +4,9 @@
   "source_roots": [
     "src"
   ],
+  "hardware_targets": [
+    "fixture-board"
+  ],
   "components": [
     {
       "id": "alpha",
