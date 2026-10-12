@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "run_id": "YYYYMMDDTHHMMSSZ__TEST-ID__target__01",
   "test_id": "TEST-ID",
   "started_at_utc": "YYYY-MM-DDTHH:MM:SSZ",
@@ -25,6 +25,12 @@
     "target_triple": null,
     "configuration": {}
   },
+  "components": [
+    {
+      "id": "component-id",
+      "content_sha256": ""
+    }
+  ],
   "conditions": {
     "propellers": "not-applicable",
     "actuator_power": "not-applicable",

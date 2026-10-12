@@ -39,18 +39,18 @@ Stop immediately on:
 - uncertainty about the exact target or feature set.
 
 Retain the board identity, firmware image hash, exact feature set, power and
-propeller state, and boot/idle log. A result applies only to the recorded
-candidate.
+propeller state, boot/idle log, and the components exercised: the board's
+app and the drivers it loaded.
 
 ## Target Procedures
 
 - Foxeer F405 V2: `project_meta/testing/targets/foxeer-f405-v2.md`
+- TBS Lucid H7: this common gate only; the board cannot arm yet.
 - FCU3: obsolete since 2026-09-22; its procedure is archived and its gates
   retired, so it is never selected for a new run.
 
 Start with the catalog so prerequisites and validation tiers remain ordered.
-Do not substitute historical evidence for rerunning the selected gate on a new
-candidate.
+A pass stands until one of its components changes; then rerun the gate.
 
 ## Historical Evidence
 

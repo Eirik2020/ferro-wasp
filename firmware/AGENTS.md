@@ -99,5 +99,5 @@ a rationale, review, and verification note; silent drift is a defect.
 - For motor-capable images, record the commit/working tree, exact features,
   artifact hash, propeller state, actuator-power state, and applicable target
   evidence.
-- Never claim a bench or flight gate passed from historical evidence or a
-  successful build alone.
+- Never claim a gate passed from a build, or from a record whose
+  components have changed since.

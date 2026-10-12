@@ -13,25 +13,31 @@ class TestEvidenceTests(unittest.TestCase):
         records_root: str,
         *,
         max_record_bytes: int = 8192,
+        components: str | None = None,
     ) -> dict:
-        return {
+        policy = {
             "records_root": records_root,
             "template": "RUN_RECORD_TEMPLATE.json",
             "max_record_bytes": max_record_bytes,
             "artifact_roots": ["logs"],
         }
+        if components is not None:
+            policy["components"] = components
+        return policy
 
     def _validate(
         self,
         records_root: str,
         *,
         max_record_bytes: int = 8192,
+        components: str | None = None,
     ) -> list[str]:
         return validate_evidence_records(
             FIXTURE_ROOT,
             self._policy(
                 records_root,
                 max_record_bytes=max_record_bytes,
+                components=components,
             ),
             "TEST_CATALOG.json",
         )
@@ -94,6 +100,33 @@ class TestEvidenceTests(unittest.TestCase):
         self.assertTrue(any("exceeds evidence budget 256" in e for e in record_errors))
         self.assertTrue(
             any("max_record_bytes must not exceed 8192" in e for e in policy_errors)
+        )
+
+    def test_accepts_schema_2_record_naming_known_components(self) -> None:
+        self.assertEqual(
+            self._validate("records/valid_components", components="COMPONENTS.json"),
+            [],
+        )
+
+    def test_rejects_unknown_repeated_empty_and_missing_components(self) -> None:
+        errors = self._validate(
+            "records/invalid_components",
+            components="COMPONENTS.json",
+        )
+
+        self.assertTrue(any("unknown component gamma" in e for e in errors))
+        self.assertTrue(any("component alpha is listed twice" in e for e in errors))
+        self.assertTrue(any("components must be a non-empty list" in e for e in errors))
+        self.assertTrue(any("missing fields: components" in e for e in errors))
+
+    def test_reports_a_source_file_no_component_owns(self) -> None:
+        errors = self._validate(
+            "records/valid_components",
+            components="COMPONENTS_UNCOVERED.json",
+        )
+
+        self.assertTrue(
+            any("belongs to no component: src/beta.rs.fixture" in e for e in errors)
         )
 
 

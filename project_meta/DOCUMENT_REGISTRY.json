@@ -7,7 +7,8 @@
     "max_record_bytes": 8192,
     "artifact_roots": [
       "logs"
-    ]
+    ],
+    "components": "project_meta/testing/COMPONENTS.json"
   },
   "immutable_archives": [
     {
@@ -518,6 +519,10 @@
     {
       "path": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
       "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/testing/COMPONENTS.json",
+      "max_bytes": 8192
     }
   ]
 }

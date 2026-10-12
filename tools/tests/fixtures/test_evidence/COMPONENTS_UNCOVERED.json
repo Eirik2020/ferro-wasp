@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "description": "Fixture components that leave beta unowned.",
+  "source_roots": [
+    "src"
+  ],
+  "components": [
+    {
+      "id": "alpha",
+      "paths": [
+        "src/alpha.rs.fixture"
+      ]
+    }
+  ]
+}

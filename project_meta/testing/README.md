@@ -13,12 +13,13 @@ Keep these separate:
 
 ```text
 Test definition = what must be tested and what evidence is required
-Test-run evidence = what was tested, on which image, when, and with what result
+Test-run evidence = what was tested, on which components, when, and with what result
 ```
 
-A prior pass does not remove a test requirement. Dated results, image hashes,
-logs, measurements, and operator observations belong in the evidence system
-or a historical handoff, not in the catalog.
+A pass carries forward while the components it names are unchanged, on any
+board; `evidence/README.md` defines components and their content IDs. Dated
+results, image hashes, logs, measurements, and operator observations belong
+in the evidence system or a historical handoff, not in the catalog.
 
 Use `EVIDENCE_INDEX.md` to locate retained historical test evidence. Do not
 load an immutable baseline unless a specific provenance question requires it.
@@ -46,6 +47,8 @@ does not establish flight readiness.
 When software changes:
 
 1. identify affected paths, boards, features, protocols, and safety behavior;
+   `python tools/components.py status` lists the components that changed
+   since their last pass and the tests that proved them;
 2. select matching catalog entries by target, tier, path trigger, and feature;
 3. run applicable software/build tests;
 4. add or update a test definition when the behavior, risk, or required
@@ -70,7 +73,7 @@ hardware, powered-actuator, and flight procedures.
 ## Recording Results
 
 For new runs, use `evidence/README.md` and create one bounded JSON record under
-`evidence/runs/YYYY/MM/`. Keep raw artifacts under ignored `logs/` paths and
+`evidence/runs/YYYY/MM/`, naming the components the run exercised. Keep raw artifacts under ignored `logs/` paths and
 reference only their path, size, and SHA-256.
 
 Do not append results to procedures, the catalog, current-work handoffs, or one

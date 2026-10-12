@@ -13,6 +13,15 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+if __package__:
+    from .components import (
+        component_ids,
+        coverage_errors,
+        validate_component_registry,
+    )
+else:
+    from components import component_ids, coverage_errors, validate_component_registry
+
 
 REGISTRY_PATH = PurePosixPath("project_meta/DOCUMENT_REGISTRY.json")
 MAX_ALLOWED_RECORD_BYTES = 8192
@@ -25,17 +34,23 @@ UTC_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 RUN_ID = re.compile(
     r"^(?P<stamp>\d{8}T\d{6}Z)__"
     r"(?P<test>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){2,})__"
-    r"(?P<target>common|fcu3|foxeer-f405-v2)__"
+    r"(?P<target>common|fcu3|foxeer-f405-v2|tbs-lucid-h7)__"
     r"(?P<sequence>\d{2})$"
 )
 ARTIFACT_ID = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 
-ALLOWED_POLICY_FIELDS = {
+REQUIRED_POLICY_FIELDS = {
     "artifact_roots",
     "max_record_bytes",
     "records_root",
     "template",
 }
+OPTIONAL_POLICY_FIELDS = {"components"}
+# Schema 1 records predate component evidence; schema 2 names the components
+# a run exercised and their content IDs.
+CURRENT_SCHEMA_VERSION = 2
+ALLOWED_SCHEMA_VERSIONS = {1, CURRENT_SCHEMA_VERSION}
+REQUIRED_COMPONENT_ENTRY_FIELDS = {"content_sha256", "id"}
 REQUIRED_RECORD_FIELDS = {
     "artifacts",
     "candidate",
@@ -80,7 +95,7 @@ REQUIRED_CONDITION_FIELDS = {
 REQUIRED_COMMAND_FIELDS = {"command", "exit_code"}
 REQUIRED_ARTIFACT_FIELDS = {"bytes", "id", "kind", "path", "sha256"}
 
-ALLOWED_TARGETS = {"common", "fcu3", "foxeer-f405-v2"}
+ALLOWED_TARGETS = {"common", "fcu3", "foxeer-f405-v2", "tbs-lucid-h7"}
 ALLOWED_TIERS = {
     "software",
     "embedded-build",
@@ -312,12 +327,14 @@ def _validate_template(path: Path, errors: list[str]) -> None:
         return
     record = _check_fields(
         template,
-        REQUIRED_RECORD_FIELDS,
+        REQUIRED_RECORD_FIELDS | {"components"},
         f"{path.as_posix()} template",
         errors,
     )
-    if record is not None and record.get("schema_version") != 1:
-        errors.append(f"{path.as_posix()} template schema_version must be 1")
+    if record is not None and record.get("schema_version") != CURRENT_SCHEMA_VERSION:
+        errors.append(
+            f"{path.as_posix()} template schema_version must be {CURRENT_SCHEMA_VERSION}"
+        )
 
 
 def _load_catalog(
@@ -340,6 +357,34 @@ def _load_catalog(
         if isinstance(entry, dict) and isinstance(entry.get("id"), str):
             definitions[entry["id"]] = entry
     return definitions
+
+
+def _load_components(
+    root: Path,
+    raw_path: Any,
+    errors: list[str],
+) -> set[str] | None:
+    """Load and check the component registry, if the policy names one."""
+
+    if raw_path is None:
+        return None
+    if not isinstance(raw_path, str):
+        errors.append("test_evidence.components must be a string")
+        return None
+    path, path_error = _repository_path(root, raw_path)
+    if path_error:
+        errors.append(f"test_evidence.components: {path_error}")
+        return None
+    assert path is not None
+    data = _load_json(path, raw_path, errors)
+    if data is None:
+        return None
+    registry_errors = validate_component_registry(data, raw_path)
+    if registry_errors:
+        errors.extend(registry_errors)
+        return None
+    errors.extend(coverage_errors(root, data))
+    return component_ids(data)
 
 
 def _validate_definition(
@@ -566,6 +611,38 @@ def _validate_artifacts(
                     )
 
 
+def _validate_components(
+    value: Any,
+    known: set[str] | None,
+    label: str,
+    errors: list[str],
+) -> None:
+    if not isinstance(value, list) or not value:
+        errors.append(f"{label} must be a non-empty list")
+        return
+    if len(value) > MAX_LIST_ITEMS:
+        errors.append(f"{label} exceeds {MAX_LIST_ITEMS} items")
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        entry = _check_fields(
+            item,
+            REQUIRED_COMPONENT_ENTRY_FIELDS,
+            f"{label}[{index}]",
+            errors,
+        )
+        if entry is None:
+            continue
+        component = _string(entry.get("id"), f"{label}[{index}].id", errors)
+        _sha256(entry.get("content_sha256"), f"{label}[{index}].content_sha256", errors)
+        if component is None:
+            continue
+        if component in seen:
+            errors.append(f"{label}: component {component} is listed twice")
+        seen.add(component)
+        if known is not None and component not in known:
+            errors.append(f"{label}: unknown component {component}")
+
+
 def _validate_record(
     root: Path,
     records_root: Path,
@@ -573,6 +650,7 @@ def _validate_record(
     max_record_bytes: int,
     artifact_roots: set[str],
     definitions: dict[str, dict[str, Any]],
+    known_components: set[str] | None,
     seen_run_ids: set[str],
     errors: list[str],
 ) -> None:
@@ -586,13 +664,24 @@ def _validate_record(
     data = _load_json(path, raw_path, errors)
     if data is None:
         return
-    record = _check_fields(data, REQUIRED_RECORD_FIELDS, raw_path, errors)
+    schema_version = data.get("schema_version") if isinstance(data, dict) else None
+    required = REQUIRED_RECORD_FIELDS
+    if schema_version == CURRENT_SCHEMA_VERSION:
+        required = REQUIRED_RECORD_FIELDS | {"components"}
+    record = _check_fields(data, required, raw_path, errors)
     if record is None:
         return
     _bounded_json(record, raw_path, errors)
 
-    if record.get("schema_version") != 1:
-        errors.append(f"{raw_path}: schema_version must be 1")
+    if schema_version not in ALLOWED_SCHEMA_VERSIONS:
+        errors.append(f"{raw_path}: schema_version must be 1 or {CURRENT_SCHEMA_VERSION}")
+    elif schema_version == CURRENT_SCHEMA_VERSION:
+        _validate_components(
+            record.get("components"),
+            known_components,
+            f"{raw_path}.components",
+            errors,
+        )
 
     run_id = _string(
         record.get("run_id"),
@@ -763,8 +852,10 @@ def validate_evidence_records(
     if not isinstance(policy, dict):
         return ["document registry 'test_evidence' must be an object"]
 
-    missing_policy = sorted(ALLOWED_POLICY_FIELDS - policy.keys())
-    extra_policy = sorted(policy.keys() - ALLOWED_POLICY_FIELDS)
+    missing_policy = sorted(REQUIRED_POLICY_FIELDS - policy.keys())
+    extra_policy = sorted(
+        policy.keys() - REQUIRED_POLICY_FIELDS - OPTIONAL_POLICY_FIELDS
+    )
     if missing_policy:
         errors.append(
             "test_evidence missing fields: " + ", ".join(missing_policy)
@@ -837,6 +928,7 @@ def validate_evidence_records(
         errors.append(f"test evidence records root does not exist: {records_raw}")
         return errors
 
+    known_components = _load_components(root, policy.get("components"), errors)
     definitions = _load_catalog(root, catalog_path, errors)
     seen_run_ids: set[str] = set()
     for path in sorted(records_path.rglob("*")):
@@ -856,6 +948,7 @@ def validate_evidence_records(
             max_record_bytes,
             artifact_roots,
             definitions,
+            known_components,
             seen_run_ids,
             errors,
         )

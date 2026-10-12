@@ -5,9 +5,9 @@ runs. Test definitions remain in `../TEST_CATALOG.json`; raw logs, firmware,
 plots, traces, CSV files, and reports remain outside model context under the
 ignored `logs/` tree.
 
-A run record is candidate-specific evidence. It does not change a catalog
-entry's status, waive a prerequisite, authorize hardware operation, or clear
-an aircraft for flight.
+A run record is evidence for the components it names, at the content it
+names. It does not change a catalog entry's status, waive a prerequisite,
+authorize hardware operation, or clear an aircraft for flight.
 
 ## Storage Layout
 
@@ -21,7 +21,7 @@ The filename timestamp is the UTC completion time. `NN` is a two-digit
 sequence used when more than one record could otherwise share the same name.
 The JSON `run_id` must equal the filename stem.
 
-Examples of `target` are `common`, `fcu3`, and `foxeer-f405-v2`. For a common
+Examples of `target` are `common`, `foxeer-f405-v2`, and `tbs-lucid-h7`. For a common
 hardware gate, record the actual board target rather than `common`.
 
 Do not create a cumulative results file or append run results to current
@@ -37,6 +37,7 @@ Every record captures:
   and heading;
 - repository revision or dirty-working-tree identity, feature set, target
   triple, firmware SHA-256 where applicable, and relevant configuration;
+- the components the run exercised, each with its content ID (see below);
 - who performed the work and whether the user confirmed a hardware run;
 - propeller, actuator-power, equipment, and environment state;
 - commands and exit codes without inline command output;
@@ -45,8 +46,33 @@ Every record captures:
 - artifact identities as repository-relative `logs/...` paths, byte sizes, and
   SHA-256 values.
 
-Use result `pass`, `fail`, `aborted`, or `inconclusive`. A prior pass applies
-only to its recorded candidate and does not remove a future test requirement.
+Use result `pass`, `fail`, `aborted`, or `inconclusive`.
+
+## Component Evidence
+
+Evidence belongs to components, not to firmware images. `../COMPONENTS.json`
+divides the source into components: one per driver, the flight crate by
+concern, other crates and each firmware app whole. A component's content ID is
+a hash of its files, so it changes only when the component does.
+
+A pass proves the components it lists at the content IDs it lists, on any
+board. A test is due again only when one of those components changes; an
+unrelated change elsewhere in the image does not repeat it. Integration
+facts such as task priorities, pins and wiring live in the app component, so
+changing them re-tests that board.
+
+List only components the run actually exercised: a boot test on one board
+proves its IMU driver, not a driver it never loads.
+
+```text
+python tools/components.py record app-tbs-lucid-h7 driver-mpu6000
+python tools/components.py status
+```
+
+`record` prints the `components` entry for a new record; `status` lists the
+components no passing record proves at their current content, with the tests
+that proved an earlier content. Records before schema 2 name no components
+and prove none.
 
 ## Artifact Rules
 
@@ -83,6 +109,8 @@ change a result to make a gate appear complete.
 1. Select the test through `../TEST_CATALOG.json` and run its prerequisites.
 2. Copy `RUN_RECORD_TEMPLATE.json` to the required dated path.
 3. Replace every placeholder and remove unused example command/artifact rows.
+   Fill `components` from `tools/components.py record` for the exact source
+   that was built and run.
 4. Calculate file hashes without modifying the artifacts. On PowerShell:
 
    ```powershell
