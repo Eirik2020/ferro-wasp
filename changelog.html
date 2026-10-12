@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-19e0bd34.js";
+            window.path_to_searchindex_js = "searchindex-a1fb206b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -190,11 +190,18 @@ Bluetooth serial module. Foxeer binds it to <code>uart3</code> (PC10/PC11) by de
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
-<li>Crate layout. <code>ferrowasp-tasks</code> is now <code>ferrowasp-flight</code> (portable flight
+<li>
+<p>Arming is refused while a computer is connected: a USB host has the board
+configured, or the configurator link was used in the last 2 seconds. The
+configurator’s pre-arm checklist shows it as “USB unplugged”.</p>
+</li>
+<li>
+<p>Crate layout. <code>ferrowasp-tasks</code> is now <code>ferrowasp-flight</code> (portable flight
 logic) and <code>ferrowasp-stm32f4-tasks</code> is <code>ferrowasp-stm32-tasks</code> (RTIC task
 bodies for every STM32 board). The HAL-neutral half of <code>ferrowasp-stm32f4</code>
 moved to a new <code>ferrowasp-stm32</code>, which the H7 backend now uses instead of
-the F4 crate; <code>ferrowasp-stm32f4</code> keeps only the F4 HAL code.</li>
+the F4 crate; <code>ferrowasp-stm32f4</code> keeps only the F4 HAL code.</p>
+</li>
 </ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
