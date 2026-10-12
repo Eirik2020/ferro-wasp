@@ -158,12 +158,17 @@ pub fn init_adc1_battery(
 /// The microSD card as the flash manager's storage. Nothing is written here;
 /// the card is claimed, and may be written, on the first JEDEC probe. A card
 /// that fails to come up leaves storage disabled rather than stopping boot.
+/// Logs write back through the card's RAM window; configuration below the
+/// log region writes through.
 pub fn init_sd_flash(resources: SdCardResources, clocks: &CoreClocks) -> SdFlash {
     let slot = match backend::sd_storage::init_sd_card(resources, clocks) {
         Ok(card) => CardSlot::Ready(card),
         Err(error) => CardSlot::Failed(error),
     };
-    backend::sd_storage::SdNor::new(slot)
+    backend::sd_storage::SdNor::with_write_back_from(
+        slot,
+        ferrowasp_flight::flash_storage::LOG_START_ADDRESS,
+    )
 }
 
 /// The Lucid's two controllable LEDs, per ArduPilot's TBS_LUCID_H7 hwdef:

@@ -405,7 +405,8 @@ ferroforge::app! {
             }
             let (producer, consumer) = {
                 let queue = cortex_m::singleton!(
-                    : flash_task::RecordQueue = flash_task::RecordQueue::new()
+                    : flash_task::RecordQueue<BLACKBOX_RECORD_QUEUE_CAPACITY> =
+                        flash_task::RecordQueue::new()
                 )
                 .unwrap();
                 queue.split()
@@ -1107,7 +1108,8 @@ ferroforge::app! {
             config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
                 [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
             staged_rpc_config: Option<flash_task::StoredConfig> = None,
-            config_rpc_completion: Option<ConfigRpcCompletion> = None
+            config_rpc_completion: Option<ConfigRpcCompletion> = None,
+            sd_write_back_since_ms: Option<u64> = None
         ],
         shared = [tuning_profile, tuning_request_seq]
     )]
@@ -1139,6 +1141,7 @@ ferroforge::app! {
             config_save_page,
             staged_rpc_config,
             config_rpc_completion,
+            sd_write_back_since_ms,
             ..
         } = cx.local;
         #[cfg(not(feature = "mspv2_configurator"))]
@@ -1149,6 +1152,26 @@ ferroforge::app! {
             config_rpc_completion,
         );
         loop {
+            // Log pages wait in the SD card's RAM window until it fills. Write
+            // them out once they have waited SD_WRITE_BACK_MAX_AGE_MS, or as
+            // soon as no flight is recording, so a power cut loses at most
+            // that much log. At the top of the pass, which every pass reaches.
+            if flash_device.write_back_pending() {
+                let now_ms = Mono::now().duration_since_epoch().to_millis();
+                let since_ms = *sd_write_back_since_ms.get_or_insert(now_ms);
+                if !assembler.recording()
+                    || now_ms.saturating_sub(since_ms) >= SD_WRITE_BACK_MAX_AGE_MS
+                {
+                    *sd_write_back_since_ms = None;
+                    if flash_device.flush().is_err() {
+                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SD storage flush failed; recording stopped");
+                    }
+                }
+            } else {
+                *sd_write_back_since_ms = None;
+            }
             {
                 if !FLASH_READY.load(Ordering::Acquire) {
                     #[cfg(feature = "mspv2_configurator")]

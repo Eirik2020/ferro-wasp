@@ -29,7 +29,10 @@ pub const CONFIG_SECTOR_SIZE: u32 = 4096;
 pub const SCRATCH_SECTOR_ADDRESS: u32 = CONFIG_SLOT_COUNT * CONFIG_SECTOR_SIZE;
 pub const LOG_START_ADDRESS: u32 = SCRATCH_SECTOR_ADDRESS + CONFIG_SECTOR_SIZE;
 
-pub type RecordQueue = Queue<FlightRecord, RECORD_QUEUE_CAPACITY>;
+/// The control loop's records on their way to storage. A board sizes it to
+/// ride out its storage's longest write stall: `RECORD_QUEUE_CAPACITY` covers
+/// SPI NOR, whose page programs are quick and steady.
+pub type RecordQueue<const N: usize = RECORD_QUEUE_CAPACITY> = Queue<FlightRecord, N>;
 pub type RecordProducer = Producer<'static, FlightRecord>;
 pub type RecordConsumer = Consumer<'static, FlightRecord>;
 

@@ -309,6 +309,15 @@ pub use ferrowasp_core::safety::signals::{
 /// queue cannot starve the rest of the system.
 pub const FLASH_RECORD_DRAIN_PER_PASS: u32 = 16;
 
+/// Blackbox records queued between the control loop and the SD card: half a
+/// second at 2 kHz. A card may hold a write busy for up to 250 ms; the 64
+/// records that suit SPI NOR lost a quarter of a full-rate log here.
+pub const BLACKBOX_RECORD_QUEUE_CAPACITY: usize = 1024;
+
+/// How long log pages may wait in the SD card's RAM window before the flash
+/// task writes them out; at most this much log is lost to a power cut.
+pub const SD_WRITE_BACK_MAX_AGE_MS: u64 = 100;
+
 #[cfg(not(feature = "mspv2_configurator"))]
 pub const USB_DEBUG_HEADER: &[u8] = b"FerroWasp TBS Lucid H7 storage CLI v1; type help\r\n";
 pub static RC_RATES: Mutex<RefCell<safety::RcRates>> = Mutex::new(RefCell::new(safety::RcRates {
