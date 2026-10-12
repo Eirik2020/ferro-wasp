@@ -1,0 +1,177 @@
+{
+  "schema_version": 2,
+  "run_id": "20261012T180412Z__BENCH-COMMON-001__tbs-lucid-h7__01",
+  "test_id": "BENCH-COMMON-001",
+  "started_at_utc": "2026-10-12T17:59:02Z",
+  "completed_at_utc": "2026-10-12T18:04:12Z",
+  "target": "tbs-lucid-h7",
+  "tier": "bench-unpowered",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "e98615ec2dc4147395f5ef16d811a37fd9265bc555219d8271a1633554af5286",
+    "procedure_path": "project_meta/testing/targets/common-boot-idle.md",
+    "procedure_heading": "Boot and Idle State",
+    "procedure_sha256": "ecddfec2a575fbfdff5e1ae7826c0da15230d78f193a5dd6105a67150912815d"
+  },
+  "execution": {
+    "performed_by": "user-with-agent-assistance",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "b945de114fc269a94914f08c9f49e438559b8170",
+    "working_tree": "clean",
+    "firmware_sha256": "84a9f72f67466cd5057af8a26c15ebe2f8704b7d71aaba18374cd99f970e2b2b",
+    "features": [
+      "board-tbs-lucid-h7"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "profile": "release",
+      "firmware_sha256_of": "ELF",
+      "stored_config": "board defaults; no microSD card fitted, so storage is disabled",
+      "flight_arming": "disabled at compile time"
+    }
+  },
+  "components": [
+    {
+      "id": "app-tbs-lucid-h7",
+      "content_sha256": "4b2a617aa843179219911c61c2030b79f1d6dbceae2644b895a0bc0cf8b155be"
+    },
+    {
+      "id": "stm32h7",
+      "content_sha256": "be7a43e7d07b62351a034377582450a165076e9c7df0ef2d898e675579092ad3"
+    },
+    {
+      "id": "stm32",
+      "content_sha256": "b9b4c0bbac034a267871fce8d759ce4bba8412060d619ac76b1841924154e6e0"
+    },
+    {
+      "id": "stm32-tasks",
+      "content_sha256": "a4b42041389bb5d06869fbd2e3892829a10bdd0f5422375967407cc75a9065ce"
+    },
+    {
+      "id": "core",
+      "content_sha256": "eec8d689363868519d3eb812bf26ba3616bbcdfa7b0a0a1812f74474f37ebc2e"
+    },
+    {
+      "id": "drivers",
+      "content_sha256": "984c3282f24b1c1cd77811cb0c8f7d2994f6d454eced1d00b0b7d6135be6d304"
+    },
+    {
+      "id": "driver-mpu6000",
+      "content_sha256": "aaef94eea86292c28904c18861175b6a174246b745d49d5ea6682874601075d0"
+    },
+    {
+      "id": "flight",
+      "content_sha256": "9389845a9d44d3ed4cd365ff11734c83dfc7e68ef20d728097bdc36eeffde4e3"
+    },
+    {
+      "id": "flight-arming",
+      "content_sha256": "ff86508aa1cf3cfe2f35d779b77a6ab59e23a7c0605c8208c1bc3ec9409e76fb"
+    },
+    {
+      "id": "flight-control",
+      "content_sha256": "16faf9c4c87975ed6146f8a4f793b698f05d4a25271dc133f7b9d81c018c3bc4"
+    },
+    {
+      "id": "flight-esc",
+      "content_sha256": "8ce2ee91f431cc382866c6596e9707c297fae98c2c11f351e322452c76dfd836"
+    },
+    {
+      "id": "flight-links",
+      "content_sha256": "eafd391c9c7f3a1a4a5703f3d377444298b385265847d19b1daa6a9b1e443738"
+    },
+    {
+      "id": "io-core",
+      "content_sha256": "27205afa6a357e95f0733c97213b798c2339024826745cc3af5f3cec01a7cde4"
+    }
+  ],
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "disconnected",
+    "equipment": [
+      "USB power only",
+      "ST-Link V2 wired SWDIO, SWCLK and GND, no NRST",
+      "ELRS receiver and GPS soldered, not bound"
+    ],
+    "environment": [
+      "indoor bench"
+    ]
+  },
+  "commands": [
+    {
+      "command": "cargo build --release --locked (firmware/tbs-lucid-h7)",
+      "exit_code": 0
+    },
+    {
+      "command": "timeout 35 probe-rs run --chip STM32H743VITx --protocol swd --no-location <ELF>",
+      "exit_code": 124
+    },
+    {
+      "command": "ferro-configurator bench watch --seconds 4",
+      "exit_code": 0
+    },
+    {
+      "command": "probe-rs read --chip STM32H743VITx b32 0x58021014 1 (GPIOE ODR, three samples)",
+      "exit_code": 0
+    },
+    {
+      "command": "timeout 12 probe-rs attach --chip STM32H743VITx --protocol swd --no-location <ELF>",
+      "exit_code": 124
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "firmware-elf",
+      "kind": "firmware",
+      "path": "logs/lucid-bench/20261012/FerroWaspTbsLucidH7-d932ccc.elf",
+      "bytes": 4834244,
+      "sha256": "84a9f72f67466cd5057af8a26c15ebe2f8704b7d71aaba18374cd99f970e2b2b"
+    },
+    {
+      "id": "swd-reset-boot-log",
+      "kind": "log",
+      "path": "logs/lucid-bench/20261012/boot-16-d932ccc-swd-reset.log",
+      "bytes": 7839,
+      "sha256": "92802c6c7127a60c5b790ea28d20e52d104f29b8251cfffddfa1911d80c1ea48"
+    },
+    {
+      "id": "cold-boot-attach-log",
+      "kind": "log",
+      "path": "logs/lucid-bench/20261012/boot-17-d932ccc-replug-attach.log",
+      "bytes": 5107,
+      "sha256": "04dd40308692d48ca682f61378d29aa95340f514612793287c03737f7888e54e"
+    },
+    {
+      "id": "cold-boot-usb-status",
+      "kind": "log",
+      "path": "logs/lucid-bench/20261012/watch-3-d932ccc-replug.json",
+      "bytes": 884,
+      "sha256": "c95e715a73301032d134052eb744d4fcaaef92de26294ffaac2edbfab256c273"
+    }
+  ],
+  "measurements": {
+    "uptime_ms_after_usb_replug": 178090,
+    "control_loop_hz": 2000,
+    "dshot_reports_all_zero": 21,
+    "dshot_reports_nonzero": 0,
+    "tolerated_stale_imu_ticks_per_2s_min": 171,
+    "tolerated_stale_imu_ticks_per_2s_max": 207,
+    "stale_imu_beyond_tolerance_after_first_sample": 0
+  },
+  "observations": [
+    "SWD reset (probe-rs run) and USB power cycle both booted to: MPU-6000 ready, WHO_AM_I 0x68; gyro bias calibrated; heartbeat running; arming inhibited.",
+    "All four DShot outputs stayed at 0 in every 2 s report, with no DShot timeouts or faults.",
+    "USB status after the power cycle: armed false, armable false, rc_valid false, imu_ready true, imu_stale false.",
+    "User saw the green heartbeat LED blinking after the power cycle; GPIOE ODR showed PE4 toggling and PE3 (blue, armed) high, which is off on this active-low LED.",
+    "One stale-beyond-tolerance warning at control sequence 0 after the SWD reset, before the IMU's first sample, while disarmed."
+  ],
+  "limitations": [
+    "Reset checked over SWD (SYSRESETREQ) on the user's ruling; the board has no reset button.",
+    "Brownout not tested.",
+    "No RC source was active: SBUS on UART6 is the default binding and the ELRS on UART7 is unbound, so disarmed-without-receiver is shown with no receiver, not with one disconnected.",
+    "Flight arming is compiled out on this board, so disarmed state does not depend on the arming checks alone.",
+    "ESC telemetry and battery ADC idle: no ESC power."
+  ],
+  "stop_conditions_triggered": []
+}
