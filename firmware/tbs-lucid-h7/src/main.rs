@@ -1184,6 +1184,18 @@ ferroforge::app! {
                             ),
                         );
                     }
+                    if let Some((command, link)) = flash_commands.take_next() {
+                        flash_responses.answer(link);
+                        let response = flash_task::storage_unavailable_response(
+                            &command,
+                            [
+                                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
+                                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
+                                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                            ],
+                        );
+                        queue_storage_response(flash_responses, response.as_str());
+                    }
                     Mono::delay(100u64.millis()).await;
                     continue;
                 }
