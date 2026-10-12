@@ -57,7 +57,8 @@ orientation, motor order, and ADC scale are verified on it.
 | Function | Lucid H7 resource |
 |---|---|
 | IMU | SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000 |
-| SBUS (default `uart6`) | USART6 RX PC7, inverted in the UART |
+| SBUS (default `uart1`) | USART1 RX PA10, the digital VTX connector's SBUS pin, inverted in the UART; receive only |
+| Spare serial (`uart6`) | USART6 (PC6 TX, PC7 RX); takes SBUS, CRSF, MSP or ESC telemetry |
 | MSP DisplayPort (default `uart3`) | USART3 (PD8 TX, PD9 RX) |
 | ESC telemetry (default `uart8`) | UART8 RX PE0 |
 | DShot600 | PB0, PB1 (TIM3), PA0, PA1 (TIM5), DMA2 streams 0-3 |

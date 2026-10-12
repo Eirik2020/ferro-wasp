@@ -102,6 +102,7 @@ macro_rules! uart_dma_peripheral {
 }
 
 uart_dma_peripheral! {
+    USART1: Usart1RxDma, Usart1TxDma;
     USART3: Usart3RxDma, Usart3TxDma;
     USART6: Usart6RxDma, Usart6TxDma;
     UART8: Uart8RxDma, Uart8TxDma;

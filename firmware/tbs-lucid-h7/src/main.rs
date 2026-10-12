@@ -31,6 +31,8 @@ ferroforge::app! {
         uart6_rx: Option<board::aliases::Uart6RxPort>,
         uart6_tx_dma: Option<board::aliases::Uart6TxDmaSide>,
         #[lock_free]
+        uart1_rx: Option<board::aliases::Uart1RxPort>,
+        #[lock_free]
         uart8_rx: Option<board::aliases::Uart8RxPort>,
 
         // IMU
@@ -170,6 +172,12 @@ ferroforge::app! {
         configurator_usb: ConfiguratorUsbState,
     }
     #[init(local = [
+        uart1_rx_buffers: stm32_storage::UartRxBufferBank =
+            stm32_storage::new_uart_rx_buffer_bank(),
+        uart1_free_queue: stm32_storage::UartRxFreeQueue =
+            stm32_storage::UartRxFreeQueue::new(),
+        uart1_filled_queue: stm32_storage::UartRxFilledQueue =
+            stm32_storage::UartRxFilledQueue::new(),
         uart8_rx_buffers: stm32_storage::UartRxBufferBank =
             stm32_storage::new_uart_rx_buffer_bank(),
         uart8_free_queue: stm32_storage::UartRxFreeQueue =
@@ -488,9 +496,17 @@ ferroforge::app! {
                     completion: uart6_tx_completion,
                 },
             uart8_rx,
+            uart1_rx,
             functions: serial_functions,
         } = stm32_uart::init_h743_uart_ports(
             stm32_uart::H743UartPortResources {
+                // DJI connector SBUS pin -> PA10 USART1_RX.
+                uart1: stm32_uart::Uart1PortResources {
+                    rx_pin: gpioa.pa10,
+                    uart: dp.USART1,
+                    prec: rec.USART1,
+                    rx_dma: dma2.4,
+                },
                 // PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
                 uart3: stm32_uart::Uart3PortResources {
                     tx_pin: gpiod.pd8,
@@ -518,6 +534,17 @@ ferroforge::app! {
             },
             &clocks,
             stm32_uart::H743UartPortStorage {
+                uart1: stm32_port::UartRxPortStorage {
+                    rx: stm32_storage::UartRxStorageResources {
+                        buffers: cx.local.uart1_rx_buffers,
+                        free_queue: cx.local.uart1_free_queue,
+                        filled_queue: cx.local.uart1_filled_queue,
+                    },
+                    stream: cortex_m::singleton!(
+                        : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                },
                 uart3: stm32_port::UartRxTxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart3_rx_buffers,
@@ -675,6 +702,7 @@ ferroforge::app! {
 
         (
             Shared {
+                uart1_rx,
                 uart3_rx,
                 uart3_tx_dma,
                 uart6_rx,
@@ -2512,6 +2540,12 @@ ferroforge::app! {
 
     #[task(from = flight_tasks::uart6_rx_idle, binds = USART6, priority = 11, shared = [uart6_rx])]
     fn uart6_rx_idle(cx: uart6_rx_idle::Context);
+
+    #[task(from = flight_tasks::uart1_rx_dma, binds = DMA2_STR4, priority = 11, shared = [uart1_rx])]
+    fn uart1_rx_dma(cx: uart1_rx_dma::Context);
+
+    #[task(from = flight_tasks::uart1_rx_idle, binds = USART1, priority = 11, shared = [uart1_rx])]
+    fn uart1_rx_idle(cx: uart1_rx_idle::Context);
 
     #[task(from = flight_tasks::uart8_rx_dma, binds = DMA1_STR2, priority = 11, shared = [uart8_rx])]
     fn uart8_rx_dma(cx: uart8_rx_dma::Context);

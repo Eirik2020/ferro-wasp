@@ -11,6 +11,7 @@ pub type Spi1ImuOwner = spi_dma::Spi1DmaOwner<Stream4<DMA1>, Stream5<DMA1>, spi_
 
 /// The started UART ports, by the DMA streams `routes.rs` gives each.
 pub type UartPorts = uart_dma::H743UartPorts<
+    Stream4<DMA2>,
     Stream1<DMA1>,
     Stream3<DMA1>,
     Stream0<DMA1>,
@@ -25,6 +26,9 @@ pub type Uart3TxDmaSide = uart_dma::UartTxDmaSide<uart_dma::UartTxDma<Stream3<DM
 pub type Uart6RxPort =
     uart_port::UartRxPort<uart_dma::UartRxIrqSide<uart_dma::UartRxDma<Stream0<DMA1>, USART6>>>;
 pub type Uart6TxDmaSide = uart_dma::UartTxDmaSide<uart_dma::UartTxDma<Stream6<DMA1>, USART6>>;
+/// UART1 (USART1), the DJI connector's SBUS pin, RX on DMA2 Stream 4.
+pub type Uart1RxPort =
+    uart_port::UartRxPort<uart_dma::UartRxIrqSide<uart_dma::UartRxDma<Stream4<DMA2>, USART1>>>;
 /// UART8, RX on DMA1 Stream 2.
 pub type Uart8RxPort =
     uart_port::UartRxPort<uart_dma::UartRxIrqSide<uart_dma::UartRxDma<Stream2<DMA1>, UART8>>>;
