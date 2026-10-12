@@ -6,6 +6,7 @@ use super::manifest::Spi1ImuKind;
 use embedded_hal::delay::DelayNs;
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
+use ferrowasp_stm32::status_led::{LedPolarity, StatusLed};
 use ferrowasp_stm32h7 as backend;
 use ferrowasp_stm32h7::eh1::CycleDelay;
 use ferrowasp_stm32h7::hal_prelude::*;
@@ -163,4 +164,34 @@ pub fn init_sd_flash(resources: SdCardResources, clocks: &CoreClocks) -> SdFlash
         Err(error) => CardSlot::Failed(error),
     };
     backend::sd_storage::SdNor::new(slot)
+}
+
+/// The Lucid's two controllable LEDs, per ArduPilot's TBS_LUCID_H7 hwdef:
+/// green "B/E" on PE4 and blue "ACT" on PE3. The third LED is power.
+pub struct StatusLedPins {
+    pub heartbeat: PE4,
+    pub armed: PE3,
+}
+
+/// Both LEDs light with the pin low: on the bench (2026-10-12), PE3 low lit
+/// the blue LED and PE4 high left the green one dark.
+pub const STATUS_LED_POLARITY: LedPolarity = LedPolarity::ActiveLow;
+
+pub struct StatusLeds {
+    pub heartbeat: StatusLed,
+    pub armed: StatusLed,
+}
+
+/// Drive both LED pins as push-pull outputs, with both LEDs off.
+pub fn init_status_leds(pins: StatusLedPins) -> StatusLeds {
+    let StatusLedPins { heartbeat, armed } = pins;
+    let heartbeat = backend::eh1::OutputPin::new(heartbeat.into_push_pull_output());
+    let armed = backend::eh1::OutputPin::new(armed.into_push_pull_output());
+    let heartbeat = cortex_m::singleton!(: backend::eh1::OutputPin<'E', 4> = heartbeat).unwrap();
+    let armed = cortex_m::singleton!(: backend::eh1::OutputPin<'E', 3> = armed).unwrap();
+
+    StatusLeds {
+        heartbeat: StatusLed::new(heartbeat, STATUS_LED_POLARITY),
+        armed: StatusLed::new(armed, STATUS_LED_POLARITY),
+    }
 }

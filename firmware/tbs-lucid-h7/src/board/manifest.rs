@@ -35,7 +35,7 @@ pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     battery_current_adc: true,
     usb_cdc_debug: true,
     dshot_motor_count: 4,
-    onboard_debug_leds_usable_with_swd: false,
+    onboard_debug_leds_usable_with_swd: true,
     timer_dma_motor_output: true,
 };
 
@@ -170,6 +170,16 @@ pub const PIN_MAP: &[PinAssignment] = &[
         signal: "UART8_RX_ESC_TELEMETRY",
         pin: "PE0",
         alternate: Some(8),
+    },
+    PinAssignment {
+        signal: "LED_ARMED_BLUE",
+        pin: "PE3",
+        alternate: None,
+    },
+    PinAssignment {
+        signal: "LED_HEARTBEAT_GREEN",
+        pin: "PE4",
+        alternate: None,
     },
 ];
 
@@ -337,6 +347,8 @@ pub const CLAIMS: &[ResourceClaim] = &[
         "BLHeli legacy ESC telemetry",
     ),
     ResourceClaim::new(ResourceKind::Pin, "PE0", "UART8 RX ESC telemetry"),
+    ResourceClaim::new(ResourceKind::Pin, "PE3", "Armed LED (blue)"),
+    ResourceClaim::new(ResourceKind::Pin, "PE4", "Heartbeat LED (green)"),
     ResourceClaim::new(
         ResourceKind::DmaStream,
         "DMA1_STREAM2_CH81",
@@ -458,7 +470,7 @@ mod tests {
         ];
 
         assert_eq!(enabled, [true; 8]);
-        assert!(!BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd);
+        assert!(BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd);
         assert_eq!(BOARD_CAPABILITIES.dshot_motor_count, 4);
     }
 

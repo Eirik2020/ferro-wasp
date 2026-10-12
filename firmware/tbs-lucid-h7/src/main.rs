@@ -145,6 +145,11 @@ ferroforge::app! {
         osd_rc_throttle_reader: signals::RcThrottleReader,
         osd_rc_rates_reader: RcRatesReader,
         usb_rc_link_reader: signals::RcLinkReader,
+        led_safety_arm_reader: signals::SafetyArmReader,
+
+        // ----  STATUS LEDS  ----
+        heartbeat_led: StatusLed,
+        armed_led: StatusLed,
         actuator_arm_done_writer: signals::ActuatorArmDoneWriter,
         actuator_arm_done_reader: signals::ActuatorArmDoneReader,
         actuator_arm_permit_writer: ActuatorArmPermitWriter,
@@ -219,6 +224,10 @@ ferroforge::app! {
         let gpioc = dp.GPIOC.split(rec.GPIOC);
         let gpiod = dp.GPIOD.split(rec.GPIOD);
         let gpioe = dp.GPIOE.split(rec.GPIOE);
+        let leds = board::init::init_status_leds(board::init::StatusLedPins {
+            heartbeat: gpioe.pe4,
+            armed: gpioe.pe3,
+        });
 
         // The scheduler and control loop run at the IMU's ODR; IMU sampling
         // itself is triggered by PB2/EXTI2.
@@ -652,6 +661,7 @@ ferroforge::app! {
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         heartbeat::spawn().unwrap();
+        status_leds::spawn().unwrap();
         adc1_polling::spawn().ok();
         uart3_tx_worker::spawn().unwrap();
         uart6_tx_worker::spawn().unwrap();
@@ -787,6 +797,9 @@ ferroforge::app! {
                 osd_rc_throttle_reader: rc_throttle_reader,
                 osd_rc_rates_reader: rc_rates_reader,
                 usb_rc_link_reader: rc_link_reader,
+                led_safety_arm_reader: safety_arm_reader,
+                heartbeat_led: leds.heartbeat,
+                armed_led: leds.armed,
                 actuator_arm_done_writer,
                 actuator_arm_done_reader,
                 actuator_arm_permit_writer,
@@ -1053,6 +1066,15 @@ ferroforge::app! {
         ]
     )]
     async fn heartbeat(cx: heartbeat::Context);
+
+    // Lowest priority, so a lit-and-blinking heartbeat shows that every
+    // task above it leaves the core time to run.
+    #[task(
+        from = flight_tasks::status_leds,
+        priority = 1,
+        local = [heartbeat_led, armed_led, led_safety_arm_reader]
+    )]
+    async fn status_leds(cx: status_leds::Context);
 
     #[task(
         priority = 1,

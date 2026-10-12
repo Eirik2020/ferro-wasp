@@ -46,6 +46,8 @@ mod esc;
 mod osd;
 // A convenience for task bodies; which names a body uses depends on the
 // firmware's features, so an unused one is not a mistake.
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod leds;
 #[allow(unused_imports)]
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod prelude;
@@ -84,6 +86,8 @@ pub use diagnostics::heartbeat;
 pub use dshot::{dshot_dma_complete, dshot_service, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use esc::esc_manager_task;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use leds::status_leds;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]

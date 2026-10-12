@@ -151,6 +151,7 @@ pub use ferrowasp_stm32::app_config::{
 };
 pub use ferrowasp_stm32::app_storage as stm32_storage;
 pub use ferrowasp_stm32::memory as stm32_memory;
+pub use ferrowasp_stm32::status_led::StatusLed;
 pub use ferrowasp_stm32::uart_port as stm32_port;
 pub use ferrowasp_stm32_tasks as flight_tasks;
 pub use ferrowasp_stm32_tasks::snapshots::{

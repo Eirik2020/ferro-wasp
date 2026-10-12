@@ -21,6 +21,7 @@ pub mod scheduler;
 pub mod serial;
 pub mod spi;
 pub mod spi_common;
+pub mod status_led;
 pub mod timebase;
 pub mod timer_dma;
 pub mod timer_tick;
