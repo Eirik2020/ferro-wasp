@@ -2201,11 +2201,31 @@ ferroforge::app! {
                     // rate silently dropped most of the log.
                     //
                     // The bound keeps this task from starving the rest of the
-                    // system on a full queue. A page still goes out once per
-                    // pass, which at roughly a millisecond a pass is ample for
-                    // the few hundred pages a second these rates ask for.
+                    // system on a full queue.
                     let mut drained = 0;
                     while drained < FLASH_RECORD_DRAIN_PER_PASS {
+                        // Write a finished page before taking another record.
+                        // The assembler holds one page, so a record taken while
+                        // it is full was dropped: with a page written only once
+                        // a pass, a full-rate log lost about a third of its
+                        // records that way. In the SD window a page write is a
+                        // RAM copy, so a pass can write several. A failed write
+                        // stays pending for the check above to report.
+                        if pending_page.is_none() {
+                            *pending_page = assembler.take_ready_page();
+                        }
+                        if let Some(page) = pending_page.as_ref() {
+                            let Some(address) = layout.log_page_address(*next_page_index)
+                            else {
+                                break;
+                            };
+                            if flash_device.page_program(address, page).is_err() {
+                                break;
+                            }
+                            *pending_page = None;
+                            *next_page_index = next_page_index.saturating_add(1);
+                            FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
+                        }
                         let Some(record) = flash_record_consumer.dequeue() else {
                             break;
                         };
@@ -2231,7 +2251,11 @@ ferroforge::app! {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                         }
                     }
-                } else if !SAFETY_ARMED.load(Ordering::Acquire)
+                } else if !cfg!(feature = "bench_blackbox")
+                    // A bench image records disarmed throughout; ending its
+                    // flight whenever the queue ran dry split one run into
+                    // hundreds of tiny flights.
+                    && !SAFETY_ARMED.load(Ordering::Acquire)
                     && assembler.recording()
                     && assembler.stop().is_err()
                 {
