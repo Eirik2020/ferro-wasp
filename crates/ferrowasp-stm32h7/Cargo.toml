@@ -26,6 +26,7 @@ stm32h743 = [
 [dependencies]
 defmt = "1.0.1"
 embedded-hal = { workspace = true }
+ferrowasp-drivers = { path = "../ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32", features = ["dshot"] }
 ferrowasp-waveform = { path = "../ferrowasp-waveform" }
