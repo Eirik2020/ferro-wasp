@@ -20,6 +20,7 @@ pub mod pwm_config;
 pub mod scheduler;
 pub mod serial;
 pub mod spi;
+pub mod spi1_imu;
 pub mod spi_common;
 pub mod status_led;
 pub mod timebase;

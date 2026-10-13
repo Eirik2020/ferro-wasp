@@ -382,7 +382,7 @@ For the normal Foxeer DShot600 firmware, build without `bench_equal_motors`:
 ```
 
 Without a stored configuration the board boots with its own default tune,
-`DEFAULT_TUNING` in `firmware/foxeer-f405-v2/src/board/profiles.rs`; a stored
+`DEFAULT_TUNING` in `firmware/foxeer-f405-v2/board/src/profiles.rs`; a stored
 configuration takes precedence.
 
 The legacy `bench_motorN_only` modes select physical PWM outputs and are

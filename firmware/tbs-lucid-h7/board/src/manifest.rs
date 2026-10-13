@@ -48,7 +48,7 @@ pub const CONTROL_SCHEDULER_TIMER: &str = "TIM4";
 pub const IO_TIMEBASE_TIMER: &str = "TIM2";
 pub const IO_WATCHDOG_TIMER: &str = "TIM6";
 
-pub use ferrowasp_stm32_tasks::Spi1ImuKind;
+pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 
 pub const PIN_MAP: &[PinAssignment] = &[
     PinAssignment {
@@ -490,7 +490,7 @@ mod tests {
         ];
 
         assert_eq!(enabled, [true; 8]);
-        assert!(BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd);
+        const { assert!(BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd) };
         assert_eq!(BOARD_CAPABILITIES.dshot_motor_count, 4);
     }
 
@@ -544,7 +544,7 @@ mod tests {
 
     #[test]
     fn active_claim_counts_match_the_runtime_contract() {
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 11);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 12);
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::TimerChannel), 4);
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 13);
     }

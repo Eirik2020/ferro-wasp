@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "crates/ferrowasp-core",
+    "firmware/foxeer-f405-v2/board",
+    "firmware/tbs-lucid-h7/board",
     "crates/ferrowasp-drivers",
     "crates/ferrowasp-flight",
     "crates/ferrowasp-io-core",

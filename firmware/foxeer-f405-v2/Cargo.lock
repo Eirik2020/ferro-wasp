@@ -305,6 +305,7 @@ dependencies = [
  "embedded-hal-async",
  "embedded-io-async",
  "ferroforge",
+ "ferrowasp-board-foxeer-f405-v2",
  "ferrowasp-core",
  "ferrowasp-drivers",
  "ferrowasp-flight",
@@ -322,6 +323,16 @@ dependencies = [
  "rtic",
  "rtic-monotonics",
  "stm32f4xx-hal",
+]
+
+[[package]]
+name = "ferrowasp-board-foxeer-f405-v2"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-core",
+ "ferrowasp-flight",
+ "ferrowasp-io-core",
+ "ferrowasp-stm32",
 ]
 
 [[package]]

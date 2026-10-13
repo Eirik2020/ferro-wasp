@@ -1,0 +1,23 @@
+[package]
+name = "ferrowasp-board-tbs-lucid-h7"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+# A member of the repository's root workspace, so `cargo test --workspace`
+# runs these board tests; the app's own workspace excludes this directory.
+workspace = "../../.."
+
+# The TBS Lucid H7's hardware data: pins, DMA and serial routes, resource claims,
+# profiles and USB identity. Plain data over the shared crates, with no chip
+# HAL, so it builds and tests on the host. The app's src/board/ keeps only the
+# HAL glue that turns this data into peripherals.
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-core = { path = "../../../crates/ferrowasp-core" }
+ferrowasp-flight = { path = "../../../crates/ferrowasp-flight" }
+ferrowasp-io-core = { path = "../../../crates/ferrowasp-io-core" }
+ferrowasp-stm32 = { path = "../../../crates/ferrowasp-stm32" }

@@ -9,6 +9,7 @@ build = "build.rs"
 
 [workspace]
 resolver = "2"
+exclude = ["board"]
 
 [[bin]]
 name = "FerroWaspTbsLucidH7"
@@ -41,6 +42,7 @@ bench_dshot_idle_output1_not_running = ["ferrowasp-stm32-tasks/bench_dshot_idle_
 mspv2_configurator = ["ferrowasp-flight/mspv2_configurator"]
 
 [dependencies]
+ferrowasp-board-tbs-lucid-h7 = { path = "board" }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
 critical-section = "1.2.0"
