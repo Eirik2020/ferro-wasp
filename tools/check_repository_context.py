@@ -53,6 +53,9 @@ FORBIDDEN_TEST_RUN_FIELDS = {
     "sha256",
 }
 AGENT_INSTRUCTION_FILE = "AGENTS.md"
+CLAUDE_INSTRUCTION_FILE = "CLAUDE.md"
+CLAUDE_IMPORT = re.compile(r"^@(\S+)\s*$", re.MULTILINE)
+ALWAYS_LOADED_MAX_LINES = 400
 AGENT_DISCOVERY_IGNORED_DIRS = {
     ".git",
     ".mypy_cache",
@@ -113,6 +116,31 @@ def _discover_agent_instruction_paths(root: Path) -> set[str]:
         discovered.add(path.relative_to(root).as_posix())
 
     return discovered
+
+
+def validate_always_loaded(root: Path) -> list[str]:
+    """Check that `CLAUDE.md` and its imports fit their shared line budget."""
+
+    claude = root / CLAUDE_INSTRUCTION_FILE
+    if not claude.is_file():
+        return []
+
+    text = claude.read_text(encoding="utf-8")
+    errors: list[str] = []
+    total = len(text.splitlines())
+    for raw_path in CLAUDE_IMPORT.findall(text):
+        path, path_error = _repository_path(root, raw_path)
+        if path_error or path is None or not path.is_file():
+            errors.append(f"{CLAUDE_INSTRUCTION_FILE} import does not resolve: {raw_path}")
+            continue
+        total += len(path.read_text(encoding="utf-8").splitlines())
+
+    if total > ALWAYS_LOADED_MAX_LINES:
+        errors.append(
+            f"always-loaded context is {total} lines, over the "
+            f"{ALWAYS_LOADED_MAX_LINES}-line limit"
+        )
+    return errors
 
 
 def _string_list(
@@ -750,6 +778,7 @@ def validate_repository(root: Path) -> list[str]:
         discovered_agent_instructions - budgeted_agent_instructions
     ):
         errors.append(f"unbudgeted agent instruction file: {raw_path}")
+    errors.extend(validate_always_loaded(root))
 
     test_catalog = registry.get("test_catalog")
     has_testing_docs = any(path.startswith("project_meta/testing/") for path in registered)
