@@ -15,17 +15,9 @@ material here. Update the relevant mdBook chapter instead.
 
 ## Authority Order
 
-When repository information conflicts, use this order:
-
-1. the latest explicit user decision and safety instruction;
-2. current code, manifests, features, and tests for the selected target;
-3. `CODEX_ACTIVE_WORK.md` for the live internal handoff and
-   `../mdbook/src/current_support.md` for the public support statement;
-4. accepted, non-superseded ADRs linked from
-   `ARCHITECTURE_DECISIONS.md`;
-5. `CODEX_PROJECT_CONTEXT.md` for durable project direction;
-6. targeted test definitions and retained evidence;
-7. historical handoffs and implementation plans.
+The root `AGENTS.md` defines the authority order. Below it and
+[the governing requirements](governing-requirements.md), current code,
+manifests, and tests outrank every narrative document here.
 
 Historical evidence can remain technically useful without describing current
 defaults.

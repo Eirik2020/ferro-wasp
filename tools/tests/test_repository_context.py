@@ -1,9 +1,12 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from tools.check_repository_context import (
+    _discover_agent_instruction_paths,
+    validate_always_loaded,
     validate_architecture_decisions,
     validate_repository,
     validate_test_catalog,
@@ -58,7 +61,7 @@ class RepositoryContextTests(unittest.TestCase):
         self.assertTrue(any("unknown ADR reference ADR-9999" in e for e in errors))
         self.assertTrue(any("supersession target must not be itself" in e for e in errors))
 
-    def test_agent_instruction_tree_is_budgeted_and_root_routed(self) -> None:
+    def test_root_agent_instructions_are_the_only_ones(self) -> None:
         registry_path = REPOSITORY_ROOT / "project_meta" / "DOCUMENT_REGISTRY.json"
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
         agent_budgets = {
@@ -66,26 +69,26 @@ class RepositoryContextTests(unittest.TestCase):
             for entry in registry["context_budgets"]
             if Path(entry["path"]).name == "AGENTS.md"
         }
-        expected = {
-            "AGENTS.md": 5120,
-            "firmware/AGENTS.md": 5120,
-            "firmware/foxeer-f405-v2/AGENTS.md": 4096,
-            "mdbook/AGENTS.md": 4096,
-            "project_meta/AGENTS.md": 4096,
-            "tools/AGENTS.md": 4096,
-            "tools/ferro-configurator/AGENTS.md": 4096,
-            "tools/rtic-app-builder/AGENTS.md": 5120,
-        }
-        self.assertEqual(agent_budgets, expected)
+        self.assertEqual(agent_budgets, {"AGENTS.md": 12288})
+        self.assertEqual(
+            _discover_agent_instruction_paths(REPOSITORY_ROOT),
+            {"AGENTS.md"},
+        )
+        self.assertEqual(validate_always_loaded(REPOSITORY_ROOT), [])
 
-        root_instructions = (REPOSITORY_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        for path in expected.keys() - {"AGENTS.md"}:
-            with self.subTest(path=path):
-                self.assertIn(path, root_instructions)
-                self.assertLessEqual(
-                    (REPOSITORY_ROOT / path).stat().st_size,
-                    expected[path],
-                )
+    def test_rejects_oversized_always_loaded_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "CLAUDE.md").write_text("@AGENTS.md\n@missing.md\n", encoding="utf-8")
+            (root / "AGENTS.md").write_text("line\n" * 400, encoding="utf-8")
+
+            errors = validate_always_loaded(root)
+
+        self.assertIn("CLAUDE.md import does not resolve: missing.md", errors)
+        self.assertIn(
+            "always-loaded context is 402 lines, over the 400-line limit",
+            errors,
+        )
 
     def test_rejects_unbudgeted_agent_instruction(self) -> None:
         with patch(

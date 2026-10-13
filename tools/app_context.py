@@ -82,8 +82,7 @@ APP_TARGETS = {
         cargo_toml=PurePosixPath("firmware/foxeer-f405-v2/Cargo.toml"),
         instructions=(
             PurePosixPath("AGENTS.md"),
-            PurePosixPath("firmware/AGENTS.md"),
-            PurePosixPath("firmware/foxeer-f405-v2/AGENTS.md"),
+            PurePosixPath("project_meta/governing-requirements.md"),
         ),
         test_chain=(
             "SW-COMMON-001",

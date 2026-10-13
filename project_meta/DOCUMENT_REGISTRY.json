@@ -34,11 +34,11 @@
   ],
   "documents": [
     {
-      "path": "project_meta/AGENTS.md",
-      "role": "project-metadata-scope-instructions",
+      "path": "project_meta/governing-requirements.md",
+      "role": "governing-requirements",
       "lifecycle": "durable",
       "context": "default",
-      "max_bytes": 4096
+      "max_bytes": 6144
     },
     {
       "path": "project_meta/README.md",
@@ -474,35 +474,7 @@
   "context_budgets": [
     {
       "path": "AGENTS.md",
-      "max_bytes": 5120
-    },
-    {
-      "path": "firmware/AGENTS.md",
-      "max_bytes": 5120
-    },
-    {
-      "path": "firmware/foxeer-f405-v2/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "mdbook/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "tools/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "tools/ferro-configurator/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "tools/rtic-app-builder/AGENTS.md",
-      "max_bytes": 5120
+      "max_bytes": 12288
     },
     {
       "path": "tools/rtic-app-builder/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md",
