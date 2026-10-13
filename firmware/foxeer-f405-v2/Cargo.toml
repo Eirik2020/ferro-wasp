@@ -39,7 +39,7 @@ bench_motor_cmd_stale_rejection = ["ferrowasp-stm32-tasks/bench_motor_cmd_stale_
 bench_prearm_imu_stale = []
 bench_spi_timeout_recovery = ["ferrowasp-stm32/bench_spi_timeout_recovery"]
 bench_dshot_idle_output1_not_running = ["ferrowasp-stm32-tasks/bench_dshot_idle_output1_not_running"]
-mspv2_configurator = ["ferrowasp-flight/mspv2_configurator"]
+mspv2_configurator = ["ferrowasp-flight/mspv2_configurator", "ferrowasp-stm32-tasks/mspv2_configurator"]
 
 [dependencies]
 ferrowasp-board-foxeer-f405-v2 = { path = "board" }
