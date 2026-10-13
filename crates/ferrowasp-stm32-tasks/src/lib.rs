@@ -86,6 +86,7 @@ pub use diagnostics::heartbeat;
 pub use dshot::{dshot_dma_complete, dshot_service, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use esc::esc_manager_task;
+pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use leds::status_leds;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
@@ -94,9 +95,8 @@ pub use osd::osd_refresh;
 pub use rc::{neutralize_rc_input, rc_input, rc_telemetry};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use spi1::{
-    ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1ImuKind, Spi1Mailbox,
-    imu_data_ready, io_watchdog, spi1_owner_service, spi1_parser, spi1_poll, spi1_rx_dma,
-    spi1_timeout,
+    ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox, imu_data_ready,
+    io_watchdog, spi1_owner_service, spi1_parser, spi1_poll, spi1_rx_dma, spi1_timeout,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use uart_port::{

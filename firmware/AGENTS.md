@@ -29,8 +29,7 @@ app, not a flight-behavior reference.
 
 ## Board-support admissibility
 
-Before adding a declaration under src/board, search sibling boards and the
-shared crates. Board support may contain physical constants, calibrated or
+Before adding board support, search sibling boards and the shared crates. Board support may contain physical constants, calibrated or
 verified profiles, exact HAL aliases, and thin composition functions that
 select concrete resources/configuration and delegate the mechanism.
 
@@ -47,8 +46,9 @@ Run python tools/check_rtic_boundaries.py after app or board-support changes.
 - Do not declare helper types, functions, macros, aliases, constants, or
   statics in `src/main.rs`. Put board-specific declarations in the app support
   library and reusable declarations in the narrowest common crate.
-- Keep concrete pin, peripheral, DMA, timer, electrical, and orientation facts
-  under the selected app's `src/board/`. RTIC init may only select resources and call shared peripheral constructors.
+- Keep pin, peripheral, DMA, timer, electrical, orientation facts in the
+  app's host-tested `board/` crate; `src/board/` is HAL glue.
+  RTIC init may only select resources and call shared peripheral constructors.
   Do not feature-gate hardware required on every supported variant. DShot is the
   standard ESC protocol on flight boards; Foxeer USB, onboard flash storage,
   flash blackbox recording, and ESC telemetry are also required. Keep RC PWM

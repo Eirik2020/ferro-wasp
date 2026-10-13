@@ -299,6 +299,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-board-foxeer-f405-v2"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-core",
+ "ferrowasp-flight",
+ "ferrowasp-io-core",
+ "ferrowasp-stm32",
+]
+
+[[package]]
+name = "ferrowasp-board-tbs-lucid-h7"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-core",
+ "ferrowasp-flight",
+ "ferrowasp-io-core",
+ "ferrowasp-stm32",
+]
+
+[[package]]
 name = "ferrowasp-core"
 version = "0.1.0"
 dependencies = [

@@ -22,7 +22,7 @@ current configuration.
 
 - Do not transplant FCU3 pins, timers, DMA streams, IMU orientation, motor
   output mapping, electrical assumptions, or storage behavior.
-- Keep Foxeer hardware facts under `src/board/`; expose composed support through
+- Keep Foxeer hardware facts in its `board/` data crate; expose composed support through
   `src/lib.rs`, and document every intentional divergence from FCU3 behavior.
 - Move any mechanism usable by another STM32F4 board to a shared crate.
 - Preserve the explicit physical-body/controller-frame pitch compatibility
