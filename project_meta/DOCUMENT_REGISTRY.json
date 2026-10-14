@@ -501,6 +501,18 @@
       "role": "historical-implementation-plan",
       "lifecycle": "historical",
       "context": "exclude"
+    },
+    {
+      "path": "project_meta/archive/2026-10-14/mdbook/src/dshot.md",
+      "role": "historical-public-chapter",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_meta/archive/2026-10-14/mdbook/src/arming.md",
+      "role": "historical-public-chapter",
+      "lifecycle": "historical",
+      "context": "exclude"
     }
   ],
   "context_budgets": [

@@ -16,7 +16,7 @@ for the board and feature matrix.
 - To build, test, or contribute from source, use the
   [Developer Setup](developer_getting_started.md).
 - To understand the current implementation, browse the flight-controller,
-  interface, and development chapters in the [Summary](SUMMARY.md).
+  interface, and development chapters in the sidebar.
 
 ## Runtime Shape
 

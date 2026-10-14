@@ -1,7 +1,7 @@
 # Documentation Policy
 
 The mdBook is the canonical home for FerroWasp user and developer
-documentation. Its [Summary](SUMMARY.md) is the maintained documentation
+documentation. Its `SUMMARY.md`, the sidebar, is the maintained documentation
 index.
 
 Use the following boundaries:
