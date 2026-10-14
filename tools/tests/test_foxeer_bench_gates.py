@@ -6,7 +6,6 @@ from tools.test_evidence import ARTIFACT_ID
 from tools.foxeer_bench_gates import (
     REVIEWED_BASELINE,
     TEMPORARY_ROLL,
-    BootIdleEvidence,
     REPO_ROOT,
     artifact_id,
     check_usb_snapshots,
@@ -45,24 +44,6 @@ i = 0.0
 d = 0.0
 # imu_lpf_hz 50.8346 is a one-pole alpha of 0.148 at the controller's 2000 Hz loop rate.
 """
-
-CANDIDATE_ELF = "cd873d6b5bb3f88a4388e1e7ebd8a2ab10d721a13454c58b551c1f96f1c2bb6a"
-
-HEALTHY_BOOT = [
-    f"HOST: firmware SHA-256 {CANDIDATE_ELF.upper()}",
-    "DRONE: [INFO ] Foxeer F405 V2 system init successful",
-    "DRONE: [INFO ] Foxeer ICM42688-P ready; WHO_AM_I 71",
-    "DRONE: [WARN ] IMU stale in control loop: seq 0, stale ticks 1",
-    "DRONE: [INFO ] Running heartbeat!",
-    "DRONE: [INFO ] Foxeer DShot values [0, 0, 0, 0], sets 999/1000, lanes [999, 999, 999, 999], "
-    "busy 0, expired 0, timeouts 0, faults 0, at 1999 ms",
-    "DRONE: [WARN ] Foxeer ESC telemetry manager latched fault after response timeout for physical "
-    "output 1 (logical M1), request 0",
-    "DRONE: [INFO ] Foxeer DShot values [0, 0, 0, 0], sets 1999/2000, lanes [1999, 1999, 1999, 1999], "
-    "busy 0, expired 0, timeouts 0, faults 0, at 3999 ms",
-    "DRONE:  WARN probe_rs::probe::stlink: send_jtag_command 242 failed: SwdDpError",
-]
-
 
 def snapshot(text: str, exit_code: int | None = None):
     prefix = "" if exit_code is None else f"exit {exit_code}\n"
@@ -124,52 +105,6 @@ class UsbConfigGateTests(unittest.TestCase):
         run = usb_run()
         del run["restored"]
         self.assertIn("restored: snapshot missing", check_usb_snapshots(run))
-
-
-class BootIdleGateTests(unittest.TestCase):
-    def evidence(self, lines):
-        evidence = BootIdleEvidence()
-        for line in lines:
-            evidence.observe(line)
-        return evidence
-
-    def test_a_healthy_boot_passes_and_probe_warnings_are_ignored(self) -> None:
-        evidence = self.evidence(HEALTHY_BOOT)
-        self.assertEqual(evidence.failures(CANDIDATE_ELF, minimum_reports=2), [])
-        self.assertEqual(evidence.expected_warnings, 2)
-
-    def test_another_image_fails(self) -> None:
-        failures = self.evidence(HEALTHY_BOOT).failures("0" * 64, minimum_reports=2)
-        self.assertTrue(any("is not the candidate's" in f for f in failures))
-
-    def test_any_output_off_stop_fails(self) -> None:
-        lines = HEALTHY_BOOT + [
-            "DRONE: [INFO ] Foxeer DShot values [0, 48, 0, 0], sets 2999/3000, lanes [2999, 2999, 2999, "
-            "2999], busy 0, expired 0, timeouts 0, faults 0, at 5999 ms"
-        ]
-        failures = self.evidence(lines).failures(CANDIDATE_ELF, minimum_reports=2)
-        self.assertTrue(any(f.startswith("DShot not at stop") for f in failures))
-
-    def test_a_dshot_fault_fails(self) -> None:
-        lines = HEALTHY_BOOT + [
-            "DRONE: [INFO ] Foxeer DShot values [0, 0, 0, 0], sets 2999/3000, lanes [2999, 2999, 2999, "
-            "2999], busy 0, expired 0, timeouts 0, faults 1, at 5999 ms"
-        ]
-        failures = self.evidence(lines).failures(CANDIDATE_ELF, minimum_reports=2)
-        self.assertTrue(any(f.startswith("DShot not at stop") for f in failures))
-
-    def test_arming_fails(self) -> None:
-        failures = self.evidence(HEALTHY_BOOT + ["DRONE: [INFO ] SYSTEM ARMED"]).failures(CANDIDATE_ELF, 2)
-        self.assertIn("the system armed", failures)
-
-    def test_an_unexpected_warning_fails(self) -> None:
-        lines = HEALTHY_BOOT + ["DRONE: [WARN ] UART4 RX free-buffer pool exhausted on IDLE"]
-        failures = self.evidence(lines).failures(CANDIDATE_ELF, minimum_reports=2)
-        self.assertIn("unexpected warning: UART4 RX free-buffer pool exhausted on IDLE", failures)
-
-    def test_a_short_capture_fails(self) -> None:
-        failures = self.evidence(HEALTHY_BOOT).failures(CANDIDATE_ELF, minimum_reports=5)
-        self.assertIn("2 DShot reports, fewer than 5", failures)
 
 
 class RecordTests(unittest.TestCase):

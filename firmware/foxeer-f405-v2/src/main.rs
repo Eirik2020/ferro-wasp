@@ -1221,6 +1221,18 @@ ferroforge::app! {
                             ),
                         );
                     }
+                    if let Some((command, link)) = flash_commands.take_next() {
+                        flash_responses.answer(link);
+                        let response = flash_task::storage_unavailable_response(
+                            &command,
+                            [
+                                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
+                                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
+                                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                            ],
+                        );
+                        queue_storage_response(flash_responses, response.as_str());
+                    }
                     Mono::delay(100u64.millis()).await;
                     continue;
                 }
@@ -2238,11 +2250,34 @@ ferroforge::app! {
                     // rate silently dropped most of the log.
                     //
                     // The bound keeps this task from starving the rest of the
-                    // system on a full queue. A page still goes out once per
-                    // pass, which at roughly a millisecond a pass is ample for
-                    // the few hundred pages a second these rates ask for.
+                    // system on a full queue.
                     let mut drained = 0;
                     while drained < FLASH_RECORD_DRAIN_PER_PASS {
+                        // Write a finished page before taking another record.
+                        // The assembler holds one page, so a record taken while
+                        // it is full was dropped. The flash programs in the
+                        // background, so a second page waits until it reports
+                        // idle; until then the records stay queued for the next
+                        // pass. A failed write stays pending for the check
+                        // above to report.
+                        if pending_page.is_none() {
+                            *pending_page = assembler.take_ready_page();
+                        }
+                        if let Some(page) = pending_page.as_ref() {
+                            if !flash_device.read_status().is_ok_and(|status| !status.busy()) {
+                                break;
+                            }
+                            let Some(address) = layout.log_page_address(*next_page_index)
+                            else {
+                                break;
+                            };
+                            if flash_device.page_program(address, page).is_err() {
+                                break;
+                            }
+                            *pending_page = None;
+                            *next_page_index = next_page_index.saturating_add(1);
+                            FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
+                        }
                         let Some(record) = flash_record_consumer.dequeue() else {
                             break;
                         };
@@ -2268,7 +2303,11 @@ ferroforge::app! {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                         }
                     }
-                } else if !SAFETY_ARMED.load(Ordering::Acquire)
+                } else if !cfg!(feature = "bench_blackbox")
+                    // A bench image records disarmed throughout; ending its
+                    // flight whenever the queue ran dry split one run into
+                    // hundreds of tiny flights.
+                    && !SAFETY_ARMED.load(Ordering::Acquire)
                     && assembler.recording()
                     && assembler.stop().is_err()
                 {

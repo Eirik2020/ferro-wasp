@@ -37,6 +37,11 @@ const RESET_SETTLE_MS: u32 = 100;
 const CLOCK_SETTLE_MS: u32 = 10;
 /// Gyro start-up is 30 ms typical and 100 ms maximum from sleep.
 const GYRO_STARTUP_MS: u32 = 100;
+/// The part loses a transaction that starts too soon after the previous one
+/// ends. On a 400 MHz STM32H743, whose chip select stays high for well under
+/// a microsecond between transactions, a read returned 0x00 and a write was
+/// lost; a 5 us gap was enough. Betaflight waits 15 us after each write.
+const TRANSACTION_GAP_US: u32 = 15;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -274,6 +279,25 @@ where
     })
 }
 
+/// A register write followed by the gap the part needs before the next
+/// transaction.
+fn write_reg_spaced<SPI, CS, D>(
+    spi: &mut SPI,
+    cs: &mut CS,
+    delay: &mut D,
+    register: Register,
+    value: u8,
+) -> Result<(), Error<SPI::Error, CS::Error>>
+where
+    SPI: SpiBus<u8>,
+    CS: OutputPin,
+    D: DelayNs,
+{
+    write_reg(spi, cs, register, value)?;
+    delay.delay_us(TRANSACTION_GAP_US);
+    Ok(())
+}
+
 pub fn read_reg<SPI, CS>(
     spi: &mut SPI,
     cs: &mut CS,
@@ -302,17 +326,20 @@ where
     read_reg(spi, cs, Register::WhoAmI)
 }
 
-fn verify_register<SPI, CS>(
+fn verify_register<SPI, CS, D>(
     spi: &mut SPI,
     cs: &mut CS,
+    delay: &mut D,
     register: Register,
     expected: u8,
 ) -> Result<(), Error<SPI::Error, CS::Error>>
 where
     SPI: SpiBus<u8>,
     CS: OutputPin,
+    D: DelayNs,
 {
     let observed = read_reg(spi, cs, register)?;
+    delay.delay_us(TRANSACTION_GAP_US);
     if observed == expected {
         Ok(())
     } else {
@@ -349,56 +376,62 @@ where
     D: DelayNs,
 {
     cs.set_high().map_err(Error::Pin)?;
+    // The caller may have just probed WHO_AM_I.
+    delay.delay_us(TRANSACTION_GAP_US);
 
     // Over SPI, DEVICE_RESET alone does not reset the sensor signal paths.
-    write_reg(spi, cs, Register::PwrMgmt1, DEVICE_RESET)?;
+    write_reg_spaced(spi, cs, delay, Register::PwrMgmt1, DEVICE_RESET)?;
     delay.delay_ms(RESET_SETTLE_MS);
-    write_reg(
+    write_reg_spaced(
         spi,
         cs,
+        delay,
         Register::SignalPathReset,
         GYRO_ACCEL_TEMP_SIGNAL_PATH_RESET,
     )?;
     delay.delay_ms(RESET_SETTLE_MS);
 
     // Leaving sleep with the gyro PLL as the clock.
-    write_reg(spi, cs, Register::PwrMgmt1, CLKSEL_PLL_GYRO_Z)?;
+    write_reg_spaced(spi, cs, delay, Register::PwrMgmt1, CLKSEL_PLL_GYRO_Z)?;
     delay.delay_ms(CLOCK_SETTLE_MS);
 
     // Reset re-enables the I2C slave interface; SPI-only from here.
-    write_reg(spi, cs, Register::UserCtrl, I2C_IF_DIS)?;
+    write_reg_spaced(spi, cs, delay, Register::UserCtrl, I2C_IF_DIS)?;
 
     let who_am_i = read_who_am_i(spi, cs)?;
+    delay.delay_us(TRANSACTION_GAP_US);
     if who_am_i != WHO_AM_I_EXPECTED {
         return Err(Error::InvalidWhoAmI(who_am_i));
     }
 
-    write_reg(spi, cs, Register::PwrMgmt2, ALL_AXES_ENABLED)?;
-    write_reg(spi, cs, Register::Config, config.config())?;
-    write_reg(spi, cs, Register::SmplrtDiv, config.smplrt_div())?;
-    write_reg(spi, cs, Register::GyroConfig, config.gyro_config())?;
-    write_reg(spi, cs, Register::AccelConfig, config.accel_config())?;
-    write_reg(
+    write_reg_spaced(spi, cs, delay, Register::PwrMgmt2, ALL_AXES_ENABLED)?;
+    write_reg_spaced(spi, cs, delay, Register::Config, config.config())?;
+    write_reg_spaced(spi, cs, delay, Register::SmplrtDiv, config.smplrt_div())?;
+    write_reg_spaced(spi, cs, delay, Register::GyroConfig, config.gyro_config())?;
+    write_reg_spaced(spi, cs, delay, Register::AccelConfig, config.accel_config())?;
+    write_reg_spaced(
         spi,
         cs,
+        delay,
         Register::IntPinCfg,
         INT_ACTIVE_HIGH_PUSH_PULL_PULSED,
     )?;
-    write_reg(spi, cs, Register::IntEnable, DATA_RDY_EN)?;
+    write_reg_spaced(spi, cs, delay, Register::IntEnable, DATA_RDY_EN)?;
 
-    verify_register(spi, cs, Register::PwrMgmt1, CLKSEL_PLL_GYRO_Z)?;
-    verify_register(spi, cs, Register::PwrMgmt2, ALL_AXES_ENABLED)?;
-    verify_register(spi, cs, Register::Config, config.config())?;
-    verify_register(spi, cs, Register::SmplrtDiv, config.smplrt_div())?;
-    verify_register(spi, cs, Register::GyroConfig, config.gyro_config())?;
-    verify_register(spi, cs, Register::AccelConfig, config.accel_config())?;
+    verify_register(spi, cs, delay, Register::PwrMgmt1, CLKSEL_PLL_GYRO_Z)?;
+    verify_register(spi, cs, delay, Register::PwrMgmt2, ALL_AXES_ENABLED)?;
+    verify_register(spi, cs, delay, Register::Config, config.config())?;
+    verify_register(spi, cs, delay, Register::SmplrtDiv, config.smplrt_div())?;
+    verify_register(spi, cs, delay, Register::GyroConfig, config.gyro_config())?;
+    verify_register(spi, cs, delay, Register::AccelConfig, config.accel_config())?;
     verify_register(
         spi,
         cs,
+        delay,
         Register::IntPinCfg,
         INT_ACTIVE_HIGH_PUSH_PULL_PULSED,
     )?;
-    verify_register(spi, cs, Register::IntEnable, DATA_RDY_EN)?;
+    verify_register(spi, cs, delay, Register::IntEnable, DATA_RDY_EN)?;
 
     delay.delay_ms(GYRO_STARTUP_MS);
     Ok(())
@@ -597,6 +630,65 @@ mod tests {
         );
         assert!(delay.delay_ns_total >= 300_000_000);
         assert_eq!(cs.states.last(), Some(&true));
+    }
+
+    /// A clock advanced only by the delay, so a chip select can measure how
+    /// long it stayed high.
+    #[derive(Clone, Default)]
+    struct SharedClock(std::rc::Rc<core::cell::Cell<u64>>);
+
+    struct ClockDelay(SharedClock);
+
+    impl DelayNs for ClockDelay {
+        fn delay_ns(&mut self, ns: u32) {
+            let clock = &(self.0).0;
+            clock.set(clock.get() + u64::from(ns));
+        }
+    }
+
+    /// Counts transactions that begin less than the part's minimum gap after
+    /// the previous one ended.
+    struct GapCheckingPin {
+        clock: SharedClock,
+        last_high_ns: Option<u64>,
+        short_gaps: usize,
+    }
+
+    impl DigitalErrorType for GapCheckingPin {
+        type Error = Infallible;
+    }
+
+    impl OutputPin for GapCheckingPin {
+        fn set_low(&mut self) -> Result<(), Self::Error> {
+            let now = self.clock.0.get();
+            if self.last_high_ns.is_some_and(|high| now - high < 5_000) {
+                self.short_gaps += 1;
+            }
+            Ok(())
+        }
+
+        fn set_high(&mut self) -> Result<(), Self::Error> {
+            self.last_high_ns = Some(self.clock.0.get());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn init_spaces_every_transaction_from_the_one_before() {
+        let clock = SharedClock::default();
+        let mut spi = MockMpu::default();
+        let mut cs = GapCheckingPin {
+            clock: clock.clone(),
+            last_high_ns: None,
+            short_gaps: 0,
+        };
+        let mut delay = ClockDelay(clock);
+
+        // Bring-up probes WHO_AM_I immediately before init.
+        read_who_am_i(&mut spi, &mut cs).unwrap();
+        init(&mut spi, &mut cs, &mut delay).unwrap();
+
+        assert_eq!(cs.short_gaps, 0);
     }
 
     #[test]

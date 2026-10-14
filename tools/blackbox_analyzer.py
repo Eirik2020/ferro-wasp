@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Analyze FerroWasp 400 Hz BB1/BB2 blackbox RTT logs."""
+"""Analyze FerroWasp BB1/BB2 blackbox logs.
+
+The control loop rate is measured from each log's own timestamps, since it
+differs by board and firmware (400 Hz once, 2 kHz now); `--control-rate-hz`
+overrides it.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +26,10 @@ LOG_DIRS = (
     REPO_ROOT / "logs" / "remote_probe",
     REPO_ROOT / "logs" / "terminal_embed",
 )
-CONTROL_RATE_HZ = 400.0
+# The rate the loaded log was recorded at; `main` sets it from the log before
+# any seconds are converted to samples. 400 Hz is the rate before timestamps.
+LEGACY_CONTROL_RATE_HZ = 400.0
+CONTROL_RATE_HZ = LEGACY_CONTROL_RATE_HZ
 FLASH_PAGE_LEN = 256
 FLASH_RECORD_LEN = 48
 FLASH_PAGE_DATA_LEN = 240
@@ -137,6 +145,11 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         type=Path,
         help="RTT log file(s). Defaults to newest .log in logs/remote_probe or logs/terminal_embed.",
+    )
+    parser.add_argument(
+        "--control-rate-hz",
+        type=float,
+        help="Control loop rate the log was recorded at. Default: measured from its timestamps.",
     )
     parser.add_argument(
         "--csv",
@@ -650,6 +663,31 @@ def u32_forward_delta(previous: int, current: int) -> int:
     return (current - previous) & 0xFFFF_FFFF
 
 
+def measured_control_rate_hz(samples: list[BlackboxSample]) -> float | None:
+    """Control ticks per second, from the control sequence and timestamp
+    spans of consecutive samples; `None` without a second of timestamps.
+
+    Timestamps tick in whole milliseconds, so the rate comes from long spans
+    rather than single intervals. A pair with a backwards or implausibly
+    large step, such as a reboot, is left out.
+    """
+
+    ticks = 0
+    elapsed_us = 0
+    for previous, current in zip(samples, samples[1:]):
+        if previous.timestamp_us is None or current.timestamp_us is None:
+            continue
+        control_delta = current.seq - previous.seq
+        interval_us = u32_forward_delta(previous.timestamp_us, current.timestamp_us)
+        if control_delta <= 0 or interval_us > 1_000_000:
+            continue
+        ticks += control_delta
+        elapsed_us += interval_us
+    if elapsed_us < 1_000_000:
+        return None
+    return ticks * 1_000_000 / elapsed_us
+
+
 def sequence_stats(samples: list[BlackboxSample]) -> SequenceStats:
     """Compare IMU progress with control progress, tolerating dropped RTT frames.
 
@@ -1057,6 +1095,18 @@ def main() -> int:
     if args.warmup > 0:
         samples = samples[args.warmup :]
 
+    global CONTROL_RATE_HZ
+    measured_rate_hz = measured_control_rate_hz(samples)
+    if args.control_rate_hz is not None:
+        CONTROL_RATE_HZ = args.control_rate_hz
+        rate_source = "given"
+    elif measured_rate_hz is not None:
+        CONTROL_RATE_HZ = round(measured_rate_hz)
+        rate_source = "measured"
+    else:
+        CONTROL_RATE_HZ = LEGACY_CONTROL_RATE_HZ
+        rate_source = "assumed: no timestamps; pass --control-rate-hz"
+
     try:
         samples, trimmed_start, trimmed_end = trim_samples_by_seconds(
             samples,
@@ -1107,7 +1157,8 @@ def main() -> int:
             "or a numeric ID for timing and missing-frame conclusions."
         )
     print(f"Format: BB{max(sample.version for sample in samples)} blackbox")
-    print(f"Samples: {len(samples)}  seq: {first_seq}..{last_seq}  estimated rate: {sample_rate_hz:.1f} Hz")
+    print(f"Control loop: {CONTROL_RATE_HZ:g} Hz ({rate_source})")
+    print(f"Samples: {len(samples)}  seq: {first_seq}..{last_seq}  logged rate: {sample_rate_hz:.1f} Hz")
     if trimmed_start or trimmed_end:
         print(f"Trimmed samples: start={trimmed_start}, end={trimmed_end}")
     if args.flight_window_throttle_min is not None:

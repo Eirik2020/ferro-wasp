@@ -322,7 +322,7 @@ enum ConfigCommand {
 #[derive(Debug, Serialize)]
 struct DeviceReport {
     port: String,
-    board: &'static str,
+    board: String,
     protocol: &'static str,
     flash: FlashInfo,
     status: Option<StatusSnapshot>,
@@ -401,9 +401,11 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 let mut client = connect(cli, timeout)?;
                 let flash = client.flash_info()?;
                 let status = client.read_status().ok();
+                let port = client.description().to_owned();
+                let board = board_of(&port);
                 let report = DeviceReport {
-                    port: client.description().to_owned(),
-                    board: "Foxeer F405 V2",
+                    port,
+                    board,
                     protocol: "FerroWasp storage CLI v1",
                     flash,
                     status,
@@ -1367,6 +1369,23 @@ fn bench_loop(cli: &Cli, timeout: Duration, seconds: u64) -> Result<(), FerroErr
             );
         }
     })
+}
+
+/// The connected board's name, from the USB serial number its firmware sets.
+fn board_of(port: &str) -> String {
+    let info = discover_ports()
+        .ok()
+        .and_then(|ports| ports.into_iter().find(|candidate| candidate.port == port));
+    match info {
+        Some(info) => match info.board_name() {
+            Some(name) => name.to_owned(),
+            None => format!(
+                "unknown (USB serial {})",
+                info.serial_number.as_deref().unwrap_or("none")
+            ),
+        },
+        None => "unknown (not a USB port)".to_owned(),
+    }
 }
 
 fn connect(

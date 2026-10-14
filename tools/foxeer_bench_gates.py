@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Run and check the Foxeer bench gates the operator only powers and cables.
+"""Run and check the Foxeer's USB configuration gate.
 
-`boot-idle` runs BENCH-COMMON-001 and `usb-config` runs BENCH-FOX-USB-001 on
-the connected board: the operator confirms the safety state once and performs
-each power cycle when asked, and everything else is driven and judged here.
-Every capture lands in a new directory under `logs/bench/`, and a draft run
-record is written for review; nothing is committed.
+`usb-config` runs BENCH-FOX-USB-001 on the connected board: the operator
+confirms the safety state once and performs each power cycle when asked, and
+everything else is driven and judged here. Every capture lands in a new
+directory under `logs/bench/`, and a draft schema 2 run record is written for
+review; nothing is committed.
 
-`check-boot-idle` and `check-usb-config` apply the same judgement to captures
-that already exist, so a manual run and an automated one are held to the same
-standard.
+`check-usb-config` applies the same judgement to snapshots that already exist.
+BENCH-COMMON-001, the boot and idle gate, is `tools/bench_rig.py boot-idle`.
 """
 
 from __future__ import annotations
@@ -18,7 +17,6 @@ import argparse
 import hashlib
 import json
 import re
-import signal
 import subprocess
 import sys
 import time
@@ -28,12 +26,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from . import components as component_ids
+else:
+    import components as component_ids
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CATALOG = REPO_ROOT / "project_meta/testing/TEST_CATALOG.json"
 RUNS_DIR = REPO_ROOT / "project_meta/testing/evidence/runs"
 BENCH_LOGS = REPO_ROOT / "logs/bench"
 CONFIGURATOR = REPO_ROOT / "tools/ferro-configurator/target/release/ferro-configurator"
-TERMINAL_EMBED = REPO_ROOT / "tools/terminal_embed.py"
+COMPONENTS = REPO_ROOT / "project_meta/testing/COMPONENTS.json"
 
 USB_VID = 0x16C0
 USB_PID = 0x27DD
@@ -77,22 +80,6 @@ USB_SNAPSHOTS = {
     "restored_cold_boot": "8-restored-cold.txt",
 }
 BASELINE_EXPORT = "foxeer-baseline.toml"
-
-# Warnings every healthy boot on the bench prints: one stale tick before the
-# first IMU sample, and ESC telemetry giving up on an ESC with no power.
-EXPECTED_WARNINGS = (
-    re.compile(r"IMU stale in control loop: seq 0, stale ticks 1$"),
-    re.compile(
-        r"Foxeer ESC telemetry manager latched fault after response timeout "
-        r"for physical output \d \(logical M\d\), request \d+$"
-    ),
-)
-DSHOT_REPORT = re.compile(
-    r"Foxeer DShot values \[(?P<values>[^\]]*)\].*?expired (?P<expired>\d+), "
-    r"timeouts (?P<timeouts>\d+), faults (?P<faults>\d+), at (?P<at_ms>\d+) ms"
-)
-DEFMT_LEVEL = re.compile(r"^\[(?P<level>TRACE|DEBUG|INFO|WARN|ERROR)\s*\]\s*(?P<text>.*)$")
-
 
 class GateStop(Exception):
     """A stop condition, or a check that failed: the gate ends here."""
@@ -183,83 +170,6 @@ def load_usb_snapshots(directory: Path) -> dict[str, tuple[int | None, dict[str,
         if path.is_file() and path.stat().st_size:
             loaded[step] = parse_snapshot(path.read_text())
     return loaded
-
-
-# --- Boot and idle logs --------------------------------------------------------
-
-
-@dataclass
-class BootIdleEvidence:
-    """What one terminal_embed capture of the flight image shows."""
-
-    elf_sha256: str | None = None
-    init_ok: bool = False
-    imu_ready: bool = False
-    heartbeat: bool = False
-    dshot_reports: int = 0
-    dshot_last_ms: int = 0
-    dshot_bad: list[str] = field(default_factory=list)
-    armed: bool = False
-    fatal: list[str] = field(default_factory=list)
-    unexpected_warnings: list[str] = field(default_factory=list)
-    expected_warnings: int = 0
-
-    def observe(self, raw: str) -> None:
-        line = raw.rstrip("\n")
-        if line.startswith("HOST: firmware SHA-256 "):
-            self.elf_sha256 = line.rsplit(" ", 1)[1].lower()
-            return
-        if not line.startswith("DRONE: "):
-            return
-        match = DEFMT_LEVEL.match(line[len("DRONE: ") :])
-        if match is None:
-            return
-        level, text = match.group("level"), match.group("text")
-        self.init_ok |= text == "Foxeer F405 V2 system init successful"
-        self.imu_ready |= text.startswith(("Foxeer ICM42688-P ready", "Foxeer MPU6500 ready"))
-        self.heartbeat |= text == "Running heartbeat!"
-        self.armed |= text == "SYSTEM ARMED"
-        if level == "ERROR" or "panicked" in text.lower() or "hardfault" in text.lower():
-            self.fatal.append(text)
-        if level == "WARN":
-            if any(pattern.search(text) for pattern in EXPECTED_WARNINGS):
-                self.expected_warnings += 1
-            else:
-                self.unexpected_warnings.append(text)
-        report = DSHOT_REPORT.search(text)
-        if report:
-            self.dshot_reports += 1
-            self.dshot_last_ms = int(report.group("at_ms"))
-            values = [int(v) for v in report.group("values").split(",") if v.strip()]
-            counters = [int(report.group(name)) for name in ("expired", "timeouts", "faults")]
-            if any(values) or any(counters):
-                self.dshot_bad.append(text)
-
-    def failures(self, expected_elf_sha256: str | None, minimum_reports: int) -> list[str]:
-        problems = []
-        if expected_elf_sha256 is not None and self.elf_sha256 != expected_elf_sha256.lower():
-            problems.append(f"ELF SHA-256 {self.elf_sha256} is not the candidate's {expected_elf_sha256}")
-        if not self.init_ok:
-            problems.append("no successful system init")
-        if not self.imu_ready:
-            problems.append("the IMU never reported ready")
-        if not self.heartbeat:
-            problems.append("no heartbeat")
-        if self.dshot_reports < minimum_reports:
-            problems.append(f"{self.dshot_reports} DShot reports, fewer than {minimum_reports}")
-        problems.extend(f"DShot not at stop: {line}" for line in self.dshot_bad)
-        if self.armed:
-            problems.append("the system armed")
-        problems.extend(f"fatal output: {line}" for line in self.fatal)
-        problems.extend(f"unexpected warning: {line}" for line in self.unexpected_warnings)
-        return problems
-
-
-def read_boot_log(path: Path) -> BootIdleEvidence:
-    evidence = BootIdleEvidence()
-    for line in path.read_text(errors="replace").splitlines():
-        evidence.observe(line)
-    return evidence
 
 
 # --- Hardware and operator -----------------------------------------------------
@@ -404,11 +314,45 @@ def load_build_record(path: Path) -> dict[str, Any]:
     return record
 
 
-def release_elf_sha256(build_record: dict[str, Any]) -> str:
-    for artifact in build_record.get("artifacts", []):
-        if artifact.get("id") == "release-elf":
-            return artifact["sha256"]
-    raise GateStop("the build record names no release-elf artifact")
+# What a USB configuration round trip exercises on the Foxeer: the app and its
+# backend, the shared tasks, the USB command link and status, and the stored
+# configuration in SPI NOR.
+USB_CONFIG_COMPONENTS = (
+    "app-foxeer-f405-v2",
+    "stm32f4",
+    "stm32",
+    "stm32-tasks",
+    "core",
+    "flight",
+    "flight-links",
+    "flight-storage",
+    "drivers",
+    "driver-spi-nor",
+    "io-core",
+)
+
+
+def candidate_components(build_record: dict[str, Any]) -> list[dict[str, str]]:
+    """The run's components at the candidate's content.
+
+    Content IDs are read from the checkout, so it must be the candidate's own
+    revision, clean; otherwise they would describe other code than the board
+    runs.
+    """
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    revision = build_record["candidate"]["revision"]
+    if git("rev-parse", "HEAD") != git("rev-parse", revision) or git("status", "--porcelain"):
+        raise GateStop(f"check out the candidate's revision {revision[:12]} with a clean tree first")
+    data = json.loads(COMPONENTS.read_text(encoding="utf-8"))
+    current, uncovered = component_ids.current_content_ids(REPO_ROOT, data)
+    if uncovered:
+        raise GateStop(f"source files belong to no component: {', '.join(uncovered)}")
+    return [{"id": name, "content_sha256": current[name]} for name in USB_CONFIG_COMPONENTS]
 
 
 def catalog_entry(test_id: str) -> dict[str, Any]:
@@ -432,6 +376,7 @@ def write_record(
     measurements: dict[str, Any],
     observations: list[str],
     limitations: list[str],
+    components: list[dict[str, str]],
     configuration: dict[str, Any] | None = None,
 ) -> Path:
     entry = catalog_entry(test_id)
@@ -445,7 +390,7 @@ def write_record(
         sequence += 1
     run_id = f"{stamp}__{test_id}__foxeer-f405-v2__{sequence:02d}"
     record = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "test_id": test_id,
         "started_at_utc": iso(started),
@@ -468,6 +413,7 @@ def write_record(
             "target_triple": candidate["target_triple"],
             "configuration": configuration or {},
         },
+        "components": components,
         "conditions": {
             "propellers": "removed",
             "actuator_power": "disconnected",
@@ -498,103 +444,6 @@ def write_record(
 # --- The gates -----------------------------------------------------------------
 
 
-def run_boot_idle(args: argparse.Namespace) -> int:
-    build_record = load_build_record(args.build_record)
-    elf_sha256 = release_elf_sha256(build_record)
-    confirm_bench_state()
-    started = utc_now()
-    capture = new_capture_dir("boot-idle", started)
-    log = CommandLog()
-    logs: list[Path] = []
-    minimum_reports = max(1, args.seconds // 2 - 1)
-    shown = "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked"
-    try:
-        for boot in range(1, args.boots + 1):
-            if boot > 1:
-                power_cycle(settle_s=2)
-            path = capture / f"boot-{boot}.log"
-            print(f"\nBoot {boot}/{args.boots}: flashing and capturing for {args.seconds} s.")
-            process = subprocess.Popen(
-                [sys.executable, str(TERMINAL_EMBED), "--board", "foxeer-f405-v2", "--release", "--locked",
-                 "--log-file", str(path)],
-                cwd=REPO_ROOT,
-                stdout=subprocess.DEVNULL,
-            )
-            booted = wait_for_line(path, "=== FLASH SUCCEEDED", process, timeout_s=120)
-            if booted:
-                time.sleep(args.seconds)
-            process.send_signal(signal.SIGINT)
-            exit_code = process.wait(timeout=30)
-            log.commands.append(
-                {"command": f"{shown} --log-file <capture>/boot-{boot}.log", "exit_code": exit_code}
-            )
-            logs.append(path)
-            evidence = read_boot_log(path)
-            problems = evidence.failures(elf_sha256, minimum_reports)
-            if not booted:
-                problems.insert(0, "the board never reported a successful flash and boot")
-            if problems:
-                raise GateStop(f"boot {boot}: " + "; ".join(problems))
-            print(f"Boot {boot}: {evidence.dshot_reports} DShot reports at stop, no faults, not armed.")
-        notes = operator_notes()
-    except GateStop as stop:
-        print(f"\nGATE STOPPED: {stop}")
-        print(f"Captures kept in {capture.relative_to(REPO_ROOT)}")
-        return 1
-    completed = utc_now()
-    result = "pass" if not notes else "inconclusive"
-    evidence_all = [read_boot_log(path) for path in logs]
-    observations = [
-        f"Every capture printed ELF SHA-256 {elf_sha256[:8]}..., the candidate's release ELF.",
-        f"{len(logs)} boots each reached system init, IMU ready and the heartbeat; every DShot report "
-        "was [0, 0, 0, 0] with no expired commands, timeouts or faults; none armed or panicked.",
-        "The only warnings were the expected boot-time IMU stale tick and ESC telemetry latching "
-        "faulted with no ESC power.",
-        "Run by tools/foxeer_bench_gates.py boot-idle; each capture ended by interrupting "
-        "terminal_embed, then the operator cold-cycled USB before the next.",
-    ]
-    if notes:
-        observations.append(f"Operator note: {notes}")
-    record = write_record(
-        test_id="BENCH-COMMON-001",
-        started=started,
-        completed=completed,
-        result=result,
-        build_record=build_record,
-        commands=log.commands,
-        artifacts=[(path, "log") for path in logs],
-        measurements={
-            "boot_cycles": len(logs),
-            "dshot_zero_output_reports": sum(e.dshot_reports for e in evidence_all),
-            "dshot_nonzero_output_reports": 0,
-            "longest_capture_seconds": max(e.dshot_last_ms for e in evidence_all) // 1000 + 1,
-        },
-        observations=observations,
-        limitations=[
-            "No oscilloscope or logic analyzer: pulses before the actuator task initializes were not "
-            "observed electrically; actuator power was disconnected throughout.",
-            "Motor outputs at stop are the firmware's own DShot reports, not measurements at the pins.",
-            "Each captured boot is the reset after probe-rs programs the image; the cold USB power "
-            "cycles between captures were not captured.",
-            "The LED heartbeat check does not apply to this board with SWD attached; the RTT heartbeat "
-            "was used instead.",
-        ],
-    )
-    print(f"\nBENCH-COMMON-001 {result.upper()}. Draft record: {record.relative_to(REPO_ROOT)}")
-    return 0 if result == "pass" else 1
-
-
-def wait_for_line(path: Path, marker: str, process: subprocess.Popen[bytes], timeout_s: float) -> bool:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if path.exists() and marker in path.read_text(errors="replace"):
-            return True
-        if process.poll() is not None:
-            return False
-        time.sleep(0.5)
-    return False
-
-
 def run_usb_config(args: argparse.Namespace) -> int:
     build_record = load_build_record(args.build_record)
     if not CONFIGURATOR.is_file():
@@ -602,9 +451,12 @@ def run_usb_config(args: argparse.Namespace) -> int:
     port = find_port()
     if port is None:
         raise GateStop("no Foxeer on USB; plug it in and wait for it to enumerate")
+    components = candidate_components(build_record)
     confirm_bench_state()
     if not ask_yes_no("Has the board been flashed with this candidate since it was built?"):
-        raise GateStop("run boot-idle first so the board runs the candidate")
+        raise GateStop(
+            "flash the candidate first: tools/bench_rig.py boot-idle --board foxeer-f405-v2"
+        )
     started = utc_now()
     capture = new_capture_dir("usb-config", started)
     log = CommandLog()
@@ -675,21 +527,11 @@ def run_usb_config(args: argparse.Namespace) -> int:
             "The image on the board is taken from the operator's confirmation; USB does not report it.",
             "Cold boots were USB power cycles with actuator power disconnected; no brownout was induced.",
         ],
+        components=components,
         configuration={"log_rate_divisor": int(initial["log_rate_divisor"])},
     )
     print(f"\nBENCH-FOX-USB-001 {result.upper()}. Draft record: {record.relative_to(REPO_ROOT)}")
     return 0 if result == "pass" else 1
-
-
-def check_boot_idle(args: argparse.Namespace) -> int:
-    failed = False
-    for path in args.logs:
-        problems = read_boot_log(path).failures(args.elf_sha256, args.minimum_reports)
-        print(f"{path}: {'PASS' if not problems else 'FAIL'}")
-        for problem in problems:
-            print(f"  - {problem}")
-        failed |= bool(problems)
-    return 1 if failed else 0
 
 
 def check_usb_config(args: argparse.Namespace) -> int:
@@ -704,22 +546,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
-    boot = commands.add_parser("boot-idle", help="Run BENCH-COMMON-001 on the connected Foxeer.")
     build_help = "The candidate's BUILD-FOX-001 record."
-    boot.add_argument("--build-record", type=Path, required=True, help=build_help)
-    boot.add_argument("--boots", type=int, default=3, help="Cold boots to capture (default 3).")
-    boot.add_argument("--seconds", type=int, default=20, help="Capture length after each boot (default 20).")
-    boot.set_defaults(handler=run_boot_idle)
-
     usb = commands.add_parser("usb-config", help="Run BENCH-FOX-USB-001 on the connected Foxeer.")
     usb.add_argument("--build-record", type=Path, required=True, help=build_help)
     usb.set_defaults(handler=run_usb_config)
-
-    check_boot = commands.add_parser("check-boot-idle", help="Judge existing boot captures.")
-    check_boot.add_argument("logs", type=Path, nargs="+")
-    check_boot.add_argument("--elf-sha256", help="Require this ELF hash in every capture.")
-    check_boot.add_argument("--minimum-reports", type=int, default=5)
-    check_boot.set_defaults(handler=check_boot_idle)
 
     check_usb = commands.add_parser("check-usb-config", help="Judge an existing snapshot directory.")
     check_usb.add_argument("directory", type=Path)

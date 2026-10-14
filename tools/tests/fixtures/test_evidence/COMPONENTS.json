@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "description": "Fixture components.",
+  "source_roots": [
+    "src"
+  ],
+  "hardware_targets": [
+    "fixture-board"
+  ],
+  "components": [
+    {
+      "id": "alpha",
+      "paths": [
+        "src/alpha.rs.fixture"
+      ]
+    },
+    {
+      "id": "beta",
+      "paths": [
+        "src/beta.rs.fixture"
+      ]
+    }
+  ]
+}

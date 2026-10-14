@@ -35,7 +35,7 @@ pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     battery_current_adc: true,
     usb_cdc_debug: true,
     dshot_motor_count: 4,
-    onboard_debug_leds_usable_with_swd: false,
+    onboard_debug_leds_usable_with_swd: true,
     timer_dma_motor_output: true,
 };
 
@@ -167,9 +167,24 @@ pub const PIN_MAP: &[PinAssignment] = &[
         alternate: Some(7),
     },
     PinAssignment {
+        signal: "USART1_RX_DJI_SBUS",
+        pin: "PA10",
+        alternate: Some(7),
+    },
+    PinAssignment {
         signal: "UART8_RX_ESC_TELEMETRY",
         pin: "PE0",
         alternate: Some(8),
+    },
+    PinAssignment {
+        signal: "LED_ARMED_BLUE",
+        pin: "PE3",
+        alternate: None,
+    },
+    PinAssignment {
+        signal: "LED_HEARTBEAT_GREEN",
+        pin: "PE4",
+        alternate: None,
     },
 ];
 
@@ -186,6 +201,8 @@ pub const DISPATCHER_IRQS: &[&str] = &[
 ];
 
 pub const HARDWARE_IRQS: &[&str] = &[
+    "USART1",
+    "DMA2_STR4",
     "USART6",
     "DMA1_STR0",
     "USART3",
@@ -235,7 +252,20 @@ pub const TIMER_GROUPS: &[TimerGroupDescription] = &[
 
 // DMA claims name the stream and, as `_CH`, its DMAMUX request line.
 pub const CLAIMS: &[ResourceClaim] = &[
-    ResourceClaim::new(ResourceKind::Peripheral, "USART6", "UART6 RC input"),
+    ResourceClaim::new(
+        ResourceKind::Peripheral,
+        "USART1",
+        "UART1 RC input (DJI connector SBUS)",
+    ),
+    ResourceClaim::new(ResourceKind::Pin, "PA10", "USART1 RX DJI connector SBUS"),
+    ResourceClaim::new(
+        ResourceKind::DmaStream,
+        "DMA2_STREAM4_CH41",
+        "UART1 RC RX (DJI connector SBUS)",
+    ),
+    ResourceClaim::new(ResourceKind::Irq, "USART1", "UART1 RX IDLE"),
+    ResourceClaim::new(ResourceKind::Irq, "DMA2_STR4", "UART1 RX DMA"),
+    ResourceClaim::new(ResourceKind::Peripheral, "USART6", "UART6 serial port"),
     ResourceClaim::new(ResourceKind::Pin, "PC6", "USART6 TX receiver"),
     ResourceClaim::new(ResourceKind::Pin, "PC7", "USART6 RX receiver"),
     ResourceClaim::new(ResourceKind::DmaStream, "DMA1_STREAM0_CH71", "UART6 RC RX"),
@@ -337,6 +367,8 @@ pub const CLAIMS: &[ResourceClaim] = &[
         "BLHeli legacy ESC telemetry",
     ),
     ResourceClaim::new(ResourceKind::Pin, "PE0", "UART8 RX ESC telemetry"),
+    ResourceClaim::new(ResourceKind::Pin, "PE3", "Armed LED (blue)"),
+    ResourceClaim::new(ResourceKind::Pin, "PE4", "Heartbeat LED (green)"),
     ResourceClaim::new(
         ResourceKind::DmaStream,
         "DMA1_STREAM2_CH81",
@@ -458,7 +490,7 @@ mod tests {
         ];
 
         assert_eq!(enabled, [true; 8]);
-        assert!(!BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd);
+        assert!(BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd);
         assert_eq!(BOARD_CAPABILITIES.dshot_motor_count, 4);
     }
 
@@ -512,9 +544,9 @@ mod tests {
 
     #[test]
     fn active_claim_counts_match_the_runtime_contract() {
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 10);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 11);
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::TimerChannel), 4);
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 12);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 13);
     }
 
     #[test]

@@ -31,6 +31,8 @@ ferroforge::app! {
         uart6_rx: Option<board::aliases::Uart6RxPort>,
         uart6_tx_dma: Option<board::aliases::Uart6TxDmaSide>,
         #[lock_free]
+        uart1_rx: Option<board::aliases::Uart1RxPort>,
+        #[lock_free]
         uart8_rx: Option<board::aliases::Uart8RxPort>,
 
         // IMU
@@ -145,6 +147,11 @@ ferroforge::app! {
         osd_rc_throttle_reader: signals::RcThrottleReader,
         osd_rc_rates_reader: RcRatesReader,
         usb_rc_link_reader: signals::RcLinkReader,
+        led_safety_arm_reader: signals::SafetyArmReader,
+
+        // ----  STATUS LEDS  ----
+        heartbeat_led: StatusLed,
+        armed_led: StatusLed,
         actuator_arm_done_writer: signals::ActuatorArmDoneWriter,
         actuator_arm_done_reader: signals::ActuatorArmDoneReader,
         actuator_arm_permit_writer: ActuatorArmPermitWriter,
@@ -165,6 +172,12 @@ ferroforge::app! {
         configurator_usb: ConfiguratorUsbState,
     }
     #[init(local = [
+        uart1_rx_buffers: stm32_storage::UartRxBufferBank =
+            stm32_storage::new_uart_rx_buffer_bank(),
+        uart1_free_queue: stm32_storage::UartRxFreeQueue =
+            stm32_storage::UartRxFreeQueue::new(),
+        uart1_filled_queue: stm32_storage::UartRxFilledQueue =
+            stm32_storage::UartRxFilledQueue::new(),
         uart8_rx_buffers: stm32_storage::UartRxBufferBank =
             stm32_storage::new_uart_rx_buffer_bank(),
         uart8_free_queue: stm32_storage::UartRxFreeQueue =
@@ -219,6 +232,10 @@ ferroforge::app! {
         let gpioc = dp.GPIOC.split(rec.GPIOC);
         let gpiod = dp.GPIOD.split(rec.GPIOD);
         let gpioe = dp.GPIOE.split(rec.GPIOE);
+        let leds = board::init::init_status_leds(board::init::StatusLedPins {
+            heartbeat: gpioe.pe4,
+            armed: gpioe.pe3,
+        });
 
         // The scheduler and control loop run at the IMU's ODR; IMU sampling
         // itself is triggered by PB2/EXTI2.
@@ -396,7 +413,8 @@ ferroforge::app! {
             }
             let (producer, consumer) = {
                 let queue = cortex_m::singleton!(
-                    : flash_task::RecordQueue = flash_task::RecordQueue::new()
+                    : flash_task::RecordQueue<BLACKBOX_RECORD_QUEUE_CAPACITY> =
+                        flash_task::RecordQueue::new()
                 )
                 .unwrap();
                 queue.split()
@@ -478,9 +496,17 @@ ferroforge::app! {
                     completion: uart6_tx_completion,
                 },
             uart8_rx,
+            uart1_rx,
             functions: serial_functions,
         } = stm32_uart::init_h743_uart_ports(
             stm32_uart::H743UartPortResources {
+                // DJI connector SBUS pin -> PA10 USART1_RX.
+                uart1: stm32_uart::Uart1PortResources {
+                    rx_pin: gpioa.pa10,
+                    uart: dp.USART1,
+                    prec: rec.USART1,
+                    rx_dma: dma2.4,
+                },
                 // PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
                 uart3: stm32_uart::Uart3PortResources {
                     tx_pin: gpiod.pd8,
@@ -508,6 +534,17 @@ ferroforge::app! {
             },
             &clocks,
             stm32_uart::H743UartPortStorage {
+                uart1: stm32_port::UartRxPortStorage {
+                    rx: stm32_storage::UartRxStorageResources {
+                        buffers: cx.local.uart1_rx_buffers,
+                        free_queue: cx.local.uart1_free_queue,
+                        filled_queue: cx.local.uart1_filled_queue,
+                    },
+                    stream: cortex_m::singleton!(
+                        : UartOwnedRxChannel = UartOwnedRxChannel::new()
+                    )
+                    .unwrap(),
+                },
                 uart3: stm32_port::UartRxTxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart3_rx_buffers,
@@ -652,6 +689,7 @@ ferroforge::app! {
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         heartbeat::spawn().unwrap();
+        status_leds::spawn().unwrap();
         adc1_polling::spawn().ok();
         uart3_tx_worker::spawn().unwrap();
         uart6_tx_worker::spawn().unwrap();
@@ -664,6 +702,7 @@ ferroforge::app! {
 
         (
             Shared {
+                uart1_rx,
                 uart3_rx,
                 uart3_tx_dma,
                 uart6_rx,
@@ -787,6 +826,9 @@ ferroforge::app! {
                 osd_rc_throttle_reader: rc_throttle_reader,
                 osd_rc_rates_reader: rc_rates_reader,
                 usb_rc_link_reader: rc_link_reader,
+                led_safety_arm_reader: safety_arm_reader,
+                heartbeat_led: leds.heartbeat,
+                armed_led: leds.armed,
                 actuator_arm_done_writer,
                 actuator_arm_done_reader,
                 actuator_arm_permit_writer,
@@ -1054,6 +1096,15 @@ ferroforge::app! {
     )]
     async fn heartbeat(cx: heartbeat::Context);
 
+    // Lowest priority, so a lit-and-blinking heartbeat shows that every
+    // task above it leaves the core time to run.
+    #[task(
+        from = flight_tasks::status_leds,
+        priority = 1,
+        local = [heartbeat_led, armed_led, led_safety_arm_reader]
+    )]
+    async fn status_leds(cx: status_leds::Context);
+
     #[task(
         priority = 1,
         local = [
@@ -1085,7 +1136,8 @@ ferroforge::app! {
             config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
                 [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
             staged_rpc_config: Option<flash_task::StoredConfig> = None,
-            config_rpc_completion: Option<ConfigRpcCompletion> = None
+            config_rpc_completion: Option<ConfigRpcCompletion> = None,
+            sd_write_back_since_ms: Option<u64> = None
         ],
         shared = [tuning_profile, tuning_request_seq]
     )]
@@ -1117,6 +1169,7 @@ ferroforge::app! {
             config_save_page,
             staged_rpc_config,
             config_rpc_completion,
+            sd_write_back_since_ms,
             ..
         } = cx.local;
         #[cfg(not(feature = "mspv2_configurator"))]
@@ -1127,6 +1180,26 @@ ferroforge::app! {
             config_rpc_completion,
         );
         loop {
+            // Log pages wait in the SD card's RAM window until it fills. Write
+            // them out once they have waited SD_WRITE_BACK_MAX_AGE_MS, or as
+            // soon as no flight is recording, so a power cut loses at most
+            // that much log. At the top of the pass, which every pass reaches.
+            if flash_device.write_back_pending() {
+                let now_ms = Mono::now().duration_since_epoch().to_millis();
+                let since_ms = *sd_write_back_since_ms.get_or_insert(now_ms);
+                if !assembler.recording()
+                    || now_ms.saturating_sub(since_ms) >= SD_WRITE_BACK_MAX_AGE_MS
+                {
+                    *sd_write_back_since_ms = None;
+                    if flash_device.flush().is_err() {
+                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                        FLASH_READY.store(false, Ordering::Release);
+                        warn!("SD storage flush failed; recording stopped");
+                    }
+                }
+            } else {
+                *sd_write_back_since_ms = None;
+            }
             {
                 if !FLASH_READY.load(Ordering::Acquire) {
                     #[cfg(feature = "mspv2_configurator")]
@@ -1138,6 +1211,18 @@ ferroforge::app! {
                                 mspv2::rpc::DeviceError::StorageUnavailable,
                             ),
                         );
+                    }
+                    if let Some((command, link)) = flash_commands.take_next() {
+                        flash_responses.answer(link);
+                        let response = flash_task::storage_unavailable_response(
+                            &command,
+                            [
+                                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
+                                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
+                                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                            ],
+                        );
+                        queue_storage_response(flash_responses, response.as_str());
                     }
                     Mono::delay(100u64.millis()).await;
                     continue;
@@ -2156,11 +2241,31 @@ ferroforge::app! {
                     // rate silently dropped most of the log.
                     //
                     // The bound keeps this task from starving the rest of the
-                    // system on a full queue. A page still goes out once per
-                    // pass, which at roughly a millisecond a pass is ample for
-                    // the few hundred pages a second these rates ask for.
+                    // system on a full queue.
                     let mut drained = 0;
                     while drained < FLASH_RECORD_DRAIN_PER_PASS {
+                        // Write a finished page before taking another record.
+                        // The assembler holds one page, so a record taken while
+                        // it is full was dropped: with a page written only once
+                        // a pass, a full-rate log lost about a third of its
+                        // records that way. In the SD window a page write is a
+                        // RAM copy, so a pass can write several. A failed write
+                        // stays pending for the check above to report.
+                        if pending_page.is_none() {
+                            *pending_page = assembler.take_ready_page();
+                        }
+                        if let Some(page) = pending_page.as_ref() {
+                            let Some(address) = layout.log_page_address(*next_page_index)
+                            else {
+                                break;
+                            };
+                            if flash_device.page_program(address, page).is_err() {
+                                break;
+                            }
+                            *pending_page = None;
+                            *next_page_index = next_page_index.saturating_add(1);
+                            FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
+                        }
                         let Some(record) = flash_record_consumer.dequeue() else {
                             break;
                         };
@@ -2186,7 +2291,11 @@ ferroforge::app! {
                             FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                         }
                     }
-                } else if !SAFETY_ARMED.load(Ordering::Acquire)
+                } else if !cfg!(feature = "bench_blackbox")
+                    // A bench image records disarmed throughout; ending its
+                    // flight whenever the queue ran dry split one run into
+                    // hundreds of tiny flights.
+                    && !SAFETY_ARMED.load(Ordering::Acquire)
                     && assembler.recording()
                     && assembler.stop().is_err()
                 {
@@ -2431,6 +2540,12 @@ ferroforge::app! {
 
     #[task(from = flight_tasks::uart6_rx_idle, binds = USART6, priority = 11, shared = [uart6_rx])]
     fn uart6_rx_idle(cx: uart6_rx_idle::Context);
+
+    #[task(from = flight_tasks::uart1_rx_dma, binds = DMA2_STR4, priority = 11, shared = [uart1_rx])]
+    fn uart1_rx_dma(cx: uart1_rx_dma::Context);
+
+    #[task(from = flight_tasks::uart1_rx_idle, binds = USART1, priority = 11, shared = [uart1_rx])]
+    fn uart1_rx_idle(cx: uart1_rx_idle::Context);
 
     #[task(from = flight_tasks::uart8_rx_dma, binds = DMA1_STR2, priority = 11, shared = [uart8_rx])]
     fn uart8_rx_dma(cx: uart8_rx_dma::Context);

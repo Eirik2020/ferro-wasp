@@ -11,6 +11,13 @@ use crate::{
 pub const FERROWASP_USB_VID: u16 = 0x16c0;
 pub const FERROWASP_USB_PID: u16 = 0x27dd;
 
+/// The boards FerroWasp firmware identifies by its USB serial number, as each
+/// board's `src/board/usb.rs` sets it.
+const KNOWN_BOARDS: &[(&str, &str)] = &[
+    ("FW-FOX-F405V2", "Foxeer F405 V2"),
+    ("FW-TBS-LUCID-H7", "TBS Lucid H7"),
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceSelector {
     Auto,
@@ -26,6 +33,18 @@ pub struct PortInfo {
     pub manufacturer: Option<String>,
     pub product: Option<String>,
     pub serial_number: Option<String>,
+}
+
+impl PortInfo {
+    /// The board this port's firmware says it runs on, from its USB serial
+    /// number; `None` for a board this configurator does not know.
+    pub fn board_name(&self) -> Option<&'static str> {
+        let serial = self.serial_number.as_deref()?;
+        KNOWN_BOARDS
+            .iter()
+            .find(|(known, _)| *known == serial)
+            .map(|(_, name)| *name)
+    }
 }
 
 pub fn discover_ports() -> Result<Vec<PortInfo>> {
@@ -97,5 +116,31 @@ mod tests {
     #[test]
     fn current_usb_identity_is_stable() {
         assert_eq!((FERROWASP_USB_VID, FERROWASP_USB_PID), (0x16c0, 0x27dd));
+    }
+
+    fn port(serial_number: Option<&str>) -> PortInfo {
+        PortInfo {
+            port: "/dev/ttyACM0".to_owned(),
+            is_ferrowasp: true,
+            vid: Some(FERROWASP_USB_VID),
+            pid: Some(FERROWASP_USB_PID),
+            manufacturer: Some("FerroWasp".to_owned()),
+            product: None,
+            serial_number: serial_number.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn a_port_names_its_board_from_the_usb_serial_number() {
+        assert_eq!(
+            port(Some("FW-FOX-F405V2")).board_name(),
+            Some("Foxeer F405 V2")
+        );
+        assert_eq!(
+            port(Some("FW-TBS-LUCID-H7")).board_name(),
+            Some("TBS Lucid H7")
+        );
+        assert_eq!(port(Some("FW-SOMETHING-NEW")).board_name(), None);
+        assert_eq!(port(None).board_name(), None);
     }
 }

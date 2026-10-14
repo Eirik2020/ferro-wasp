@@ -22,8 +22,8 @@ use stm32h7xx_hal::{
         dma::DmaConfig,
         traits::{DoubleBufferedStream, Stream},
     },
-    gpio::{PC6, PC7, PD8, PD9, PE0},
-    pac::{UART8, USART3, USART6},
+    gpio::{PA10, PC6, PC7, PD8, PD9, PE0},
+    pac::{UART8, USART1, USART3, USART6},
     prelude::*,
     rcc::{CoreClocks, rec},
     serial::{
@@ -242,8 +242,17 @@ pub struct Uart8PortResources<S> {
     pub rx_dma: S,
 }
 
+/// UART1 (the USART1 peripheral) receive-only on PA10, RX by DMA.
+pub struct Uart1PortResources<S> {
+    pub rx_pin: PA10,
+    pub uart: USART1,
+    pub prec: rec::Usart1,
+    pub rx_dma: S,
+}
+
 /// Every UART the STM32H743 flight boards route, by logical port.
-pub struct H743UartPortResources<S3Rx, S3Tx, S6Rx, S6Tx, S8> {
+pub struct H743UartPortResources<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8> {
+    pub uart1: Uart1PortResources<S1>,
     pub uart3: Uart3PortResources<S3Rx, S3Tx>,
     pub uart6: Uart6PortResources<S6Rx, S6Tx>,
     pub uart8: Uart8PortResources<S8>,
@@ -251,6 +260,7 @@ pub struct H743UartPortResources<S3Rx, S3Tx, S6Rx, S6Tx, S8> {
 
 /// Static buffers and stream owners for each port.
 pub struct H743UartPortStorage {
+    pub uart1: UartRxPortStorage,
     pub uart3: UartRxTxPortStorage,
     pub uart6: UartRxTxPortStorage,
     pub uart8: UartRxPortStorage,
@@ -258,14 +268,16 @@ pub struct H743UartPortStorage {
 
 /// The started ports. A port left unbound stays `None`: its peripheral is
 /// never enabled, so its interrupts never fire.
-pub struct H743UartPorts<S3Rx, S3Tx, S6Rx, S6Tx, S8>
+pub struct H743UartPorts<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>
 where
+    S1: Stream,
     S3Rx: Stream,
     S3Tx: Stream,
     S6Rx: Stream,
     S6Tx: Stream,
     S8: Stream,
 {
+    pub uart1_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S1, USART1>>>>,
     pub uart3_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S3Rx, USART3>>>>,
     pub uart3_tx: UartTxPort<UartTxDmaSide<UartTxDma<S3Tx, USART3>>>,
     pub uart6_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S6Rx, USART6>>>>,
@@ -276,13 +288,14 @@ where
 
 /// Start every bound port with its function's line settings and give each
 /// function its endpoint.
-pub fn init_h743_uart_ports<S3Rx, S3Tx, S6Rx, S6Tx, S8>(
-    resources: H743UartPortResources<S3Rx, S3Tx, S6Rx, S6Tx, S8>,
+pub fn init_h743_uart_ports<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>(
+    resources: H743UartPortResources<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>,
     clocks: &CoreClocks,
     storage: H743UartPortStorage,
     bindings: &ResolvedBindings,
-) -> H743UartPorts<S3Rx, S3Tx, S6Rx, S6Tx, S8>
+) -> H743UartPorts<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>
 where
+    S1: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
     S3Rx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
     S3Tx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
     S6Rx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
@@ -290,6 +303,7 @@ where
     S8: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
 {
     let mut ports = H743UartPorts {
+        uart1_rx: None,
         uart3_rx: None,
         uart3_tx: UartTxPort::unbound(),
         uart6_rx: None,
@@ -404,6 +418,40 @@ where
             &mut ports.functions,
             bindings,
             LogicalSerialPort::Uart6,
+            endpoint,
+        );
+    }
+
+    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart1) {
+        let uart1 = resources.uart1;
+        let serial = uart1
+            .uart
+            .serial(
+                (NoTx, uart1.rx_pin.into_alternate::<7>()),
+                stm32h7_uart_config(profile.protocol),
+                uart1.prec,
+                clocks,
+            )
+            .unwrap();
+        let (parts, _) = start_rx(
+            serial.release(),
+            uart1.rx_dma,
+            profile.protocol,
+            storage.uart1.rx.into_backend(),
+            false,
+        );
+        let (port, endpoint) = rx_port(
+            LogicalSerialPort::Uart1,
+            parts.irq,
+            parts.parser,
+            storage.uart1.stream,
+            None,
+        );
+        ports.uart1_rx = Some(port);
+        place_endpoint(
+            &mut ports.functions,
+            bindings,
+            LogicalSerialPort::Uart1,
             endpoint,
         );
     }

@@ -40,7 +40,8 @@ An arm attempt requires:
   count;
 - a supported IMU that has produced a sample;
 - completed stationary startup gyro-bias calibration;
-- a fresh IMU sample in the control loop;
+- a fresh IMU sample in the control loop, where one isolated tick without a
+  new sample is tolerated and two in a row are not;
 - no revoked actuator permit or other failed safety check.
 
 These IMU conditions are checked before actuator preparation, throughout its
@@ -175,6 +176,8 @@ open.
 | DShot idle RPM above the ceiling | Abort after spin-up grace and select four stops |
 | Invalid DShot qualification configuration | Abort and select four stops |
 | Missing/stale/invalid armed motor command | Reject it and select the safe protocol response |
+| One control tick without a new IMU sample | Skip that update; motors hold the previous command |
+| Two consecutive control ticks without a new IMU sample | Request disarm; block arming while it lasts |
 | DShot lease or frame-set deadline expires | Select stop, fault the bank as applicable, and request disarm |
 | Explicit disarm | Clear armed/permit/preparation state and select stop |
 

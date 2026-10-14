@@ -88,7 +88,16 @@ pub const ESC_TELEMETRY_DMA_ROUTE: DmaRoute = DmaRoute {
     owner: "UART8 BLHeli ESC telemetry RX",
 };
 
-pub const ACTIVE_DMA_ROUTES: [DmaRoute; 11] = [
+/// The DJI connector's SBUS pin, receive only.
+pub const RC_UART1_DMA_ROUTE: DmaRoute = DmaRoute {
+    controller: 2,
+    stream: 4,
+    channel: 41,
+    direction: DmaDirection::PeripheralToMemory,
+    owner: "UART1 RC RX (DJI connector SBUS)",
+};
+
+pub const ACTIVE_DMA_ROUTES: [DmaRoute; 12] = [
     ACTIVE_IO_DMA_ROUTES[0],
     ACTIVE_IO_DMA_ROUTES[1],
     ACTIVE_IO_DMA_ROUTES[2],
@@ -100,6 +109,7 @@ pub const ACTIVE_DMA_ROUTES: [DmaRoute; 11] = [
     MOTOR_DSHOT_DMA_ROUTES[2],
     MOTOR_DSHOT_DMA_ROUTES[3],
     ESC_TELEMETRY_DMA_ROUTE,
+    RC_UART1_DMA_ROUTE,
 ];
 
 pub const SPI1_IMU: SpiRoute = SpiRoute {
@@ -125,7 +135,7 @@ mod tests {
     #[test]
     fn active_routes_have_no_exclusive_claim_conflicts() {
         assert_eq!(find_duplicate_claim(CLAIMS), None);
-        assert_eq!(ACTIVE_DMA_ROUTES.len(), 11);
+        assert_eq!(ACTIVE_DMA_ROUTES.len(), 12);
         for (index, route) in ACTIVE_DMA_ROUTES.iter().enumerate() {
             assert!(!ACTIVE_DMA_ROUTES[index + 1..].iter().any(|other| {
                 other.controller == route.controller && other.stream == route.stream
@@ -135,8 +145,9 @@ mod tests {
 
     #[test]
     fn dshot_and_telemetry_routes_are_active() {
-        assert_eq!(&ACTIVE_DMA_ROUTES[5..9], &MOTOR_DSHOT_DMA_ROUTES);
-        assert_eq!(ACTIVE_DMA_ROUTES[9], ESC_TELEMETRY_DMA_ROUTE);
+        assert_eq!(&ACTIVE_DMA_ROUTES[6..10], &MOTOR_DSHOT_DMA_ROUTES);
+        assert_eq!(ACTIVE_DMA_ROUTES[10], ESC_TELEMETRY_DMA_ROUTE);
+        assert_eq!(ACTIVE_DMA_ROUTES[11], RC_UART1_DMA_ROUTE);
     }
 
     #[test]

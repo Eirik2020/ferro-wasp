@@ -29,7 +29,10 @@ pub const CONFIG_SECTOR_SIZE: u32 = 4096;
 pub const SCRATCH_SECTOR_ADDRESS: u32 = CONFIG_SLOT_COUNT * CONFIG_SECTOR_SIZE;
 pub const LOG_START_ADDRESS: u32 = SCRATCH_SECTOR_ADDRESS + CONFIG_SECTOR_SIZE;
 
-pub type RecordQueue = Queue<FlightRecord, RECORD_QUEUE_CAPACITY>;
+/// The control loop's records on their way to storage. A board sizes it to
+/// ride out its storage's longest write stall: `RECORD_QUEUE_CAPACITY` covers
+/// SPI NOR, whose page programs are quick and steady.
+pub type RecordQueue<const N: usize = RECORD_QUEUE_CAPACITY> = Queue<FlightRecord, N>;
 pub type RecordProducer = Producer<'static, FlightRecord>;
 pub type RecordConsumer = Consumer<'static, FlightRecord>;
 
@@ -76,6 +79,28 @@ pub const COMMAND_QUEUE_CAPACITY: usize = 8;
 pub const RESPONSE_QUEUE_CAPACITY: usize = 32;
 pub const USB_COMMAND_LINE_CAPACITY: usize = 96;
 pub const USB_RESPONSE_CAPACITY: usize = 64;
+
+/// The answer to a storage command while storage is unavailable: no card or
+/// flash, or recovery failed. `flash info` reports what the probe saw, not
+/// ready; anything else is refused. Answering at all matters: an unanswered
+/// command left the host waiting out its timeout.
+pub fn storage_unavailable_response(
+    command: &StorageCommand,
+    jedec: [u8; 3],
+) -> String<USB_RESPONSE_CAPACITY> {
+    use core::fmt::Write;
+
+    let mut response = String::new();
+    let _ = match command {
+        StorageCommand::FlashInfo => write!(
+            response,
+            "OK jedec={:02x}:{:02x}:{:02x} bytes=0 ready=0\r\n",
+            jedec[0], jedec[1], jedec[2]
+        ),
+        _ => response.write_str("ERR storage unavailable\r\n"),
+    };
+    response
+}
 
 /// Format the storage catalogue summary without exceeding one USB response
 /// frame, even when every counter reaches its full `u32` width.
@@ -1356,6 +1381,14 @@ mod tests {
     #[test]
     fn usb_cli_requires_explicit_erase_confirmation() {
         assert_eq!(parse_command("flash info"), Ok(StorageCommand::FlashInfo));
+        assert_eq!(
+            storage_unavailable_response(&StorageCommand::FlashInfo, [0, 0, 0]).as_str(),
+            "OK jedec=00:00:00 bytes=0 ready=0\r\n"
+        );
+        assert_eq!(
+            storage_unavailable_response(&parse_command("logs list").unwrap(), [0, 0, 0]).as_str(),
+            "ERR storage unavailable\r\n"
+        );
         assert_eq!(
             parse_command("flash test"),
             Err(CommandParseError::ConfirmationRequired)

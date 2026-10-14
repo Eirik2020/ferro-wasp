@@ -43,7 +43,7 @@ where
             .map_err(|_| ());
 
         if result.is_err() {
-            warn!("Foxeer DShot command rejected");
+            warn!("DShot command rejected");
             self.force_off();
             false
         } else {
@@ -380,20 +380,21 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                             },
                         ) => {
                             warn!(
-                                "Foxeer physical ESC output {} (logical M{}) idle qualification overspeed: {}00 eRPM",
+                                "Physical ESC output {} (logical M{}) idle qualification overspeed: {}00 eRPM",
                                 output.index() + 1,
                                 CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[output.index()],
                                 erpm_div100
                             );
                             actuator.abort_arming(
-                            cx.local.actuator_arm_done_writer,
-                            safety::ArmingAbortReason::EscIdleRpmOutOfRange,
-                            "Foxeer DShot idle qualification rejected an overspeed physical output",
-                            |reason| {
-                                cx.spawn.safety_master(safety::SafetyEvent::ArmingAborted(reason))
-                                    .is_ok()
-                            },
-                        );
+                                cx.local.actuator_arm_done_writer,
+                                safety::ArmingAbortReason::EscIdleRpmOutOfRange,
+                                "DShot idle qualification rejected an overspeed physical output",
+                                |reason| {
+                                    cx.spawn
+                                        .safety_master(safety::SafetyEvent::ArmingAborted(reason))
+                                        .is_ok()
+                                },
+                            );
                             return;
                         }
                         esc::EscIdleQualificationStatus::Failed(
@@ -402,7 +403,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                             },
                         ) => {
                             warn!(
-                                "Foxeer DShot idle qualification timeout; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
+                                "DShot idle qualification timeout; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
                                 consecutive_samples[0],
                                 consecutive_samples[1],
                                 consecutive_samples[2],
@@ -414,7 +415,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                                     < DSHOT_IDLE_QUALIFICATION_CONFIG.required_consecutive_samples
                                 {
                                     warn!(
-                                        "Foxeer physical ESC output {} (logical M{}) idle qualification failed: motor not running or RPM evidence invalid ({} of {} samples)",
+                                        "Physical ESC output {} (logical M{}) idle qualification failed: motor not running or RPM evidence invalid ({} of {} samples)",
                                         index + 1,
                                         CONFIG::ESC_OUTPUT_TO_LOGICAL_MOTOR[index],
                                         samples,
@@ -426,7 +427,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                             actuator.abort_arming(
                             cx.local.actuator_arm_done_writer,
                             safety::ArmingAbortReason::EscIdleTelemetryTimeout,
-                            "Foxeer DShot idle qualification did not prove all physical outputs turning",
+                            "DShot idle qualification did not prove all physical outputs turning",
                             |reason| {
                                 cx.spawn.safety_master(safety::SafetyEvent::ArmingAborted(reason))
                                     .is_ok()
@@ -440,7 +441,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                             actuator.abort_arming(
                                 cx.local.actuator_arm_done_writer,
                                 safety::ArmingAbortReason::EscIdleQualificationInvalid,
-                                "Foxeer DShot idle qualification profile is invalid",
+                                "DShot idle qualification profile is invalid",
                                 |reason| {
                                     cx.spawn
                                         .safety_master(safety::SafetyEvent::ArmingAborted(reason))
@@ -455,7 +456,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                 }
 
                 info!(
-                    "Foxeer DShot idle eRPM qualified; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
+                    "DShot idle eRPM qualified; physical outputs 1/2/3/4 samples [{}, {}, {}, {}]",
                     qualification.consecutive_samples()[0],
                     qualification.consecutive_samples()[1],
                     qualification.consecutive_samples()[2],
