@@ -59,6 +59,7 @@ links into the internal book.
 | Public direction | `mdbook/src/roadmap.md` |
 | Crate map | `mdbook/src/project_structure.md` |
 | Board configuration and naming | `mdbook/src/board_support.md` |
+| Repository checks and the context router | `project_meta/tooling.md` |
 | The dev container's agent tooling | `project_meta/dev-environment.md` |
 | How a subsystem works | its `mdbook/src/` chapter |
 | Commands | `mdbook/src/testing.md` and `developer_getting_started.md` |

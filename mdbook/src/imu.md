@@ -135,7 +135,7 @@ The optional BB2 `gyro10` values use the same measured-rate convention passed
 to the rate PID. Host viewers should display those roll, pitch, and yaw fields
 directly.
 
-See [RTT Debug Tools](./rtt_debug_tools.md) for the terminal logger and live
+See [Bench and Analysis Tools](./rtt_debug_tools.md) for the terminal logger and live
 IMU viewer.
 
 ## Foxeer Bring-Up Checklist
