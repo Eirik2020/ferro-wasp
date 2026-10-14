@@ -62,6 +62,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Boards and Platform
 
+- **Foxeer status LEDs.** The shared `status_leds` task (green heartbeat, blue
+  armed) runs on the TBS Lucid H7 only; wire it on Foxeer to bring the golden
+  app level.
 - **Chip-family backends.** A backend should cover its whole family: H7 DShot
   is hard-wired to TIM3/TIM5 while TIM2 is the timebase.
 - **Board data from existing targets.** Generate a board's data crate from its

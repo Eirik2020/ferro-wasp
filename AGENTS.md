@@ -4,7 +4,7 @@
 
 This file is the highest-authority document in the repository; only the user
 outranks it. On conflict the order is: the user; this file;
-`project_meta/governing-requirements.md` (W1-W9); all other documents. This is
+`project_meta/governing-requirements.md` (W1-W7); all other documents. This is
 the only `AGENTS.md`; its scoped rules below bind only inside their directory.
 
 Any other document that diverges from this file or the governing requirements is
@@ -32,9 +32,10 @@ Start from the task, not the chapter. Read the named sections, not whole files.
 
 | Task | Read |
 | --- | --- |
-| A flight app, board support, or RTIC wiring | W4, W5; Firmware below; `python tools/app_context.py --board foxeer-f405-v2 --topic <topic>` |
-| Arming, motors, DShot | W1, W3; `mdbook/src/arming.md`, `mdbook/src/dshot.md` |
-| Selecting or running a test, recording evidence | W6, W7; `project_meta/testing/README.md` |
+| A flight app or RTIC wiring | W3, W4, W5; Firmware below; `python tools/app_context.py --board foxeer-f405-v2 --topic <topic>` |
+| Adding or changing a board | W4, W5, W6; `mdbook/src/board_support.md` |
+| Arming, motors, DShot | W1, W2, W6; `mdbook/src/arming.md`, `mdbook/src/dshot.md` |
+| Selecting or running a test, recording evidence | W7; Operating Rules below; `project_meta/testing/README.md` |
 | Blackbox and logging | `project_meta/LOGGING_FORMAT.md` |
 | Host tools or FerroConfigurator | W1; Host Tools below |
 | Public documentation | Public Book below; `mdbook/src/SUMMARY.md` |
@@ -49,16 +50,34 @@ links into the internal book.
 
 | Topic | Owner |
 | --- | --- |
-| Requirements W1-W9 | `project_meta/governing-requirements.md` |
+| Requirements W1-W7 | `project_meta/governing-requirements.md` |
 | What was decided, and why | `project_meta/ARCHITECTURE_DECISIONS.md` and `decisions/` |
 | What is left to build | `project_meta/remaining-work.md` |
 | Test definitions, procedures, evidence workflow | `project_meta/testing/README.md` |
 | Blackbox format requirements | `project_meta/LOGGING_FORMAT.md` |
 | Board and feature support | `mdbook/src/current_support.md` |
 | Public direction | `mdbook/src/roadmap.md` |
-| Crate layout | `mdbook/src/project_structure.md` |
+| Crate map | `mdbook/src/project_structure.md` |
+| Board configuration and naming | `mdbook/src/board_support.md` |
 | How a subsystem works | its `mdbook/src/` chapter |
 | Commands | `mdbook/src/testing.md` and `developer_getting_started.md` |
+
+## Operating Rules
+
+- Ask the user before any W6 change and before any decision that sets
+  structure: crate layout, where data lives, a convention other code follows.
+  Lay out the options with a recommendation; small reversible fixes go ahead.
+- An agent may run hardware-in-the-loop tests over SWD and USB while the system
+  is disarmed and nothing actuates. Motor, powered, and flight procedures are
+  the user's, including FerroConfigurator's motor test. Propellers stay off
+  until the reviewed preflight prerequisites are complete. Never assume a probe
+  or board is attached.
+- Stop on any unexpected motor, arming, telemetry, storage, or RC-loss
+  behaviour and report it; never work around it.
+- `logs/` holds the only copy of every flight log and flown binary. Never
+  delete or rewrite anything in it.
+- Never claim a gate passed from a build. In every report, say what was
+  measured and what was inferred.
 
 ## Scoped Rules
 

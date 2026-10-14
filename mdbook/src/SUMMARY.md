@@ -21,6 +21,7 @@
 - [Development](development.md)
   - [Contributing](contributing.md)
   - [Project Structure](project_structure.md)
+  - [Board Support](board_support.md)
   - [Testing](testing.md)
   - [RTT Debug Tools](rtt_debug_tools.md)
   - [Documentation Policy](documentation.md)

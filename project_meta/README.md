@@ -8,7 +8,7 @@ The root `AGENTS.md` defines the authority order and maps tasks to chapters.
 Below it and [the governing requirements](governing-requirements.md), current
 code, manifests, and tests outrank every narrative document here.
 
-- [Governing requirements](governing-requirements.md): W1-W9.
+- [Governing requirements](governing-requirements.md): W1-W7.
 - [Remaining work](remaining-work.md): what is left to build.
 - [Architecture decisions](ARCHITECTURE_DECISIONS.md): the ADR index.
 - [Testing](testing/README.md): test selection, target procedures, and the

@@ -1,11 +1,11 @@
 # Governing Requirements
 
 FerroWasp is a deterministic, safety-oriented Rust/RTIC flight controller for
-small multirotors, and a prototype research platform. It prefers auditability,
-timing determinism, fault containment, and evidence over feature parity. It is
-not a PX4, ArduPilot, or Betaflight clone.
+small multirotors, built on FerroForge, and a prototype research platform. It
+puts auditability, timing determinism, fault containment, and evidence before
+feature count.
 
-Agreed direction, updated 2026-10-13. This document is limited to two pages
+Agreed direction, updated 2026-10-14. This document is limited to two pages
 maximum.
 
 **Authority.** `AGENTS.md` in the repository root defines the authority order and
@@ -13,61 +13,47 @@ how conflicts are resolved. These requirements override every document below
 this one. If one proves impossible or impractical, call a review with the user
 rather than editing around it. Implementation status does not change them.
 
-1. **W1 - Motor authority.** Only the safety kernel and its actuator-output path
-   command motor hardware. Flight modes, the configurator, host tools, logging,
-   profiles, and experiments may request actuation; none owns a motor
-   peripheral or bypasses arming, failsafe, actuator gating, watchdog, health, or
-   command-freshness checks. Logging and disarmed configuration change data and
-   permitted tuning values only.
-2. **W2 - Fail closed.** Stale sensor or setpoint paths, unbounded or blocking
+1. **W1 - Motor authority.** Only the safety master and its actuator-output path
+   command motor hardware. Flight modes, FerroConfigurator, host tools, logging,
+   profiles, and experiments may only request actuation, and the firmware
+   accepts or refuses. Nothing bypasses arming, failsafe, actuator gating,
+   watchdog, health, or command-freshness checks. A disarmed bench request, such
+   as the motor test, runs under a short firmware-held lease that lapses when
+   renewals stop.
+2. **W2 - Fail closed.** Stale sensor or setpoint data, unbounded or blocking
    real-time work, runtime panics, and leaks of actuator authority are
-   high-priority defects. Unexpected motor, arming, telemetry, storage, or
-   RC-loss behaviour stops the work and fails closed. Unsafe Rust is minimal,
-   isolated, documented, and reviewed.
-3. **W3 - Controlled configuration.** These change only with the user's approval,
-   a stated reason, and revalidation at the level they affect: pin maps, DMA
-   streams, timer assignments, IMU orientation and gyro signs, motor order and
-   mapping, RC mapping and command signs, throttle scaling, gains, loop rate,
-   DShot timing, arming, failsafe, watchdog, and gating behaviour, the stored
-   configuration schema, the blackbox format, public wire and CLI formats, and
-   crate layout. An orientation, motor-map, or command-sign change repeats the
-   props-off axis, sign, motor identity, direction, and stick and tilt checks
-   before flight.
-4. **W4 - Layering.** Reusable types and safety state live in `ferrowasp-core`;
-   protocols and devices in `ferrowasp-drivers`; portable flight logic in
-   `ferrowasp-flight`; HAL-neutral STM32 mechanisms in `ferrowasp-stm32`; each
-   family's HAL in `ferrowasp-stm32f4` or `ferrowasp-stm32h7`; shared RTIC task
-   bodies in `ferrowasp-stm32-tasks`. An app shell is RTIC wiring. A board's
-   physical facts live in its host-tested `firmware/<board>/board` data crate,
-   and `src/board/` is HAL glue. Code still useful after substituting hardware
-   facts moves to the narrowest shared crate. Every new type, resource, task,
-   configuration field, and failure response has a named owning layer; reuse
-   existing drivers, protocols, and safety state machines rather than building
-   parallel ones. Firmware paths are `no_std`, allocation-free, and use bounded
-   queues.
+   high-priority defects. A fault leaves the motors stopped and the system
+   disarmed, never in a guessed state.
+3. **W3 - FerroForge.** FerroForge is FerroWasp's main framework, and the two are
+   developed together. Each firmware is a `ferroforge::app!`, and reusable tasks
+   are `#[ferroforge::task]` definitions in shared crates. When FerroWasp needs
+   something FerroForge lacks, it is built in FerroForge rather than worked
+   around in FerroWasp. FerroWasp builds against FerroForge as released on
+   crates.io; a `path` dependency or `[patch]` changes the flight image.
+4. **W4 - Layering.** Shared logic is free of HAL types. A board's physical facts
+   are host-tested data, and an app shell is RTIC wiring. Code still useful after
+   substituting hardware facts moves to the narrowest shared crate, and each new
+   type, task, or failure response has one owning layer. Firmware is `no_std`,
+   allocation-free, and uses bounded queues. Unsafe code lives only at
+   chip-backend peripheral and DMA boundaries, and is documented. The crate map
+   is `mdbook/src/project_structure.md`.
 5. **W5 - Golden app.** `foxeer-f405-v2` is the behavioural reference. A feature
-   lands there first or in the same change; another board departs from it only
-   explicitly, with a rationale and board-specific verification. Silent drift is
-   a defect. Golden status never licenses copying Foxeer hardware facts.
-6. **W6 - The user operates the hardware.** The user performs every bench,
-   motor, and flight procedure. An agent uses a probe or a powered board only at
-   the user's request, and never assumes one is attached. Propellers stay off
-   until the reviewed preflight prerequisites are complete.
-7. **W7 - Evidence.** A compile does not establish target behaviour, a target boot
-   does not establish actuator behaviour, and props-off operation does not
+   lands there first or in the same change. Where another board leads, the
+   change records why, and remaining work records bringing Foxeer level. Any
+   other departure is explicit, with a rationale and board-specific
+   verification. Golden status never licenses copying Foxeer's hardware facts.
+6. **W6 - Controlled configuration.** Pin maps, DMA streams, timer assignments,
+   IMU orientation and signs, default motor order, RC mapping and command signs,
+   throttle scaling, default gains, loop rate, DShot timing, arming, failsafe,
+   watchdog, and gating behaviour, the stored-configuration schema, the blackbox
+   format, and public wire and CLI formats change only with a stated reason and
+   the revalidation that [the test documentation](testing/README.md) assigns to
+   what changed.
+7. **W7 - Evidence.** A compile does not establish target behaviour, a target
+   boot does not establish actuator behaviour, and props-off operation does not
    establish flight readiness; each claim needs evidence at its own level.
    Evidence is tied to component IDs, and a record stands while its components
-   are unchanged. Never claim a gate passed from a build. `logs/` is the only
-   copy of every flight log and flown binary; never delete or rewrite it.
-8. **W8 - Assurance language.** Never claim SIL, DAL, DO-178C, airworthiness,
-   production safety, or certification. Say "safety-oriented",
-   "certification-aligned", or "evidence-friendly". Label a claim implemented,
-   transitional, planned, or aspirational, and separate what was measured from
-   what was inferred.
-9. **W9 - Repository boundary.** This repository is the only authority for
-   FerroWasp's firmware, host tools, evidence, and plans; FerroConfigurator,
-   inside it, is its host tool. FerroForge comes from crates.io: a `path` dependency or `[patch]` on a
-   local checkout changes the flight image.
+   are unchanged.
 
 Implementation details belong in the public book, `mdbook/`, what is left to
 build in [remaining work](remaining-work.md), and decisions in the
