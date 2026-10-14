@@ -349,6 +349,34 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/decisions/ADR-0039.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0040.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0041.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0042.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
       "path": "project_meta/LOGGING_FORMAT.md",
       "role": "logging-format-requirements",
       "lifecycle": "durable",
