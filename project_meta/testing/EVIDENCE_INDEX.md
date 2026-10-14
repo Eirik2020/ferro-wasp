@@ -10,11 +10,8 @@ Use these sources for current work:
 
 - `python tools/components.py due` for evidence owed by changed components;
 - `README.md` and `TEST_CATALOG.json` for test selection and prerequisites;
-- `../../archive/project_meta/FCU3_TEST_PROCEDURE_2026-09-22.md` for the FCU3 procedure,
-  archived 2026-09-22 when the board was marked obsolete;
 - `targets/foxeer-f405-v2.md` for the current Foxeer F405 V2 procedure;
-- `../../mdbook/src/user/foxeer_f405_v2.md` for the current USB field
-  cheatsheet.
+- `../../mdbook/src/user/foxeer_f405_v2.md` for the Foxeer user guide.
 
 Current code, manifests, features, and tests outrank historical prose. An
 active catalog entry means selectable after prerequisites, not passed.
@@ -24,9 +21,9 @@ active catalog entry means selectable after prerequisites, not passed.
 Snapshot:
 [TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md](../../archive/project_meta/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md)
 
-- Bytes: `64,546`
+- Bytes: `64,435`
 - SHA-256:
-  `86E29BB3FBE491D99C2AFBD61F360403552F68714C405933BBB9F5300E6F3134`
+  `E88DC3F56C7020A3D559A576DD9BB6DC201FCB89D1A916E0E71387E850394B10`
 - Snapshot captured: 2026-07-27
 - Dated evidence present: 2026-07-18 through 2026-07-22
 
@@ -86,7 +83,8 @@ newer reviewed configuration or current target procedure.
 
 ## Evidence Handling
 
-- Open only the archive section needed for the specific provenance question.
+- Everything linked here is in the restricted archive: an agent asks the user
+  before opening any of it, names the section and why, and opens only that.
 - Preserve dates, image and log hashes, feature sets, equipment, results, and
   stated limitations when citing evidence.
 - Do not edit or append to the immutable baselines.

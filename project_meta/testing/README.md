@@ -19,7 +19,7 @@ Test-run evidence = what was tested, on which components, when, and with what re
 A pass carries forward while the components it names are unchanged, on any
 board; `evidence/README.md` defines components and their content IDs. Dated
 results, image hashes, logs, measurements, and operator observations belong
-in the evidence system or a historical handoff, not in the catalog.
+in run records, not in the catalog.
 
 Use `EVIDENCE_INDEX.md` to locate retained historical test evidence. Do not
 load an immutable baseline unless a specific provenance question requires it.
@@ -67,8 +67,9 @@ When the user requests bench or flight testing:
 6. obtain explicit user confirmation before powered or flight activity;
 7. record results separately with the required evidence fields.
 
-The agent may run software-only checks. The user remains the operator for
-hardware, powered-actuator, and flight procedures.
+Who may run what on hardware is set by the Operating Rules in the root
+`AGENTS.md`: an agent may run disarmed, non-actuating tests; powered, motor,
+and flight procedures are the user's.
 
 ## Recording Results
 
@@ -88,10 +89,9 @@ python tools/check_repository_context.py
 
 ## Safety Rules
 
-- No test may bypass arming, actuator gating, failsafe, watchdog, health, or
-  command-freshness checks.
-- Propellers remain removed unless an explicitly reviewed flight test requires
-  them.
+W1 and W2 in [the governing requirements](../governing-requirements.md) apply
+to every test. In addition:
+
 - Powered and flight tests fail closed when their target, image, feature set,
   prerequisites, or evidence capture cannot be established.
 - A `needs-review` entry is routing information, not authorization to execute
