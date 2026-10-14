@@ -384,10 +384,11 @@
       "max_bytes": 8192
     },
     {
-      "path": "project_meta/PUBLICATION_CHECKLIST.md",
-      "role": "publication-workflow",
-      "lifecycle": "live",
-      "context": "targeted"
+      "path": "project_meta/releasing.md",
+      "role": "release-procedure",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 6144
     },
     {
       "path": "project_meta/testing/README.md",

@@ -53,6 +53,6 @@
   - [Common Boot and Idle](testing/targets/common-boot-idle.md)
   - [Foxeer F405 V2 Procedure](testing/targets/foxeer-f405-v2.md)
 - [Logging Format](LOGGING_FORMAT.md)
-- [Publication Checklist](PUBLICATION_CHECKLIST.md)
+- [Releasing](releasing.md)
 - [Repository Tooling](tooling.md)
 - [Development Container Internals](dev-environment.md)

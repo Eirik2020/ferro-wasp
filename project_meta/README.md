@@ -14,7 +14,7 @@ code, manifests, and tests outrank every narrative document here.
 - [Testing](testing/README.md): test selection, target procedures, and the
   evidence workflow.
 - [Logging format](LOGGING_FORMAT.md): what the blackbox must carry.
-- [Publication checklist](PUBLICATION_CHECKLIST.md).
+- [Releasing](releasing.md): cutting a release and the publication rules.
 - [Repository tooling](tooling.md): the context router and repository checks.
 - [Development container internals](dev-environment.md): the agent tooling
   inside the reference container.

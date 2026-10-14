@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/PUBLICATION_CHECKLIST.md`. The
+> repository went public with the v0.1.0 pre-release; the release procedure
+> that still binds was promoted to `project_meta/releasing.md` first.
+> Historical only; never active authority.
+
 # FerroWasp Public Repository Checklist
 
 This checklist prepares FerroWasp for publication as an experimental,
