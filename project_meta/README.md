@@ -15,6 +15,8 @@ code, manifests, and tests outrank every narrative document here.
   evidence workflow.
 - [Logging format](LOGGING_FORMAT.md): what the blackbox must carry.
 - [Publication checklist](PUBLICATION_CHECKLIST.md).
+- [Development container internals](dev-environment.md): the agent tooling
+  inside the reference container.
 
 Retained historical evidence is located through
 [the evidence index](testing/EVIDENCE_INDEX.md). Moving material to the archive

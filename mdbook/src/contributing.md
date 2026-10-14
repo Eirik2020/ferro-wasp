@@ -35,18 +35,8 @@ The guide also documents the pinned native fallback. The root workspace
 contains reusable crates; each deployable firmware app under `firmware/` has an
 isolated Cargo graph and must be checked separately.
 
-Before opening a pull request, run the checks relevant to the change. The
-normal source-only baseline is:
-
-```text
-cargo fmt --all --check
-cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
-python tools/check_repository_context.py
-mdbook build mdbook
-```
-
-For firmware changes, also run `cargo fmt --check` and
+Before opening a pull request, run the [software checks](testing.md#software-checks)
+relevant to the change. For firmware changes, also run `cargo fmt --check` and
 `cargo check --release --locked` from each affected app directory. Do not
 assume a probe or target board is available in CI, and do not weaken a target
 check merely because hardware is unavailable.

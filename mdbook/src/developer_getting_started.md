@@ -92,11 +92,11 @@ docker compose build dev
 docker compose run --rm dev bash tools/dev/check-environment.sh
 ```
 
-The environment check is hardware-free. It verifies exact tool versions, the
-pinned Codex CLI, Git and OpenSSH clients, namespace diagnostic tools, Python
-analysis dependencies, the embedded target, and discovery of every isolated
-Cargo workspace without downloading project dependencies. Authenticated Git access and
-nested-userns execution are checked after the recreated container starts.
+The environment check is hardware-free. It verifies exact tool versions, Git and OpenSSH clients,
+namespace diagnostic tools, Python analysis dependencies, the embedded target,
+and discovery of every isolated Cargo workspace without downloading project
+dependencies. Authenticated Git access and nested user namespaces are checked
+after the recreated container starts.
 
 Most WSL distributions use user and group ID `1000`, which is the container
 default. If `id -u` or `id -g` reports another value, build with matching
@@ -104,39 +104,6 @@ values so generated source-tree files remain owned by the WSL user:
 
 ```bash
 DEV_UID="$(id -u)" DEV_GID="$(id -g)" docker compose build dev
-```
-
-### Preserve Codex sessions
-
-Codex stores local session rollouts, its session index, configuration, and
-login state under `/home/ferrowasp/.codex`. The reference environment mounts
-that complete directory from the external Docker volume
-`ferrowasp-codex-home`, so container recreation does not discard chats or
-settings. The CLI package itself is installed outside that mount under
-`/opt/codex`, so mounting retained state cannot hide the executable supplied
-by the image.
-
-If an existing FerroWasp container was created before this volume was added,
-migrate it exactly once before recreating the container:
-
-```bash
-bash tools/dev/migrate-codex-state.sh
-```
-
-The migration pauses the running container while taking a bounded snapshot,
-refuses to overwrite a non-empty target volume, verifies the copied file
-count, and removes its temporary host copy. The volume includes authentication
-material; never copy it into the repository or a shared archive. Run migration
-as the final action before recreation because later messages written to the
-old container are not part of the snapshot.
-
-After recreation, the Codex UI can reopen its retained threads. The installed
-CLI also supports:
-
-```bash
-codex resume
-codex resume --last
-codex resume --all
 ```
 
 ### Daily use
@@ -149,11 +116,9 @@ bash tools/dev/compose-with-ssh-agent.sh up -d dev
 bash tools/dev/compose-with-ssh-agent.sh exec dev bash
 ```
 
-The development service currently disables the Docker default seccomp profile
-because that profile blocks the unprivileged `unshare --user` operation
-required by the Codex/Bubblewrap sandbox. It also enables
-`no-new-privileges` and grants no additional Linux capabilities. This policy remains under
-review for replacement with a narrower custom seccomp profile.
+The service runs without Docker's default seccomp profile, which blocks the
+unprivileged user namespaces a maintainer sandboxing tool needs. It keeps
+`no-new-privileges` and adds no Linux capabilities.
 
 The helper refuses to create the service when the host agent socket is absent
 or has no loaded identity. Inside the container, verify the forwarded agent
@@ -172,17 +137,8 @@ The repository is bind-mounted at `/workspace/ferro-wasp`. Cargo registry,
 Git dependency, and Linux build-target caches live in named Docker volumes.
 This prevents incompatible Windows and Linux target artifacts from mixing.
 
-Inside the container, run the normal repository commands directly:
-
-```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check --workspace --locked
-cargo test --workspace --locked
-python -m unittest discover -s tools/tests -v
-python tools/check_repository_context.py
-mdbook build mdbook
-```
+Inside the container, run the [software checks](testing.md#software-checks)
+directly.
 
 Stop the service without deleting caches:
 
@@ -190,11 +146,7 @@ Stop the service without deleting caches:
 docker compose down
 ```
 
-`docker compose down --volumes` deletes the Cargo cache volumes but not the
-external `ferrowasp-codex-home` volume. Docker manages that volume outside the
-Compose application lifecycle so ordinary teardown and recreation preserve
-Codex sessions. Removing the external volume is a separate destructive action
-that also removes its retained chats, configuration, and login state.
+`docker compose down --volumes` also deletes the Cargo cache volumes.
 
 VS Code users may install the Dev Containers extension, verify `ssh-add -l` in
 the host shell, and open the repository with **Dev Containers: Reopen in
@@ -249,15 +201,8 @@ Set-Location ferro-wasp
 rustup show active-toolchain
 ```
 
-Run the hardware-free root checks before making changes:
-
-```powershell
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked
-cargo check --workspace --locked
-cargo test --workspace --locked
-python tools\check_repository_context.py
-```
+Run the hardware-free [software checks](testing.md#software-checks) before
+making changes.
 
 The root workspace contains reusable crates. Deployable firmware applications
 are isolated because their STM32 peripheral-access configurations are not
@@ -275,13 +220,16 @@ another board.
 
 ## Build the flight applications
 
-Foxeer is the golden flight app for established runtime and safety behavior:
+Build an application from its own directory. Foxeer is the golden flight app,
+the reference for runtime and safety behaviour:
 
 ```powershell
 Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
 Set-Location ..\..
 ```
+
+`firmware\tbs-lucid-h7` builds the same way.
 
 The resulting Foxeer ELF is:
 
@@ -376,22 +324,11 @@ cargo install mdbook-mermaid --version 0.17.0 --locked
 mdbook build mdbook
 ```
 
-Documentation and context changes must also pass:
-
-```powershell
-python tools\check_repository_context.py
-python -m unittest tools.tests.test_repository_context -v
-```
+Documentation changes must also pass the repository context check in the
+[software checks](testing.md#software-checks).
 
 ## Contribution workflow
 
-The default branch is `main`. Keep patches small, preserve unrelated
-worktree changes, and use a non-target branch plus pull request for normal
-publication. Repository rules require passing checks and protect `main` from
-deletion and force-pushes.
-
-Read the [contribution guide](contributing.md) before submitting work. For
-safety-relevant changes, record the reason, exact image/configuration,
-verification performed, remaining target gaps, and any timing or unsafe-code
-implications. Never claim certification, airworthiness, or production safety
-from prototype evidence.
+The default branch is `main`, protected from deletion and force-pushes, and it
+requires passing checks. Work on a branch and open a pull request; the
+[contribution guide](contributing.md) says what a pull request must state.
