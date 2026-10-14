@@ -55,6 +55,13 @@
       "max_bytes": 12000
     },
     {
+      "path": "project_meta/SUMMARY.md",
+      "role": "internal-book-index",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 6144
+    },
+    {
       "path": "project_meta/ARCHITECTURE_DECISIONS.md",
       "role": "architecture-decision-index",
       "lifecycle": "durable",

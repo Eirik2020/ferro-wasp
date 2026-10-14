@@ -69,7 +69,7 @@ rather than editing around it. Implementation status does not change them.
    it. FerroForge comes from crates.io: a `path` dependency or `[patch]` on a
    local checkout changes the flight image.
 
-Implementation details belong in the [developer guide](../mdbook/src/SUMMARY.md),
-what is left to build in [remaining work](remaining-work.md), and decisions in the
+Implementation details belong in the public book, `mdbook/`, what is left to
+build in [remaining work](remaining-work.md), and decisions in the
 [decision index](ARCHITECTURE_DECISIONS.md). Keep this page concise when
 updating it.
