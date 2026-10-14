@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/FLIGHT_TEST_QUICK_COMMANDS.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # FerroWasp Flight Test Quick Commands
 
 The current repository-facing USB field cheatsheet is:

@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/BENCH_TEST_PLAN.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # Bench Test Plan
 
 This legacy path is now a bounded router. It no longer owns current test

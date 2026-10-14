@@ -335,49 +335,46 @@
       "max_bytes": 8192
     },
     {
-      "path": "project_meta/BENCH_TEST_PLAN.md",
+      "path": "project_meta/archive/2026-10-14/BENCH_TEST_PLAN.md",
       "role": "legacy-test-router",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/CHATGPT_PROJECT_CONTEXT.md",
-      "role": "external-upload-context",
-      "lifecycle": "live",
+      "lifecycle": "historical",
       "context": "exclude"
     },
     {
-      "path": "project_meta/CODEX_ACTIVE_WORK.md",
+      "path": "project_meta/archive/2026-10-14/CHATGPT_PROJECT_CONTEXT.md",
+      "role": "external-upload-context",
+      "lifecycle": "historical",
+      "context": "exclude"
+    },
+    {
+      "path": "project_meta/archive/2026-10-14/CODEX_ACTIVE_WORK.md",
       "role": "current-work-handoff",
-      "lifecycle": "live",
-      "context": "targeted",
-      "max_bytes": 12000,
-      "max_current_state_headings": 1
+      "lifecycle": "historical",
+      "context": "exclude"
     },
     {
-      "path": "project_meta/CODEX_PROJECT_CONTEXT.md",
+      "path": "project_meta/archive/2026-10-14/CODEX_PROJECT_CONTEXT.md",
       "role": "agent-project-context",
-      "lifecycle": "live",
-      "context": "targeted"
+      "lifecycle": "historical",
+      "context": "exclude"
     },
     {
-      "path": "project_meta/CROSS_REPO_SYNC.md",
+      "path": "project_meta/archive/2026-10-14/CROSS_REPO_SYNC.md",
       "role": "repository-authority-boundary",
-      "lifecycle": "durable",
-      "context": "targeted"
+      "lifecycle": "historical",
+      "context": "exclude"
     },
     {
-      "path": "project_meta/FLIGHT_TEST_QUICK_COMMANDS.md",
+      "path": "project_meta/archive/2026-10-14/FLIGHT_TEST_QUICK_COMMANDS.md",
       "role": "flight-cheatsheet-compatibility-redirect",
-      "lifecycle": "live",
-      "context": "targeted"
+      "lifecycle": "historical",
+      "context": "exclude"
     },
     {
-      "path": "project_meta/INTERNAL_TODO.md",
+      "path": "project_meta/archive/2026-10-14/INTERNAL_TODO.md",
       "role": "development-backlog",
-      "lifecycle": "live",
-      "context": "targeted"
+      "lifecycle": "historical",
+      "context": "exclude"
     },
     {
       "path": "project_meta/PUBLICATION_CHECKLIST.md",
@@ -433,7 +430,7 @@
       "max_bytes": 16384
     },
     {
-      "path": "project_meta/UNIFIED_IO_DMA_HANDOFF.md",
+      "path": "project_meta/archive/2026-10-14/UNIFIED_IO_DMA_HANDOFF.md",
       "role": "historical-implementation-handoff",
       "lifecycle": "historical",
       "context": "exclude"

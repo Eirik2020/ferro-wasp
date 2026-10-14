@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/INTERNAL_TODO.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # Internal Development Backlog
 
 This is maintainer/session backlog material. Public roadmap-level items should

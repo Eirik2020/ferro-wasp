@@ -8,7 +8,7 @@ a current procedure, pass status, or flight-clearance document.
 
 Use these sources for current work:
 
-- `../CODEX_ACTIVE_WORK.md` for the live bench, logging, and flight handoff;
+- `python tools/components.py due` for evidence owed by changed components;
 - `README.md` and `TEST_CATALOG.json` for test selection and prerequisites;
 - `../archive/FCU3_TEST_PROCEDURE_2026-09-22.md` for the FCU3 procedure,
   archived 2026-09-22 when the board was marked obsolete;

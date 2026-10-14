@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/CHATGPT_PROJECT_CONTEXT.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # FerroWasp — ChatGPT Project Context
 
 This is a self-contained architectural brief intended for upload to a ChatGPT

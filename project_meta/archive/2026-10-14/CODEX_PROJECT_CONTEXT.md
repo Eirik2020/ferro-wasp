@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/CODEX_PROJECT_CONTEXT.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # FerroWasp Codex Project Context
 
 This document is compact project memory for coding agents working in the
