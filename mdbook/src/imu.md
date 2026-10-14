@@ -99,6 +99,12 @@ their two-second deltas. The obsolete FCU3 kept an 800 Hz timer poll trigger.
 
 ## Axis And Rate Convention
 
+The drone body frame is forward/right/down: +X forward, +Y right, +Z down,
+with angular rates by the right-hand rule. Board support states the
+sensor-to-board and board-to-body transformations explicitly. A historical
+controller-sign compatibility stays visible at the controller boundary rather
+than being hidden by a falsified physical orientation.
+
 Raw values remain in sensor-axis order. Each board support supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.
 

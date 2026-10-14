@@ -1,0 +1,89 @@
+# Remaining Work
+
+What is left to build, grouped by area. Evidence owed for changed components is
+not listed here: `python tools/components.py due` reports it. What the blackbox
+must carry is owned by [the logging format](LOGGING_FORMAT.md).
+
+## Safety and Flight
+
+- **Actuator deadline.** Detect the complete absence of future motor commands
+  independently of the control loop, and stop the motors.
+- **Freshness and fault injection.** IMU initialization, gyro-bias calibration,
+  and freshness are pre-arm prerequisites without negative target fault
+  injection. RC link quality and ADC/OSD freshness policy are prototype-level.
+- **DShot timing.** Pulse width, jitter, polarity margin, cross-timer phase, and
+  physical stop latency need logic-analyzer measurement; a flight does not
+  establish them.
+- **ESC-only power cycle.** PR #16 resumes ESC telemetry while disarmed after a
+  quiet window. Cycling only ESC power while USB powers the board is untested
+  with it; until a props-off run shows the first arm fails closed and a later
+  arm qualifies on fresh eRPM from every ESC, do not do it.
+- **I-term.** Foxeer stays P-only (2.5/2.5/2.0) and I stays zero until target
+  evidence shows every disarm, RC loss, aborted arm, and rearm starts with clean
+  controller state. Roll P 3.0 stays withdrawn after a 10-13 Hz oscillation.
+  Command tracking has never been evaluated.
+- **IMU calibration.** A user-requested, disarmed-only calibration of a
+  stationary aircraft on level ground, exposed through the USB configuration
+  CLI without actuator authority. It rejects motion or excessive tilt, uses a
+  bounded sample window, reports success or failure, and persists atomically
+  with integrity protection. Define which gyro bias, accelerometer level
+  offsets, and trim are stored, how they are validated at boot, and whether
+  boot gyro calibration remains a fallback or becomes a check.
+- **Self-level mode.** A bounded attitude outer loop over the rate loop, after
+  the rate-command and controller-reset changes are flight-verified, keeping
+  the safety and actuator boundary.
+- **Battery current** reads a constant 0.1 A on Foxeer. The firmware matches
+  Betaflight's FOXEERF405V2 target (PC1, scale 70, offset 0), so the sense
+  wiring is next; current is not a safety input until calibrated.
+
+## Logging and Analysis
+
+- **Foxeer blackbox rate.** At the 2 kHz loop, `log_rate_divisor` 1 needs about
+  400 pages/s. The drain fix that reached that rate on the Lucid's SD card has
+  not run on Foxeer's SPI-NOR; measure it there, or default the divisor to 2.
+- **Timestamp resolution.** Blackbox `timestamp_us` has 1 ms resolution from
+  the 1 kHz monotonic; use `control_sequence` as the time base. A 1 MHz timer
+  monotonic would fix it, and is a timer-assignment decision for the user.
+- **Command-to-eRPM characterization**, offline, from synchronized command,
+  fresh eRPM, and battery voltage under steady-state qualifiers: a bounded
+  monotonic per-motor LUT with source-flight provenance, validated across pack
+  voltage, load, temperature, and manoeuvring before any use as feedforward.
+  Never close a fast RPM loop around sequential legacy telemetry.
+- **Crash and stall classification**, offline first: an armed acceleration
+  impulse followed by a commanded motor giving fresh, valid eRPM below its
+  expectation for a bounded time. Missing telemetry is distinct from valid low
+  eRPM. The pilot's later disarm is a validation label, never a detector input.
+  Test throttle cuts, low-command motors, hard landings, prop unloading, ESC
+  desync, and telemetry loss for false positives. It gains no safety effect
+  until validated.
+- **RTT channels.** Replace single-channel `defmt-rtt` with `rtt-target`:
+  channel 0 `defmt`, channel 1 compact binary telemetry copied at low priority.
+  Neither blocks the control loop; a full buffer increments a drop counter.
+
+## Boards and Platform
+
+- **Chip-family backends.** A backend should cover its whole family: H7 DShot
+  is hard-wired to TIM3/TIM5 while TIM2 is the timebase.
+- **Board data from existing targets.** Generate a board's data crate from its
+  ArduPilot or Betaflight target definition.
+- **Host-testable flash manager.** Move the shared flash manager's logic into a
+  state machine with host tests.
+- **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
+  moved into pure step functions.
+- **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
+  (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
+  needs a board variant.
+- **FerroForge adoption.** Convert `usb_fs`, then retire `tools/rtic-app-builder`.
+
+## Tooling and Environment
+
+- **Remote debug gateway** (Pi Zero 2 W, probe, SWD), owned by ferro-debugger.
+  Whatever implements it rejects flashing or reset unless the armed heartbeat
+  is fresh and disarmed, stops the flight logger before taking the probe, and
+  is never left enabled in a flight configuration.
+- **Reference container.** After the `.devcontainer` relocation, run
+  `tools/dev/compose-with-ssh-agent.sh config` and
+  `tools/dev/check-rebuilt-container.sh`; confirm the VS Code and Compose entry
+  points both authenticate to GitHub through the forwarded agent; replace
+  `seccomp=unconfined` with a minimal reviewed profile if Docker and WSL allow;
+  and write recovery steps for WSL or Docker upgrades.

@@ -30,7 +30,9 @@ rather than editing around it. Implementation status does not change them.
    mapping, RC mapping and command signs, throttle scaling, gains, loop rate,
    DShot timing, arming, failsafe, watchdog, and gating behaviour, the stored
    configuration schema, the blackbox format, public wire and CLI formats, and
-   crate layout.
+   crate layout. An orientation, motor-map, or command-sign change repeats the
+   props-off axis, sign, motor identity, direction, and stick and tilt checks
+   before flight.
 4. **W4 - Layering.** Reusable types and safety state live in `ferrowasp-core`;
    protocols and devices in `ferrowasp-drivers`; portable flight logic in
    `ferrowasp-flight`; HAL-neutral STM32 mechanisms in `ferrowasp-stm32`; each
@@ -38,8 +40,11 @@ rather than editing around it. Implementation status does not change them.
    bodies in `ferrowasp-stm32-tasks`. An app shell is RTIC wiring. A board's
    physical facts live in its host-tested `firmware/<board>/board` data crate,
    and `src/board/` is HAL glue. Code still useful after substituting hardware
-   facts moves to the narrowest shared crate. Firmware paths are `no_std`,
-   allocation-free, and use bounded queues.
+   facts moves to the narrowest shared crate. Every new type, resource, task,
+   configuration field, and failure response has a named owning layer; reuse
+   existing drivers, protocols, and safety state machines rather than building
+   parallel ones. Firmware paths are `no_std`, allocation-free, and use bounded
+   queues.
 5. **W5 - Golden app.** `foxeer-f405-v2` is the behavioural reference. A feature
    lands there first or in the same change; another board departs from it only
    explicitly, with a rationale and board-specific verification. Silent drift is
@@ -65,6 +70,6 @@ rather than editing around it. Implementation status does not change them.
    local checkout changes the flight image.
 
 Implementation details belong in the [developer guide](../mdbook/src/SUMMARY.md),
-what is left to build in remaining work, and decisions in the
+what is left to build in [remaining work](remaining-work.md), and decisions in the
 [decision index](ARCHITECTURE_DECISIONS.md). Keep this page concise when
 updating it.

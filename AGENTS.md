@@ -40,7 +40,7 @@ Start from the task, not the chapter. Read the named sections, not whole files.
 | Public documentation | Public Book below; `mdbook/src/SUMMARY.md` |
 | Building or checking anything | `mdbook/src/testing.md` Software Checks; `.github/workflows/ci.yml` is exact |
 | Whether something was already decided | `project_meta/ARCHITECTURE_DECISIONS.md` |
-| What is left to build | `project_meta/CODEX_ACTIVE_WORK.md` |
+| What is left to build | `project_meta/remaining-work.md` |
 | Publishing a release | `project_meta/PUBLICATION_CHECKLIST.md` |
 
 One topic, one owner, across both books. Specify a topic in its owning chapter;
@@ -51,7 +51,7 @@ links into the internal book.
 | --- | --- |
 | Requirements W1-W9 | `project_meta/governing-requirements.md` |
 | What was decided, and why | `project_meta/ARCHITECTURE_DECISIONS.md` and `decisions/` |
-| What is left to build | `project_meta/CODEX_ACTIVE_WORK.md` |
+| What is left to build | `project_meta/remaining-work.md` |
 | Test definitions, procedures, evidence workflow | `project_meta/testing/README.md` |
 | Blackbox format requirements | `project_meta/LOGGING_FORMAT.md` |
 | Board and feature support | `mdbook/src/current_support.md` |

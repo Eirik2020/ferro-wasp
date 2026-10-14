@@ -41,6 +41,13 @@
       "max_bytes": 6144
     },
     {
+      "path": "project_meta/remaining-work.md",
+      "role": "remaining-work",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 12000
+    },
+    {
       "path": "project_meta/README.md",
       "role": "project-metadata-index",
       "lifecycle": "durable",
@@ -294,6 +301,27 @@
     },
     {
       "path": "project_meta/decisions/ADR-0035.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0036.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0037.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0038.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
