@@ -1,5 +1,6 @@
 use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxTransfer};
 use super::manifest::Spi1ImuKind;
+use backend::dshot::channel::{Ch1, Ch3, Ch3N, Ch4};
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
 use ferrowasp_io_core::serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
@@ -7,6 +8,7 @@ use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
 use ferrowasp_stm32f4 as backend;
+use ferrowasp_stm32f4::hal_prelude::hal::gpio::Speed;
 use ferrowasp_stm32f4::hal_prelude::*;
 use ferrowasp_stm32f4::uart_dma;
 
@@ -21,8 +23,8 @@ const _: () = {
 
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
-    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotMotorBank,
-    DshotServiceEvent, DshotTelemetryRequestError,
+    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotServiceEvent,
+    DshotTelemetryRequestError,
 };
 
 pub struct Spi1ImuResources {
@@ -219,25 +221,43 @@ pub struct DshotMotorBankResources {
     pub motor4_dma: Stream6<DMA2>,
 }
 
+/// Build the four-motor bank. The pads are latched low as GPIO until both
+/// timers are configured with their outputs parked low, then connected.
+/// TIM1 starts TIM8 through its trigger output, so all four lanes begin on
+/// the same edge.
 pub fn init_dshot_motor_bank(
     resources: DshotMotorBankResources,
     clocks: &hal::rcc::Clocks,
     storage: &'static mut DshotDmaStorage,
-) -> Result<DshotMotorBank, DshotInitError> {
-    backend::dshot::new_foxeer(
-        resources.motor1_pin,
-        resources.motor2_pin,
-        resources.motor3_pin,
-        resources.motor4_pin,
-        resources.tim1,
-        resources.tim8,
-        resources.motor1_dma,
-        resources.motor2_dma,
-        resources.motor3_dma,
-        resources.motor4_dma,
+) -> Result<super::aliases::DshotMotorBank, DshotInitError> {
+    let r = resources;
+    let mut motor1_pin = r.motor1_pin.into_push_pull_output();
+    let mut motor2_pin = r.motor2_pin.into_push_pull_output();
+    let mut motor3_pin = r.motor3_pin.into_push_pull_output();
+    let mut motor4_pin = r.motor4_pin.into_push_pull_output();
+    motor1_pin.set_low();
+    motor2_pin.set_low();
+    motor3_pin.set_low();
+    motor4_pin.set_low();
+
+    let bank = backend::dshot::init_dshot_motor_bank(
+        (r.tim1.release(), r.tim8.release()),
+        (
+            backend::dshot::lane::<TIM1, Ch1, 6, _>(r.motor1_dma),
+            backend::dshot::lane::<TIM8, Ch4, 7, _>(r.motor2_dma),
+            backend::dshot::lane::<TIM8, Ch3, 0, _>(r.motor3_dma),
+            backend::dshot::lane::<TIM1, Ch3N, 6, _>(r.motor4_dma),
+        ),
+        backend::dshot::TriggeredStart::<TIM1, TIM8>::new(),
         clocks,
         storage,
-    )
+    )?;
+
+    motor1_pin.into_alternate::<1>().speed(Speed::VeryHigh);
+    motor2_pin.into_alternate::<3>().speed(Speed::VeryHigh);
+    motor3_pin.into_alternate::<3>().speed(Speed::VeryHigh);
+    motor4_pin.into_alternate::<1>().speed(Speed::VeryHigh);
+    Ok(bank)
 }
 
 /// Every UART this board routes, by logical port.

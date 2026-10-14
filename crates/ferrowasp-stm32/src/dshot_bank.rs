@@ -64,6 +64,49 @@ impl DshotMotor {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DshotInitError {
     InvalidTiming(DshotTimingError),
+    /// A lane names a timer the bank was not given.
+    LaneTimerMissing,
+    /// Two lanes name the same timer channel.
+    LaneChannelReused,
+    /// The lane timers run from different clocks; one bank encodes every
+    /// lane with one bit timing.
+    LaneClocksDiffer,
+}
+
+/// The timer channels a DShot lane can drive. A lane's channel is part of
+/// its type, so its compare register and DMA request are fixed at compile
+/// time; `N` variants are an advanced timer's complementary outputs.
+pub mod channel {
+    /// A timer output channel: its zero-based index, and whether the lane
+    /// drives the complementary output CHxN instead of CHx.
+    pub trait LaneChannel: 'static {
+        const INDEX: usize;
+        const COMPLEMENTARY: bool;
+    }
+
+    macro_rules! lane_channels {
+        ($($name:ident: $index:literal, $complementary:literal;)+) => {
+            $(
+                #[doc = concat!("Timer channel `", stringify!($name), "`.")]
+                pub struct $name;
+
+                impl LaneChannel for $name {
+                    const INDEX: usize = $index;
+                    const COMPLEMENTARY: bool = $complementary;
+                }
+            )+
+        };
+    }
+
+    lane_channels! {
+        Ch1: 0, false;
+        Ch2: 1, false;
+        Ch3: 2, false;
+        Ch4: 3, false;
+        Ch1N: 0, true;
+        Ch2N: 1, true;
+        Ch3N: 2, true;
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -152,6 +195,89 @@ pub trait DshotLanes {
 
     /// Disable `motor`'s DMA stream and clear its flags.
     fn pause_and_clear(&mut self, motor: DshotMotor);
+}
+
+/// A DShot motor bank, whatever lanes it drives: what the shared tasks
+/// need, so they take any board's bank without naming its timers or streams.
+pub trait DshotMotors {
+    fn command_stop(&mut self);
+    fn command_throttles(
+        &mut self,
+        commands: [u16; 4],
+        now_ms: u64,
+        lease_duration_ms: u32,
+    ) -> Result<(), DshotCommandError>;
+    fn command_special(
+        &mut self,
+        motor: DshotMotor,
+        sequence: DshotCommandSequence,
+    ) -> Result<(), DshotSpecialCommandError>;
+    fn request_telemetry(&mut self, motor: DshotMotor) -> Result<(), DshotTelemetryRequestError>;
+    fn cancel_telemetry_request(&mut self);
+    fn take_telemetry_request_sent(&mut self) -> Option<DshotMotor>;
+    fn service(&mut self, now_ms: u64) -> DshotServiceEvent;
+    fn on_dma_interrupt(&mut self, motor: DshotMotor) -> DshotInterruptEvent;
+    fn is_faulted(&self) -> bool;
+    fn stats(&self) -> DshotStats;
+    fn requested_values(&self) -> [u16; 4];
+}
+
+impl<L> DshotMotors for DshotBank<L>
+where
+    L: DshotLanes,
+{
+    fn command_stop(&mut self) {
+        DshotBank::command_stop(self)
+    }
+
+    fn command_throttles(
+        &mut self,
+        commands: [u16; 4],
+        now_ms: u64,
+        lease_duration_ms: u32,
+    ) -> Result<(), DshotCommandError> {
+        DshotBank::command_throttles(self, commands, now_ms, lease_duration_ms)
+    }
+
+    fn command_special(
+        &mut self,
+        motor: DshotMotor,
+        sequence: DshotCommandSequence,
+    ) -> Result<(), DshotSpecialCommandError> {
+        DshotBank::command_special(self, motor, sequence)
+    }
+
+    fn request_telemetry(&mut self, motor: DshotMotor) -> Result<(), DshotTelemetryRequestError> {
+        DshotBank::request_telemetry(self, motor)
+    }
+
+    fn cancel_telemetry_request(&mut self) {
+        DshotBank::cancel_telemetry_request(self)
+    }
+
+    fn take_telemetry_request_sent(&mut self) -> Option<DshotMotor> {
+        DshotBank::take_telemetry_request_sent(self)
+    }
+
+    fn service(&mut self, now_ms: u64) -> DshotServiceEvent {
+        DshotBank::service(self, now_ms)
+    }
+
+    fn on_dma_interrupt(&mut self, motor: DshotMotor) -> DshotInterruptEvent {
+        DshotBank::on_dma_interrupt(self, motor)
+    }
+
+    fn is_faulted(&self) -> bool {
+        DshotBank::is_faulted(self)
+    }
+
+    fn stats(&self) -> DshotStats {
+        DshotBank::stats(self)
+    }
+
+    fn requested_values(&self) -> [u16; 4] {
+        DshotBank::requested_values(self)
+    }
 }
 
 pub struct DshotBank<L>

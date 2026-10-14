@@ -24,6 +24,7 @@
 
 use core::marker::PhantomData;
 
+use ferrowasp_stm32::dshot_bank::channel::*;
 use stm32h7xx_hal::dma::{
     MemoryToPeripheral, PeripheralToMemory,
     dma::{DMAReq, Instance, StreamX},
@@ -158,42 +159,66 @@ unsafe impl<U: UartDmaPeripheral> TargetAddress<MemoryToPeripheral> for UartTxEn
     }
 }
 
-/// One timer channel's compare register, as a DMA destination. `REQUEST` is
-/// that channel's DMAMUX input.
-pub struct TimerCompareEndpoint<const REQUEST: u8> {
+/// A timer channel DShot can drive: its compare register, and the DMAMUX
+/// input of that channel (RM0433 table 121). Declared below for each channel
+/// that has a request; a channel without one (TIM4 CH4) has no impl, so a
+/// board naming it does not compile.
+pub trait CompareChannel<C: LaneChannel> {
+    const REQUEST: u8;
+    fn compare_address(&self) -> usize;
+}
+
+macro_rules! compare_channels {
+    ($($TIM:ident: [$($C:ident => $index:literal, $request:ident;)+])+) => {
+        $($(
+            impl CompareChannel<$C> for pac::$TIM {
+                const REQUEST: u8 = DMAReq::$request as u8;
+                fn compare_address(&self) -> usize {
+                    self.ccr[$index].as_ptr() as usize
+                }
+            }
+        )+)+
+    };
+}
+
+compare_channels! {
+    TIM2: [Ch1 => 0, Tim2Ch1; Ch2 => 1, Tim2Ch2; Ch3 => 2, Tim2Ch3; Ch4 => 3, Tim2Ch4;]
+    TIM3: [Ch1 => 0, Tim3Ch1; Ch2 => 1, Tim3Ch2; Ch3 => 2, Tim3Ch3; Ch4 => 3, Tim3Ch4;]
+    TIM4: [Ch1 => 0, Tim4Ch1; Ch2 => 1, Tim4Ch2; Ch3 => 2, Tim4Ch3;]
+    TIM5: [Ch1 => 0, Tim5Ch1; Ch2 => 1, Tim5Ch2; Ch3 => 2, Tim5Ch3; Ch4 => 3, Tim5Ch4;]
+}
+
+/// One timer channel's compare register, as a DMA destination.
+pub struct TimerCompareEndpoint<T, C> {
     address: usize,
+    _channel: PhantomData<(T, C)>,
 }
 
-pub(crate) fn tim3_ch3(timer: &pac::TIM3) -> TimerCompareEndpoint<{ DMAReq::Tim3Ch3 as u8 }> {
-    TimerCompareEndpoint {
-        address: timer.ccr[2].as_ptr() as usize,
+impl<T, C> TimerCompareEndpoint<T, C>
+where
+    T: CompareChannel<C>,
+    C: LaneChannel,
+{
+    /// The endpoint for channel `C` of `timer`, which the caller owns.
+    pub(crate) fn new(timer: &T) -> Self {
+        Self {
+            address: timer.compare_address(),
+            _channel: PhantomData,
+        }
     }
 }
 
-pub(crate) fn tim3_ch4(timer: &pac::TIM3) -> TimerCompareEndpoint<{ DMAReq::Tim3Ch4 as u8 }> {
-    TimerCompareEndpoint {
-        address: timer.ccr[3].as_ptr() as usize,
-    }
-}
-
-pub(crate) fn tim5_ch1(timer: &pac::TIM5) -> TimerCompareEndpoint<{ DMAReq::Tim5Ch1 as u8 }> {
-    TimerCompareEndpoint {
-        address: timer.ccr[0].as_ptr() as usize,
-    }
-}
-
-pub(crate) fn tim5_ch2(timer: &pac::TIM5) -> TimerCompareEndpoint<{ DMAReq::Tim5Ch2 as u8 }> {
-    TimerCompareEndpoint {
-        address: timer.ccr[1].as_ptr() as usize,
-    }
-}
-
-// SAFETY: every constructor above takes the address of a CCRx register of a
-// timer its caller owns, and passes the DMAMUX input of that same channel.
+// SAFETY: `new` takes the address of channel `C`'s CCRx register from a
+// timer its caller owns, and `REQUEST_LINE` is that same channel's DMAMUX
+// input, both from the one `CompareChannel` impl for that timer and channel.
 // Compare registers are written as whole 32-bit words.
-unsafe impl<const REQUEST: u8> TargetAddress<MemoryToPeripheral> for TimerCompareEndpoint<REQUEST> {
+unsafe impl<T, C> TargetAddress<MemoryToPeripheral> for TimerCompareEndpoint<T, C>
+where
+    T: CompareChannel<C>,
+    C: LaneChannel,
+{
     type MemSize = u32;
-    const REQUEST_LINE: Option<u8> = Some(REQUEST);
+    const REQUEST_LINE: Option<u8> = Some(T::REQUEST);
 
     fn address(&self) -> usize {
         self.address

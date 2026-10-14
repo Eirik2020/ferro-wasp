@@ -1,6 +1,6 @@
 use ferrowasp_stm32f4::hal_prelude::hal::gpio::{PB12, PB13, PC2, PC3, PC10, PC11};
 use ferrowasp_stm32f4::hal_prelude::hal::pac::{SPI2, TIM8, USART3};
-use ferrowasp_stm32f4::{adc, hal_prelude::*, spi_dma, uart_dma};
+use ferrowasp_stm32f4::{adc, dshot, hal_prelude::*, spi_dma, uart_dma};
 
 pub type Usart2TxPin = PA2<Input>;
 pub type Usart2RxPin = PA3<Input>;
@@ -50,6 +50,17 @@ pub type Uart3TxDmaSide = uart_dma::UartTxSide<Stream3<DMA1>, USART3, 4>;
 /// UART4 on PA0/PA1, RX on DMA1 Stream 2 and TX on Stream 4.
 pub type Uart4RxIrq = uart_dma::UartRxIrq<Stream2<DMA1>, UART4, 4>;
 pub type Uart4TxDmaSide = uart_dma::UartTxSide<Stream4<DMA1>, UART4, 4>;
+
+/// The four motor lanes: TIM1 CH1 on PA8, TIM8 CH4 on PC9, TIM8 CH3 on PC8,
+/// and TIM1 CH3N on PB15, carried by DMA2 streams 1, 7, 2, and 6. The type
+/// compiles only if the backend declares each lane's stream route.
+pub type DshotMotorBank = dshot::DshotMotorBank<
+    (TIM1, TIM8),
+    dshot::Lane<Stream1<DMA2>, TIM1, dshot::channel::Ch1, 6>,
+    dshot::Lane<Stream7<DMA2>, TIM8, dshot::channel::Ch4, 7>,
+    dshot::Lane<Stream2<DMA2>, TIM8, dshot::channel::Ch3, 0>,
+    dshot::Lane<Stream6<DMA2>, TIM1, dshot::channel::Ch3N, 6>,
+>;
 
 pub type Adc1ObservationTransfer = adc::Adc1ObservationTransferFor<Stream4<DMA2>, 0>;
 pub type Adc1ObservationParts = adc::Adc1ObservationPartsFor<Stream4<DMA2>, 0>;
@@ -120,8 +131,4 @@ pub fn assert_uart1_esc_telemetry_route_compile() {
         4,
         PeripheralToMemory,
     >();
-}
-
-pub fn assert_four_motor_dshot_routes_compile() {
-    ferrowasp_stm32f4::dshot::assert_foxeer_four_motor_dma_routes_compile();
 }

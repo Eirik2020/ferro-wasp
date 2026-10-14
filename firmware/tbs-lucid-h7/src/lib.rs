@@ -190,7 +190,7 @@ use panic_probe as _;
 pub use rtic_monotonics::systick::prelude::*;
 pub use stm32_usb::UsbDeviceState;
 
-pub type DshotShared = board::init::DshotMotorBank;
+pub type DshotShared = board::aliases::DshotMotorBank;
 
 pub type SerialPortEndpoint = stm32_port::SerialPortEndpoint;
 pub type EscManagerState = esc::EscManager;

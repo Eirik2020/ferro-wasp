@@ -308,7 +308,6 @@ ferroforge::app! {
         };
 
         let dshot_motors = {
-            board::aliases::assert_four_motor_dshot_routes_compile();
             let tim1 = Timer::new(dp.TIM1, &mut clocks);
             let tim8 = Timer::new(dp.TIM8, &mut clocks);
             board::init::init_dshot_motor_bank(

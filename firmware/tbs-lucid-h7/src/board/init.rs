@@ -25,7 +25,9 @@ const _: () = {
     assert!(Spi1ImuKind::Mpu6000.dma_burst_register() == mpu6000::Register::AccelXoutH as u8);
 };
 
-use super::aliases::Adc1ObservationParts;
+use super::aliases::{Adc1ObservationParts, DshotMotorBank};
+use backend::dshot::channel::{Ch1, Ch2, Ch3, Ch4};
+use hal::rcc::ResetEnable;
 
 pub struct Adc1BatteryResources {
     pub adc: pac::ADC1,
@@ -35,8 +37,8 @@ pub struct Adc1BatteryResources {
 }
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
-    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotMotorBank,
-    DshotMotorBankResources, DshotServiceEvent, DshotTelemetryRequestError, init_dshot_motor_bank,
+    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotServiceEvent,
+    DshotTelemetryRequestError,
 };
 use backend::sd_storage::CardSlot;
 pub use backend::sd_storage::SdCardResources;
@@ -384,4 +386,57 @@ pub fn init_io_watchdog(
         clocks,
         ferrowasp_stm32::watchdog::IO_WATCHDOG_HZ,
     )
+}
+
+pub struct DshotMotorBankResources {
+    pub tim3: TIM3,
+    pub tim3_rec: rec::Tim3,
+    pub tim5: TIM5,
+    pub tim5_rec: rec::Tim5,
+    pub motor1_pin: PB0,
+    pub motor2_pin: PB1,
+    pub motor3_pin: PA0,
+    pub motor4_pin: PA1,
+    pub motor1_dma: Stream0<DMA2>,
+    pub motor2_dma: Stream1<DMA2>,
+    pub motor3_dma: Stream2<DMA2>,
+    pub motor4_dma: Stream3<DMA2>,
+}
+
+/// Build the four-motor bank. The pads are latched low as GPIO until both
+/// timers are configured with their outputs parked low, then connected.
+pub fn init_dshot_motor_bank(
+    resources: DshotMotorBankResources,
+    clocks: &CoreClocks,
+    storage: &'static mut DshotDmaStorage,
+) -> Result<DshotMotorBank, DshotInitError> {
+    let r = resources;
+    let mut motor1_pin = r.motor1_pin.into_push_pull_output();
+    let mut motor2_pin = r.motor2_pin.into_push_pull_output();
+    let mut motor3_pin = r.motor3_pin.into_push_pull_output();
+    let mut motor4_pin = r.motor4_pin.into_push_pull_output();
+    motor1_pin.set_low();
+    motor2_pin.set_low();
+    motor3_pin.set_low();
+    motor4_pin.set_low();
+
+    r.tim3_rec.enable().reset();
+    r.tim5_rec.enable().reset();
+    let bank = backend::dshot::init_dshot_motor_bank(
+        (r.tim3, r.tim5),
+        (
+            backend::dshot::lane::<TIM3, Ch3, _>(r.motor1_dma),
+            backend::dshot::lane::<TIM3, Ch4, _>(r.motor2_dma),
+            backend::dshot::lane::<TIM5, Ch1, _>(r.motor3_dma),
+            backend::dshot::lane::<TIM5, Ch2, _>(r.motor4_dma),
+        ),
+        clocks,
+        storage,
+    )?;
+
+    motor1_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    motor2_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    motor3_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    motor4_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    Ok(bank)
 }

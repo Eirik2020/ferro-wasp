@@ -2,53 +2,54 @@
 //!
 //! The command lease, telemetry, completion, and fault policy are the shared
 //! `DshotBank` state machine from `ferrowasp_stm32::dshot_bank`; this module
-//! is the H7 hardware under it. The bank owns TIM3 and TIM5, DMA2 streams 0-3,
-//! every motor pin, and all DMA buffers as one fault-containment unit.
+//! is the H7 hardware under it. The bank owns its timers, its four DMA
+//! streams, and all DMA buffers as one fault-containment unit.
 //!
-//! Lanes: motor 1 TIM3_CH3, motor 2 TIM3_CH4, motor 3 TIM5_CH1, motor 4
-//! TIM5_CH2, on DMA2 streams 0 to 3 in that order.
+//! Which timers and channels carry the motors, and on which streams, is the
+//! board's: it hands over its timers, enabled and reset, as a `TimerSet`,
+//! and names each motor's lane with `lane::<Timer, Channel, _>(stream)`. A
+//! lane's compare register and DMAMUX request come from the timer's type and
+//! the channel's, so they cannot disagree. Any channel of TIM2-TIM5 with a
+//! DMA request can be a lane.
 //!
-//! Unlike the F405 bank, whose TIM1 starts TIM8 through a trigger input, the
-//! two timers here are started back to back in software. The skew is a few
-//! bus cycles against a 1.67 us bit.
+//! The board latches the motor pads low as GPIO before building the bank and
+//! connects them to their timers after it, so no pad sees a timer until its
+//! outputs are configured and parked low.
 //!
-//! Every lane writes 32-bit compare words: TIM5's compare registers are 32
-//! bits wide, and TIM3 ignores the upper half.
+//! The timers start back to back in software; the skew is a few bus cycles
+//! against a 1.67 us bit. Every lane writes 32-bit compare words: TIM2 and
+//! TIM5 have 32-bit compare registers, and TIM3 and TIM4 ignore the upper
+//! half.
 
-use crate::dma_endpoints::{
-    StreamErrors, TimerCompareEndpoint, tim3_ch3, tim3_ch4, tim5_ch1, tim5_ch2,
-};
+use core::any::Any;
+use core::marker::PhantomData;
+
+use crate::dma_endpoints::{CompareChannel, StreamErrors, TimerCompareEndpoint};
+use ferrowasp_stm32::dshot_bank::channel::LaneChannel;
 use ferrowasp_waveform::dshot::{DshotPacket, DshotTiming, encode_compare_sequence};
 use stm32h7xx_hal::{
     dma::{
         DBTransfer, MemoryToPeripheral, Transfer,
-        dma::{DMAReq, DmaConfig, Stream0, Stream1, Stream2, Stream3},
+        dma::DmaConfig,
         traits::{DoubleBufferedStream, Stream},
     },
-    gpio::{Alternate, PA0, PA1, PB0, PB1, Speed},
-    pac::{DMA2, TIM3, TIM5},
-    rcc::{CoreClocks, ResetEnable, rec},
+    pac::{TIM2, TIM3, TIM4, TIM5},
+    rcc::CoreClocks,
 };
 
+pub use ferrowasp_stm32::dshot_bank::channel;
 pub use ferrowasp_stm32::dshot_bank::{
     COMPARE_DMA_SLOTS, DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS,
     DSHOT600_BITRATE_HZ, DshotBank, DshotCommandError, DshotCommandSequence, DshotInitError,
-    DshotInterruptEvent, DshotLanes, DshotMotor, DshotServiceEvent, DshotSpecialCommandError,
-    DshotStats, DshotTelemetryRequestError,
+    DshotInterruptEvent, DshotLanes, DshotMotor, DshotMotors, DshotServiceEvent,
+    DshotSpecialCommandError, DshotStats, DshotTelemetryRequestError,
 };
 
 pub type DshotDmaBuffer = [u32; COMPARE_DMA_SLOTS];
 type DshotBuffer = &'static mut DshotDmaBuffer;
-type LaneTransfer<S, const REQUEST: u8> =
-    Transfer<S, TimerCompareEndpoint<REQUEST>, MemoryToPeripheral, DshotBuffer, DBTransfer>;
-type Motor1Transfer = LaneTransfer<Stream0<DMA2>, { DMAReq::Tim3Ch3 as u8 }>;
-type Motor2Transfer = LaneTransfer<Stream1<DMA2>, { DMAReq::Tim3Ch4 as u8 }>;
-type Motor3Transfer = LaneTransfer<Stream2<DMA2>, { DMAReq::Tim5Ch1 as u8 }>;
-type Motor4Transfer = LaneTransfer<Stream3<DMA2>, { DMAReq::Tim5Ch2 as u8 }>;
 
-/// The STM32H743 four-motor bank: the shared DShot state machine over TIM3,
-/// TIM5, and DMA2 streams 0-3.
-pub type DshotMotorBank = DshotBank<H7DshotLanes>;
+/// A bank over the timer set `TS` and lanes `A`-`D`, for motors 1-4.
+pub type DshotMotorBank<TS, A, B, C, D> = DshotBank<H7DshotLanes<TS, A, B, C, D>>;
 
 /// Static storage for two DMA buffers per motor lane. It must be placed in
 /// memory DMA2 can reach.
@@ -70,146 +71,303 @@ impl Default for DshotDmaStorage {
     }
 }
 
-pub struct DshotMotorBankResources {
-    pub tim3: TIM3,
-    pub tim3_rec: rec::Tim3,
-    pub tim5: TIM5,
-    pub tim5_rec: rec::Tim5,
-    pub motor1_pin: PB0,
-    pub motor2_pin: PB1,
-    pub motor3_pin: PA0,
-    pub motor4_pin: PA1,
-    pub motor1_dma: Stream0<DMA2>,
-    pub motor2_dma: Stream1<DMA2>,
-    pub motor3_dma: Stream2<DMA2>,
-    pub motor4_dma: Stream3<DMA2>,
+/// The register sequencing DShot needs from one timer, for the channels in
+/// `channels` (bit n is channel n + 1).
+pub trait LaneTimer: Any {
+    /// Count at the DShot bit rate with the channels in PWM mode 1, preload
+    /// on, outputs enabled active high, and every compare at zero.
+    fn configure(&self, timing: DshotTiming, channels: u8);
+    /// Stop the counter with the requests closed, load each channel's first
+    /// duty from `first[channel]`, stage the counter at ARR so its first
+    /// update latches them, and open the requests.
+    fn stage(&self, channels: u8, first: &[u16; 4], period_end: u16);
+    fn start(&self);
+    /// Stop with the outputs held low: every compare at zero in PWM mode 1.
+    fn stop(&self, channels: u8);
+    /// Stop, then hold the outputs inactive whatever the compare values,
+    /// until the bank is rebuilt.
+    fn force_inactive(&self, channels: u8);
 }
 
-/// TIM3/TIM5 compare lanes and their DMA2 streams, the H7 hardware under a
-/// `DshotMotorBank`.
-pub struct H7DshotLanes {
-    tim3: TIM3,
-    tim5: TIM5,
-    period_end: u16,
-    _motor1_pin: PB0<Alternate<2>>,
-    _motor2_pin: PB1<Alternate<2>>,
-    _motor3_pin: PA0<Alternate<2>>,
-    _motor4_pin: PA1<Alternate<2>>,
-    motor1_transfer: Motor1Transfer,
-    motor2_transfer: Motor2Transfer,
-    motor3_transfer: Motor3Transfer,
-    motor4_transfer: Motor4Transfer,
-}
+macro_rules! lane_timers {
+    ($($TIM:ident),+) => {
+        $(
+            impl LaneTimer for $TIM {
+                fn configure(&self, timing: DshotTiming, channels: u8) {
+                    self.cr1.reset();
+                    self.cr2.reset();
+                    self.smcr.reset();
+                    self.dier.reset();
+                    self.ccer.reset();
+                    self.ccmr1_output().reset();
+                    self.ccmr2_output().reset();
+                    self.psc.write(|w| w.psc().bits(0));
+                    self.arr.write(|w| w.arr().bits(timing.arr.into()));
+                    park(self);
+                    self.cnt.write(|w| w.cnt().bits(0));
+                    self.cr1.modify(|_, w| w.arpe().set_bit());
+                    if channels & 0b0001 != 0 {
+                        self.ccmr1_output()
+                            .modify(|_, w| w.cc1s().output().oc1pe().enabled().oc1m().pwm_mode1());
+                        self.ccer.modify(|_, w| w.cc1p().clear_bit().cc1e().set_bit());
+                    }
+                    if channels & 0b0010 != 0 {
+                        self.ccmr1_output()
+                            .modify(|_, w| w.cc2s().output().oc2pe().enabled().oc2m().pwm_mode1());
+                        self.ccer.modify(|_, w| w.cc2p().clear_bit().cc2e().set_bit());
+                    }
+                    if channels & 0b0100 != 0 {
+                        self.ccmr2_output()
+                            .modify(|_, w| w.cc3s().output().oc3pe().enabled().oc3m().pwm_mode1());
+                        self.ccer.modify(|_, w| w.cc3p().clear_bit().cc3e().set_bit());
+                    }
+                    if channels & 0b1000 != 0 {
+                        self.ccmr2_output()
+                            .modify(|_, w| w.cc4s().output().oc4pe().enabled().oc4m().pwm_mode1());
+                        self.ccer.modify(|_, w| w.cc4p().clear_bit().cc4e().set_bit());
+                    }
+                    self.cr2.modify(|_, w| w.ccds().on_compare());
+                    self.egr.write(|w| w.ug().set_bit());
+                    self.sr.reset();
+                }
 
-/// The register sequencing one timer's pair of DShot channels needs. TIM3
-/// and TIM5 have different register blocks, so each gets its own impl.
-macro_rules! dshot_timer {
-    (
-        $name:ident: $TIM:ident, $ccmr:ident,
-        a: [$ia:literal, $ccas:ident, $ocape:ident, $ocam:ident, $ccap:ident, $ccae:ident, $ccade:ident],
-        b: [$ib:literal, $ccbs:ident, $ocbpe:ident, $ocbm:ident, $ccbp:ident, $ccbe:ident, $ccbde:ident]
-    ) => {
-        mod $name {
-            use super::*;
+                fn stage(&self, channels: u8, first: &[u16; 4], period_end: u16) {
+                    set_requests(self, channels, false);
+                    self.cr1.modify(|_, w| w.cen().clear_bit());
+                    for (index, duty) in first.iter().enumerate() {
+                        if channels & (1 << index) != 0 {
+                            self.ccr[index].write(|w| w.ccr().bits((*duty).into()));
+                        }
+                    }
+                    self.cnt.write(|w| w.cnt().bits(period_end.into()));
+                    self.sr.reset();
+                    set_requests(self, channels, true);
+                }
 
-            pub(super) fn configure(timer: &$TIM, timing: DshotTiming) {
-                timer.cr1.reset();
-                timer.cr2.reset();
-                timer.smcr.reset();
-                timer.dier.reset();
-                timer.ccer.reset();
-                timer.psc.write(|w| w.psc().bits(0));
-                timer.arr.write(|w| w.arr().bits(timing.arr.into()));
-                park(timer);
-                timer.cnt.write(|w| w.cnt().bits(0));
-                timer.cr1.modify(|_, w| w.arpe().set_bit());
-                timer.$ccmr().write(|w| {
-                    w.$ccas()
-                        .output()
-                        .$ocape()
-                        .enabled()
-                        .$ocam()
-                        .pwm_mode1()
-                        .$ccbs()
-                        .output()
-                        .$ocbpe()
-                        .enabled()
-                        .$ocbm()
-                        .pwm_mode1()
-                });
-                timer.cr2.modify(|_, w| w.ccds().on_compare());
-                timer.ccer.modify(|_, w| {
-                    w.$ccap()
-                        .clear_bit()
-                        .$ccae()
-                        .set_bit()
-                        .$ccbp()
-                        .clear_bit()
-                        .$ccbe()
-                        .set_bit()
-                });
-                timer.egr.write(|w| w.ug().set_bit());
-                timer.sr.reset();
-            }
+                fn start(&self) {
+                    self.cr1.modify(|_, w| w.cen().set_bit());
+                }
 
-            /// Stop the counter with both requests closed, load the first
-            /// duties, and stage the counter at ARR so its first update
-            /// latches them.
-            pub(super) fn stage(timer: &$TIM, first: [u16; 2], period_end: u16) {
-                close_requests(timer);
-                timer.cr1.modify(|_, w| w.cen().clear_bit());
-                timer.ccr[$ia].write(|w| w.ccr().bits(first[0].into()));
-                timer.ccr[$ib].write(|w| w.ccr().bits(first[1].into()));
-                timer.cnt.write(|w| w.cnt().bits(period_end.into()));
-                timer.sr.reset();
-                timer
-                    .dier
-                    .modify(|_, w| w.$ccade().set_bit().$ccbde().set_bit());
-            }
+                fn stop(&self, channels: u8) {
+                    set_requests(self, channels, false);
+                    self.cr1.modify(|_, w| w.cen().clear_bit());
+                    park(self);
+                    self.egr.write(|w| w.ug().set_bit());
+                    self.sr.reset();
+                }
 
-            pub(super) fn start(timer: &$TIM) {
-                timer.cr1.modify(|_, w| w.cen().set_bit());
-            }
-
-            pub(super) fn close_requests(timer: &$TIM) {
-                timer
-                    .dier
-                    .modify(|_, w| w.$ccade().clear_bit().$ccbde().clear_bit());
-            }
-
-            /// Stop with both outputs held low: zero compare in PWM mode 1.
-            pub(super) fn stop(timer: &$TIM) {
-                close_requests(timer);
-                timer.cr1.modify(|_, w| w.cen().clear_bit());
-                park(timer);
-                timer.egr.write(|w| w.ug().set_bit());
-                timer.sr.reset();
-            }
-
-            /// Hold both outputs inactive regardless of compare values, until
-            /// the bank is rebuilt.
-            pub(super) fn force_inactive(timer: &$TIM) {
-                stop(timer);
-                timer
-                    .$ccmr()
-                    .modify(|_, w| w.$ocam().force_inactive().$ocbm().force_inactive());
-            }
-
-            fn park(timer: &$TIM) {
-                for ccr in &timer.ccr {
-                    ccr.write(|w| w.ccr().bits(0));
+                fn force_inactive(&self, channels: u8) {
+                    self.stop(channels);
+                    if channels & 0b0001 != 0 {
+                        self.ccmr1_output().modify(|_, w| w.oc1m().force_inactive());
+                    }
+                    if channels & 0b0010 != 0 {
+                        self.ccmr1_output().modify(|_, w| w.oc2m().force_inactive());
+                    }
+                    if channels & 0b0100 != 0 {
+                        self.ccmr2_output().modify(|_, w| w.oc3m().force_inactive());
+                    }
+                    if channels & 0b1000 != 0 {
+                        self.ccmr2_output().modify(|_, w| w.oc4m().force_inactive());
+                    }
                 }
             }
-        }
+
+            impl ParkAndRequest for $TIM {
+                fn park(&self) {
+                    for ccr in &self.ccr {
+                        ccr.write(|w| w.ccr().bits(0));
+                    }
+                }
+
+                fn set_requests(&self, channels: u8, open: bool) {
+                    self.dier.modify(|r, w| {
+                        let bit = |n: u8, current: bool| {
+                            if channels & (1 << n) != 0 { open } else { current }
+                        };
+                        w.cc1de()
+                            .bit(bit(0, r.cc1de().bit()))
+                            .cc2de()
+                            .bit(bit(1, r.cc2de().bit()))
+                            .cc3de()
+                            .bit(bit(2, r.cc3de().bit()))
+                            .cc4de()
+                            .bit(bit(3, r.cc4de().bit()))
+                    });
+                }
+            }
+        )+
     };
 }
 
-dshot_timer!(tim3_lanes: TIM3, ccmr2_output,
-    a: [2, cc3s, oc3pe, oc3m, cc3p, cc3e, cc3de],
-    b: [3, cc4s, oc4pe, oc4m, cc4p, cc4e, cc4de]);
-dshot_timer!(tim5_lanes: TIM5, ccmr1_output,
-    a: [0, cc1s, oc1pe, oc1m, cc1p, cc1e, cc1de],
-    b: [1, cc2s, oc2pe, oc2m, cc2p, cc2e, cc2de]);
+/// Helpers the `LaneTimer` impls share, per timer register block.
+trait ParkAndRequest {
+    fn park(&self);
+    fn set_requests(&self, channels: u8, open: bool);
+}
+
+fn park(timer: &impl ParkAndRequest) {
+    timer.park();
+}
+
+fn set_requests(timer: &impl ParkAndRequest, channels: u8, open: bool) {
+    timer.set_requests(channels, open);
+}
+
+lane_timers!(TIM2, TIM3, TIM4, TIM5);
+
+/// The timers a bank drives, in slots. A lane finds its timer by type.
+pub trait TimerSet: 'static {
+    const LEN: usize;
+    fn timer(&self, slot: usize) -> &dyn LaneTimer;
+    fn find<T: 'static>(&self) -> Option<(usize, &T)>;
+}
+
+macro_rules! timer_sets {
+    ($(($($T:ident: $slot:tt),+)),+) => {
+        $(
+            impl<$($T: LaneTimer),+> TimerSet for ($($T,)+) {
+                const LEN: usize = [$($slot),+].len();
+
+                fn timer(&self, slot: usize) -> &dyn LaneTimer {
+                    match slot {
+                        $($slot => &self.$slot,)+
+                        _ => unreachable!("slot below LEN"),
+                    }
+                }
+
+                fn find<T: 'static>(&self) -> Option<(usize, &T)> {
+                    $(
+                        if let Some(timer) = (&self.$slot as &dyn Any).downcast_ref::<T>() {
+                            return Some(($slot, timer));
+                        }
+                    )+
+                    None
+                }
+            }
+        )+
+    };
+}
+
+timer_sets!((A: 0), (A: 0, B: 1), (A: 0, B: 1, C: 2), (A: 0, B: 1, C: 2, D: 3));
+
+/// A motor lane as the board names it: channel `C` of timer `T`, on DMA
+/// `stream`.
+pub struct LaneStream<S, T, C> {
+    stream: S,
+    _lane: PhantomData<(T, C)>,
+}
+
+/// Name a motor lane: channel `C` of timer `T`, carried by `stream`.
+pub fn lane<T, C, S>(stream: S) -> LaneStream<S, T, C> {
+    LaneStream {
+        stream,
+        _lane: PhantomData,
+    }
+}
+
+/// A built lane: its timer slot, its channel, and its DMA transfer.
+pub struct Lane<S, T, C>
+where
+    S: Stream,
+    T: CompareChannel<C>,
+    C: LaneChannel,
+{
+    slot: usize,
+    transfer: Transfer<S, TimerCompareEndpoint<T, C>, MemoryToPeripheral, DshotBuffer, DBTransfer>,
+}
+
+/// One built lane, whatever its stream, timer, and channel.
+pub trait LaneDma {
+    fn slot(&self) -> usize;
+    fn channel(&self) -> usize;
+    fn exchange(&mut self, next: DshotBuffer) -> Result<DshotBuffer, DshotBuffer>;
+    fn start(&mut self);
+    fn status(&self) -> (bool, bool);
+    fn pause_and_clear(&mut self);
+}
+
+impl<S, T, C> LaneDma for Lane<S, T, C>
+where
+    S: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
+    T: CompareChannel<C>,
+    C: LaneChannel,
+{
+    fn slot(&self) -> usize {
+        self.slot
+    }
+
+    fn channel(&self) -> usize {
+        C::INDEX
+    }
+
+    fn exchange(&mut self, next: DshotBuffer) -> Result<DshotBuffer, DshotBuffer> {
+        // Single-buffer mode: the HAL stops the stream, swaps the buffer, and
+        // re-enables it; no request reaches it until the timer opens one.
+        // That cannot fail; the error arm exists because double-buffer mode
+        // can.
+        let mut next = Some(next);
+        let old = self
+            .transfer
+            .next_transfer_with(|old, _, _| match next.take() {
+                Some(next) => (next, Some(old)),
+                None => (old, None),
+            });
+        match (old, next) {
+            (Ok(Some(old)), _) => Ok(old),
+            (_, Some(next)) => Err(next),
+            (Ok(None) | Err(_), None) => {
+                unreachable!("the stream took the next buffer and returned the old one")
+            }
+        }
+    }
+
+    fn start(&mut self) {
+        self.transfer.start(|_| {});
+    }
+
+    fn status(&self) -> (bool, bool) {
+        let errors = S::error_flags();
+        (
+            self.transfer.get_transfer_complete_flag(),
+            errors.transfer_error || errors.direct_mode_error,
+        )
+    }
+
+    fn pause_and_clear(&mut self) {
+        self.transfer.pause(|_| {});
+        self.transfer.clear_interrupts();
+    }
+}
+
+/// A lane the board named, to be built against the bank's timers.
+pub trait IntoLane<TS> {
+    type Lane: LaneDma;
+    fn into_lane(self, timers: &TS, buffer: DshotBuffer) -> Result<Self::Lane, DshotInitError>;
+}
+
+impl<TS, S, T, C> IntoLane<TS> for LaneStream<S, T, C>
+where
+    TS: TimerSet,
+    S: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
+    T: CompareChannel<C> + 'static,
+    C: LaneChannel,
+{
+    type Lane = Lane<S, T, C>;
+
+    fn into_lane(self, timers: &TS, buffer: DshotBuffer) -> Result<Self::Lane, DshotInitError> {
+        let (slot, timer) = timers.find::<T>().ok_or(DshotInitError::LaneTimerMissing)?;
+        buffer.fill(0);
+        let transfer = Transfer::init(
+            self.stream,
+            TimerCompareEndpoint::<T, C>::new(timer),
+            buffer,
+            None,
+            dma_config(),
+        );
+        Ok(Lane { slot, transfer })
+    }
+}
 
 fn dma_config() -> DmaConfig {
     DmaConfig::default()
@@ -221,50 +379,61 @@ fn dma_config() -> DmaConfig {
         .direct_mode_error_interrupt(true)
 }
 
-fn exchange<S, const REQUEST: u8>(
-    transfer: &mut LaneTransfer<S, REQUEST>,
-    next: DshotBuffer,
-) -> Result<DshotBuffer, DshotBuffer>
+/// The timers and four lanes under a `DshotMotorBank`.
+pub struct H7DshotLanes<TS, A, B, C, D> {
+    timers: TS,
+    /// Each timer slot's lane channels, bit n for channel n + 1.
+    channels: [u8; 4],
+    period_end: u16,
+    motor1: A,
+    motor2: B,
+    motor3: C,
+    motor4: D,
+}
+
+impl<TS, A, B, C, D> H7DshotLanes<TS, A, B, C, D>
 where
-    S: DoubleBufferedStream + Stream<Config = DmaConfig>,
+    TS: TimerSet,
+    A: LaneDma,
+    B: LaneDma,
+    C: LaneDma,
+    D: LaneDma,
 {
-    // Single-buffer mode: the HAL stops the stream, swaps the buffer, and
-    // re-enables it; no request reaches it until the timer opens one. That
-    // cannot fail; the error arm exists because double-buffer mode can.
-    let mut next = Some(next);
-    let old = transfer.next_transfer_with(|old, _, _| match next.take() {
-        Some(next) => (next, Some(old)),
-        None => (old, None),
-    });
-    match (old, next) {
-        (Ok(Some(old)), _) => Ok(old),
-        (_, Some(next)) => Err(next),
-        (Ok(None) | Err(_), None) => {
-            unreachable!("the stream took the next buffer and returned the old one")
+    fn lane(&self, motor: DshotMotor) -> &dyn LaneDma {
+        match motor {
+            DshotMotor::Motor1 => &self.motor1,
+            DshotMotor::Motor2 => &self.motor2,
+            DshotMotor::Motor3 => &self.motor3,
+            DshotMotor::Motor4 => &self.motor4,
         }
+    }
+
+    fn lane_mut(&mut self, motor: DshotMotor) -> &mut dyn LaneDma {
+        match motor {
+            DshotMotor::Motor1 => &mut self.motor1,
+            DshotMotor::Motor2 => &mut self.motor2,
+            DshotMotor::Motor3 => &mut self.motor3,
+            DshotMotor::Motor4 => &mut self.motor4,
+        }
+    }
+
+    /// The slots that carry at least one lane, each with its channels.
+    fn used_slots(&self) -> impl Iterator<Item = (usize, u8)> + '_ {
+        (0..TS::LEN).filter_map(|slot| {
+            let channels = self.channels[slot];
+            (channels != 0).then_some((slot, channels))
+        })
     }
 }
 
-fn status<S, const REQUEST: u8>(transfer: &LaneTransfer<S, REQUEST>) -> (bool, bool)
+impl<TS, A, B, C, D> DshotLanes for H7DshotLanes<TS, A, B, C, D>
 where
-    S: Stream + StreamErrors,
+    TS: TimerSet,
+    A: LaneDma,
+    B: LaneDma,
+    C: LaneDma,
+    D: LaneDma,
 {
-    let errors = S::error_flags();
-    (
-        transfer.get_transfer_complete_flag(),
-        errors.transfer_error || errors.direct_mode_error,
-    )
-}
-
-fn pause_and_clear<S, const REQUEST: u8>(transfer: &mut LaneTransfer<S, REQUEST>)
-where
-    S: Stream<Config = DmaConfig>,
-{
-    transfer.pause(|_| {});
-    transfer.clear_interrupts();
-}
-
-impl DshotLanes for H7DshotLanes {
     type Buffer = DshotDmaBuffer;
 
     fn encode(packet: DshotPacket, timing: DshotTiming, buffer: &mut DshotDmaBuffer) -> u16 {
@@ -281,110 +450,70 @@ impl DshotLanes for H7DshotLanes {
         motor: DshotMotor,
         next: DshotBuffer,
     ) -> Result<DshotBuffer, DshotBuffer> {
-        match motor {
-            DshotMotor::Motor1 => exchange(&mut self.motor1_transfer, next),
-            DshotMotor::Motor2 => exchange(&mut self.motor2_transfer, next),
-            DshotMotor::Motor3 => exchange(&mut self.motor3_transfer, next),
-            DshotMotor::Motor4 => exchange(&mut self.motor4_transfer, next),
-        }
+        self.lane_mut(motor).exchange(next)
     }
 
     fn start_dma(&mut self, motor: DshotMotor) {
-        match motor {
-            DshotMotor::Motor1 => self.motor1_transfer.start(|_| {}),
-            DshotMotor::Motor2 => self.motor2_transfer.start(|_| {}),
-            DshotMotor::Motor3 => self.motor3_transfer.start(|_| {}),
-            DshotMotor::Motor4 => self.motor4_transfer.start(|_| {}),
-        }
+        self.lane_mut(motor).start();
     }
 
     fn start_frame(&mut self, first_duties: [u16; 4]) {
-        tim3_lanes::stage(
-            &self.tim3,
-            [first_duties[0], first_duties[1]],
-            self.period_end,
-        );
-        tim5_lanes::stage(
-            &self.tim5,
-            [first_duties[2], first_duties[3]],
-            self.period_end,
-        );
-        tim3_lanes::start(&self.tim3);
-        tim5_lanes::start(&self.tim5);
+        // Each timer slot's first duties, by channel.
+        let mut first = [[0u16; 4]; 4];
+        for (motor, duty) in DshotMotor::ALL.into_iter().zip(first_duties) {
+            let lane = self.lane(motor);
+            first[lane.slot()][lane.channel()] = duty;
+        }
+        for (slot, channels) in self.used_slots() {
+            self.timers
+                .timer(slot)
+                .stage(channels, &first[slot], self.period_end);
+        }
+        for (slot, _) in self.used_slots() {
+            self.timers.timer(slot).start();
+        }
     }
 
     fn stop_frame(&mut self) {
-        tim3_lanes::stop(&self.tim3);
-        tim5_lanes::stop(&self.tim5);
+        for (slot, channels) in self.used_slots() {
+            self.timers.timer(slot).stop(channels);
+        }
     }
 
     fn force_outputs_low(&mut self) {
-        tim3_lanes::force_inactive(&self.tim3);
-        tim5_lanes::force_inactive(&self.tim5);
+        for (slot, channels) in self.used_slots() {
+            self.timers.timer(slot).force_inactive(channels);
+        }
     }
 
     fn dma_status(&self, motor: DshotMotor) -> (bool, bool) {
-        match motor {
-            DshotMotor::Motor1 => status(&self.motor1_transfer),
-            DshotMotor::Motor2 => status(&self.motor2_transfer),
-            DshotMotor::Motor3 => status(&self.motor3_transfer),
-            DshotMotor::Motor4 => status(&self.motor4_transfer),
-        }
+        self.lane(motor).status()
     }
 
     fn pause_and_clear(&mut self, motor: DshotMotor) {
-        match motor {
-            DshotMotor::Motor1 => pause_and_clear(&mut self.motor1_transfer),
-            DshotMotor::Motor2 => pause_and_clear(&mut self.motor2_transfer),
-            DshotMotor::Motor3 => pause_and_clear(&mut self.motor3_transfer),
-            DshotMotor::Motor4 => pause_and_clear(&mut self.motor4_transfer),
-        }
+        self.lane_mut(motor).pause_and_clear();
     }
 }
 
-/// Build the Lucid H7 bank. Pads are latched low as GPIO until both timers
-/// are configured with their outputs parked low.
-pub fn init_dshot_motor_bank(
-    resources: DshotMotorBankResources,
+/// Build a bank over `timers`, enabled and reset, with `lanes` for motors
+/// 1-4. Each timer that carries a lane is configured with its outputs parked
+/// low; the board connects the motor pads afterwards.
+#[allow(clippy::type_complexity)]
+pub fn init_dshot_motor_bank<TS, LA, LB, LC, LD>(
+    timers: TS,
+    lanes: (LA, LB, LC, LD),
     clocks: &CoreClocks,
     storage: &'static mut DshotDmaStorage,
-) -> Result<DshotMotorBank, DshotInitError> {
-    let DshotMotorBankResources {
-        tim3,
-        tim3_rec,
-        tim5,
-        tim5_rec,
-        motor1_pin,
-        motor2_pin,
-        motor3_pin,
-        motor4_pin,
-        motor1_dma,
-        motor2_dma,
-        motor3_dma,
-        motor4_dma,
-    } = resources;
-
+) -> Result<DshotMotorBank<TS, LA::Lane, LB::Lane, LC::Lane, LD::Lane>, DshotInitError>
+where
+    TS: TimerSet,
+    LA: IntoLane<TS>,
+    LB: IntoLane<TS>,
+    LC: IntoLane<TS>,
+    LD: IntoLane<TS>,
+{
     let timing = DshotTiming::from_clocks(clocks.timx_ker_ck().raw(), DSHOT600_BITRATE_HZ)
         .map_err(DshotInitError::InvalidTiming)?;
-
-    let mut motor1_pin = motor1_pin.into_push_pull_output();
-    let mut motor2_pin = motor2_pin.into_push_pull_output();
-    let mut motor3_pin = motor3_pin.into_push_pull_output();
-    let mut motor4_pin = motor4_pin.into_push_pull_output();
-    motor1_pin.set_low();
-    motor2_pin.set_low();
-    motor3_pin.set_low();
-    motor4_pin.set_low();
-
-    tim3_rec.enable().reset();
-    tim5_rec.enable().reset();
-    tim3_lanes::configure(&tim3, timing);
-    tim5_lanes::configure(&tim5, timing);
-
-    let motor1_pin = motor1_pin.into_alternate::<2>().speed(Speed::VeryHigh);
-    let motor2_pin = motor2_pin.into_alternate::<2>().speed(Speed::VeryHigh);
-    let motor3_pin = motor3_pin.into_alternate::<2>().speed(Speed::VeryHigh);
-    let motor4_pin = motor4_pin.into_alternate::<2>().speed(Speed::VeryHigh);
 
     let [
         motor1_active,
@@ -396,51 +525,38 @@ pub fn init_dshot_motor_bank(
         motor4_active,
         motor4_spare,
     ] = storage.buffers.each_mut();
-    let init = |buffer: DshotBuffer| {
-        buffer.fill(0);
-        buffer
-    };
-    let motor1_transfer = Transfer::init(
-        motor1_dma,
-        tim3_ch3(&tim3),
-        init(motor1_active),
-        None,
-        dma_config(),
-    );
-    let motor2_transfer = Transfer::init(
-        motor2_dma,
-        tim3_ch4(&tim3),
-        init(motor2_active),
-        None,
-        dma_config(),
-    );
-    let motor3_transfer = Transfer::init(
-        motor3_dma,
-        tim5_ch1(&tim5),
-        init(motor3_active),
-        None,
-        dma_config(),
-    );
-    let motor4_transfer = Transfer::init(
-        motor4_dma,
-        tim5_ch2(&tim5),
-        init(motor4_active),
-        None,
-        dma_config(),
-    );
+    let motor1 = lanes.0.into_lane(&timers, motor1_active)?;
+    let motor2 = lanes.1.into_lane(&timers, motor2_active)?;
+    let motor3 = lanes.2.into_lane(&timers, motor3_active)?;
+    let motor4 = lanes.3.into_lane(&timers, motor4_active)?;
+
+    let mut channels = [0u8; 4];
+    for lane in [
+        &motor1 as &dyn LaneDma,
+        &motor2 as &dyn LaneDma,
+        &motor3 as &dyn LaneDma,
+        &motor4 as &dyn LaneDma,
+    ] {
+        let bit = 1 << lane.channel();
+        if channels[lane.slot()] & bit != 0 {
+            return Err(DshotInitError::LaneChannelReused);
+        }
+        channels[lane.slot()] |= bit;
+    }
+    for (slot, slot_channels) in channels.iter().enumerate().take(TS::LEN) {
+        if *slot_channels != 0 {
+            timers.timer(slot).configure(timing, *slot_channels);
+        }
+    }
 
     let lanes = H7DshotLanes {
-        tim3,
-        tim5,
+        timers,
+        channels,
         period_end: timing.arr,
-        _motor1_pin: motor1_pin,
-        _motor2_pin: motor2_pin,
-        _motor3_pin: motor3_pin,
-        _motor4_pin: motor4_pin,
-        motor1_transfer,
-        motor2_transfer,
-        motor3_transfer,
-        motor4_transfer,
+        motor1,
+        motor2,
+        motor3,
+        motor4,
     };
     Ok(DshotBank::from_lanes(
         lanes,

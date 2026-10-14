@@ -3,7 +3,7 @@
 
 use ferrowasp_stm32::uart_port;
 use ferrowasp_stm32h7::hal_prelude::*;
-use ferrowasp_stm32h7::{adc, sd_storage, spi_dma, timers, uart_dma};
+use ferrowasp_stm32h7::{adc, dshot, sd_storage, spi_dma, timers, uart_dma};
 
 pub type ImuDataReadyPin = PB2<Input>;
 
@@ -23,6 +23,16 @@ pub type Uart1RxPort = uart_port::UartRxPort<uart_dma::UartRxIrq<Stream4<DMA2>, 
 pub type Uart8RxPort = uart_port::UartRxPort<uart_dma::UartRxIrq<Stream2<DMA1>, UART8>>;
 
 /// Battery voltage on PC0 and current on PC1.
+/// The four motor lanes: TIM3 CH3/CH4 on PB0/PB1 and TIM5 CH1/CH2 on
+/// PA0/PA1, carried by DMA2 streams 0-3.
+pub type DshotMotorBank = dshot::DshotMotorBank<
+    (TIM3, TIM5),
+    dshot::Lane<Stream0<DMA2>, TIM3, dshot::channel::Ch3>,
+    dshot::Lane<Stream1<DMA2>, TIM3, dshot::channel::Ch4>,
+    dshot::Lane<Stream2<DMA2>, TIM5, dshot::channel::Ch1>,
+    dshot::Lane<Stream3<DMA2>, TIM5, dshot::channel::Ch2>,
+>;
+
 pub type Adc1ObservationTransfer = adc::Adc1Observation<PC0<Analog>, PC1<Analog>>;
 pub type Adc1ObservationParts = adc::Adc1ObservationParts<PC0<Analog>, PC1<Analog>>;
 

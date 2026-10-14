@@ -32,17 +32,28 @@ and refused unless every motor is stopped and no command lease is active.
 
 Each lane is a timer compare channel whose DMA stream writes the next bit's
 compare value at every bit boundary. The four lanes form one bank and one
-fault domain: the bank owns both timers, all four DMA streams, every motor pin,
-and every DMA buffer. The timer and DMA routes are board facts, declared in
-each board's data crate under `firmware/<board>/board/src/routes.rs`.
+fault domain: the bank owns its timers, all four DMA streams, and every DMA
+buffer.
+
+Which timers, channels, and streams carry the motors is the board's. Its glue
+hands the chip backend its timers and names each motor's lane as a timer, a
+channel, and a stream; the DMA plan is in its data crate under
+`firmware/<board>/board/src/routes.rs`. A lane's compare register and DMA
+request follow from the timer's and channel's types, so they cannot disagree,
+and a route the backend has not declared does not compile. All of a bank's
+lane timers must count the same timer clock, because one bit timing encodes
+every lane; on the STM32F405 that means not mixing the APB2 timers (TIM1,
+TIM8) with the APB1 ones.
 
 | Board | Timers | Start |
 |---|---|---|
 | Foxeer F405 V2 | TIM1 and TIM8 | TIM1 starts TIM8 through an internal trigger |
 | TBS Lucid H7 | TIM3 and TIM5 | started back to back in software, a few bus cycles apart |
 
-Before each frame set the bank stops both timers, prepares all four streams,
-stages every lane's first bit, and then starts the timers together. A frame set
+Before each frame set the bank stops its timers, prepares all four streams,
+stages every lane's first bit, and then starts the timers together: from one
+timer's trigger output where the board chooses that and the chip wires it, or
+back to back in software. A frame set
 is complete only when all four lanes report transfer completion. A transfer or
 direct-mode error, an unexpected or duplicate interrupt, or a frame set still
 in flight after 1 ms faults the whole bank: the timers stop, the streams are

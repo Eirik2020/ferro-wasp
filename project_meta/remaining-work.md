@@ -65,8 +65,12 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Foxeer status LEDs.** The shared `status_leds` task (green heartbeat, blue
   armed) runs on the TBS Lucid H7 only; wire it on Foxeer to bring the golden
   app level.
-- **Chip-family backends.** A backend should cover its whole family: H7 DShot
-  is hard-wired to TIM3/TIM5 while TIM2 is the timebase.
+- **Chip-family backends.** Board assembly has left both backends, and DShot
+  lanes are named by each board. What remains is added when a board needs it:
+  F4 DShot covers only the advanced timers (TIM1, TIM8) and the Foxeer's four
+  DMA routes; the H7 covers TIM2-TIM5. A board whose motors use both of the
+  H743's 32-bit timers (the Lucid V3: TIM2 and TIM5) needs the microsecond
+  timebase moved to a 16-bit timer with wrap extension.
 - **Board data from existing targets.** Generate a board's data crate from its
   ArduPilot or Betaflight target definition.
 - **Host-testable flash manager.** Move the shared flash manager's logic into a

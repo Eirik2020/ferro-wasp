@@ -5,6 +5,7 @@
 //! command reaches the DShot bank.
 
 use crate::prelude::backend::dshot;
+use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
 use crate::snapshots::MOTOR_OUTPUT_MAP_SNAPSHOT;
 
@@ -14,14 +15,16 @@ pub type ArmingGuard = fn(bool, bool, bool, u32) -> Result<(), safety::ArmingAbo
 
 pub struct ActuatorHardware<'a, SharedDshot>
 where
-    SharedDshot: rtic::Mutex<T = dshot::DshotMotorBank>,
+    SharedDshot: rtic::Mutex,
+    SharedDshot::T: DshotMotors,
 {
     dshot: &'a mut SharedDshot,
 }
 
 impl<'a, SharedDshot> ActuatorHardware<'a, SharedDshot>
 where
-    SharedDshot: rtic::Mutex<T = dshot::DshotMotorBank>,
+    SharedDshot: rtic::Mutex,
+    SharedDshot::T: DshotMotors,
 {
     pub fn new(dshot: &'a mut SharedDshot) -> Self {
         Self { dshot }
@@ -121,7 +124,8 @@ pub fn apply_bench_motor_request<SharedDshot>(
     idle_command: f32,
     now_ms: u64,
 ) where
-    SharedDshot: rtic::Mutex<T = dshot::DshotMotorBank>,
+    SharedDshot: rtic::Mutex,
+    SharedDshot::T: DshotMotors,
 {
     let lane = |logical_motor: u8| {
         ferrowasp_core::actuator::unpack_motor_map(
@@ -216,7 +220,8 @@ pub const fn inject_idle_qualification_fault(
 // motor path moves without a logic change.
 #[allow(unused_mut, clippy::needless_return)]
 #[ferroforge::task(
-    shared = [dshot_motors: dshot::DshotMotorBank],
+    bounds = [dshot_motors: dshot::DshotMotors],
+    shared = [dshot_motors],
     local = [
         actuator_safety_arm_reader: signals::SafetyArmReader,
         actuator_arm_permit_reader: signals::ActuatorArmPermitReader,
