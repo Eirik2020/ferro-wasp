@@ -49,6 +49,10 @@ and blocks arming for two seconds after the last test.
 
 ## Commands
 
+From a source checkout, `python3 tools/configurator.py cli` followed by any of
+these arguments builds and runs the CLI from anywhere in the repository, and
+`python3 tools/configurator.py` opens the desktop app.
+
 ```powershell
 ferro-configurator.exe doctor
 ferro-configurator.exe device list
