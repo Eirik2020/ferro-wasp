@@ -64,9 +64,9 @@ rather than editing around it. Implementation status does not change them.
    "certification-aligned", or "evidence-friendly". Label a claim implemented,
    transitional, planned, or aspirational, and separate what was measured from
    what was inferred.
-9. **W9 - Repository boundary.** This repository is the authority for its
-   firmware, host tools, and evidence; planning held elsewhere never overrides
-   it. FerroForge comes from crates.io: a `path` dependency or `[patch]` on a
+9. **W9 - Repository boundary.** This repository is the only authority for
+   FerroWasp's firmware, host tools, evidence, and plans; FerroConfigurator,
+   inside it, is its host tool. FerroForge comes from crates.io: a `path` dependency or `[patch]` on a
    local checkout changes the flight image.
 
 Implementation details belong in the public book, `mdbook/`, what is left to

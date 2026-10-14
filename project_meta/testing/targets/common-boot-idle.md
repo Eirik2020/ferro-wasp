@@ -60,6 +60,6 @@ The bounded map is `project_meta/testing/EVIDENCE_INDEX.md`.
 
 The byte-preserved checklist and dated results that previously occupied this
 path are retained at
-`project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md`.
+`archive/project_meta/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md`.
 Unchecked items in that snapshot are historical checklist state, not
 automatically active test definitions or current flight obligations.

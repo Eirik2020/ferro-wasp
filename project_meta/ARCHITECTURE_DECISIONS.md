@@ -16,7 +16,7 @@ the wording and status from the former combined ledger.
   decisions and current target evidence rather than inferring a resolution.
 
 The byte-for-byte ledger before this split is retained as
-[`archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md`](archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md).
+[`archive/project_meta/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md`](../archive/project_meta/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md).
 Its immutable size and SHA-256 are enforced through
 `DOCUMENT_REGISTRY.json`.
 
