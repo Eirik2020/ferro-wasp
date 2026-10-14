@@ -27,7 +27,7 @@ work logs do not belong here.
 
 ## Protocols and Interfaces
 
-- add CRSF/ELRS while retaining SBUS;
+- validate CRSF/ELRS and its telemetry on the target, link loss included;
 - evaluate bidirectional DShot telemetry separately from the current legacy
   UART telemetry path;
 - mature configuration and telemetry protocols only after their bounds,
@@ -38,14 +38,15 @@ work logs do not belong here.
 
 - continue thinning RTIC apps so they contain resource declarations, task
   bindings, scheduling, and board composition rather than reusable logic;
-- move reusable STM32F4 initialization and mechanisms into
-  `ferrowasp-stm32f4` without hiding runtime work behind custom macros;
-- keep physical pins, DMA routes, timer assignments, sensor orientation, and
-  other board facts in each app support module;
+- make each chip backend cover its whole family, so a new board on a supported
+  chip needs only its board data;
+- generate a board's data from its existing Betaflight or ArduPilot target;
+- grow FerroForge alongside FerroWasp, building what the firmware needs into
+  the framework rather than around it;
 - add boards only when their explicit hardware contract and verification path
   are maintainable;
-- explore STM32H7 and Pixhawk-class targets after the STM32F4 architecture is
-  stable.
+- bring the STM32H743 port to flight, and consider Pixhawk-class targets
+  after that.
 
 ## Engineering Assurance
 

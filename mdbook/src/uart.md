@@ -6,8 +6,9 @@ flight image's legacy ESC telemetry.
 ## Current Implementation
 
 The reusable STM32F4 UART DMA mechanism lives in
-`crates/ferrowasp-stm32f4/src/uart_dma.rs`. Each board's pin conversion,
-storage shape, and device construction live in its app's `src/board/`.
+`crates/ferrowasp-stm32f4/src/uart_dma.rs`. Each board's UART routes are data
+in its board crate (`board/src/serial.rs`); peripheral construction is in the
+app's `src/board/`.
 
 It provides:
 
@@ -26,7 +27,7 @@ Current UART modes:
 |---|---|---|
 | `Sbus` | 100000 baud, even parity, 2 stop bits, RX DMA | Active RC input path |
 | `Msp` | 115200 baud, TX/RX DMA | Active DJI O4 OSD path on UART4 |
-| `EscTelemetry` | 115200 baud, 8N1, RX DMA | Standard flight-board BLHeli legacy telemetry path on USART1 |
+| `EscTelemetry` | 115200 baud, 8N1, RX DMA | BLHeli legacy ESC telemetry |
 | `Crsf` | 420000 baud, 8N1, not inverted, TX/RX DMA | RC input with battery telemetry when `rc_protocol` is `crsf` |
 | `Cli` | 115200 baud, 8N1, TX/RX DMA | The text command line, for a configurator over a cable or Bluetooth (`configurator`) |
 | `Mavlink` | 57600 baud, RX DMA | Future telemetry/config subset |
@@ -66,14 +67,14 @@ function. A function gains a protocol setting when it gets a second protocol.
 
 ## Default Bindings
 
-On the F405 boards, USART2 is routed to RC input in SBUS mode:
+On Foxeer, USART2 is routed to RC input in SBUS mode:
 
 ```text
 USART2 RX DMA/IDLE IRQ -> owned RxChunk -> persistent async SBUS parser
     -> RC validity + rates/throttle/arm
 ```
 
-The current prototype uses PA2/PA3 for USART2 TX/RX.
+Foxeer uses PA2/PA3 for USART2 TX/RX.
 
 UART4 is routed to the DJI O4 MSP OSD path:
 
@@ -82,7 +83,7 @@ UART4 RX DMA/IDLE IRQ -> owned RxChunk -> osd_refresh task -> MSP parser/respond
 OSD frame queue -> UART4 TX DMA -> DJI O4 air unit
 ```
 
-The current prototype uses PA0/PA1 for UART4 TX/RX.
+Foxeer uses PA0/PA1 for UART4 TX/RX.
 
 USART1 is routed to the combined BLHeli legacy ESC telemetry wire. On Foxeer,
 UART4 can carry ESC telemetry instead:
@@ -107,15 +108,15 @@ into the flash manager, which answers every command on the link it came from
 (`crates/ferrowasp-flight/src/command_link.rs`). Motor commands and the
 unconditional log erase stay on USB.
 
-On the TBS Lucid H7, USART6 (`uart6`) carries SBUS, inverted in the UART;
-USART3 (`uart3`) carries MSP DisplayPort with TX DMA; and UART8 (`uart8`)
-carries ESC telemetry on PE0. Every H743 UART inverts in hardware, so any of
-the three can take SBUS or ESC telemetry; `uart3` and `uart6` have the transmit
-DMA that MSP and CRSF need. The Lucid has no configurator port yet. In the standard flight image, the manager sends typed telemetry requests through
-a bounded queue to the DShot actuator service; it never writes motor hardware
-itself. A CRC-valid response seen before the matching frame-start
-acknowledgement remains quarantined until that exact sequence/output
-acknowledgement arrives.
+On the TBS Lucid H7, USART1 (`uart1`, PA10, receive only) takes RC input from
+the digital VTX connector's SBUS pin, inverted in the UART; USART3 (`uart3`)
+carries MSP DisplayPort with TX DMA; UART8 (`uart8`, PE0) carries ESC
+telemetry; and USART6 (`uart6`) is spare. Every H743 UART inverts in hardware,
+so any port can take SBUS or ESC telemetry; `uart3` and `uart6` have the
+transmit DMA that MSP and CRSF need. The Lucid has no configurator port yet.
+
+The ESC manager never writes motor hardware; how it pairs a telemetry reply
+with the motor that was asked is in [DShot](./dshot.md#esc-telemetry).
 
 ## Design Intent
 
