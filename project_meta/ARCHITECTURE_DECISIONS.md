@@ -1,7 +1,5 @@
 # FerroWasp Architecture Decisions
 
-Last updated: 2026-07-28
-
 This is the bounded index for FerroWasp architecture decision records (ADRs).
 Open only the decisions relevant to the task. The standalone records preserve
 the wording and status from the former combined ledger.
@@ -60,7 +58,10 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0032](decisions/ADR-0032.md) | Foxeer Uses A Separate Capped Actuator-Validation Gate | accepted for commissioning; original flight-inhibit premise superseded |
 | [ADR-0033](decisions/ADR-0033.md) | Foxeer IMU Sampling Is Triggered By PC4/EXTI4 | accepted, pending target validation |
 | [ADR-0034](decisions/ADR-0034.md) | Foxeer Onboard Flash Uses A Low-Priority CPU-Driven SPI2 Owner | accepted, pending target validation |
-| [ADR-0035](decisions/ADR-0035.md) | Board Support Lives With Each Isolated App | accepted |
+| [ADR-0035](decisions/ADR-0035.md) | Board Support Lives With Each Isolated App | accepted; location amended by ADR-0036 |
+| [ADR-0036](decisions/ADR-0036.md) | Each Board's Facts Live In A Host-Tested Data Crate | accepted; amends the location in ADR-0035 |
+| [ADR-0037](decisions/ADR-0037.md) | One Flash Manager Serves Every Board Through NorStorage | accepted, pending target validation |
+| [ADR-0038](decisions/ADR-0038.md) | Test Evidence Is Tied To Component IDs, Not Image Hashes | accepted |
 
 ## Adding Or Changing A Decision
 
