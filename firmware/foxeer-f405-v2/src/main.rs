@@ -25,16 +25,16 @@ ferroforge::app! {
         // UART ports. Each is started at boot for the function saved config
         // binds to it, or left off (`None`) when nothing is bound.
         #[lock_free]
-        uart1_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart1RxIrq>>,
+        uart1_rx: Option<stm32_port::UartRxPort<board::aliases::Uart1RxIrq>>,
         #[lock_free]
-        uart2_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart2RxIrq>>,
-        uart2_tx_dma: Option<stm32_uart::Uart2TxDmaSide>,
+        uart2_rx: Option<stm32_port::UartRxPort<board::aliases::Uart2RxIrq>>,
+        uart2_tx_dma: Option<board::aliases::Uart2TxDmaSide>,
         #[lock_free]
-        uart3_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart3RxIrq>>,
-        uart3_tx_dma: Option<stm32_uart::Uart3TxDmaSide>,
+        uart3_rx: Option<stm32_port::UartRxPort<board::aliases::Uart3RxIrq>>,
+        uart3_tx_dma: Option<board::aliases::Uart3TxDmaSide>,
         #[lock_free]
-        uart4_rx: Option<stm32_port::UartRxPort<stm32_uart::Uart4RxIrq>>,
-        uart4_tx_dma: Option<stm32_uart::Uart4TxDmaSide>,
+        uart4_rx: Option<stm32_port::UartRxPort<board::aliases::Uart4RxIrq>>,
+        uart4_tx_dma: Option<board::aliases::Uart4TxDmaSide>,
 
         // IMU
         imu_data: imu::ImuData,
@@ -495,7 +495,7 @@ ferroforge::app! {
         // changed binding applies after a reboot.
         board::aliases::assert_uart1_esc_telemetry_route_compile();
         let serial_bindings = boot_serial_bindings(&mut flash_device);
-        let stm32_uart::F405UartPorts {
+        let board::init::UartPorts {
             uart1_rx,
             uart2_rx,
             uart2_tx:
@@ -519,37 +519,29 @@ ferroforge::app! {
                     completion: uart4_tx_completion,
                 },
             functions: serial_functions,
-        } = stm32_uart::init_f405_uart_ports(
-            stm32_uart::F405UartPortResources {
-                uart1: stm32_uart::Uart1PortResources {
-                    rx_pin: gpioa.pa10,
-                    uart: dp.USART1,
-                    rx_dma: dma2.5,
-                },
-                uart2: stm32_uart::Uart2PortResources {
-                    tx_pin: gpioa.pa2,
-                    rx_pin: gpioa.pa3,
-                    uart: dp.USART2,
-                    rx_dma: dma1.5,
-                    tx_dma: dma1.6,
-                },
-                uart3: stm32_uart::Uart3PortResources {
-                    tx_pin: gpioc.pc10,
-                    rx_pin: gpioc.pc11,
-                    uart: dp.USART3,
-                    rx_dma: dma1.1,
-                    tx_dma: dma1.3,
-                },
-                uart4: stm32_uart::Uart4PortResources {
-                    tx_pin: gpioa.pa0,
-                    rx_pin: gpioa.pa1,
-                    uart: dp.UART4,
-                    rx_dma: dma1.2,
-                    tx_dma: dma1.4,
-                },
+        } = board::init::init_uart_ports(
+            board::init::UartPortResources {
+                uart1_rx_pin: gpioa.pa10,
+                uart1: dp.USART1,
+                uart1_rx_dma: dma2.5,
+                uart2_tx_pin: gpioa.pa2,
+                uart2_rx_pin: gpioa.pa3,
+                uart2: dp.USART2,
+                uart2_rx_dma: dma1.5,
+                uart2_tx_dma: dma1.6,
+                uart3_tx_pin: gpioc.pc10,
+                uart3_rx_pin: gpioc.pc11,
+                uart3: dp.USART3,
+                uart3_rx_dma: dma1.1,
+                uart3_tx_dma: dma1.3,
+                uart4_tx_pin: gpioa.pa0,
+                uart4_rx_pin: gpioa.pa1,
+                uart4: dp.UART4,
+                uart4_rx_dma: dma1.2,
+                uart4_tx_dma: dma1.4,
             },
             &mut clocks,
-            stm32_uart::F405UartPortStorage {
+            board::init::UartPortStorage {
                 uart1: stm32_port::UartRxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart1_rx_buffers,

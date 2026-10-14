@@ -5,11 +5,16 @@ use super::aliases::{SdFlash, Spi1ImuOwner};
 use super::manifest::Spi1ImuKind;
 use embedded_hal::delay::DelayNs;
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
+use ferrowasp_io_core::serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::status_led::{LedPolarity, StatusLed};
+use ferrowasp_stm32::uart_port::{
+    SerialPortEndpoint, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
+};
 use ferrowasp_stm32h7 as backend;
 use ferrowasp_stm32h7::eh1::CycleDelay;
 use ferrowasp_stm32h7::hal_prelude::*;
+use ferrowasp_stm32h7::uart_dma;
 
 const _: () = {
     assert!(Spi1ImuKind::MPU6500_WHO_AM_I == mpu6500::WHO_AM_I_EXPECTED);
@@ -198,5 +203,153 @@ pub fn init_status_leds(pins: StatusLedPins) -> StatusLeds {
     StatusLeds {
         heartbeat: StatusLed::new(heartbeat, STATUS_LED_POLARITY),
         armed: StatusLed::new(armed, STATUS_LED_POLARITY),
+    }
+}
+
+/// Every UART this board routes, with the DMA streams `routes.rs` gives each.
+pub struct UartPortResources {
+    /// The DJI connector's SBUS pin, PA10 USART1_RX.
+    pub uart1_rx_pin: PA10,
+    pub uart1: USART1,
+    pub uart1_prec: rec::Usart1,
+    pub uart1_rx_dma: Stream4<DMA2>,
+    /// PD8 USART3_TX to the DJI unit's RX, PD9 USART3_RX from its TX.
+    pub uart3_tx_pin: PD8,
+    pub uart3_rx_pin: PD9,
+    pub uart3: USART3,
+    pub uart3_prec: rec::Usart3,
+    pub uart3_rx_dma: Stream1<DMA1>,
+    pub uart3_tx_dma: Stream3<DMA1>,
+    pub uart6_tx_pin: PC6,
+    pub uart6_rx_pin: PC7,
+    pub uart6: USART6,
+    pub uart6_prec: rec::Usart6,
+    pub uart6_rx_dma: Stream0<DMA1>,
+    pub uart6_tx_dma: Stream6<DMA1>,
+    /// ESC telemetry, PE0 UART8_RX.
+    pub uart8_rx_pin: PE0,
+    pub uart8: UART8,
+    pub uart8_prec: rec::Uart8,
+    pub uart8_rx_dma: Stream2<DMA1>,
+}
+
+/// Static buffers and stream owners for each port.
+pub struct UartPortStorage {
+    pub uart1: UartRxPortStorage,
+    pub uart3: UartRxTxPortStorage,
+    pub uart6: UartRxTxPortStorage,
+    pub uart8: UartRxPortStorage,
+}
+
+/// The started ports. A port left unbound stays `None`: its peripheral is
+/// never enabled, so its interrupts never fire.
+pub struct UartPorts {
+    pub uart1_rx: Option<super::aliases::Uart1RxPort>,
+    pub uart3_rx: Option<super::aliases::Uart3RxPort>,
+    pub uart3_tx: UartTxPort<super::aliases::Uart3TxDmaSide>,
+    pub uart6_rx: Option<super::aliases::Uart6RxPort>,
+    pub uart6_tx: UartTxPort<super::aliases::Uart6TxDmaSide>,
+    pub uart8_rx: Option<super::aliases::Uart8RxPort>,
+    pub functions: SerialFunctionSlots<SerialPortEndpoint>,
+}
+
+/// Start every bound port with its function's line settings and give each
+/// function its endpoint.
+pub fn init_uart_ports(
+    resources: UartPortResources,
+    clocks: &CoreClocks,
+    storage: UartPortStorage,
+    bindings: &ResolvedBindings,
+) -> UartPorts {
+    let mut functions = SerialFunctionSlots::empty();
+    let r = resources;
+    let (uart3_rx, uart3_tx) = uart_dma::start_rx_tx_port(
+        LogicalSerialPort::Uart3,
+        |config| {
+            r.uart3
+                .serial(
+                    (
+                        r.uart3_tx_pin.into_alternate::<7>(),
+                        r.uart3_rx_pin.into_alternate::<7>(),
+                    ),
+                    config,
+                    r.uart3_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart3_rx_dma,
+        r.uart3_tx_dma,
+        storage.uart3,
+        bindings,
+        &mut functions,
+    );
+    let (uart6_rx, uart6_tx) = uart_dma::start_rx_tx_port(
+        LogicalSerialPort::Uart6,
+        |config| {
+            r.uart6
+                .serial(
+                    (
+                        r.uart6_tx_pin.into_alternate::<7>(),
+                        r.uart6_rx_pin.into_alternate::<7>(),
+                    ),
+                    config,
+                    r.uart6_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart6_rx_dma,
+        r.uart6_tx_dma,
+        storage.uart6,
+        bindings,
+        &mut functions,
+    );
+    let uart1_rx = uart_dma::start_rx_port(
+        LogicalSerialPort::Uart1,
+        |config| {
+            r.uart1
+                .serial(
+                    (hal::serial::NoTx, r.uart1_rx_pin.into_alternate::<7>()),
+                    config,
+                    r.uart1_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart1_rx_dma,
+        storage.uart1,
+        bindings,
+        &mut functions,
+    );
+    let uart8_rx = uart_dma::start_rx_port(
+        LogicalSerialPort::Uart8,
+        |config| {
+            r.uart8
+                .serial(
+                    (hal::serial::NoTx, r.uart8_rx_pin.into_alternate::<8>()),
+                    config,
+                    r.uart8_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart8_rx_dma,
+        storage.uart8,
+        bindings,
+        &mut functions,
+    );
+    UartPorts {
+        uart1_rx,
+        uart3_rx,
+        uart3_tx,
+        uart6_rx,
+        uart6_tx,
+        uart8_rx,
+        functions,
     }
 }

@@ -232,12 +232,12 @@ FLIGHT_APP_CONTRACTS = {
         "required_calls": (
             "init_dshot_motor_bank(",
             "init_usb_cdc_serial(",
-            "init_f405_uart_ports(",
+            "init_uart_ports(",
             "init_spi2_flash(",
         ),
     },
     # The Foxeer's feature set on the STM32H743: UART ports bound at boot
-    # (by default SBUS on USART6, MSP on USART3, ESC telemetry on UART8), and
+    # (by default SBUS on USART1, MSP on USART3, ESC telemetry on UART8), and
     # blackbox storage on the microSD card.
     "tbs-lucid-h7": {
         "board_feature": "board-tbs-lucid-h7",
@@ -254,7 +254,7 @@ FLIGHT_APP_CONTRACTS = {
         "required_calls": (
             "init_dshot_motor_bank(",
             "init_usb_cdc_serial(",
-            "init_h743_uart_ports(",
+            "init_uart_ports(",
             "init_sd_flash(",
         ),
     },

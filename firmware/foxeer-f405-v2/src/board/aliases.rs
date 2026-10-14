@@ -1,6 +1,6 @@
 use ferrowasp_stm32f4::hal_prelude::hal::gpio::{PB12, PB13, PC2, PC3, PC10, PC11};
 use ferrowasp_stm32f4::hal_prelude::hal::pac::{SPI2, TIM8, USART3};
-use ferrowasp_stm32f4::{adc, hal_prelude::*, spi_dma};
+use ferrowasp_stm32f4::{adc, hal_prelude::*, spi_dma, uart_dma};
 
 pub type Usart2TxPin = PA2<Input>;
 pub type Usart2RxPin = PA3<Input>;
@@ -37,6 +37,18 @@ pub type AdcCurrentPin = PC1<Input>;
 pub type Spi1RxTransfer = spi_dma::SpiRxTransfer<Stream0<DMA2>, SPI1, 3>;
 pub type Spi1TxTransfer = spi_dma::SpiTxTransfer<Stream3<DMA2>, SPI1, 3>;
 pub type Spi1ImuOwner = spi_dma::SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, spi_dma::Spi1ImuCs>;
+
+/// UART1 (USART1) receive-only on PA10, RX on DMA2 Stream 5.
+pub type Uart1RxIrq = uart_dma::UartRxIrq<Stream5<DMA2>, USART1, 4>;
+/// UART2 (USART2) on PA2/PA3, RX on DMA1 Stream 5 and TX on Stream 6.
+pub type Uart2RxIrq = uart_dma::UartRxIrq<Stream5<DMA1>, USART2, 4>;
+pub type Uart2TxDmaSide = uart_dma::UartTxSide<Stream6<DMA1>, USART2, 4>;
+/// UART3 (USART3) on PC10/PC11, RX on DMA1 Stream 1 and TX on Stream 3.
+pub type Uart3RxIrq = uart_dma::UartRxIrq<Stream1<DMA1>, USART3, 4>;
+pub type Uart3TxDmaSide = uart_dma::UartTxSide<Stream3<DMA1>, USART3, 4>;
+/// UART4 on PA0/PA1, RX on DMA1 Stream 2 and TX on Stream 4.
+pub type Uart4RxIrq = uart_dma::UartRxIrq<Stream2<DMA1>, UART4, 4>;
+pub type Uart4TxDmaSide = uart_dma::UartTxSide<Stream4<DMA1>, UART4, 4>;
 
 pub type Adc1ObservationTransfer = adc::Adc1ObservationTransferFor<Stream4<DMA2>, 0>;
 pub type Adc1ObservationParts = adc::Adc1ObservationPartsFor<Stream4<DMA2>, 0>;

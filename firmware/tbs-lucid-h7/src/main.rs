@@ -481,7 +481,7 @@ ferroforge::app! {
         // port's function and line settings; it is read once, here, so a
         // changed binding applies after a reboot.
         let serial_bindings = boot_serial_bindings(&mut flash_device);
-        let board::aliases::UartPorts {
+        let board::init::UartPorts {
             uart3_rx,
             uart3_tx:
                 stm32_port::UartTxPort {
@@ -499,42 +499,31 @@ ferroforge::app! {
             uart8_rx,
             uart1_rx,
             functions: serial_functions,
-        } = stm32_uart::init_h743_uart_ports(
-            stm32_uart::H743UartPortResources {
-                // DJI connector SBUS pin -> PA10 USART1_RX.
-                uart1: stm32_uart::Uart1PortResources {
-                    rx_pin: gpioa.pa10,
-                    uart: dp.USART1,
-                    prec: rec.USART1,
-                    rx_dma: dma2.4,
-                },
-                // PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
-                uart3: stm32_uart::Uart3PortResources {
-                    tx_pin: gpiod.pd8,
-                    rx_pin: gpiod.pd9,
-                    uart: dp.USART3,
-                    prec: rec.USART3,
-                    rx_dma: dma1.1,
-                    tx_dma: dma1.3,
-                },
-                uart6: stm32_uart::Uart6PortResources {
-                    tx_pin: gpioc.pc6,
-                    rx_pin: gpioc.pc7,
-                    uart: dp.USART6,
-                    prec: rec.USART6,
-                    rx_dma: dma1.0,
-                    tx_dma: dma1.6,
-                },
-                // ESC TLM -> PE0 UART8_RX.
-                uart8: stm32_uart::Uart8PortResources {
-                    rx_pin: gpioe.pe0,
-                    uart: dp.UART8,
-                    prec: rec.UART8,
-                    rx_dma: dma1.2,
-                },
+        } = board::init::init_uart_ports(
+            board::init::UartPortResources {
+                uart1_rx_pin: gpioa.pa10,
+                uart1: dp.USART1,
+                uart1_prec: rec.USART1,
+                uart1_rx_dma: dma2.4,
+                uart3_tx_pin: gpiod.pd8,
+                uart3_rx_pin: gpiod.pd9,
+                uart3: dp.USART3,
+                uart3_prec: rec.USART3,
+                uart3_rx_dma: dma1.1,
+                uart3_tx_dma: dma1.3,
+                uart6_tx_pin: gpioc.pc6,
+                uart6_rx_pin: gpioc.pc7,
+                uart6: dp.USART6,
+                uart6_prec: rec.USART6,
+                uart6_rx_dma: dma1.0,
+                uart6_tx_dma: dma1.6,
+                uart8_rx_pin: gpioe.pe0,
+                uart8: dp.UART8,
+                uart8_prec: rec.UART8,
+                uart8_rx_dma: dma1.2,
             },
             &clocks,
-            stm32_uart::H743UartPortStorage {
+            board::init::UartPortStorage {
                 uart1: stm32_port::UartRxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart1_rx_buffers,

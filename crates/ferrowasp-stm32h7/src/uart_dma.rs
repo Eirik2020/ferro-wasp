@@ -22,14 +22,8 @@ use stm32h7xx_hal::{
         dma::DmaConfig,
         traits::{DoubleBufferedStream, Stream},
     },
-    gpio::{PA10, PC6, PC7, PD8, PD9, PE0},
-    pac::{UART8, USART1, USART3, USART6},
     prelude::*,
-    rcc::{CoreClocks, rec},
-    serial::{
-        NoTx,
-        config::{Config, StopBits},
-    },
+    serial::config::{Config, StopBits},
 };
 
 /// A UART's receive stream: a HAL transfer into the rotating buffers.
@@ -211,284 +205,93 @@ where
     )
 }
 
-/// Stream types are the board's choice; the backend takes any DMA1 or DMA2
-/// stream.
-///
-/// UART6 (the USART6 peripheral) on PC6/PC7, RX and TX by DMA.
-pub struct Uart6PortResources<RxS, TxS> {
-    pub tx_pin: PC6,
-    pub rx_pin: PC7,
-    pub uart: USART6,
-    pub prec: rec::Usart6,
-    pub rx_dma: RxS,
-    pub tx_dma: TxS,
-}
+/// The receive side of a started port, for a board's shared resources.
+pub type UartRxIrq<S, U> = UartRxIrqSide<UartRxDma<S, U>>;
+/// The transmit side of a started port.
+pub type UartTxSide<S, U> = UartTxDmaSide<UartTxDma<S, U>>;
 
-/// UART3 (the USART3 peripheral) on PD8/PD9, RX and TX by DMA.
-pub struct Uart3PortResources<RxS, TxS> {
-    pub tx_pin: PD8,
-    pub rx_pin: PD9,
-    pub uart: USART3,
-    pub prec: rec::Usart3,
-    pub rx_dma: RxS,
-    pub tx_dma: TxS,
-}
-
-/// UART8 receive-only on PE0, RX by DMA.
-pub struct Uart8PortResources<S> {
-    pub rx_pin: PE0,
-    pub uart: UART8,
-    pub prec: rec::Uart8,
-    pub rx_dma: S,
-}
-
-/// UART1 (the USART1 peripheral) receive-only on PA10, RX by DMA.
-pub struct Uart1PortResources<S> {
-    pub rx_pin: PA10,
-    pub uart: USART1,
-    pub prec: rec::Usart1,
-    pub rx_dma: S,
-}
-
-/// Every UART the STM32H743 flight boards route, by logical port.
-pub struct H743UartPortResources<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8> {
-    pub uart1: Uart1PortResources<S1>,
-    pub uart3: Uart3PortResources<S3Rx, S3Tx>,
-    pub uart6: Uart6PortResources<S6Rx, S6Tx>,
-    pub uart8: Uart8PortResources<S8>,
-}
-
-/// Static buffers and stream owners for each port.
-pub struct H743UartPortStorage {
-    pub uart1: UartRxPortStorage,
-    pub uart3: UartRxTxPortStorage,
-    pub uart6: UartRxTxPortStorage,
-    pub uart8: UartRxPortStorage,
-}
-
-/// The started ports. A port left unbound stays `None`: its peripheral is
-/// never enabled, so its interrupts never fire.
-pub struct H743UartPorts<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>
-where
-    S1: Stream,
-    S3Rx: Stream,
-    S3Tx: Stream,
-    S6Rx: Stream,
-    S6Tx: Stream,
-    S8: Stream,
-{
-    pub uart1_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S1, USART1>>>>,
-    pub uart3_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S3Rx, USART3>>>>,
-    pub uart3_tx: UartTxPort<UartTxDmaSide<UartTxDma<S3Tx, USART3>>>,
-    pub uart6_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S6Rx, USART6>>>>,
-    pub uart6_tx: UartTxPort<UartTxDmaSide<UartTxDma<S6Tx, USART6>>>,
-    pub uart8_rx: Option<UartRxPort<UartRxIrqSide<UartRxDma<S8, UART8>>>>,
-    pub functions: SerialFunctionSlots<SerialPortEndpoint>,
-}
-
-/// Start every bound port with its function's line settings and give each
-/// function its endpoint.
-pub fn init_h743_uart_ports<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>(
-    resources: H743UartPortResources<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>,
-    clocks: &CoreClocks,
-    storage: H743UartPortStorage,
+/// Start a port that can transmit, if `bindings` gives it a function: the
+/// receive side always, and the transmit side when the bound protocol
+/// transmits. `open` configures the board's UART, on its own pins and
+/// alternate function, with the line settings it is handed, and releases
+/// it; it is called only for a bound port, so an unbound port is never
+/// enabled and returns `None` with an unbound transmit side. Streams are the
+/// board's choice: any DMA1 or DMA2 stream.
+#[allow(clippy::too_many_arguments)]
+pub fn start_rx_tx_port<U, RxS, TxS>(
+    logical: LogicalSerialPort,
+    open: impl FnOnce(Config) -> U,
+    rx_dma: RxS,
+    tx_dma: TxS,
+    storage: UartRxTxPortStorage,
     bindings: &ResolvedBindings,
-) -> H743UartPorts<S1, S3Rx, S3Tx, S6Rx, S6Tx, S8>
+    functions: &mut SerialFunctionSlots<SerialPortEndpoint>,
+) -> (
+    Option<UartRxPort<UartRxIrq<RxS, U>>>,
+    UartTxPort<UartTxSide<TxS, U>>,
+)
 where
-    S1: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
-    S3Rx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
-    S3Tx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
-    S6Rx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
-    S6Tx: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
-    S8: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
+    U: UartDmaPeripheral,
+    RxS: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
+    TxS: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
 {
-    let mut ports = H743UartPorts {
-        uart1_rx: None,
-        uart3_rx: None,
-        uart3_tx: UartTxPort::unbound(),
-        uart6_rx: None,
-        uart6_tx: UartTxPort::unbound(),
-        uart8_rx: None,
-        functions: SerialFunctionSlots::empty(),
+    let Some(profile) = bindings.profile(logical) else {
+        return (None, UartTxPort::unbound());
     };
-
-    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart3) {
-        let uart3 = resources.uart3;
-        let serial = uart3
-            .uart
-            .serial(
-                (
-                    uart3.tx_pin.into_alternate::<7>(),
-                    uart3.rx_pin.into_alternate::<7>(),
-                ),
-                stm32h7_uart_config(profile.protocol),
-                uart3.prec,
-                clocks,
-            )
-            .unwrap();
-        let with_tx = profile.protocol.needs_tx();
-        let (parts, tx_endpoint) = start_rx(
-            serial.release(),
-            uart3.rx_dma,
-            profile.protocol,
-            storage.uart3.rx.into_backend(),
-            with_tx,
-        );
-        let writer = if with_tx {
-            let transfer = Transfer::init(
-                uart3.tx_dma,
-                tx_endpoint,
-                storage.uart3.tx_buffer,
-                None,
-                tx_dma_config(),
-            );
-            let (tx, writer) = tx_port(
-                UartTxDmaSide::new(UartTxDma { transfer }),
-                storage.uart3.tx_stream,
-            );
-            ports.uart3_tx = tx;
-            Some(writer)
-        } else {
-            None
-        };
-        let (port, endpoint) = rx_port(
-            LogicalSerialPort::Uart3,
-            parts.irq,
-            parts.parser,
-            storage.uart3.stream,
-            writer,
-        );
-        ports.uart3_rx = Some(port);
-        place_endpoint(
-            &mut ports.functions,
-            bindings,
-            LogicalSerialPort::Uart3,
-            endpoint,
-        );
-    }
-
-    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart6) {
-        let uart6 = resources.uart6;
-        let serial = uart6
-            .uart
-            .serial(
-                (
-                    uart6.tx_pin.into_alternate::<7>(),
-                    uart6.rx_pin.into_alternate::<7>(),
-                ),
-                stm32h7_uart_config(profile.protocol),
-                uart6.prec,
-                clocks,
-            )
-            .unwrap();
-        let with_tx = profile.protocol.needs_tx();
-        let (parts, tx_endpoint) = start_rx(
-            serial.release(),
-            uart6.rx_dma,
-            profile.protocol,
-            storage.uart6.rx.into_backend(),
-            with_tx,
-        );
-        let writer = if with_tx {
-            let transfer = Transfer::init(
-                uart6.tx_dma,
-                tx_endpoint,
-                storage.uart6.tx_buffer,
-                None,
-                tx_dma_config(),
-            );
-            let (tx, writer) = tx_port(
-                UartTxDmaSide::new(UartTxDma { transfer }),
-                storage.uart6.tx_stream,
-            );
-            ports.uart6_tx = tx;
-            Some(writer)
-        } else {
-            None
-        };
-        let (port, endpoint) = rx_port(
-            LogicalSerialPort::Uart6,
-            parts.irq,
-            parts.parser,
-            storage.uart6.stream,
-            writer,
-        );
-        ports.uart6_rx = Some(port);
-        place_endpoint(
-            &mut ports.functions,
-            bindings,
-            LogicalSerialPort::Uart6,
-            endpoint,
-        );
-    }
-
-    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart1) {
-        let uart1 = resources.uart1;
-        let serial = uart1
-            .uart
-            .serial(
-                (NoTx, uart1.rx_pin.into_alternate::<7>()),
-                stm32h7_uart_config(profile.protocol),
-                uart1.prec,
-                clocks,
-            )
-            .unwrap();
-        let (parts, _) = start_rx(
-            serial.release(),
-            uart1.rx_dma,
-            profile.protocol,
-            storage.uart1.rx.into_backend(),
-            false,
-        );
-        let (port, endpoint) = rx_port(
-            LogicalSerialPort::Uart1,
-            parts.irq,
-            parts.parser,
-            storage.uart1.stream,
+    let uart = open(stm32h7_uart_config(profile.protocol));
+    let with_tx = profile.protocol.needs_tx();
+    let (parts, tx_endpoint) = start_rx(
+        uart,
+        rx_dma,
+        profile.protocol,
+        storage.rx.into_backend(),
+        with_tx,
+    );
+    let (tx_side, writer) = if with_tx {
+        let transfer = Transfer::init(
+            tx_dma,
+            tx_endpoint,
+            storage.tx_buffer,
             None,
+            tx_dma_config(),
         );
-        ports.uart1_rx = Some(port);
-        place_endpoint(
-            &mut ports.functions,
-            bindings,
-            LogicalSerialPort::Uart1,
-            endpoint,
+        let (tx, writer) = tx_port(
+            UartTxDmaSide::new(UartTxDma { transfer }),
+            storage.tx_stream,
         );
-    }
+        (tx, Some(writer))
+    } else {
+        (UartTxPort::unbound(), None)
+    };
+    let (port, endpoint) = rx_port(logical, parts.irq, parts.parser, storage.stream, writer);
+    place_endpoint(functions, bindings, logical, endpoint);
+    (Some(port), tx_side)
+}
 
-    if let Some(profile) = bindings.profile(LogicalSerialPort::Uart8) {
-        let uart8 = resources.uart8;
-        let serial = uart8
-            .uart
-            .serial(
-                (NoTx, uart8.rx_pin.into_alternate::<8>()),
-                stm32h7_uart_config(profile.protocol),
-                uart8.prec,
-                clocks,
-            )
-            .unwrap();
-        let (parts, _) = start_rx(
-            serial.release(),
-            uart8.rx_dma,
-            profile.protocol,
-            storage.uart8.rx.into_backend(),
-            false,
-        );
-        let (port, endpoint) = rx_port(
-            LogicalSerialPort::Uart8,
-            parts.irq,
-            parts.parser,
-            storage.uart8.stream,
-            None,
-        );
-        ports.uart8_rx = Some(port);
-        place_endpoint(
-            &mut ports.functions,
-            bindings,
-            LogicalSerialPort::Uart8,
-            endpoint,
-        );
-    }
-
-    ports
+/// Start a receive-only port, if `bindings` gives it a function. `open`
+/// configures the board's UART with no transmit pin.
+pub fn start_rx_port<U, S>(
+    logical: LogicalSerialPort,
+    open: impl FnOnce(Config) -> U,
+    rx_dma: S,
+    storage: UartRxPortStorage,
+    bindings: &ResolvedBindings,
+    functions: &mut SerialFunctionSlots<SerialPortEndpoint>,
+) -> Option<UartRxPort<UartRxIrq<S, U>>>
+where
+    U: UartDmaPeripheral,
+    S: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,
+{
+    let profile = bindings.profile(logical)?;
+    let uart = open(stm32h7_uart_config(profile.protocol));
+    let (parts, _) = start_rx(
+        uart,
+        rx_dma,
+        profile.protocol,
+        storage.rx.into_backend(),
+        false,
+    );
+    let (port, endpoint) = rx_port(logical, parts.irq, parts.parser, storage.stream, None);
+    place_endpoint(functions, bindings, logical, endpoint);
+    Some(port)
 }
