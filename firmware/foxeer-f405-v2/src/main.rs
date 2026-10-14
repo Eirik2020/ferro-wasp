@@ -276,7 +276,7 @@ ferroforge::app! {
         )
         .unwrap();
 
-        let (
+        let flight_tasks::EscChannels {
             esc_manager_state,
             esc_request_producer,
             esc_request_consumer,
@@ -284,28 +284,7 @@ ferroforge::app! {
             esc_ack_consumer,
             esc_telemetry_update_producer,
             esc_telemetry_update_consumer,
-        ) = {
-            let requests =
-                cortex_m::singleton!(: esc::EscRequestQueue = esc::EscRequestQueue::new()).unwrap();
-            let acknowledgements =
-                cortex_m::singleton!(: esc::EscAckQueue = esc::EscAckQueue::new()).unwrap();
-            let (request_producer, request_consumer) = requests.split();
-            let (ack_producer, ack_consumer) = acknowledgements.split();
-            let updates = cortex_m::singleton!(
-                : esc::EscTelemetryUpdateQueue = esc::EscTelemetryUpdateQueue::new()
-            )
-            .unwrap();
-            let (update_producer, update_consumer) = updates.split();
-            (
-                esc::EscManager::new(esc::EscManagerConfig::legacy_uart(), 0),
-                request_producer,
-                request_consumer,
-                ack_producer,
-                ack_consumer,
-                update_producer,
-                update_consumer,
-            )
-        };
+        } = flight_tasks::esc_channels();
 
         let dshot_motors = {
             let tim1 = Timer::new(dp.TIM1, &mut clocks);
@@ -365,23 +344,7 @@ ferroforge::app! {
         }
         IMU_TRANSPORT_READY.store(spi1_imu.bringup.is_ready(), Ordering::Relaxed);
 
-        let (
-            mut flash_device,
-            flash_record_producer,
-            flash_record_consumer,
-            flash_command_producer,
-            flash_command_consumer,
-            flash_response_producer,
-            flash_response_consumer,
-            configurator_command_producer,
-            configurator_command_consumer,
-            configurator_response_producer,
-            configurator_response_consumer,
-            flash_rpc_command_producer,
-            flash_rpc_command_consumer,
-            flash_rpc_response_producer,
-            flash_rpc_response_consumer,
-        ) = {
+        let mut flash_device = {
             let mut flash = board::init::init_spi2_flash(
                 board::init::Spi2FlashResources {
                     cs_pin: gpiob.pb12,
@@ -409,84 +372,31 @@ ferroforge::app! {
                 }
                 Err(_) => warn!("SPI2 flash JEDEC probe failed; storage remains disabled"),
             }
-            let (producer, consumer) = {
-                let queue = cortex_m::singleton!(
+            flash
+        };
+        let flight_tasks::StorageChannels {
+            flash_record_producer,
+            flash_record_consumer,
+            flash_command_producer,
+            flash_command_consumer,
+            flash_response_producer,
+            flash_response_consumer,
+            flash_rpc_command_producer,
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
+            flash_rpc_response_consumer,
+        } = flight_tasks::storage_channels(
+            cortex_m::singleton!(
                     : flash_task::RecordQueue = flash_task::RecordQueue::new()
                 )
-                .unwrap();
-                queue.split()
-            };
-            let commands = cortex_m::singleton!(
-                : flash_task::CommandQueue = flash_task::CommandQueue::new()
-            )
-            .unwrap();
-            let responses = cortex_m::singleton!(
-                : flash_task::ResponseQueue = flash_task::ResponseQueue::new()
-            )
-            .unwrap();
-            let (command_producer, command_consumer) = commands.split();
-            let (response_producer, response_consumer) = responses.split();
-            let configurator_commands = cortex_m::singleton!(
-                : flash_task::CommandQueue = flash_task::CommandQueue::new()
-            )
-            .unwrap();
-            let configurator_responses = cortex_m::singleton!(
-                : flash_task::ResponseQueue = flash_task::ResponseQueue::new()
-            )
-            .unwrap();
-            let (configurator_command_producer, configurator_command_consumer) =
-                configurator_commands.split();
-            let (configurator_response_producer, configurator_response_consumer) =
-                configurator_responses.split();
-            #[cfg(feature = "mspv2_configurator")]
-            let (
-                rpc_command_producer,
-                rpc_command_consumer,
-                rpc_response_producer,
-                rpc_response_consumer,
-            ) = {
-                let commands = cortex_m::singleton!(
-                    : flash_task::RpcCommandQueue = flash_task::RpcCommandQueue::new()
-                )
-                .unwrap();
-                let responses = cortex_m::singleton!(
-                    : flash_task::RpcResponseQueue = flash_task::RpcResponseQueue::new()
-                )
-                .unwrap();
-                let (command_producer, command_consumer) = commands.split();
-                let (response_producer, response_consumer) = responses.split();
-                (
-                    command_producer,
-                    command_consumer,
-                    response_producer,
-                    response_consumer,
-                )
-            };
-            #[cfg(not(feature = "mspv2_configurator"))]
-            let (
-                rpc_command_producer,
-                rpc_command_consumer,
-                rpc_response_producer,
-                rpc_response_consumer,
-            ) = ((), (), (), ());
-            (
-                flash,
-                producer,
-                consumer,
-                command_producer,
-                command_consumer,
-                response_producer,
-                response_consumer,
-                configurator_command_producer,
-                configurator_command_consumer,
-                configurator_response_producer,
-                configurator_response_consumer,
-                rpc_command_producer,
-                rpc_command_consumer,
-                rpc_response_producer,
-                rpc_response_consumer,
-            )
-        };
+                .unwrap(),
+        );
+        let flight_tasks::CommandLinkChannels {
+            configurator_command_producer,
+            configurator_command_consumer,
+            configurator_response_producer,
+            configurator_response_consumer,
+        } = flight_tasks::command_link_channels();
 
         // ------------  UART ports, bound at boot  ------------
         // Pins and DMA streams are fixed per port. Saved config chooses each

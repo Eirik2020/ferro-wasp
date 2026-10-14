@@ -29,6 +29,8 @@ mod adc;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod arming;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod channels;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod cli_link;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod control;
@@ -78,6 +80,11 @@ pub use actuator::{
 pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use channels::{
+    CommandLinkChannels, EscChannels, StorageChannels, command_link_channels, esc_channels,
+    storage_channels,
+};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use cli_link::configurator_link;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
