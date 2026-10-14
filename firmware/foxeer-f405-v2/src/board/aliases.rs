@@ -55,7 +55,7 @@ pub type Uart4TxDmaSide = uart_dma::UartTxSide<Stream4<DMA1>, UART4, 4>;
 /// and TIM1 CH3N on PB15, carried by DMA2 streams 1, 7, 2, and 6. The type
 /// compiles only if the backend declares each lane's stream route.
 pub type DshotMotorBank = dshot::DshotMotorBank<
-    (TIM1, TIM8),
+    (dshot::DshotTimer<TIM1>, dshot::DshotTimer<TIM8>),
     dshot::Lane<Stream1<DMA2>, TIM1, dshot::channel::Ch1, 6>,
     dshot::Lane<Stream7<DMA2>, TIM8, dshot::channel::Ch4, 7>,
     dshot::Lane<Stream2<DMA2>, TIM8, dshot::channel::Ch3, 0>,

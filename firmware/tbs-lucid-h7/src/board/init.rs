@@ -423,7 +423,10 @@ pub fn init_dshot_motor_bank(
     r.tim3_rec.enable().reset();
     r.tim5_rec.enable().reset();
     let bank = backend::dshot::init_dshot_motor_bank(
-        (r.tim3, r.tim5),
+        (
+            backend::dshot::DshotTimer(r.tim3),
+            backend::dshot::DshotTimer(r.tim5),
+        ),
         (
             backend::dshot::lane::<TIM3, Ch3, _>(r.motor1_dma),
             backend::dshot::lane::<TIM3, Ch4, _>(r.motor2_dma),

@@ -26,7 +26,7 @@ pub type Uart8RxPort = uart_port::UartRxPort<uart_dma::UartRxIrq<Stream2<DMA1>, 
 /// The four motor lanes: TIM3 CH3/CH4 on PB0/PB1 and TIM5 CH1/CH2 on
 /// PA0/PA1, carried by DMA2 streams 0-3.
 pub type DshotMotorBank = dshot::DshotMotorBank<
-    (TIM3, TIM5),
+    (dshot::DshotTimer<TIM3>, dshot::DshotTimer<TIM5>),
     dshot::Lane<Stream0<DMA2>, TIM3, dshot::channel::Ch3>,
     dshot::Lane<Stream1<DMA2>, TIM3, dshot::channel::Ch4>,
     dshot::Lane<Stream2<DMA2>, TIM5, dshot::channel::Ch1>,

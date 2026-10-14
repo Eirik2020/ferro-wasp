@@ -308,6 +308,17 @@ where
 {
     /// A bank over lanes already holding their first buffers, with one spare
     /// per lane.
+    /// The lanes, for tests of the code that builds them.
+    #[cfg(test)]
+    pub(crate) fn lanes(&self) -> &L {
+        &self.lanes
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lanes_mut(&mut self) -> &mut L {
+        &mut self.lanes
+    }
+
     pub fn from_lanes(lanes: L, spares: [&'static mut L::Buffer; 4], timing: DshotTiming) -> Self {
         let [motor1_spare, motor2_spare, motor3_spare, motor4_spare] = spares;
         Self {

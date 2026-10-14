@@ -241,7 +241,10 @@ pub fn init_dshot_motor_bank(
     motor4_pin.set_low();
 
     let bank = backend::dshot::init_dshot_motor_bank(
-        (r.tim1.release(), r.tim8.release()),
+        (
+            backend::dshot::DshotTimer(r.tim1.release()),
+            backend::dshot::DshotTimer(r.tim8.release()),
+        ),
         (
             backend::dshot::lane::<TIM1, Ch1, 6, _>(r.motor1_dma),
             backend::dshot::lane::<TIM8, Ch4, 7, _>(r.motor2_dma),

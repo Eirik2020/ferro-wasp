@@ -35,13 +35,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::any::Any;
 use core::marker::PhantomData;
 
 use ferrowasp_stm32::dshot_bank::channel::{Ch1, Ch3, Ch3N, Ch4, LaneChannel};
-use ferrowasp_waveform::dshot::{
-    COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotPacket, DshotTiming, encode_compare_sequence,
-};
+use ferrowasp_stm32::dshot_lanes::{self, build_bank};
+use ferrowasp_waveform::dshot::{COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotTiming};
 use stm32f4xx_hal::{
     dma::{
         ChannelX, DMAError, MemoryToPeripheral, Stream1, Stream2, Stream6, Stream7, Transfer,
@@ -59,90 +57,57 @@ pub use ferrowasp_stm32::dshot_bank::{
     DshotMotor, DshotMotors, DshotServiceEvent, DshotSpecialCommandError, DshotStats,
     DshotTelemetryRequestError,
 };
+pub use ferrowasp_stm32::dshot_lanes::{
+    DshotMotorBank, IntoLane, LaneDma, LaneOutputs, LaneTimer, SoftwareStart, StartMode, TimerSet,
+    TriggerMaster, TriggerSlave,
+};
 
 pub type DshotDmaBuffer = [u16; COMPARE_DMA_SLOTS];
 type DshotBuffer = &'static mut DshotDmaBuffer;
+pub type DshotDmaStorage = dshot_lanes::DshotDmaStorage<DshotDmaBuffer>;
 
-/// A bank over the timer set `TS` and lanes `A`-`D`, for motors 1-4.
-pub type DshotMotorBank<TS, A, B, C, D> = DshotBank<Stm32f4DshotLanes<TS, A, B, C, D>>;
+/// The clock domain of the APB2 timers, TIM1 and TIM8. The APB1 timers
+/// count a clock half as fast, so a bank cannot mix the two.
+const APB2_TIMERS: u8 = 2;
 
-/// Static storage for two DMA buffers per motor lane.
-pub struct DshotDmaStorage {
-    buffers: [DshotDmaBuffer; 8],
-}
+/// A timer the bank drives. The shared lane traits are implemented for this
+/// wrapper, since neither they nor the PAC's timer types belong to this
+/// crate.
+pub struct DshotTimer<T>(pub T);
 
-impl DshotDmaStorage {
-    pub const fn new() -> Self {
-        Self {
-            buffers: [[0; COMPARE_DMA_SLOTS]; 8],
-        }
-    }
-}
-
-impl Default for DshotDmaStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Which outputs of one timer the bank drives: bit n is channel n + 1, and
-/// a bit also set in `complementary` drives that channel's CHxN output
-/// instead of CHx.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct LaneOutputs {
-    pub channels: u8,
-    pub complementary: u8,
-}
-
-/// The register sequencing DShot needs from one timer.
-pub trait LaneTimer: Any {
-    /// The clock this timer counts, before its prescaler.
-    fn timer_clock_hz(&self, clocks: &Clocks) -> u32;
-    /// Count at the DShot bit rate with the outputs in PWM mode 1, preload
-    /// on, enabled active high, every compare at zero, and the main output
-    /// gate open.
-    fn configure(&self, timing: DshotTiming, outputs: LaneOutputs);
-    /// Stop the counter with the requests closed, load each channel's first
-    /// duty from `first[channel]`, stage the counter at ARR so its first
-    /// update latches them, and open the requests.
-    fn stage(&self, channels: u8, first: &[u16; 4], period_end: u16);
-    fn start(&self);
-    /// Stop with every output held low: all compares at zero.
-    fn stop(&self, channels: u8);
-    /// Stop, then close the main output gate and disable the outputs until
-    /// the bank is rebuilt.
-    fn force_inactive(&self, outputs: LaneOutputs);
-}
+/// Start `M` in software and `S` from `M`'s trigger output, for timers this
+/// backend wires that way.
+pub type TriggeredStart<M, S> = dshot_lanes::TriggeredStart<DshotTimer<M>, DshotTimer<S>>;
 
 /// TIM1 and TIM8 share the advanced-timer register block.
 macro_rules! advanced_lane_timers {
     ($($TIM:ident),+) => {
         $(
-            impl LaneTimer for $TIM {
-                fn timer_clock_hz(&self, clocks: &Clocks) -> u32 {
-                    clocks.timclk2().raw()
+            impl LaneTimer for DshotTimer<$TIM> {
+                fn clock_domain(&self) -> u8 {
+                    APB2_TIMERS
                 }
 
                 fn configure(&self, timing: DshotTiming, outputs: LaneOutputs) {
-                    configure_advanced(self, timing, outputs);
+                    configure_advanced(&self.0, timing, outputs);
                 }
 
                 fn stage(&self, channels: u8, first: &[u16; 4], period_end: u16) {
-                    stage(self, channels, first, period_end);
+                    stage(&self.0, channels, first, period_end);
                 }
 
                 fn start(&self) {
-                    self.cr1().modify(|_, w| w.cen().set_bit());
+                    self.0.cr1().modify(|_, w| w.cen().set_bit());
                 }
 
                 fn stop(&self, channels: u8) {
-                    stop(self, channels);
+                    stop(&self.0, channels);
                 }
 
                 fn force_inactive(&self, outputs: LaneOutputs) {
-                    stop(self, outputs.channels);
-                    self.bdtr().modify(|_, w| w.moe().clear_bit());
-                    set_outputs_enabled(self, outputs, false);
+                    stop(&self.0, outputs.channels);
+                    self.0.bdtr().modify(|_, w| w.moe().clear_bit());
+                    set_outputs_enabled(&self.0, outputs, false);
                 }
             }
         )+
@@ -316,110 +281,18 @@ fn force_update(timer: &RegisterBlock) {
     timer.egr().write(|w| w.ug().update());
 }
 
-/// A timer whose trigger output can start another: its TRGO follows its
-/// counter enable.
-pub trait TriggerMaster: LaneTimer {
-    fn lead(&self);
-}
-
-/// A timer that `M`'s trigger output can start: the internal trigger input
-/// wired to `M` (RM0090 table 94), in trigger mode.
-pub trait TriggerSlave<M>: LaneTimer {
-    fn follow(&self);
-}
-
-impl TriggerMaster for TIM1 {
+impl TriggerMaster for DshotTimer<TIM1> {
     fn lead(&self) {
-        self.cr2().modify(|_, w| w.mms().enable());
+        self.0.cr2().modify(|_, w| w.mms().enable());
     }
 }
 
-impl TriggerSlave<TIM1> for TIM8 {
+// RM0090 table 94: TIM8's ITR0 is TIM1's TRGO.
+impl TriggerSlave<DshotTimer<TIM1>> for DshotTimer<TIM8> {
     fn follow(&self) {
-        self.smcr()
+        self.0
+            .smcr()
             .modify(|_, w| w.ts().itr0().sms().trigger_mode());
-    }
-}
-
-/// The timers a bank drives, in slots. A lane finds its timer by type.
-pub trait TimerSet: 'static {
-    const LEN: usize;
-    fn timer(&self, slot: usize) -> &dyn LaneTimer;
-    fn find<T: 'static>(&self) -> Option<(usize, &T)>;
-}
-
-macro_rules! timer_sets {
-    ($(($($T:ident: $slot:tt),+)),+) => {
-        $(
-            impl<$($T: LaneTimer),+> TimerSet for ($($T,)+) {
-                const LEN: usize = [$($slot),+].len();
-
-                fn timer(&self, slot: usize) -> &dyn LaneTimer {
-                    match slot {
-                        $($slot => &self.$slot,)+
-                        _ => unreachable!("slot below LEN"),
-                    }
-                }
-
-                fn find<T: 'static>(&self) -> Option<(usize, &T)> {
-                    $(
-                        if let Some(timer) = (&self.$slot as &dyn Any).downcast_ref::<T>() {
-                            return Some(($slot, timer));
-                        }
-                    )+
-                    None
-                }
-            }
-        )+
-    };
-}
-
-timer_sets!((A: 0), (A: 0, B: 1), (A: 0, B: 1, C: 2), (A: 0, B: 1, C: 2, D: 3));
-
-/// How a bank's timers start each frame set.
-pub trait StartMode<TS> {
-    /// Wire the timers up; return the slot that is started by trigger
-    /// rather than in software, if any.
-    fn wire(&self, timers: &TS) -> Result<Option<usize>, DshotInitError>;
-}
-
-/// Start every timer in software, one after another.
-pub struct SoftwareStart;
-
-impl<TS: TimerSet> StartMode<TS> for SoftwareStart {
-    fn wire(&self, _timers: &TS) -> Result<Option<usize>, DshotInitError> {
-        Ok(None)
-    }
-}
-
-/// Start `M` in software and `S` from `M`'s trigger output, so both begin
-/// on the same edge.
-pub struct TriggeredStart<M, S>(PhantomData<(M, S)>);
-
-impl<M, S> TriggeredStart<M, S> {
-    pub const fn new() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<M, S> Default for TriggeredStart<M, S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<TS, M, S> StartMode<TS> for TriggeredStart<M, S>
-where
-    TS: TimerSet,
-    M: TriggerMaster,
-    S: TriggerSlave<M>,
-{
-    fn wire(&self, timers: &TS) -> Result<Option<usize>, DshotInitError> {
-        let (_, master) = timers.find::<M>().ok_or(DshotInitError::LaneTimerMissing)?;
-        let (slave_slot, slave) = timers.find::<S>().ok_or(DshotInitError::LaneTimerMissing)?;
-        master.lead();
-        slave.follow();
-        Ok(Some(slave_slot))
     }
 }
 
@@ -531,17 +404,6 @@ where
     transfer: LaneTransfer<S, T, C, DMA_CHANNEL>,
 }
 
-/// One built lane, whatever its stream, timer, and channel.
-pub trait LaneDma {
-    fn slot(&self) -> usize;
-    fn channel(&self) -> usize;
-    fn complementary(&self) -> bool;
-    fn exchange(&mut self, next: DshotBuffer) -> Result<DshotBuffer, DshotBuffer>;
-    fn start(&mut self);
-    fn status(&self) -> (bool, bool);
-    fn pause_and_clear(&mut self);
-}
-
 impl<S, T, C, const DMA_CHANNEL: u8> LaneDma for Lane<S, T, C, DMA_CHANNEL>
 where
     S: stm32f4xx_hal::dma::traits::Stream + StreamISR,
@@ -550,6 +412,8 @@ where
     C: LaneChannel,
     CompareEndpoint<T, C>: DMASet<S, DMA_CHANNEL, MemoryToPeripheral>,
 {
+    type Buffer = DshotDmaBuffer;
+
     fn slot(&self) -> usize {
         self.slot
     }
@@ -598,12 +462,6 @@ fn dma_error_buffer(error: DMAError<DshotBuffer>) -> DshotBuffer {
     }
 }
 
-/// A lane the board named, to be built against the bank's timers.
-pub trait IntoLane<TS> {
-    type Lane: LaneDma;
-    fn into_lane(self, timers: &TS, buffer: DshotBuffer) -> Result<Self::Lane, DshotInitError>;
-}
-
 impl<TS, S, T, C, const DMA_CHANNEL: u8> IntoLane<TS> for LaneStream<S, T, C, DMA_CHANNEL>
 where
     TS: TimerSet,
@@ -616,11 +474,13 @@ where
     type Lane = Lane<S, T, C, DMA_CHANNEL>;
 
     fn into_lane(self, timers: &TS, buffer: DshotBuffer) -> Result<Self::Lane, DshotInitError> {
-        let (slot, timer) = timers.find::<T>().ok_or(DshotInitError::LaneTimerMissing)?;
+        let (slot, timer) = timers
+            .find::<DshotTimer<T>>()
+            .ok_or(DshotInitError::LaneTimerMissing)?;
         buffer.fill(0);
         let transfer = Transfer::init_memory_to_peripheral(
             self.stream,
-            CompareEndpoint::<T, C>::new(timer),
+            CompareEndpoint::<T, C>::new(&timer.0),
             buffer,
             None,
             dma_config(),
@@ -639,122 +499,6 @@ fn dma_config() -> DmaConfig {
         .direct_mode_error_interrupt(true)
 }
 
-/// The timers and four lanes under a `DshotMotorBank`.
-pub struct Stm32f4DshotLanes<TS, A, B, C, D> {
-    timers: TS,
-    /// Each timer slot's lane outputs.
-    outputs: [LaneOutputs; 4],
-    /// The slot started by another timer's trigger, if any.
-    triggered_slot: Option<usize>,
-    period_end: u16,
-    motor1: A,
-    motor2: B,
-    motor3: C,
-    motor4: D,
-}
-
-impl<TS, A, B, C, D> Stm32f4DshotLanes<TS, A, B, C, D>
-where
-    TS: TimerSet,
-    A: LaneDma,
-    B: LaneDma,
-    C: LaneDma,
-    D: LaneDma,
-{
-    fn lane(&self, motor: DshotMotor) -> &dyn LaneDma {
-        match motor {
-            DshotMotor::Motor1 => &self.motor1,
-            DshotMotor::Motor2 => &self.motor2,
-            DshotMotor::Motor3 => &self.motor3,
-            DshotMotor::Motor4 => &self.motor4,
-        }
-    }
-
-    fn lane_mut(&mut self, motor: DshotMotor) -> &mut dyn LaneDma {
-        match motor {
-            DshotMotor::Motor1 => &mut self.motor1,
-            DshotMotor::Motor2 => &mut self.motor2,
-            DshotMotor::Motor3 => &mut self.motor3,
-            DshotMotor::Motor4 => &mut self.motor4,
-        }
-    }
-
-    /// The slots that carry at least one lane, each with its outputs.
-    fn used_slots(&self) -> impl Iterator<Item = (usize, LaneOutputs)> + '_ {
-        (0..TS::LEN).filter_map(|slot| {
-            let outputs = self.outputs[slot];
-            (outputs.channels != 0).then_some((slot, outputs))
-        })
-    }
-}
-
-impl<TS, A, B, C, D> DshotLanes for Stm32f4DshotLanes<TS, A, B, C, D>
-where
-    TS: TimerSet,
-    A: LaneDma,
-    B: LaneDma,
-    C: LaneDma,
-    D: LaneDma,
-{
-    type Buffer = DshotDmaBuffer;
-
-    fn encode(packet: DshotPacket, timing: DshotTiming, buffer: &mut DshotDmaBuffer) -> u16 {
-        encode_compare_sequence(packet, timing, buffer)
-    }
-
-    fn exchange_buffer(
-        &mut self,
-        motor: DshotMotor,
-        next: DshotBuffer,
-    ) -> Result<DshotBuffer, DshotBuffer> {
-        self.lane_mut(motor).exchange(next)
-    }
-
-    fn start_dma(&mut self, motor: DshotMotor) {
-        self.lane_mut(motor).start();
-    }
-
-    fn start_frame(&mut self, first_duties: [u16; 4]) {
-        // Each timer slot's first duties, by channel.
-        let mut first = [[0u16; 4]; 4];
-        for (motor, duty) in DshotMotor::ALL.into_iter().zip(first_duties) {
-            let lane = self.lane(motor);
-            first[lane.slot()][lane.channel()] = duty;
-        }
-        for (slot, outputs) in self.used_slots() {
-            self.timers
-                .timer(slot)
-                .stage(outputs.channels, &first[slot], self.period_end);
-        }
-        // A triggered timer starts from its master's trigger output.
-        for (slot, _) in self.used_slots() {
-            if Some(slot) != self.triggered_slot {
-                self.timers.timer(slot).start();
-            }
-        }
-    }
-
-    fn stop_frame(&mut self) {
-        for (slot, outputs) in self.used_slots() {
-            self.timers.timer(slot).stop(outputs.channels);
-        }
-    }
-
-    fn force_outputs_low(&mut self) {
-        for (slot, outputs) in self.used_slots() {
-            self.timers.timer(slot).force_inactive(outputs);
-        }
-    }
-
-    fn dma_status(&self, motor: DshotMotor) -> (bool, bool) {
-        self.lane(motor).status()
-    }
-
-    fn pause_and_clear(&mut self, motor: DshotMotor) {
-        self.lane_mut(motor).pause_and_clear();
-    }
-}
-
 /// Build a bank over `timers` with `lanes` for motors 1-4, started as
 /// `start` says. Each timer that carries a lane is configured with its
 /// outputs parked low; the board connects the motor pads afterwards.
@@ -768,84 +512,23 @@ pub fn init_dshot_motor_bank<TS, LA, LB, LC, LD>(
 ) -> Result<DshotMotorBank<TS, LA::Lane, LB::Lane, LC::Lane, LD::Lane>, DshotInitError>
 where
     TS: TimerSet,
-    LA: IntoLane<TS>,
-    LB: IntoLane<TS>,
-    LC: IntoLane<TS>,
-    LD: IntoLane<TS>,
+    LA: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
+    LB: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
+    LC: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
+    LD: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
 {
-    let [
-        motor1_active,
-        motor1_spare,
-        motor2_active,
-        motor2_spare,
-        motor3_active,
-        motor3_spare,
-        motor4_active,
-        motor4_spare,
-    ] = storage.buffers.each_mut();
-    let motor1 = lanes.0.into_lane(&timers, motor1_active)?;
-    let motor2 = lanes.1.into_lane(&timers, motor2_active)?;
-    let motor3 = lanes.2.into_lane(&timers, motor3_active)?;
-    let motor4 = lanes.3.into_lane(&timers, motor4_active)?;
-
-    let mut outputs = [LaneOutputs::default(); 4];
-    for lane in [
-        &motor1 as &dyn LaneDma,
-        &motor2 as &dyn LaneDma,
-        &motor3 as &dyn LaneDma,
-        &motor4 as &dyn LaneDma,
-    ] {
-        let bit = 1 << lane.channel();
-        let slot = &mut outputs[lane.slot()];
-        if slot.channels & bit != 0 {
-            return Err(DshotInitError::LaneChannelReused);
-        }
-        slot.channels |= bit;
-        if lane.complementary() {
-            slot.complementary |= bit;
-        }
-    }
-
-    // One bit timing serves every lane, so every lane timer must count the
-    // same clock.
-    let mut timer_clock_hz = None;
-    for (slot, slot_outputs) in outputs.iter().enumerate().take(TS::LEN) {
-        if slot_outputs.channels == 0 {
-            continue;
-        }
-        let hz = timers.timer(slot).timer_clock_hz(clocks);
-        match timer_clock_hz {
-            None => timer_clock_hz = Some(hz),
-            Some(first) if first != hz => return Err(DshotInitError::LaneClocksDiffer),
-            Some(_) => {}
-        }
-    }
-    let timing = DshotTiming::from_clocks(
-        timer_clock_hz.ok_or(DshotInitError::LaneTimerMissing)?,
-        DSHOT600_BITRATE_HZ,
-    )
-    .map_err(DshotInitError::InvalidTiming)?;
-
-    for (slot, slot_outputs) in outputs.iter().enumerate().take(TS::LEN) {
-        if slot_outputs.channels != 0 {
-            timers.timer(slot).configure(timing, *slot_outputs);
-        }
-    }
-    let triggered_slot = start.wire(&timers)?;
-
-    let lanes = Stm32f4DshotLanes {
+    build_bank(
         timers,
-        outputs,
-        triggered_slot,
-        period_end: timing.arr,
-        motor1,
-        motor2,
-        motor3,
-        motor4,
-    };
-    Ok(DshotBank::from_lanes(
         lanes,
-        [motor1_spare, motor2_spare, motor3_spare, motor4_spare],
-        timing,
-    ))
+        start,
+        |domain| {
+            let timer_clock_hz = match domain {
+                APB2_TIMERS => clocks.timclk2().raw(),
+                _ => clocks.timclk1().raw(),
+            };
+            DshotTiming::from_clocks(timer_clock_hz, DSHOT600_BITRATE_HZ)
+                .map_err(DshotInitError::InvalidTiming)
+        },
+        storage,
+    )
 }
