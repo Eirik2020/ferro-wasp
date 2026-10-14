@@ -42,7 +42,7 @@ Start from the task, not the chapter. Read the named sections, not whole files.
 | Building or checking anything | `mdbook/src/testing.md` Software Checks; `.github/workflows/ci.yml` is exact |
 | Whether something was already decided | `project_meta/ARCHITECTURE_DECISIONS.md` |
 | What is left to build | `project_meta/remaining-work.md` |
-| Publishing a release | `project_meta/PUBLICATION_CHECKLIST.md` |
+| Publishing a release | `project_meta/releasing.md` |
 
 One topic, one owner, across both books. Specify a topic in its owning chapter;
 every other mention links there instead of restating it. A public chapter never
