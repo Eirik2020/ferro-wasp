@@ -363,7 +363,7 @@ Validate the package from its extracted folder before using it:
 
 The dry run must verify the manifest, firmware hash, board, flash range, and
 vector table without accessing the MCU. See the
-[FerroConfigurator README](../../tools/ferro-configurator/README.md) for its
+[FerroConfigurator README](https://github.com/Eirik2020/ferro-wasp/blob/main/tools/ferro-configurator/README.md) for its
 full development and packaging contract.
 
 ## Build the documentation

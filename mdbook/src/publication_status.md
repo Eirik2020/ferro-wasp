@@ -3,13 +3,13 @@
 FerroWasp is open source under the Apache License, Version 2.0. Project-owned
 source is covered by [LICENSE](../../LICENSE); vendored assets and bundled
 tools retain the licences listed in
-[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md) and their accompanying
+[THIRD_PARTY_NOTICES.md](https://github.com/Eirik2020/ferro-wasp/blob/main/THIRD_PARTY_NOTICES.md) and their accompanying
 notices.
 
 The repository governance files are:
 
 - [Contributing](contributing.md) for contribution expectations;
-- [SECURITY.md](../../.github/SECURITY.md) for private security reporting;
+- [SECURITY.md](https://github.com/Eirik2020/ferro-wasp/blob/main/.github/SECURITY.md) for private security reporting;
 - [NOTICE](../../NOTICE) for project naming and notices.
 
 Source publication and packaged releases do not make FerroWasp a stable,
