@@ -374,7 +374,8 @@ After any firmware or parameter change:
 
 1. verify device information and the complete saved configuration;
 2. cold-boot stationary and require healthy IMU, RC, DShot, ESC telemetry, and
-   OSD;
+   OSD; unplug USB, since the board refuses to arm while a computer is
+   connected;
 3. repeat props-off motor direction, correction direction, disarm, and RC-loss
    checks when firmware, gains, wiring, motor/ESC hardware, or the airframe
    changed;
