@@ -77,6 +77,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Tooling and Environment
 
+- **Flight report rate.** `tools/flight_report.py` converts sequence numbers to
+  time at a fixed 400 Hz, so on Foxeer's 2 kHz loop its durations and trims are
+  wrong unless `--sample-rate` is given. Measure the rate from the log, as
+  `blackbox_analyzer.py` does.
 - **Reference container.** After the `.devcontainer` relocation, run
   `tools/dev/compose-with-ssh-agent.sh config` and
   `tools/dev/check-rebuilt-container.sh`; confirm the VS Code and Compose entry
