@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/CODEX_ACTIVE_WORK.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # FerroWasp Active Work Handoff
 
 Last updated: 2026-09-29

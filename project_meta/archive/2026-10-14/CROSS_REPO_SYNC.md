@@ -1,3 +1,8 @@
+> Archived 2026-10-14 from `project_meta/CROSS_REPO_SYNC.md`. Binding decisions were
+> promoted to `governing-requirements.md`, `remaining-work.md`,
+> `LOGGING_FORMAT.md`, the ADRs, and the root `AGENTS.md` first. Historical
+> only; never active authority.
+
 # Cross-Repo Sync
 
 Last updated: 2026-07-14

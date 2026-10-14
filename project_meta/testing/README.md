@@ -61,7 +61,7 @@ When the user requests bench or flight testing:
    propeller state, actuator-power state, and available equipment;
 2. load only common entries plus the selected target's entries;
 3. reject entries marked `needs-review` until their referenced procedure has
-   been reconciled with `../CODEX_ACTIVE_WORK.md` and current code;
+   been reconciled with current code;
 4. order tests by prerequisite and validation tier;
 5. present the applicable checklist and stop conditions;
 6. obtain explicit user confirmation before powered or flight activity;
