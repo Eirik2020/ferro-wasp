@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a1fb206b.js";
+            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -233,7 +233,8 @@ orientation, motor order, and ADC scale are verified on it.</p>
 </thead>
 <tbody>
 <tr><td>IMU</td><td>SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000</td></tr>
-<tr><td>SBUS (default <code>uart6</code>)</td><td>USART6 RX PC7, inverted in the UART</td></tr>
+<tr><td>SBUS (default <code>uart1</code>)</td><td>USART1 RX PA10, the digital VTX connector’s SBUS pin, inverted in the UART; receive only</td></tr>
+<tr><td>Spare serial (<code>uart6</code>)</td><td>USART6 (PC6 TX, PC7 RX); takes SBUS, CRSF, MSP or ESC telemetry</td></tr>
 <tr><td>MSP DisplayPort (default <code>uart3</code>)</td><td>USART3 (PD8 TX, PD9 RX)</td></tr>
 <tr><td>ESC telemetry (default <code>uart8</code>)</td><td>UART8 RX PE0</td></tr>
 <tr><td>DShot600</td><td>PB0, PB1 (TIM3), PA0, PA1 (TIM5), DMA2 streams 0-3</td></tr>

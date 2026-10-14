@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a1fb206b.js";
+            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -1068,7 +1068,8 @@ measure physical stop latency.</p>
 <li>continued cold-start, temperature-margin, and controlled flight evidence;</li>
 <li>a retained BB2 flight capture for quantitative rate tracking and saturation;</li>
 <li>making IMU initialization, calibration, and freshness an explicit pre-arm
-prerequisite; the present first post-arm stale-IMU check disarms instead;</li>
+prerequisite; the present post-arm stale-IMU check disarms instead, after
+two consecutive stale ticks;</li>
 <li>bidirectional DShot telemetry;</li>
 <li>DShot special-command policy;</li>
 <li>a reviewed pitch-authority tuning progression.</li>

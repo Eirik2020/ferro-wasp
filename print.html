@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a1fb206b.js";
+            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0cbe97ab.js"></script>
@@ -892,7 +892,8 @@ orientation, motor order, and ADC scale are verified on it.</p>
 </thead>
 <tbody>
 <tr><td>IMU</td><td>SPI1 (PA5, PA6, PD7), CS PC15, data-ready PB2 / EXTI2; MPU6500, ICM42688-P or MPU-6000</td></tr>
-<tr><td>SBUS (default <code>uart6</code>)</td><td>USART6 RX PC7, inverted in the UART</td></tr>
+<tr><td>SBUS (default <code>uart1</code>)</td><td>USART1 RX PA10, the digital VTX connector’s SBUS pin, inverted in the UART; receive only</td></tr>
+<tr><td>Spare serial (<code>uart6</code>)</td><td>USART6 (PC6 TX, PC7 RX); takes SBUS, CRSF, MSP or ESC telemetry</td></tr>
 <tr><td>MSP DisplayPort (default <code>uart3</code>)</td><td>USART3 (PD8 TX, PD9 RX)</td></tr>
 <tr><td>ESC telemetry (default <code>uart8</code>)</td><td>UART8 RX PE0</td></tr>
 <tr><td>DShot600</td><td>PB0, PB1 (TIM3), PA0, PA1 (TIM5), DMA2 streams 0-3</td></tr>
@@ -1167,7 +1168,8 @@ Foxeer has no VBUS sense pin, so a USB supply that only gives power does not
 count;</li>
 <li>a supported IMU that has produced a sample;</li>
 <li>completed stationary startup gyro-bias calibration;</li>
-<li>a fresh IMU sample in the control loop;</li>
+<li>a fresh IMU sample in the control loop, where one isolated tick without a
+new sample is tolerated and two in a row are not;</li>
 <li>no revoked actuator permit or other failed safety check.</li>
 </ul>
 <p>These IMU conditions are checked before actuator preparation, throughout its
@@ -1286,6 +1288,8 @@ open.</p>
 <tr><td>DShot idle RPM above the ceiling</td><td>Abort after spin-up grace and select four stops</td></tr>
 <tr><td>Invalid DShot qualification configuration</td><td>Abort and select four stops</td></tr>
 <tr><td>Missing/stale/invalid armed motor command</td><td>Reject it and select the safe protocol response</td></tr>
+<tr><td>One control tick without a new IMU sample</td><td>Skip that update; motors hold the previous command</td></tr>
+<tr><td>Two consecutive control ticks without a new IMU sample</td><td>Request disarm; block arming while it lasts</td></tr>
 <tr><td>DShot lease or frame-set deadline expires</td><td>Select stop, fault the bank as applicable, and request disarm</td></tr>
 <tr><td>Explicit disarm</td><td>Clear armed/permit/preparation state and select stop</td></tr>
 </tbody>
@@ -2212,7 +2216,8 @@ measure physical stop latency.</p>
 <li>continued cold-start, temperature-margin, and controlled flight evidence;</li>
 <li>a retained BB2 flight capture for quantitative rate tracking and saturation;</li>
 <li>making IMU initialization, calibration, and freshness an explicit pre-arm
-prerequisite; the present first post-arm stale-IMU check disarms instead;</li>
+prerequisite; the present post-arm stale-IMU check disarms instead, after
+two consecutive stale ticks;</li>
 <li>bidirectional DShot telemetry;</li>
 <li>DShot special-command policy;</li>
 <li>a reviewed pitch-authority tuning progression.</li>
@@ -3019,8 +3024,9 @@ power state, procedure, observations, and unresolved limitations. Stop on any
 unexpected motor response, oscillation, heat, smoke, loss of RC or video, or
 loss of confidence.</p>
 <p>The user operates powered hardware and decides when to advance between gates.
-A result applies only to the recorded image, hardware, configuration, and
-airframe.</p>
+A result applies to the recorded hardware, configuration, and airframe, and to
+the source components the run exercised: it carries forward while those
+components are unchanged and is repeated when one of them changes.</p>
 <h2 id="foxeer-user-workflow"><a class="header" href="#foxeer-user-workflow">Foxeer User Workflow</a></h2>
 <p>The <a href="#foxeer-f405-v2-usb-quick-start">Foxeer F405 V2 guide</a> covers release-image
 validation, USB DFU flashing, disarmed configuration changes, blackbox
