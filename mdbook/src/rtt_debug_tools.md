@@ -1,7 +1,8 @@
-# RTT Debug Tools
+# Bench and Analysis Tools
 
 These Python tools flash a board over SWD, decode its `defmt` RTT output
-through `probe-rs`, keep a log of it, and plot or analyze what it reports.
+through `probe-rs`, keep a log of it, read the onboard log store, and plot or
+analyze what they collect.
 They observe; they are not safety authority and never command motors. The
 flight log is the onboard blackbox, downloaded with FerroConfigurator; RTT is
 for the bench.
@@ -32,6 +33,28 @@ everything received. Before flashing, the log records the ELF's path and
 SHA-256, so a retained log names its exact image. `--log-file` chooses another
 path. Prefer this tool over piping `cargo embed` into a file, whose interactive
 output carries cursor and colour control sequences.
+
+The tool prints milestones so a slow probe is not mistaken for a hang:
+
+```text
+HOST: === FLASH STARTED: connecting, erasing, and programming ===
+HOST: === FLASH ACTIVE: erase/program transfer observed ===
+HOST: === FLASH PROGRAMMED: waiting for firmware boot/RTT ===
+HOST: === FLASH SUCCEEDED: firmware boot and RTT observed ===
+```
+
+Only `FLASH SUCCEEDED` means the image booted far enough to produce RTT. A
+failure prints `FLASH FAILED` and exits nonzero.
+
+`--foxeer-smoke` is a self-terminating first check of a new SWD connection. It
+adds `imu_transport_rtt` and `smoke_actuator_inhibit`, so the image cannot
+drive motors, listens for 14 seconds after boot, checks the boot, RTT, IMU, and
+data-ready evidence, and prints PASS or FAIL. `--probe-speed-khz` and
+`--connect-under-reset` help a marginal SWD connection. Anything after `--`
+runs instead of the default `probe-rs` command, with the same logging.
+
+If nothing appears: check that `probe-rs` sees the probe, that no other
+debugger holds it, and that the image was built with `defmt-rtt`.
 
 ## Heartbeat
 
@@ -122,6 +145,59 @@ compares them with the filtered rates, and reports standard deviation,
 peak-to-peak noise, attenuation, drift, and a rough quiet, watch, or noisy
 verdict. It is a rest-noise screen, not a substitute for props-off motor checks
 or vibration analysis.
+
+## Onboard Storage from Python
+
+FerroConfigurator is the normal way to read configuration and download logs.
+`tools/ferrowasp_storage.py` is the lower-level Python client for the same USB
+storage commands, kept as a development reference; it needs `pyserial`.
+
+```powershell
+python tools\ferrowasp_storage.py --port COM7 info
+python tools\ferrowasp_storage.py --port COM7 flights
+python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
+```
+
+`read` fetches only the selected flight's page range; `--resume` continues an
+interrupted download after validating every page already on disk against the
+flight ID, page sequence, and CRC. `erase --confirm` erases the log region
+only, and `test --confirm` exercises only the reserved scratch sector. Every
+write is refused while armed, and maintenance in progress stops if arming
+begins. Record what `info` reports for the flash; the capacity code for 16 MiB
+is `18`.
+
+The analyzer reads `.fwbb` files directly, rejects invalid or truncated pages,
+and reports what it kept. Select one flight so flight boundaries are not
+counted as gaps:
+
+```powershell
+python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --mode auto
+```
+
+## ULog Reference Converter
+
+FerroConfigurator's `convert` command is the normal path.
+`tools/fwbb_to_ulog.py` is its Python reference implementation and produces the
+same file: one CRC-validated flight as the `ferrowasp_rate_control` topic, with
+timestamps from the first selected sample and sequence gaps as ULog dropouts.
+It never combines flights.
+
+```powershell
+python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
+```
+
+## Flight Reports
+
+`tools/flight_report.py` writes a Markdown summary and plots of
+setpoint against measured rate, tracking error, PID output, motor output, and
+the worst tracking-error events, under `logs\terminal_embed\reports\`:
+
+```powershell
+python tools\flight_report.py --trim-start 3 --trim-end 3
+```
+
+With no source it uses the newest log. It assumes a 400 Hz control rate, so on
+a faster loop pass the real rate with `--sample-rate`.
 
 ## Safety Notes
 

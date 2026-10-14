@@ -23,7 +23,7 @@
   - [Project Structure](project_structure.md)
   - [Board Support](board_support.md)
   - [Testing](testing.md)
-  - [RTT Debug Tools](rtt_debug_tools.md)
+  - [Bench and Analysis Tools](rtt_debug_tools.md)
   - [Documentation Policy](documentation.md)
 - [Roadmap](roadmap.md)
 - [Publication and Licence](publication_status.md)
