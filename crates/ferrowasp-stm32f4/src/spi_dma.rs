@@ -1,14 +1,11 @@
 pub use ferrowasp_stm32::spi_common::*;
 use stm32f4xx_hal::{
     dma::{
-        ChannelX, MemoryToPeripheral, PeripheralToMemory, Stream2, Stream3, Transfer,
+        ChannelX, MemoryToPeripheral, PeripheralToMemory, Transfer,
         config::DmaConfig,
         traits::{Channel, DMASet, Stream},
     },
-    gpio::{Input, Output, PA4, PA5, PA6, PA7, PushPull},
-    pac::{DMA2, SPI1},
     prelude::*,
-    rcc::Rcc,
     spi::{self, Spi},
 };
 
@@ -26,78 +23,12 @@ where
 pub type SpiTxTransfer<TxStream, SpiT, const CHANNEL: u8> =
     Transfer<TxStream, CHANNEL, spi::Tx<SpiT>, MemoryToPeripheral, SpiTxBuf>;
 
-pub type Spi1RxTransfer = SpiRxTransfer<Stream2<DMA2>, SPI1, 3>;
-pub type Spi1TxTransfer = SpiTxTransfer<Stream3<DMA2>, SPI1, 3>;
-pub type Spi1ImuCs = PA4<Output<PushPull>>;
-pub type Spi1ImuBus = Spi<SPI1>;
-pub type Spi1Mpu6500Cs = Spi1ImuCs;
-pub type Spi1Mpu6500Bus = Spi1ImuBus;
-
 /// An STM32F4 SPI DMA owner: the shared owner over the HAL's transfers.
 pub type SpiDmaOwner<RxTransferT, TxTransferT, CsT> = ferrowasp_stm32::spi_common::SpiDmaOwner<
     RxTransferT,
     SpiPollerSide<TxTransferT, DmaConfig>,
     CsT,
 >;
-pub type Spi1Mpu6500Owner = SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, Spi1Mpu6500Cs>;
-
-pub struct Spi1Mpu6500Resources {
-    pub cs_pin: PA4<Input>,
-    pub sck_pin: PA5<Input>,
-    pub miso_pin: PA6<Input>,
-    pub mosi_pin: PA7<Input>,
-    pub spi: SPI1,
-    pub rx_dma: Stream2<DMA2>,
-    pub tx_dma: Stream3<DMA2>,
-}
-
-pub fn init_spi1_imu_cs(cs_pin: PA4<Input>) -> Spi1ImuCs {
-    let mut cs = cs_pin.into_push_pull_output();
-    cs.set_high();
-    cs
-}
-
-pub fn init_spi1_mpu6500_cs(cs_pin: PA4<Input>) -> Spi1Mpu6500Cs {
-    init_spi1_imu_cs(cs_pin)
-}
-
-pub fn init_spi1_mpu6500_bus(
-    spi: SPI1,
-    sck_pin: PA5<Input>,
-    miso_pin: PA6<Input>,
-    mosi_pin: PA7<Input>,
-    clocks: &mut Rcc,
-) -> Spi1Mpu6500Bus {
-    let mode = spi::Mode {
-        polarity: spi::Polarity::IdleLow,
-        phase: spi::Phase::CaptureOnFirstTransition,
-    };
-
-    init_spi1_bus(spi, sck_pin, miso_pin, mosi_pin, mode, 1_000_000, clocks)
-}
-
-pub fn init_spi1_bus(
-    spi: SPI1,
-    sck_pin: PA5<Input>,
-    miso_pin: PA6<Input>,
-    mosi_pin: PA7<Input>,
-    mode: spi::Mode,
-    frequency_hz: u32,
-    clocks: &mut Rcc,
-) -> Spi1ImuBus {
-    Spi::new(
-        spi,
-        (
-            Some(sck_pin.into_alternate()),
-            Some(miso_pin.into_alternate()),
-            Some(mosi_pin.into_alternate()),
-        ),
-        mode,
-        frequency_hz.Hz(),
-        clocks,
-    )
-}
-
 pub struct SpiPollerSide<TxTransferT, DmaConfigT> {
     pub tx_transfer: Option<TxTransferT>,
     pub dma_config: DmaConfigT,

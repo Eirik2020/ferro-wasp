@@ -34,9 +34,10 @@ pub type Motor4Pin = PB15<Input>;
 pub type AdcVoltagePin = PC0<Input>;
 pub type AdcCurrentPin = PC1<Input>;
 
+pub type Spi1ImuCs = PA4<Output<PushPull>>;
 pub type Spi1RxTransfer = spi_dma::SpiRxTransfer<Stream0<DMA2>, SPI1, 3>;
 pub type Spi1TxTransfer = spi_dma::SpiTxTransfer<Stream3<DMA2>, SPI1, 3>;
-pub type Spi1ImuOwner = spi_dma::SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, spi_dma::Spi1ImuCs>;
+pub type Spi1ImuOwner = spi_dma::SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, Spi1ImuCs>;
 
 /// UART1 (USART1) receive-only on PA10, RX on DMA2 Stream 5.
 pub type Uart1RxIrq = uart_dma::UartRxIrq<Stream5<DMA2>, USART1, 4>;

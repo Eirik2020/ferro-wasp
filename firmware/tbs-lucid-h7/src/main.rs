@@ -258,14 +258,11 @@ ferroforge::app! {
             },
         );
 
-        let control_loop_scheduler = ferrowasp_stm32h7::timers::init_control_scheduler(
-            dp.TIM4,
-            rec.TIM4,
-            &clocks,
-            scheduler_rate.to_Hz(),
-        );
-        let io_timebase = ferrowasp_stm32h7::timers::MicrosecondTimebase::new(dp.TIM2, rec.TIM2, &clocks);
-        let io_watchdog = ferrowasp_stm32h7::timers::init_io_watchdog(dp.TIM6, rec.TIM6, &clocks);
+        let control_loop_scheduler =
+            board::aliases::ControlScheduler::new(dp.TIM4, rec.TIM4, &clocks, scheduler_rate.to_Hz());
+        let io_timebase = board::aliases::IoTimebase::new(dp.TIM2, rec.TIM2, &clocks);
+        let io_watchdog =
+            board::init::init_io_watchdog(dp.TIM6, rec.TIM6, &clocks);
 
         let (usb_dev, usb_serial) = stm32_usb::init_usb_cdc_serial(
             stm32_usb::UsbResources {

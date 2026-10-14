@@ -25,7 +25,14 @@ const _: () = {
     assert!(Spi1ImuKind::Mpu6000.dma_burst_register() == mpu6000::Register::AccelXoutH as u8);
 };
 
-pub use backend::adc::{Adc1BatteryResources, Adc1ObservationParts};
+use super::aliases::Adc1ObservationParts;
+
+pub struct Adc1BatteryResources {
+    pub adc: pac::ADC1,
+    pub prec: rec::Adc12,
+    pub voltage_pin: PC0,
+    pub current_pin: PC1,
+}
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
     DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotMotorBank,
@@ -91,19 +98,20 @@ pub fn init_spi1_imu(
         tx_dma,
     } = resources;
 
-    let mut cs = backend::spi_dma::init_spi1_imu_cs(cs_pin);
-    let mut spi = backend::spi_dma::init_spi1_bus(
-        spi,
-        backend::spi_dma::Spi1BusPins {
-            sck: sck_pin,
-            miso: miso_pin,
-            mosi: mosi_pin,
-        },
+    let mut cs = cs_pin.into_push_pull_output();
+    cs.set_high();
+    let mut cs = backend::eh1::OutputPin::new(cs);
+    let mut spi = backend::eh1::SpiBus::new(spi.spi(
+        (
+            sck_pin.into_alternate::<5>(),
+            miso_pin.into_alternate::<5>(),
+            mosi_pin.into_alternate::<5>(),
+        ),
         hal::spi::MODE_3,
-        1_000_000,
+        1_000_000.Hz(),
         prec,
         clocks,
-    );
+    ));
 
     delay.delay_ms(10);
     let bringup = match icm42688p::read_who_am_i(&mut spi, &mut cs) {
@@ -157,7 +165,17 @@ pub fn init_adc1_battery(
 ) -> Adc1ObservationParts {
     let (primary, spare) = storage.split();
 
-    backend::adc::init_adc1_observation(resources, delay, clocks, primary, spare)
+    backend::adc::init_adc1_observation(
+        resources.adc,
+        resources.prec,
+        resources.voltage_pin.into_analog(),
+        resources.current_pin.into_analog(),
+        super::profiles::ADC_REFERENCE_MV,
+        delay,
+        clocks,
+        primary,
+        spare,
+    )
 }
 
 /// The microSD card as the flash manager's storage. Nothing is written here;
@@ -352,4 +370,18 @@ pub fn init_uart_ports(
         uart8_rx,
         functions,
     }
+}
+
+/// The I/O deadline watchdog, on TIM6 at the shared watchdog rate.
+pub fn init_io_watchdog(
+    timer: pac::TIM6,
+    prec: rec::Tim6,
+    clocks: &CoreClocks,
+) -> super::aliases::IoWatchdog {
+    super::aliases::IoWatchdog::new(
+        timer,
+        prec,
+        clocks,
+        ferrowasp_stm32::watchdog::IO_WATCHDOG_HZ,
+    )
 }

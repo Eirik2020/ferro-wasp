@@ -19,7 +19,6 @@ const _: () = {
     assert!(Spi1ImuKind::Mpu6000.dma_burst_register() == mpu6000::Register::AccelXoutH as u8);
 };
 
-pub use backend::adc::Adc1BatteryResources;
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
     DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotMotorBank,
@@ -129,13 +128,23 @@ where
         tx_dma,
     } = resources;
 
-    let mut cs = backend::spi_dma::init_spi1_imu_cs(cs_pin);
+    let mut cs = cs_pin.into_push_pull_output();
+    cs.set_high();
     let mode = spi::Mode {
         polarity: spi::Polarity::IdleHigh,
         phase: spi::Phase::CaptureOnSecondTransition,
     };
-    let mut spi =
-        backend::spi_dma::init_spi1_bus(spi, sck_pin, miso_pin, mosi_pin, mode, 1_000_000, clocks);
+    let mut spi = Spi::new(
+        spi,
+        (
+            Some(sck_pin.into_alternate()),
+            Some(miso_pin.into_alternate()),
+            Some(mosi_pin.into_alternate()),
+        ),
+        mode,
+        1_000_000.Hz(),
+        clocks,
+    );
 
     delay.delay_ms(10);
     let bringup = match icm42688p::read_who_am_i(&mut spi, &mut cs) {
@@ -186,10 +195,10 @@ pub fn init_adc1_battery(
 ) -> Adc1ObservationParts {
     let (primary, spare) = storage.split();
 
-    backend::adc::init_adc1_observation_for::<_, 0>(
+    backend::adc::init_adc1_observation_for::<_, _, _, 0>(
         resources.adc,
-        resources.voltage_pin,
-        resources.current_pin,
+        resources.voltage_pin.into_analog(),
+        resources.current_pin.into_analog(),
         resources.dma,
         rcc,
         primary,

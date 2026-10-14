@@ -381,14 +381,10 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "defmt",
- "ferroforge",
  "ferrowasp-io-core",
  "ferrowasp-stm32",
  "ferrowasp-waveform",
- "fugit",
  "rc-pwm",
- "rtic",
- "rtic-monotonics",
  "usb-device",
  "usbd-serial",
 ]

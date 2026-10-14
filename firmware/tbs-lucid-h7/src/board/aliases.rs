@@ -7,7 +7,9 @@ use ferrowasp_stm32h7::{adc, sd_storage, spi_dma, timers, uart_dma};
 
 pub type ImuDataReadyPin = PB2<Input>;
 
-pub type Spi1ImuOwner = spi_dma::Spi1DmaOwner<Stream4<DMA1>, Stream5<DMA1>, spi_dma::Spi1ImuCs>;
+/// The IMU chip select, PC15.
+pub type Spi1ImuCs = ferrowasp_stm32h7::eh1::OutputPin<'C', 15>;
+pub type Spi1ImuOwner = spi_dma::Spi1DmaOwner<Stream4<DMA1>, Stream5<DMA1>, Spi1ImuCs>;
 
 /// UART3 (USART3), RX on DMA1 Stream 1 and TX on DMA1 Stream 3.
 pub type Uart3RxPort = uart_port::UartRxPort<uart_dma::UartRxIrq<Stream1<DMA1>, USART3>>;
@@ -20,10 +22,12 @@ pub type Uart1RxPort = uart_port::UartRxPort<uart_dma::UartRxIrq<Stream4<DMA2>, 
 /// UART8, RX on DMA1 Stream 2.
 pub type Uart8RxPort = uart_port::UartRxPort<uart_dma::UartRxIrq<Stream2<DMA1>, UART8>>;
 
-pub type Adc1ObservationTransfer = adc::Adc1Observation;
+/// Battery voltage on PC0 and current on PC1.
+pub type Adc1ObservationTransfer = adc::Adc1Observation<PC0<Analog>, PC1<Analog>>;
+pub type Adc1ObservationParts = adc::Adc1ObservationParts<PC0<Analog>, PC1<Analog>>;
 
 pub type ControlScheduler = timers::PeriodicTimer<TIM4>;
-pub type IoTimebase = timers::MicrosecondTimebase;
+pub type IoTimebase = timers::MicrosecondTimebase<TIM2>;
 pub type IoWatchdog = timers::PeriodicTimer<TIM6>;
 
 /// The microSD card, presented to the flash manager as SPI NOR.

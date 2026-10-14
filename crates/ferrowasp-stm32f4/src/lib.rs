@@ -7,11 +7,7 @@
 #[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub mod adc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod advanced_pwm;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod board_routes;
-#[cfg(all(target_arch = "arm", feature = "stm32f401"))]
-pub mod bringup;
 pub mod clocks;
 #[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
 #[allow(unsafe_code)]
@@ -24,8 +20,6 @@ pub mod hal_prelude;
 pub mod scheduler;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod spi_dma;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod static_pwm;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod timebase;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]

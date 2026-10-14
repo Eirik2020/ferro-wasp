@@ -9,12 +9,12 @@ use stm32f4xx_hal::{
         config::{AdcConfig, Dma, SampleTime, Scan, Sequence},
     },
     dma::{
-        ChannelX, PeripheralToMemory, Stream0, Transfer,
+        ChannelX, PeripheralToMemory, Transfer,
         config::DmaConfig,
         traits::{Channel, DMASet, DmaFlagExt, Stream},
     },
-    gpio::{Input, PC0, PC1},
-    pac::{ADC1, DMA2},
+    hal_02,
+    pac::ADC1,
     rcc::Rcc,
 };
 
@@ -27,14 +27,6 @@ where
     StreamT: Stream,
     ChannelX<CHANNEL>: Channel,
     Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>;
-pub type Adc1ObservationTransfer = Adc1ObservationTransferFor<Stream0<DMA2>, 0>;
-
-pub struct Adc1BatteryResources {
-    pub adc: ADC1,
-    pub voltage_pin: PC0<Input>,
-    pub current_pin: PC1<Input>,
-    pub dma: Stream0<DMA2>,
-}
 
 pub struct Adc1ObservationPartsFor<StreamT, const CHANNEL: u8>
 where
@@ -46,32 +38,12 @@ where
     pub spare_buffer: Adc1SampleBuffer,
 }
 
-pub type Adc1ObservationParts = Adc1ObservationPartsFor<Stream0<DMA2>, 0>;
-
-pub fn init_adc1_observation(
+/// Start ADC1 sampling the temperature sensor, then the board's battery
+/// voltage and current channels (pins already in analog mode), into `dma`.
+pub fn init_adc1_observation_for<StreamT, VoltageT, CurrentT, const CHANNEL: u8>(
     adc: ADC1,
-    voltage_pin: PC0<Input>,
-    current_pin: PC1<Input>,
-    dma: Stream0<DMA2>,
-    rcc: &mut Rcc,
-    primary_buffer: Adc1SampleBuffer,
-    spare_buffer: Adc1SampleBuffer,
-) -> Adc1ObservationParts {
-    init_adc1_observation_for::<_, 0>(
-        adc,
-        voltage_pin,
-        current_pin,
-        dma,
-        rcc,
-        primary_buffer,
-        spare_buffer,
-    )
-}
-
-pub fn init_adc1_observation_for<StreamT, const CHANNEL: u8>(
-    adc: ADC1,
-    voltage_pin: PC0<Input>,
-    current_pin: PC1<Input>,
+    voltage: VoltageT,
+    current: CurrentT,
     dma: StreamT,
     rcc: &mut Rcc,
     primary_buffer: Adc1SampleBuffer,
@@ -81,11 +53,11 @@ where
     StreamT: Stream,
     ChannelX<CHANNEL>: Channel,
     Adc<ADC1>: DMASet<StreamT, CHANNEL, PeripheralToMemory>,
+    VoltageT: hal_02::adc::Channel<ADC1, ID = u8>,
+    CurrentT: hal_02::adc::Channel<ADC1, ID = u8>,
 {
     let adc_config = AdcConfig::default().dma(Dma::Single).scan(Scan::Enabled);
     let mut adc = Adc::new(adc, true, adc_config, rcc);
-    let voltage = voltage_pin.into_analog();
-    let current = current_pin.into_analog();
 
     adc.configure_channel(&Temperature, Sequence::One, SampleTime::Cycles_480);
     adc.configure_channel(&voltage, Sequence::Two, SampleTime::Cycles_480);
@@ -108,14 +80,6 @@ where
         transfer,
         spare_buffer,
     }
-}
-
-pub fn take_completed_adc1_sample(
-    transfer: &mut Adc1ObservationTransfer,
-    spare_buffer: &mut Option<Adc1SampleBuffer>,
-    planner: &mut AdcDmaIrqPlanner,
-) -> Result<Option<Adc1Sample>, AdcDmaDeliveryError> {
-    take_completed_adc1_sample_for(transfer, spare_buffer, planner)
 }
 
 pub fn take_completed_adc1_sample_for<StreamT, const CHANNEL: u8>(
