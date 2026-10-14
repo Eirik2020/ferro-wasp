@@ -1,8 +1,8 @@
 # The Internal Book
 
 This is FerroWasp's internal book, for maintainers and agents. It is never
-published. Users and contributors read the [public book](../mdbook/src/SUMMARY.md)
-instead, and no public chapter links here.
+published. Users and contributors read the public book, `mdbook/`, instead,
+and no public chapter links here.
 
 The root `AGENTS.md` defines the authority order and maps tasks to chapters.
 Below it and [the governing requirements](governing-requirements.md), current

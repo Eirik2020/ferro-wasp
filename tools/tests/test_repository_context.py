@@ -8,6 +8,7 @@ from tools.check_repository_context import (
     _discover_agent_instruction_paths,
     validate_always_loaded,
     validate_architecture_decisions,
+    validate_internal_book,
     validate_repository,
     validate_test_catalog,
 )
@@ -75,6 +76,33 @@ class RepositoryContextTests(unittest.TestCase):
             {"AGENTS.md"},
         )
         self.assertEqual(validate_always_loaded(REPOSITORY_ROOT), [])
+
+    def test_internal_book_lists_exactly_the_live_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "project_meta").mkdir()
+            (root / "project_meta" / "SUMMARY.md").write_text(
+                "- [Live](live.md)\n- [Old](archive/old.md)\n",
+                encoding="utf-8",
+            )
+            registry = {
+                "documents": [
+                    {"path": "project_meta/live.md", "lifecycle": "live"},
+                    {"path": "project_meta/durable.md", "lifecycle": "durable"},
+                    {"path": "project_meta/archive/old.md", "lifecycle": "historical"},
+                ]
+            }
+
+            errors = validate_internal_book(root, registry)
+
+        self.assertEqual(
+            errors,
+            [
+                "project_meta/SUMMARY.md: missing chapter project_meta/durable.md",
+                "project_meta/SUMMARY.md: lists a historical or unregistered "
+                "document project_meta/archive/old.md",
+            ],
+        )
 
     def test_rejects_oversized_always_loaded_context(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

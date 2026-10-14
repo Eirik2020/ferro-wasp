@@ -123,7 +123,8 @@ assets and their licence headers. Never turn a past test result into a general
 support or safety claim; label board-specific limits.
 
 **Internal Book (`project_meta/`).** Register every Markdown file in
-`DOCUMENT_REGISTRY.json`. Test definitions (`TEST_CATALOG.json`,
+`DOCUMENT_REGISTRY.json`, and list every non-historical one in `SUMMARY.md`.
+`mdbook build project_meta` builds it into `target/internal-book`. Test definitions (`TEST_CATALOG.json`,
 `testing/targets/`) stay separate from dated run evidence (`testing/evidence/`);
 `active` means selectable, not passed. Moving evidence preserves its dates,
 hashes, feature sets, artifact identities, and limitations.
