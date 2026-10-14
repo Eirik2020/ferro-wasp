@@ -6,10 +6,10 @@ FerroWasp currently has early support for several communication paths. RC input 
 
 | Protocol/path | Status |
 |---|---|
-| SBUS | Active prototype RC input, by default on UART2 (Foxeer) or UART6 (Lucid) |
-| BLHeli legacy ESC telemetry | Active in the flight DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated |
-| USB CDC serial | Mandatory on Foxeer, which emits bounded read-only `FWDBG1` status lines; was optional on the obsolete FCU3 via `usb_serial` |
-| MSPv1 / DJI O4 OSD | Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames |
+| SBUS | Active prototype RC input, by default on `uart2` (Foxeer) or `uart1` (Lucid) |
+| BLHeli legacy ESC telemetry | Active in the flight DShot image, by default on `uart1` (Foxeer) or `uart8` (Lucid); eRPM and frame integrity target-validated on Foxeer |
+| USB CDC serial | Standard on both flight boards: `FWDBG1` status lines and the configurator command line |
+| MSPv1 / DJI O4 OSD | Active prototype, by default on `uart4` (Foxeer) or `uart3` (Lucid), using MSPv1 responses and DisplayPort OSD frames |
 | MAVLink | UART mode placeholder/config values exist, no active MAVLink implementation yet |
 | CRSF/ELRS | RC input with battery telemetry, selected by `rc_protocol`; not yet run on hardware |
 
@@ -87,49 +87,28 @@ already high, the change invalidates the RC link like a lost receiver: the
 link must recover, and the new arm channel must read low, before the craft
 can arm.
 
-## Foxeer USB Debug
+## USB
 
-The Foxeer app's optional CDC ACM endpoint reports a self-describing ASCII
-`FWDBG1` line on the existing roughly two-second heartbeat. It includes the
-selected IMU, sample and control sequences, raw gyro, stale state, RC
-qualification, throttle and arm switch, system arm state, pack voltage, and
-current.
+Each flight board presents a USB CDC serial port. Every two seconds or so it
+sends a self-describing ASCII `FWDBG1` status line: the selected IMU, sample
+and control sequences, raw gyro, stale state, RC qualification, throttle and
+arm switch, arm state, pack voltage, and current.
 
-The implementation uses fixed-size buffers and coalesces status requests.
-OTG_FS service runs below control, IMU, RC, and safety priorities. Host input
-is drained and discarded; there is intentionally no USB command parser,
-parameter writer, arming request, or actuator resource.
+The same port accepts a bounded ASCII command line, which FerroConfigurator
+drives: configuration get,
+set, and save; serial port bindings; flash information and the scratch-sector
+test; log listing, page reads, sync acknowledgement, and erase; and the props-off
+motor test. The firmware validates every command. Writes and the motor test
+are refused while armed, a motor test is a request the safety master may
+refuse, and nothing on the command line can arm the craft. A UART bound to the
+`configurator` function accepts the same command line except the motor test and
+the unconditional log erase.
 
-## FCU3 ESC Telemetry
+USB service runs below the control, IMU, RC, and safety priorities, with
+fixed-size buffers.
 
-The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud in the standard FCU3 flight image. The ESC manager issues
-bounded telemetry-bit requests through the actuator-owned DShot service. Since the
-ten-byte wire frame does not identify a motor, a low-priority ESC manager
-rotates physical-output requests. Both directions use bounded SPSC queues.
+## ESC Telemetry
 
-The safety-owned DShot service acknowledges an exact sequence/output request
-only after the selected telemetry bit was present in a frame that actually
-started. If a CRC-valid response completes while that request is still queued,
-the manager may buffer it, but it remains quarantined and cannot be published
-until the matching acknowledgement arrives. Association timeouts stop the
-manager so a late response cannot be attributed to a later output. It resumes
-only while disarmed, after 500 ms with no wire byte and no acknowledgement,
-doubling to at most 4 s while retries bring nothing back.
-
-The physical-output association maps to the logical Quad X layout as follows:
-output 1 is M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right,
-and output 4 is M2/front-right.
-
-The manager owns parsing, samples, cadence, association, and timeouts. It does
-not own a motor peripheral, arming state, actuator permit, or failsafe state.
-UART, parser, queue, and timeout faults cannot grant authority. When they
-prevent fresh observations during guarded idle, pre-arm qualification fails
-closed and selects stop; after `SYSTEM ARMED`, telemetry loss is currently
-observational and does not itself disarm.
-
-The manager waits five seconds after boot before its first request. An arm
-attempt that enters guarded idle before telemetry is available can fail closed
-at the 1.2-second qualification deadline. A switch-low observation and a new
-low-to-high arm request are then required. See [DShot](./dshot.md) for the frame
-and target-evidence details.
+The BLHeli legacy UART telemetry protocol, how a reply is associated with the
+motor that was asked, and how telemetry recovers after a timeout are described
+in [DShot](./dshot.md#esc-telemetry).

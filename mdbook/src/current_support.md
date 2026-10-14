@@ -1,10 +1,9 @@
 # Current Support
 
 Foxeer F405 V2 is the golden flight target and the behavioral reference for
-new flight-board work. NUCLEO-F401RE is a non-actuating development target.
-FerroWasp FCU3, obsolete since 2026-09-22, was removed on 2026-10-07. TBS
-Lucid H7 is an unverified port of the Foxeer feature set to the STM32H743; it
-builds, but has not run on hardware.
+new flight-board work. TBS Lucid H7 carries the Foxeer feature set on the
+STM32H743; it has passed bench checks but has never driven motors or flown.
+NUCLEO-F401RE is a non-actuating development target.
 
 The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.
@@ -15,7 +14,7 @@ list every peripheral or diagnostic feature.
 | MCU / runtime | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
 | RC input | SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config | None |
 | IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | None |
-| Control | 400 Hz rate controller and Quad X mixer | None |
+| Control | 2 kHz rate controller and Quad X mixer | None |
 | ESC output | Four-lane DShot600 | None |
 | ESC telemetry | Standard BLHeli legacy UART eRPM path | None |
 | Arming qualification | Fresh idle eRPM from all four motors | Not applicable |
@@ -34,25 +33,30 @@ parts of its flight image rather than optional board capabilities.
 
 The fitted SPI1 IMU is detected at boot. MPU6500, ICM42688-P and MPU-6000
 share the bounded DMA transport and board orientation contract; PC4/EXTI4
-supplies the normal data-ready event. The controller consumes fresh samples at 400 Hz.
+supplies the normal data-ready event. The ICM-42688-P runs at a 2 kHz output
+rate and the control loop matches it, so every tick has a fresh sample; the
+MPU6500 tops out at 1 kHz.
 
 Four DShot600 lanes use TIM1 and TIM8 with board-local pin and DMA routes. The
 actuator path continuously selects stop while disarmed, rejects stale motor
 commands, and contains a lane or DMA failure across the whole four-output
-bank. The bounded ESC manager associates PA10 / USART1 legacy telemetry with
-requested physical outputs and supplies eRPM evidence for guarded arming.
+bank. The bounded ESC manager associates legacy telemetry, received by default
+on `uart1` (PA10), with requested physical outputs and supplies eRPM evidence for guarded arming.
 
 Onboard SPI-NOR stores CRC-protected configuration and FWBB flight records.
 The [FerroConfigurator](user/ferro_configurator.md) uses USB CDC to manage that
 storage while the aircraft is disarmed.
 
-## TBS Lucid H7 (unverified)
+## TBS Lucid H7 (bench only)
 
 The app lives in `firmware/tbs-lucid-h7` and carries the Foxeer feature set on
 the Lucid's own peripherals, through the `ferrowasp-stm32h7` backend. Pins
-follow the upstream Betaflight `TBS_LUCID_H7` target. Nothing here has run on
-the board, so flight arming is disabled at compile time until the IMU
-orientation, motor order, and ADC scale are verified on it.
+follow the upstream Betaflight `TBS_LUCID_H7` target. A later board revision,
+ArduPilot's `TBS_LUCID_H7V3`, routes motors and receivers differently and is
+not supported. Boot,
+IMU, USB, and microSD logging have run on a board; motors, RC, and OSD have
+not. Flight arming is disabled at compile time until the IMU orientation, motor
+order, and ADC scale are verified.
 
 | Function | Lucid H7 resource |
 |---|---|
@@ -94,10 +98,10 @@ without pretending to be a flight target.
 The two flight apps use the same bounded behavior for the main control chain:
 
 ```text
-SBUS input
+SBUS or CRSF input
   -> safety-qualified arm request
   -> fresh IMU sample
-  -> 400 Hz rate controller and Quad X mixer
+  -> 2 kHz rate controller and Quad X mixer
   -> bounded motor-command queue
   -> safety-owned 500 Hz DShot600 service
   -> legacy ESC telemetry and idle-eRPM qualification
