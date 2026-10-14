@@ -65,13 +65,13 @@ devices in `ferrowasp-drivers`; portable flight logic in `ferrowasp-flight`;
 HAL-neutral STM32 mechanisms in `ferrowasp-stm32`, each family's HAL in
 `ferrowasp-stm32f4` or `ferrowasp-stm32h7`; shared RTIC task bodies in
 `ferrowasp-stm32-tasks`; and RTIC wiring in thin app shells. Keep each board's
-physical facts in its app's `src/board/`. Optional generation belongs in
+physical facts in its app's `board/` data crate. Optional generation belongs in
 `ferrowasp-gen`, manifests, or the isolated builder.
 
 Keep HAL-specific types out of core logic. Put reusable behavior in shared
 crates rather than duplicating it between boards.
 
-Treat each app's src/board directory as hardware data and narrow adaptation,
+Treat each app's board crate and src/board as hardware data and HAL glue,
 not as a general implementation layer. If code remains useful after
 substituting pins, peripherals, routes, or configuration values, move it to
 the narrowest shared crate before adding another board copy.

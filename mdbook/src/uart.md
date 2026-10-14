@@ -34,7 +34,7 @@ Current UART modes:
 ## Port Binding
 
 Pins, DMA streams and interrupts are fixed per port at compile time, in each
-board's `src/board/serial.rs` route table. A port is named by the UART's
+board's data crate route table (`board/src/serial.rs`). A port is named by the UART's
 number on the chip, as the pilot sees it on the board: USART3 is `uart3`
 whatever it serves. Saved configuration holds a function for each of
 `uart1` to `uart8`. Which function a port serves (RC input, MSP OSD, ESC

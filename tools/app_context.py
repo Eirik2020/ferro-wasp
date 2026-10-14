@@ -41,6 +41,7 @@ class AppTarget:
     instructions: tuple[PurePosixPath, ...]
     test_chain: tuple[str, ...]
     board_directory: PurePosixPath
+    board_data_directory: PurePosixPath
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,9 @@ APP_TARGETS = {
         ),
         board_directory=PurePosixPath(
             "firmware/foxeer-f405-v2/src/board"
+        ),
+        board_data_directory=PurePosixPath(
+            "firmware/foxeer-f405-v2/board/src"
         ),
     ),
 }
@@ -267,7 +271,7 @@ TOPIC_ROUTES = {
         ),
     ),
     "storage": TopicRoute(
-        summary="Foxeer flash discovery, configuration, blackbox access, and manager state.",
+        summary="Storage discovery, configuration, blackbox access, and the shared flash manager.",
         common_symbols=(),
         foxeer_symbols=(
             "flash_manager_task",
@@ -275,6 +279,8 @@ TOPIC_ROUTES = {
         companions=(
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
+            PurePosixPath("crates/ferrowasp-drivers/src/nor_storage.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/spi_nor.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/log_sync.rs"),
@@ -289,6 +295,7 @@ TOPIC_ROUTES = {
             PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
         ),
     ),
@@ -520,6 +527,7 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
         PurePosixPath("project_meta/testing/TEST_CATALOG.json"),
         target.support,
         target.board_directory,
+        target.board_data_directory,
         *topic.companions,
     )
     lines.extend(["", "Companion context:"])
@@ -585,6 +593,7 @@ def validate_routes(root: Path = REPOSITORY_ROOT) -> list[str]:
             target.readme,
             target.cargo_toml,
             target.board_directory,
+            target.board_data_directory,
             *target.instructions,
         )
         for path in required_paths:

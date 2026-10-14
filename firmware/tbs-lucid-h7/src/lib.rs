@@ -134,7 +134,7 @@ pub use ferrowasp_flight::rc_receiver::RcReceiver;
 #[cfg(not(feature = "mspv2_configurator"))]
 pub use ferrowasp_flight::usb_debug;
 pub use ferrowasp_flight::{log_sync, sync_ledger};
-pub use ferrowasp_io_core::serial::{RcProtocol, ResolvedBindings};
+pub use ferrowasp_io_core::serial::{RcProtocol, ResolvedBindings, SerialBindings, SerialRoute};
 pub use ferrowasp_io_core::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
     SpiRequestMailbox,
@@ -257,13 +257,6 @@ impl ConfiguratorUsbState {
     }
 }
 
-#[derive(Clone, Copy)]
-#[cfg_attr(not(feature = "mspv2_configurator"), allow(dead_code))]
-pub enum ConfigRpcCompletion {
-    Commit(u16),
-    Defaults(u16),
-}
-
 #[cfg(not(feature = "mspv2_configurator"))]
 pub struct ConfiguratorUsbState;
 
@@ -302,21 +295,10 @@ pub use ferrowasp_core::safety::signals::{
     self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
 };
 
-/// How many blackbox records the flash task consumes per pass.
-///
-/// Its loop yields for a millisecond, so one record per pass capped the store
-/// near a thousand records a second regardless of the flash. Bounded so a full
-/// queue cannot starve the rest of the system.
-pub const FLASH_RECORD_DRAIN_PER_PASS: u32 = 16;
-
 /// Blackbox records queued between the control loop and the SD card: half a
 /// second at 2 kHz. A card may hold a write busy for up to 250 ms; the 64
 /// records that suit SPI NOR lost a quarter of a full-rate log here.
 pub const BLACKBOX_RECORD_QUEUE_CAPACITY: usize = 1024;
-
-/// How long log pages may wait in the SD card's RAM window before the flash
-/// task writes them out; at most this much log is lost to a power cut.
-pub const SD_WRITE_BACK_MAX_AGE_MS: u64 = 100;
 
 #[cfg(not(feature = "mspv2_configurator"))]
 pub const USB_DEBUG_HEADER: &[u8] = b"FerroWasp TBS Lucid H7 storage CLI v1; type help\r\n";
@@ -504,29 +486,6 @@ pub fn handle_msp_packet(
     }
 }
 
-pub fn scan_flash_log(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-) -> Result<(u32, u32, bool), flash_task::StorageReadError<board::aliases::SdFlashError>> {
-    flash_task::scan_log(layout, |address, page| flash.read(address, page))
-}
-
-pub fn load_flash_config(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-) -> Result<
-    (flash_task::StoredConfig, u32, u8),
-    flash_task::StorageReadError<board::aliases::SdFlashError>,
-> {
-    flash_task::load_config(
-        layout,
-        // The Foxeer defaults: the Lucid flies the same airframe profile until
-        // it has its own.
-        DEFAULT_STORED_CONFIG,
-        |address, page| flash.read(address, page),
-    )
-}
-
 /// The serial bindings to start the ports with, and the RC protocol of the
 /// port bound to RC input: the saved values when storage holds a
 /// configuration, else the board's defaults. Read once in init, so a changed
@@ -534,7 +493,9 @@ pub fn load_flash_config(
 pub fn boot_serial_bindings(flash: &mut FlashDevice) -> ResolvedBindings {
     let saved = if FLASH_READY.load(Ordering::Acquire) {
         flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
-            .and_then(|layout| load_flash_config(flash, layout).ok())
+            .and_then(|layout| {
+                flight_tasks::load_flash_config(flash, layout, DEFAULT_STORED_CONFIG).ok()
+            })
             .map(|(config, _, _)| config)
     } else {
         None
@@ -554,149 +515,6 @@ pub fn rc_receiver_for(protocol: RcProtocol) -> RcReceiver {
         RcProtocol::Sbus => RcReceiver::sbus(),
         RcProtocol::Crsf => RcReceiver::crsf(),
     }
-}
-
-/// Queue one answer line for the link the storage owner is answering.
-pub fn queue_storage_response(responses: &mut ResponseRouter, text: &str) -> bool {
-    let Some(frame) = flash_task::ResponseFrame::from_text(text) else {
-        return false;
-    };
-    if !responses.send(frame) {
-        return false;
-    }
-    // The configurator link polls its queue; USB is woken.
-    if responses.replying_to() == CommandLink::Usb {
-        cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
-    }
-    true
-}
-
-/// Erase, header and bit are the most one acknowledgement can take.
-pub const MAX_SYNC_MARK_STEPS: u8 = 3;
-
-/// The next ledger operation toward acknowledging `flight_id`.
-pub fn sync_mark_step(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-    flight_id: u32,
-) -> Result<sync_ledger::MarkStep, sync_ledger::LedgerError<board::aliases::SdFlashError>> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output);
-    sync_ledger::next_mark_step(layout, &mut read, flight_id)
-}
-
-/// Starts one ledger operation; the storage owner waits for it to finish.
-pub fn start_sync_mark_step(
-    flash: &mut FlashDevice,
-    step: sync_ledger::MarkStep,
-) -> Result<(), board::aliases::SdFlashError> {
-    match step {
-        sync_ledger::MarkStep::EraseLedger { address } => flash.erase_sector_4k(address),
-        sync_ledger::MarkStep::ProgramHeader { address } => {
-            flash.page_program(address, &sync_ledger::SYNC_LEDGER_MAGIC)
-        }
-        sync_ledger::MarkStep::ProgramBit { address, value } => {
-            flash.page_program(address, &[value])
-        }
-        sync_ledger::MarkStep::Done => Ok(()),
-    }
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn queue_rpc_response(
-    producer: &mut flash_task::RpcResponseProducer,
-    response: mspv2::rpc::RpcResponse,
-) -> bool {
-    if producer.enqueue(response).is_err() {
-        return false;
-    }
-    cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
-    true
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn finish_config_rpc_error(
-    producer: &mut flash_task::RpcResponseProducer,
-    completion: &mut Option<ConfigRpcCompletion>,
-    error: mspv2::rpc::DeviceError,
-) -> bool {
-    let Some(completion) = completion.take() else {
-        return false;
-    };
-    let request_id = match completion {
-        ConfigRpcCompletion::Commit(id) | ConfigRpcCompletion::Defaults(id) => id,
-    };
-    queue_rpc_response(producer, mspv2::rpc::error(request_id, error))
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn blackbox_flight_id_at(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-    page_index: u32,
-) -> Result<u32, ()> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::blackbox_flight_id_at(&mut read, layout, page_index)
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn blackbox_bounds(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    id: mspv2::rpc::BlackboxId,
-) -> Result<Option<(u32, u32)>, ()> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::blackbox_bounds(&mut read, layout, used_pages, id)
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn blackbox_info(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    id: mspv2::rpc::BlackboxId,
-    active_id: Option<u32>,
-) -> Result<Option<mspv2::rpc::BlackboxInfo>, ()> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::blackbox_info(&mut read, layout, used_pages, id, active_id)
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn list_blackboxes(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    active_id: Option<u32>,
-) -> Result<mspv2::rpc::BlackboxList, ()> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::list_blackboxes(&mut read, layout, used_pages, active_id)
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn read_blackbox_chunk(
-    flash: &mut FlashDevice,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    id: mspv2::rpc::BlackboxId,
-    offset: u32,
-    requested_length: u16,
-) -> Result<mspv2::rpc::BlackboxChunk, mspv2::rpc::DeviceError> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::read_blackbox_chunk(&mut read, layout, used_pages, id, offset, requested_length)
-}
-
-pub fn queue_page_hex(
-    producer: &mut ResponseRouter,
-    page_index: u32,
-    page: &[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
-) -> bool {
-    flash_task::emit_page_hex_lines(page_index, page, |line| {
-        queue_storage_response(producer, line)
-    })
-}
-
-pub fn flash_scratch_test_page() -> [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] {
-    flash_task::scratch_test_page()
 }
 
 pub fn validate_live_arming_guard(
