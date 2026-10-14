@@ -19,6 +19,8 @@ pub mod hal_prelude;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod scheduler;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub mod signature;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod spi_dma;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod timebase;

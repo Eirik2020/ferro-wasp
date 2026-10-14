@@ -49,6 +49,8 @@ mod osd;
 // A convenience for task bodies; which names a body uses depends on the
 // firmware's features, so an unused one is not a mistake.
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod app;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod leds;
 #[allow(unused_imports)]
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
@@ -60,6 +62,8 @@ pub mod snapshots;
 mod spi1;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod uart_port;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod usb;
 
 #[cfg(all(
     target_arch = "arm",
@@ -115,3 +119,5 @@ pub use uart_port::{
     uart7_rx_idle, uart7_tx_dma_complete, uart7_tx_worker, uart8_rx_dma, uart8_rx_idle,
     uart8_tx_dma_complete, uart8_tx_worker,
 };
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use usb::usb_fs;
