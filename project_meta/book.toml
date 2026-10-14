@@ -1,7 +1,5 @@
 # The internal book: maintainers and agents only, never published. It builds
-# into the gitignored target directory. The archive is never listed in
-# SUMMARY.md, and mdBook copies only non-Markdown files from the source, so
-# archived documents stay out of the build.
+# into the gitignored target directory.
 [book]
 title = "FerroWasp Internal"
 language = "en"

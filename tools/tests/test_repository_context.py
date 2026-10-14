@@ -257,7 +257,7 @@ class RepositoryContextTests(unittest.TestCase):
                 self.assertIn(prerequisite, entry["prerequisites"])
                 self.assertEqual(
                     entry["procedure"]["path"],
-                    "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
+                    "archive/project_meta/FCU3_TEST_PROCEDURE_2026-09-22.md",
                 )
 
 

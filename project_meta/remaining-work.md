@@ -77,10 +77,6 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Tooling and Environment
 
-- **Remote debug gateway** (Pi Zero 2 W, probe, SWD), owned by ferro-debugger.
-  Whatever implements it rejects flashing or reset unless the armed heartbeat
-  is fresh and disarmed, stops the flight logger before taking the probe, and
-  is never left enabled in a flight configuration.
 - **Reference container.** After the `.devcontainer` relocation, run
   `tools/dev/compose-with-ssh-agent.sh config` and
   `tools/dev/check-rebuilt-container.sh`; confirm the VS Code and Compose entry

@@ -158,8 +158,8 @@ Fix a stale passage in place. A whole spent or superseded document or section:
 
 1. Find what still binds; a decision never superseded, only buried, is in force.
 2. Promote it into the owning chapter first, grouped by topic.
-3. Then archive the remainder verbatim under `project_meta/archive/<date>/`,
-   mirroring its relative path, with a header naming the source file, the date,
+3. Then archive the remainder verbatim under `archive/<date>/`, mirroring its
+   repository-relative path, with a header naming the source file, the date,
    and that binding decisions were promoted out.
 
 Never archive before promoting, never rewrite spent material to look current,
@@ -174,7 +174,7 @@ and never delete it instead of archiving. Verify before and after; a clean
 
 ## Restricted Archive - Explicit User Permission Required
 
-The archives are `project_meta/archive/` and
+The archives are the top-level `archive/` and
 `tools/rtic-app-builder/docs/archive/`. Without explicit user permission, do not
 list, search, open, read, summarize, or copy from anything under them, nor
 recover their content through other tools or cached copies. Archived documents
@@ -190,5 +190,5 @@ tooling, not an agent reading them. `.ignore` excludes the archives from normal
 ripgrep searches; with `-uu`, exclude them by hand:
 
 ```text
-rg --files -uu -g '!project_meta/archive/**' -g '!tools/rtic-app-builder/docs/archive/**' -g '!**/target/**'
+rg --files -uu -g '!archive/**' -g '!tools/rtic-app-builder/docs/archive/**' -g '!**/target/**'
 ```

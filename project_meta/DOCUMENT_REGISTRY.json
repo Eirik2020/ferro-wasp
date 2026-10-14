@@ -17,17 +17,17 @@
       "sha256": "1DB2C24B4595C290589E757D4F0A398944CC20DD9B20BF8AF4CE5DCE2D4C8846"
     },
     {
-      "path": "project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
+      "path": "archive/project_meta/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
       "bytes": 64435,
       "sha256": "E88DC3F56C7020A3D559A576DD9BB6DC201FCB89D1A916E0E71387E850394B10"
     },
     {
-      "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
+      "path": "archive/project_meta/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
       "bytes": 61010,
       "sha256": "ADB7FAF0ABB66907D9316B8CB845EFB4F93CABAAC663861315BD78101EA424C9"
     },
     {
-      "path": "project_meta/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
+      "path": "archive/project_meta/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
       "bytes": 47486,
       "sha256": "0976CD2A8660BD8377F61D8DCBC1EA8AFD30D3C884E483F4798DD992EE869730"
     }
@@ -342,48 +342,6 @@
       "max_bytes": 8192
     },
     {
-      "path": "project_meta/archive/2026-10-14/BENCH_TEST_PLAN.md",
-      "role": "legacy-test-router",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/CHATGPT_PROJECT_CONTEXT.md",
-      "role": "external-upload-context",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/CODEX_ACTIVE_WORK.md",
-      "role": "current-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/CODEX_PROJECT_CONTEXT.md",
-      "role": "agent-project-context",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/CROSS_REPO_SYNC.md",
-      "role": "repository-authority-boundary",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/FLIGHT_TEST_QUICK_COMMANDS.md",
-      "role": "flight-cheatsheet-compatibility-redirect",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/INTERNAL_TODO.md",
-      "role": "development-backlog",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
       "path": "project_meta/PUBLICATION_CHECKLIST.md",
       "role": "publication-workflow",
       "lifecycle": "live",
@@ -418,101 +376,11 @@
       "max_bytes": 4096
     },
     {
-      "path": "project_meta/archive/FCU3_APP_README_2026-10-07.md",
-      "role": "historical-target-test-procedure",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
-      "role": "historical-target-test-procedure",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
       "path": "project_meta/testing/targets/foxeer-f405-v2.md",
       "role": "target-test-procedure",
       "lifecycle": "live",
       "context": "targeted",
       "max_bytes": 16384
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/UNIFIED_IO_DMA_HANDOFF.md",
-      "role": "historical-implementation-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md",
-      "role": "historical-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md",
-      "role": "historical-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-09-24.md",
-      "role": "historical-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
-      "role": "historical-test-evidence",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
-      "role": "historical-target-verification",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
-      "role": "historical-architecture-decisions",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/foxeer_f405v2_ferrowasp_hardware_map.md",
-      "role": "historical-board-research",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/foxeer_f405v2_windows_dfu_cargo_flashing.md",
-      "role": "historical-developer-workflow",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/stm32f405_rtic2_dshot_implementation.md",
-      "role": "historical-implementation-plan",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/stm32f4_rtic2_unified_io_dma_implementation_plan_codex_ready.md",
-      "role": "historical-implementation-plan",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/mdbook/src/dshot.md",
-      "role": "historical-public-chapter",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/2026-10-14/mdbook/src/arming.md",
-      "role": "historical-public-chapter",
-      "lifecycle": "historical",
-      "context": "exclude"
     }
   ],
   "context_budgets": [

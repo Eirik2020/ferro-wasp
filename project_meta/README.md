@@ -20,7 +20,7 @@ Retained historical evidence is located through
 [the evidence index](testing/EVIDENCE_INDEX.md). Moving material to the archive
 does not weaken its evidence status, though historical evidence does not
 describe current defaults. Preserve artifact identities, hashes,
-dates, feature sets, and limitations. `archive/` is restricted; see `AGENTS.md`.
+dates, feature sets, and limitations. The archive is the top-level `archive/`, restricted; see `AGENTS.md`.
 Immutable archives may retain the former `project_docs` path; those strings are
 provenance, not routing.
 
