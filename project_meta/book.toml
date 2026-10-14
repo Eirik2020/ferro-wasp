@@ -1,0 +1,15 @@
+# The internal book: maintainers and agents only, never published. It builds
+# into the gitignored target directory.
+[book]
+title = "FerroWasp Internal"
+language = "en"
+src = "."
+
+[build]
+build-dir = "../target/internal-book"
+create-missing = false
+# Keep README.md as README.html so source links work in the build too.
+use-default-preprocessors = false
+
+[output.html]
+search.enable = true

@@ -53,6 +53,11 @@ FORBIDDEN_TEST_RUN_FIELDS = {
     "sha256",
 }
 AGENT_INSTRUCTION_FILE = "AGENTS.md"
+CLAUDE_INSTRUCTION_FILE = "CLAUDE.md"
+CLAUDE_IMPORT = re.compile(r"^@(\S+)\s*$", re.MULTILINE)
+ALWAYS_LOADED_MAX_LINES = 400
+INTERNAL_BOOK_SUMMARY = PurePosixPath("project_meta/SUMMARY.md")
+SUMMARY_LINK = re.compile(r"\]\(([^)#\s]+\.md)\)")
 AGENT_DISCOVERY_IGNORED_DIRS = {
     ".git",
     ".mypy_cache",
@@ -113,6 +118,62 @@ def _discover_agent_instruction_paths(root: Path) -> set[str]:
         discovered.add(path.relative_to(root).as_posix())
 
     return discovered
+
+
+def validate_always_loaded(root: Path) -> list[str]:
+    """Check that `CLAUDE.md` and its imports fit their shared line budget."""
+
+    claude = root / CLAUDE_INSTRUCTION_FILE
+    if not claude.is_file():
+        return []
+
+    text = claude.read_text(encoding="utf-8")
+    errors: list[str] = []
+    total = len(text.splitlines())
+    for raw_path in CLAUDE_IMPORT.findall(text):
+        path, path_error = _repository_path(root, raw_path)
+        if path_error or path is None or not path.is_file():
+            errors.append(f"{CLAUDE_INSTRUCTION_FILE} import does not resolve: {raw_path}")
+            continue
+        total += len(path.read_text(encoding="utf-8").splitlines())
+
+    if total > ALWAYS_LOADED_MAX_LINES:
+        errors.append(
+            f"always-loaded context is {total} lines, over the "
+            f"{ALWAYS_LOADED_MAX_LINES}-line limit"
+        )
+    return errors
+
+
+def validate_internal_book(root: Path, registry: dict[str, Any]) -> list[str]:
+    """Check that the internal book lists exactly the non-historical documents."""
+
+    summary = root / INTERNAL_BOOK_SUMMARY
+    if not summary.is_file():
+        return []
+
+    book_root = INTERNAL_BOOK_SUMMARY.parent
+    listed = {
+        (book_root / link).as_posix()
+        for link in SUMMARY_LINK.findall(summary.read_text(encoding="utf-8"))
+    }
+    expected = {
+        entry["path"]
+        for entry in registry.get("documents", [])
+        if isinstance(entry, dict)
+        and isinstance(entry.get("path"), str)
+        and entry.get("lifecycle") != "historical"
+        and entry["path"] != INTERNAL_BOOK_SUMMARY.as_posix()
+    }
+    errors = [
+        f"{INTERNAL_BOOK_SUMMARY}: missing chapter {path}"
+        for path in sorted(expected - listed)
+    ]
+    errors.extend(
+        f"{INTERNAL_BOOK_SUMMARY}: lists a historical or unregistered document {path}"
+        for path in sorted(listed - expected)
+    )
+    return errors
 
 
 def _string_list(
@@ -708,6 +769,7 @@ def validate_repository(root: Path) -> list[str]:
         errors.append(f"registry entry is not a discovered project document: {raw_path}")
 
     errors.extend(validate_architecture_decisions(root))
+    errors.extend(validate_internal_book(root, registry))
 
     budget_paths: set[str] = set()
     for index, entry in enumerate(budgets):
@@ -750,6 +812,7 @@ def validate_repository(root: Path) -> list[str]:
         discovered_agent_instructions - budgeted_agent_instructions
     ):
         errors.append(f"unbudgeted agent instruction file: {raw_path}")
+    errors.extend(validate_always_loaded(root))
 
     test_catalog = registry.get("test_catalog")
     has_testing_docs = any(path.startswith("project_meta/testing/") for path in registered)

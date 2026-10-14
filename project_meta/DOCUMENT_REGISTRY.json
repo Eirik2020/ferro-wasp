@@ -17,28 +17,49 @@
       "sha256": "1DB2C24B4595C290589E757D4F0A398944CC20DD9B20BF8AF4CE5DCE2D4C8846"
     },
     {
-      "path": "project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
+      "path": "archive/project_meta/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
       "bytes": 64435,
       "sha256": "E88DC3F56C7020A3D559A576DD9BB6DC201FCB89D1A916E0E71387E850394B10"
     },
     {
-      "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
+      "path": "archive/project_meta/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
       "bytes": 61010,
       "sha256": "ADB7FAF0ABB66907D9316B8CB845EFB4F93CABAAC663861315BD78101EA424C9"
     },
     {
-      "path": "project_meta/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
+      "path": "archive/project_meta/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
       "bytes": 47486,
       "sha256": "0976CD2A8660BD8377F61D8DCBC1EA8AFD30D3C884E483F4798DD992EE869730"
     }
   ],
   "documents": [
     {
-      "path": "project_meta/AGENTS.md",
-      "role": "project-metadata-scope-instructions",
+      "path": "project_meta/governing-requirements.md",
+      "role": "governing-requirements",
       "lifecycle": "durable",
       "context": "default",
-      "max_bytes": 4096
+      "max_bytes": 6144
+    },
+    {
+      "path": "project_meta/remaining-work.md",
+      "role": "remaining-work",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 12000
+    },
+    {
+      "path": "project_meta/dev-environment.md",
+      "role": "dev-container-internals",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 6144
+    },
+    {
+      "path": "project_meta/tooling.md",
+      "role": "repository-tooling",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 6144
     },
     {
       "path": "project_meta/README.md",
@@ -46,6 +67,13 @@
       "lifecycle": "durable",
       "context": "default",
       "max_bytes": 12000
+    },
+    {
+      "path": "project_meta/SUMMARY.md",
+      "role": "internal-book-index",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 6144
     },
     {
       "path": "project_meta/ARCHITECTURE_DECISIONS.md",
@@ -300,6 +328,55 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/decisions/ADR-0036.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0037.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0038.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0039.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0040.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0041.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0042.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
       "path": "project_meta/LOGGING_FORMAT.md",
       "role": "logging-format-requirements",
       "lifecycle": "durable",
@@ -307,55 +384,11 @@
       "max_bytes": 8192
     },
     {
-      "path": "project_meta/BENCH_TEST_PLAN.md",
-      "role": "legacy-test-router",
+      "path": "project_meta/releasing.md",
+      "role": "release-procedure",
       "lifecycle": "durable",
       "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/CHATGPT_PROJECT_CONTEXT.md",
-      "role": "external-upload-context",
-      "lifecycle": "live",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/CODEX_ACTIVE_WORK.md",
-      "role": "current-work-handoff",
-      "lifecycle": "live",
-      "context": "targeted",
-      "max_bytes": 12000,
-      "max_current_state_headings": 1
-    },
-    {
-      "path": "project_meta/CODEX_PROJECT_CONTEXT.md",
-      "role": "agent-project-context",
-      "lifecycle": "live",
-      "context": "targeted"
-    },
-    {
-      "path": "project_meta/CROSS_REPO_SYNC.md",
-      "role": "repository-authority-boundary",
-      "lifecycle": "durable",
-      "context": "targeted"
-    },
-    {
-      "path": "project_meta/FLIGHT_TEST_QUICK_COMMANDS.md",
-      "role": "flight-cheatsheet-compatibility-redirect",
-      "lifecycle": "live",
-      "context": "targeted"
-    },
-    {
-      "path": "project_meta/INTERNAL_TODO.md",
-      "role": "development-backlog",
-      "lifecycle": "live",
-      "context": "targeted"
-    },
-    {
-      "path": "project_meta/PUBLICATION_CHECKLIST.md",
-      "role": "publication-workflow",
-      "lifecycle": "live",
-      "context": "targeted"
+      "max_bytes": 6144
     },
     {
       "path": "project_meta/testing/README.md",
@@ -386,123 +419,17 @@
       "max_bytes": 4096
     },
     {
-      "path": "project_meta/archive/FCU3_APP_README_2026-10-07.md",
-      "role": "historical-target-test-procedure",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
-      "role": "historical-target-test-procedure",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
       "path": "project_meta/testing/targets/foxeer-f405-v2.md",
       "role": "target-test-procedure",
       "lifecycle": "live",
       "context": "targeted",
       "max_bytes": 16384
-    },
-    {
-      "path": "project_meta/UNIFIED_IO_DMA_HANDOFF.md",
-      "role": "historical-implementation-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_THROUGH_2026-07-22.md",
-      "role": "historical-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-07-27.md",
-      "role": "historical-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/CODEX_ACTIVE_WORK_HISTORY_2026-09-24.md",
-      "role": "historical-work-handoff",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/BENCH_TEST_PLAN_FULL_BASELINE_2026-07-27.md",
-      "role": "historical-test-evidence",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md",
-      "role": "historical-target-verification",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
-      "role": "historical-architecture-decisions",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/foxeer_f405v2_ferrowasp_hardware_map.md",
-      "role": "historical-board-research",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/foxeer_f405v2_windows_dfu_cargo_flashing.md",
-      "role": "historical-developer-workflow",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/stm32f405_rtic2_dshot_implementation.md",
-      "role": "historical-implementation-plan",
-      "lifecycle": "historical",
-      "context": "exclude"
-    },
-    {
-      "path": "project_meta/archive/stm32f4_rtic2_unified_io_dma_implementation_plan_codex_ready.md",
-      "role": "historical-implementation-plan",
-      "lifecycle": "historical",
-      "context": "exclude"
     }
   ],
   "context_budgets": [
     {
       "path": "AGENTS.md",
-      "max_bytes": 5120
-    },
-    {
-      "path": "firmware/AGENTS.md",
-      "max_bytes": 5120
-    },
-    {
-      "path": "firmware/foxeer-f405-v2/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "mdbook/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "tools/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "tools/ferro-configurator/AGENTS.md",
-      "max_bytes": 4096
-    },
-    {
-      "path": "tools/rtic-app-builder/AGENTS.md",
-      "max_bytes": 5120
+      "max_bytes": 12288
     },
     {
       "path": "tools/rtic-app-builder/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md",

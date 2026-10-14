@@ -61,8 +61,7 @@ stop before publishing an arming-abort reason.
 
 ## Telemetry-Qualified DShot Sequence
 
-Foxeer uses telemetry-qualified DShot arming, and the obsolete FCU3 image used
-the same sequence:
+Both flight boards use telemetry-qualified DShot arming:
 
 1. Safety Master enters `Arming`, grants the temporary permit, and asks
    Actuator Output to prepare the ESCs.
@@ -95,26 +94,10 @@ After applying ESC power, wait up to 4 seconds for it to resume while disarmed, 
 complete a fresh switch-low/low-to-high arm sequence.
 
 The ESC manager does not decide whether RPM is sufficient and cannot change
-the safety state. It only owns UART parsing, request rotation, response
-association, timeouts, and publication of observations. The safety-owned
-actuator path owns the qualification decision.
-
-A CRC-valid UART frame can complete while its operation is still queued. The
-manager may buffer that frame, but it remains quarantined and is published only
-after the exact sequence/output frame-start acknowledgement arrives from the
-DShot service. Association timeouts stop telemetry so late traffic cannot be
-relabeled; it resumes only while disarmed, after a quiet window (500 ms,
-doubling to at most 4 s while retries bring nothing back) in
-which the DShot service has dropped any request the manager gave up on, and
-with every stored sample dropped, so qualification still needs fresh eRPM. UART, parser, bounded-queue, and timeout failures
-cannot grant authority; when they prevent required pre-arm samples,
-qualification fails closed. Telemetry loss after `Armed` is currently
-observational and does not itself disarm.
-
-ESC-manager identity is physical-output identity: output 1 is logical
-M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right, and output
-4 is M2/front-right. The default DShot image runs this PA10 legacy telemetry
-path.
+the safety state; how it associates telemetry with an output, and how it
+recovers after a timeout, is in [DShot](dshot.md#esc-telemetry). Its faults can
+only withhold samples, so qualification fails closed. Telemetry loss after
+`Armed` is currently observational and does not itself disarm.
 
 ```mermaid
 sequenceDiagram
@@ -130,7 +113,7 @@ sequenceDiagram
     AO->>ESC: guarded idle frames, value 112
     EM->>AO: bounded telemetry request
     AO-->>EM: acknowledgement after requested frame starts
-    ESC->>EM: PA10 legacy UART response
+    ESC->>EM: legacy UART telemetry response
     EM->>AO: timestamped physical-output observation
     AO->>AO: require 3 fresh in-range samples per motor
     AO->>SM: preparation complete
@@ -192,22 +175,3 @@ Arming failure selects stop before reporting failure.
 Disarm clears the armed state and temporary permit.
 Telemetry and ESC-manager faults cannot grant motor authority.
 ```
-
-## Recorded Target Checks
-
-Powered props-off evidence covers:
-
-- three successful four-motor DShot idle qualifications at approximately
-  6,500-7,100 eRPM;
-- an injected physical-output-1 / logical-M4 zero-eRPM condition that failed
-  after 1.2 seconds, named the unproven output, selected sustained stop, and
-  never emitted `SYSTEM ARMED`;
-- active-command RC loss selecting stop, arm-high recovery remaining disarmed,
-  and a fresh low-to-high transition restoring the normal guarded sequence;
-- explicit disarm selecting four stops;
-- power interruption and reflashing while arm remained high stopping the
-  motors and not automatically rearming after reboot, by operator observation.
-
-RTT records state, requested output, telemetry, and backend counters but does
-not measure the electrical stop latency. DShot pulse timing/jitter and precise
-stop latency remain instrumented checkpoints.

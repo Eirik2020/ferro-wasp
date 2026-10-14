@@ -1,234 +1,77 @@
-# RTT Debug Tools
+# Bench and Analysis Tools
 
-The current bench workflow includes Python tools for flashing the STM32F405
-target, decoding `defmt-rtt` output through `probe-rs`, logging terminal output,
-and live-viewing IMU data.
-
-These tools are for bring-up and bench analysis. They are not safety authority,
-and they do not command motors.
+These Python tools flash a board over SWD, decode its `defmt` RTT output
+through `probe-rs`, keep a log of it, read the onboard log store, and plot or
+analyze what they collect.
+They observe; they are not safety authority and never command motors. The
+flight log is the onboard blackbox, downloaded with FerroConfigurator; RTT is
+for the bench.
 
 ## Terminal Embed
 
-Run from the repository root:
-
-```powershell
-python tools\terminal_embed.py
-```
-
-Foxeer F405 V2, the golden flight target, is the default. Name a board
-explicitly to be sure which one is flashed:
+From the repository root:
 
 ```powershell
 python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 ```
 
-The Foxeer board support leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
-must be unpowered at the ESC side; USB DFU remains the recovery path.
-
-Release and feature-selected images use the same logger:
+Foxeer F405 V2 is the only board it knows, and the default. It builds the image
+quietly, showing compiler output only if the build fails, then runs
+`probe-rs run` against the STM32F405RG over SWD and prints the decoded lines.
+Feature-selected images use the same command:
 
 ```powershell
-python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
+python tools\terminal_embed.py --release --locked --features "bench_actuator_validation bench_equal_motors"
 ```
 
-The script performs a quiet firmware build, runs:
+Foxeer's board support leaves PA13/SWDIO and PA14/SWCLK untouched. Make the
+first SWD connection with the ESCs unpowered; USB DFU remains the recovery path.
+
+Every printed line is also written, and flushed at once, to
+`logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log`, so an interrupted run keeps
+everything received. Before flashing, the log records the ELF's path and
+SHA-256, so a retained log names its exact image. `--log-file` chooses another
+path. Prefer this tool over piping `cargo embed` into a file, whose interactive
+output carries cursor and colour control sequences.
+
+The tool prints milestones so a slow probe is not mistaken for a hang:
 
 ```text
-probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps
+HOST: === FLASH STARTED: connecting, erasing, and programming ===
+HOST: === FLASH ACTIVE: erase/program transfer observed ===
+HOST: === FLASH PROGRAMMED: waiting for firmware boot/RTT ===
+HOST: === FLASH SUCCEEDED: firmware boot and RTT observed ===
 ```
 
-and prints decoded `defmt` RTT lines in the terminal.
+Only `FLASH SUCCEEDED` means the image booted far enough to produce RTT. A
+failure prints `FLASH FAILED` and exits nonzero.
 
-Successful build warnings are hidden to keep the terminal readable. If the build
-fails, compiler output is shown.
+`--foxeer-smoke` is a self-terminating first check of a new SWD connection. It
+adds `imu_transport_rtt` and `smoke_actuator_inhibit`, so the image cannot
+drive motors, listens for 14 seconds after boot, checks the boot, RTT, IMU, and
+data-ready evidence, and prints PASS or FAIL. `--probe-speed-khz` and
+`--connect-under-reset` help a marginal SWD connection. Anything after `--`
+runs instead of the default `probe-rs` command, with the same logging.
 
-Every line printed by the tool is also written to:
+If nothing appears: check that `probe-rs` sees the probe, that no other
+debugger holds it, and that the image was built with `defmt-rtt`.
 
-```text
-logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log
-```
+## Heartbeat
 
-Each line is flushed immediately, so an interrupted run retains all output
-received up to that point. Prefer this wrapper over piping cargo-embed through
-`Tee-Object`; cargo-embed's interactive terminal stream may include cursor and
-ANSI control sequences rather than a clean line-oriented log. Default
-build-and-run mode records the firmware ELF path and SHA-256 before flashing,
-so a retained target log identifies its exact artifact.
+Every two seconds the heartbeat logs the isolated stale IMU ticks it
+tolerated, storage identity and capacity, and blackbox pages written, records
+dropped, write faults, and the log-rate divisor. The `imu_transport_rtt`
+feature adds raw gyro and data-ready interrupt counts, and
+`imu_orientation_rtt` an orientation snapshot; [IMU](imu.md) describes them.
 
-Use `--log-file` to choose a specific output path:
+## Blackbox Frames over RTT
+
+The `blackbox_defmt` feature emits one compact `BB2` frame per control tick
+over the same RTT stream, which `defmt-rtt` owns:
 
 ```powershell
-python tools\terminal_embed.py --log-file logs\bench_rtt.log
+python tools\terminal_embed.py --release --locked --features blackbox_defmt
 ```
-
-## Remote Pi Probe
-
-The bench setup can also use a Raspberry Pi as a network-connected SWD/RTT
-gateway. In the current workshop setup:
-
-| Role | Value |
-|---|---|
-| Pi host | configured in FerroDebugger or local config |
-| probe-rs server | configured in FerroDebugger or local config |
-| probe selector | `0:0:/dev/spidev0.0` |
-| target chip | `STM32F405RG` |
-
-Most helper scripts also accept a named link:
-
-| Link | Use When | Host Choice |
-|---|---|---|
-| `Cable` | Laptop stays on normal internet Wi-Fi and is cabled to the Pi | link details live in FerroDebugger/local config |
-| `Mobile` | Laptop and Pi are both on the configured mobile router | SSH alias from FerroDebugger config |
-| `Zero` | Raspberry Pi Zero 2 W gateway on bench Wi-Fi | link details live in FerroDebugger/local config |
-| `ZeroMobile` | Zero 2 W gateway on the mobile router | link details live in FerroDebugger/local config |
-
-Examples:
-
-```powershell
-.\tools\remote_info.ps1 -Link Cable
-.\tools\remote_info.ps1 -Link Mobile
-.\tools\remote_info.ps1 -Link Zero
-.\tools\remote_info.ps1 -Link ZeroMobile
-.\tools\pi_log_fetch.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Mobile
-python tools\imu_live_view.py --remote --link cable
-python tools\imu_live_view.py --remote --link mobile
-python tools\imu_live_view.py --remote --link zero
-python tools\imu_live_view.py --remote --link zeromobile
-```
-
-Start `probe-rs serve` on the Pi before using the Windows-side helpers. The
-server must have at least one configured user/token; otherwise remote clients
-connect and then fail authentication.
-
-From the repository root on Windows:
-
-```powershell
-.\tools\remote_info.ps1 -Link Cable
-.\tools\remote_run.ps1 -Link Cable -Build
-.\tools\remote_attach.ps1 -Link Cable
-.\tools\remote_attach_log.ps1 -Link Cable
-.\tools\pi_log_start.ps1 -Link Cable
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-```
-
-Command meaning:
-
-| Command | Purpose |
-|---|---|
-| `remote_info.ps1` | Checks the remote SWD connection through the Pi. It does not flash or reset the FCU. |
-| `remote_run.ps1` | Optionally builds, flashes the ELF, resets/runs the STM32, and streams RTT/defmt output. Pass `-Features blackbox_defmt` to build the 400 Hz compact blackbox frames. |
-| `remote_attach.ps1` | Attaches to already-running firmware and streams RTT/defmt output without reflashing. |
-| `remote_attach_log.ps1` | Attach-only RTT/defmt session that also writes full terminal output to a log file. |
-| `pi_log_start.ps1` | Starts a detached attach logger on the Pi so logging survives SSH disconnects. |
-| `pi_log_stop.ps1` | Stops the detached Pi-side logger. |
-| `pi_log_fetch.ps1` | Copies the latest Pi-side log into this repository under `logs\remote_probe`. |
-| `pi_elf_sync.ps1` | Copies the current local ELF to the Pi path used by `pi_log_start.ps1` for `defmt` decoding. |
-
-The helpers default to the current bench host, token, probe path, and chip. Use
-environment variables to avoid putting a shared token in command history:
-
-```powershell
-$env:FERROWASP_PROBE_HOST = "ws://your-probe-host.local:3000"
-$env:FERROWASP_PROBE_TOKEN = "your-token"
-```
-
-For onboard use, install `probe-rs serve` as a boot-starting `systemd` service
-on the Pi:
-
-```powershell
-.\tools\install_probe_rs_service.ps1 -Token "your-token"
-```
-
-The service starts after network-online and restarts if it exits. Useful Pi-side
-checks:
-
-```powershell
-ssh your-pi-host 'systemctl status probe-rs-serve --no-pager'
-ssh your-pi-host 'ss -ltnp | grep probe-rs'
-ssh your-pi-host 'sudo systemctl stop probe-rs-serve'
-```
-
-`remote_attach.ps1` needs a local ELF matching the firmware running on the FCU
-so `defmt` decoding uses the correct metadata.
-
-By default, `remote_attach_log.ps1` writes logs under:
-
-```text
-logs\remote_probe\YYYYMMDD_HHMMSS_attach.log
-```
-
-Choose a specific log path with:
-
-```powershell
-.\tools\remote_attach_log.ps1 -Link Cable -LogFile logs\bench_attach.log
-```
-
-For onboard or disconnected logging, start the logger on the Pi, disconnect as
-needed, then reconnect later to stop and fetch the log:
-
-```powershell
-.\tools\pi_log_start.ps1 -Link Cable
-# disconnect/reconnect later
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-```
-
-The Pi-side logger writes under:
-
-```text
-/home/pi/logs/ferrowasp-rtt
-```
-
-Fetched logs are copied into:
-
-```text
-logs\remote_probe
-```
-
-## 400 Hz Blackbox Frames
-
-The current firmware uses `defmt-rtt` 1.2. That backend owns the SEGGER RTT
-control block and one RTT up-channel, so the MVP logger does not link
-`rtt-target` beside it. Instead, blackbox data is emitted as compact fixed-point
-`defmt` frames over the existing RTT stream.
-
-Build and flash the blackbox-enabled firmware:
-
-```powershell
-.\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
-```
-
-For the Foxeer F405 V2 over its retrofitted local SWD connection:
-
-```powershell
-python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features blackbox_defmt
-```
-
-Begin with ESC power disconnected and hold the board stationary for at least
-ten seconds. The offline analyzer's `Sequence/timing` section should estimate
-about `1000 Hz` for the EXTI-driven Foxeer IMU, with contiguous IMU sequence
-deltas normally alternating between `2` and `3` at the unchanged 400 Hz control
-rate. Repeated IMU samples should be zero. Missing BB2 frames indicate RTT
-transport loss and are reported independently from IMU progress.
-
-For a clean motor-vibration check that disables the PID/mixer and commands all
-four motors equally through the normal actuator-output task, build with:
-
-```powershell
-.\tools\remote_run.ps1 -Link Cable -Build -Features "blackbox_defmt bench_equal_motors"
-```
-
-The craft must still be armed normally. This mode caps requested throttle to
-`250` PWM-style units, emits `BB2` frames with PID set to zero, and logs motors
-as `[throttle; 4]`. Use propellers removed only. If any motor or ESC smokes,
-smells hot, jitters abnormally, or heats rapidly, stop the test and inspect the
-hardware before running again.
-
-The 400 Hz control loop emits `BB2` frames. Disarmed frames still include raw
-gyro, filtered gyro, command, throttle, and freshness flags; PID and motor
-fields are zeroed until the craft is armed.
 
 ```text
 BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
@@ -236,170 +79,130 @@ BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0
 
 | Field | Meaning |
 |---|---|
-| `seq` | Control-rate sample sequence |
-| `imu` | IMU sample sequence used by this control update |
+| `seq` | Control-tick sequence |
+| `imu` | IMU sample sequence used by this tick |
 | `flags` | Bit 0 armed, bit 1 IMU fresh |
-| `raw10` | Unfiltered roll, pitch, yaw gyro rates in 0.1 deg/s |
-| `gyro10` | Filtered roll, pitch, yaw gyro rates in 0.1 deg/s |
+| `raw10` | Unfiltered roll, pitch, yaw rates in 0.1 deg/s |
+| `gyro10` | Filtered roll, pitch, yaw rates in 0.1 deg/s, as the PID sees them |
 | `cmd10` | Commanded roll, pitch, yaw rates in 0.1 deg/s |
-| `pid` | Total PID output per axis in controller output units |
+| `pid` | Total PID output per axis |
 | `thr` | Throttle setpoint in PWM-style command units |
 | `motors` | Mixed motor commands in PWM-style command units |
 
-Future work: replace the RTT backend deliberately so channel 0 can carry
-`defmt` and channel 1 can carry raw binary blackbox samples.
+Disarmed, PID and motor fields are zero. With `bench_equal_motors`, PID is zero
+and every motor carries the capped throttle. A gap in `seq` is RTT transport
+loss, reported separately from IMU progress.
 
-The live viewer auto-detects `BB1` and `BB2` frames:
+## Blackbox Analyzer
 
-```powershell
-python tools\imu_live_view.py --remote --link cable
-```
-
-When blackbox frames appear, it shows control-loop plots for gyro-vs-command
-rates, PID output, throttle, and motors.
-The viewer suppresses raw RTT echo by default to avoid lag with 400 Hz frames.
-Use `--echo-rtt` only when raw terminal output is more important than smooth
-plotting. If the PC still struggles, lower the UI refresh rate:
-
-```powershell
-python tools\imu_live_view.py --remote --link cable --ui-hz 15
-```
-
-For offline analysis after a Pi-side recording:
-
-If you rebuilt/flashed from the PC and plan to log on the Pi, sync the matching
-ELF first so `defmt` decoding uses the right metadata:
-
-```powershell
-.\tools\pi_elf_sync.ps1 -Link Cable
-```
-
-```powershell
-.\tools\pi_log_start.ps1 -Link Cable -Restart
-# run the bench test
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
-```
-
-After a local `terminal_embed.py` capture, the analyzer selects the newest RTT
-log automatically:
+With no argument, the analyzer reads the newest RTT log and measures the
+control rate from it:
 
 ```powershell
 python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
 ```
 
-For deliberate hand-motion/swing tests, the default `--mode auto` should classify
-large low-frequency gyro movement as motion. Use `--mode rest` for stationary
-noise-floor or motor-vibration checks where large filtered gyro standard
-deviation should be treated as noise:
+`--mode auto`, the default, classifies large low-frequency movement as motion,
+for hand-motion tests. `--mode rest` treats all filtered-gyro variation as
+noise, for stationary noise-floor and props-off motor-vibration checks. For a
+hand swing, trim the pickup and put-down:
 
 ```powershell
-python tools\blackbox_analyzer.py --mode rest
+python tools\blackbox_analyzer.py --mode swing --trim-start 6 --trim-end 6
 ```
 
-For a hand-swing recording, trim the pickup and place-down sections by time:
-
-```powershell
-python tools\blackbox_analyzer.py --mode swing --trim-start 6 --trim-end 6 --csv logs\remote_probe\swing_trimmed.csv
-```
-
-With no log argument, the analyzer uses the newest `.log` in `logs\remote_probe`
-or `logs\terminal_embed`. You can also pass a specific fetched log:
-
-```powershell
-python tools\blackbox_analyzer.py logs\remote_probe\pi_20260710_193000_attach.log --csv logs\remote_probe\swing_test.csv
-```
-
-## Heartbeat
-
-The default firmware heartbeat logs once at startup and then alternates the
-red/green debug LEDs about once per second as a visible liveness indicator.
-High-rate IMU and control-loop observation is handled by BB2 frames when the
-`blackbox_defmt` feature is enabled.
+Pass a log path to analyze a specific capture.
 
 ## IMU Live View
-
-Run:
 
 ```powershell
 python tools\imu_live_view.py
 ```
 
-The viewer launches `terminal_embed.py` or attaches through the remote probe
-helpers. With `blackbox_defmt` firmware it parses BB2 frames and shows:
+The viewer runs `terminal_embed.py` and plots what it reads. From `BB2` frames
+it shows measured against commanded rates, PID output, throttle, and motors. It
+does not echo every RTT line, which would make the plot lag; `--echo-rtt`
+turns echo on, and `--ui-hz 15` lowers the redraw rate on a slow PC.
 
-- measured roll/pitch/yaw gyro-rate history,
-- commanded roll/pitch/yaw rates,
-- PID output, throttle, and motor commands.
-
-Older heartbeat-IMU firmware can still use the attitude-view options. The
-default attitude mode seeds roll and pitch once from accelerometer gravity, then
-integrates gyro rates only:
-
-```powershell
-python tools\imu_live_view.py --attitude gyro
-```
-
-For a bench view that continuously nudges roll and pitch back toward gravity:
-
-```powershell
-python tools\imu_live_view.py --attitude accel
-```
-
-To attach through the remote Pi probe-rs server and live-view already-running
-firmware:
-
-```powershell
-python tools\imu_live_view.py --remote --link cable
-```
-
-The remote viewer defaults to the cable link, `0:0:/dev/spidev0.0`, and
-`STM32F405RG`. It honors the same `FERROWASP_PROBE_HOST` and
-`FERROWASP_PROBE_TOKEN` environment variables as the PowerShell helpers when
-`--link auto` is used. Pass `--link mobile` on the mobile-router network.
-
-Yaw remains gyro-only in both modes and will drift.
+From heartbeat IMU lines it can also draw an attitude estimate. `--attitude
+gyro`, the default, seeds roll and pitch from gravity once and then integrates
+gyro rates; `--attitude accel` keeps pulling roll and pitch back toward
+gravity. Yaw is gyro-only in both and drifts. `accel_live_plot.py` is an older
+name for the same viewer.
 
 ## IMU Noise Analyzer
 
-The noise analyzer gives a quick bench answer to:
-
-```text
-Is the filtered gyro signal quiet enough for the PID to use?
-```
-
-Analyze the newest RTT log:
+A quick bench answer to whether the filtered gyro is quiet enough for the PID,
+with the board still:
 
 ```powershell
 python tools\imu_noise_analyzer.py --latest
-```
-
-Or capture a still FCU/IMU run directly:
-
-```powershell
 python tools\imu_noise_analyzer.py --capture 30
 ```
 
-The analyzer:
+It remaps raw gyro axes into the PID's roll, pitch, and yaw convention,
+compares them with the filtered rates, and reports standard deviation,
+peak-to-peak noise, attenuation, drift, and a rough quiet, watch, or noisy
+verdict. It is a rest-noise screen, not a substitute for props-off motor checks
+or vibration analysis.
 
-- parses BB2 or older heartbeat IMU lines,
-- remaps raw gyro sensor axes into the current PID roll/pitch/yaw convention,
-- compares raw gyro noise against filtered control-axis rates,
-- reports standard deviation, peak-to-peak noise, attenuation, drift, and a
-  rough quiet/watch/noisy verdict.
+## Onboard Storage from Python
 
-Use this as a rest-noise screen only. It does not replace props-off motor output
-checks, motor-temperature checks, or later vibration/frequency analysis.
+FerroConfigurator is the normal way to read configuration and download logs.
+`tools/ferrowasp_storage.py` is the lower-level Python client for the same USB
+storage commands, kept as a development reference; it needs `pyserial`.
+
+```powershell
+python tools\ferrowasp_storage.py --port COM7 info
+python tools\ferrowasp_storage.py --port COM7 flights
+python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
+```
+
+`read` fetches only the selected flight's page range; `--resume` continues an
+interrupted download after validating every page already on disk against the
+flight ID, page sequence, and CRC. `erase --confirm` erases the log region
+only, and `test --confirm` exercises only the reserved scratch sector. Every
+write is refused while armed, and maintenance in progress stops if arming
+begins. Record what `info` reports for the flash; the capacity code for 16 MiB
+is `18`.
+
+The analyzer reads `.fwbb` files directly, rejects invalid or truncated pages,
+and reports what it kept. Select one flight so flight boundaries are not
+counted as gaps:
+
+```powershell
+python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --mode auto
+```
+
+## ULog Reference Converter
+
+FerroConfigurator's `convert` command is the normal path.
+`tools/fwbb_to_ulog.py` is its Python reference implementation and produces the
+same file: one CRC-validated flight as the `ferrowasp_rate_control` topic, with
+timestamps from the first selected sample and sequence gaps as ULog dropouts.
+It never combines flights.
+
+```powershell
+python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
+```
+
+## Flight Reports
+
+`tools/flight_report.py` writes a Markdown summary and plots of
+setpoint against measured rate, tracking error, PID output, motor output, and
+the worst tracking-error events, under `logs\terminal_embed\reports\`:
+
+```powershell
+python tools\flight_report.py --trim-start 3 --trim-end 3
+```
+
+With no source it uses the newest log. It assumes a 400 Hz control rate, so on
+a faster loop pass the real rate with `--sample-rate`.
 
 ## Safety Notes
 
-- Run motor/axis checks with props removed.
-- `remote_run.ps1` flashes, resets, and starts firmware. Keep ESC power in the
-  intended bench-safe state before using it.
-- Do not leave `probe-rs serve` exposed on an untrusted network; the remote
-  server provides debug-level control of the FCU.
-- Treat BB2 `raw10` as unfiltered control-axis gyro data and `gyro10` as
-  PID-convention measured data.
-- The Python tools are observation tools only; motor authority must remain in
-  the firmware safety/actuator-output path.
+- `terminal_embed.py` flashes, resets, and starts firmware. Put the ESCs in the
+  intended bench-safe power state first.
+- Run every motor or axis check with propellers removed.
+- Motor authority stays in the firmware's safety and actuator-output path;
+  none of these tools can command a motor.

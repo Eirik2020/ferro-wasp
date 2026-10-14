@@ -1,6 +1,6 @@
-# UART
+# UART RX
 
-UART support is divided into two layers:
+UART receive support is divided into two layers:
 
 - **HAL layer**
 - **Software layer**
@@ -85,9 +85,8 @@ The parser task continuously pulls buffers from the filled queue until it is emp
 
 The hardware task takes buffers from the free queue and gives them to the DMA transfer. If the free queue is empty when the DMA transfer requests a new buffer, the hardware task returns an error.
 
-For the UART4 MSP/OSD, USART2 SBUS, and FCU3 PA10 / USART1 ESC-telemetry paths,
-the IRQ owner adds one portable ownership step after detaching the static DMA
-buffer. USART1 uses DMA2 Stream 5 Channel 4:
+On every bound port, the IRQ owner adds one portable ownership step after
+detaching the static DMA buffer:
 
 ```text
 filled DMA buffer
@@ -100,23 +99,13 @@ filled DMA buffer
 `RxChunk` carries the IDLE/full completion cause, generation, timestamp, and
 continuity markers. Queue overflow is reported through a separate
 `DiscontinuityReader`; protocol framing and DMA chunk boundaries remain
-independent. USART2 wakes one persistent async SBUS parser. Its safety path
+independent. The RC port wakes one persistent async RC parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.
 
-In the flight DShot image, USART1 feeds the low-priority ESC manager's
-ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
-samples, and timeouts. UART transport or parser state cannot command motors:
-telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator
-service. A CRC-valid frame that arrives while its request is still queued can
-be buffered, but it remains quarantined and is published only after the manager
-receives the matching sequence/output acknowledgement for a frame that
-actually started.
-
-Transport, parser, queue, and timeout faults cannot grant actuator authority.
-If they withhold the fresh observations required during guarded idle, pre-arm
-qualification times out and returns all four outputs to stop. Telemetry loss
-after arming is currently observational and does not itself request disarm.
+The ESC telemetry port feeds the low-priority ESC manager's ten-byte BLHeli
+parser; [DShot](./dshot.md#esc-telemetry) describes how it pairs replies with
+motors and why its faults can only withhold arming, never grant authority.
 
 ---
 
