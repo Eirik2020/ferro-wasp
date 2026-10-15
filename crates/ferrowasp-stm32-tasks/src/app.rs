@@ -291,6 +291,9 @@ pub fn handle_msp_packet(
 /// its `main.rs` reads from the board's profiles, the MSPv2 identity, and the
 /// helpers that resolve boot bindings, arming health, and motor numbering.
 /// The application's `lib.rs` adds only its chip backend and board types.
+// `internal` re-exports the application crate the macro expands in, not this
+// one, so `crate` is meant.
+#[allow(clippy::crate_in_macro_def)]
 #[macro_export]
 macro_rules! flight_app_facade {
     (

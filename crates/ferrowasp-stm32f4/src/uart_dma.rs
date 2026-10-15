@@ -332,6 +332,13 @@ pub type UartRxIrq<StreamT, UsartT, const CHANNEL: u8> =
 pub type UartTxSide<StreamT, UsartT, const CHANNEL: u8> =
     UartTxDmaSide<UartTxDma<StreamT, UsartT, CHANNEL>>;
 
+/// A started port that can transmit: the receive side when it is bound, and
+/// the transmit side.
+pub type StartedRxTxPort<RxStreamT, TxStreamT, UsartT, const RX_CHANNEL: u8, const TX_CHANNEL: u8> = (
+    Option<UartRxPort<UartRxIrq<RxStreamT, UsartT, RX_CHANNEL>>>,
+    UartTxPort<UartTxSide<TxStreamT, UsartT, TX_CHANNEL>>,
+);
+
 /// Start a port that can transmit, if `bindings` gives it a function: the
 /// receive side always, and the transmit side when the bound protocol
 /// transmits. The pins arrive already in their alternate function, so the
@@ -357,10 +364,7 @@ pub fn start_rx_tx_port<
     storage: UartRxTxPortStorage,
     bindings: &ResolvedBindings,
     functions: &mut SerialFunctionSlots<SerialPortEndpoint>,
-) -> (
-    Option<UartRxPort<UartRxIrq<RxStreamT, UsartT, RX_CHANNEL>>>,
-    UartTxPort<UartTxSide<TxStreamT, UsartT, TX_CHANNEL>>,
-)
+) -> StartedRxTxPort<RxStreamT, TxStreamT, UsartT, RX_CHANNEL, TX_CHANNEL>
 where
     UsartT: serial::Instance + serial::CommonPins,
     TxPin: Into<<UsartT as serial::CommonPins>::Tx<PushPull>>,

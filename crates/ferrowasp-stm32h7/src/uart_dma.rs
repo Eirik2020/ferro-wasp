@@ -210,6 +210,13 @@ pub type UartRxIrq<S, U> = UartRxIrqSide<UartRxDma<S, U>>;
 /// The transmit side of a started port.
 pub type UartTxSide<S, U> = UartTxDmaSide<UartTxDma<S, U>>;
 
+/// A started port that can transmit: the receive side when it is bound, and
+/// the transmit side.
+pub type StartedRxTxPort<RxS, TxS, U> = (
+    Option<UartRxPort<UartRxIrq<RxS, U>>>,
+    UartTxPort<UartTxSide<TxS, U>>,
+);
+
 /// Start a port that can transmit, if `bindings` gives it a function: the
 /// receive side always, and the transmit side when the bound protocol
 /// transmits. `open` configures the board's UART, on its own pins and
@@ -226,10 +233,7 @@ pub fn start_rx_tx_port<U, RxS, TxS>(
     storage: UartRxTxPortStorage,
     bindings: &ResolvedBindings,
     functions: &mut SerialFunctionSlots<SerialPortEndpoint>,
-) -> (
-    Option<UartRxPort<UartRxIrq<RxS, U>>>,
-    UartTxPort<UartTxSide<TxS, U>>,
-)
+) -> StartedRxTxPort<RxS, TxS, U>
 where
     U: UartDmaPeripheral,
     RxS: DoubleBufferedStream + Stream<Config = DmaConfig> + StreamErrors,

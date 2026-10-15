@@ -195,7 +195,7 @@ jobs:
           unexpected="$(
             printf '%s\n' "$unsafe_matches" |
               rg --invert-match \
-                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]+unsafe impl (PeriAddress|DMASet)|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]dma_endpoints.rs:[0-9]+:(unsafe impl(<[^>]*>)? TargetAddress<|[[:space:]]+let dma = unsafe \{ &\*I::ptr\(\) \};$))' ||
+                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]*unsafe impl(<[^>]*>)? (PeriAddress|DMASet)|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]dma_endpoints.rs:[0-9]+:(unsafe impl(<[^>]*>)? TargetAddress<|[[:space:]]+let dma = unsafe \{ &\*I::ptr\(\) \};$))' ||
               true
           )"
 
