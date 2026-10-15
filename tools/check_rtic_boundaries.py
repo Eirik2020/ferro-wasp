@@ -122,6 +122,10 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
         ]
         signature = text[match.start() : min(ends)] if ends else ""
         name = match.group(1)
+        # A FerroForge group member, `fn name;`, has no signature of its own:
+        # the group supplies it.
+        if "(" not in signature:
+            continue
         if f"{name}::Context" not in signature:
             errors.append(
                 f"{label}:{_line_number(text, match.start())}: "

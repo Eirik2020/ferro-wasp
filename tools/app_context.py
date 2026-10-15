@@ -18,6 +18,11 @@ FUNCTION_DECLARATION = re.compile(
     r"^ {4}(?:(?:pub(?:\([^)]*\))?|async|const|unsafe)\s+)*fn\s+"
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
 )
+# A FerroForge group member, declared inside its `#[group(..)] mod` with no
+# signature: `async fn spi1_poll;`.
+GROUP_MEMBER_DECLARATION = re.compile(
+    r"^ {8}(?:async\s+)?fn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;"
+)
 # `#[rtic::app] mod app {`, or `ferroforge::app! {`, which expands into one.
 APP_MODULE = re.compile(r"^(?:mod app|ferroforge::app!)\s*\{")
 ATTRIBUTE_KIND = re.compile(r"#\[\s*(task|init|idle)\b")
@@ -330,11 +335,17 @@ def discover_symbols_from_text(text: str) -> tuple[list[RustSymbol], list[Resour
 
     declarations: list[tuple[int, int, str]] = []
     for index in range(module_index + 1, len(lines)):
-        match = FUNCTION_DECLARATION.match(lines[index].rstrip("\r\n"))
-        if match is None:
+        line = lines[index].rstrip("\r\n")
+        match = FUNCTION_DECLARATION.match(line)
+        if match is not None:
+            start_index = _attribute_start(lines, index, module_index)
+            declarations.append((start_index, index, match.group("name")))
             continue
-        start_index = _attribute_start(lines, index, module_index)
-        declarations.append((start_index, index, match.group("name")))
+        member = GROUP_MEMBER_DECLARATION.match(line)
+        if member is not None:
+            previous = lines[index - 1].strip()
+            start_index = index - 1 if previous.startswith("#[task") else index
+            declarations.append((start_index, index, member.group("name")))
 
     if not declarations:
         raise RouteError("no top-level functions were found inside the RTIC app module")

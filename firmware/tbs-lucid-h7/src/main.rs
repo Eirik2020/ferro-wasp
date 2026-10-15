@@ -334,7 +334,7 @@ ferroforge::app! {
             &SPI1_MAILBOX,
             SpiDeadlineUs(SPI1_IMU_DEADLINE_US),
             || {
-                let _ = spi1_owner_service::spawn();
+                let _ = spi1_imu::spi1_owner_service::spawn();
             },
         ));
         if let Some(kind) = spi1_imu.bringup.kind() {
@@ -1028,64 +1028,32 @@ ferroforge::app! {
     async fn actuator_output(cx: actuator_output::Context, cmd: safety::ActuatorCmd);
 
     // ########### SPI 1 ###################################
-    #[task(
-        from = flight_tasks::imu_data_ready,
-        binds = EXTI2,
-        priority = 14,
-        local = [imu_data_ready],
-        shared = [io_timebase],
-        spawn = [spi1_poll]
-    )]
-    fn imu_data_ready(cx: imu_data_ready::Context);
-
-    #[task(
-        from = flight_tasks::spi1_poll,
-        priority = 12,
-        local = [spi1_device],
-        config = [spi1_imu_burst_register: fn(u8) -> Option<u8> = spi1_imu_burst_register]
-    )]
-    async fn spi1_poll(cx: spi1_poll::Context, observed_at_us: u64);
-
-    #[task(
-        from = flight_tasks::spi1_owner_service,
-        priority = 13,
-        shared = [spi1_owner, io_timebase]
-    )]
-    async fn spi1_owner_service(cx: spi1_owner_service::Context);
-
-    #[task(
-        from = flight_tasks::spi1_rx_dma,
-        binds = DMA1_STR4,
-        priority = 13,
-        shared = [spi1_owner],
-        spawn = [spi1_parser]
-    )]
-    fn spi1_rx_dma(cx: spi1_rx_dma::Context);
-
-    #[task(
-        from = flight_tasks::io_watchdog,
-        binds = TIM6_DAC,
-        priority = 9,
-        local = [io_watchdog],
-        shared = [io_timebase],
-        spawn = [spi1_timeout]
-    )]
-    fn io_watchdog(cx: io_watchdog::Context);
-
-    #[task(from = flight_tasks::spi1_timeout, priority = 13, shared = [spi1_owner])]
-    async fn spi1_timeout(cx: spi1_timeout::Context, observed_at_us: u64);
-
     // Above every UART transport (11): a gyro sample published late makes
     // the next control tick stale, and one stale tick disarms. UART work at
     // the same level delayed it enough, with ESC telemetry and the OSD busy,
     // to disarm moments after arming. See mdbook/src/priority.md.
-    #[task(
-        from = flight_tasks::spi1_parser,
-        priority = 12,
-        local = [spi1_parser],
-        shared = [imu_data]
+    #[group(
+        from = flight_tasks::groups::spi1_imu,
+        local = [imu_data_ready, spi1_device, io_watchdog, spi1_parser],
+        shared = [io_timebase, spi1_owner, imu_data],
+        config = [spi1_imu_burst_register: fn(u8) -> Option<u8> = spi1_imu_burst_register],
     )]
-    async fn spi1_parser(cx: spi1_parser::Context);
+    mod spi1_imu {
+        #[task(binds = EXTI2, priority = 14)]
+        fn imu_data_ready;
+        #[task(priority = 12)]
+        async fn spi1_poll;
+        #[task(priority = 13)]
+        async fn spi1_owner_service;
+        #[task(binds = DMA1_STR4, priority = 13)]
+        fn spi1_rx_dma;
+        #[task(binds = TIM6_DAC, priority = 9)]
+        fn io_watchdog;
+        #[task(priority = 13)]
+        async fn spi1_timeout;
+        #[task(priority = 12)]
+        async fn spi1_parser;
+    }
 
     // ########### UART ports ##############################################
     // Every UART transport runs at priority 11, whatever function its port
