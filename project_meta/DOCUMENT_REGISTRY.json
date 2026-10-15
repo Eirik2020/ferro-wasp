@@ -430,7 +430,7 @@
       "role": "target-test-procedure",
       "lifecycle": "live",
       "context": "targeted",
-      "max_bytes": 16384
+      "max_bytes": 20480
     }
   ],
   "context_budgets": [

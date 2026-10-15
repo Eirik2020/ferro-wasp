@@ -190,6 +190,52 @@
       ]
     },
     {
+      "id": "BENCH-FOX-DFU-001",
+      "summary": "Reboot a disarmed Foxeer into the firmware and the ROM bootloader by command, flash it without BOOT, and refuse reboot with a flight log open.",
+      "target": "foxeer-f405-v2",
+      "tier": "bench-unpowered",
+      "status": "active",
+      "triggers": {
+        "paths": [
+          "crates/ferrowasp-stm32/src/system_reset.rs",
+          "crates/ferrowasp-stm32f4/src/system_bootloader.rs",
+          "crates/ferrowasp-stm32-tasks/src/flash.rs",
+          "crates/ferrowasp-flight/src/command_link.rs",
+          "tools/ferro-configurator/crates/ferro-configurator-core/src/firmware/",
+          "firmware/foxeer-f405-v2/"
+        ],
+        "features": [
+          "board-foxeer-f405-v2"
+        ],
+        "invocations": [
+          "bench"
+        ]
+      },
+      "procedure": {
+        "path": "project_meta/testing/targets/foxeer-f405-v2.md",
+        "heading": "Foxeer USB Reboot And DFU Flash Gate"
+      },
+      "prerequisites": [
+        "BUILD-FOX-001",
+        "BENCH-COMMON-001"
+      ],
+      "requires_user_execution": true,
+      "stop_conditions": [
+        "the exact image, features, propeller state, or actuator-power state is unknown",
+        "the target arms or produces actuator activity",
+        "a reboot is accepted while a flight log is open",
+        "the DFU device is not the Foxeer, or readback differs inside a load segment",
+        "the configuration changes or the board does not return as FerroWasp"
+      ],
+      "evidence": [
+        "commit or working-tree identity and firmware image hashes, candidate and bench_blackbox",
+        "exact feature sets and power/propeller state",
+        "DFU enumeration after reboot dfu, and the readback comparison",
+        "configuration export before and after flashing",
+        "both refusal responses with a flight log open, and the failed flash --yes"
+      ]
+    },
+    {
       "id": "BENCH-FCU3-DSHOT-001",
       "summary": "Run the FCU3 powered props-off exact-flight-image DShot gate.",
       "target": "fcu3",

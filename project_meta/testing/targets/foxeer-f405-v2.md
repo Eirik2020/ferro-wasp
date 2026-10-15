@@ -149,6 +149,50 @@ state, initial snapshot, rejection response, same-boot temporary snapshot,
 cold-boot temporary snapshot, restored snapshot before and after cold boot,
 and operator observations.
 
+## Foxeer USB Reboot And DFU Flash Gate
+
+Catalog ID: `BENCH-FOX-DFU-001`.
+
+Shows that a disarmed Foxeer running FerroWasp restarts, and restarts into the
+STM32 ROM bootloader, on command, that FerroConfigurator flashes it without the
+BOOT button and it returns as FerroWasp, and that a reboot is refused while a
+flight log is open. ADR-0043 is the design.
+
+Keep the aircraft disarmed on USB power only, with propellers removed and
+actuator/ESC power disconnected. Before flashing anything, download every
+flight on the board and export the configuration; a bench image in step 6
+appends a long bench flight to the log.
+
+1. Record the candidate identity, hash, and exact features, and validate the
+   image with `flash --board foxeer-f405-v2 --dry-run`.
+2. `device reboot`: require the USB port to drop and return, a lower uptime
+   in `device info`, and no `0483:df11` device.
+3. `device reboot --dfu`: require exactly one `0483:df11` device within 10 s.
+   The F405 ROM reports `dfuERROR` / "firmware is corrupt" on its first status
+   however it is entered; `dfu-util` clears it.
+4. Read back the image's range with `dfu-util -U` and require every byte of
+   the ELF's load segments to match; erased gaps between segments read
+   `0xFF`. Leave DFU by flashing the candidate.
+5. From running FerroWasp, `flash --board foxeer-f405-v2 --yes <candidate>`:
+   require exit code zero, the board back on its FerroWasp port with the
+   same USB serial number, and `config export` identical to the export from
+   before.
+6. Flash the same commit built with `bench_blackbox`, which opens a flight log
+   at boot. Require `reboot` and `reboot dfu` both answered
+   `ERR flight log still being written`, and `flash --yes` to exit nonzero
+   with the board still running. The user then enters ROM DFU with the BOOT
+   button, and the candidate is flashed back.
+
+Stop on an armed state, any actuator activity, an unknown image or feature
+set, a reboot accepted while a flight log is open, a DFU device that is not
+the Foxeer's, a readback mismatch inside a load segment, a changed
+configuration, or a board that does not return as FerroWasp.
+
+Required evidence: candidate and bench-image identities and hashes, exact
+features, power/propeller state, DFU enumeration time, readback comparison,
+configuration before and after, both refusal responses, and operator
+observations.
+
 ## Foxeer Powered Props-Off Exact-Image Gate
 
 Catalog ID: `BENCH-FOX-001`.
