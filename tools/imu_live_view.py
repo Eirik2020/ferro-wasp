@@ -4,12 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import math
-import os
 import queue
 import re
-import socket
 import subprocess
 import sys
 import threading
@@ -19,15 +16,9 @@ from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TERMINAL_EMBED = REPO_ROOT / "tools" / "terminal_embed.py"
-DEFAULT_REMOTE_HOST = "ws://your-probe-host.local:3000"
-DEFAULT_REMOTE_ELF = REPO_ROOT / "target-codex-fresh/thumbv7em-none-eabihf/release/FerroWasp"
-DEFAULT_REMOTE_CHIP = "STM32F405RG"
-DEFAULT_REMOTE_PROBE = "0:0:/dev/spidev0.0"
-LOCAL_CONFIG = REPO_ROOT / "local_config" / "ferrowasp.local.json"
 IMU_RE = re.compile(
     r"Heartbeat: IMU seq (?P<seq>\d+), "
     r"raw \[(?P<raw_x>-?\d+), (?P<raw_y>-?\d+), (?P<raw_z>-?\d+)\], "
@@ -100,49 +91,6 @@ def parse_args() -> argparse.Namespace:
         help="Use 'gyro' for gyro-only after initial accel seed, or 'accel' for continuous roll/pitch accel grounding.",
     )
     parser.add_argument(
-        "--remote",
-        action="store_true",
-        help="Attach through the remote Pi probe-rs server instead of using terminal_embed.py defaults.",
-    )
-    parser.add_argument(
-        "--probe-host",
-        default=None,
-        help=f"Remote probe-rs host URI. Defaults to FERROWASP_PROBE_HOST or {DEFAULT_REMOTE_HOST}.",
-    )
-    parser.add_argument(
-        "--link",
-        choices=("auto", "cable", "mobile", "zero", "zeromobile"),
-        default="auto",
-        help="Named Pi network link for --remote when --probe-host is not set.",
-    )
-    parser.add_argument(
-        "--probe-token",
-        default=None,
-        help="Remote probe-rs token. Defaults to FERROWASP_PROBE_TOKEN or local_config/ferrowasp.local.json.",
-    )
-    parser.add_argument(
-        "--elf",
-        type=Path,
-        default=DEFAULT_REMOTE_ELF,
-        help="ELF path used for remote attach and defmt decoding.",
-    )
-    parser.add_argument(
-        "--chip",
-        default=DEFAULT_REMOTE_CHIP,
-        help="Target chip name for probe-rs.",
-    )
-    parser.add_argument(
-        "--probe",
-        default=DEFAULT_REMOTE_PROBE,
-        help="probe-rs probe selector for the Pi GPIO/SPI SWD backend.",
-    )
-    parser.add_argument(
-        "--speed",
-        type=int,
-        default=1000,
-        help="SWD speed in kHz.",
-    )
-    parser.add_argument(
         "--ui-hz",
         type=float,
         default=30.0,
@@ -167,114 +115,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def remote_command_from_args(args: argparse.Namespace) -> list[str]:
-    host = probe_host_from_args(args)
-    token = args.probe_token or config_default("probe_token", "FERROWASP_PROBE_TOKEN")
-    if not token:
-        raise SystemExit(
-            "Remote probe token not configured. Pass --probe-token, set "
-            "FERROWASP_PROBE_TOKEN, or create local_config/ferrowasp.local.json."
-        )
-    return [
-        sys.executable,
-        str(TERMINAL_EMBED),
-        "--",
-        "probe-rs",
-        "--host",
-        host,
-        "--token",
-        token,
-        "attach",
-        str(args.elf),
-        "--chip",
-        args.chip,
-        "--protocol",
-        "swd",
-        "--probe",
-        args.probe,
-        "--speed",
-        str(args.speed),
-    ]
-
-
-def getenv_default(name: str, default: str) -> str:
-    value = os.environ.get(name)
-    return value if value else default
-
-
-def load_local_config() -> dict[str, object]:
-    if not LOCAL_CONFIG.exists():
-        return {}
-    with LOCAL_CONFIG.open("r", encoding="utf-8") as config_file:
-        data = json.load(config_file)
-    return data if isinstance(data, dict) else {}
-
-
-def config_default(name: str, env_name: str, default: str = "") -> str:
-    value = os.environ.get(env_name)
-    if value:
-        return value
-    value = load_local_config().get(name)
-    return value if isinstance(value, str) and value else default
-
-
-def probe_host_from_args(args: argparse.Namespace) -> str:
-    return args.probe_host or remote_host_from_env_or_link(args.link)
-
-
-def remote_host_from_env_or_link(link: str) -> str:
-    if link == "auto":
-        return config_probe_host(link, "FERROWASP_PROBE_HOST", DEFAULT_REMOTE_HOST)
-    return remote_host_for_link(link)
-
-
-def remote_host_for_link(link: str) -> str:
-    host = config_probe_host(link)
-    if not host:
-        raise SystemExit(
-            f"Remote probe host for link '{link}' is not configured. Pass "
-            "--probe-host or set local_config/ferrowasp.local.json probe_hosts."
-        )
-    return host
-
-
-def config_probe_host(link: str, env_name: str = "", default: str = "") -> str:
-    if env_name:
-        value = os.environ.get(env_name)
-        if value:
-            return value
-    hosts = load_local_config().get("probe_hosts")
-    if isinstance(hosts, dict):
-        value = hosts.get(link)
-        if isinstance(value, str) and value:
-            return value
-    return default
-
-
-def check_remote_probe_reachable(host_uri: str, timeout_s: float = 2.0) -> str | None:
-    parsed = urlparse(host_uri)
-    host = parsed.hostname
-    port = parsed.port
-    if host is None or port is None:
-        return f"Could not parse remote probe host URI: {host_uri}"
-    if host.endswith(".local"):
-        return None
-    try:
-        with socket.create_connection((host, port), timeout=timeout_s):
-            return None
-    except OSError as error:
-        return (
-            f"Could not reach remote probe-rs at {host_uri}: {error}. "
-            "Make sure the laptop is on the same network as the selected Pi link "
-            "and that probe-rs serve is running."
-        )
-
-
 def command_from_args(args: argparse.Namespace) -> list[str]:
     raw_command = args.command
     if not raw_command:
-        if args.remote:
-            return remote_command_from_args(args)
         return [sys.executable, str(TERMINAL_EMBED)]
     if raw_command[0] == "--":
         return list(raw_command[1:])
@@ -826,12 +669,6 @@ setattr(tk.Canvas, "create_oval_at", create_oval_at)
 
 def main() -> int:
     args = parse_args()
-    if args.remote:
-        host_uri = probe_host_from_args(args)
-        error = check_remote_probe_reachable(host_uri)
-        if error is not None:
-            print(error, file=sys.stderr)
-            return 2
     command = command_from_args(args)
     root = tk.Tk()
     view = ImuLiveView(

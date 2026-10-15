@@ -54,7 +54,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/archive/FCU3_APP_README_2026-10-07.md",
+        "path": "archive/project_meta/FCU3_APP_README_2026-10-07.md",
         "heading": "Build"
       },
       "prerequisites": [
@@ -211,7 +211,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
+        "path": "archive/project_meta/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Powered Props-Off DShot Gate"
       },
       "prerequisites": [
@@ -296,7 +296,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
+        "path": "archive/project_meta/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Final Preflight Gate"
       },
       "prerequisites": [
@@ -379,7 +379,7 @@
         ]
       },
       "procedure": {
-        "path": "project_meta/archive/FCU3_TEST_PROCEDURE_2026-09-22.md",
+        "path": "archive/project_meta/FCU3_TEST_PROCEDURE_2026-09-22.md",
         "heading": "FCU3 Bounded Logged Flight Test"
       },
       "prerequisites": [

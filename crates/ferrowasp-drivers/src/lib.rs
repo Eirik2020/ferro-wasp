@@ -6,4 +6,5 @@ pub mod crsf;
 pub mod icm42688p;
 pub mod mpu6000;
 pub mod mpu6500;
+pub mod nor_storage;
 pub mod spi_nor;

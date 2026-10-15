@@ -1,112 +1,215 @@
-# AGENTS.md
+# Repository Instructions
 
-## Project identity and routing
+## Authority
 
-FerroWasp is a small, deterministic, safety-oriented Rust/RTIC flight-control
-framework. Prefer auditability, timing determinism, fault containment, and
-evidence generation over broad feature parity. The project is in rapid
-prototyping, but the major safety boundaries remain mandatory. Do not treat it
-as a PX4, ArduPilot, or Betaflight clone.
+This file is the highest-authority document in the repository; only the user
+outranks it. On conflict the order is: the user; this file;
+`project_meta/governing-requirements.md` (W1-W7); all other documents. This is
+the only `AGENTS.md`; its scoped rules below bind only inside their directory.
 
-This file applies repository-wide. Before scoped work, also read:
+Any other document that diverges from this file or the governing requirements is
+wrong; correct it immediately without asking permission. A conflict between this
+file and the governing requirements needs the user's explicit decision - raise it
+and wait rather than choosing a side. Where a document and the code disagree
+about what the code does, the code is right and the document is fixed.
 
-- `firmware/AGENTS.md` for firmware applications;
-- `firmware/foxeer-f405-v2/AGENTS.md` for the Foxeer app;
-- `mdbook/AGENTS.md` for documentation;
-- `tools/AGENTS.md` for host tooling;
-- `tools/ferro-configurator/AGENTS.md` for the isolated USB configurator;
-- `tools/rtic-app-builder/AGENTS.md` for the isolated builder workspace;
-- `project_meta/AGENTS.md` for project metadata.
+## Two Books
 
-Nested instructions add local rules and never weaken this file. Load only the
-documents routed by the applicable instructions:
+- **The public book**, `mdbook/` (published): for users and contributors. How
+  FerroWasp works, how to build, flash, configure, and test it, what is
+  supported, and where it is going. Start at `mdbook/src/SUMMARY.md`.
+- **The internal book**, `project_meta/` (never published): for maintainers and
+  agents. Governing requirements, decisions, remaining work, the test catalog
+  and evidence, the logging format, and the publication checklist.
 
-- architectural change: `project_meta/CODEX_PROJECT_CONTEXT.md`;
-- live bench, motor, logging, or test-plan work:
-  `project_meta/CODEX_ACTIVE_WORK.md`;
-- test selection or execution: `project_meta/testing/README.md`;
-- cross-repository movement: `project_meta/CROSS_REPO_SYNC.md`.
+Keep agreed design, current implementation, and open proposals distinct. Keep
+remaining work visible; agreement on an approach does not mean it is
+implemented. READMEs are brief entry points that link into a book.
 
-## Documentation boundary
+## Documentation Map
 
-The mdBook under `mdbook/src/` is the canonical user and developer
-documentation set; keep `mdbook/src/SUMMARY.md` as its only maintained index.
-Keep the root README as a concise landing page. Package READMEs may describe a
-narrow local contract, but must link to the book instead of duplicating public
-guides, status summaries, setup instructions, or roadmap content.
+Start from the task, not the chapter. Read the named sections, not whole files.
 
-Keep agent instructions, internal context, machine-enforced test/evidence
-metadata, decision provenance, and archives outside the public book. Do not
-point users or ordinary contributors to agent-context documents.
+| Task | Read |
+| --- | --- |
+| A flight app or RTIC wiring | W3, W4, W5; Firmware below; `python tools/app_context.py --board foxeer-f405-v2 --topic <topic>` |
+| Adding or changing a board | W4, W5, W6; `mdbook/src/board_support.md` |
+| Arming, motors, DShot | W1, W2, W6; `mdbook/src/arming.md`, `mdbook/src/dshot.md` |
+| Selecting or running a test, recording evidence | W7; Operating Rules below; `project_meta/testing/README.md` |
+| Blackbox and logging | `project_meta/LOGGING_FORMAT.md` |
+| Host tools or FerroConfigurator | W1; Host Tools below |
+| Public documentation | Public Book below; `mdbook/src/SUMMARY.md` |
+| Building or checking anything | `mdbook/src/testing.md` Software Checks; `.github/workflows/ci.yml` is exact |
+| Whether something was already decided | `project_meta/ARCHITECTURE_DECISIONS.md` |
+| What is left to build | `project_meta/remaining-work.md` |
+| Publishing a release | `project_meta/releasing.md` |
 
-Root legal files and GitHub metadata under `.github/` are repository metadata,
-not documentation. Keep their guidance minimal and link to the canonical
-mdBook chapter when details belong in the book.
+One topic, one owner, across both books. Specify a topic in its owning chapter;
+every other mention links there instead of restating it. A public chapter never
+links into the internal book.
 
-## Non-negotiable safety rules
+| Topic | Owner |
+| --- | --- |
+| Requirements W1-W7 | `project_meta/governing-requirements.md` |
+| What was decided, and why | `project_meta/ARCHITECTURE_DECISIONS.md` and `decisions/` |
+| What is left to build | `project_meta/remaining-work.md` |
+| Test definitions, procedures, evidence workflow | `project_meta/testing/README.md` |
+| Blackbox format requirements | `project_meta/LOGGING_FORMAT.md` |
+| Board and feature support | `mdbook/src/current_support.md` |
+| Public direction | `mdbook/src/roadmap.md` |
+| Crate map | `mdbook/src/project_structure.md` |
+| Board configuration and naming | `mdbook/src/board_support.md` |
+| Repository checks and the context router | `project_meta/tooling.md` |
+| The dev container's agent tooling | `project_meta/dev-environment.md` |
+| How a subsystem works | its `mdbook/src/` chapter |
+| Commands | `mdbook/src/testing.md` and `developer_getting_started.md` |
 
-- Only the safety kernel and safety-owned actuator-output path may command
-  motor peripherals. Outer layers may request actuation but never own the
-  hardware.
-- Experimental, configurator, marketplace, and profile logic must not bypass
-  arming, failsafe, actuator gating, watchdog, health, or command-freshness
-  checks.
-- Unsafe Rust must be minimized, isolated, documented, and reviewed.
-- Do not claim SIL, DAL, DO-178C, airworthiness, or certification. Use
-  “certification-aligned” or “evidence-friendly” unless a release is actually
-  certified.
-- Treat stale sensor/setpoint paths, unbounded work, blocking real-time work,
-  runtime panics, and actuator-authority leaks as high-priority defects.
+## Operating Rules
 
-## Architecture boundary
+- Ask the user before any W6 change and before any decision that sets
+  structure: crate layout, where data lives, a convention other code follows.
+  Lay out the options with a recommendation; small reversible fixes go ahead.
+- An agent may run hardware-in-the-loop tests over SWD and USB while the system
+  is disarmed and nothing actuates. Motor, powered, and flight procedures are
+  the user's, including FerroConfigurator's motor test. Propellers stay off
+  until the reviewed preflight prerequisites are complete. Never assume a probe
+  or board is attached.
+- Stop on any unexpected motor, arming, telemetry, storage, or RC-loss
+  behaviour and report it; never work around it.
+- `logs/` holds the only copy of every flight log and flown binary. Never
+  delete or rewrite anything in it.
+- Never claim a gate passed from a build. In every report, say what was
+  measured and what was inferred.
 
-Keep reusable types and safety state in `ferrowasp-core`; protocols and
-devices in `ferrowasp-drivers`; portable flight logic in `ferrowasp-flight`;
-HAL-neutral STM32 mechanisms in `ferrowasp-stm32`, each family's HAL in
-`ferrowasp-stm32f4` or `ferrowasp-stm32h7`; shared RTIC task bodies in
-`ferrowasp-stm32-tasks`; and RTIC wiring in thin app shells. Keep each board's
-physical facts in its app's `src/board/`. Optional generation belongs in
-`ferrowasp-gen`, manifests, or the isolated builder.
+## Scoped Rules
 
-Keep HAL-specific types out of core logic. Put reusable behavior in shared
-crates rather than duplicating it between boards.
+**Firmware (`firmware/`).** Read the app's `README.md`, `Cargo.toml`, and the
+code you change; route localized work through `tools/app_context.py` first. Its
+test chain is routing, not a pass.
 
-Treat each app's src/board directory as hardware data and narrow adaptation,
-not as a general implementation layer. If code remains useful after
-substituting pins, peripherals, routes, or configuration values, move it to
-the narrowest shared crate before adding another board copy.
+- `src/main.rs` holds `ferroforge::app!` only: resources, priorities, init
+  wiring, locking, spawning. No helper types, functions, macros, constants, or
+  statics; it imports only the app library's facade.
+- Init selects resources and calls shared constructors. Do not feature-gate
+  hardware every variant has. DShot is the flight ESC protocol; RC PWM stays in
+  shared crates for servos, never as an ESC fallback.
+- A new shared resource or priority change states its timing and contention
+  rationale; a safety-related task states its priority and timing assumptions.
+  A safety-relevant change states its reason, failure behaviour, test coverage,
+  that motor authority did not move, and any unsafe-code or timing effects.
+- Use typed units for time, rates, voltages, and actuator commands. Prefer an
+  explicit safety state machine over a clever abstraction.
+- Before changing a secondary app, compare with Foxeer: arming preparation and
+  guard order; disarm, RC-loss, failsafe, watchdog, and fault paths; actuator
+  permits, leases, and stale-command containment; task priorities and completion
+  order; logging identities and feature gates. Repeat the comparison of enabled
+  features before a secondary board's bench test.
+- Foxeer: keep the physical-body/controller-frame pitch boundary explicit, never
+  a sign change hidden in a sensor or mixer layer. The DShot/eRPM-qualified
+  arming sequence is the motor path; diagnostic features never replace it
+  silently. SWD pins stay reserved.
+- `stm32f401-bringup` validates peripherals without actuators; it is not a
+  behaviour reference.
+- Run `python tools/check_rtic_boundaries.py` after app or board changes. For a
+  motor-capable image, record the commit, features, artifact hash, and propeller
+  and actuator-power state.
 
-## Engineering rules
+**Host Tools (`tools/`).** Read-only by default. Flashing, erase, reset, and
+configuration writes are explicit commands with visible output; destructive log
+or storage actions need confirmation. Select the board, app, artifact, features,
+and link explicitly, never falling back to another target or a stale ELF. Never
+infer success from an intermediate milestone; failure exits nonzero. Parsers are
+bounded and reject malformed or mismatched input without partial success.
+Acquisition, validation, conversion, and analysis stay separate so conversion
+cannot make corrupt evidence look valid. Never overwrite inputs or retained
+logs. Software-only tests assume no network, probe, or hardware.
 
-- Prefer `no_std`, allocation-free firmware paths and fixed-size bounded
-  queues.
-- Avoid panics in runtime control/safety paths and abstractions that obscure
-  latency or worst-case work.
-- Use typed units for time, rates, voltages, and actuator commands where
-  practical.
-- Preserve existing names and make small, reviewable patches. Do not perform
-  broad refactors unless asked.
-- Prefer explicit safety state machines over clever abstractions.
-- Infer as little as possible when dependencies, commands, or hardware facts
-  are missing; report the assumption.
+- `tools/ferro-configurator/` is its own Cargo workspace and lockfile, depending
+  by path on `ferrowasp-core`; a protocol change lands on both sides in one
+  commit. Bench motor tests are requests the firmware may refuse. Writes are
+  disarmed-only with full readback. Validate board identity, manifest, hashes,
+  address ranges, page CRCs, and resume state before claiming success; `.fwbb`
+  files are never modified. MSPv2 is not enabled or expanded without approval.
+- `tools/rtic-app-builder/` is an isolated workspace that never joins the root
+  one without approval. `generated/` is disposable: fix the manifest, contract,
+  template, or `xtask`, then regenerate. The generator translates declared
+  values and never allocates pins, peripherals, interrupts, DMA, timers,
+  priorities, or queues. Its NUCLEO examples have no flight authority.
 
-Ask before changing pin maps, DMA streams, timer assignments, safety states,
-crate layout, or public protocol formats. Explain architectural changes before
-implementing them.
+**Public Book (`mdbook/`).** Never copy agent instructions, internal work
+tracking, test metadata, raw evidence, decision provenance, or archives into it.
+Change `src/SUMMARY.md` with any chapter added, moved, or removed. Use relative
+links that work in source and build; never edit `book/`. Keep generated Mermaid
+assets and their licence headers. Never turn a past test result into a general
+support or safety claim; label board-specific limits.
 
-## Verification
+**Internal Book (`project_meta/`).** Register every Markdown file in
+`DOCUMENT_REGISTRY.json`, and list every non-historical one in `SUMMARY.md`.
+`mdbook build project_meta` builds it into `target/internal-book`. Test definitions (`TEST_CATALOG.json`,
+`testing/targets/`) stay separate from dated run evidence (`testing/evidence/`);
+`active` means selectable, not passed. Moving evidence preserves its dates,
+hashes, feature sets, artifact identities, and limitations.
 
-Run checks proportional to the change:
+## Always-Loaded Context Budget
 
-- `cargo fmt --all --check`
-- `cargo clippy --workspace --all-targets`
-- `cargo check --workspace`
-- `cargo test --workspace`
+`CLAUDE.md`, `AGENTS.md`, and every file `CLAUDE.md` imports load into each
+session before work starts, and share one line budget. **At 300 lines
+combined**, stop and ask the user before adding anything: offer a path-scoped
+rule under `.claude/rules/`, a skill, an on-demand chapter, or trimming what no
+longer earns its place. **At 400 lines**, nothing more is added to any of them
+until the user resolves it.
 
-For embedded targets, prefer `cargo check` unless the target setup is known.
-Do not assume a probe, MCU, runner, or actuator power is available. Report
-missing target tooling rather than rewriting unrelated code.
+## Document Size and Content
 
-For safety-relevant changes, provide a clear reason, failure behavior,
-unit/SIL/HIL coverage where feasible, confirmation that motor authority did not
-move, and any unsafe-code or timing implications.
+A chapter crossing roughly 400 lines is a signal to apply the retiring rule
+below, not a cap to design around: splitting it to get under the number is not
+compliance. `governing-requirements.md` states its own limit. Never write into
+either book:
+
+- progress narration or status records ("this is now done", "as of ..."); what
+  changed and why belongs in the commit message, and dated test results in run
+  records under `project_meta/testing/evidence/`;
+- restatements of what the code does, instead of intent, constraints, and
+  rationale;
+- a new document when an existing chapter covers the topic.
+
+## Retiring Stale Material
+
+Fix a stale passage in place. A whole spent or superseded document or section:
+
+1. Find what still binds; a decision never superseded, only buried, is in force.
+2. Promote it into the owning chapter first, grouped by topic.
+3. Then archive the remainder verbatim under `archive/<date>/`, mirroring its
+   repository-relative path, with a header naming the source file, the date,
+   and that binding decisions were promoted out.
+
+Never archive before promoting, never rewrite spent material to look current,
+and never delete it instead of archiving. Verify before and after; a clean
+`mdbook build` proves nothing about content survival:
+
+- **Before**, find what links into the sections you move or remove:
+  `rg -o '<file>\.md#[a-z0-9-]+'`, and repoint every hit in the same change.
+  Renaming a heading breaks its anchor.
+- **After**, `diff <(sort <backup>) <(sort <file>) | grep '^<'` lists only lines
+  you deliberately changed.
+
+## Restricted Archive - Explicit User Permission Required
+
+The archives are the top-level `archive/` and
+`tools/rtic-app-builder/docs/archive/`. Without explicit user permission, do not
+list, search, open, read, summarize, or copy from anything under them, nor
+recover their content through other tools or cached copies. Archived documents
+are never active authority. Reviewing, documenting, building, or implementing
+does not grant access: explain which material you need and why, then wait, and
+use only the scope granted. Do not weaken this rule without an explicit user
+instruction.
+
+A user-requested archival operation authorizes checking destination paths and
+moving named active files into a new snapshot, not reading existing archived
+content. `tools/check_repository_context.py` hashing the immutable archives is
+tooling, not an agent reading them. `.ignore` excludes the archives from normal
+ripgrep searches; with `-uu`, exclude them by hand:
+
+```text
+rg --files -uu -g '!archive/**' -g '!tools/rtic-app-builder/docs/archive/**' -g '!**/target/**'
+```

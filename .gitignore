@@ -5,8 +5,6 @@
 /diagnostic_*.jpg
 /logs
 /local_archive/
-/local_config/*
-!/local_config/*.example.json
 /python_sandbox/
 /captures/
 

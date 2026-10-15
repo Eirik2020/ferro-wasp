@@ -1,13 +1,15 @@
 # FerroWasp
 
 FerroWasp is a safety-focused Rust/RTIC flight-controller firmware project for
-multicopter UAVs. It favors explicit resource ownership, deterministic
+multicopter UAVs, composed with the [FerroForge](https://crates.io/crates/ferroforge)
+framework. It favors explicit resource ownership, deterministic
 scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.
 
-The Foxeer F405 V2 is the golden flight target, and NUCLEO-F401RE provides a
-non-actuating STM32F4 development target. FerroWasp FCU3 has been retired. See [Current Support](current_support.md)
-for the board and feature matrix.
+The Foxeer F405 V2 is the golden flight target. The TBS Lucid H7 carries the
+same feature set on an STM32H743, so far on the bench only, and NUCLEO-F401RE is
+a non-actuating STM32F4 development target. See
+[Current Support](current_support.md) for the board and feature matrix.
 
 ## Where to Begin
 
@@ -16,16 +18,16 @@ for the board and feature matrix.
 - To build, test, or contribute from source, use the
   [Developer Setup](developer_getting_started.md).
 - To understand the current implementation, browse the flight-controller,
-  interface, and development chapters in the [Summary](SUMMARY.md).
+  interface, and development chapters in the sidebar.
 
 ## Runtime Shape
 
 ```mermaid
 flowchart LR
-    rc[SBUS RC<br/>USART2 DMA]
-    imu[MPU6500 / ICM42688-P<br/>SPI1 DMA]
+    rc[SBUS or CRSF RC<br/>UART DMA]
+    imu[ICM42688-P / MPU-6000 / MPU6500<br/>SPI1 DMA]
     safety[Safety Master]
-    control[400 Hz<br/>Control Loop]
+    control[2 kHz<br/>Control Loop]
     escmgr[ESC Manager<br/>legacy telemetry]
     actuator[Actuator Output<br/>DShot600]
     motors[ESCs / Motors]

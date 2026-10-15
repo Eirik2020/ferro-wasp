@@ -48,8 +48,6 @@ app and the drivers it loaded.
 
 - Foxeer F405 V2: `project_meta/testing/targets/foxeer-f405-v2.md`
 - TBS Lucid H7: this common gate only; the board cannot arm yet.
-- FCU3: obsolete since 2026-09-22; its procedure is archived and its gates
-  retired, so it is never selected for a new run.
 
 Start with the catalog so prerequisites and validation tiers remain ordered.
 A pass stands until one of its components changes; then rerun the gate.
@@ -60,6 +58,6 @@ The bounded map is `project_meta/testing/EVIDENCE_INDEX.md`.
 
 The byte-preserved checklist and dated results that previously occupied this
 path are retained at
-`project_meta/archive/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md`.
+`archive/project_meta/TARGET_VERIFICATION_FULL_BASELINE_2026-07-27.md`.
 Unchecked items in that snapshot are historical checklist state, not
 automatically active test definitions or current flight obligations.

@@ -13,7 +13,7 @@ from statistics import mean, pstdev
 import matplotlib.pyplot as plt
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LOG_DIR = REPO_ROOT / "logs" / "remote_probe"
+DEFAULT_LOG_DIR = REPO_ROOT / "logs" / "terminal_embed"
 DEFAULT_REPORT_DIR = DEFAULT_LOG_DIR / "reports"
 CONTROL_RATE_HZ = 400.0
 
@@ -47,12 +47,12 @@ def parse_args() -> argparse.Namespace:
         "source",
         nargs="?",
         type=Path,
-        help="BB2 .log or analyzer .csv. Defaults to newest .log/.csv in logs/remote_probe.",
+        help="BB2 .log or analyzer .csv. Defaults to newest .log/.csv in logs/terminal_embed.",
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        help="Report directory. Defaults to logs/remote_probe/reports/<source-stem>.",
+        help="Report directory. Defaults to logs/terminal_embed/reports/<source-stem>.",
     )
     parser.add_argument(
         "--trim-start",

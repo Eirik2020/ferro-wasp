@@ -1,15 +1,14 @@
 # Foxeer F405 V2 Test Procedure
 
-This is the current operator procedure for the Foxeer F405 V2 flight app.
-Historical measurements and dated passes are routed through
-`../EVIDENCE_INDEX.md`; `../../../mdbook/src/user/foxeer_f405_v2.md`
-retains the public USB field cheatsheet. Historical evidence is not a substitute for running
-the gates below on the proposed image.
+The operator procedure for the Foxeer F405 V2 flight app. Historical evidence,
+located through `../EVIDENCE_INDEX.md`, never substitutes for running the
+gates below on the proposed image.
 
 An `active` catalog entry means that its definition may be selected. It does
-not mean the test has passed or that the aircraft is cleared to fly. The user
-operates all target hardware. Stop conditions override completion and evidence
-collection.
+not mean the test has passed or that the aircraft is cleared to fly. Who may
+operate the hardware is set by the Operating Rules in the root `AGENTS.md`;
+every powered and flight gate below is the user's. Stop conditions override
+completion and evidence collection.
 
 ## Reviewed Baseline
 
@@ -22,21 +21,13 @@ Use one exact flight candidate and record:
 - propeller and actuator-power state;
 - the complete persisted configuration from `config-show`.
 
-A recorded image hash reproduces only from the same absolute checkout path. A
-mismatch after moving or copying the tree is not evidence that the image
-changed. Measured with the same commit in clean worktrees: the build is
-deterministic within one tree, every other path disagrees, and path length is
-not the cause - two 34-character paths still differed. Panic locations embed
-source paths in `.rodata`, but `trim-paths = "object"` removes all of them
-without making the image portable, so the residue is Cargo's `-C metadata` hash
-reaching symbol names and link layout: `crates/` lies outside the app's own
-workspace, so Cargo hashes it by absolute path, not relative to the root. Do not
-retry `trim-paths` for this: it needs an unstable `cargo-features` gate and
-does not deliver.
-Rebuilding also needs the build script to re-run: it declares
-`rerun-if-changed=../../.git/HEAD`, a path that does not exist in every layout,
-so `touch build.rs` before trusting a rebuilt hash. The git revision it embeds
-reaches only defmt, which is interned outside the loadable image.
+A recorded image hash reproduces only from the same absolute checkout path, so
+a mismatch after moving or copying the tree is not evidence that the image
+changed. The build is deterministic within one tree; Cargo hashes the shared
+`crates/` by absolute path because they lie outside the app's workspace, and
+`trim-paths` does not fix it, so do not retry it. Before trusting a rebuilt
+hash, `touch build.rs`: its `rerun-if-changed=../../.git/HEAD` does not exist
+in every layout; the git revision it embeds stays out of the loadable image.
 
 The reviewed configuration is:
 
@@ -63,15 +54,16 @@ Do not fly the pre-pitch-fix image with SHA-256
 Any other candidate still needs the gates below; a different hash is not
 evidence that the pitch fix or current safety behavior is present.
 
-The logical-to-physical output map is `MOTOR_OUTPUT_MAP = [3, 4, 2, 1]`, shared
-by every FerroWasp board:
+Foxeer's board data maps logical motors to physical outputs one to one
+(`LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT = [1, 2, 3, 4]`), and the reviewed
+configuration keeps the pilot's `motor_map` at `1234`:
 
 | Logical motor | Physical output | Location | Rotation |
 |---|---:|---|---|
-| M1 | 3 | rear-right | CW |
-| M2 | 4 | front-right | CCW |
-| M3 | 2 | rear-left | CCW |
-| M4 | 1 | front-left | CW |
+| M1 | 1 | rear-right | CW |
+| M2 | 2 | front-right | CCW |
+| M3 | 3 | rear-left | CCW |
+| M4 | 4 | front-left | CW |
 
 The DShot idle command `65` maps to protocol value `112`. Arming keeps stop
 frames selected through the guarded dwell, then applies bounded idle under
@@ -84,8 +76,13 @@ those electrical measurements remain open.
 
 Catalog ID: `BENCH-FOX-USB-001`.
 
-`tools/foxeer_bench_gates.py usb-config` runs and checks these steps; see
-`tools/README.md`.
+`python3 tools/foxeer_bench_gates.py usb-config --build-record <BUILD-FOX-001
+record>` runs and checks these steps on a connected Foxeer. The operator
+confirms propellers removed and actuator power disconnected and performs each
+USB power cycle when prompted; the tool drives the rest, stops at the first
+failed check, keeps every capture in a new `logs/bench/` directory, and drafts
+a schema 2 run record for review, never committing it. `check-usb-config`
+judges an existing capture directory to the same standard.
 
 Keep the aircraft disarmed, stationary during boot gyro calibration, and with
 propellers removed. Keep actuator/ESC power disconnected. If the installation

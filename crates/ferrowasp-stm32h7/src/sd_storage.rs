@@ -427,6 +427,40 @@ where
     }
 }
 
+/// The flash manager's view: never busy, since every operation completes
+/// before it returns, and log programs held in the write-back window until
+/// a flush.
+impl<D> ferrowasp_drivers::nor_storage::NorStorage for SdNor<D>
+where
+    D: BlockDevice,
+{
+    type Error = Error<D::Error>;
+
+    fn read(&mut self, address: u32, output: &mut [u8]) -> Result<(), Self::Error> {
+        SdNor::read(self, address, output)
+    }
+
+    fn page_program(&mut self, address: u32, bytes: &[u8]) -> Result<(), Self::Error> {
+        SdNor::page_program(self, address, bytes)
+    }
+
+    fn erase_sector_4k(&mut self, address: u32) -> Result<(), Self::Error> {
+        SdNor::erase_sector_4k(self, address)
+    }
+
+    fn busy(&mut self) -> Result<bool, Self::Error> {
+        Ok(SdNor::read_status(self)?.busy())
+    }
+
+    fn write_back_pending(&self) -> bool {
+        SdNor::write_back_pending(self)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        SdNor::flush(self)
+    }
+}
+
 /// A card slot whose card may have failed to come up. The flash manager
 /// owns the slot either way; a failed card answers every access with the
 /// error it failed with.

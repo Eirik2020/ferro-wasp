@@ -130,8 +130,12 @@ def _validate_main(path: Path, root: Path, errors: list[str]) -> None:
 
 
 def _board_sources(root: Path) -> list[tuple[str, Path]]:
+    """Each app's board support: its HAL glue in `src/board/` and its data
+    crate's sources in `board/src/`."""
+
     sources: list[tuple[str, Path]] = []
-    for board_dir in sorted(root.glob("firmware/*/src/board")):
+    board_dirs = [*root.glob("firmware/*/src/board"), *root.glob("firmware/*/board/src")]
+    for board_dir in sorted(board_dirs):
         board = board_dir.parents[1].name
         for path in sorted(board_dir.rglob("*.rs")):
             sources.append((board, path))

@@ -14,7 +14,8 @@ source checkout.
 FerroWasp remains experimental flight-control firmware. Flashing replaces
 firmware already installed in STM32 internal flash, including Betaflight.
 Remove every propeller, disconnect the flight battery, and keep the ESCs
-unpowered throughout USB maintenance.
+unpowered throughout USB maintenance, except for the props-off motor test,
+which needs the battery.
 
 ## Download and extract
 
@@ -146,16 +147,18 @@ Named profiles are stored under
 `%APPDATA%\FerroConfigurator\profiles` and survive replacement of the release
 folder.
 
-The fresh-storage Foxeer fallback is:
+With nothing stored, the Foxeer boots with these defaults:
 
 ```text
 roll/pitch/yaw P: 2.5 / 2.5 / 2.0
 all I and D:       0
-IMU LPF alpha:    0.55
+gyro filter:      50.8 Hz corner
 log divisor:      1
+RC:               SBUS, AETR, arm switch on channel 9
 RC deadband:      8
 roll/pitch rates: center 70, maximum 300, expo 0.50
 yaw rates:        center 70, maximum 200, expo 0.50
+motor map:        1234
 ```
 
 This is a flyable experimental baseline, not a universal tune.
@@ -192,6 +195,14 @@ For a complete profile:
 .\ferro-configurator.exe --port $Port config apply foxeer-profile.toml
 .\ferro-configurator.exe --port $Port config show
 ```
+
+Legacy schema-v1 profiles contain only the original eleven fields. Applying
+one overlays those fields onto the connected board and preserves its current
+RC-rate settings.
+
+PID changes can cause violent oscillation. Change one controlled variable at a
+time, verify the entire configuration, and repeat relevant props-off checks
+before flight.
 
 ## Use a CRSF receiver
 
@@ -246,14 +257,6 @@ then bind one to a function (`none`, `rc`, `osd`, `esc_telemetry` or
 The change is saved and verified by readback, and takes effect when the
 controller reboots. A function the port cannot carry is dropped at boot and
 logged; with no port bound to `rc`, the craft cannot arm.
-
-Legacy schema-v1 profiles contain only the original eleven fields. Applying
-one overlays those fields onto the connected board and preserves its current
-RC-rate settings.
-
-PID changes can cause violent oscillation. Change one controlled variable at a
-time, verify the entire configuration, and repeat relevant props-off checks
-before flight.
 
 ## List and download flights
 
@@ -371,7 +374,8 @@ After any firmware or parameter change:
 
 1. verify device information and the complete saved configuration;
 2. cold-boot stationary and require healthy IMU, RC, DShot, ESC telemetry, and
-   OSD;
+   OSD; unplug USB, since the board refuses to arm while a computer is
+   connected;
 3. repeat props-off motor direction, correction direction, disarm, and RC-loss
    checks when firmware, gains, wiring, motor/ESC hardware, or the airframe
    changed;

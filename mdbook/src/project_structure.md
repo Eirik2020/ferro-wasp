@@ -1,88 +1,70 @@
 # Project Structure
 
-The repository is currently a rapid prototype, not yet the final multi-crate layout.
+FerroWasp is one root Cargo workspace of shared crates, plus one isolated Cargo
+workspace per firmware application. Each application selects one chip's HAL and
+peripheral-access crate, and keeping them apart stops Cargo from unifying two
+chips' features in one build. Firmware is composed with
+[FerroForge](https://crates.io/crates/ferroforge).
 
-Current important paths:
+## Shared Crates
 
-```text
-.
-|-- firmware/
-|   |-- tbs-lucid-h7/            # TBS Lucid H7 board support and H743 RTIC shell
-|   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
-|   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
-|       |-- src/board/           # Immutable board facts and typed construction
-|       |-- src/lib.rs           # Internal app-support facade
-|       `-- src/main.rs          # ferroforge::app! declarations and wiring only
-|-- crates/
-|   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
-|   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
-|   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
-|   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
-|   |-- ferrowasp-flight/        # Portable flight logic: control, OSD, ESC manager, storage
-|   |-- ferrowasp-stm32/         # HAL-neutral STM32 UART/SPI/ADC/DShot mechanisms
-|   |-- ferrowasp-stm32-tasks/   # RTIC task definitions shared by the STM32 boards
-|   |-- ferrowasp-stm32f4/       # STM32F4 HAL backend
-|   |-- ferrowasp-stm32h7/       # STM32H743 HAL backend
-|   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
-|   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
-|   `-- rc-pwm/                  # Local PWM controller crate
-|-- mdbook/
-|   `-- src/                     # This documentation book
-|-- .github/
-|   |-- CONTRIBUTING.md          # GitHub pointer to the canonical guide
-|   `-- SECURITY.md              # Private security-reporting policy
-|-- LICENSE                      # Apache License, Version 2.0
-|-- NOTICE                       # Copyright, naming, and status notice
-`-- THIRD_PARTY_NOTICES.md       # Licences for vendored assets
-```
+Under `crates/`, all members of the root workspace and host-tested there:
 
-## Current Reality
+| Crate | Owns |
+|---|---|
+| `ferrowasp-core` | Safety state and the safety master's rules, actuator command types, blackbox records, stored configuration, reference frames |
+| `ferrowasp-drivers` | Device and protocol drivers: IMUs (ICM-42688-P, MPU-6000, MPU-6500), CRSF, BLHeli telemetry, SPI NOR flash, and the `NorStorage` trait |
+| `ferrowasp-flight` | Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link |
+| `ferrowasp-io-core` | Bounded serial and SPI contracts, I/O health, statistics, and time types |
+| `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
+| `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
+| `ferrowasp-pid` | The PID rate-control primitive |
+| `ferrowasp-waveform` | DShot packet encoding and compare sequences |
+| `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
+| `ferrowasp-stm32` | STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types |
+| `ferrowasp-stm32f4` | The STM32F4 backend over `stm32f4xx-hal` |
+| `ferrowasp-stm32h7` | The STM32H743 backend over `stm32h7xx-hal` |
+| `ferrowasp-stm32-tasks` | The RTIC task definitions every STM32 flight board shares, including the flash manager |
 
-Each deployable board has an independent Cargo/PAC graph. Its `src/main.rs`
-contains the RTIC resource and task declarations, locking, scheduling, and
-concrete initialization wiring. Board declarations and constructors live in
-the same package's support library; reusable behavior remains in shared crates.
-Foxeer is the golden flight app.
+Only `ferrowasp-stm32f4` and `ferrowasp-stm32h7` name a chip HAL, and only
+they hold unsafe code, at their DMA endpoint declarations.
 
-The code already contains early signs of the future shape:
+## Firmware Applications
 
-- reusable safety, signal, and actuator conversion types in `crates/ferrowasp-core/`
-- board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
-  construction policy under each app's `src/board/`
-- isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
-  independent Cargo and RTIC resource contracts
-- HAL-neutral STM32 UART/SPI/ADC and DShot mechanisms under
-  `crates/ferrowasp-stm32/`, with each family's HAL under them in
-  `crates/ferrowasp-stm32f4/` (also servo/auxiliary PWM) and
-  `crates/ferrowasp-stm32h7/`
-- software-driver and control helpers, including the BLHeli parser and bounded
-  ESC manager, under `crates/ferrowasp-drivers/` and `crates/ferrowasp-flight/`
-- local support crates for `rc-pwm`, `ferrowasp-pid`, `ferrowasp-mspv1`, and `ferrowasp-waveform`
-- active MSPv1 / DJI O4 OSD support under `crates/ferrowasp-mspv1/` and `crates/ferrowasp-flight/`
-- host-testable pure logic for safety, RC mapping, filters, PID, mixer, DShot,
-  BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers
+Under `firmware/`, each its own Cargo workspace:
 
-## Target Direction
+| Application | Board |
+|---|---|
+| `foxeer-f405-v2` | Foxeer F405 V2, STM32F405; the golden flight app |
+| `tbs-lucid-h7` | TBS Lucid H7, STM32H743 |
+| `stm32f401-bringup` | NUCLEO-F401RE; peripheral bring-up without actuators |
 
-The long-term layout is expected to move toward:
+A flight application has three parts:
 
 ```text
-ferrowasp-core       reusable types, units, safety state, queues
-ferrowasp-mcu        family-neutral MCU contracts
-ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-flight     portable flight logic, host-testable
-ferrowasp-stm32      HAL-neutral STM32 mechanisms
-ferrowasp-stm32f4    STM32F4 HAL backend (ferrowasp-stm32h7 for the H743)
-ferrowasp-stm32-tasks RTIC task definitions shared by the STM32 boards
-app src/board        board pin maps, clocks, DMA/timer assignments
-app src/lib.rs       board composition and internal support facade
-app src/main.rs      thin ferroforge::app! shell selecting shared definitions
-ferrowasp-gen        optional source generation for task/resource wiring
-manifest/            optional board, task, resource, and policy descriptions
+firmware/<board>/
+|-- board/        board data crate: pins, DMA and serial routes, resource claims,
+|                 default configuration, USB identity; no HAL, host-tested
+|-- src/board/    HAL glue: type aliases and peripheral construction
+|-- src/lib.rs    the facade main.rs imports
+`-- src/main.rs   the ferroforge::app! declaration: resources, priorities,
+                  init wiring, and task selection only
 ```
 
-Boards use isolated app packages so their PAC features and RTIC resource
-contracts cannot be accidentally unified.
+Each board data crate is also a member of the root workspace, so
+`cargo test --workspace` runs its tests; the application's own workspace
+excludes it and depends on it by path. [Board Support](board_support.md)
+describes what a board owns.
 
-Reusable behavior moves outward only when its ownership and bounded execution
-are explicit; custom macros are not used to hide runtime work.
+## Host Tools
+
+| Path | What |
+|---|---|
+| `tools/ferro-configurator/` | FerroConfigurator, its own Cargo workspace: CLI and GUI for flashing, configuration, motor tests, and log download |
+| `tools/*.py` | Bench, RTT, analysis, evidence, and repository checks |
+| `tools/rtic-app-builder/` | The earlier app generator, its own workspace, due to be retired |
+
+## Documentation
+
+`mdbook/` is this book. `project_meta/` holds internal maintainer material and
+is not published.

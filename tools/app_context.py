@@ -41,6 +41,7 @@ class AppTarget:
     instructions: tuple[PurePosixPath, ...]
     test_chain: tuple[str, ...]
     board_directory: PurePosixPath
+    board_data_directory: PurePosixPath
 
 
 @dataclass(frozen=True)
@@ -81,8 +82,7 @@ APP_TARGETS = {
         cargo_toml=PurePosixPath("firmware/foxeer-f405-v2/Cargo.toml"),
         instructions=(
             PurePosixPath("AGENTS.md"),
-            PurePosixPath("firmware/AGENTS.md"),
-            PurePosixPath("firmware/foxeer-f405-v2/AGENTS.md"),
+            PurePosixPath("project_meta/governing-requirements.md"),
         ),
         test_chain=(
             "SW-COMMON-001",
@@ -96,6 +96,9 @@ APP_TARGETS = {
         board_directory=PurePosixPath(
             "firmware/foxeer-f405-v2/src/board"
         ),
+        board_data_directory=PurePosixPath(
+            "firmware/foxeer-f405-v2/board/src"
+        ),
     ),
 }
 
@@ -108,7 +111,7 @@ TOPIC_ROUTES = {
     "init": TopicRoute(
         summary="Board construction, resource ownership, startup, and heartbeat.",
         common_symbols=("init", "heartbeat"),
-        companions=(PurePosixPath("project_meta/CODEX_PROJECT_CONTEXT.md"),),
+        companions=(PurePosixPath("project_meta/governing-requirements.md"),),
     ),
     "arming": TopicRoute(
         summary="Safety events, live guards, guarded holds, and actuator handoff.",
@@ -118,7 +121,7 @@ TOPIC_ROUTES = {
             "actuator_output",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/esc_manager.rs"),
         ),
@@ -129,7 +132,7 @@ TOPIC_ROUTES = {
             "control_loop",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
         ),
@@ -146,7 +149,7 @@ TOPIC_ROUTES = {
             "actuator_output",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
@@ -164,7 +167,7 @@ TOPIC_ROUTES = {
             "actuator_output",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-flight/src/esc_manager.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
@@ -180,7 +183,7 @@ TOPIC_ROUTES = {
             "dshot_service",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-drivers/src/blheli_telemetry.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/esc_manager.rs"),
         ),
@@ -197,7 +200,7 @@ TOPIC_ROUTES = {
         ),
         foxeer_symbols=("imu_data_ready",),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-drivers/src/mpu6500.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/mpu6000.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/icm42688p.rs"),
@@ -218,7 +221,7 @@ TOPIC_ROUTES = {
             "rc_telemetry",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/rc_receiver.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
@@ -236,7 +239,7 @@ TOPIC_ROUTES = {
             "uart4_tx_dma_complete",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-flight/src/osd.rs"),
             PurePosixPath("crates/ferrowasp-mspv1/src/lib.rs"),
         ),
@@ -260,21 +263,23 @@ TOPIC_ROUTES = {
             "uart3_tx_dma_complete",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-flight/src/usb_debug.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/command_link.rs"),
         ),
     ),
     "storage": TopicRoute(
-        summary="Foxeer flash discovery, configuration, blackbox access, and manager state.",
+        summary="Storage discovery, configuration, blackbox access, and the shared flash manager.",
         common_symbols=(),
         foxeer_symbols=(
             "flash_manager_task",
         ),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
+            PurePosixPath("crates/ferrowasp-drivers/src/nor_storage.rs"),
             PurePosixPath("crates/ferrowasp-drivers/src/spi_nor.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/log_sync.rs"),
@@ -286,9 +291,10 @@ TOPIC_ROUTES = {
         common_symbols=("control_loop",),
         foxeer_symbols=("flash_manager_task",),
         companions=(
-            PurePosixPath("project_meta/CODEX_ACTIVE_WORK.md"),
+            PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
         ),
     ),
@@ -520,6 +526,7 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
         PurePosixPath("project_meta/testing/TEST_CATALOG.json"),
         target.support,
         target.board_directory,
+        target.board_data_directory,
         *topic.companions,
     )
     lines.extend(["", "Companion context:"])
@@ -585,6 +592,7 @@ def validate_routes(root: Path = REPOSITORY_ROOT) -> list[str]:
             target.readme,
             target.cargo_toml,
             target.board_directory,
+            target.board_data_directory,
             *target.instructions,
         )
         for path in required_paths:
