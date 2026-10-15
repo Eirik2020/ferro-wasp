@@ -202,8 +202,11 @@
         <fieldset>
           <legend>Firmware</legend>
           <label><input type="radio" name="firmware-source" value="bundled" checked /> The firmware bundled with FerroConfigurator</label>
-          <label><input type="radio" name="firmware-source" value="file" /> A file
-            <input id="firmware-path" type="text" placeholder="FerroWasp ELF path" size="36" disabled /></label>
+          <div class="row">
+            <label><input type="radio" name="firmware-source" value="file" /> A file</label>
+            <button id="choose-firmware" type="button">Choose file…</button>
+            <span id="firmware-path" class="note">No file chosen</span>
+          </div>
         </fieldset>
         <div class="row">
           <button id="flash" type="button" disabled>Flash firmware</button>

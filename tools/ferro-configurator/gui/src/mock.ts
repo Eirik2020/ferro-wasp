@@ -420,4 +420,9 @@ export class MockApi implements Api {
     this.level = { x_mg: 14, y_mg: -38, z_mg: 6 };
     return { ...this.level };
   }
+
+  async chooseFirmwareFile(): Promise<string | null> {
+    await sleep(100);
+    return "/home/pilot/FerroWaspFoxeerF405V2";
+  }
 }

@@ -275,6 +275,8 @@ export interface Api {
    * bootloader is flashed as it is. Reconnects when the controller returns.
    */
   flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport>;
+  /** Asks the user for a firmware file; `null` when they cancel. */
+  chooseFirmwareFile(): Promise<string | null>;
   /** The stored accelerometer level. */
   accelLevel(): Promise<AccelLevel>;
   /**

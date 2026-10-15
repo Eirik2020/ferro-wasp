@@ -17,6 +17,7 @@ ferro-configurator-bridge = { path = "../../crates/ferro-configurator-bridge" }
 ferro-configurator-core = { path = "../../crates/ferro-configurator-core" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 
 [features]
 default = ["custom-protocol"]

@@ -282,6 +282,8 @@ async fn flash_firmware(
 
 fn main() {
     tauri::Builder::default()
+        // The Firmware tab's file chooser.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(AppState {
                 session: Arc::new(Mutex::new(Session::new())),

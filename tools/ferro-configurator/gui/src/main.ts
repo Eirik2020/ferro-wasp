@@ -911,6 +911,28 @@ async function reboot(dfu: boolean): Promise<void> {
   }
 }
 
+/** The firmware file the user picked, flashed when "A file" is selected. */
+let chosenFirmware: string | null = null;
+
+async function chooseFirmware(): Promise<void> {
+  try {
+    const path = await api.chooseFirmwareFile();
+    if (path === null) {
+      return;
+    }
+    chosenFirmware = path;
+    const shown = element("firmware-path");
+    shown.textContent = path.split(/[\\/]/).pop() ?? path;
+    shown.title = path;
+    const radio = document.querySelector<HTMLInputElement>('input[name="firmware-source"][value="file"]');
+    if (radio) {
+      radio.checked = true;
+    }
+  } catch (error) {
+    report(error);
+  }
+}
+
 function describeStage(stage: FlashStage): string {
   switch (stage.stage) {
     case "entering_bootloader":
@@ -931,9 +953,9 @@ function describeStage(stage: FlashStage): string {
 async function flashFirmware(): Promise<void> {
   const source =
     document.querySelector<HTMLInputElement>('input[name="firmware-source"]:checked')?.value ?? "bundled";
-  const path = source === "file" ? element<HTMLInputElement>("firmware-path").value.trim() : null;
-  if (path === "") {
-    setStatusLine("Enter the path of a FerroWasp firmware file first.", "bad");
+  const path = source === "file" ? chosenFirmware : null;
+  if (source === "file" && path === null) {
+    setStatusLine("Choose a firmware file first.", "bad");
     return;
   }
   const wasConnected = connected;
@@ -1062,11 +1084,7 @@ function wire(): void {
   element("calibrate-accel").addEventListener("click", () => void calibrateAccelerometer());
   element("reboot-dfu").addEventListener("click", () => void reboot(true));
   element("flash").addEventListener("click", () => void flashFirmware());
-  for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="firmware-source"]')) {
-    radio.addEventListener("change", () => {
-      element<HTMLInputElement>("firmware-path").disabled = radio.value !== "file" || !radio.checked;
-    });
-  }
+  element("choose-firmware").addEventListener("click", () => void chooseFirmware());
   const template = element<HTMLTemplateElement>("config-actions-template");
   for (const slot of document.querySelectorAll<HTMLElement>(".config-actions")) {
     slot.append(template.content.cloneNode(true));
