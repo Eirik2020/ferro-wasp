@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c1f02f.js";
+            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -317,17 +317,26 @@ validation fails.</p>
 </code></pre>
 <p>Follow its prompts:</p>
 <ol>
-<li>Disconnect USB.</li>
-<li>Hold the board’s BOOT button.</li>
-<li>Reconnect USB, wait approximately one second, and release BOOT.</li>
-<li>Allow the configurator to detect exactly one STM32 ROM DFU device.</li>
-<li>Type the requested confirmation only after checking the selected board and
-image.</li>
+<li>Type the requested confirmation only after checking the board and image.
+Nothing on the board changes before this.</li>
+<li>If the board runs FerroWasp and is connected over USB, the configurator
+restarts it into the STM32 ROM bootloader. The board must be disarmed; it
+refuses while armed, while a flight log is still being written, or while
+flash maintenance is running.</li>
+<li>If the board does not run FerroWasp, or does not answer, the configurator
+asks you to unplug USB, hold BOOT, reconnect, wait about a second, and
+release BOOT.</li>
 <li>Do not disconnect USB during programming.</li>
 </ol>
 <p>The command must reach its final successful completion message and exit with
 code zero. Detection or programming progress is not, by itself, proof that
 the flash completed.</p>
+<p>To restart a connected board without flashing, or to leave it in the ROM
+bootloader for another flasher:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe device reboot
+.\ferro-configurator.exe device reboot --dfu
+</code></pre>
+<p>A power cycle leaves the ROM bootloader.</p>
 <p>If the normal FerroWasp COM port does not return after programming, disconnect
 and reconnect USB normally without holding BOOT.</p>
 <p>ROM DFU updates internal MCU flash. It does not intentionally erase the
@@ -394,6 +403,16 @@ RC-rate settings.</p>
 <p>PID changes can cause violent oscillation. Change one controlled variable at a
 time, verify the entire configuration, and repeat relevant props-off checks
 before flight.</p>
+<h2 id="calibrate-the-accelerometer"><a class="header" href="#calibrate-the-accelerometer">Calibrate the accelerometer</a></h2>
+<p>Set the craft still on level ground, disarmed, then press Calibrate
+accelerometer on the configurator’s Setup tab, or run:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port imu calibrate
+</code></pre>
+<p>The controller averages about half a second of the accelerometer and saves
+where it reads level with the configuration; <code>imu level</code> shows it. It refuses a
+craft that moves or leans more than 10 degrees. The level corrects the
+attitude the OSD and the configurator show; the rate loop that flies the craft
+does not use the accelerometer. The gyro still calibrates itself at every boot.</p>
 <h2 id="use-a-crsf-receiver"><a class="header" href="#use-a-crsf-receiver">Use a CRSF receiver</a></h2>
 <p>Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the
 SBUS pad: CRSF must not pass through the board’s SBUS inverter. Then select
@@ -502,6 +521,19 @@ by 4 KiB. Download every flight before flashing it.</p>
 <code>ferrowasp_rate_control</code>. The current topic includes raw and filtered gyro
 rates, rate setpoints, PID effort, throttle, four motor commands, sequences,
 and armed/fresh-IMU flags.</p>
+<p>For MATLAB or a spreadsheet, write CSV instead:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe convert flight-34.fwbb --flight latest --csv
+</code></pre>
+<pre><code class="language-matlab">T = readtable("flight-34.csv");
+plot(T.time_s, [T.setpoint_roll_dps T.gyro_roll_dps])
+</code></pre>
+<p>Each row is one logged record and each column names its unit: degrees per
+second for gyro rates and setpoints, mixer counts (0 to 2000) for PID effort,
+throttle and motors. <code>time_s</code> is computed from the control-tick count at the
+control rate measured from the log, which the conversion prints with the log
+rate divisor. Where records were dropped, rows are missing but <code>time_s</code> stays
+correct, so resample onto a uniform grid (<code>retime</code>, <code>resample</code>) before
+frequency-domain analysis; the conversion reports how many gaps it found.</p>
 <h2 id="erase-logs"><a class="header" href="#erase-logs">Erase logs</a></h2>
 <p>Erase only after every required flight has been downloaded, retained, and
 converted successfully:</p>
@@ -546,7 +578,8 @@ configuration validation and rejects storage changes while armed.</p>
 <li>Run <code>ferro-configurator.exe doctor</code>.</li>
 <li>Validate the bundled image with
 <code>ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run</code>.</li>
-<li>Flash the board through the guided USB DFU workflow.</li>
+<li>Flash the board through the guided USB DFU workflow; a board already
+running FerroWasp is restarted into the bootloader without the BOOT button.</li>
 <li>Connect to its USB CDC port to inspect configuration or retrieve logs.</li>
 </ol>
 <p>The <a href="#foxeer-f405-v2-usb-quick-start">Foxeer F405 V2 guide</a> provides complete commands and
@@ -2088,7 +2121,8 @@ chips’ features in one build. Firmware is composed with
 </table>
 </div>
 <p>Only <code>ferrowasp-stm32f4</code> and <code>ferrowasp-stm32h7</code> name a chip HAL, and only
-they hold unsafe code, at their DMA endpoint declarations.</p>
+they hold unsafe code: their DMA endpoint declarations and their jump into the
+chip’s ROM bootloader.</p>
 <h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
 <p>Under <code>firmware/</code>, each its own Cargo workspace:</p>
 <div class="table-wrapper">
@@ -2351,9 +2385,12 @@ counted as gaps:</p>
 <h2 id="ulog-reference-converter"><a class="header" href="#ulog-reference-converter">ULog Reference Converter</a></h2>
 <p>FerroConfigurator’s <code>convert</code> command is the normal path.
 <code>tools/fwbb_to_ulog.py</code> is its Python reference implementation and produces the
-same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic, with
-timestamps from the first selected sample and sequence gaps as ULog dropouts.
-It never combines flights.</p>
+same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic. The
+log does not store its control rate, so both measure it over the flight, write
+it as the <code>control_rate_hz</code> info field, and time each record by its control
+tick at that rate; sequence gaps become ULog dropouts. A flight under 2 s is
+too short to measure and keeps the records’ millisecond timestamps. It never
+combines flights.</p>
 <pre><code class="language-powershell">python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
 </code></pre>
 <h2 id="flight-reports"><a class="header" href="#flight-reports">Flight Reports</a></h2>
@@ -2515,6 +2552,21 @@ configurable stick order and arm channel.</li>
 motor order, from FerroConfigurator or the USB command line.</li>
 <li>FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
 live stick readout, and a rates curve.</li>
+<li>ULog conversion (<code>convert</code> and <code>tools/fwbb_to_ulog.py</code>) measures the
+control rate from the log instead of assuming 400 Hz, times records by
+control tick, and accepts records that share a millisecond timestamp.</li>
+<li><code>convert --csv</code> in FerroConfigurator: one flight as CSV for MATLAB, with
+units in the column names, time from the control-tick count at the rate
+measured from the log, and dropped-record gaps reported.</li>
+<li>Accelerometer level calibration: <code>imu calibrate</code> on a still, level craft
+saves where the accelerometer reads level, and the attitude estimate uses
+it. FerroConfigurator’s Setup tab has a Calibrate button, and <code>imu calibrate</code> and <code>imu level</code> commands. Stored configuration version 7.</li>
+<li><code>reboot</code> and <code>reboot dfu</code> on the USB command line, disarmed only: the
+second restarts the board into the STM32 ROM bootloader. FerroConfigurator’s
+<code>flash</code> uses it, so a board running FerroWasp is flashed without the BOOT
+button, and <code>device reboot [--dfu]</code> gives both directly. The GUI gains a
+Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
+the TBS Lucid H7’s entry is not yet tested.</li>
 <li>Test evidence tied to source components rather than whole firmware images,
 with <code>tools/components.py</code> listing which tests each board owes, and
 <code>tools/bench_rig.py</code> running the boot and idle gate on any board over SWD.</li>

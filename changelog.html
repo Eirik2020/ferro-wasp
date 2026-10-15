@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c1f02f.js";
+            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -201,6 +201,21 @@ configurable stick order and arm channel.</li>
 motor order, from FerroConfigurator or the USB command line.</li>
 <li>FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
 live stick readout, and a rates curve.</li>
+<li>ULog conversion (<code>convert</code> and <code>tools/fwbb_to_ulog.py</code>) measures the
+control rate from the log instead of assuming 400 Hz, times records by
+control tick, and accepts records that share a millisecond timestamp.</li>
+<li><code>convert --csv</code> in FerroConfigurator: one flight as CSV for MATLAB, with
+units in the column names, time from the control-tick count at the rate
+measured from the log, and dropped-record gaps reported.</li>
+<li>Accelerometer level calibration: <code>imu calibrate</code> on a still, level craft
+saves where the accelerometer reads level, and the attitude estimate uses
+it. FerroConfigurator’s Setup tab has a Calibrate button, and <code>imu calibrate</code> and <code>imu level</code> commands. Stored configuration version 7.</li>
+<li><code>reboot</code> and <code>reboot dfu</code> on the USB command line, disarmed only: the
+second restarts the board into the STM32 ROM bootloader. FerroConfigurator’s
+<code>flash</code> uses it, so a board running FerroWasp is flashed without the BOOT
+button, and <code>device reboot [--dfu]</code> gives both directly. The GUI gains a
+Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
+the TBS Lucid H7’s entry is not yet tested.</li>
 <li>Test evidence tied to source components rather than whole firmware images,
 with <code>tools/components.py</code> listing which tests each board owes, and
 <code>tools/bench_rig.py</code> running the boot and idle gate on any board over SWD.</li>

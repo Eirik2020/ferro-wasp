@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c1f02f.js";
+            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -205,7 +205,8 @@ chips’ features in one build. Firmware is composed with
 </table>
 </div>
 <p>Only <code>ferrowasp-stm32f4</code> and <code>ferrowasp-stm32h7</code> name a chip HAL, and only
-they hold unsafe code, at their DMA endpoint declarations.</p>
+they hold unsafe code: their DMA endpoint declarations and their jump into the
+chip’s ROM bootloader.</p>
 <h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
 <p>Under <code>firmware/</code>, each its own Cargo workspace:</p>
 <div class="table-wrapper">

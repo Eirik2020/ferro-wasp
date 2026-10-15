@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d1c1f02f.js";
+            window.path_to_searchindex_js = "../searchindex-cb2ba6d3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5109988b.js"></script>
@@ -195,7 +195,8 @@ configuration validation and rejects storage changes while armed.</p>
 <li>Run <code>ferro-configurator.exe doctor</code>.</li>
 <li>Validate the bundled image with
 <code>ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run</code>.</li>
-<li>Flash the board through the guided USB DFU workflow.</li>
+<li>Flash the board through the guided USB DFU workflow; a board already
+running FerroWasp is restarted into the bootloader without the BOOT button.</li>
 <li>Connect to its USB CDC port to inspect configuration or retrieve logs.</li>
 </ol>
 <p>The <a href="foxeer_f405_v2.html">Foxeer F405 V2 guide</a> provides complete commands and

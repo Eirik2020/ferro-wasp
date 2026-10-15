@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d1c1f02f.js";
+            window.path_to_searchindex_js = "../searchindex-cb2ba6d3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5109988b.js"></script>
@@ -240,17 +240,26 @@ validation fails.</p>
 </code></pre>
 <p>Follow its prompts:</p>
 <ol>
-<li>Disconnect USB.</li>
-<li>Hold the board’s BOOT button.</li>
-<li>Reconnect USB, wait approximately one second, and release BOOT.</li>
-<li>Allow the configurator to detect exactly one STM32 ROM DFU device.</li>
-<li>Type the requested confirmation only after checking the selected board and
-image.</li>
+<li>Type the requested confirmation only after checking the board and image.
+Nothing on the board changes before this.</li>
+<li>If the board runs FerroWasp and is connected over USB, the configurator
+restarts it into the STM32 ROM bootloader. The board must be disarmed; it
+refuses while armed, while a flight log is still being written, or while
+flash maintenance is running.</li>
+<li>If the board does not run FerroWasp, or does not answer, the configurator
+asks you to unplug USB, hold BOOT, reconnect, wait about a second, and
+release BOOT.</li>
 <li>Do not disconnect USB during programming.</li>
 </ol>
 <p>The command must reach its final successful completion message and exit with
 code zero. Detection or programming progress is not, by itself, proof that
 the flash completed.</p>
+<p>To restart a connected board without flashing, or to leave it in the ROM
+bootloader for another flasher:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe device reboot
+.\ferro-configurator.exe device reboot --dfu
+</code></pre>
+<p>A power cycle leaves the ROM bootloader.</p>
 <p>If the normal FerroWasp COM port does not return after programming, disconnect
 and reconnect USB normally without holding BOOT.</p>
 <p>ROM DFU updates internal MCU flash. It does not intentionally erase the
@@ -317,6 +326,16 @@ RC-rate settings.</p>
 <p>PID changes can cause violent oscillation. Change one controlled variable at a
 time, verify the entire configuration, and repeat relevant props-off checks
 before flight.</p>
+<h2 id="calibrate-the-accelerometer"><a class="header" href="#calibrate-the-accelerometer">Calibrate the accelerometer</a></h2>
+<p>Set the craft still on level ground, disarmed, then press Calibrate
+accelerometer on the configurator’s Setup tab, or run:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port imu calibrate
+</code></pre>
+<p>The controller averages about half a second of the accelerometer and saves
+where it reads level with the configuration; <code>imu level</code> shows it. It refuses a
+craft that moves or leans more than 10 degrees. The level corrects the
+attitude the OSD and the configurator show; the rate loop that flies the craft
+does not use the accelerometer. The gyro still calibrates itself at every boot.</p>
 <h2 id="use-a-crsf-receiver"><a class="header" href="#use-a-crsf-receiver">Use a CRSF receiver</a></h2>
 <p>Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the
 SBUS pad: CRSF must not pass through the board’s SBUS inverter. Then select
@@ -425,6 +444,19 @@ by 4 KiB. Download every flight before flashing it.</p>
 <code>ferrowasp_rate_control</code>. The current topic includes raw and filtered gyro
 rates, rate setpoints, PID effort, throttle, four motor commands, sequences,
 and armed/fresh-IMU flags.</p>
+<p>For MATLAB or a spreadsheet, write CSV instead:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe convert flight-34.fwbb --flight latest --csv
+</code></pre>
+<pre><code class="language-matlab">T = readtable("flight-34.csv");
+plot(T.time_s, [T.setpoint_roll_dps T.gyro_roll_dps])
+</code></pre>
+<p>Each row is one logged record and each column names its unit: degrees per
+second for gyro rates and setpoints, mixer counts (0 to 2000) for PID effort,
+throttle and motors. <code>time_s</code> is computed from the control-tick count at the
+control rate measured from the log, which the conversion prints with the log
+rate divisor. Where records were dropped, rows are missing but <code>time_s</code> stays
+correct, so resample onto a uniform grid (<code>retime</code>, <code>resample</code>) before
+frequency-domain analysis; the conversion reports how many gaps it found.</p>
 <h2 id="erase-logs"><a class="header" href="#erase-logs">Erase logs</a></h2>
 <p>Erase only after every required flight has been downloaded, retained, and
 converted successfully:</p>

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c1f02f.js";
+            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -306,9 +306,12 @@ counted as gaps:</p>
 <h2 id="ulog-reference-converter"><a class="header" href="#ulog-reference-converter">ULog Reference Converter</a></h2>
 <p>FerroConfigurator’s <code>convert</code> command is the normal path.
 <code>tools/fwbb_to_ulog.py</code> is its Python reference implementation and produces the
-same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic, with
-timestamps from the first selected sample and sequence gaps as ULog dropouts.
-It never combines flights.</p>
+same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic. The
+log does not store its control rate, so both measure it over the flight, write
+it as the <code>control_rate_hz</code> info field, and time each record by its control
+tick at that rate; sequence gaps become ULog dropouts. A flight under 2 s is
+too short to measure and keeps the records’ millisecond timestamps. It never
+combines flights.</p>
 <pre><code class="language-powershell">python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
 </code></pre>
 <h2 id="flight-reports"><a class="header" href="#flight-reports">Flight Reports</a></h2>
