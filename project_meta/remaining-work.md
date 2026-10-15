@@ -80,7 +80,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
   (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
   needs a board variant.
-- **FerroForge adoption.** Convert `usb_fs`, then retire `tools/rtic-app-builder`.
+- **FerroForge adoption.** Retire `tools/rtic-app-builder`. FerroForge 0.4
+  expands a group whose members are imported in one brace, `pub use
+  crate::{a, b};`, into an empty group without an error, so
+  `ferrowasp-stm32-tasks::groups` imports each member on its own line; the fix
+  belongs in FerroForge.
 
 ## Tooling and Environment
 
