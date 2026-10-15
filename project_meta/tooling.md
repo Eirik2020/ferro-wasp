@@ -25,6 +25,8 @@ statement of which tests apply or passed.
 
 ## Checks
 
+- `tools/run_tests.py` runs every test suite, locally and in CI, and counts the
+  tests each ran; `--list` shows what each suite runs and why it is separate.
 - `tools/check_repository_context.py` validates the document registry and byte
   budgets, the always-loaded line limit, the internal book's summary, the ADR
   index and records, the immutable archive hashes, the test catalog, run

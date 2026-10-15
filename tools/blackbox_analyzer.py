@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Analyze FerroWasp BB1/BB2 blackbox logs.
+"""Analyze FerroWasp blackbox logs: RTT BB1/BB2 captures, or one onboard flight
+exported by `ferro-configurator convert FLIGHT.fwbb --csv`.
 
 The control loop rate is measured from each log's own timestamps, since it
 differs by board and firmware (400 Hz once, 2 kHz now); `--control-rate-hz`
@@ -9,12 +10,10 @@ overrides it.
 from __future__ import annotations
 
 import argparse
-import binascii
 from collections import Counter
 import csv
 import math
 import re
-import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,10 +29,6 @@ LOG_DIRS = (
 # any seconds are converted to samples. 400 Hz is the rate before timestamps.
 LEGACY_CONTROL_RATE_HZ = 400.0
 CONTROL_RATE_HZ = LEGACY_CONTROL_RATE_HZ
-FLASH_PAGE_LEN = 256
-FLASH_RECORD_LEN = 48
-FLASH_PAGE_DATA_LEN = 240
-FLASH_RECORD_STRUCT = struct.Struct("<IIIH3h3h3h3hH4H")
 
 BB_RE = re.compile(
     r"BB(?P<version>[12]) seq (?P<seq>\d+) imu (?P<imu_seq>\d+) flags (?P<flags>\d+) "
@@ -98,17 +93,6 @@ class SequenceStats:
 
 
 @dataclass(frozen=True)
-class FlashLogStats:
-    page_count: int
-    record_count: int
-    flight_ids: tuple[int, ...]
-    first_page_sequence: int | None
-    last_page_sequence: int | None
-    partial_page_count: int
-    final_page_records: int | None
-
-
-@dataclass(frozen=True)
 class TimestampStats:
     contiguous_pairs: int
     mean_interval_us: float
@@ -144,7 +128,10 @@ def parse_args() -> argparse.Namespace:
         "log_files",
         nargs="*",
         type=Path,
-        help="RTT log file(s). Defaults to newest .log in logs/remote_probe or logs/terminal_embed.",
+        help=(
+            "RTT log file(s), or one flight's CSV from `ferro-configurator convert --csv`. "
+            "Defaults to the newest .log in logs/remote_probe or logs/terminal_embed."
+        ),
     )
     parser.add_argument(
         "--control-rate-hz",
@@ -155,10 +142,6 @@ def parse_args() -> argparse.Namespace:
         "--csv",
         type=Path,
         help="Write parsed blackbox samples to CSV.",
-    )
-    parser.add_argument(
-        "--flight-id",
-        help="Analyze one onboard-flash flight ID, or 'latest'.",
     )
     parser.add_argument(
         "--warmup",
@@ -309,115 +292,57 @@ def samples_from_lines(lines: Iterable[str]) -> list[BlackboxSample]:
     return samples
 
 
+CONFIGURATOR_CSV_COLUMNS = (
+    "time_s",
+    "seq",
+    "imu_seq",
+    "timestamp_ms",
+    "armed",
+    "imu_fresh",
+)
+
+
 def samples_from_file(path: Path) -> list[BlackboxSample]:
     if path.suffix.lower() == ".fwbb":
-        return samples_from_flash_file(path)
+        raise OSError(
+            f"{path} is a raw onboard log; export one flight with "
+            f"`ferro-configurator convert {path.name} --csv` and analyze the CSV"
+        )
+    if path.suffix.lower() == ".csv":
+        return samples_from_configurator_csv(path)
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         return samples_from_lines(handle)
 
 
-def samples_from_flash_file(path: Path) -> list[BlackboxSample]:
-    return samples_from_flash_bytes(path.read_bytes())
-
-
-def validated_flash_pages(data: bytes) -> list[tuple[bytes, int, int, int]]:
-    if len(data) % FLASH_PAGE_LEN:
-        page_index = len(data) // FLASH_PAGE_LEN
-        raise OSError(
-            f"truncated flash page {page_index}: {len(data) % FLASH_PAGE_LEN} bytes"
-        )
-    pages: list[tuple[bytes, int, int, int]] = []
-    for page_start in range(0, len(data), FLASH_PAGE_LEN):
-        page_index = page_start // FLASH_PAGE_LEN
-        page = data[page_start : page_start + FLASH_PAGE_LEN]
-        if page[FLASH_PAGE_DATA_LEN : FLASH_PAGE_DATA_LEN + 2] != b"FB":
-            raise OSError(f"invalid flash page magic at page {page_index}")
-        if page[FLASH_PAGE_DATA_LEN + 2] != 1:
-            raise OSError(f"unsupported flash page version at page {page_index}")
-        record_count = page[FLASH_PAGE_DATA_LEN + 3]
-        if record_count > FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN:
-            raise OSError(
-                f"invalid flash record count {record_count} at page {page_index}"
+def samples_from_configurator_csv(path: Path) -> list[BlackboxSample]:
+    """One flight as FerroConfigurator exports it: FerroConfigurator is the only
+    decoder of the onboard log format."""
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        columns = tuple(reader.fieldnames or ())
+        if columns[: len(CONFIGURATOR_CSV_COLUMNS)] != CONFIGURATOR_CSV_COLUMNS:
+            raise OSError(f"{path} is not a FerroConfigurator flight CSV")
+        samples = []
+        for row in reader:
+            axes = lambda prefix, unit: tuple(  # noqa: E731
+                float(row[f"{prefix}_{axis}_{unit}"]) for axis in ("roll", "pitch", "yaw")
             )
-        expected_crc = int.from_bytes(page[-4:], "little")
-        if binascii.crc32(page[:-4]) != expected_crc:
-            raise OSError(f"flash page CRC mismatch at page {page_index}")
-        flight_id = int.from_bytes(
-            page[FLASH_PAGE_DATA_LEN + 4 : FLASH_PAGE_DATA_LEN + 8], "little"
-        )
-        page_sequence = int.from_bytes(
-            page[FLASH_PAGE_DATA_LEN + 8 : FLASH_PAGE_DATA_LEN + 12], "little"
-        )
-        pages.append((page, flight_id, page_sequence, record_count))
-    return pages
-
-
-def flash_log_stats(data: bytes) -> FlashLogStats:
-    pages = validated_flash_pages(data)
-    return FlashLogStats(
-        page_count=len(pages),
-        record_count=sum(page[3] for page in pages),
-        flight_ids=tuple(sorted({page[1] for page in pages})),
-        first_page_sequence=pages[0][2] if pages else None,
-        last_page_sequence=pages[-1][2] if pages else None,
-        partial_page_count=sum(
-            page[3] < FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN for page in pages
-        ),
-        final_page_records=pages[-1][3] if pages else None,
-    )
-
-
-def samples_from_flash_bytes(data: bytes) -> list[BlackboxSample]:
-    samples: list[BlackboxSample] = []
-    for page, flight_id, _, record_count in validated_flash_pages(data):
-        for record_index in range(record_count):
-            start = record_index * FLASH_RECORD_LEN
-            values = FLASH_RECORD_STRUCT.unpack_from(page, start)
             samples.append(
                 BlackboxSample(
                     version=2,
-                    seq=values[1],
-                    imu_seq=values[2],
-                    flags=values[3],
-                    raw_dps=tuple(value / 10.0 for value in values[4:7]),
-                    gyro_dps=tuple(value / 10.0 for value in values[7:10]),
-                    command_dps=tuple(value / 10.0 for value in values[10:13]),
-                    pid=tuple(values[13:16]),
-                    throttle=values[16],
-                    motors=tuple(values[17:21]),
-                    timestamp_us=values[0],
-                    flight_id=flight_id,
+                    seq=int(row["seq"]),
+                    imu_seq=int(row["imu_seq"]),
+                    flags=int(row["armed"]) | int(row["imu_fresh"]) << 1,
+                    raw_dps=axes("gyro_raw", "dps"),
+                    gyro_dps=axes("gyro", "dps"),
+                    command_dps=axes("setpoint", "dps"),
+                    pid=tuple(int(value) for value in axes("pid", "counts")),
+                    throttle=int(row["throttle_counts"]),
+                    motors=tuple(int(row[f"motor{index}_counts"]) for index in range(1, 5)),
+                    timestamp_us=round(float(row["timestamp_ms"]) * 1_000),
                 )
             )
     return samples
-
-
-def select_flight_samples(
-    samples: list[BlackboxSample], requested: str | None
-) -> tuple[list[BlackboxSample], int | None]:
-    if requested is None:
-        return samples, None
-
-    available = sorted(
-        {sample.flight_id for sample in samples if sample.flight_id is not None}
-    )
-    if not available:
-        raise ValueError("--flight-id requires an onboard .fwbb log")
-
-    if requested.lower() == "latest":
-        selected = available[-1]
-    else:
-        try:
-            selected = int(requested, 10)
-        except ValueError as error:
-            raise ValueError("--flight-id must be an integer or 'latest'") from error
-        if selected not in available:
-            choices = ",".join(str(value) for value in available)
-            raise ValueError(
-                f"flight ID {selected} is unavailable; available IDs: {choices}"
-            )
-
-    return [sample for sample in samples if sample.flight_id == selected], selected
 
 
 def trim_samples_by_seconds(
@@ -1069,26 +994,17 @@ def main() -> int:
     args = parse_args()
     samples: list[BlackboxSample] = []
     sources: list[str] = []
-    flash_summaries: list[FlashLogStats] = []
 
+    paths = args.log_files or [latest_log_file()]
+    if sum(path.suffix.lower() == ".csv" for path in paths) > 1:
+        print("error: a CSV holds one flight; analyze one at a time", file=sys.stderr)
+        return 1
     try:
-        paths = args.log_files or [latest_log_file()]
         for path in paths:
             resolved = path if path.is_absolute() else REPO_ROOT / path
-            if resolved.suffix.lower() == ".fwbb":
-                data = resolved.read_bytes()
-                flash_summaries.append(flash_log_stats(data))
-                samples.extend(samples_from_flash_bytes(data))
-            else:
-                samples.extend(samples_from_file(resolved))
+            samples.extend(samples_from_file(resolved))
             sources.append(str(resolved))
-    except (FileNotFoundError, OSError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 1
-
-    try:
-        samples, selected_flight_id = select_flight_samples(samples, args.flight_id)
-    except ValueError as error:
+    except (FileNotFoundError, OSError, ValueError, KeyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
@@ -1140,22 +1056,6 @@ def main() -> int:
 
     print()
     print(f"Source: {', '.join(sources)}")
-    for stats in flash_summaries:
-        flight_ids = ",".join(str(value) for value in stats.flight_ids) or "none"
-        print(
-            f"Flash pages: {stats.page_count} CRC-valid; records: {stats.record_count}; "
-            f"flight IDs: {flight_ids}; page sequence: "
-            f"{stats.first_page_sequence}..{stats.last_page_sequence}; "
-            f"partial pages: {stats.partial_page_count}; "
-            f"final page: {stats.final_page_records}/{FLASH_PAGE_DATA_LEN // FLASH_RECORD_LEN} records"
-        )
-    if selected_flight_id is not None:
-        print(f"Selected flight ID: {selected_flight_id}")
-    elif len({sample.flight_id for sample in samples if sample.flight_id is not None}) > 1:
-        print(
-            "Warning: multiple flight IDs are combined; select --flight-id latest "
-            "or a numeric ID for timing and missing-frame conclusions."
-        )
     print(f"Format: BB{max(sample.version for sample in samples)} blackbox")
     print(f"Control loop: {CONTROL_RATE_HZ:g} Hz ({rate_source})")
     print(f"Samples: {len(samples)}  seq: {first_seq}..{last_seq}  logged rate: {sample_rate_hz:.1f} Hz")

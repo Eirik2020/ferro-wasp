@@ -97,6 +97,8 @@ test chain is routing, not a pass.
   rationale; a safety-related task states its priority and timing assumptions.
   A safety-relevant change states its reason, failure behaviour, test coverage,
   that motor authority did not move, and any unsafe-code or timing effects.
+- A task definition wires resources, locks, and spawns; each decision it makes
+  is a host-tested function in a HAL-free crate (`mdbook/src/testing.md`).
 - Use typed units for time, rates, voltages, and actuator commands. Prefer an
   explicit safety state machine over a clever abstraction.
 - Before changing a secondary app, compare with Foxeer: arming preparation and

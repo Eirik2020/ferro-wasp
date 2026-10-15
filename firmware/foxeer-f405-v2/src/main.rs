@@ -817,7 +817,6 @@ ferroforge::app! {
             flash_device, flash_record_consumer, flash_commands, flash_responses,
             flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
             stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
-            config_save_candidate: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             // control_loop
             control_loop_cnt, samples_per_control_loop, flight_controller, control_loop_scheduler,
             imu_rate_filter, imu_angle_integrator, gyro_axis_map, gyro_bias_calibrator,

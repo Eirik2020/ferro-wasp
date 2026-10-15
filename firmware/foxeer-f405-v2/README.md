@@ -339,9 +339,10 @@ USB, then select the flight ID that `list` reported as `next flight` before
 arming:
 
 ```powershell
-python tools\ferrowasp_storage.py --port COM7 list
-python tools\ferrowasp_storage.py --port COM7 --timeout 10 read --resume --output logs\foxeer-hop-front-flip.fwbb
-python tools\blackbox_analyzer.py logs\foxeer-hop-front-flip.fwbb --flight-id 23 --mode swing --csv logs\foxeer-pitch-fix-flight23.csv
+ferro-configurator --port COM7 blackbox flights
+ferro-configurator --port COM7 blackbox download --flight 23 --output logs\foxeer-hop-front-flip.fwbb
+ferro-configurator convert logs\foxeer-hop-front-flip.fwbb --csv
+python tools\blackbox_analyzer.py logs\foxeer-hop-front-flip.csv --mode swing --csv logs\foxeer-pitch-fix-flight23.csv
 ```
 
 Replace the COM port and flight ID with the values observed on the target.
@@ -541,10 +542,10 @@ configuration slots or the dedicated scratch-test sector. With the enumerated
 COM port in a second terminal:
 
 ```powershell
-python tools\ferrowasp_storage.py --port COM7 info
-python tools\ferrowasp_storage.py --port COM7 list
-python tools\ferrowasp_storage.py --port COM7 erase --confirm
-python tools\ferrowasp_storage.py --port COM7 list
+ferro-configurator --port COM7 device info
+ferro-configurator --port COM7 blackbox flights
+ferro-configurator --port COM7 blackbox erase --confirm
+ferro-configurator --port COM7 blackbox flights
 ```
 
 Require `used pages: 0` and `writable: True`, then reboot or reflash the exact
@@ -556,9 +557,10 @@ Leave it disarmed for at least two seconds so the final partial page flushes.
 Then download and analyze:
 
 ```powershell
-python tools\ferrowasp_storage.py --port COM7 list
-python tools\ferrowasp_storage.py --port COM7 read --output logs\foxeer-bench.fwbb
-python tools\blackbox_analyzer.py logs\foxeer-bench.fwbb --mode auto --csv logs\foxeer-bench.csv
+ferro-configurator --port COM7 blackbox flights
+ferro-configurator --port COM7 blackbox download --flight latest --output logs\foxeer-bench.fwbb
+ferro-configurator convert logs\foxeer-bench.fwbb --csv
+python tools\blackbox_analyzer.py logs\foxeer-bench.csv --mode auto --csv logs\foxeer-bench-samples.csv
 ```
 
 Require nonzero used pages, zero RTT-reported record drops and write faults,

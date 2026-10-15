@@ -40,7 +40,7 @@ open.
   Keep the hard real-time producer allocation-free and bounded: control tasks
   should publish fixed-size typed records to the existing bounded logging
   boundary, while a lower-priority owner performs ULog framing and storage I/O.
-  Provide host tests with known-good ULog readers. `tools/fwbb_to_ulog.py` and
-  FerroConfigurator already convert one validated `.fwbb` flight to the compact
+  Provide host tests with known-good ULog readers. FerroConfigurator already
+  converts one validated `.fwbb` flight to the compact
   `ferrowasp_rate_control` topic; native firmware ULog framing, parameters,
   richer metadata, and replacing `.fwbb` remain.

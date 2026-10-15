@@ -146,48 +146,24 @@ peak-to-peak noise, attenuation, drift, and a rough quiet, watch, or noisy
 verdict. It is a rest-noise screen, not a substitute for props-off motor checks
 or vibration analysis.
 
-## Onboard Storage from Python
+## Onboard Logs
 
-FerroConfigurator is the normal way to read configuration and download logs.
-`tools/ferrowasp_storage.py` is the lower-level Python client for the same USB
-storage commands, kept as a development reference; it needs `pyserial`.
-
-```powershell
-python tools\ferrowasp_storage.py --port COM7 info
-python tools\ferrowasp_storage.py --port COM7 flights
-python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
-```
-
-`read` fetches only the selected flight's page range; `--resume` continues an
-interrupted download after validating every page already on disk against the
-flight ID, page sequence, and CRC. `erase --confirm` erases the log region
-only, and `test --confirm` exercises only the reserved scratch sector. Every
-write is refused while armed, and maintenance in progress stops if arming
-begins. Record what `info` reports for the flash; the capacity code for 16 MiB
-is `18`.
-
-The analyzer reads `.fwbb` files directly, rejects invalid or truncated pages,
-and reports what it kept. Select one flight so flight boundaries are not
-counted as gaps:
+FerroConfigurator is the one tool that reads the onboard log format: it
+downloads a flight, checking every page's CRC and sequence, and converts it.
+The analyzer reads its CSV export, one flight per file:
 
 ```powershell
-python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --mode auto
+.\ferro-configurator.exe --port COM7 blackbox download --flight latest --output logs\foxeer-latest.fwbb
+.\ferro-configurator.exe convert logs\foxeer-latest.fwbb --csv
+python tools\blackbox_analyzer.py logs\foxeer-latest.csv --mode auto
 ```
 
-## ULog Reference Converter
-
-FerroConfigurator's `convert` command is the normal path.
-`tools/fwbb_to_ulog.py` is its Python reference implementation and produces the
-same file: one CRC-validated flight as the `ferrowasp_rate_control` topic. The
-log does not store its control rate, so both measure it over the flight, write
-it as the `control_rate_hz` info field, and time each record by its control
-tick at that rate; sequence gaps become ULog dropouts. A flight under 2 s is
-too short to measure and keeps the records' millisecond timestamps. It never
-combines flights.
-
-```powershell
-python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
-```
+`convert` without `--csv` writes ULog instead: one flight as the
+`ferrowasp_rate_control` topic. The log does not store its control rate, so
+both formats measure it over the flight and time each record by its control
+tick at that rate; ULog carries it as the `control_rate_hz` info field and
+sequence gaps as dropouts. A flight under 2 s is too short to measure; its CSV
+export is refused, and its ULog keeps the records' millisecond timestamps.
 
 ## Flight Reports
 

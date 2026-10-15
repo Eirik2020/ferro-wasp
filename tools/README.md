@@ -8,8 +8,6 @@ safety authority. Each is documented in one book chapter:
 | `terminal_embed.py` | Build, flash over SWD, decode and log RTT | [Bench and Analysis Tools](../mdbook/src/rtt_debug_tools.md) |
 | `imu_live_view.py`, `accel_live_plot.py` | Live plots of RTT output | same |
 | `blackbox_analyzer.py`, `imu_noise_analyzer.py` | Log and noise analysis | same |
-| `ferrowasp_storage.py` | Python client for the USB storage commands | same |
-| `fwbb_to_ulog.py` | Reference `.fwbb` to ULog converter | same |
 | `flight_report.py` | Report and plots from a log | same |
 | `bench_rig.py`, `foxeer_bench_gates.py` | Run bench gates and draft run records | `project_meta/testing/` procedures |
 | `components.py`, `test_evidence.py` | Component IDs and run-record checks | `project_meta/testing/evidence/README.md` |
