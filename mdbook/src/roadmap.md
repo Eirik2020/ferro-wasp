@@ -28,8 +28,9 @@ work logs do not belong here.
 ## Protocols and Interfaces
 
 - validate CRSF/ELRS and its telemetry on the target, link loss included;
-- evaluate bidirectional DShot telemetry separately from the current legacy
-  UART telemetry path;
+- add bidirectional DShot, giving per-motor eRPM on every frame at the
+  control-loop rate, for an RPM-tracking gyro notch filter and for arming
+  qualification in place of the legacy UART telemetry path;
 - mature configuration and telemetry protocols only after their bounds,
   recovery behavior, and compatibility policy are explicit;
 - keep RC-PWM available for servos and auxiliary devices rather than ESCs.

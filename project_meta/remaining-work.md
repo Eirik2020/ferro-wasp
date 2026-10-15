@@ -14,6 +14,33 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **DShot timing.** Pulse width, jitter, polarity margin, cross-timer phase, and
   physical stop latency need logic-analyzer measurement; a flight does not
   establish them.
+- **Bidirectional DShot and RPM filter** (ADR-0045 to ADR-0048), Foxeer
+  first. Pieces, in order:
+  - reply decoding and inverted-checksum encoding in `ferrowasp-waveform`;
+  - the receive phase and reply-loss accounting in the shared DShot bank;
+  - per-lane GPIO-sampling receive in the F4 backend, with the stream
+    turnaround in its unsafe boundary;
+  - frame sets released by the control loop, with the 2 ms fallback;
+  - the RPM filter and its stored configuration in `ferrowasp-flight`, and
+    FerroConfigurator's Motors tab for the bidirectional-DShot setting and the
+    motor pole count;
+  - the qualification source moved to bidirectional eRPM;
+  - extended telemetry: the enable command before guarded idle, and decoding
+    of temperature, voltage and current;
+  - blackbox eRPM, reply-loss and extended-telemetry fields;
+  - dynamic idle (ADR-0049) with a mixer output floor, enabled only after the
+    RPM filter has target evidence.
+
+  Then, on target:
+  - the installed BLHeli_32 version and the EDT values it actually sends;
+  - logic-analyzer captures of both directions;
+  - a DMA2 errata 2.1.10 check under SPI1 and ADC load;
+  - the filter's cost per loop;
+  - props-off arming;
+  - spectral evidence before the gyro low-pass corner moves;
+  - a stale-reply fault-injection test for dynamic idle.
+
+  Open: the TBS Lucid H7 receive path.
 - **ESC-only power cycle.** PR #16 resumes ESC telemetry while disarmed after a
   quiet window. Cycling only ESC power while USB powers the board is untested
   with it; until a props-off run shows the first arm fails closed and a later
