@@ -8,11 +8,11 @@ use crate::snapshots::*;
 use core::fmt::Write as _;
 use ferrowasp_drivers::nor_storage::NorStorage;
 use ferrowasp_flight::accel_level::{AccelLevelCalibration, CalibrationError};
-#[cfg(feature = "mspv2_configurator")]
-use ferrowasp_flight::blackbox_storage as blackbox_task;
 use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
 use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
 use ferrowasp_flight::log_writer::{LogWriter, PageWrite};
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_flight::rpc_commands::{self, RpcContext};
 use ferrowasp_flight::storage_commands::{self, CommandAction, CommandContext};
 use ferrowasp_flight::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
@@ -31,12 +31,7 @@ pub const REBOOT_STORAGE_SETTLE_MS: u32 = 500;
 /// before the port goes away.
 pub const REBOOT_ANSWER_MS: u64 = 100;
 
-#[derive(Clone, Copy)]
-#[cfg_attr(not(feature = "mspv2_configurator"), allow(dead_code))]
-pub enum ConfigRpcCompletion {
-    Commit(u16),
-    Defaults(u16),
-}
+pub use ferrowasp_flight::config_save::ConfigRpcCompletion;
 
 #[cfg(feature = "mspv2_configurator")]
 pub type FlashRpcCommandConsumer = flash_task::RpcCommandConsumer;
@@ -109,42 +104,6 @@ pub fn finish_config_rpc_error(
         ConfigRpcCompletion::Commit(id) | ConfigRpcCompletion::Defaults(id) => id,
     };
     queue_rpc_response(producer, mspv2::rpc::error(request_id, error))
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn blackbox_info<F: NorStorage>(
-    flash: &mut F,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    id: mspv2::rpc::BlackboxId,
-    active_id: Option<u32>,
-) -> Result<Option<mspv2::rpc::BlackboxInfo>, ()> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::blackbox_info(&mut read, layout, used_pages, id, active_id)
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn list_blackboxes<F: NorStorage>(
-    flash: &mut F,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    active_id: Option<u32>,
-) -> Result<mspv2::rpc::BlackboxList, ()> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::list_blackboxes(&mut read, layout, used_pages, active_id)
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn read_blackbox_chunk<F: NorStorage>(
-    flash: &mut F,
-    layout: flash_task::StorageLayout,
-    used_pages: u32,
-    id: mspv2::rpc::BlackboxId,
-    offset: u32,
-    requested_length: u16,
-) -> Result<mspv2::rpc::BlackboxChunk, mspv2::rpc::DeviceError> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
-    blackbox_task::read_blackbox_chunk(&mut read, layout, used_pages, id, offset, requested_length)
 }
 
 /// The answer line for a calibration that produced nothing.
@@ -607,219 +566,25 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
 
             #[cfg(feature = "mspv2_configurator")]
             if let Some(request) = flash_rpc_command_consumer.dequeue() {
-                let request_id = request.request_id;
-                let maintenance_busy = maintenance.is_active()
-                    || config_save.is_active()
-                    || accel_calibration.is_some();
-                let active_blackbox_id = log
-                    .recording()
-                    .then(|| log.next_flight().wrapping_sub(1).max(1));
-                let response = match request.operation {
-                    mspv2::rpc::Request::Hello => Some(mspv2::rpc::ok(
-                        request_id,
-                        mspv2::rpc::Response::Hello((*flash_rpc_device_info)()),
-                    )),
-                    mspv2::rpc::Request::GetConfig => {
-                        let crc = stored_config.crc32();
-                        Some(mspv2::rpc::ok(
-                            request_id,
-                            mspv2::rpc::Response::Config(mspv2::rpc::ConfigSnapshot {
-                                schema_version: mspv2::rpc::CONFIG_SCHEMA_VERSION,
-                                active_crc32: crc,
-                                persisted_crc32: crc,
-                                config: stored_config.to_rpc(),
-                            }),
-                        ))
-                    }
-                    mspv2::rpc::Request::StageConfig(config) => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::Armed,
-                            ))
-                        } else if maintenance_busy {
-                            Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
-                        } else {
-                            match stored_config.apply_rpc(config) {
-                                Ok(candidate) => {
-                                    let crc = candidate.crc32();
-                                    *staged_rpc_config = Some(candidate);
-                                    Some(mspv2::rpc::ok(
-                                        request_id,
-                                        mspv2::rpc::Response::ConfigStaged {
-                                            staged_crc32: crc,
-                                            reboot_required: false,
-                                        },
-                                    ))
-                                }
-                                Err(field) => Some(mspv2::rpc::RpcResponse {
-                                    protocol_version: mspv2::rpc::FWSP_RPC_VERSION,
-                                    request_id,
-                                    result: mspv2::rpc::RpcResult::Err(mspv2::rpc::ErrorDetail {
-                                        code: mspv2::rpc::DeviceError::InvalidConfiguration,
-                                        field: Some(field),
-                                        argument: None,
-                                    }),
-                                }),
-                            }
-                        }
-                    }
-                    mspv2::rpc::Request::CommitConfig {
-                        expected_staged_crc32,
-                    } => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::Armed,
-                            ))
-                        } else if maintenance_busy {
-                            Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
-                        } else if let Some(candidate) = *staged_rpc_config {
-                            if candidate.crc32() != expected_staged_crc32 {
-                                Some(mspv2::rpc::error(
-                                    request_id,
-                                    mspv2::rpc::DeviceError::ConfigurationConflict,
-                                ))
-                            } else {
-                                match config_save.begin(
-                                    candidate,
-                                    *config_sequence,
-                                    *config_active_slot,
-                                ) {
-                                    Ok(()) => {
-                                        *config_rpc_completion =
-                                            Some(ConfigRpcCompletion::Commit(request_id));
-                                        *staged_rpc_config = None;
-                                        None
-                                    }
-                                    Err(_) => Some(mspv2::rpc::error(
-                                        request_id,
-                                        mspv2::rpc::DeviceError::Internal,
-                                    )),
-                                }
-                            }
-                        } else {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::ConfigurationConflict,
-                            ))
-                        }
-                    }
-                    mspv2::rpc::Request::ResetConfigToDefaults => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::Armed,
-                            ))
-                        } else if maintenance_busy {
-                            Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
-                        } else {
-                            match config_save.begin(
-                                CONFIG::DEFAULT_STORED_CONFIG,
-                                *config_sequence,
-                                *config_active_slot,
-                            ) {
-                                Ok(()) => {
-                                    *config_rpc_completion =
-                                        Some(ConfigRpcCompletion::Defaults(request_id));
-                                    *staged_rpc_config = None;
-                                    None
-                                }
-                                Err(_) => Some(mspv2::rpc::error(
-                                    request_id,
-                                    mspv2::rpc::DeviceError::Internal,
-                                )),
-                            }
-                        }
-                    }
-                    mspv2::rpc::Request::ListBlackboxes => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::Armed,
-                            ))
-                        } else {
-                            match list_blackboxes(
-                                flash_device,
-                                layout,
-                                log.next_page(),
-                                active_blackbox_id,
-                            ) {
-                                Ok(list) => Some(mspv2::rpc::ok(
-                                    request_id,
-                                    mspv2::rpc::Response::BlackboxList(list),
-                                )),
-                                Err(_) => Some(mspv2::rpc::error(
-                                    request_id,
-                                    mspv2::rpc::DeviceError::ReadFailure,
-                                )),
-                            }
-                        }
-                    }
-                    mspv2::rpc::Request::GetBlackboxInfo { id } => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::Armed,
-                            ))
-                        } else {
-                            match blackbox_info(
-                                flash_device,
-                                layout,
-                                log.next_page(),
-                                id,
-                                active_blackbox_id,
-                            ) {
-                                Ok(Some(info)) => Some(mspv2::rpc::ok(
-                                    request_id,
-                                    mspv2::rpc::Response::BlackboxInfo(info),
-                                )),
-                                Ok(None) => Some(mspv2::rpc::error(
-                                    request_id,
-                                    mspv2::rpc::DeviceError::BlackboxNotFound,
-                                )),
-                                Err(_) => Some(mspv2::rpc::error(
-                                    request_id,
-                                    mspv2::rpc::DeviceError::ReadFailure,
-                                )),
-                            }
-                        }
-                    }
-                    mspv2::rpc::Request::ReadBlackboxChunk {
-                        id,
-                        offset,
-                        requested_length,
-                    } => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            Some(mspv2::rpc::error(
-                                request_id,
-                                mspv2::rpc::DeviceError::Armed,
-                            ))
-                        } else if active_blackbox_id == Some(id.0) {
-                            Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
-                        } else {
-                            match read_blackbox_chunk(
-                                flash_device,
-                                layout,
-                                log.next_page(),
-                                id,
-                                offset,
-                                requested_length,
-                            ) {
-                                Ok(chunk) => Some(mspv2::rpc::ok(
-                                    request_id,
-                                    mspv2::rpc::Response::BlackboxChunk(chunk),
-                                )),
-                                Err(error) => Some(mspv2::rpc::error(request_id, error)),
-                            }
-                        }
-                    }
-                    mspv2::rpc::Request::EraseBlackbox { .. }
-                    | mspv2::rpc::Request::Reboot { .. } => Some(mspv2::rpc::error(
-                        request_id,
-                        mspv2::rpc::DeviceError::UnsupportedOperation,
-                    )),
-                };
+                let response = rpc_commands::handle(
+                    request,
+                    &mut RpcContext {
+                        flash: &mut *flash_device,
+                        layout,
+                        armed: SAFETY_ARMED.load(Ordering::Acquire),
+                        log: &*log,
+                        maintenance: &*maintenance,
+                        config_save: &mut *config_save,
+                        calibrating: accel_calibration.is_some(),
+                        stored_config: &*stored_config,
+                        staged: &mut *staged_rpc_config,
+                        completion: &mut *config_rpc_completion,
+                        config_sequence: *config_sequence,
+                        config_active_slot: *config_active_slot,
+                        device_info: *flash_rpc_device_info,
+                        default_config: CONFIG::DEFAULT_STORED_CONFIG,
+                    },
+                );
                 if let Some(response) = response {
                     let _ = queue_rpc_response(flash_rpc_response_producer, response);
                 }

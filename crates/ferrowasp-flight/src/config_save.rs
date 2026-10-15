@@ -51,6 +51,14 @@ pub enum SaveStep {
     Failed(SaveFailure),
 }
 
+/// The MSPv2 request a save answers when it completes. The text command line
+/// answers through the link that asked instead.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConfigRpcCompletion {
+    Commit(u16),
+    Defaults(u16),
+}
+
 /// One configuration save in progress, or none.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConfigSave {

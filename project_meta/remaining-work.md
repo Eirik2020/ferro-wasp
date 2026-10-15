@@ -77,10 +77,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Host-testable flash manager.** The configuration save
   (`ferrowasp-flight::config_save`), the log erase, sync-ledger mark and
   scratch test (`storage_maintenance`), the flight log writer (`log_writer`),
-  and the storage command line (`storage_commands`) are host-tested. Still
-  inside the task: startup recovery and the MSPv2 handler. The log writer has
-  not recorded on hardware since; a `bench_blackbox` run needs the BOOT button
-  to leave.
+  the storage command line (`storage_commands`) and the MSPv2 handler
+  (`rpc_commands`) are host-tested; the task keeps startup recovery and the
+  calibration and reboot glue as wiring. None of these has run on hardware
+  since its extraction except the configuration save, maintenance and scratch
+  test; a `bench_blackbox` run needs the BOOT button to leave.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
