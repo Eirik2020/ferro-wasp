@@ -17,7 +17,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ferro_configurator_bridge::{BridgeError, DEFAULT_TIMEOUT, Safety, Session, ports as discover};
+use ferro_configurator_bridge::{
+    BridgeError, DEFAULT_TIMEOUT, FlashReport, Safety, Session, ports as discover,
+};
 use ferro_configurator_core::{
     DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, LiveSnapshot, PortInfo,
     SerialBindings, SerialTransport, SyncedFlight,
@@ -241,6 +243,31 @@ async fn sync_flights(
     .await
 }
 
+/// Restarts the controller, or into its ROM bootloader with `dfu`. Refused
+/// by the session while armed, and by the firmware while storage is busy.
+#[tauri::command]
+async fn reboot(state: State<'_, AppState>, dfu: bool) -> Result<(), BridgeError> {
+    blocking(&state.session, move |session| session.reboot(dfu)).await
+}
+
+/// Flashes `path`, or the bundled image, restarting a connected disarmed
+/// controller into its bootloader first. Every gate is in the session.
+#[tauri::command]
+async fn flash_firmware(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: Option<String>,
+) -> Result<FlashReport, BridgeError> {
+    let path = path.filter(|path| !path.is_empty()).map(PathBuf::from);
+    blocking(&state.session, move |session| {
+        session.flash(path.as_deref(), |stage| {
+            // Best effort, as for a download.
+            let _ = app.emit("flash-progress", stage);
+        })
+    })
+    .await
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -267,6 +294,8 @@ fn main() {
             flights,
             download_flight,
             sync_flights,
+            reboot,
+            flash_firmware,
         ])
         .run(tauri::generate_context!())
         .expect("the FerroConfigurator window failed to start");

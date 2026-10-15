@@ -13,6 +13,8 @@ import {
   type Api,
   type DownloadProgress,
   type DownloadSummary,
+  type FlashReport,
+  type FlashStage,
   type SyncedFlight,
   type SyncProgress,
   type FerroConfig,
@@ -118,6 +120,21 @@ export class TauriApi implements Api {
     });
     try {
       return await call<SyncedFlight[]>("sync_flights", { directory });
+    } finally {
+      stop();
+    }
+  }
+
+  reboot(dfu: boolean): Promise<void> {
+    return call<void>("reboot", { dfu });
+  }
+
+  async flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport> {
+    const stop = await listen<FlashStage>("flash-progress", (event) => {
+      onStage(event.payload);
+    });
+    try {
+      return await call<FlashReport>("flash_firmware", { path });
     } finally {
       stop();
     }

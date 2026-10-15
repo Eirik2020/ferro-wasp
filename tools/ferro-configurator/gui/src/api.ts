@@ -200,6 +200,26 @@ export interface DownloadSummary {
   path: string;
 }
 
+/** One step of a flash, as the Rust session reports it. */
+export type FlashStage =
+  | { stage: "entering_bootloader"; port: string }
+  | { stage: "image_validated"; bytes: number; base_address: number }
+  | { stage: "dfu_detected"; device: string }
+  | { stage: "programming"; bytes: number }
+  | { stage: "programmed" }
+  | { stage: "restarting" };
+
+export interface FlashReport {
+  board: string;
+  firmware: string;
+  /** The bundled release's version, when the bundled image was flashed. */
+  release: string | null;
+  bytes_written: number;
+  base_address: number;
+  /** The port the controller came back on, already reconnected. */
+  restarted_port: string | null;
+}
+
 export interface Api {
   ports(): Promise<PortInfo[]>;
   /** `null` selects the only FerroWasp port, matching the CLI's auto mode. */
@@ -237,4 +257,15 @@ export interface Api {
    * and acknowledges them so the controller may later erase its log.
    */
   syncFlights(directory: string, onProgress: (progress: SyncProgress) => void): Promise<SyncedFlight[]>;
+  /**
+   * Restarts the controller, or into its ROM bootloader with `dfu`, and
+   * closes the connection. Refused while armed or while storage is busy.
+   */
+  reboot(dfu: boolean): Promise<void>;
+  /**
+   * Flashes `path`, or the bundled image when `null`. A connected, disarmed
+   * controller is restarted into its bootloader first; one already in its
+   * bootloader is flashed as it is. Reconnects when the controller returns.
+   */
+  flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport>;
 }

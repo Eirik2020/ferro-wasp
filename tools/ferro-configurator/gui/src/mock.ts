@@ -20,6 +20,8 @@ import {
   type DownloadSummary,
   type SyncedFlight,
   type SyncProgress,
+  type FlashReport,
+  type FlashStage,
 } from "./api";
 
 /** The reviewed Foxeer baseline. */
@@ -359,5 +361,46 @@ export class MockApi implements Api {
       });
     }
     return synced;
+  }
+
+  async reboot(dfu: boolean): Promise<void> {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    void dfu;
+    this.connected = false;
+  }
+
+  async flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport> {
+    if (this.connected && this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    if (!this.connected) {
+      throw new BridgeError(
+        "refused",
+        "connect the controller, or start its ROM bootloader with the BOOT button",
+      );
+    }
+    const bytes = 187_608;
+    onStage({ stage: "entering_bootloader", port: "COM6" });
+    this.connected = false;
+    await sleep(600);
+    onStage({ stage: "image_validated", bytes, base_address: 0x0800_0000 });
+    onStage({ stage: "dfu_detected", device: "Found DFU: [0483:df11] (simulated)" });
+    onStage({ stage: "programming", bytes });
+    await sleep(2_000);
+    onStage({ stage: "programmed" });
+    onStage({ stage: "restarting" });
+    await sleep(1_000);
+    this.connected = true;
+    return {
+      board: "Foxeer F405 V2 (STM32F405RGT6)",
+      firmware: path ?? "FerroWaspFoxeerF405V2 (bundled)",
+      release: path === null ? "0.1.0-simulated" : null,
+      bytes_written: bytes,
+      base_address: 0x0800_0000,
+      restarted_port: "COM6",
+    };
   }
 }

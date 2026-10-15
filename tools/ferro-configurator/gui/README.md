@@ -17,10 +17,17 @@ download flight logs — the read and configure half of the CLI.
 
 It is laid out like the Betaflight Configurator: connection across the top,
 tabs down the left (Setup, Ports, Receiver, Motors, PID Tuning, Rates,
-Blackbox), and the safety banner above every tab. The settings tabs edit one
-configuration, so each has the same Save bar and saving sends all of it; a tab
-with unsaved edits is marked. Leaving the Motors tab stops every motor and
-turns the motor test off.
+Blackbox, Firmware), and the safety banner above every tab. The settings tabs
+edit one configuration, so each has the same Save bar and saving sends all of
+it; a tab with unsaved edits is marked. Leaving the Motors tab stops every
+motor and turns the motor test off.
+
+The Firmware tab flashes the bundled image or a chosen ELF. A connected,
+disarmed Foxeer is restarted into its ROM bootloader, flashed, and reconnected
+when it returns; a board already in its bootloader from the BOOT button is
+flashed without connecting. Reboot, in the header, restarts the controller
+and reconnects. The session in `ferro-configurator-bridge` makes every check;
+the page only reflects it.
 
 It also explains why the controller will not arm, as a pre-arm checklist built
 by `ferro-configurator-core::prearm` from the status line; draws the rates

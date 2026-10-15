@@ -31,8 +31,9 @@ artifact is stable, airworthy, or production-ready.
 - `reboot` and `reboot dfu` on the USB command line, disarmed only: the
   second restarts the board into the STM32 ROM bootloader. FerroConfigurator's
   `flash` uses it, so a board running FerroWasp is flashed without the BOOT
-  button, and `device reboot [--dfu]` gives both directly. Not yet run on
-  hardware.
+  button, and `device reboot [--dfu]` gives both directly. The GUI gains a
+  Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
+  the TBS Lucid H7's entry is not yet tested.
 - Test evidence tied to source components rather than whole firmware images,
   with `tools/components.py` listing which tests each board owes, and
   `tools/bench_rig.py` running the boot and idle gate on any board over SWD.
