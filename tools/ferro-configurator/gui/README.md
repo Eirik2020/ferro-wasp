@@ -20,7 +20,10 @@ tabs down the left (Setup, Ports, Receiver, Motors, PID Tuning, Rates,
 Blackbox, Firmware), and the safety banner above every tab. The settings tabs
 edit one configuration, so each has the same Save bar and saving sends all of
 it; a tab with unsaved edits is marked. Leaving the Motors tab stops every
-motor and turns the motor test off.
+motor and turns the motor test off. PID Tuning has a slider beside every gain
+and a master slider that scales them all, springing back when released. A
+pulled cable, or a controller that stops answering, ends the connection with
+"Connection lost" in the safety banner.
 
 The Firmware tab flashes the bundled image or a chosen ELF. A connected,
 disarmed Foxeer is restarted into its ROM bootloader, flashed, and reconnected

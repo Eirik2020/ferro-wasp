@@ -101,6 +101,11 @@
 
       <section id="tab-pid" role="tabpanel" data-panel="pid" hidden>
         <h2>PID tuning</h2>
+        <div class="row master">
+          <label>Master <input id="pid-master" type="range" min="50" max="150" step="1" value="100" disabled />
+            <output id="pid-master-value">×1.00</output></label>
+          <span class="note">Scales every P, I and D together; springs back when released.</span>
+        </div>
         <div class="grid">
           <fieldset>
             <legend>Roll</legend>
@@ -193,7 +198,6 @@
           <label><input type="radio" name="firmware-source" value="file" /> A file
             <input id="firmware-path" type="text" placeholder="FerroWasp ELF path" size="36" disabled /></label>
         </fieldset>
-        <label><input id="props-off" type="checkbox" /> Propellers are off and ESC power is disconnected</label>
         <div class="row">
           <button id="flash" type="button" disabled>Flash firmware</button>
           <button id="reboot-dfu" type="button" disabled>Reboot to bootloader</button>

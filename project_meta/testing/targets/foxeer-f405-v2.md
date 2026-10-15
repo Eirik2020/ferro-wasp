@@ -158,10 +158,9 @@ STM32 ROM bootloader, on command, that FerroConfigurator flashes it without the
 BOOT button and it returns as FerroWasp, and that a reboot is refused while a
 flight log is open. ADR-0043 is the design.
 
-Keep the aircraft disarmed on USB power only, with propellers removed and
-actuator/ESC power disconnected. Before flashing anything, download every
-flight on the board and export the configuration; a bench image in step 6
-appends a long bench flight to the log.
+Keep the aircraft disarmed and on USB power only. Before flashing anything,
+download every flight on the board and export the configuration; a bench
+image in step 6 appends a long bench flight to the log.
 
 1. Record the candidate identity, hash, and exact features, and validate the
    image with `flash --board foxeer-f405-v2 --dry-run`.

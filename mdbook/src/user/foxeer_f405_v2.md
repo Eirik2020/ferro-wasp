@@ -92,17 +92,16 @@ Start the guided flasher:
 
 Follow its prompts:
 
-1. Check the board and remove the propellers.
-2. Type the requested confirmation only after checking the board and image.
+1. Type the requested confirmation only after checking the board and image.
    Nothing on the board changes before this.
-3. If the board runs FerroWasp and is connected over USB, the configurator
+2. If the board runs FerroWasp and is connected over USB, the configurator
    restarts it into the STM32 ROM bootloader. The board must be disarmed; it
    refuses while armed, while a flight log is still being written, or while
    flash maintenance is running.
-4. If the board does not run FerroWasp, or does not answer, the configurator
+3. If the board does not run FerroWasp, or does not answer, the configurator
    asks you to unplug USB, hold BOOT, reconnect, wait about a second, and
    release BOOT.
-5. Do not disconnect USB during programming.
+4. Do not disconnect USB during programming.
 
 The command must reach its final successful completion message and exit with
 code zero. Detection or programming progress is not, by itself, proof that

@@ -21,7 +21,7 @@ use ferro_configurator_core::{
 use serde::Serialize;
 
 const FLASH_WIZARD_STEP_TITLES: [&str; 4] = [
-    "Step 1 of 4 - Check the firmware and make the bench safe",
+    "Step 1 of 4 - Check the firmware",
     "Step 2 of 4 - Final confirmation",
     "Step 3 of 4 - Enter the STM32 ROM bootloader",
     "Step 4 of 4 - Program and restart",
@@ -981,9 +981,7 @@ fn run_flash_wizard(
     );
     println!("  Reset:      {:#010x}", image.reset_vector);
     println!();
-    println!("  WARNING: This replaces the firmware currently in MCU application flash.");
-    println!("  Remove all propellers and keep the flight controller on a safe bench.");
-    prompt_enter("Press Enter when you have checked the board and removed the propellers...")?;
+    println!("  This replaces the firmware currently in MCU application flash.");
 
     println!();
     println!("{}", FLASH_WIZARD_STEP_TITLES[1]);

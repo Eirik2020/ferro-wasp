@@ -56,6 +56,12 @@ let activeTab = "setup";
 
 const TAB_STORAGE_KEY = "ferro-configurator.tab";
 
+/** Why the last connection ended on its own, shown until the next connect. */
+let lostMessage: string | null = null;
+/** Consecutive failed live polls; this many in a row means it stopped answering. */
+let liveFailures = 0;
+const LIVE_FAILURES_LOST = 3;
+
 /** The port last connected to, so a restarted controller can be found again. */
 let lastPort: string | null = null;
 /** A flash or reboot is running; every other control waits. */
@@ -103,9 +109,9 @@ function renderSafety(): void {
   const detail = element("safety-detail");
 
   if (!connected || !safetyState) {
-    banner.textContent = "No controller connected";
-    banner.dataset["state"] = "unknown";
-    detail.textContent = "";
+    banner.textContent = lostMessage === null ? "No controller connected" : "Connection lost";
+    banner.dataset["state"] = lostMessage === null ? "unknown" : "lost";
+    detail.textContent = lostMessage ?? "";
     element("prearm-checks").replaceChildren();
     renderReceiver();
     updateWriteControls();
@@ -233,11 +239,36 @@ async function pollSafety(): Promise<void> {
     safetyState = await api.safetyDisplay();
     renderSafety();
   } catch (error) {
+    if (await handleLoss(error)) {
+      return;
+    }
     if (toBridgeError(error).kind === "notConnected") {
       connected = false;
     }
     renderSafety();
   }
+}
+
+/**
+ * Ends the connection in the interface when the controller went away, and
+ * says so. True when `error` was such a loss.
+ */
+async function handleLoss(error: unknown): Promise<boolean> {
+  const bridged = toBridgeError(error);
+  if (bridged.kind !== "lost") {
+    return false;
+  }
+  await connectionLost(bridged.message);
+  return true;
+}
+
+async function connectionLost(message: string): Promise<void> {
+  if (!connected) {
+    return;
+  }
+  lostMessage = message;
+  await disconnect();
+  setStatusLine("Connection lost. Reconnect USB, then press Connect.", "bad");
 }
 
 /** Reads the channels at once, between the two-second status lines. */
@@ -251,6 +282,9 @@ async function pollRc(): Promise<void> {
     renderReceiver();
   } catch (error) {
     fastChannels = null;
+    if (await handleLoss(error)) {
+      return;
+    }
     if (toBridgeError(error).kind !== "notConnected") {
       rcUnsupported = true;
     }
@@ -278,8 +312,16 @@ async function pollLive(): Promise<void> {
       }
     });
     viewer.showSpinning(spinning);
-  } catch {
+    liveFailures = 0;
+  } catch (error) {
     viewer.render(null);
+    if (!(await handleLoss(error))) {
+      liveFailures += 1;
+      if (liveFailures >= LIVE_FAILURES_LOST) {
+        liveFailures = 0;
+        await connectionLost("The controller stopped answering.");
+      }
+    }
   } finally {
     liveInFlight = false;
   }
@@ -321,6 +363,8 @@ async function connect(choice: string | null = selectedPort(), quiet = false): P
     const description = await api.connect(choice);
     connected = true;
     lastPort = choice;
+    lostMessage = null;
+    liveFailures = 0;
     element("device-description").textContent = description;
     setStatusLine(`Connected to ${description}.`);
     await pollSafety();
@@ -421,6 +465,7 @@ function renderConfig(): void {
   protocol.value = config?.rc_protocol ?? "sbus";
   protocol.disabled = config?.rc_protocol === undefined;
   dirtyTabs.clear();
+  syncGainSliders();
   renderRates();
   renderDirty();
   updateWriteControls();
@@ -510,13 +555,8 @@ function updateWriteControls(): void {
   // Without a connection the controller may already be in its bootloader
   // from the BOOT button; the session decides.
   const flash = element<HTMLButtonElement>("flash");
-  const propsOff = element<HTMLInputElement>("props-off").checked;
-  flash.disabled = firmwareBusy || !propsOff || (connected && !writable);
-  flash.title = !propsOff
-    ? "Confirm the propellers are off and ESC power is disconnected"
-    : connected && !writable
-      ? "Disarm the controller first"
-      : "Flash the selected firmware";
+  flash.disabled = firmwareBusy || (connected && !writable);
+  flash.title = connected && !writable ? "Disarm the controller first" : "Flash the selected firmware";
 }
 
 async function loadConfig(): Promise<void> {
@@ -720,6 +760,75 @@ async function syncFlights(): Promise<void> {
   }
 }
 
+// ------------------------------------------------------------ PID sliders ---
+
+/** Every gain the PID tab edits, by input id. */
+const GAIN_IDS = ["roll", "pitch", "yaw"].flatMap((axis) => ["p", "i", "d"].map((term) => `${axis}-${term}`));
+/** The firmware's accepted range for every gain (`ferrowasp-core` `value_spec`). */
+const GAIN_MIN = 0;
+const GAIN_MAX = 20;
+/** The gains when the master slider was grabbed; null when it is at rest. */
+let masterBase: Map<string, number> | null = null;
+
+function gainSlider(id: string): HTMLInputElement {
+  return element<HTMLInputElement>(`${id}-slider`);
+}
+
+/** Writes `value` into a gain's number box as if typed, so it is marked edited. */
+function setGain(id: string, value: number): void {
+  const input = element<HTMLInputElement>(id);
+  input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/** A slider beside each gain's number box, kept in step with it both ways. */
+function addGainSliders(): void {
+  for (const id of GAIN_IDS) {
+    const input = element<HTMLInputElement>(id);
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.id = `${id}-slider`;
+    slider.min = String(GAIN_MIN);
+    slider.max = String(GAIN_MAX);
+    slider.step = "0.01";
+    slider.setAttribute("aria-label", `${id} slider`);
+    input.before(slider);
+    slider.addEventListener("input", () => setGain(id, Number(slider.value)));
+    input.addEventListener("input", () => {
+      slider.value = input.value;
+    });
+  }
+  const master = element<HTMLInputElement>("pid-master");
+  const shown = element<HTMLOutputElement>("pid-master-value");
+  master.addEventListener("input", () => {
+    if (masterBase === null) {
+      masterBase = new Map(GAIN_IDS.map((id) => [id, Number(element<HTMLInputElement>(id).value)]));
+    }
+    const factor = Number(master.value) / 100;
+    shown.value = `×${factor.toFixed(2)}`;
+    for (const [id, base] of masterBase) {
+      const scaled = Math.round(base * factor * 100) / 100;
+      setGain(id, Math.min(Math.max(scaled, GAIN_MIN), GAIN_MAX));
+    }
+  });
+  // No master value is stored: released, it returns to 1.00 over the new gains.
+  master.addEventListener("change", () => {
+    masterBase = null;
+    master.value = "100";
+    shown.value = "×1.00";
+  });
+}
+
+function syncGainSliders(): void {
+  for (const id of GAIN_IDS) {
+    const input = element<HTMLInputElement>(id);
+    const slider = gainSlider(id);
+    slider.value = input.value === "" ? "0" : input.value;
+    slider.disabled = input.disabled;
+  }
+  element<HTMLInputElement>("pid-master").disabled = config === null;
+}
+
 // --------------------------------------------------------------- firmware ---
 
 /**
@@ -901,11 +1010,14 @@ function wire(): void {
 
   element("refresh-ports").addEventListener("click", () => void refreshPorts());
   element("connect").addEventListener("click", () => void connect());
-  element("disconnect").addEventListener("click", () => void disconnect());
+  element("disconnect").addEventListener("click", () => {
+    lostMessage = null;
+    void disconnect();
+  });
+  addGainSliders();
   element("reboot").addEventListener("click", () => void reboot(false));
   element("reboot-dfu").addEventListener("click", () => void reboot(true));
   element("flash").addEventListener("click", () => void flashFirmware());
-  element("props-off").addEventListener("change", updateWriteControls);
   for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="firmware-source"]')) {
     radio.addEventListener("change", () => {
       element<HTMLInputElement>("firmware-path").disabled = radio.value !== "file" || !radio.checked;

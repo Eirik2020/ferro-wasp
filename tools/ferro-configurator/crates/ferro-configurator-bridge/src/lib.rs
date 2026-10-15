@@ -43,6 +43,10 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(2);
 pub enum BridgeError {
     /// No device is open. The front-end should offer to connect.
     NotConnected,
+    /// The open device went away, a cable pulled or a port gone; the
+    /// session has closed it. The front-end should say so and offer to
+    /// connect again.
+    Lost { message: String },
     /// The controller reports itself armed, so a write was refused.
     Refused { reason: String },
     /// The device, transport or host filesystem failed.
@@ -53,6 +57,7 @@ impl std::fmt::Display for BridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotConnected => f.write_str("not connected to a controller"),
+            Self::Lost { message } => f.write_str(message),
             Self::Refused { reason } => write!(f, "refused: {reason}"),
             Self::Device { message } => f.write_str(message),
         }
@@ -185,10 +190,28 @@ impl<T: LineTransport> Session<T> {
         self.client.as_mut().ok_or(BridgeError::NotConnected)
     }
 
+    /// Runs `work` on the open client. A transport failure means the port
+    /// is gone, so the session closes it and reports the loss rather than an
+    /// ordinary device error the front-end would retry forever.
+    fn with_client<R>(
+        &mut self,
+        work: impl FnOnce(&mut FerroClient<T>) -> std::result::Result<R, FerroError>,
+    ) -> Result<R> {
+        match work(self.client_mut()?) {
+            Err(FerroError::Transport { port, reason }) => {
+                self.client = None;
+                Err(BridgeError::Lost {
+                    message: format!("lost the connection to {port}: {reason}"),
+                })
+            }
+            result => result.map_err(Into::into),
+        }
+    }
+
     /// The controller's live safety status, and whether this session would
     /// accept a write right now.
     pub fn safety(&mut self) -> Result<Safety> {
-        let status = self.client_mut()?.read_status_fresh()?;
+        let status = self.with_client(FerroClient::read_status_fresh)?;
         Ok(Safety {
             writes_allowed: !status.armed,
             checks: prearm_checks(&status),
@@ -261,7 +284,7 @@ impl<T: LineTransport> Session<T> {
     /// `live` polling that runs beside it reads those lines as they arrive,
     /// so the cache stays current.
     pub fn safety_display(&mut self) -> Result<Safety> {
-        let status = self.client_mut()?.read_status()?;
+        let status = self.with_client(FerroClient::read_status)?;
         Ok(Safety {
             writes_allowed: !status.armed,
             checks: prearm_checks(&status),
@@ -271,13 +294,13 @@ impl<T: LineTransport> Session<T> {
 
     /// Attitude and motor activity, quick enough to poll for a 3D view.
     pub fn live(&mut self) -> Result<LiveSnapshot> {
-        Ok(self.client_mut()?.live()?)
+        self.with_client(FerroClient::live)
     }
 
     /// The receiver's sixteen channels in microseconds, as fresh as the last
     /// frame. A read; never gated.
     pub fn rc_channels(&mut self) -> Result<[u16; 16]> {
-        Ok(self.client_mut()?.rc_channels()?)
+        self.with_client(FerroClient::rc_channels)
     }
 
     /// Refuses unless the controller reports itself disarmed with the arm
@@ -526,6 +549,17 @@ mod tests {
             }
         );
         assert!(session.is_connected());
+    }
+
+    #[test]
+    fn a_failed_port_closes_the_session_and_reports_the_loss() {
+        let mut transport = MockTransport::with_lines(Vec::<String>::new());
+        transport.push_transport_error("Input/output error");
+        let mut session = Session::from_client(FerroClient::new(transport, DEFAULT_TIMEOUT));
+
+        assert!(matches!(session.live(), Err(BridgeError::Lost { .. })));
+        assert!(!session.is_connected());
+        assert_eq!(session.live().unwrap_err(), BridgeError::NotConnected);
     }
 
     #[test]

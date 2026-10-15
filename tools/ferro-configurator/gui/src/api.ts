@@ -148,7 +148,7 @@ export interface FlightCatalog {
  * the controller reports itself armed. The interface presents it as a safety
  * state, never as an error to retry.
  */
-export type BridgeErrorKind = "notConnected" | "refused" | "device";
+export type BridgeErrorKind = "notConnected" | "lost" | "refused" | "device";
 
 export class BridgeError extends Error {
   readonly kind: BridgeErrorKind;
