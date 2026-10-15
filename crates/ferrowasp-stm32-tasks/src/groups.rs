@@ -15,3 +15,25 @@ pub mod spi1_imu {
     pub use crate::spi1_rx_dma;
     pub use crate::spi1_timeout;
 }
+
+/// Every flight task a board runs the same way: arming and actuator output,
+/// the control loop, DShot service and ESC telemetry, RC, USB, OSD, storage,
+/// battery sensing and the heartbeat. Spawns between members are wired here.
+#[cfg(feature = "dshot")]
+#[ferroforge::group]
+pub mod flight {
+    pub use crate::actuator_idle_notify;
+    pub use crate::actuator_output;
+    pub use crate::adc1_polling;
+    pub use crate::control_loop;
+    pub use crate::dma_adc1;
+    pub use crate::dshot_service;
+    pub use crate::esc_manager_task;
+    pub use crate::flash_manager_task;
+    pub use crate::heartbeat;
+    pub use crate::osd_refresh;
+    pub use crate::rc_input;
+    pub use crate::rc_telemetry;
+    pub use crate::safety_master;
+    pub use crate::usb_fs;
+}

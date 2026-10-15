@@ -624,17 +624,17 @@ ferroforge::app! {
         );
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
-        heartbeat::spawn().unwrap();
-        adc1_polling::spawn().ok();
+        flight::heartbeat::spawn().unwrap();
+        flight::adc1_polling::spawn().ok();
         uart2_tx_worker::spawn().unwrap();
         uart3_tx_worker::spawn().unwrap();
         uart4_tx_worker::spawn().unwrap();
-        rc_input::spawn().unwrap();
-        rc_telemetry::spawn().unwrap();
-        osd_refresh::spawn().ok();
-        dshot_service::spawn().unwrap();
-        esc_manager_task::spawn().unwrap();
-        flash_manager_task::spawn().unwrap();
+        flight::rc_input::spawn().unwrap();
+        flight::rc_telemetry::spawn().unwrap();
+        flight::osd_refresh::spawn().ok();
+        flight::dshot_service::spawn().unwrap();
+        flight::esc_manager_task::spawn().unwrap();
+        flight::flash_manager_task::spawn().unwrap();
         configurator_link::spawn().ok();
 
         (
@@ -796,159 +796,141 @@ ferroforge::app! {
         )
     }
 
-    // ----  SAFETY MASTER  ----
-    //---------------------------------------------------------------------------------------------------------------------------
-    #[task(
-        from = flight_tasks::safety_master,
-        priority = 16,
+    // The flight tasks every board runs the same way. Each member's own
+    // resources and configuration are in its definition in
+    // ferrowasp-stm32-tasks; this selection binds them once.
+    #[group(
+        from = flight_tasks::groups::flight,
         local = [
-            safety_rc_arm_high_reader,
-            safety_rc_throttle_reader,
-            safety_rc_link_reader,
-            safety_arm_writer,
-            rc_link_invalidator,
-            actuator_arm_permit_writer,
-            actuator_arm_done_reader
+            // safety_master
+            safety_rc_arm_high_reader, safety_rc_throttle_reader, safety_rc_link_reader,
+            safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
+            actuator_arm_done_reader,
+            // usb_fs
+            usb_dev, usb_serial, usb_header_sent, flash_command_producer, flash_response_consumer,
+            flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
+            // heartbeat
+            usb_rc_link_reader,
+            // flash_manager_task
+            flash_device, flash_record_consumer, flash_commands, flash_responses,
+            flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
+            stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
+            config_save_candidate: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
+            // control_loop
+            control_loop_cnt, samples_per_control_loop, flight_controller, control_loop_scheduler,
+            imu_rate_filter, imu_angle_integrator, gyro_axis_map, gyro_bias_calibrator,
+            imu_last_sequence, imu_stale_ticks, applied_tuning_seq, rc_rates_reader,
+            control_throttle_reader, control_safety_arm_reader, control_rc_link_reader,
+            control_arm_permit_reader, motor_cmd_writer, motor_cmd_seq, flash_record_producer,
+            // dshot_service
+            esc_request_consumer, esc_ack_producer,
+            // esc_manager_task
+            esc_telemetry_port, esc_manager_state, esc_request_producer, esc_ack_consumer,
+            esc_telemetry_update_producer,
+            // actuator_output
+            actuator_safety_arm_reader, actuator_arm_permit_reader, actuator_rc_arm_high_reader,
+            actuator_rc_throttle_reader, actuator_rc_link_reader, actuator_arm_done_writer,
+            motor_cmd_reader, esc_telemetry_update_consumer,
+            // rc_input
+            rc_port, rc_receiver, arm_qualifier, rc_rates_writer, rc_throttle_writer,
+            rc_arm_high_writer, rc_link_frame_writer,
+            // rc_telemetry
+            rc_telemetry_writer,
+            // osd_refresh
+            osd_port, osd_tx_healthy, osd_task, osd_tx_buffer, osd_refresh_tick,
+            osd_safety_arm_reader, osd_rc_throttle_reader, osd_rc_rates_reader,
+            // dma_adc1
+            adc1_buffer,
+            battery_cell_detector: osd::BatteryCellDetector = osd::BatteryCellDetector::new(
+                BATTERY_MAX_CELL_MV,
+                BATTERY_DETECT_CELL_MV,
+                BATTERY_MAX_CELLS,
+            )
         ],
-        spawn = [actuator_output],
+        shared = [
+            tuning_profile,
+            tuning_request_seq,
+            imu_data,
+            imu_angles,
+            imu_rates,
+            dshot_motors,
+            battery_voltage_v10,
+            battery_cell_count,
+            battery_cell_voltage_v100,
+            battery_current_ca,
+            adc1_transfer
+        ],
         config = [
             actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
             actuator_inhibit_reason: &'static str = ACTUATOR_INHIBIT_REASON,
             bench_actuator_validation_enabled: bool = BENCH_ACTUATOR_VALIDATION_ENABLED,
-            validate_live_arming_guard: fn(
-                bool,
-                bool,
-                bool,
-                u32,
-            ) -> Result<(), safety::ArmingAbortReason> = validate_live_arming_guard,
-        ]
-    )]
-    async fn safety_master(cx: safety_master::Context, event: safety::SafetyEvent);
-    //---------------------------------------------------------------------------------------------------------------------------
-
-    // ---- USB CDC: command line, bench motor requests, status ----
-    #[task(
-        from = flight_tasks::usb_fs,
-        binds = OTG_FS,
-        priority = 5,
-        local = [
-            usb_dev,
-            usb_serial,
-            usb_header_sent,
-            flash_command_producer,
-            flash_response_consumer,
-            flash_rpc_command_producer,
-            flash_rpc_response_consumer,
-            configurator_usb
-        ],
-        spawn = [safety_master],
-        config = [
+            validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
             usb_debug_header: &'static [u8] = USB_DEBUG_HEADER,
-            actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,
-        ]
-    )]
-    fn usb_fs(cx: usb_fs::Context);
-
-    // IDLE TASK
-
-    #[task(
-        from = flight_tasks::heartbeat,
-        priority = 1,
-        local = [usb_rc_link_reader],
-        config = [
             physical_imu_to_drone_rotation: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation(),
             control_imu_to_rate_controller_map: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map(),
-        ]
-    )]
-    async fn heartbeat(cx: heartbeat::Context);
-
-    // Lowest priority: storage never preempts flight work.
-    #[task(
-        from = flight_tasks::flash_manager_task,
-        priority = 1,
-        local = [
-            flash_device,
-            flash_record_consumer,
-            flash_commands,
-            flash_responses,
-            flash_rpc_command_consumer,
-            flash_rpc_response_producer,
-            flash_rpc_device_info,
-            stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
-            config_save_candidate: flash_task::StoredConfig = DEFAULT_STORED_CONFIG
-        ],
-        shared = [tuning_profile, tuning_request_seq],
-        config = [
             default_stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             default_serial_bindings: SerialBindings = board::serial::DEFAULT_SERIAL_BINDINGS,
             serial_routes: &'static [SerialRoute] = board::serial::SERIAL_ROUTES,
-        ]
-    )]
-    async fn flash_manager_task(cx: flash_manager_task::Context);
-
-    // ---- MAIN CONTROL LOOP ----
-    #[task(
-        from = flight_tasks::control_loop,
-        binds = TIM4,
-        priority = 14,
-        local = [
-            control_loop_cnt,
-            samples_per_control_loop,
-            flight_controller,
-            control_loop_scheduler,
-            imu_rate_filter,
-            imu_angle_integrator,
-            gyro_axis_map,
-            gyro_bias_calibrator,
-            imu_last_sequence,
-            imu_stale_ticks,
-            applied_tuning_seq,
-            rc_rates_reader,
-            control_throttle_reader,
-            control_safety_arm_reader,
-            control_rc_link_reader,
-            control_arm_permit_reader,
-            motor_cmd_writer,
-            motor_cmd_seq,
-            flash_record_producer
-        ],
-        shared = [imu_data, imu_angles, imu_rates, tuning_profile, tuning_request_seq],
-        spawn = [actuator_output, safety_master],
-        config = [
             imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile =
                 IMU_CONTROL_AXIS_PROFILE,
             imu_gyro_raw_to_dps: f32 = IMU_GYRO_RAW_TO_DPS,
             logical_to_physical_motor_output: [usize; 4] =
                 board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
             control_loop_rate_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
-        ]
-    )]
-    fn control_loop(cx: control_loop::Context);
-
-    #[task(
-        from = flight_tasks::actuator_idle_notify,
-        priority = 13,
-        spawn = [safety_master]
-    )]
-    async fn actuator_idle_notify(cx: actuator_idle_notify::Context);
-
-    #[task(
-        from = flight_tasks::dshot_service,
-        priority = 13,
-        shared = [dshot_motors],
-        local = [esc_request_consumer, esc_ack_producer],
-        spawn = [safety_master],
-        config = [
             dshot_motor_for_output: fn(esc::EscOutput) -> board::init::DshotMotor =
                 dshot_motor_for_output,
+            esc_output_to_logical_motor: [u8; 4] = [
+                logical_motor_for_physical_index(0),
+                logical_motor_for_physical_index(1),
+                logical_motor_for_physical_index(2),
+                logical_motor_for_physical_index(3),
+            ],
+            dshot_idle_command: f32 = BOARD_DSHOT_IDLE_COMMAND,
+            adc_vbat_divider_ratio: f32 = ADC_VBAT_DIVIDER_RATIO,
+            adc_current_betaflight_scale: u32 = ADC_CURRENT_BETAFLIGHT_SCALE,
+            adc_current_offset_ma: i32 = ADC_CURRENT_OFFSET_MA,
         ]
     )]
-    async fn dshot_service(cx: dshot_service::Context);
+    mod flight {
+        #[task(priority = 16)]
+        async fn safety_master;
+        // USB CDC: command line, bench motor requests, status.
+        #[task(binds = OTG_FS, priority = 5)]
+        fn usb_fs;
+        #[task(priority = 1)]
+        async fn heartbeat;
+        // Lowest priority: storage never preempts flight work.
+        #[task(priority = 1)]
+        async fn flash_manager_task;
+        #[task(binds = TIM4, priority = 14)]
+        fn control_loop;
+        #[task(priority = 13)]
+        async fn actuator_idle_notify;
+        #[task(priority = 13)]
+        async fn dshot_service;
+        // BLHeli legacy ESC telemetry, on the port bound to `esc_telemetry`.
+        #[task(priority = 4)]
+        async fn esc_manager_task;
+        #[task(priority = 15)]
+        async fn actuator_output;
+        #[task(priority = 10)]
+        async fn rc_input;
+        // Battery telemetry back through the RC receiver, when the RC protocol
+        // talks back. Lowest priority: it only reads snapshots.
+        #[task(priority = 1)]
+        async fn rc_telemetry;
+        #[task(priority = 3)]
+        async fn osd_refresh;
+        #[task(binds = DMA2_STREAM4, priority = 1)]
+        fn dma_adc1;
+        #[task(priority = 1)]
+        async fn adc1_polling;
+    }
 
     #[task(
         from = flight_tasks::dshot_dma_complete,
@@ -997,58 +979,6 @@ ferroforge::app! {
         ]
     )]
     fn dshot_motor4_dma_complete(cx: dshot_motor4_dma_complete::Context);
-
-    // ########### USART1 / BLHeli legacy ESC telemetry #####################
-    #[task(
-        from = flight_tasks::esc_manager_task,
-        priority = 4,
-        local = [
-            esc_telemetry_port,
-            esc_manager_state,
-            esc_request_producer,
-            esc_ack_consumer,
-            esc_telemetry_update_producer
-        ],
-        config = [
-            esc_output_to_logical_motor: [u8; 4] = [
-                logical_motor_for_physical_index(0),
-                logical_motor_for_physical_index(1),
-                logical_motor_for_physical_index(2),
-                logical_motor_for_physical_index(3),
-            ],
-        ]
-    )]
-    async fn esc_manager_task(cx: esc_manager_task::Context);
-
-    #[task(
-        from = flight_tasks::actuator_output,
-        priority = 15,
-        shared = [dshot_motors],
-        local = [
-            actuator_safety_arm_reader,
-            actuator_arm_permit_reader,
-            actuator_rc_arm_high_reader,
-            actuator_rc_throttle_reader,
-            actuator_rc_link_reader,
-            actuator_arm_done_writer,
-            motor_cmd_reader,
-            esc_telemetry_update_consumer
-        ],
-        spawn = [safety_master, actuator_idle_notify],
-        config = [
-            validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
-            dshot_idle_command: f32 = BOARD_DSHOT_IDLE_COMMAND,
-            actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
-            actuator_inhibit_reason: &'static str = ACTUATOR_INHIBIT_REASON,
-            esc_output_to_logical_motor: [u8; 4] = [
-                logical_motor_for_physical_index(0),
-                logical_motor_for_physical_index(1),
-                logical_motor_for_physical_index(2),
-                logical_motor_for_physical_index(3),
-            ],
-        ]
-    )]
-    async fn actuator_output(cx: actuator_output::Context, cmd: safety::ActuatorCmd);
 
     // ########### SPI 1 ###################################
     // Above every UART transport (11): a gyro sample published late makes
@@ -1105,33 +1035,6 @@ ferroforge::app! {
 
     #[task(from = flight_tasks::uart4_rx_idle, binds = UART4, priority = 11, shared = [uart4_rx])]
     fn uart4_rx_idle(cx: uart4_rx_idle::Context);
-
-    #[task(
-        from = flight_tasks::osd_refresh,
-        priority = 3,
-        local = [
-            osd_port,
-            osd_tx_healthy,
-            osd_task,
-            osd_tx_buffer,
-            osd_refresh_tick,
-            osd_safety_arm_reader,
-            osd_rc_throttle_reader,
-            osd_rc_rates_reader
-        ],
-        shared = [
-            battery_voltage_v10,
-            battery_cell_count,
-            battery_cell_voltage_v100,
-            battery_current_ca,
-            imu_angles,
-            imu_rates,
-            imu_data,
-            tuning_profile,
-            tuning_request_seq
-        ]
-    )]
-    async fn osd_refresh(cx: osd_refresh::Context);
 
     #[task(
         from = flight_tasks::uart2_tx_worker,
@@ -1193,57 +1096,4 @@ ferroforge::app! {
     )]
     fn uart4_tx_dma_complete(cx: uart4_tx_dma_complete::Context);
 
-    #[task(
-        from = flight_tasks::rc_input,
-        priority = 10,
-        local = [
-            rc_port,
-            rc_receiver,
-            arm_qualifier,
-            rc_rates_writer,
-            rc_throttle_writer,
-            rc_arm_high_writer,
-            rc_link_frame_writer
-        ],
-        shared = [tuning_profile],
-        spawn = [safety_master]
-    )]
-    async fn rc_input(cx: rc_input::Context);
-
-    // Battery telemetry back through the RC receiver, when the RC protocol
-    // talks back. Lowest priority: it only reads snapshots.
-    #[task(from = flight_tasks::rc_telemetry, priority = 1, local = [rc_telemetry_writer])]
-    async fn rc_telemetry(cx: rc_telemetry::Context);
-
-    // ---- ADC1 ----
-    #[task(
-        from = flight_tasks::dma_adc1,
-        binds = DMA2_STREAM4,
-        priority = 1,
-        shared = [
-            adc1_transfer,
-            battery_voltage_v10,
-            battery_cell_count,
-            battery_cell_voltage_v100,
-            battery_current_ca
-        ],
-        local = [
-            adc1_buffer,
-            battery_cell_detector: osd::BatteryCellDetector =
-                osd::BatteryCellDetector::new(
-                    BATTERY_MAX_CELL_MV,
-                    BATTERY_DETECT_CELL_MV,
-                    BATTERY_MAX_CELLS,
-                )
-        ],
-        config = [
-            adc_vbat_divider_ratio: f32 = ADC_VBAT_DIVIDER_RATIO,
-            adc_current_betaflight_scale: u32 = ADC_CURRENT_BETAFLIGHT_SCALE,
-            adc_current_offset_ma: i32 = ADC_CURRENT_OFFSET_MA,
-        ]
-    )]
-    fn dma_adc1(cx: dma_adc1::Context);
-
-    #[task(from = flight_tasks::adc1_polling, priority = 1, shared = [adc1_transfer])]
-    async fn adc1_polling(cx: adc1_polling::Context);
 }

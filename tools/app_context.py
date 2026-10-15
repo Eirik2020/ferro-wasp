@@ -343,8 +343,9 @@ def discover_symbols_from_text(text: str) -> tuple[list[RustSymbol], list[Resour
             continue
         member = GROUP_MEMBER_DECLARATION.match(line)
         if member is not None:
-            previous = lines[index - 1].strip()
-            start_index = index - 1 if previous.startswith("#[task") else index
+            start_index = index
+            while lines[start_index - 1].strip().startswith(("#[task", "//")):
+                start_index -= 1
             declarations.append((start_index, index, member.group("name")))
 
     if not declarations:
@@ -357,6 +358,25 @@ def discover_symbols_from_text(text: str) -> tuple[list[RustSymbol], list[Resour
             if position + 1 < len(declarations)
             else len(lines)
         )
+        if lines[declaration_index].rstrip().endswith(";"):
+            # A group member, or a task declared without a body: one line.
+            next_start = min(next_start, declaration_index + 1)
+        else:
+            # Stop before a group selection and the comments that introduce it.
+            group_start = next(
+                (
+                    index
+                    for index in range(declaration_index + 1, next_start)
+                    if lines[index].startswith("    #[group(")
+                ),
+                None,
+            )
+            if group_start is not None:
+                while lines[group_start - 1].strip().startswith("//") or not lines[
+                    group_start - 1
+                ].strip():
+                    group_start -= 1
+                next_start = group_start
         attribute_text = "".join(lines[start_index:declaration_index])
         kind_match = ATTRIBUTE_KIND.search(attribute_text)
         priority_match = PRIORITY.search(attribute_text)
