@@ -38,7 +38,8 @@ The practical order is:
 1. Keep SBUS working as the current target-tested RC baseline.
 2. Keep the BLHeli legacy telemetry manager non-authoritative and bounded;
    missing pre-arm evidence may block qualification, while post-arm telemetry
-   remains observational. Consider bidirectional DShot telemetry separately.
+   remains observational. Bidirectional DShot is planned to replace it as the
+   arming eRPM source; see the [Roadmap](roadmap.md).
 3. Validate CRSF/ELRS on the target, link loss included, before preferring it.
 4. Keep MSPv1/DJI O4 OSD display-only and freshness-aware.
 5. Expand USB serial into useful telemetry.

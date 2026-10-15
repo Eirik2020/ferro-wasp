@@ -5,6 +5,10 @@ open.
 
 ## Open work
 
+- Where bidirectional DShot runs (ADR-0045), record each motor's eRPM for
+  every frame set, its consecutive-invalid-reply count, and its invalid-reply
+  total (ADR-0047), plus each extended-telemetry temperature, voltage and
+  current value when it arrives, with its motor identity (ADR-0048).
 - Record every fresh per-motor legacy-UART eRPM observation at its actual
   bounded rate, including time/age, physical and logical motor identity, request
   sequence, freshness, and transport health; never present repeated stale
