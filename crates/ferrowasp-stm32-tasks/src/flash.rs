@@ -289,7 +289,6 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         default_serial_bindings: SerialBindings,
         serial_routes: &'static [SerialRoute],
         imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile,
-        imu_gyro_raw_to_dps: f32,
     ],
     monotonic = Mono,
 )]
@@ -1432,15 +1431,12 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     Some(Err("ERR imu calibration timed out; no IMU samples\r\n"))
                 } else if sequence != *accel_calibration_seq {
                     *accel_calibration_seq = sequence;
-                    let sensor_accel = cx.shared.imu_data.lock(|imu| imu.acc);
+                    // One sample, both sensors: the parser stores them in g and
+                    // degrees per second.
+                    let (sensor_accel, gyro_dps) =
+                        cx.shared.imu_data.lock(|imu| (imu.acc, imu.gyro));
                     let gravity = CONFIG::IMU_CONTROL_AXIS_PROFILE
                         .sensor_accel_to_drone_gravity(sensor_accel);
-                    let gyro_dps = [
-                        IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed),
-                        IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed),
-                        IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
-                    ]
-                    .map(|raw| raw as f32 * CONFIG::IMU_GYRO_RAW_TO_DPS);
                     calibration
                         .push(gravity, gyro_dps)
                         .map(|result| result.map_err(calibration_failure))
