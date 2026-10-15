@@ -30,6 +30,24 @@ python tools/check_rtic_boundaries.py
 mdbook build mdbook
 ```
 
+### Where tests go
+
+- A unit test sits beside the code it tests, in the module's
+  `#[cfg(test)] mod tests`, and runs on the host. Name it for the behaviour it
+  pins, as a sentence: `reboot_waits_for_disarm_idle_storage_and_a_closed_log`.
+- A test that spans crates, or checks a recorded file against its expected
+  decoding, goes in the crate's `tests/` directory.
+- Firmware decisions are tested on the host, so they cannot live where only the
+  target runs them. A task in `ferrowasp-stm32-tasks` wires resources, locks,
+  spawns and queues; each decision it makes, a refusal rule, a state machine, a
+  unit conversion, is a function in a HAL-free crate with tests, such as
+  `reboot_refusal` and `AccelLevelCalibration` in `ferrowasp-flight`.
+- Chip backends hold the peripheral and DMA code that only the target can run;
+  keep logic out of them, so that target verification covers what is left.
+- A test that needs a Cargo feature the workspace does not turn on, or that a
+  workspace-wide run compiles out, goes into the `rust-features` suite in
+  `tools/run_tests.py`. A new suite is added there, never to CI directly.
+
 Embedded applications are isolated Cargo workspaces. Check the selected app
 from its own directory with the exact board features being reviewed. A build
 proves source compatibility only; it does not prove pin routing, timing,
