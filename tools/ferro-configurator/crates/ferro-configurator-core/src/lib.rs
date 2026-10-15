@@ -8,6 +8,7 @@
 pub mod blackbox;
 pub mod client;
 pub mod config;
+pub mod csv_export;
 pub mod device;
 pub mod error;
 pub mod firmware;
@@ -25,6 +26,7 @@ pub use client::{
     SerialPortBinding, StatusSnapshot, UnsyncedFlight, UnsyncedFlights,
 };
 pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
+pub use csv_export::{CsvSummary, convert_fwbb_to_csv};
 pub use device::{DeviceSelector, PortInfo, discover_ports, open_device};
 pub use error::{FerroError, Result};
 pub use firmware::{

@@ -14,9 +14,10 @@ use ferro_configurator_core::{
     DfuDetection, DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress,
     FlightSelector, PortInfo, PreparedImage, ProfileStore, RESTART_TIMEOUT, SERIAL_FUNCTIONS,
     SerialBindings, StatusSnapshot, SyncedFlight, catalog_device, config::lpf_alpha_for_corner,
-    convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight, enter_rom_bootloader,
-    find_board_port, find_bundled_firmware, flash_firmware, open_device, prearm_checks,
-    prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port, wait_for_dfu_device,
+    convert_fwbb_to_csv, convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight,
+    enter_rom_bootloader, find_board_port, find_bundled_firmware, flash_firmware, open_device,
+    prearm_checks, prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port,
+    wait_for_dfu_device,
 };
 use serde::Serialize;
 
@@ -206,9 +207,13 @@ struct BlackboxSyncReport {
 struct ConvertArgs {
     /// CRC-validated onboard FWBB archive.
     input: PathBuf,
-    /// Output ULog path. Defaults to the input path with `.ulg`.
+    /// Output path. Defaults to the input path with `.ulg`, or `.csv`.
     #[arg(long)]
     output: Option<PathBuf>,
+    /// Write CSV, one row per record with units in the column names, for
+    /// MATLAB's readtable, instead of ULog.
+    #[arg(long)]
+    csv: bool,
     /// Numeric flight ID, or `latest`.
     #[arg(long, default_value = "latest")]
     flight: String,
@@ -861,6 +866,35 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
         },
         Command::Convert(args) => {
             let selector = FlightSelector::parse(&args.flight)?;
+            if args.csv {
+                let output = args
+                    .output
+                    .clone()
+                    .unwrap_or_else(|| args.input.with_extension("csv"));
+                let summary = convert_fwbb_to_csv(&args.input, &output, selector, args.force)?;
+                return emit(cli.format, "convert.csv", &summary, || {
+                    println!(
+                        "Wrote flight {} to {}: {} rows, {:.2} s.",
+                        summary.flight_id,
+                        summary.output.display(),
+                        summary.rows,
+                        summary.duration_s
+                    );
+                    println!(
+                        "Control rate {} Hz (measured {:.1} Hz); one record every {} tick(s), {} Hz.",
+                        summary.control_rate_hz,
+                        summary.measured_rate_hz,
+                        summary.record_step,
+                        summary.control_rate_hz / summary.record_step.max(1)
+                    );
+                    if summary.gaps > 0 {
+                        println!(
+                            "{} gap(s) where records were dropped; time_s stays correct across them.",
+                            summary.gaps
+                        );
+                    }
+                });
+            }
             let output = args
                 .output
                 .clone()

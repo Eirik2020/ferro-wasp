@@ -28,6 +28,9 @@ artifact is stable, airworthy, or production-ready.
   motor order, from FerroConfigurator or the USB command line.
 - FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
   live stick readout, and a rates curve.
+- `convert --csv` in FerroConfigurator: one flight as CSV for MATLAB, with
+  units in the column names, time from the control-tick count at the rate
+  measured from the log, and dropped-record gaps reported.
 - Accelerometer level calibration: `imu calibrate` on a still, level craft
   saves where the accelerometer reads level, and the attitude estimate uses
   it. FerroConfigurator's Setup tab has a Calibrate button, and `imu

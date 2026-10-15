@@ -383,6 +383,25 @@ Open the `.ulg` file in PlotJuggler and select
 rates, rate setpoints, PID effort, throttle, four motor commands, sequences,
 and armed/fresh-IMU flags.
 
+For MATLAB or a spreadsheet, write CSV instead:
+
+```powershell
+.\ferro-configurator.exe convert flight-34.fwbb --flight latest --csv
+```
+
+```matlab
+T = readtable("flight-34.csv");
+plot(T.time_s, [T.setpoint_roll_dps T.gyro_roll_dps])
+```
+
+Each row is one logged record and each column names its unit: degrees per
+second for gyro rates and setpoints, mixer counts (0 to 2000) for PID effort,
+throttle and motors. `time_s` is computed from the control-tick count at the
+control rate measured from the log, which the conversion prints with the log
+rate divisor. Where records were dropped, rows are missing but `time_s` stays
+correct, so resample onto a uniform grid (`retime`, `resample`) before
+frequency-domain analysis; the conversion reports how many gaps it found.
+
 ## Erase logs
 
 Erase only after every required flight has been downloaded, retained, and

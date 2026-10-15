@@ -38,6 +38,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Foxeer blackbox rate.** At the 2 kHz loop, `log_rate_divisor` 1 needs about
   400 pages/s. The drain fix that reached that rate on the Lucid's SD card has
   not run on Foxeer's SPI-NOR; measure it there, or default the divisor to 2.
+- **Periodic record loss on Foxeer.** Flights 1-13 (older firmware, logged at
+  2 kHz with divisor 2) lose exactly one record in six: four 2-tick steps, then
+  one 4-tick step, every time. Check whether current firmware still does it
+  before relying on uniform sampling.
 - **Timestamp resolution.** Blackbox `timestamp_us` has 1 ms resolution from
   the 1 kHz monotonic; use `control_sequence` as the time base. A 1 MHz timer
   monotonic would fix it, and is a timer-assignment decision for the user.

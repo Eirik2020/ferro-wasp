@@ -65,6 +65,16 @@ pub fn convert_fwbb_to_ulog(
     selector: FlightSelector,
     force: bool,
 ) -> Result<ConversionSummary> {
+    let (flight_id, records) = flight_records(input, selector)?;
+    write_ulog(output, flight_id, &records, force)
+}
+
+/// One flight's records from a CRC-validated FWBB archive, its pages
+/// contiguous: the source every export reads.
+pub(crate) fn flight_records(
+    input: &Path,
+    selector: FlightSelector,
+) -> Result<(u32, Vec<FlightRecord>)> {
     let pages = read_and_validate_pages(input)?;
     let selected_id = match selector {
         FlightSelector::Latest => pages
@@ -100,7 +110,7 @@ pub fn convert_fwbb_to_ulog(
             "flight ID {selected_id} is not present or contains no records"
         )));
     }
-    write_ulog(output, selected_id, &records, force)
+    Ok((selected_id, records))
 }
 
 fn read_and_validate_pages(
@@ -252,7 +262,7 @@ fn write_ulog(
     })
 }
 
-fn replace_with_completed_file(partial: &Path, output: &Path) -> Result<()> {
+pub(crate) fn replace_with_completed_file(partial: &Path, output: &Path) -> Result<()> {
     if !output.exists() {
         return fs::rename(partial, output).map_err(|error| file_error("finalize", output, error));
     }
@@ -343,7 +353,11 @@ fn write_bytes(writer: &mut File, path: &Path, bytes: &[u8]) -> Result<u64> {
     Ok(bytes.len() as u64)
 }
 
-fn file_error(operation: &'static str, path: &Path, error: std::io::Error) -> FerroError {
+pub(crate) fn file_error(
+    operation: &'static str,
+    path: &Path,
+    error: std::io::Error,
+) -> FerroError {
     FerroError::FileIo {
         operation,
         path: path.to_path_buf(),
