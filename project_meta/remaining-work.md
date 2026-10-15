@@ -80,15 +80,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
   (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
   needs a board variant.
-- **Configurator flashing** (ADR-0043). Not yet shown on hardware: that
-  `reboot` refuses while a flight log is open (needs a `bench_blackbox`
-  image), and whether ROM DFU entered with the BOOT button also starts in
-  `dfuERROR` / "firmware is corrupt", as entry by command does on the Foxeer;
-  `dfu-util` clears it and programming verifies, but the cause is unknown. The
-  H743's jump address (`0x1FF09800`, from AN2606) is unverified until the
-  Lucid's replacement arrives. Still to build: the GUI's Flash tab (bundled
-  image or a chosen file) and Reboot button, and a Lucid board profile in
-  FerroConfigurator. A catalog test for DFU entry and return is not defined.
+- **Configurator flashing** (ADR-0043). The GUI's Flash tab (bundled image
+  or a chosen file) and Reboot button. Deferred with the Lucid: the H743's
+  jump address (`0x1FF09800`, from AN2606) is unverified on hardware, and
+  FerroConfigurator has no Lucid board profile.
 - **FerroForge adoption.** Retire `tools/rtic-app-builder`. FerroForge 0.4
   expands a group whose members are imported in one brace, `pub use
   crate::{a, b};`, into an empty group without an error, so
