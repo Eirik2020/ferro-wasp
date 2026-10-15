@@ -1,17 +1,15 @@
+import tempfile
 import unittest
-import binascii
 import math
-import struct
 from dataclasses import replace
+from pathlib import Path
 
 from tools.blackbox_analyzer import (
     BlackboxSample,
     centered_drift_stats,
-    flash_log_stats,
     longest_flight_window,
     measured_control_rate_hz,
-    samples_from_flash_bytes,
-    select_flight_samples,
+    samples_from_file,
     sequence_stats,
     strongest_frequency,
     timestamp_stats,
@@ -87,84 +85,41 @@ class SequenceStatsTests(unittest.TestCase):
         self.assertEqual(stats.p99_abs_jitter_us, 4)
         self.assertEqual(stats.intervals_over_3000_us, 0)
 
-    def test_reads_crc_valid_onboard_flash_page(self) -> None:
-        page = bytearray(b"\xff" * 256)
-        record = struct.pack(
-            "<IIIH3h3h3h3hH4H",
-            123_000,
-            44,
-            110,
-            3,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            321,
-            100,
-            101,
-            102,
-            103,
+    def test_reads_one_flight_from_a_configurator_csv(self) -> None:
+        header = (
+            "time_s,seq,imu_seq,timestamp_ms,armed,imu_fresh,"
+            "gyro_raw_roll_dps,gyro_raw_pitch_dps,gyro_raw_yaw_dps,"
+            "gyro_roll_dps,gyro_pitch_dps,gyro_yaw_dps,"
+            "setpoint_roll_dps,setpoint_pitch_dps,setpoint_yaw_dps,"
+            "pid_roll_counts,pid_pitch_counts,pid_yaw_counts,"
+            "throttle_counts,motor1_counts,motor2_counts,motor3_counts,motor4_counts"
         )
-        page[:48] = record
-        page[240:252] = b"FB\x01\x01" + (7).to_bytes(4, "little") + (9).to_bytes(4, "little")
-        page[252:] = binascii.crc32(page[:252]).to_bytes(4, "little")
-        samples = samples_from_flash_bytes(bytes(page))
+        row = "0.001000,44,110,123.000,1,0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,10,-11,12,321,100,101,102,103"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "flight.csv"
+            path.write_text(f"{header}\n{row}\n", encoding="utf-8")
+            samples = samples_from_file(path)
 
         self.assertEqual(len(samples), 1)
-        self.assertEqual(samples[0].seq, 44)
-        self.assertEqual(samples[0].timestamp_us, 123_000)
-        self.assertEqual(samples[0].flight_id, 7)
-        self.assertEqual(samples[0].imu_seq, 110)
-        self.assertEqual(samples[0].motors, (100, 101, 102, 103))
-        stats = flash_log_stats(bytes(page))
-        self.assertEqual(stats.page_count, 1)
-        self.assertEqual(stats.record_count, 1)
-        self.assertEqual(stats.flight_ids, (7,))
-        self.assertEqual(stats.first_page_sequence, 9)
-        self.assertEqual(stats.last_page_sequence, 9)
-        self.assertEqual(stats.partial_page_count, 1)
-        self.assertEqual(stats.final_page_records, 1)
+        value = samples[0]
+        self.assertEqual((value.seq, value.imu_seq, value.timestamp_us), (44, 110, 123_000))
+        self.assertTrue(value.armed)
+        self.assertFalse(value.imu_fresh)
+        self.assertEqual(value.raw_dps, (0.1, 0.2, 0.3))
+        self.assertEqual(value.command_dps, (0.7, 0.8, 0.9))
+        self.assertEqual(value.pid, (10, -11, 12))
+        self.assertEqual((value.throttle, value.motors), (321, (100, 101, 102, 103)))
 
-    def test_selects_latest_onboard_flight(self) -> None:
-        samples = [
-            sample(1, 10),
-            BlackboxSample(**{**sample(2, 12).__dict__, "flight_id": 3}),
-            BlackboxSample(**{**sample(3, 15).__dict__, "flight_id": 4}),
-        ]
-
-        selected, flight_id = select_flight_samples(samples, "latest")
-
-        self.assertEqual(flight_id, 4)
-        self.assertEqual([value.seq for value in selected], [3])
-
-    def test_rejects_unavailable_onboard_flight(self) -> None:
-        samples = [BlackboxSample(**{**sample(2, 12).__dict__, "flight_id": 3})]
-
-        with self.assertRaisesRegex(ValueError, "available IDs: 3"):
-            select_flight_samples(samples, "9")
-
-    def test_rejects_crc_invalid_onboard_flash_page(self) -> None:
-        page = bytearray(b"\xff" * 256)
-        page[240:252] = (
-            b"FB\x01\x00" + (1).to_bytes(4, "little") + (0).to_bytes(4, "little")
-        )
-        page[252:] = binascii.crc32(page[:252]).to_bytes(4, "little")
-        page[0] ^= 1
-
-        with self.assertRaisesRegex(OSError, "CRC mismatch"):
-            samples_from_flash_bytes(bytes(page))
-
-    def test_rejects_non_page_data_in_onboard_flash_download(self) -> None:
-        with self.assertRaisesRegex(OSError, "invalid flash page magic"):
-            samples_from_flash_bytes(bytes(256))
+    def test_a_raw_onboard_log_points_at_the_configurator(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "flight-3.fwbb"
+            path.write_bytes(bytes(256))
+            with self.assertRaisesRegex(OSError, "ferro-configurator convert flight-3.fwbb --csv"):
+                samples_from_file(path)
+            other = Path(directory) / "other.csv"
+            other.write_text("a,b\n1,2\n", encoding="utf-8")
+            with self.assertRaisesRegex(OSError, "not a FerroConfigurator flight CSV"):
+                samples_from_file(other)
 
     def test_centered_drift_reports_signed_mean_rate(self) -> None:
         base = replace(

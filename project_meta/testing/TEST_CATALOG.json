@@ -156,7 +156,7 @@
           "firmware/foxeer-f405-v2/",
           "crates/ferrowasp-core/src/blackbox.rs",
           "crates/ferrowasp-flight/src/flash_storage.rs",
-          "tools/ferrowasp_storage.py"
+          "tools/ferro-configurator/crates/ferro-configurator-core/src/"
         ],
         "features": [
           "board-foxeer-f405-v2"

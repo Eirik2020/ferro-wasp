@@ -28,9 +28,9 @@ artifact is stable, airworthy, or production-ready.
   motor order, from FerroConfigurator or the USB command line.
 - FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
   live stick readout, and a rates curve.
-- ULog conversion (`convert` and `tools/fwbb_to_ulog.py`) measures the
-  control rate from the log instead of assuming 400 Hz, times records by
-  control tick, and accepts records that share a millisecond timestamp.
+- ULog conversion (`convert`) measures the control rate from the log instead
+  of assuming 400 Hz, times records by control tick, and accepts records that
+  share a millisecond timestamp.
 - `convert --csv` in FerroConfigurator: one flight as CSV for MATLAB, with
   units in the column names, time from the control-tick count at the rate
   measured from the log, and dropped-record gaps reported.
@@ -49,6 +49,12 @@ artifact is stable, airworthy, or production-ready.
   `tools/bench_rig.py` running the boot and idle gate on any board over SWD.
 
 ### Changed
+
+- FerroConfigurator is the one reader of the onboard log format.
+  `tools/blackbox_analyzer.py` analyzes its `convert --csv` export, and the
+  duplicate Python tools `tools/ferrowasp_storage.py` and
+  `tools/fwbb_to_ulog.py` are removed; their commands are FerroConfigurator's
+  `blackbox` and `convert`.
 
 - Arming is refused while a computer is connected: a USB host has the board
   configured, or the configurator link was used in the last 2 seconds. The
