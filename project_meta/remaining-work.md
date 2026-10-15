@@ -22,13 +22,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   evidence shows every disarm, RC loss, aborted arm, and rearm starts with clean
   controller state. Roll P 3.0 stays withdrawn after a 10-13 Hz oscillation.
   Command tracking has never been evaluated.
-- **IMU calibration.** A user-requested, disarmed-only calibration of a
-  stationary aircraft on level ground, exposed through the USB configuration
-  CLI without actuator authority. It rejects motion or excessive tilt, uses a
-  bounded sample window, reports success or failure, and persists atomically
-  with integrity protection. Define which gyro bias, accelerometer level
-  offsets, and trim are stored, how they are validated at boot, and whether
-  boot gyro calibration remains a fallback or becomes a check.
+- **IMU calibration.** Accelerometer level calibration is built (ADR-0044);
+  the gyro still calibrates at every boot. Storing gyro bias, and whether boot
+  calibration then becomes a check, remains open. A self-level mode should
+  require a calibrated level.
 - **Self-level mode.** A bounded attitude outer loop over the rate loop, after
   the rate-command and controller-reset changes are flight-verified, keeping
   the safety and actuator boundary.

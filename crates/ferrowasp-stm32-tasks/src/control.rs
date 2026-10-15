@@ -353,7 +353,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
         let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
             body_rates,
-            drone_gravity,
+            accel_level().apply(drone_gravity),
             1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32,
         );
         cx.shared.imu_angles.lock(|angles| {

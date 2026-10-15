@@ -1,5 +1,6 @@
 use ferrowasp_core::actuator::MotorOutputMap;
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+use ferrowasp_flight::accel_level::AccelLevel;
 use ferrowasp_flight::drone_toolbox::{
     IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, TuningProfile,
 };
@@ -126,6 +127,7 @@ pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
     log_rate_divisor: 1,
     serial_bindings: None,
     rc_protocol: RcProtocol::Sbus,
+    accel_level: AccelLevel::ZERO,
 };
 
 // The approved P-only baseline: changing it is a tuning change and re-gates

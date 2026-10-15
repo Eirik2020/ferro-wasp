@@ -67,6 +67,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0041](decisions/ADR-0041.md) | Motor Bench Actuation Is Capped And Explicitly Gated | accepted |
 | [ADR-0042](decisions/ADR-0042.md) | USB And The Configurator Port Carry One Bounded Command Line | accepted |
 | [ADR-0043](decisions/ADR-0043.md) | The Command Line Reboots Into The STM32 ROM Bootloader | accepted |
+| [ADR-0044](decisions/ADR-0044.md) | Accelerometer Level Is Calibrated On Command And Stored Per Craft | accepted |
 
 ## Adding Or Changing A Decision
 

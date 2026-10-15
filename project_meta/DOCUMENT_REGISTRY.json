@@ -384,6 +384,13 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/decisions/ADR-0044.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
       "path": "project_meta/LOGGING_FORMAT.md",
       "role": "logging-format-requirements",
       "lifecycle": "durable",
