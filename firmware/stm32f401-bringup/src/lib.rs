@@ -3,6 +3,9 @@
 
 pub mod board;
 
+// The RTIC app's imports, and the runtime crates below, exist only on the
+// target; the board manifest's tests run on the host.
+#[cfg(target_arch = "arm")]
 pub mod internal {
     pub use crate::board;
     pub use crate::board::heartbeat::{
@@ -16,5 +19,7 @@ pub mod internal {
     pub use stm32f4xx_hal::{pac, prelude::*};
 }
 
+#[cfg(target_arch = "arm")]
 use defmt_rtt as _;
+#[cfg(target_arch = "arm")]
 use panic_probe as _;
