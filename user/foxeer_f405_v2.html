@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "../searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-0cbe97ab.js"></script>
+        <script src="../toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -188,7 +188,8 @@ source checkout.</p>
 <p>FerroWasp remains experimental flight-control firmware. Flashing replaces
 firmware already installed in STM32 internal flash, including Betaflight.
 Remove every propeller, disconnect the flight battery, and keep the ESCs
-unpowered throughout USB maintenance.</p>
+unpowered throughout USB maintenance, except for the props-off motor test,
+which needs the battery.</p>
 <h2 id="download-and-extract"><a class="header" href="#download-and-extract">Download and extract</a></h2>
 <p>Published packages are attached to the repository’s
 <a href="https://github.com/Eirik2020/ferro-wasp/releases">GitHub Releases</a>. Download
@@ -278,14 +279,16 @@ armed.</p>
 <p>Named profiles are stored under
 <code>%APPDATA%\FerroConfigurator\profiles</code> and survive replacement of the release
 folder.</p>
-<p>The fresh-storage Foxeer fallback is:</p>
+<p>With nothing stored, the Foxeer boots with these defaults:</p>
 <pre><code class="language-text">roll/pitch/yaw P: 2.5 / 2.5 / 2.0
 all I and D:       0
-IMU LPF alpha:    0.55
+gyro filter:      50.8 Hz corner
 log divisor:      1
+RC:               SBUS, AETR, arm switch on channel 9
 RC deadband:      8
 roll/pitch rates: center 70, maximum 300, expo 0.50
 yaw rates:        center 70, maximum 200, expo 0.50
+motor map:        1234
 </code></pre>
 <p>This is a flyable experimental baseline, not a universal tune.</p>
 <h2 id="change-parameters"><a class="header" href="#change-parameters">Change parameters</a></h2>
@@ -308,6 +311,12 @@ yaw rates:        center 70, maximum 200, expo 0.50
 .\ferro-configurator.exe --port $Port config apply foxeer-profile.toml
 .\ferro-configurator.exe --port $Port config show
 </code></pre>
+<p>Legacy schema-v1 profiles contain only the original eleven fields. Applying
+one overlays those fields onto the connected board and preserves its current
+RC-rate settings.</p>
+<p>PID changes can cause violent oscillation. Change one controlled variable at a
+time, verify the entire configuration, and repeat relevant props-off checks
+before flight.</p>
 <h2 id="use-a-crsf-receiver"><a class="header" href="#use-a-crsf-receiver">Use a CRSF receiver</a></h2>
 <p>Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the
 SBUS pad: CRSF must not pass through the board’s SBUS inverter. Then select
@@ -348,12 +357,6 @@ then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code
 <p>The change is saved and verified by readback, and takes effect when the
 controller reboots. A function the port cannot carry is dropped at boot and
 logged; with no port bound to <code>rc</code>, the craft cannot arm.</p>
-<p>Legacy schema-v1 profiles contain only the original eleven fields. Applying
-one overlays those fields onto the connected board and preserves its current
-RC-rate settings.</p>
-<p>PID changes can cause violent oscillation. Change one controlled variable at a
-time, verify the entire configuration, and repeat relevant props-off checks
-before flight.</p>
 <h2 id="list-and-download-flights"><a class="header" href="#list-and-download-flights">List and download flights</a></h2>
 <p>After landing, disarm and leave the FCU powered for at least two seconds so the
 last partial flash page can be committed.</p>
@@ -435,7 +438,8 @@ and verified by reading the empty catalogue.</p>
 <ol>
 <li>verify device information and the complete saved configuration;</li>
 <li>cold-boot stationary and require healthy IMU, RC, DShot, ESC telemetry, and
-OSD;</li>
+OSD; unplug USB, since the board refuses to arm while a computer is
+connected;</li>
 <li>repeat props-off motor direction, correction direction, disarm, and RC-loss
 checks when firmware, gains, wiring, motor/ESC hardware, or the airframe
 changed;</li>

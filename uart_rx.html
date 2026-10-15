@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,8 +174,8 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="uart"><a class="header" href="#uart">UART</a></h1>
-<p>UART support is divided into two layers:</p>
+                        <h1 id="uart-rx"><a class="header" href="#uart-rx">UART RX</a></h1>
+<p>UART receive support is divided into two layers:</p>
 <ul>
 <li><strong>HAL layer</strong></li>
 <li><strong>Software layer</strong></li>
@@ -234,9 +234,8 @@ let mut filled_queue: ferrowasp_stm32f4::uart_dma::FilledQueue = Queue::new();</
 </ul>
 <p>The parser task continuously pulls buffers from the filled queue until it is empty. After parsing a buffer, the parser returns it to the free queue.</p>
 <p>The hardware task takes buffers from the free queue and gives them to the DMA transfer. If the free queue is empty when the DMA transfer requests a new buffer, the hardware task returns an error.</p>
-<p>For the UART4 MSP/OSD, USART2 SBUS, and FCU3 PA10 / USART1 ESC-telemetry paths,
-the IRQ owner adds one portable ownership step after detaching the static DMA
-buffer. USART1 uses DMA2 Stream 5 Channel 4:</p>
+<p>On every bound port, the IRQ owner adds one portable ownership step after
+detaching the static DMA buffer:</p>
 <pre><code class="language-text">filled DMA buffer
     -&gt; copy bytes and metadata into bounded RxChunk
     -&gt; recycle DMA buffer immediately
@@ -246,21 +245,12 @@ buffer. USART1 uses DMA2 Stream 5 Channel 4:</p>
 <p><code>RxChunk</code> carries the IDLE/full completion cause, generation, timestamp, and
 continuity markers. Queue overflow is reported through a separate
 <code>DiscontinuityReader</code>; protocol framing and DMA chunk boundaries remain
-independent. USART2 wakes one persistent async SBUS parser. Its safety path
+independent. The RC port wakes one persistent async RC parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.</p>
-<p>In the flight DShot image, USART1 feeds the low-priority ESC manager’s
-ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
-samples, and timeouts. UART transport or parser state cannot command motors:
-telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator
-service. A CRC-valid frame that arrives while its request is still queued can
-be buffered, but it remains quarantined and is published only after the manager
-receives the matching sequence/output acknowledgement for a frame that
-actually started.</p>
-<p>Transport, parser, queue, and timeout faults cannot grant actuator authority.
-If they withhold the fresh observations required during guarded idle, pre-arm
-qualification times out and returns all four outputs to stop. Telemetry loss
-after arming is currently observational and does not itself request disarm.</p>
+<p>The ESC telemetry port feeds the low-priority ESC manager’s ten-byte BLHeli
+parser; <a href="./dshot.html#esc-telemetry">DShot</a> describes how it pairs replies with
+motors and why its faults can only withhold arming, never grant authority.</p>
 <hr>
 <h2 id="buffer-flow"><a class="header" href="#buffer-flow">Buffer Flow</a></h2>
 <pre class="mermaid">flowchart LR

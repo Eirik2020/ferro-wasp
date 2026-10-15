@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -175,81 +175,80 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="project-structure"><a class="header" href="#project-structure">Project Structure</a></h1>
-<p>The repository is currently a rapid prototype, not yet the final multi-crate layout.</p>
-<p>Current important paths:</p>
-<pre><code class="language-text">.
-|-- firmware/
-|   |-- tbs-lucid-h7/            # TBS Lucid H7 board support and H743 RTIC shell
-|   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
-|   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
-|       |-- src/board/           # Immutable board facts and typed construction
-|       |-- src/lib.rs           # Internal app-support facade
-|       `-- src/main.rs          # ferroforge::app! declarations and wiring only
-|-- crates/
-|   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
-|   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
-|   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
-|   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
-|   |-- ferrowasp-flight/        # Portable flight logic: control, OSD, ESC manager, storage
-|   |-- ferrowasp-stm32/         # HAL-neutral STM32 UART/SPI/ADC/DShot mechanisms
-|   |-- ferrowasp-stm32-tasks/   # RTIC task definitions shared by the STM32 boards
-|   |-- ferrowasp-stm32f4/       # STM32F4 HAL backend
-|   |-- ferrowasp-stm32h7/       # STM32H743 HAL backend
-|   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
-|   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
-|   `-- rc-pwm/                  # Local PWM controller crate
-|-- mdbook/
-|   `-- src/                     # This documentation book
-|-- .github/
-|   |-- CONTRIBUTING.md          # GitHub pointer to the canonical guide
-|   `-- SECURITY.md              # Private security-reporting policy
-|-- LICENSE                      # Apache License, Version 2.0
-|-- NOTICE                       # Copyright, naming, and status notice
-`-- THIRD_PARTY_NOTICES.md       # Licences for vendored assets
+<p>FerroWasp is one root Cargo workspace of shared crates, plus one isolated Cargo
+workspace per firmware application. Each application selects one chip’s HAL and
+peripheral-access crate, and keeping them apart stops Cargo from unifying two
+chips’ features in one build. Firmware is composed with
+<a href="https://crates.io/crates/ferroforge">FerroForge</a>.</p>
+<h2 id="shared-crates"><a class="header" href="#shared-crates">Shared Crates</a></h2>
+<p>Under <code>crates/</code>, all members of the root workspace and host-tested there:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Crate</th><th>Owns</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ferrowasp-core</code></td><td>Safety state and the safety master’s rules, actuator command types, blackbox records, stored configuration, reference frames</td></tr>
+<tr><td><code>ferrowasp-drivers</code></td><td>Device and protocol drivers: IMUs (ICM-42688-P, MPU-6000, MPU-6500), CRSF, BLHeli telemetry, SPI NOR flash, and the <code>NorStorage</code> trait</td></tr>
+<tr><td><code>ferrowasp-flight</code></td><td>Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link</td></tr>
+<tr><td><code>ferrowasp-io-core</code></td><td>Bounded serial and SPI contracts, I/O health, statistics, and time types</td></tr>
+<tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
+<tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
+<tr><td><code>ferrowasp-pid</code></td><td>The PID rate-control primitive</td></tr>
+<tr><td><code>ferrowasp-waveform</code></td><td>DShot packet encoding and compare sequences</td></tr>
+<tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
+<tr><td><code>ferrowasp-stm32</code></td><td>STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types</td></tr>
+<tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend over <code>stm32f4xx-hal</code></td></tr>
+<tr><td><code>ferrowasp-stm32h7</code></td><td>The STM32H743 backend over <code>stm32h7xx-hal</code></td></tr>
+<tr><td><code>ferrowasp-stm32-tasks</code></td><td>The RTIC task definitions every STM32 flight board shares, including the flash manager</td></tr>
+</tbody>
+</table>
+</div>
+<p>Only <code>ferrowasp-stm32f4</code> and <code>ferrowasp-stm32h7</code> name a chip HAL, and only
+they hold unsafe code, at their DMA endpoint declarations.</p>
+<h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
+<p>Under <code>firmware/</code>, each its own Cargo workspace:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Application</th><th>Board</th></tr>
+</thead>
+<tbody>
+<tr><td><code>foxeer-f405-v2</code></td><td>Foxeer F405 V2, STM32F405; the golden flight app</td></tr>
+<tr><td><code>tbs-lucid-h7</code></td><td>TBS Lucid H7, STM32H743</td></tr>
+<tr><td><code>stm32f401-bringup</code></td><td>NUCLEO-F401RE; peripheral bring-up without actuators</td></tr>
+</tbody>
+</table>
+</div>
+<p>A flight application has three parts:</p>
+<pre><code class="language-text">firmware/&lt;board&gt;/
+|-- board/        board data crate: pins, DMA and serial routes, resource claims,
+|                 default configuration, USB identity; no HAL, host-tested
+|-- src/board/    HAL glue: type aliases and peripheral construction
+|-- src/lib.rs    the facade main.rs imports
+`-- src/main.rs   the ferroforge::app! declaration: resources, priorities,
+                  init wiring, and task selection only
 </code></pre>
-<h2 id="current-reality"><a class="header" href="#current-reality">Current Reality</a></h2>
-<p>Each deployable board has an independent Cargo/PAC graph. Its <code>src/main.rs</code>
-contains the RTIC resource and task declarations, locking, scheduling, and
-concrete initialization wiring. Board declarations and constructors live in
-the same package’s support library; reusable behavior remains in shared crates.
-Foxeer is the golden flight app.</p>
-<p>The code already contains early signs of the future shape:</p>
-<ul>
-<li>reusable safety, signal, and actuator conversion types in <code>crates/ferrowasp-core/</code></li>
-<li>board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
-construction policy under each app’s <code>src/board/</code></li>
-<li>isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
-independent Cargo and RTIC resource contracts</li>
-<li>HAL-neutral STM32 UART/SPI/ADC and DShot mechanisms under
-<code>crates/ferrowasp-stm32/</code>, with each family’s HAL under them in
-<code>crates/ferrowasp-stm32f4/</code> (also servo/auxiliary PWM) and
-<code>crates/ferrowasp-stm32h7/</code></li>
-<li>software-driver and control helpers, including the BLHeli parser and bounded
-ESC manager, under <code>crates/ferrowasp-drivers/</code> and <code>crates/ferrowasp-flight/</code></li>
-<li>local support crates for <code>rc-pwm</code>, <code>ferrowasp-pid</code>, <code>ferrowasp-mspv1</code>, and <code>ferrowasp-waveform</code></li>
-<li>active MSPv1 / DJI O4 OSD support under <code>crates/ferrowasp-mspv1/</code> and <code>crates/ferrowasp-flight/</code></li>
-<li>host-testable pure logic for safety, RC mapping, filters, PID, mixer, DShot,
-BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers</li>
-</ul>
-<h2 id="target-direction"><a class="header" href="#target-direction">Target Direction</a></h2>
-<p>The long-term layout is expected to move toward:</p>
-<pre><code class="language-text">ferrowasp-core       reusable types, units, safety state, queues
-ferrowasp-mcu        family-neutral MCU contracts
-ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-flight     portable flight logic, host-testable
-ferrowasp-stm32      HAL-neutral STM32 mechanisms
-ferrowasp-stm32f4    STM32F4 HAL backend (ferrowasp-stm32h7 for the H743)
-ferrowasp-stm32-tasks RTIC task definitions shared by the STM32 boards
-app src/board        board pin maps, clocks, DMA/timer assignments
-app src/lib.rs       board composition and internal support facade
-app src/main.rs      thin ferroforge::app! shell selecting shared definitions
-ferrowasp-gen        optional source generation for task/resource wiring
-manifest/            optional board, task, resource, and policy descriptions
-</code></pre>
-<p>Boards use isolated app packages so their PAC features and RTIC resource
-contracts cannot be accidentally unified.</p>
-<p>Reusable behavior moves outward only when its ownership and bounded execution
-are explicit; custom macros are not used to hide runtime work.</p>
+<p>Each board data crate is also a member of the root workspace, so
+<code>cargo test --workspace</code> runs its tests; the application’s own workspace
+excludes it and depends on it by path. <a href="board_support.html">Board Support</a>
+describes what a board owns.</p>
+<h2 id="host-tools"><a class="header" href="#host-tools">Host Tools</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Path</th><th>What</th></tr>
+</thead>
+<tbody>
+<tr><td><code>tools/ferro-configurator/</code></td><td>FerroConfigurator, its own Cargo workspace: CLI and GUI for flashing, configuration, motor tests, and log download</td></tr>
+<tr><td><code>tools/*.py</code></td><td>Bench, RTT, analysis, evidence, and repository checks</td></tr>
+<tr><td><code>tools/rtic-app-builder/</code></td><td>The earlier app generator, its own workspace, due to be retired</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="documentation"><a class="header" href="#documentation">Documentation</a></h2>
+<p><code>mdbook/</code> is this book. <code>project_meta/</code> holds internal maintainer material and
+is not published.</p>
 
                     </main>
 
@@ -259,7 +258,7 @@ are explicit; custom macros are not used to hide runtime work.</p>
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="testing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="board_support.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -273,7 +272,7 @@ are explicit; custom macros are not used to hide runtime work.</p>
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="testing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="board_support.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

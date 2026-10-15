@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,12 +176,14 @@
                     <main>
                         <h1 id="ferrowasp"><a class="header" href="#ferrowasp">FerroWasp</a></h1>
 <p>FerroWasp is a safety-focused Rust/RTIC flight-controller firmware project for
-multicopter UAVs. It favors explicit resource ownership, deterministic
+multicopter UAVs, composed with the <a href="https://crates.io/crates/ferroforge">FerroForge</a>
+framework. It favors explicit resource ownership, deterministic
 scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.</p>
-<p>The Foxeer F405 V2 is the golden flight target, and NUCLEO-F401RE provides a
-non-actuating STM32F4 development target. FerroWasp FCU3 has been retired. See <a href="current_support.html">Current Support</a>
-for the board and feature matrix.</p>
+<p>The Foxeer F405 V2 is the golden flight target. The TBS Lucid H7 carries the
+same feature set on an STM32H743, so far on the bench only, and NUCLEO-F401RE is
+a non-actuating STM32F4 development target. See
+<a href="current_support.html">Current Support</a> for the board and feature matrix.</p>
 <h2 id="where-to-begin"><a class="header" href="#where-to-begin">Where to Begin</a></h2>
 <ul>
 <li>To install and operate a packaged Foxeer image, use the
@@ -189,14 +191,14 @@ for the board and feature matrix.</p>
 <li>To build, test, or contribute from source, use the
 <a href="developer_getting_started.html">Developer Setup</a>.</li>
 <li>To understand the current implementation, browse the flight-controller,
-interface, and development chapters in the <a href="SUMMARY.html">Summary</a>.</li>
+interface, and development chapters in the sidebar.</li>
 </ul>
 <h2 id="runtime-shape"><a class="header" href="#runtime-shape">Runtime Shape</a></h2>
 <pre class="mermaid">flowchart LR
-    rc[SBUS RC&lt;br/&gt;USART2 DMA]
-    imu[MPU6500 / ICM42688-P&lt;br/&gt;SPI1 DMA]
+    rc[SBUS or CRSF RC&lt;br/&gt;UART DMA]
+    imu[ICM42688-P / MPU-6000 / MPU6500&lt;br/&gt;SPI1 DMA]
     safety[Safety Master]
-    control[400 Hz&lt;br/&gt;Control Loop]
+    control[2 kHz&lt;br/&gt;Control Loop]
     escmgr[ESC Manager&lt;br/&gt;legacy telemetry]
     actuator[Actuator Output&lt;br/&gt;DShot600]
     motors[ESCs / Motors]

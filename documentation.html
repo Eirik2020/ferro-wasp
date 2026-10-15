@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,7 +176,7 @@
                     <main>
                         <h1 id="documentation-policy"><a class="header" href="#documentation-policy">Documentation Policy</a></h1>
 <p>The mdBook is the canonical home for FerroWasp user and developer
-documentation. Its <a href="SUMMARY.html">Summary</a> is the maintained documentation
+documentation. Its <code>SUMMARY.md</code>, the sidebar, is the maintained documentation
 index.</p>
 <p>Use the following boundaries:</p>
 <ul>
@@ -185,17 +185,19 @@ index.</p>
 testing concepts, and the roadmap belong in this book.</li>
 <li>Crate, app, and tool READMEs may document a narrow package contract, but
 should link here instead of duplicating general guides.</li>
-<li><code>project_meta</code> is reserved for agent context, machine-enforced test and
-evidence metadata, design-decision provenance, internal work tracking, and
-archives. It is not a user or developer entry point.</li>
-<li>Agent instructions remain next to the files they govern.</li>
+<li><code>project_meta</code> is an internal maintainers’ book, never published: governing
+requirements, design decisions, remaining work, and the machine-checked test
+and evidence records. It is not a user or developer entry point.</li>
+<li><code>archive/</code> keeps retired documents verbatim, for provenance only.</li>
+<li>Agent instructions are one root <code>AGENTS.md</code>.</li>
 <li>Legal distribution files remain at the repository root. GitHub-recognized
 policy pointers and per-tag release-delivery metadata live under <code>.github/</code>.
 Canonical contribution guidance and release history remain in this book.</li>
 </ul>
-<p>When a public behavior, workflow, or supported feature changes, update the
-relevant chapter and the Summary in the same change. Do not add a second
-standalone guide elsewhere in the repository.</p>
+<p>Each topic has one owning chapter; other chapters link to it rather than
+restating it. When a public behavior, workflow, or supported feature changes,
+update the owning chapter and the Summary in the same change. Do not add a
+second standalone guide elsewhere in the repository.</p>
 
                     </main>
 

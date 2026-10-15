@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -201,7 +201,7 @@ verify;</li>
 </ul>
 <h2 id="protocols-and-interfaces"><a class="header" href="#protocols-and-interfaces">Protocols and Interfaces</a></h2>
 <ul>
-<li>add CRSF/ELRS while retaining SBUS;</li>
+<li>validate CRSF/ELRS and its telemetry on the target, link loss included;</li>
 <li>evaluate bidirectional DShot telemetry separately from the current legacy
 UART telemetry path;</li>
 <li>mature configuration and telemetry protocols only after their bounds,
@@ -212,14 +212,15 @@ recovery behavior, and compatibility policy are explicit;</li>
 <ul>
 <li>continue thinning RTIC apps so they contain resource declarations, task
 bindings, scheduling, and board composition rather than reusable logic;</li>
-<li>move reusable STM32F4 initialization and mechanisms into
-<code>ferrowasp-stm32f4</code> without hiding runtime work behind custom macros;</li>
-<li>keep physical pins, DMA routes, timer assignments, sensor orientation, and
-other board facts in each app support module;</li>
+<li>make each chip backend cover its whole family, so a new board on a supported
+chip needs only its board data;</li>
+<li>generate a board’s data from its existing Betaflight or ArduPilot target;</li>
+<li>grow FerroForge alongside FerroWasp, building what the firmware needs into
+the framework rather than around it;</li>
 <li>add boards only when their explicit hardware contract and verification path
 are maintainable;</li>
-<li>explore STM32H7 and Pixhawk-class targets after the STM32F4 architecture is
-stable.</li>
+<li>bring the STM32H743 port to flight, and consider Pixhawk-class targets
+after that.</li>
 </ul>
 <h2 id="engineering-assurance"><a class="header" href="#engineering-assurance">Engineering Assurance</a></h2>
 <ul>

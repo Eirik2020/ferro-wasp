@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -184,15 +184,14 @@ SPI1.</p>
 <tr><th>Board</th><th>IMU behavior</th></tr>
 </thead>
 <tbody>
-<tr><td>FerroWasp FCU3 (obsolete)</td><td>Fixed MPU6500 path, <code>WHO_AM_I=0x70</code></td></tr>
 <tr><td>Foxeer F405 V2</td><td>Mode-3 probe selects MPU6500 <code>0x70</code>, ICM42688-P <code>0x47</code> or MPU-6000 <code>0x68</code></td></tr>
-<tr><td>TBS Lucid H7 (unverified)</td><td>Same probe on SPI1 only; the second IMU on SPI4 is not used</td></tr>
+<tr><td>TBS Lucid H7 (bench only)</td><td>Same probe on SPI1 only; the second IMU on SPI4 is not used</td></tr>
 <tr><td>NUCLEO-F401RE</td><td>No attached IMU in the board contract</td></tr>
 </tbody>
 </table>
 </div>
 <p>An unsupported identity, failed probe, failed reset, or configuration
-read-back failure leaves Foxeer sampling disabled. The heartbeat and unrelated
+read-back failure leaves sampling disabled. The heartbeat and unrelated
 bring-up services continue, while the runtime IMU health gate rejects arming.</p>
 <h2 id="driver-behavior"><a class="header" href="#driver-behavior">Driver Behavior</a></h2>
 <p>All three drivers are allocation-free modules in <code>ferrowasp-drivers</code> and use
@@ -228,7 +227,8 @@ The IMU bus stays at 1 MHz, so a burst takes about 120 us, which rules out an
 <li><code>WHO_AM_I=0x47</code> validation and bank-0 selection</li>
 <li>I2C disabled while big-endian sensor output is preserved</li>
 <li>register read-back before sensor power-up</li>
-<li>1 kHz low-noise gyro and accelerometer output</li>
+<li>2 kHz low-noise gyro and accelerometer output, with the UI filter at a
+quarter of the output rate (500 Hz)</li>
 <li>+/-2000 dps gyro and +/-16 g accelerometer ranges</li>
 <li>the required power transition and gyro startup delays</li>
 <li>active-high, push-pull, pulsed INT1 data-ready routing, including the required
@@ -242,15 +242,15 @@ decoders reject short, all-zero, and all-<code>0xff</code> frames.</p>
 <p>The sensor layouts all fit the existing fixed 15-byte full-duplex DMA
 transaction: one read-command byte plus 14 response bytes.</p>
 <pre class="mermaid">flowchart LR
-    fcu[FCU3 TIM4&lt;br/&gt;800 Hz poll]
-    fox[Foxeer PC4/EXTI4&lt;br/&gt;1 kHz data ready]
+    fox[Foxeer PC4/EXTI4&lt;br/&gt;data ready]
+    lucid[Lucid PB2/EXTI2&lt;br/&gt;data ready]
     poll[SPI1 request task&lt;br/&gt;sensor-specific start register]
     dma[SPI1 RX DMA]
     parser[Sensor-specific parser]
     data[Latest ImuData]
-    control[400 Hz control loop]
+    control[2 kHz control loop]
 
-    fcu --&gt; poll
+    lucid --&gt; poll
     fox --&gt; poll
     poll --&gt; dma
     dma --&gt; parser
@@ -261,12 +261,17 @@ transaction: one read-command byte plus 14 response bytes.</p>
 <p><code>SpiDmaOwner</code> exclusively owns SPI1, both DMA halves, chip select, timeout
 recovery, and static receive buffers. The parser returns each receive buffer
 after valid and invalid frames.</p>
-<p>Foxeer configures every supported sensor for active-high, push-pull data-ready
-pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
+<p>Every supported sensor is configured for active-high, push-pull data-ready
+pulses, which trigger sampling: PC4/EXTI4 on Foxeer, PB2/EXTI2 on the Lucid. The IRQ timestamps and clears the
 edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
-their two-second deltas. The obsolete FCU3 kept an 800 Hz timer poll trigger.</p>
+their two-second deltas.</p>
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
+<p>The drone body frame is forward/right/down: +X forward, +Y right, +Z down,
+with angular rates by the right-hand rule. Board support states the
+sensor-to-board and board-to-body transformations explicitly. A historical
+controller-sign compatibility stays visible at the controller boundary rather
+than being hidden by a falsified physical orientation.</p>
 <p>Raw values remain in sensor-axis order. Each board support supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.</p>
 <p>The Foxeer-only <code>imu_orientation_rtt</code> feature adds one low-rate, coherent
@@ -285,13 +290,11 @@ together enable <code>FLIGHT_ARMING_ENABLED</code>. Any change to the sensor, it
 orientation or the motor order withdraws that and requires the checks again.
 Those checks were made with the ICM42688-P, so a Foxeer that detects an
 MPU-6000 samples and reports it but fails the pre-arm IMU check until its axes
-and signs are verified on a board that carries one.
-The obsolete FCU3’s mapping and gyro bias behaviour had bench evidence of its
-own.</p>
+and signs are verified on a board that carries one.</p>
 <p>The optional BB2 <code>gyro10</code> values use the same measured-rate convention passed
 to the rate PID. Host viewers should display those roll, pitch, and yaw fields
 directly.</p>
-<p>See <a href="./rtt_debug_tools.html">RTT Debug Tools</a> for the terminal logger and live
+<p>See <a href="./rtt_debug_tools.html">Bench and Analysis Tools</a> for the terminal logger and live
 IMU viewer.</p>
 <h2 id="foxeer-bring-up-checklist"><a class="header" href="#foxeer-bring-up-checklist">Foxeer Bring-Up Checklist</a></h2>
 <ol>

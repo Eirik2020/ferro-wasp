@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -177,12 +177,14 @@
                     <main>
                         <h1 id="ferrowasp"><a class="header" href="#ferrowasp">FerroWasp</a></h1>
 <p>FerroWasp is a safety-focused Rust/RTIC flight-controller firmware project for
-multicopter UAVs. It favors explicit resource ownership, deterministic
+multicopter UAVs, composed with the <a href="https://crates.io/crates/ferroforge">FerroForge</a>
+framework. It favors explicit resource ownership, deterministic
 scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.</p>
-<p>The Foxeer F405 V2 is the golden flight target, and NUCLEO-F401RE provides a
-non-actuating STM32F4 development target. FerroWasp FCU3 has been retired. See <a href="#current-support">Current Support</a>
-for the board and feature matrix.</p>
+<p>The Foxeer F405 V2 is the golden flight target. The TBS Lucid H7 carries the
+same feature set on an STM32H743, so far on the bench only, and NUCLEO-F401RE is
+a non-actuating STM32F4 development target. See
+<a href="#current-support">Current Support</a> for the board and feature matrix.</p>
 <h2 id="where-to-begin"><a class="header" href="#where-to-begin">Where to Begin</a></h2>
 <ul>
 <li>To install and operate a packaged Foxeer image, use the
@@ -190,14 +192,14 @@ for the board and feature matrix.</p>
 <li>To build, test, or contribute from source, use the
 <a href="#developer-getting-started">Developer Setup</a>.</li>
 <li>To understand the current implementation, browse the flight-controller,
-interface, and development chapters in the <a href="SUMMARY.html">Summary</a>.</li>
+interface, and development chapters in the sidebar.</li>
 </ul>
 <h2 id="runtime-shape"><a class="header" href="#runtime-shape">Runtime Shape</a></h2>
 <pre class="mermaid">flowchart LR
-    rc[SBUS RC&lt;br/&gt;USART2 DMA]
-    imu[MPU6500 / ICM42688-P&lt;br/&gt;SPI1 DMA]
+    rc[SBUS or CRSF RC&lt;br/&gt;UART DMA]
+    imu[ICM42688-P / MPU-6000 / MPU6500&lt;br/&gt;SPI1 DMA]
     safety[Safety Master]
-    control[400 Hz&lt;br/&gt;Control Loop]
+    control[2 kHz&lt;br/&gt;Control Loop]
     escmgr[ESC Manager&lt;br/&gt;legacy telemetry]
     actuator[Actuator Output&lt;br/&gt;DShot600]
     motors[ESCs / Motors]
@@ -263,7 +265,8 @@ source checkout.</p>
 <p>FerroWasp remains experimental flight-control firmware. Flashing replaces
 firmware already installed in STM32 internal flash, including Betaflight.
 Remove every propeller, disconnect the flight battery, and keep the ESCs
-unpowered throughout USB maintenance.</p>
+unpowered throughout USB maintenance, except for the props-off motor test,
+which needs the battery.</p>
 <h2 id="download-and-extract"><a class="header" href="#download-and-extract">Download and extract</a></h2>
 <p>Published packages are attached to the repository’s
 <a href="https://github.com/Eirik2020/ferro-wasp/releases">GitHub Releases</a>. Download
@@ -353,14 +356,16 @@ armed.</p>
 <p>Named profiles are stored under
 <code>%APPDATA%\FerroConfigurator\profiles</code> and survive replacement of the release
 folder.</p>
-<p>The fresh-storage Foxeer fallback is:</p>
+<p>With nothing stored, the Foxeer boots with these defaults:</p>
 <pre><code class="language-text">roll/pitch/yaw P: 2.5 / 2.5 / 2.0
 all I and D:       0
-IMU LPF alpha:    0.55
+gyro filter:      50.8 Hz corner
 log divisor:      1
+RC:               SBUS, AETR, arm switch on channel 9
 RC deadband:      8
 roll/pitch rates: center 70, maximum 300, expo 0.50
 yaw rates:        center 70, maximum 200, expo 0.50
+motor map:        1234
 </code></pre>
 <p>This is a flyable experimental baseline, not a universal tune.</p>
 <h2 id="change-parameters"><a class="header" href="#change-parameters">Change parameters</a></h2>
@@ -383,6 +388,12 @@ yaw rates:        center 70, maximum 200, expo 0.50
 .\ferro-configurator.exe --port $Port config apply foxeer-profile.toml
 .\ferro-configurator.exe --port $Port config show
 </code></pre>
+<p>Legacy schema-v1 profiles contain only the original eleven fields. Applying
+one overlays those fields onto the connected board and preserves its current
+RC-rate settings.</p>
+<p>PID changes can cause violent oscillation. Change one controlled variable at a
+time, verify the entire configuration, and repeat relevant props-off checks
+before flight.</p>
 <h2 id="use-a-crsf-receiver"><a class="header" href="#use-a-crsf-receiver">Use a CRSF receiver</a></h2>
 <p>Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the
 SBUS pad: CRSF must not pass through the board’s SBUS inverter. Then select
@@ -423,12 +434,6 @@ then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code
 <p>The change is saved and verified by readback, and takes effect when the
 controller reboots. A function the port cannot carry is dropped at boot and
 logged; with no port bound to <code>rc</code>, the craft cannot arm.</p>
-<p>Legacy schema-v1 profiles contain only the original eleven fields. Applying
-one overlays those fields onto the connected board and preserves its current
-RC-rate settings.</p>
-<p>PID changes can cause violent oscillation. Change one controlled variable at a
-time, verify the entire configuration, and repeat relevant props-off checks
-before flight.</p>
 <h2 id="list-and-download-flights"><a class="header" href="#list-and-download-flights">List and download flights</a></h2>
 <p>After landing, disarm and leave the FCU powered for at least two seconds so the
 last partial flash page can be committed.</p>
@@ -510,7 +515,8 @@ and verified by reading the empty catalogue.</p>
 <ol>
 <li>verify device information and the complete saved configuration;</li>
 <li>cold-boot stationary and require healthy IMU, RC, DShot, ESC telemetry, and
-OSD;</li>
+OSD; unplug USB, since the board refuses to arm while a computer is
+connected;</li>
 <li>repeat props-off motor direction, correction direction, disarm, and RC-loss
 checks when firmware, gains, wiring, motor/ESC hardware, or the airframe
 changed;</li>
@@ -613,39 +619,15 @@ than copying Windows <code>target</code> directories or virtual environments.</p
 <pre><code class="language-bash">docker compose build dev
 docker compose run --rm dev bash tools/dev/check-environment.sh
 </code></pre>
-<p>The environment check is hardware-free. It verifies exact tool versions, the
-pinned Codex CLI, Git and OpenSSH clients, namespace diagnostic tools, Python
-analysis dependencies, the embedded target, and discovery of every isolated
-Cargo workspace without downloading project dependencies. Authenticated Git access and
-nested-userns execution are checked after the recreated container starts.</p>
+<p>The environment check is hardware-free. It verifies exact tool versions, Git and OpenSSH clients,
+namespace diagnostic tools, Python analysis dependencies, the embedded target,
+and discovery of every isolated Cargo workspace without downloading project
+dependencies. Authenticated Git access and nested user namespaces are checked
+after the recreated container starts.</p>
 <p>Most WSL distributions use user and group ID <code>1000</code>, which is the container
 default. If <code>id -u</code> or <code>id -g</code> reports another value, build with matching
 values so generated source-tree files remain owned by the WSL user:</p>
 <pre><code class="language-bash">DEV_UID="$(id -u)" DEV_GID="$(id -g)" docker compose build dev
-</code></pre>
-<h3 id="preserve-codex-sessions"><a class="header" href="#preserve-codex-sessions">Preserve Codex sessions</a></h3>
-<p>Codex stores local session rollouts, its session index, configuration, and
-login state under <code>/home/ferrowasp/.codex</code>. The reference environment mounts
-that complete directory from the external Docker volume
-<code>ferrowasp-codex-home</code>, so container recreation does not discard chats or
-settings. The CLI package itself is installed outside that mount under
-<code>/opt/codex</code>, so mounting retained state cannot hide the executable supplied
-by the image.</p>
-<p>If an existing FerroWasp container was created before this volume was added,
-migrate it exactly once before recreating the container:</p>
-<pre><code class="language-bash">bash tools/dev/migrate-codex-state.sh
-</code></pre>
-<p>The migration pauses the running container while taking a bounded snapshot,
-refuses to overwrite a non-empty target volume, verifies the copied file
-count, and removes its temporary host copy. The volume includes authentication
-material; never copy it into the repository or a shared archive. Run migration
-as the final action before recreation because later messages written to the
-old container are not part of the snapshot.</p>
-<p>After recreation, the Codex UI can reopen its retained threads. The installed
-CLI also supports:</p>
-<pre><code class="language-bash">codex resume
-codex resume --last
-codex resume --all
 </code></pre>
 <h3 id="daily-use"><a class="header" href="#daily-use">Daily use</a></h3>
 <p>Start the persistent development service with the host SSH agent mounted,
@@ -653,11 +635,9 @@ then open a shell:</p>
 <pre><code class="language-bash">bash tools/dev/compose-with-ssh-agent.sh up -d dev
 bash tools/dev/compose-with-ssh-agent.sh exec dev bash
 </code></pre>
-<p>The development service currently disables the Docker default seccomp profile
-because that profile blocks the unprivileged <code>unshare --user</code> operation
-required by the Codex/Bubblewrap sandbox. It also enables
-<code>no-new-privileges</code> and grants no additional Linux capabilities. This policy remains under
-review for replacement with a narrower custom seccomp profile.</p>
+<p>The service runs without Docker’s default seccomp profile, which blocks the
+unprivileged user namespaces a maintainer sandboxing tool needs. It keeps
+<code>no-new-privileges</code> and adds no Linux capabilities.</p>
 <p>The helper refuses to create the service when the host agent socket is absent
 or has no loaded identity. Inside the container, verify the forwarded agent
 and the configured remote before relying on pull or push:</p>
@@ -670,23 +650,12 @@ git ls-remote --exit-code origin HEAD
 <p>The repository is bind-mounted at <code>/workspace/ferro-wasp</code>. Cargo registry,
 Git dependency, and Linux build-target caches live in named Docker volumes.
 This prevents incompatible Windows and Linux target artifacts from mixing.</p>
-<p>Inside the container, run the normal repository commands directly:</p>
-<pre><code class="language-bash">cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check --workspace --locked
-cargo test --workspace --locked
-python -m unittest discover -s tools/tests -v
-python tools/check_repository_context.py
-mdbook build mdbook
-</code></pre>
+<p>Inside the container, run the <a href="#software-checks">software checks</a>
+directly.</p>
 <p>Stop the service without deleting caches:</p>
 <pre><code class="language-bash">docker compose down
 </code></pre>
-<p><code>docker compose down --volumes</code> deletes the Cargo cache volumes but not the
-external <code>ferrowasp-codex-home</code> volume. Docker manages that volume outside the
-Compose application lifecycle so ordinary teardown and recreation preserve
-Codex sessions. Removing the external volume is a separate destructive action
-that also removes its retained chats, configuration, and login state.</p>
+<p><code>docker compose down --volumes</code> also deletes the Cargo cache volumes.</p>
 <p>VS Code users may install the Dev Containers extension, verify <code>ssh-add -l</code> in
 the host shell, and open the repository with <strong>Dev Containers: Reopen in
 Container</strong>. The extension automatically forwards a running host SSH agent,
@@ -732,29 +701,26 @@ of that package do not need STM32CubeProgrammer.</p>
 Set-Location ferro-wasp
 rustup show active-toolchain
 </code></pre>
-<p>Run the hardware-free root checks before making changes:</p>
-<pre><code class="language-powershell">cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked
-cargo check --workspace --locked
-cargo test --workspace --locked
-python tools\check_repository_context.py
-</code></pre>
+<p>Run the hardware-free <a href="#software-checks">software checks</a> before
+making changes.</p>
 <p>The root workspace contains reusable crates. Deployable firmware applications
 are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
 <pre><code class="language-text">firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
-firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, unverified
+firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, bench only
 firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
 board’s image, pins, DMA routes, sensor orientation, or motor mapping on
 another board.</p>
 <h2 id="build-the-flight-applications"><a class="header" href="#build-the-flight-applications">Build the flight applications</a></h2>
-<p>Foxeer is the golden flight app for established runtime and safety behavior:</p>
+<p>Build an application from its own directory. Foxeer is the golden flight app,
+the reference for runtime and safety behaviour:</p>
 <pre><code class="language-powershell">Set-Location firmware\foxeer-f405-v2
 cargo build --release --locked
 Set-Location ..\..
 </code></pre>
+<p><code>firmware\tbs-lucid-h7</code> builds the same way.</p>
 <p>The resulting Foxeer ELF is:</p>
 <pre><code class="language-text">firmware/foxeer-f405-v2/target/thumbv7em-none-eabihf/release/FerroWaspFoxeerF405V2
 </code></pre>
@@ -810,7 +776,7 @@ the ZIP and checksum together.</p>
 </code></pre>
 <p>The dry run must verify the manifest, firmware hash, board, flash range, and
 vector table without accessing the MCU. See the
-<a href="../../tools/ferro-configurator/README.html">FerroConfigurator README</a> for its
+<a href="https://github.com/Eirik2020/ferro-wasp/blob/main/tools/ferro-configurator/README.md">FerroConfigurator README</a> for its
 full development and packaging contract.</p>
 <h2 id="build-the-documentation"><a class="header" href="#build-the-documentation">Build the documentation</a></h2>
 <p>Install the pinned documentation tools when needed:</p>
@@ -818,27 +784,18 @@ full development and packaging contract.</p>
 cargo install mdbook-mermaid --version 0.17.0 --locked
 mdbook build mdbook
 </code></pre>
-<p>Documentation and context changes must also pass:</p>
-<pre><code class="language-powershell">python tools\check_repository_context.py
-python -m unittest tools.tests.test_repository_context -v
-</code></pre>
+<p>Documentation changes must also pass the repository context check in the
+<a href="#software-checks">software checks</a>.</p>
 <h2 id="contribution-workflow"><a class="header" href="#contribution-workflow">Contribution workflow</a></h2>
-<p>The default branch is <code>main</code>. Keep patches small, preserve unrelated
-worktree changes, and use a non-target branch plus pull request for normal
-publication. Repository rules require passing checks and protect <code>main</code> from
-deletion and force-pushes.</p>
-<p>Read the <a href="#contributing">contribution guide</a> before submitting work. For
-safety-relevant changes, record the reason, exact image/configuration,
-verification performed, remaining target gaps, and any timing or unsafe-code
-implications. Never claim certification, airworthiness, or production safety
-from prototype evidence.</p>
+<p>The default branch is <code>main</code>, protected from deletion and force-pushes, and it
+requires passing checks. Work on a branch and open a pull request; the
+<a href="#contributing">contribution guide</a> says what a pull request must state.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
-new flight-board work. NUCLEO-F401RE is a non-actuating development target.
-FerroWasp FCU3, obsolete since 2026-09-22, was removed on 2026-10-07. TBS
-Lucid H7 is an unverified port of the Foxeer feature set to the STM32H743; it
-builds, but has not run on hardware.</p>
+new flight-board work. TBS Lucid H7 carries the Foxeer feature set on the
+STM32H743; it has passed bench checks but has never driven motors or flown.
+NUCLEO-F401RE is a non-actuating development target.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
@@ -851,7 +808,7 @@ list every peripheral or diagnostic feature.</p>
 <tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
 <tr><td>RC input</td><td>SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config</td><td>None</td></tr>
 <tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>None</td></tr>
-<tr><td>Control</td><td>400 Hz rate controller and Quad X mixer</td><td>None</td></tr>
+<tr><td>Control</td><td>2 kHz rate controller and Quad X mixer</td><td>None</td></tr>
 <tr><td>ESC output</td><td>Four-lane DShot600</td><td>None</td></tr>
 <tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
 <tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
@@ -870,21 +827,26 @@ persistent configuration, onboard blackbox storage, and MSP OSD are standard
 parts of its flight image rather than optional board capabilities.</p>
 <p>The fitted SPI1 IMU is detected at boot. MPU6500, ICM42688-P and MPU-6000
 share the bounded DMA transport and board orientation contract; PC4/EXTI4
-supplies the normal data-ready event. The controller consumes fresh samples at 400 Hz.</p>
+supplies the normal data-ready event. The ICM-42688-P runs at a 2 kHz output
+rate and the control loop matches it, so every tick has a fresh sample; the
+MPU6500 tops out at 1 kHz.</p>
 <p>Four DShot600 lanes use TIM1 and TIM8 with board-local pin and DMA routes. The
 actuator path continuously selects stop while disarmed, rejects stale motor
 commands, and contains a lane or DMA failure across the whole four-output
-bank. The bounded ESC manager associates PA10 / USART1 legacy telemetry with
-requested physical outputs and supplies eRPM evidence for guarded arming.</p>
+bank. The bounded ESC manager associates legacy telemetry, received by default
+on <code>uart1</code> (PA10), with requested physical outputs and supplies eRPM evidence for guarded arming.</p>
 <p>Onboard SPI-NOR stores CRC-protected configuration and FWBB flight records.
 The <a href="#ferroconfigurator">FerroConfigurator</a> uses USB CDC to manage that
 storage while the aircraft is disarmed.</p>
-<h2 id="tbs-lucid-h7-unverified"><a class="header" href="#tbs-lucid-h7-unverified">TBS Lucid H7 (unverified)</a></h2>
+<h2 id="tbs-lucid-h7-bench-only"><a class="header" href="#tbs-lucid-h7-bench-only">TBS Lucid H7 (bench only)</a></h2>
 <p>The app lives in <code>firmware/tbs-lucid-h7</code> and carries the Foxeer feature set on
 the Lucid’s own peripherals, through the <code>ferrowasp-stm32h7</code> backend. Pins
-follow the upstream Betaflight <code>TBS_LUCID_H7</code> target. Nothing here has run on
-the board, so flight arming is disabled at compile time until the IMU
-orientation, motor order, and ADC scale are verified on it.</p>
+follow the upstream Betaflight <code>TBS_LUCID_H7</code> target. A later board revision,
+ArduPilot’s <code>TBS_LUCID_H7V3</code>, routes motors and receivers differently and is
+not supported. Boot,
+IMU, USB, and microSD logging have run on a board; motors, RC, and OSD have
+not. Flight arming is disabled at compile time until the IMU orientation, motor
+order, and ADC scale are verified.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -926,10 +888,10 @@ IMU or actuator outputs, so it is useful for non-actuating STM32F4 development
 without pretending to be a flight target.</p>
 <h2 id="shared-flight-behavior"><a class="header" href="#shared-flight-behavior">Shared Flight Behavior</a></h2>
 <p>The two flight apps use the same bounded behavior for the main control chain:</p>
-<pre><code class="language-text">SBUS input
+<pre><code class="language-text">SBUS or CRSF input
   -&gt; safety-qualified arm request
   -&gt; fresh IMU sample
-  -&gt; 400 Hz rate controller and Quad X mixer
+  -&gt; 2 kHz rate controller and Quad X mixer
   -&gt; bounded motor-command queue
   -&gt; safety-owned 500 Hz DShot600 service
   -&gt; legacy ESC telemetry and idle-eRPM qualification
@@ -987,15 +949,14 @@ SPI1.</p>
 <tr><th>Board</th><th>IMU behavior</th></tr>
 </thead>
 <tbody>
-<tr><td>FerroWasp FCU3 (obsolete)</td><td>Fixed MPU6500 path, <code>WHO_AM_I=0x70</code></td></tr>
 <tr><td>Foxeer F405 V2</td><td>Mode-3 probe selects MPU6500 <code>0x70</code>, ICM42688-P <code>0x47</code> or MPU-6000 <code>0x68</code></td></tr>
-<tr><td>TBS Lucid H7 (unverified)</td><td>Same probe on SPI1 only; the second IMU on SPI4 is not used</td></tr>
+<tr><td>TBS Lucid H7 (bench only)</td><td>Same probe on SPI1 only; the second IMU on SPI4 is not used</td></tr>
 <tr><td>NUCLEO-F401RE</td><td>No attached IMU in the board contract</td></tr>
 </tbody>
 </table>
 </div>
 <p>An unsupported identity, failed probe, failed reset, or configuration
-read-back failure leaves Foxeer sampling disabled. The heartbeat and unrelated
+read-back failure leaves sampling disabled. The heartbeat and unrelated
 bring-up services continue, while the runtime IMU health gate rejects arming.</p>
 <h2 id="driver-behavior"><a class="header" href="#driver-behavior">Driver Behavior</a></h2>
 <p>All three drivers are allocation-free modules in <code>ferrowasp-drivers</code> and use
@@ -1031,7 +992,8 @@ The IMU bus stays at 1 MHz, so a burst takes about 120 us, which rules out an
 <li><code>WHO_AM_I=0x47</code> validation and bank-0 selection</li>
 <li>I2C disabled while big-endian sensor output is preserved</li>
 <li>register read-back before sensor power-up</li>
-<li>1 kHz low-noise gyro and accelerometer output</li>
+<li>2 kHz low-noise gyro and accelerometer output, with the UI filter at a
+quarter of the output rate (500 Hz)</li>
 <li>+/-2000 dps gyro and +/-16 g accelerometer ranges</li>
 <li>the required power transition and gyro startup delays</li>
 <li>active-high, push-pull, pulsed INT1 data-ready routing, including the required
@@ -1045,15 +1007,15 @@ decoders reject short, all-zero, and all-<code>0xff</code> frames.</p>
 <p>The sensor layouts all fit the existing fixed 15-byte full-duplex DMA
 transaction: one read-command byte plus 14 response bytes.</p>
 <pre class="mermaid">flowchart LR
-    fcu[FCU3 TIM4&lt;br/&gt;800 Hz poll]
-    fox[Foxeer PC4/EXTI4&lt;br/&gt;1 kHz data ready]
+    fox[Foxeer PC4/EXTI4&lt;br/&gt;data ready]
+    lucid[Lucid PB2/EXTI2&lt;br/&gt;data ready]
     poll[SPI1 request task&lt;br/&gt;sensor-specific start register]
     dma[SPI1 RX DMA]
     parser[Sensor-specific parser]
     data[Latest ImuData]
-    control[400 Hz control loop]
+    control[2 kHz control loop]
 
-    fcu --&gt; poll
+    lucid --&gt; poll
     fox --&gt; poll
     poll --&gt; dma
     dma --&gt; parser
@@ -1064,12 +1026,17 @@ transaction: one read-command byte plus 14 response bytes.</p>
 <p><code>SpiDmaOwner</code> exclusively owns SPI1, both DMA halves, chip select, timeout
 recovery, and static receive buffers. The parser returns each receive buffer
 after valid and invalid frames.</p>
-<p>Foxeer configures every supported sensor for active-high, push-pull data-ready
-pulses and triggers sampling from PC4/EXTI4. The IRQ timestamps and clears the
+<p>Every supported sensor is configured for active-high, push-pull data-ready
+pulses, which trigger sampling: PC4/EXTI4 on Foxeer, PB2/EXTI2 on the Lucid. The IRQ timestamps and clears the
 edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
-their two-second deltas. The obsolete FCU3 kept an 800 Hz timer poll trigger.</p>
+their two-second deltas.</p>
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
+<p>The drone body frame is forward/right/down: +X forward, +Y right, +Z down,
+with angular rates by the right-hand rule. Board support states the
+sensor-to-board and board-to-body transformations explicitly. A historical
+controller-sign compatibility stays visible at the controller boundary rather
+than being hidden by a falsified physical orientation.</p>
 <p>Raw values remain in sensor-axis order. Each board support supplies the axis indices and
 signs used to produce measured roll, pitch, and yaw rates for the control loop.</p>
 <p>The Foxeer-only <code>imu_orientation_rtt</code> feature adds one low-rate, coherent
@@ -1088,13 +1055,11 @@ together enable <code>FLIGHT_ARMING_ENABLED</code>. Any change to the sensor, it
 orientation or the motor order withdraws that and requires the checks again.
 Those checks were made with the ICM42688-P, so a Foxeer that detects an
 MPU-6000 samples and reports it but fails the pre-arm IMU check until its axes
-and signs are verified on a board that carries one.
-The obsolete FCU3’s mapping and gyro bias behaviour had bench evidence of its
-own.</p>
+and signs are verified on a board that carries one.</p>
 <p>The optional BB2 <code>gyro10</code> values use the same measured-rate convention passed
 to the rate PID. Host viewers should display those roll, pitch, and yaw fields
 directly.</p>
-<p>See <a href="#rtt-debug-tools">RTT Debug Tools</a> for the terminal logger and live
+<p>See <a href="#bench-and-analysis-tools">Bench and Analysis Tools</a> for the terminal logger and live
 IMU viewer.</p>
 <h2 id="foxeer-bring-up-checklist"><a class="header" href="#foxeer-bring-up-checklist">Foxeer Bring-Up Checklist</a></h2>
 <ol>
@@ -1185,8 +1150,7 @@ observed low and then transition high.</p>
 armability, arm state, throttle, and IMU health every 10 ms. Any failure selects
 stop before publishing an arming-abort reason.</p>
 <h2 id="telemetry-qualified-dshot-sequence"><a class="header" href="#telemetry-qualified-dshot-sequence">Telemetry-Qualified DShot Sequence</a></h2>
-<p>Foxeer uses telemetry-qualified DShot arming, and the obsolete FCU3 image used
-the same sequence:</p>
+<p>Both flight boards use telemetry-qualified DShot arming:</p>
 <ol>
 <li>Safety Master enters <code>Arming</code>, grants the temporary permit, and asks
 Actuator Output to prepare the ESCs.</li>
@@ -1216,24 +1180,10 @@ without ESC power long enough for that request to time out, telemetry stops.
 After applying ESC power, wait up to 4 seconds for it to resume while disarmed, then
 complete a fresh switch-low/low-to-high arm sequence.</p>
 <p>The ESC manager does not decide whether RPM is sufficient and cannot change
-the safety state. It only owns UART parsing, request rotation, response
-association, timeouts, and publication of observations. The safety-owned
-actuator path owns the qualification decision.</p>
-<p>A CRC-valid UART frame can complete while its operation is still queued. The
-manager may buffer that frame, but it remains quarantined and is published only
-after the exact sequence/output frame-start acknowledgement arrives from the
-DShot service. Association timeouts stop telemetry so late traffic cannot be
-relabeled; it resumes only while disarmed, after a quiet window (500 ms,
-doubling to at most 4 s while retries bring nothing back) in
-which the DShot service has dropped any request the manager gave up on, and
-with every stored sample dropped, so qualification still needs fresh eRPM. UART, parser, bounded-queue, and timeout failures
-cannot grant authority; when they prevent required pre-arm samples,
-qualification fails closed. Telemetry loss after <code>Armed</code> is currently
-observational and does not itself disarm.</p>
-<p>ESC-manager identity is physical-output identity: output 1 is logical
-M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right, and output
-4 is M2/front-right. The default DShot image runs this PA10 legacy telemetry
-path.</p>
+the safety state; how it associates telemetry with an output, and how it
+recovers after a timeout, is in <a href="#esc-telemetry">DShot</a>. Its faults can
+only withhold samples, so qualification fails closed. Telemetry loss after
+<code>Armed</code> is currently observational and does not itself disarm.</p>
 <pre class="mermaid">sequenceDiagram
     participant RC as RC Input
     participant SM as Safety Master
@@ -1247,7 +1197,7 @@ path.</p>
     AO-&gt;&gt;ESC: guarded idle frames, value 112
     EM-&gt;&gt;AO: bounded telemetry request
     AO--&gt;&gt;EM: acknowledgement after requested frame starts
-    ESC-&gt;&gt;EM: PA10 legacy UART response
+    ESC-&gt;&gt;EM: legacy UART telemetry response
     EM-&gt;&gt;AO: timestamped physical-output observation
     AO-&gt;&gt;AO: require 3 fresh in-range samples per motor
     AO-&gt;&gt;SM: preparation complete
@@ -1304,927 +1254,139 @@ Arming failure selects stop before reporting failure.
 Disarm clears the armed state and temporary permit.
 Telemetry and ESC-manager faults cannot grant motor authority.
 </code></pre>
-<h2 id="recorded-target-checks"><a class="header" href="#recorded-target-checks">Recorded Target Checks</a></h2>
-<p>Powered props-off evidence covers:</p>
-<ul>
-<li>three successful four-motor DShot idle qualifications at approximately
-6,500-7,100 eRPM;</li>
-<li>an injected physical-output-1 / logical-M4 zero-eRPM condition that failed
-after 1.2 seconds, named the unproven output, selected sustained stop, and
-never emitted <code>SYSTEM ARMED</code>;</li>
-<li>active-command RC loss selecting stop, arm-high recovery remaining disarmed,
-and a fresh low-to-high transition restoring the normal guarded sequence;</li>
-<li>explicit disarm selecting four stops;</li>
-<li>power interruption and reflashing while arm remained high stopping the
-motors and not automatically rearming after reboot, by operator observation.</li>
-</ul>
-<p>RTT records state, requested output, telemetry, and backend counters but does
-not measure the electrical stop latency. DShot pulse timing/jitter and precise
-stop latency remain instrumented checkpoints.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="dshot"><a class="header" href="#dshot">DShot</a></h1>
-<p>FerroWasp uses four-motor DShot600 as the standard ESC protocol on Foxeer, the
-golden flight target. FCU3, obsolete since 2026-09-22, was removed on
-2026-10-07: its sections below record how that board was set up and what it
-measured, not current behaviour. It supports isolated capped bench images and the normal mixed-control
-path. PA10 legacy BLHeli telemetry is part of each flight-board service set.
-RC PWM remains reusable shared infrastructure for servo and auxiliary outputs;
-it is not a flight-app ESC fallback.</p>
-<p>The capped bench image remains behind the existing equal-motor gate:</p>
-<pre><code class="language-powershell">cd firmware/foxeer-f405-v2
-cargo build --release --locked --features "bench_actuator_validation bench_equal_motors"
+<p>Four-motor DShot600 is the ESC protocol on every flight board. RC PWM remains
+shared infrastructure for servos and auxiliary outputs; it is never a
+flight-app ESC fallback. How arming uses DShot idle and ESC telemetry is in
+<a href="#arming-and-safety-logic">Arming Sequence</a>.</p>
+<h2 id="packet"><a class="header" href="#packet">Packet</a></h2>
+<p>A DShot packet is 16 bits, sent most significant bit first:</p>
+<pre><code class="language-text">[ 11-bit value ][ telemetry request bit ][ 4-bit checksum ]
 </code></pre>
-<p>Physical selected-motor modes and multiple logical-motor selections are compile-time errors. The base bench image
-sends the same requested throttle to all four lanes. For props-off mapping
-validation, exactly one <code>bench_logical_motorN_only</code> feature may be added.
-Those modes retain the 250 PWM-style command cap and normal RC, arming,
-freshness, lease, and actuator-output validation.</p>
-<p>The normal controller and mixer use DShot in the default build:</p>
-<pre><code class="language-powershell">cargo build --release --locked
-</code></pre>
-<h2 id="fcu3-routes"><a class="header" href="#fcu3-routes">FCU3 Routes</a></h2>
-<p>The external motor pads are unchanged. The DShot image selects alternate
-timer functions that provide independent compare DMA requests:</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Physical output lane</th><th>External pad</th><th>DShot timer output</th><th>DMA route</th></tr>
+<tr><th>Value</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td>1</td><td>PA8</td><td>TIM1_CH1, AF1</td><td>DMA2 Stream1 Channel6</td></tr>
-<tr><td>2</td><td>PC9</td><td>TIM8_CH4, AF3</td><td>DMA2 Stream7 Channel7</td></tr>
-<tr><td>3</td><td>PC8</td><td>TIM8_CH3, AF3</td><td>DMA2 Stream4 Channel7</td></tr>
-<tr><td>4</td><td>PB15</td><td>TIM1_CH3N, AF1</td><td>DMA2 Stream6 Channel6, CCR3 request</td></tr>
+<tr><td>0</td><td>stop</td></tr>
+<tr><td>1..47</td><td>special commands</td></tr>
+<tr><td>48..2047</td><td>throttle</td></tr>
 </tbody>
 </table>
 </div>
-<p>Physical output 4 is a complementary advanced-timer output, but the ordinary TIM1_CH3 output
-is disabled. RM0090 Table 96 therefore defines the pad as
-<code>OC3N = OC3REF xor CC3NP</code>. The backend selects the PAC’s active-high setting,
-<code>CC3NP=0</code>, so PB15 follows the same active-high pulse reference as the ordinary
-timer outputs. This still requires physical waveform validation.</p>
-<p>All four DMA2 streams are separate from the active ADC1 and SPI1 streams.</p>
-<h2 id="waveform"><a class="header" href="#waveform">Waveform</a></h2>
-<p>A DShot packet contains 16 bits:</p>
-<pre><code class="language-text">[ 11-bit value ][ telemetry bit ][ 4-bit checksum ]
-</code></pre>
-<p>Values have these meanings:</p>
-<pre><code class="language-text">0       stop
-1..47   special commands
-48..2047 throttle
-</code></pre>
-<p>The actuator path emits only stop or mapped throttle values and does not expose
-special commands. After the ESC boot window, its service sets the telemetry bit
-on one lane at a time for legacy UART telemetry. Requests are limited to one
-every 20 ms and a new request cannot overlap an outstanding response.</p>
-<h2 id="blheli-legacy-uart-telemetry"><a class="header" href="#blheli-legacy-uart-telemetry">BLHeli Legacy UART Telemetry</a></h2>
-<p>The FCU3 flight image receives the combined ESC telemetry wire on
-<strong>PA10 / USART1 RX AF7</strong> at 115,200 baud, 8N1. USART1 RX uses DMA2 Stream 5
-Channel 4; PA9 is not configured or claimed. A frame has ten bytes:
-temperature, big-endian voltage/current, consumption, eRPM/100, and CRC-8. The
-bounded parser validates CRC polynomial <code>0x07</code> and advances one byte after
-failure to regain framing without a sync byte.</p>
-<p>Frames contain no motor identifier. A low-priority ESC manager therefore
-rotates physical DShot output lanes 1 through 4 and owns the single pending
-association. It sends typed operations through a bounded SPSC request queue to
-the DShot actuator service. The actuator service is the only consumer and
-acknowledges the exact sequence/output request only after its telemetry bit is
-present in a frame that actually started. A second bounded SPSC queue returns
-that acknowledgement to the manager.</p>
-<p>Because the actuator service can preempt the manager, a CRC-valid response may
-already be complete while its request is still marked queued. The manager
-quarantines at most that pending response and publishes it only after receiving
-the matching sequence/output frame-start acknowledgement. A mismatched
-acknowledgement cannot relabel the response. The manager distinguishes a
-missing actuator acknowledgement from a missing ESC response and never
-overlaps requests. An association timeout stops telemetry, so a late
-acknowledgement or wire frame cannot be assigned to a later output. The DShot
-service drops a request it has held for <code>ESC_REQUEST_EXPIRY_MS</code> (20 ms)
-without sending it, the time after which the manager gives up on its
-acknowledgement, so nothing stale reaches an ESC later. Telemetry resumes only
-while disarmed, after 500 ms with no wire byte and no acknowledgement, with
-every stored sample dropped. Each retry that brings no frame back doubles that
-window, up to 4 s, so unpowered ESCs are asked rarely and log one warning per
-outage; the first frame resets it and logs <code>ESC telemetry back</code>.
-An unanswered response expires after 100 ms. The aggregate request limit is
-50 Hz, or 12.5 Hz per ESC when all respond.</p>
-<p>Telemetry identity is physical-output identity, not mixer motor order:</p>
+<p>The checksum is <code>(payload ^ (payload &gt;&gt; 4) ^ (payload &gt;&gt; 8)) &amp; 0x0f</code>. At
+DShot600 a bit lasts 1.667 us: a <code>0</code> is high for 3/8 of it and a <code>1</code> for 3/4.
+A packet takes about 27 us. Packet encoding, throttle mapping, and the
+compare-value sequence are host-tested in <code>ferrowasp-waveform::dshot</code>.</p>
+<p>Normal output carries only stop or mapped throttle. Special commands, such as
+FerroConfigurator’s spin-direction change and save, are queued for one motor
+and refused unless every motor is stopped and no command lease is active.</p>
+<h2 id="motor-bank"><a class="header" href="#motor-bank">Motor Bank</a></h2>
+<p>Each lane is a timer compare channel whose DMA stream writes the next bit’s
+compare value at every bit boundary. The four lanes form one bank and one
+fault domain: the bank owns both timers, all four DMA streams, every motor pin,
+and every DMA buffer. The timer and DMA routes are board facts, declared in
+each board’s data crate under <code>firmware/&lt;board&gt;/board/src/routes.rs</code>.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Physical ESC output</th><th>Logical motor and location</th></tr>
+<tr><th>Board</th><th>Timers</th><th>Start</th></tr>
 </thead>
 <tbody>
-<tr><td>1</td><td>M4, front-left</td></tr>
-<tr><td>2</td><td>M3, rear-left</td></tr>
-<tr><td>3</td><td>M1, rear-right</td></tr>
-<tr><td>4</td><td>M2, front-right</td></tr>
+<tr><td>Foxeer F405 V2</td><td>TIM1 and TIM8</td><td>TIM1 starts TIM8 through an internal trigger</td></tr>
+<tr><td>TBS Lucid H7</td><td>TIM3 and TIM5</td><td>started back to back in software, a few bus cycles apart</td></tr>
 </tbody>
 </table>
 </div>
-<p>This path does not own motor peripherals or safety state. UART, DMA, parser,
-queue, and timeout faults cannot grant authority. If they prevent the fresh
-observations required during guarded idle, pre-arm qualification fails closed
-and all four outputs return to stop. Once the system is armed, legacy telemetry
-is currently observational: losing it does not itself request disarm.</p>
-<p>The manager intentionally waits five seconds after boot before issuing its
-first request. An arm attempt that reaches guarded idle during that window may
-not collect enough samples and can fail closed at the 1.2-second qualification
-deadline. After any arming abort, the arm switch must be moved low before a new
-low-to-high arm request can qualify.</p>
-<p>For a powered telemetry or arming test, power the ESCs before that first
-post-delay request. If the FC remains on without ESC power, the request receives
-no response and the association timeout stops telemetry. Once the ESCs are
-powered, telemetry resumes on its own within about 4 seconds while disarmed;
-no reboot is needed.</p>
-<h3 id="powered-props-off-result"><a class="header" href="#powered-props-off-result">Powered props-off result</a></h3>
-<p>The PA10 legacy telemetry path passed a powered props-off run on 2026-07-20.
-The retained log is
-<code>logs/terminal_embed/20260720_185949_rtt.log</code> (SHA-256
-<code>4CE58E3286F4CA2DF00FB47F47C8D5CE3379CCB1C12CA5871C05D0984C727692</code>).
-Its final manager totals were 3,950 queued operations, 3,950 acknowledged frame
-starts, and 3,950 valid UART responses, with zero acknowledgement/response
-timeouts, mismatches, unsolicited frames, CRC failures, or discarded bytes.</p>
-<p>All motors reported zero eRPM while stopped, approximately 6,500-7,200 eRPM at
-DShot idle value <code>112</code>, and increasing eRPM with throttle. RC loss and explicit
-disarm selected four zero DShot values; operator observation confirmed
-immediate physical stop and telemetry reached zero on every motor by the next
-two-second report. A report coincident with the stop can retain coast-down or
-the latest sample from before that report boundary.</p>
-<p>The installed ESCs returned zero for voltage, current, consumption, and
-temperature while the independent FCU ADC reported 23.7 V. Those auxiliary
-fields remain unsupported or unvalidated for this ESC configuration; this
-checkpoint validates eRPM, framing, request/ack association, and stop behavior.</p>
-<p>The checksum is:</p>
-<pre><code class="language-rust ignore">(payload ^ (payload &gt;&gt; 4) ^ (payload &gt;&gt; 8)) &amp; 0x0f</code></pre>
-<p>At the FCU3 advanced-timer clock of 168 MHz, DShot600 uses:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Property</th><th style="text-align: right">Timer ticks</th><th style="text-align: right">Approximate time</th></tr>
-</thead>
-<tbody>
-<tr><td>Bit period</td><td style="text-align: right">280</td><td style="text-align: right">1.667 us</td></tr>
-<tr><td>Logical <code>0</code> high</td><td style="text-align: right">105</td><td style="text-align: right">0.625 us</td></tr>
-<tr><td>Logical <code>1</code> high</td><td style="text-align: right">210</td><td style="text-align: right">1.250 us</td></tr>
-</tbody>
-</table>
-</div>
-<p>The packet, mapping, timing, and compare-sequence code is host-tested in
-<code>ferrowasp-waveform::dshot</code>.</p>
-<h2 id="timer-synchronization"><a class="header" href="#timer-synchronization">Timer Synchronization</a></h2>
-<p>TIM1 owns physical output lanes 1 and 4. TIM8 owns lanes 2 and 3. Both use PWM mode 1 with compare
-preload enabled.</p>
-<p>TIM1 is the frame master:</p>
-<pre><code class="language-text">TIM1 CR2.MMS = Enable
-TIM8 SMCR.TS = ITR0
-TIM8 SMCR.SMS = Trigger mode
-</code></pre>
-<p>Before each frame set, the backend:</p>
-<ol>
-<li>disables both timer counters and all four compare DMA requests;</li>
-<li>enables and prepares all four DMA streams;</li>
-<li>stages each first-bit duty and parks both counters at ARR;</li>
-<li>enables all four compare DMA requests;</li>
-<li>starts TIM1, whose CEN rising edge starts TIM8 through ITR0.</li>
-</ol>
-<p>The internal trigger avoids four software-start operations. Logic-analyzer
-evidence is still required before claiming a measured lane-to-lane phase
-bound.</p>
-<p>Each DMA buffer contains the remaining 15 bit duties followed by zero:</p>
-<pre><code class="language-text">bit N falls at its CCR match
-    -&gt; lane DMA writes bit N+1 into the CCR preload
-    -&gt; timer update loads it for the next bit
-</code></pre>
-<p>Each lane has a priority-16 completion IRQ. A frame set is complete only after
-all four lanes report transfer completion. The timers then stop with every
-compare at zero. A transfer error, direct-mode error, unexpected interrupt,
-duplicate completion, or missing completion faults the complete bank and
-forces every output low.</p>
-<h2 id="cadence-and-leases"><a class="header" href="#cadence-and-leases">Cadence And Leases</a></h2>
-<p>The priority-13 actuator service is the sole frame-set starter. It repeats the
-current authorized four-lane vector every 2 ms, giving a fixed 500 Hz cadence.
-Actuator commands only update the requested vector and its lease.</p>
-<p>Nonzero commands use the normal 20 ms motor-command lease. If the
-control/actuator path does not renew the lease, the service selects four stop
-values and requests disarm.</p>
-<p>The DShot-specific arming path does not use the legacy PWM low/idle sequence.
-After the 200 ms arm-switch qualification, the actuator owner keeps four stop
-values selected for a 100 ms pre-arm dwell and revalidates permission, RC
-armability, arm-switch state, and low throttle every 10 ms. It then selects
-the profiled idle value under the temporary arm permit while continuing those
-guard checks. The ESC manager publishes timestamped telemetry observations
-through a bounded queue; it does not command an actuator or change safety
-state. The actuator owner requires three fresh samples from every motor in the
-3,000-10,000 eRPM window. A missing/stalled motor times out after 1.2 seconds;
-overspeed aborts after the 250 ms spin-up grace. Every abort selects four stop
-values. Only successful qualification is reported to the safety master, which
-performs its final guard check before setting <code>SYSTEM ARMED</code>. The PWM path
-retains its existing timing and behavior.</p>
-<p>A DShot600 frame lasts about 27 us. A frame set still in flight after 1 ms is
-treated as a lost completion: both timers stop, all four DMA streams are
-fenced, both advanced-timer output gates close, and the backend requests
-disarm.</p>
+<p>Before each frame set the bank stops both timers, prepares all four streams,
+stages every lane’s first bit, and then starts the timers together. A frame set
+is complete only when all four lanes report transfer completion. A transfer or
+direct-mode error, an unexpected or duplicate interrupt, or a frame set still
+in flight after 1 ms faults the whole bank: the timers stop, the streams are
+fenced, every output is forced low, and the bank requests disarm.</p>
+<p>On Foxeer, motor 4 is TIM1’s complementary output CH3N with the ordinary CH3
+output disabled; the backend selects active-high polarity so it pulses like the
+other lanes.</p>
+<h2 id="cadence-and-leases"><a class="header" href="#cadence-and-leases">Cadence and Leases</a></h2>
+<p>The DShot service is the only task that starts a frame set. Every 2 ms (500 Hz)
+it resends the current authorized four-lane vector, using absolute release
+times so the cadence does not drift. Motor commands only update that vector
+and renew its lease. A nonzero command older than 20 ms is rejected, and if the
+lease is not renewed the service selects four stops and requests disarm.
+Disarmed, it keeps sending stop frames.</p>
 <h2 id="safety-ownership"><a class="header" href="#safety-ownership">Safety Ownership</a></h2>
-<p>The DShot peripheral remains inside the actuator boundary:</p>
 <pre><code class="language-text">control loop
     -&gt; bounded MotorCmd queue
     -&gt; actuator_output validation
     -&gt; leased four-lane DShot request
-    -&gt; DShot actuator service
-    -&gt; TIM1/TIM8 and DMA2 hardware
+    -&gt; DShot service and motor bank
+    -&gt; timers, DMA, motor pins
 </code></pre>
-<p>No control, RC, USB, OSD, or experimental task owns a motor timer, pad, or
-DShot DMA stream. Disarmed operation continuously transmits stop frame sets.
-The four-motor image still requires ordinary RC qualification and the
-boot/reconnect arm-low interlock.</p>
-<h2 id="standard-mixed-control"><a class="header" href="#standard-mixed-control">Standard Mixed Control</a></h2>
-<p>Status: <strong>500 Hz runtime, powered props-off mixed control, all-axis correction,
-qualified arming, RC-loss/recovery, and initial controlled flight have passed
-their recorded checkpoints</strong>. Electrical waveform/timing and measured stop
-latency remain open.</p>
-<p>The default DShot build activates the existing normal controller branch rather
-than adding another mixer. At 400 Hz, that branch generates the physical
-four-motor vector through the measured FCU3 map <code>[3, 4, 2, 1]</code>, publishes it
-through the bounded <code>MotorCmd</code> queue, and wakes the sole actuator owner. The
-owner drains to the newest command, rejects data older than 20 ms or any
-non-finite value, applies the profiled DShot idle floor, and renews the
-four-lane backend lease. The independent 500 Hz DShot service selects stop
-and requests disarm if renewal ceases.</p>
-<p>No pin, timer, DMA route, interrupt priority, motor map, RC policy, arming
-state, or actuator authority changes between the bench and mixed images.
-Unlike the bench images, the standard image has no 250-count command cap. Its
-powered props-off stages were therefore completed before the controlled flight
-reported below.</p>
-<p>Build, flash, display RTT, and retain the exact default run from the repository
-root:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked
+<p>No control, RC, USB, OSD, configurator, or experimental task owns a motor
+timer, pin, or DShot DMA stream.</p>
+<p>Each app is <code>#![deny(unsafe_code)]</code>. The unsafe code under DShot is limited to
+the DMA endpoint declarations of each chip backend: <code>ferrowasp-stm32f4::dshot</code>
+and <code>ferrowasp-stm32h7::dma_endpoints</code>. Each proves that an endpoint addresses
+the compare register of a timer the bank owns exclusively, with the right
+transfer width and a valid stream mapping. HAL transfers own the active
+buffers; there is no project <code>static mut</code> and no aliasing of a buffer that DMA
+is using.</p>
+<h2 id="esc-telemetry"><a class="header" href="#esc-telemetry">ESC Telemetry</a></h2>
+<p>ESC telemetry is the BLHeli legacy UART protocol: one combined telemetry wire
+from all four ESCs, at 115,200 baud 8N1, on the UART bound to the
+<code>esc_telemetry</code> function. A frame is ten bytes: temperature, voltage, current,
+consumption, eRPM/100, and a CRC-8 with polynomial <code>0x07</code>. The parser advances
+one byte after a CRC failure, so it regains framing without a sync byte.</p>
+<p>A frame carries no motor identity, so identity comes from which output asked.
+A low-priority ESC manager rotates through the physical outputs, at most one
+request every 20 ms with never more than one outstanding, which is 12.5 Hz per
+ESC when all four respond. It passes each request to the DShot service through
+a bounded queue; the service sets that output’s telemetry bit and acknowledges
+the request only once the frame carrying it has started. A response that
+arrives before its acknowledgement is held back until the matching
+acknowledgement arrives, and a mismatched acknowledgement cannot relabel it.
+The service drops a request it has held unsent for 20 ms, the same time after
+which the manager gives up on its acknowledgement, so a stale request never
+reaches an ESC later. A response unanswered after 100 ms times out.</p>
+<p>Telemetry identity is physical-output identity, not mixer motor order; the
+board maps outputs to logical motors.</p>
+<p>A timeout stops telemetry, so late traffic cannot be assigned to a later
+request. Telemetry resumes only while disarmed, after 500 ms with no byte on
+the wire and no acknowledgement pending, with every stored sample dropped.
+Each retry that brings nothing back doubles that window, up to 4 s, so
+unpowered ESCs are asked rarely and log one warning per outage; the first frame
+back resets it.</p>
+<p>The manager waits five seconds after boot before its first request. It owns no
+motor peripheral or safety state: a UART, parser, queue, or timeout fault can
+only withhold the samples arming needs, which fails closed. Once armed,
+telemetry is observational; losing it does not by itself disarm.</p>
+<h2 id="bench-images"><a class="header" href="#bench-images">Bench Images</a></h2>
+<p>Bench features build images for props-off work and never ship as the flight
+image. Every motor bench feature needs the explicit props-off gate
+<code>bench_actuator_validation</code> as well, or the build fails:</p>
+<pre><code class="language-text">cargo build --release --locked --features "bench_actuator_validation bench_equal_motors"
 </code></pre>
-<p>Require the unique startup identity:</p>
-<pre><code class="language-text">DShot600 standard motor output active
-</code></pre>
-<p>The pre-promotion source-verified release candidate built without
-<code>blackbox_defmt</code> had
-SHA-256
-<code>757F918B29771F0D62E7EBCC14B6DCE4A840E0062626B0A21F8F3EA7C6453269</code>.
-It retains <code>DMA2_STREAM1/4/6/7</code> at
-<code>0x08004B44/0x08004F4C/0x08004FA4/0x08004FFC</code>; its vector table contains the
-corresponding Thumb addresses, and loadable flash data ends at <code>0x08013968</code>.
-Defmt metadata contains the standard DShot identity and stop-only preparation
-messages but not the equal/unequal bench identities or legacy PWM
-<code>Applying idle throttle</code> message.</p>
-<h3 id="stage-1-unpowered-runtime"><a class="header" href="#stage-1-unpowered-runtime">Stage 1: Unpowered Runtime</a></h3>
-<ol>
-<li>Disconnect ESC power and start with the RC arm switch low.</li>
-<li>Require four DShot stop values for at least 10,000 frame sets.</li>
-<li>Require equal lane counters, at most one set in flight, zero busy/expiry/
-timeout/fault counts, and continuously advancing IMU sequence. Use the
-appended <code>at &lt;ms&gt;</code> fields across at least ten reports to require an average
-service rate of 490-510 frame sets per second.</li>
-<li>With the ESC bank deliberately unpowered, expect the manager’s first
-post-five-second request to produce one ESC-response timeout and latch
-telemetry off. This is separate from the DShot backend timeout counter,
-which must remain zero.</li>
-<li>Reset several times, including once with the transmitter arm toggle high.
-No reset or link recovery may request arming until a fresh low-to-high arm
-transition is observed.</li>
-<li>Before a later powered stage, apply ESC power and wait up to 4 seconds
-for telemetry to resume (RTT logs <code>ESC telemetry back</code>).</li>
-</ol>
-<p>The first retained unpowered capture,
-<code>logs/terminal_embed/20260719_172718_rtt.log</code>, used the earlier candidate with
-SHA-256
-<code>3EDC1D7767B119D9124874D96316EAEF16AF8EC6A950BBC926E4747CB7E66DAF</code>.
-It reached 67,000 started frame sets. All 67 reports contained four zeros,
-identical lane and completed-set counters, exactly one set in flight, and zero
-busy, expiry, timeout, and fault counts. IMU sequence advanced monotonically
-from 0 through 160,160 across 101 reports, with no warning, error, panic,
-arming, or safety event.</p>
-<p>That capture also exposed persistent roughly 333 Hz frame-set service:
-<code>Mono::delay(2.millis())</code> uses RTIC’s minimum-duration relative delay, which
-adds one 1 ms SysTick. The service now computes an absolute deadline from each
-release and uses <code>delay_until</code>, preserving the intended two-tick/500 Hz
-cadence. The corrected image also prints its monotonic report time.</p>
-<p>The promoted standard image passed the corrected unpowered cadence checkpoint
-on 2026-07-20. Retained log
-<code>logs/terminal_embed/20260720_181201_rtt.log</code> used firmware SHA-256
-<code>5B91A09C509138D4762BBA0F9DC295A591BA474EF7587269435BC4BDBED84979</code>;
-the log itself has SHA-256
-<code>388901C486004D11F51CDB8EFC7BA77B70CF406AE83ECE0E510E27F77AE3774A</code>.
-It reached 12,000 started frame sets in 23,999 ms. Across all 12 DShot reports,
-the requested vector remained <code>[0, 0, 0, 0]</code>, all four lane counters equaled
-the completed-set count, exactly one set was in flight, and busy, expiry,
-timeout, and fault counters remained zero. Every 1,000-set interval occupied
-exactly 2,000 ms, establishing 500 frame sets per second across the retained
-22-second measurement span. IMU sequence advanced from 0 through 19,220 with
-no warning, error, panic, arm request, or armed state.</p>
-<p>This clears the corrected cadence/runtime portion of Stage 1. The operator
-subsequently confirmed that interrupting power or reflashing while the
-controller arm signal remained high stopped the motors and did not rearm them
-after reboot; a fresh low-to-high arm transition was required. That restart
-result is operator-observed rather than a single uninterrupted RTT reset trace.</p>
-<h3 id="stage-2-powered-props-off-mixer"><a class="header" href="#stage-2-powered-props-off-mixer">Stage 2: Powered Props-Off Mixer</a></h3>
-<ol>
-<li>Remove every propeller, inspect all four motor/ESC assemblies, start at
-zero throttle, and confirm the airframe is restrained.</li>
-<li>Arm and require the 100 ms stop dwell, then observe all four motors start
-at idle value <code>112</code> during qualification. Require three fresh samples per
-motor between 3,000 and 10,000 eRPM before <code>SYSTEM ARMED</code>.</li>
-<li>Apply only modest throttle. Confirm all four values respond and remain
-bounded, lane counters stay synchronized, and backend faults remain zero.</li>
-<li>Use small, brief stick steps and verify the physical DShot vectors:
-roll-right raises physical left outputs 1/2 relative to right outputs 3/4;
-pitch-forward raises rear outputs 2/3 relative to front outputs 1/4; and
-yaw-right separates diagonals 2/4 from 1/3.</li>
-<li>With sticks centered, tilt the restrained frame briefly about roll and
-pitch. Corrections must oppose the motion. Stop on reinforcing response,
-severe oscillation, heat, smell, roughness, or unexpected current.</li>
-<li>Disarm from idle and from a nonzero command. Both must select four zeros
-and physically stop every motor.</li>
-</ol>
-<h3 id="stage-3-active-command-rc-loss"><a class="header" href="#stage-3-active-command-rc-loss">Stage 3: Active-Command RC Loss</a></h3>
-<ol>
-<li>Rearm, hold a modest nonzero mixed command, and confirm unequal DShot
-values are updating.</li>
-<li>Interrupt the DJI O4/RC3 link by powering off Goggles 3.</li>
-<li>Require one RC frame-timeout invalidation, prompt physical stop, and
-sustained <code>[0, 0, 0, 0]</code> values with healthy lane counters.</li>
-<li>Restore the link with arm still high. Healthy-frame qualification must not
-request arming or restart a motor.</li>
-<li>Move arm low for at least one second, then high at zero throttle. Require
-the complete guarded arming sequence before output resumes.</li>
-<li>Explicitly disarm and retain RTT from before link loss through final stop.</li>
-</ol>
-<p>RTT proves state and requested values but cannot measure electrical timing or
-physical stop latency. Those remain instrumented checkpoints.</p>
-<h3 id="standard-image-powered-result"><a class="header" href="#standard-image-powered-result">Standard-Image Powered Result</a></h3>
-<p>Status on 2026-07-20: <strong>arming, idle, throttle, explicit disarm,
-active-command RC-loss/recovery, and roll/pitch/yaw stick and hand-motion
-direction checks passed props-off</strong>.</p>
-<p>Retained log <code>logs/terminal_embed/20260720_181535_rtt.log</code> used the same
-standard firmware SHA-256 as the unpowered run:
-<code>5B91A09C509138D4762BBA0F9DC295A591BA474EF7587269435BC4BDBED84979</code>.
-The log has SHA-256
-<code>2E174B54D67FEDCC0B01C3D7155F3A604ECD6964DC80DDE0995AD6DBE501B4D3</code>.</p>
-<p>The first arm retained the required ordering: 100 ms of stop frames,
-<code>DShot pre-arm complete; motor outputs remain stopped</code>, <code>SYSTEM ARMED</code>, then
-six reports at idle <code>[112, 112, 112, 112]</code>. The operator confirmed that all
-motors idled only while armed.</p>
-<p>During later armed intervals, modest throttle produced mixed DShot vectors
-including <code>[148, 148, 149, 149]</code>, <code>[152, 152, 152, 151]</code>, and
-<code>[143, 143, 144, 143]</code>. The operator confirmed that all motors followed
-throttle. No claim about roll, pitch, yaw, or motion-opposing correction is
-made from this run because those direction steps were not reported.</p>
-<p>RC frame timeout during both idle and active mixed output selected sustained
-<code>[0, 0, 0, 0]</code>. Link recovery with the controller arm state still high did
-not emit an arm request or restart a motor. A fresh disarm-then-arm command
-completed the guarded stop dwell and restored idle. The final explicit disarm
-reported <code>SYSTEM DISARMED</code>, selected four zeros, and physically stopped the
-motors by operator observation.</p>
-<p>Across all 69 DShot reports through 69,000 started frame sets, every lane
-counter equaled the completed-set count, exactly one set was in flight, and
-busy, expiry, timeout, and fault counters remained zero. IMU sequence advanced
-through 110,511. The operator observed immediate physical stops on RC loss and
-explicit disarm; RTT’s two-second status cadence cannot establish measured
-stop latency.</p>
-<h3 id="initial-controlled-flight-result"><a class="header" href="#initial-controlled-flight-result">Initial Controlled Flight Result</a></h3>
-<p>On 2026-07-20 the operator reported that the first controlled experimental
-flight on the standard DShot image went well, supported strong manoeuvres, and
-did not reproduce the previous unwanted yawing. Pitch authority felt lower
-than desired. No new BB2 flight capture accompanies this observation, so it
-does not quantify rate tracking, saturation, timing, or control margin. The
-parked tuning follow-up is to change pitch P alone from <code>0.25</code> to <code>0.30</code> in a
-controlled test after checking motor headroom.</p>
-<p>This result establishes an initial interoperability/flight checkpoint; it does
-not make the implementation routinely flight-ready, waveform-validated,
-airworthy, or production-ready.</p>
-<h2 id="dshot-arming-and-idle-policy"><a class="header" href="#dshot-arming-and-idle-policy">DShot Arming And Idle Policy</a></h2>
-<p>Status: <strong>telemetry-qualified powered props-off and physical-output-1 negative
-fault-injection checkpoints passed</strong>.</p>
-<p>The FCU3 DShot profile owns these explicit settings:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Setting</th><th style="text-align: right">Initial value</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>prearm_stop_hold_ms</code></td><td style="text-align: right">100 ms</td><td>Guard recheck window with all lanes stopped</td></tr>
-<tr><td><code>idle_throttle_command</code></td><td style="text-align: right">65</td><td>Qualification and armed-idle input, mapped to DShot value <code>112</code></td></tr>
-<tr><td><code>idle_qualification_min_erpm_div100</code></td><td style="text-align: right">30</td><td>A motor must report at least 3,000 eRPM</td></tr>
-<tr><td><code>idle_qualification_max_erpm_div100</code></td><td style="text-align: right">100</td><td>A motor must not exceed 10,000 eRPM</td></tr>
-<tr><td><code>idle_qualification_spinup_grace_ms</code></td><td style="text-align: right">250 ms</td><td>Ignore startup transients before judging RPM</td></tr>
-<tr><td><code>idle_qualification_timeout_ms</code></td><td style="text-align: right">1,200 ms</td><td>Stop and abort if all motors do not qualify</td></tr>
-<tr><td><code>idle_qualification_max_sample_age_ms</code></td><td style="text-align: right">200 ms</td><td>Reject stale observations</td></tr>
-<tr><td><code>idle_qualification_consecutive_samples</code></td><td style="text-align: right">3</td><td>Required fresh in-range samples per motor</td></tr>
-</tbody>
-</table>
-</div>
-<p>Command <code>65</code> preserves the value that previously spun all four motors in the
-powered props-off test. It is intentionally not changed without new target
-evidence. The profile caps any idle-tuning value at the existing 250-count
-bench limit. The shared active-output validator accepts the protocol-specific
-idle floor without changing the legacy PWM idle.</p>
-<p>The actuator owner applies configured idle during qualification using a short,
-renewed command lease. The system is still logically disarmed at this point.
-It selects stop immediately if the arm permit, RC link, arm switch, or
-low-throttle guard becomes invalid. Logical-motor and unequal-vector images
-still qualify all four ESCs before their post-arm bench behavior begins.</p>
-<p>The ESC manager does not begin requests until five seconds after boot. An arm
-attempt during that interval can therefore enter guarded idle, receive no
-qualifying samples, stop at the 1.2-second deadline, and remain disarmed. Move
-the arm switch low and make a fresh arm request after telemetry is available.
-If the FC has already issued a request while the ESC bank was unpowered, its
-response timeout stops telemetry; power the ESCs, wait up to 4 seconds for it
-to resume, then retry.</p>
-<p>Use this props-off checkpoint before any prop-on work:</p>
-<ol>
-<li>Inspect every motor and ESC, remove all propellers, and flash
-<code>dshot bench_equal_motors</code>.</li>
-<li>At startup, require
-<code>DShot arming profile: 100 ms stop dwell, idle command 65 -&gt; value 112</code>.</li>
-<li>Arm at zero throttle. Require this ordering:
-<code>RC Requests ARM!</code>, <code>Attempting DShot safety arming</code>,
-<code>Preparing DShot actuators with 100 ms of stop frames</code>,
-<code>DShot pre-arm stop complete; qualifying idle eRPM 3000..10000 with 3 samples/physical output</code>,
-all four motors starting at idle,
-<code>DShot idle eRPM qualified; physical outputs 1/2/3/4 samples [3, 3, 3, 3]</code>, then
-<code>SYSTEM ARMED</code>.</li>
-<li>Require no movement during the stop dwell. During qualification, require
-all four motors to start and run smoothly at DShot value <code>112</code>; no motor
-may be missing, stalled, or above 10,000 eRPM.</li>
-<li>Explicitly disarm. Require prompt physical stop, sustained four zero values,
-equal lane counters, and zero busy, expiry, timeout, and fault counts.</li>
-<li>Optional failure injection, still props-off: disconnect only the telemetry
-signal and repeat arming. Motors may idle for at most the bounded
-qualification interval, then all four must stop, no <code>SYSTEM ARMED</code> line may
-appear, and RTT must report the telemetry-timeout arming abort.</li>
-</ol>
-<p>For a repeatable physical-output-1 negative test without obstructing a motor or
-changing the real DShot vector, use the compile-time fault image:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features bench_dshot_idle_output1_not_running
-</code></pre>
-<p>The old <code>bench_dshot_idle_motor1_not_running</code> spelling remains a compatibility
-alias; it does not mean logical M1.</p>
-<p>This image still commands idle to all four motors, but substitutes zero eRPM
-for physical output 1, which is logical M4/front-left, only at the
-actuator-owned qualification input. Require the loud <code>FAULT INJECTION ACTIVE</code>
-startup warning. After at most 1.2 seconds of idle, RTT must identify physical
-output 1 (logical M4) with <code>0 of 3 samples</code>, all four DShot lanes must return to
-zero, and <code>SYSTEM ARMED</code> must never appear. Disarm before returning to the
-standard image; never use this build with propellers installed.</p>
-<p>The checkpoint passed on 2026-07-20 using fault-image SHA-256
-<code>1CEFE0E47030C2AECB3BC1BB15244A65E3608F14D79FF0D16D408C54AC175B80</code>.
-Retained log <code>logs/terminal_embed/20260720_193148_rtt.log</code>, SHA-256
-<code>7FAFC3A7F9AD85DA4546525D76C91113F16D2D4AA01AD57BD3730867D34DD477</code>,
-contains three <code>[0, 12, 12, 12]</code> timeouts and three explicit <code>ESC1</code> failures,
-where that dated log label means physical output 1 / logical M4, with no
-<code>SYSTEM ARMED</code>. The operator observed motor stop after the configured
-1.2-second interval. Each following DShot report selected four zeros; telemetry
-returned to zero as the motors stopped. All 1,450 telemetry requests started
-and decoded without a reported transport/parser error.</p>
-<p>The standard image subsequently passed powered props-off coexistence with
-<code>blackbox_defmt</code>. Logs <code>20260720_194720_rtt.log</code> and
-<code>20260720_194906_rtt.log</code> retained 15,047 and 13,053 contiguous 400 Hz BB2
-samples respectively, while DShot lanes remained synchronized and the ESC
-manager completed 1,550/1,550 and 1,350/1,350 valid telemetry transactions
-without reported errors. Both runs qualified all four idle RPMs, armed, and
-disarmed to stop. Zero-command hand motion produced opposing roll, pitch, and
-yaw correction. Roll/pitch stick mixing was captured with expected signs;
-yaw-stick input remained zero and was covered by the subsequent run below.
-Terminal display saturation did not create a gap in either retained file.</p>
-<p>The yaw observation subsequently passed in
-<code>logs/terminal_embed/20260720_195451_rtt.log</code>. Yaw stick command covered
-<code>-1000..+1000 dps</code>; the physical motor diagonals followed yaw-controller
-output with the expected sign. During the following zero-stick hand rotation,
-the controller output tracked negative measured yaw and the yaw-diagonal
-differential opposed the motion. All 13,565 BB2 samples were contiguous and
-fresh, 1,350/1,350 ESC telemetry transactions were valid without reported
-errors, and explicit disarm selected four stop values. This closes all three
-props-off stick-mixing and motion-opposition axes for the standard image.</p>
-<p>If any motor does not start reliably at <code>112</code>, use the equal-motor image and
-raise RC throttle slowly to identify the lowest value at which all four motors
-run smoothly. Record the DShot value and conditions; change
-<code>idle_throttle_command</code> only in small reviewed increments, then repeat cold
-starts and the full props-off check. Do not tune with propellers installed or
-infer a final margin from one run.</p>
-<p>The unequal-vector image additionally requires idle command <code>&lt;= 80</code>, its
-smallest fixed command. A higher tuned idle deliberately makes that image fail
-to compile until its vector and expected evidence are reviewed; it must never
-be silently clamped into a different packet test.</p>
-<p>The source-verified props-off equal-motor candidate has SHA-256
-<code>34CB9BFB9225AC9AE3B9771F4647F52FABE9176D392ABC54DE50BCC0AE764807</code>.
-Its four expected DMA2 IRQ symbols are unchanged, and its defmt metadata
-contains the new stop-dwell ordering without the legacy PWM idle messages.</p>
-<p>The 2026-07-19 powered props-off run retained the stop-dwell and
-pre-arm-complete messages before <code>SYSTEM ARMED</code>, followed by four values
-<code>112</code>. The operator reported all four motors running. Explicit disarm restored
-sustained four-lane zeros through at least 25,000 starts. Every lane counter
-remained equal with one frame set in flight, IMU sampling continued, and busy,
-expiry, timeout, and fault counts remained zero.</p>
-<p>The operator subsequently confirmed that every motor remained physically
-stopped until <code>SYSTEM ARMED</code>, all four idled at value <code>112</code>, and motors ran
-only while armed. Command <code>65</code> / DShot value <code>112</code> is therefore retained as
-the current FCU3 prototype idle without a board support tuning change. Continued
-cold-start and temperature-margin testing remains necessary before treating
-the initial flight result as broad readiness.</p>
-<h2 id="unsafe-boundary"><a class="header" href="#unsafe-boundary">Unsafe Boundary</a></h2>
-<p>The application remains <code>#![deny(unsafe_code)]</code>. Project-local unsafe code is
-isolated in <code>ferrowasp-stm32f4::dshot</code>.</p>
-<p>The only unsafe source declarations are two documented trait-implementation
-templates, expanded for four private DMA endpoints. They prove:</p>
 <ul>
-<li>each private endpoint addresses the compare register of an exclusively
-owned TIM1 or TIM8;</li>
-<li>timer compare DMA writes are 16-bit halfwords;</li>
-<li>each fixed STM32F405 stream/channel mapping is valid in the
-memory-to-peripheral direction.</li>
+<li><code>bench_equal_motors</code> sends the same requested throttle to all four lanes,
+capped at 250 PWM-style counts, with normal RC, arming, freshness, lease,
+and actuator validation.</li>
+<li><code>bench_logical_motorN_only</code>, added to it, spins only logical motor N, to
+confirm the logical-to-physical map and each motor’s direction. Selecting
+two is a compile error.</li>
+<li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
+1 at the qualification input only, to prove that a missing motor aborts
+arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
+with propellers fitted.</li>
 </ul>
-<p>Endpoint constructors are private. HAL <code>Transfer</code> values own active buffers,
-DMA addresses, stream fencing, and buffer exchange. There is no project
-<code>static mut</code>, manual DMA buffer address, or DMA-active buffer aliasing.</p>
-<h2 id="four-motor-bench-test"><a class="header" href="#four-motor-bench-test">Four-Motor Bench Test</a></h2>
-<p>Propellers must remain removed. The operator inspected the motor associated
-with an earlier smoke report on 2026-07-20 and reports that it appears normal,
-closing that inspection blocker. Continue to stop immediately on heat, smell,
-roughness, jitter, or abnormal current.</p>
-<p>First flash with actuator power disconnected:</p>
-<pre><code class="language-powershell">cargo embed --release --features "bench_equal_motors"
-</code></pre>
-<p>Expected RTT begins with:</p>
-<pre><code class="language-text">DShot600 four-motor equal-throttle bench backend active
-DShot values [0, 0, 0, 0], sets &lt;completed&gt;/&lt;started&gt;, lanes [&lt;m1&gt;, &lt;m2&gt;, &lt;m3&gt;, &lt;m4&gt;], busy 0, expired 0, timeouts 0, faults 0
-</code></pre>
-<p>For at least 10,000 frame sets:</p>
-<ul>
-<li>all four lane counts must be equal;</li>
-<li>each lane count must equal completed frame sets;</li>
-<li>started minus completed must be zero or one;</li>
-<li>busy, expiry, timeout, and fault counts must remain zero;</li>
-<li>no spurious-DMA warning may appear;</li>
-<li>IMU and heartbeat activity must continue.</li>
-</ul>
-<p>After any waveform-affecting correction, repeat at least 2,000 unpowered frame
-sets with the same counter and fault requirements. Only then:</p>
-<ol>
-<li>inspect all four motor/ESC assemblies, especially the previously suspect
-pair;</li>
-<li>power the ESCs with propellers still removed and RC throttle at zero;</li>
-<li>arm and confirm all four motors decode the guarded idle phase;</li>
-<li>disarm immediately if any motor fails to idle, and do not raise throttle;</li>
-<li>only after all four idle normally, rearm and apply a small throttle increase;</li>
-<li>confirm all four motors follow the same capped command;</li>
-<li>disarm and confirm every motor returns to stop.</li>
-</ol>
-<p>Zero RC throttle is clamped to the validated armed-idle command by the active
-actuator path. All four motors should therefore continue idling after
-<code>SYSTEM ARMED</code> until an explicit disarm or safety fault selects stop.</p>
-<p>Without a logic analyzer, the test establishes ESC interoperability only. It
-does not establish electrical pulse widths, jitter, physical-output-4 polarity margins, or a
-measured synchronization bound.</p>
-<h2 id="historical-physical-output-1-evidence"><a class="header" href="#historical-physical-output-1-evidence">Historical Physical-Output-1 Evidence</a></h2>
-<p>The earlier <code>dshot bench_motor1_only</code> image validated the PA8/TIM1_CH1 lane on
-2026-07-18. It reached at least 12,000 unpowered frame starts and 10,000
-powered props-off frame starts with zero busy, lease-expiry, timeout, or fault
-counts. M1 followed requested values <code>112</code>, <code>177</code>, <code>167</code>, and <code>219</code>, then
-returned to stop on disarm.</p>
-<p>Here <code>M1</code> was the backend’s historical name for physical output lane 1 on PA8,
-not current Betaflight logical motor 1. That evidence remains valid for lane 1
-and the guarded lease behavior. It does not validate the TIM8 lanes,
-physical-output-4 complementary polarity, or four-lane synchronization.</p>
-<h2 id="four-motor-unpowered-evidence"><a class="header" href="#four-motor-unpowered-evidence">Four-Motor Unpowered Evidence</a></h2>
-<p>The release four-motor image passed its first FCU3 target checkpoint on
-2026-07-18 with ESC power disconnected. It reached at least 12,000 frame
-starts. Every reported snapshot showed:</p>
-<ul>
-<li><code>completed = started - 1</code>;</li>
-<li>four equal lane counters matching completed frame sets;</li>
-<li>zero busy, lease-expiry, timeout, and fault counts;</li>
-<li>no spurious-DMA warning;</li>
-<li>continuing IMU progress through at least sequence 28,829.</li>
-</ul>
-<p>This validates concurrent four-lane DMA completion and runtime stability. It
-does not validate ESC decoding, motor behavior, electrical timing, polarity
-margins, or measured synchronization.</p>
-<h2 id="first-four-motor-powered-attempt"><a class="header" href="#first-four-motor-powered-attempt">First Four-Motor Powered Attempt</a></h2>
-<p>The first powered props-off attempt on 2026-07-18 did not pass. Physical output
-lanes 1, 2, and 3 spun, but lane 4/front-right on PB15 did not. All four requested values
-and DMA completion counters remained equal through explicit disarm; busy,
-lease-expiry, timeout, and fault counters stayed zero.</p>
-<p>The tested image had <code>CC3NP=1</code>, selecting active-low for TIM1_CH3N. Since
-TIM1_CH3 was disabled, this inverted only the physical-output-4 waveform despite its healthy
-DMA accounting. That image had SHA-256
-<code>5FE1AE6883E6448A89541731CA3F61F5758E065B9BA2CBAD32F4E81380F702F2</code>.
-Source now selects active-high <code>CC3NP=0</code>; the corrected release ELF has
-SHA-256
-<code>AA3A5A3D96B0B97BD1FA99031A4AA6FCD2A0A37650B8F4AEAA8121BFBF5FF13C</code>.</p>
-<h2 id="corrected-four-motor-powered-evidence"><a class="header" href="#corrected-four-motor-powered-evidence">Corrected Four-Motor Powered Evidence</a></h2>
-<p>The corrected-image powered props-off checkpoint passed on 2026-07-18. The
-operator skipped the separate short unpowered regression and proceeded
-directly to the motor test. The powered capture nevertheless showed
-synchronized stop-frame accounting through 3,000 starts before arming.</p>
-<p>All four motors, including physical output 4/front-right, spun and responded to equal capped
-RC throttle. Reported values progressed from armed idle <code>112</code> through <code>123</code>,
-<code>129</code>, and <code>158</code>, returned to <code>112</code>, and selected four zeros on explicit
-disarm. At 10,000 frame starts:</p>
-<ul>
-<li><code>completed = started - 1</code>;</li>
-<li>all four lane counters equaled the completed count;</li>
-<li>busy, lease-expiry, timeout, and fault counters remained zero;</li>
-<li>IMU sampling continued through at least sequence 24,024.</li>
-</ul>
-<p>This establishes four-lane ESC interoperability, corrected physical-output-4 polarity at the
-ESC, guarded arming, equal-throttle response, and explicit disarm behavior. It
-does not establish electrical pulse widths, polarity margin, jitter,
-TIM1/TIM8 phase alignment, motor direction, mixed-command motor ordering, or
-flight readiness.</p>
-<h2 id="props-off-rc-loss-test"><a class="header" href="#props-off-rc-loss-test">Props-Off RC-Loss Test</a></h2>
-<p>Status: <strong>functional target checkpoint passed on 2026-07-18</strong>. This test
-validates that RC loss revokes actuator permission, selects DShot stop on all
-four lanes, and cannot cause an automatic rearm when the link returns. It does
-not measure the physical stop latency.</p>
-<p>The current policy declares the RC link stale after 100,000 us without a
-healthy frame and requires three consecutive healthy frames for recovery.</p>
-<h3 id="target-evidence"><a class="header" href="#target-evidence">Target Evidence</a></h3>
-<p>The operator reported that the powered props-off RC-loss/recovery procedure
-completed as expected. The retained RTT excerpt begins after the timeout
-invalidation and initial transition to stop, so those two events were not
-captured directly. The retained evidence does show:</p>
-<ul>
-<li>prolonged four-lane stop values <code>[0, 0, 0, 0]</code> through at least frame-set
-starts 44,000 to 47,000, with no automatic arm request;</li>
-<li>equal per-lane completion counters and zero busy, lease-expiry, timeout, and
-fault counts throughout;</li>
-<li>continuing IMU progress through sequence 126,527;</li>
-<li>a later fresh <code>RC Requests ARM!</code> followed by the normal stop-frame guard,
-four equal idle values <code>112</code>, <code>BLHeli ESCs idling</code>, and <code>SYSTEM ARMED</code>;</li>
-<li>explicit <code>RC Requests Disarm!</code> and <code>SYSTEM DISARMED</code>, followed by continued
-four-lane stop values through at least 52,000 frame-set starts.</li>
-</ul>
-<p>This closes the functional RC-loss, no-automatic-rearm, manual recovery, and
-continued-runtime gate. The exact stop latency and a retained event-by-event
-trace from timeout through the first stop frame remain unavailable; measuring
-latency still requires timestamped instrumentation or a logic analyzer.</p>
-<h3 id="preconditions"><a class="header" href="#preconditions">Preconditions</a></h3>
-<ol>
-<li>Remove all propellers.</li>
-<li>Inspect each motor and ESC for damage, abnormal smell, or unexpected heat.</li>
-<li>Flash the exact <code>dshot bench_equal_motors</code> image under test.</li>
-<li>Start with RC throttle at zero and the arm switch low.</li>
-<li>Wait for <code>RC link valid after healthy-frame qualification</code>.</li>
-<li>Confirm four equal zero DShot values, synchronized lane counters, and zero
-busy, lease-expiry, timeout, and fault counts.</li>
-</ol>
-<h3 id="procedure"><a class="header" href="#procedure">Procedure</a></h3>
-<ol>
-<li>Move the arm switch high and wait for all four motors to enter idle and for
-<code>SYSTEM ARMED</code>.</li>
-<li>Keep throttle at zero and leave the arm switch high.</li>
-<li>Power off the DJI Goggles 3 to interrupt the O4/RC3 SBUS path without
-removing FCU or ESC power.</li>
-<li>Require one <code>RC link invalidated by frame timeout</code> warning. Confirm all four
-motors stop and the next DShot status reports values <code>[0, 0, 0, 0]</code>.</li>
-<li>Leave the RC link absent for at least two DShot status reports. Values must
-remain zero, lane counters must remain equal, backend fault counters must
-remain zero, and IMU sequence numbers must continue advancing.</li>
-<li>Restore Goggles 3 power while leaving the arm switch high. After
-<code>RC link valid after healthy-frame qualification</code>, require no
-<code>RC Requests ARM!</code>, no motor movement, and continued DShot stop values.</li>
-<li>Move the arm switch low and hold it there for at least one second.</li>
-<li>Move the arm switch high and verify that the normal guarded arming sequence
-can run again. Confirm all four motors idle, then explicitly disarm.</li>
-</ol>
-<p>Remove ESC power immediately if any motor continues running after link
-invalidation, restarts during arm-high reconnection, or accelerates without a
-new command. RTT status cadence is too slow to establish stop latency; that
-requires separate timestamped or logic-analyzer evidence.</p>
-<h2 id="logical-motor-identification"><a class="header" href="#logical-motor-identification">Logical-Motor Identification</a></h2>
-<p>Status: <strong>logical-to-physical identity and rotation direction passed on
-2026-07-20</strong>. The prerequisite equal-motor
-RC-loss/recovery checkpoint passed on 2026-07-18. This stage validates the
-committed logical-to-physical map without enabling full mixed control.</p>
-<p>For each logical motor, flash one image:</p>
-<pre><code class="language-powershell">cargo embed --release --features "bench_equal_motors bench_logical_motor1_only"
-cargo embed --release --features "bench_equal_motors bench_logical_motor2_only"
-cargo embed --release --features "bench_equal_motors bench_logical_motor3_only"
-cargo embed --release --features "bench_equal_motors bench_logical_motor4_only"
-</code></pre>
-<p>The 2026-07-18 release candidates built from commit <code>c4eeb90</code> plus the current
-working-tree changes are:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Logical motor</th><th>ELF SHA-256</th></tr>
-</thead>
-<tbody>
-<tr><td>1</td><td><code>A3E569EDFADC5E64DED1A1AC4147610E540A6F56B337262672AF4D5B33D9BA9A</code></td></tr>
-<tr><td>2</td><td><code>8626339FEDDAD7A7EB9CFA606E669A354443AFCD96DF115419C4983510AFE152</code></td></tr>
-<tr><td>3</td><td><code>373D40848C86BE9FBEE2360E97E728C088B1E164588979DBDFFFA99EDF6C0C04</code></td></tr>
-<tr><td>4</td><td><code>1BE803EF05BF3B5694400538F903FC3BD46C3554E37CB9222870136F3607C65D</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>All four retain <code>DMA2_STREAM1/4/6/7</code> at
-<code>0x080048F4/0x08004CFC/0x08004D54/0x08004DAC</code> and end their loadable flash
-image at <code>0x080130D8</code>. These identifiers describe source-side candidates; each
-becomes target evidence only after its startup identity and physical behavior
-are observed.</p>
-<p>Use this procedure for each image:</p>
-<ol>
-<li>Remove all propellers and start with throttle zero and arm low.</li>
-<li>Confirm the startup message identifies the intended logical motor.</li>
-<li>Arm normally. All four motors may idle during the guarded arming sequence.</li>
-<li>After <code>SYSTEM ARMED</code>, confirm zero throttle returns all four lanes to stop.</li>
-<li>Apply only a small throttle increase. Exactly one motor must spin.</li>
-<li>Record its physical output, airframe location, and rotation direction.</li>
-<li>Disarm and require four zero DShot values with equal lane counters and zero
-backend faults.</li>
-</ol>
-<p>The committed map predicts:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Logical motor</th><th style="text-align: right">Physical output</th><th>Expected location</th><th>Observed location</th><th>Expected DShot vector</th></tr>
-</thead>
-<tbody>
-<tr><td>1</td><td style="text-align: right">3</td><td>rear-right</td><td>rear-right, pass</td><td><code>[0, 0, value, 0]</code></td></tr>
-<tr><td>2</td><td style="text-align: right">4</td><td>front-right</td><td>front-right, pass</td><td><code>[0, 0, 0, value]</code></td></tr>
-<tr><td>3</td><td style="text-align: right">2</td><td>rear-left</td><td>rear-left, pass</td><td><code>[0, value, 0, 0]</code></td></tr>
-<tr><td>4</td><td style="text-align: right">1</td><td>front-left</td><td>front-left, pass</td><td><code>[value, 0, 0, 0]</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>The operator ran each exact feature command above and reported that only the
-expected airframe motor spun. Follow-up target observations and retained logs
-then supplied CW/CCW direction, synchronized completion counters, explicit
-stop after disarm, and zero backend/telemetry error evidence as summarized
-below.</p>
-<p>Stop at the first mismatch. Do not edit the motor map or ESC direction as part
-of the observation run; record the result and review it separately.</p>
-<p>The current FCU3 checkpoint passed with these observed results:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Logical motor</th><th style="text-align: right">Physical lane</th><th>Location</th><th>Rotation viewed from above</th></tr>
-</thead>
-<tbody>
-<tr><td>1</td><td style="text-align: right">3</td><td>rear-right</td><td>CW</td></tr>
-<tr><td>2</td><td style="text-align: right">4</td><td>front-right</td><td>CCW</td></tr>
-<tr><td>3</td><td style="text-align: right">2</td><td>rear-left</td><td>CCW</td></tr>
-<tr><td>4</td><td style="text-align: right">1</td><td>front-left</td><td>CW</td></tr>
-</tbody>
-</table>
-</div>
-<p>Retained logs <code>20260720_200200_rtt.log</code>, <code>20260720_200253_rtt.log</code>,
-<code>20260720_200358_rtt.log</code>, and <code>20260720_200501_rtt.log</code> each showed only the
-selected physical lane at DShot value <code>112</code>, synchronized lane counters, zero
-backend/telemetry errors, and four-zero output after disarm. The intervening
-<code>20260720_200141_rtt.log</code> was only a failed probe-open attempt.</p>
-<h2 id="capped-unequal-vector-validation"><a class="header" href="#capped-unequal-vector-validation">Capped Unequal-Vector Validation</a></h2>
-<p>Status: <strong>Parts A and B passed functionally on target with retained RTT
-evidence</strong>. This stage proves that all four lanes can carry different packets
-in the same synchronized frame set. It does not enable the PID mixer or
-authorize flight output.</p>
-<p>Build and flash:</p>
-<pre><code class="language-powershell">cargo embed --release --features "bench_equal_motors bench_dshot_unequal_motors"
-</code></pre>
-<p>The 2026-07-18 source-side release candidate built from commit <code>c4eeb90</code> plus
-the current working-tree changes has ELF SHA-256
-<code>78FD890B9D93DCA8D1A456548F0C89DB6153561496C1BB42B8D42238676DABF3</code>.
-It retains <code>DMA2_STREAM1/4/6/7</code> at
-<code>0x080048F4/0x08004CFC/0x08004D54/0x08004DAC</code> and ends its loadable flash
-image at <code>0x080130E8</code>. This is not target evidence until flashed and observed.
-The runtime result below validates the behavior, but the flashed ELF hash was
-not independently read back from the target.</p>
-<p>The fresh candidate rebuilt after the DShot-specific arming change on
-2026-07-19 has SHA-256
-<code>07A44529265B9895818F57C0B5CD608E35A9E6C95CF381373BE1372B60C24F1D</code>.
-It retains the same four DMA IRQ addresses, ends its loadable flash data at
-<code>0x08012CC8</code>, and contains defmt metadata for unequal-vector mode and the
-stop-only arming sequence.</p>
-<p>The feature cannot be combined with a logical-motor selection, physical
-selected-motor mode, or PWM calibration. It requires both <code>dshot</code> and
-<code>bench_equal_motors</code>. The normal RC qualification, guarded arming, fresh
-<code>MotorCmd</code> queue, 20 ms output lease, actuator owner, and whole-bank fault
-containment remain active.</p>
-<p>Throttle below 100 command counts selects four stop values. At or above the
-trigger, the reusable bench task emits:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Representation</th><th style="text-align: right">Index 1</th><th style="text-align: right">Index 2</th><th style="text-align: right">Index 3</th><th style="text-align: right">Index 4</th></tr>
-</thead>
-<tbody>
-<tr><td>Logical command</td><td style="text-align: right">140</td><td style="text-align: right">120</td><td style="text-align: right">100</td><td style="text-align: right">80</td></tr>
-<tr><td>Physical command after <code>[3, 4, 2, 1]</code> remap</td><td style="text-align: right">80</td><td style="text-align: right">100</td><td style="text-align: right">140</td><td style="text-align: right">120</td></tr>
-<tr><td>Expected DShot value</td><td style="text-align: right">127</td><td style="text-align: right">147</td><td style="text-align: right">187</td><td style="text-align: right">167</td></tr>
-</tbody>
-</table>
-</div>
-<p>All command values remain below the established 250-count bench cap.</p>
-<h3 id="part-a-unequal-packets-and-stop-transitions"><a class="header" href="#part-a-unequal-packets-and-stop-transitions">Part A: Unequal Packets And Stop Transitions</a></h3>
-<ol>
-<li>Remove all propellers and inspect every motor and ESC.</li>
-<li>Start with throttle zero and arm low. Confirm the unequal-vector startup
-message and four stop values.</li>
-<li>Arm normally. All four motors may idle during the guarded arming sequence.</li>
-<li>After <code>SYSTEM ARMED</code>, keep throttle below the trigger and require
-<code>[0, 0, 0, 0]</code>.</li>
-<li>Raise throttle just above the trigger. Require DShot values
-<code>[127, 147, 187, 167]</code> and confirm all four motors run. Different unloaded
-motor speeds are supporting evidence, not a strict pass criterion.</li>
-<li>Hold the vector for at least five status reports. Require equal advancing
-lane counters, at most one frame set in flight, zero busy/expiry/timeout/
-fault counts, and continuing IMU progress.</li>
-<li>Lower throttle below the trigger. Require all motors to stop and the next
-status to report four zeros. Repeat the command/stop transition three
-times.</li>
-<li>Explicitly disarm and require continued four-lane stop.</li>
-</ol>
-<p>Stop immediately on any vector mismatch, lane-counter divergence, warning, or
-motor that does not stop.</p>
-<p>Target result on 2026-07-18: <strong>functional pass</strong>. The retained RTT excerpt
-preserves four consecutive active reports from sets <code>46999/47000</code> through
-<code>49999/50000</code>, each with exact physical DShot values
-<code>[127, 147, 187, 167]</code>. Every lane counter matched the completed-set count,
-there was exactly one frame set in flight, and busy, expiry, timeout, and fault
-counts remained zero. IMU sequence advanced from <code>105706</code> through <code>124925</code>.
-Explicit disarm was followed by sustained <code>[0, 0, 0, 0]</code> reports at
-<code>50999/51000</code> and <code>51999/52000</code>.</p>
-<p>The operator reports completing all of Part A, including the five-report hold
-and three command-to-stop transitions. The retained excerpt itself contains
-four consecutive active reports and the final explicit-disarm transition, so
-the additional hold and repeated transitions remain operator-observed rather
-than retained RTT evidence. This test does not establish physical RPM ordering
-or stop latency.</p>
-<h3 id="part-b-rc-loss-during-a-nonzero-vector"><a class="header" href="#part-b-rc-loss-during-a-nonzero-vector">Part B: RC Loss During A Nonzero Vector</a></h3>
-<p>Run this only after Part A and the DShot-specific arming checkpoint pass.</p>
-<p>From the repository root, build, flash, display decoded RTT, and retain a
-clean timestamped log with:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
-</code></pre>
-<p>The wrapper uses <code>probe-rs run</code>, shows decoded <code>defmt</code> lines in the terminal,
-and flushes each line to
-<code>logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log</code>. Output already received remains
-available after terminal scrollback overflows or the run is stopped with
-<code>Ctrl+C</code>. To inspect the newest capture:</p>
-<pre><code class="language-powershell">$log = Get-ChildItem logs\terminal_embed\*_rtt.log | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-Get-Content -LiteralPath $log.FullName -Tail 200
-</code></pre>
-<ol>
-<li>Rearm at zero throttle, cross the trigger, and confirm the exact unequal
-vector.</li>
-<li>While the vector is active, power off DJI Goggles 3 to interrupt the
-O4/RC3 SBUS path without removing FCU or ESC power.</li>
-<li>Require one frame-timeout invalidation, prompt physical stop, and four
-DShot zero values with equal counters and zero backend faults.</li>
-<li>With the link still absent and arm still high, lower RC throttle to zero.
-Leave the link absent for at least two status reports while IMU sequence
-continues advancing.</li>
-<li>Restore the link with arm still high and throttle zero. Require healthy
-link qualification but no automatic arm request or motor restart. Require
-at least two more four-zero status reports.</li>
-<li>Move arm low for at least one second, then high at zero throttle, and verify
-normal guarded rearming remains possible. Explicitly disarm.</li>
-<li>Retain RTT from one unequal-vector report before link loss through recovered
-stop, fresh rearm, and final disarm. The expected RC frame-timeout warning
-is distinct from the DShot backend timeout counter, which must remain zero.</li>
-</ol>
-<p>RTT cadence cannot measure physical stop latency; that remains an instrumented
-checkpoint.</p>
-<p>Target result on 2026-07-19: <strong>pass with retained RTT</strong>. The clean capture is
-<code>logs/terminal_embed/20260719_164203_rtt.log</code>, produced by the exact
-release-feature command above. Its ELF SHA-256 matches the recorded candidate:
-<code>07A44529265B9895818F57C0B5CD608E35A9E6C95CF381373BE1372B60C24F1D</code>.</p>
-<p>Before link loss, sets <code>3999/4000</code> and <code>4999/5000</code> carried the exact unequal
-vector <code>[127, 147, 187, 167]</code>. The frame-timeout warning was followed by four
-zeros at <code>5999/6000</code>; zeros then persisted through sets <code>6999/7000</code> to
-<code>9999/10000</code>. Link qualification was followed by two more zero reports at
-<code>10999/11000</code> and <code>11999/12000</code> without an arm request or restart. Additional
-link timeout/requalification cycles also remained stopped through
-<code>19999/20000</code>.</p>
-<p>A fresh low-to-high request completed the guarded 100 ms stop dwell, remained
-zero at <code>20999/21000</code>, and restored the exact vector at <code>21999/22000</code>.
-Explicit disarm returned to four zeros at <code>22999/23000</code>. Across all 23 DShot
-status reports, every lane matched the completed-set count, exactly one set
-was in flight, and busy, expiry, backend-timeout, and fault counters were
-zero. IMU sequence advanced from 1 through 56,056. RTT cadence still cannot
-measure physical stop latency.</p>
-<h2 id="deferred-work"><a class="header" href="#deferred-work">Deferred Work</a></h2>
-<ul>
-<li>logic-analyzer timing, jitter, polarity, and synchronization evidence;</li>
-<li>instrumented RC-loss and explicit-disarm stop latency;</li>
-<li>continued cold-start, temperature-margin, and controlled flight evidence;</li>
-<li>a retained BB2 flight capture for quantitative rate tracking and saturation;</li>
-<li>making IMU initialization, calibration, and freshness an explicit pre-arm
-prerequisite; the present post-arm stale-IMU check disarms instead, after
-two consecutive stale ticks;</li>
-<li>bidirectional DShot telemetry;</li>
-<li>DShot special-command policy;</li>
-<li>a reviewed pitch-authority tuning progression.</li>
-</ul>
-<p>The Foxeer F405 V2 backend is standard four-lane DShot600 using its own
-board-declared timer and DMA routes. FCU3 routes must not be assumed valid for
-that board.</p>
+<p>The idle command used for arming changes only in small reviewed steps, each
+followed by repeated cold starts and the full props-off check; never tune it
+with propellers fitted.</p>
+<h2 id="not-yet-measured"><a class="header" href="#not-yet-measured">Not Yet Measured</a></h2>
+<p>Pulse width, jitter, polarity margin, lane-to-lane phase, and physical stop
+latency have not been measured with a logic analyzer; flights so far do not
+establish them. Bidirectional DShot telemetry is not implemented.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="priority-and-scheduling"><a class="header" href="#priority-and-scheduling">Priority and Scheduling</a></h1>
 <div class="table-wrapper">
@@ -2257,7 +1419,7 @@ configuration, and debugging.</p>
 <ul>
 <li><a href="#communication-protocols">Communication Protocols</a> introduces SBUS and
 MSP.</li>
-<li><a href="#uart">UART</a> and <a href="#uart-1">UART RX</a> describe the portable serial
+<li><a href="#uart">UART</a> and <a href="#uart-rx">UART RX</a> describe the portable serial
 contracts and STM32F4 transport.</li>
 <li><a href="#ferroconfigurator">FerroConfigurator</a> describes the standard
 Foxeer USB companion application.</li>
@@ -2274,10 +1436,10 @@ interfaces are available on each board.</p>
 <tr><th>Protocol/path</th><th>Status</th></tr>
 </thead>
 <tbody>
-<tr><td>SBUS</td><td>Active prototype RC input, by default on UART2 (Foxeer) or UART6 (Lucid)</td></tr>
-<tr><td>BLHeli legacy ESC telemetry</td><td>Active in the flight DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
-<tr><td>USB CDC serial</td><td>Mandatory on Foxeer, which emits bounded read-only <code>FWDBG1</code> status lines; was optional on the obsolete FCU3 via <code>usb_serial</code></td></tr>
-<tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames</td></tr>
+<tr><td>SBUS</td><td>Active prototype RC input, by default on <code>uart2</code> (Foxeer) or <code>uart1</code> (Lucid)</td></tr>
+<tr><td>BLHeli legacy ESC telemetry</td><td>Active in the flight DShot image, by default on <code>uart1</code> (Foxeer) or <code>uart8</code> (Lucid); eRPM and frame integrity target-validated on Foxeer</td></tr>
+<tr><td>USB CDC serial</td><td>Standard on both flight boards: <code>FWDBG1</code> status lines and the configurator command line</td></tr>
+<tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype, by default on <code>uart4</code> (Foxeer) or <code>uart3</code> (Lucid), using MSPv1 responses and DisplayPort OSD frames</td></tr>
 <tr><td>MAVLink</td><td>UART mode placeholder/config values exist, no active MAVLink implementation yet</td></tr>
 <tr><td>CRSF/ELRS</td><td>RC input with battery telemetry, selected by <code>rc_protocol</code>; not yet run on hardware</td></tr>
 </tbody>
@@ -2344,44 +1506,26 @@ disarmed. Because the arm switch may now be read from a channel that is
 already high, the change invalidates the RC link like a lost receiver: the
 link must recover, and the new arm channel must read low, before the craft
 can arm.</p>
-<h2 id="foxeer-usb-debug"><a class="header" href="#foxeer-usb-debug">Foxeer USB Debug</a></h2>
-<p>The Foxeer app’s optional CDC ACM endpoint reports a self-describing ASCII
-<code>FWDBG1</code> line on the existing roughly two-second heartbeat. It includes the
-selected IMU, sample and control sequences, raw gyro, stale state, RC
-qualification, throttle and arm switch, system arm state, pack voltage, and
-current.</p>
-<p>The implementation uses fixed-size buffers and coalesces status requests.
-OTG_FS service runs below control, IMU, RC, and safety priorities. Host input
-is drained and discarded; there is intentionally no USB command parser,
-parameter writer, arming request, or actuator resource.</p>
-<h2 id="fcu3-esc-telemetry"><a class="header" href="#fcu3-esc-telemetry">FCU3 ESC Telemetry</a></h2>
-<p>The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud in the standard FCU3 flight image. The ESC manager issues
-bounded telemetry-bit requests through the actuator-owned DShot service. Since the
-ten-byte wire frame does not identify a motor, a low-priority ESC manager
-rotates physical-output requests. Both directions use bounded SPSC queues.</p>
-<p>The safety-owned DShot service acknowledges an exact sequence/output request
-only after the selected telemetry bit was present in a frame that actually
-started. If a CRC-valid response completes while that request is still queued,
-the manager may buffer it, but it remains quarantined and cannot be published
-until the matching acknowledgement arrives. Association timeouts stop the
-manager so a late response cannot be attributed to a later output. It resumes
-only while disarmed, after 500 ms with no wire byte and no acknowledgement,
-doubling to at most 4 s while retries bring nothing back.</p>
-<p>The physical-output association maps to the logical Quad X layout as follows:
-output 1 is M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right,
-and output 4 is M2/front-right.</p>
-<p>The manager owns parsing, samples, cadence, association, and timeouts. It does
-not own a motor peripheral, arming state, actuator permit, or failsafe state.
-UART, parser, queue, and timeout faults cannot grant authority. When they
-prevent fresh observations during guarded idle, pre-arm qualification fails
-closed and selects stop; after <code>SYSTEM ARMED</code>, telemetry loss is currently
-observational and does not itself disarm.</p>
-<p>The manager waits five seconds after boot before its first request. An arm
-attempt that enters guarded idle before telemetry is available can fail closed
-at the 1.2-second qualification deadline. A switch-low observation and a new
-low-to-high arm request are then required. See <a href="#dshot">DShot</a> for the frame
-and target-evidence details.</p>
+<h2 id="usb"><a class="header" href="#usb">USB</a></h2>
+<p>Each flight board presents a USB CDC serial port. Every two seconds or so it
+sends a self-describing ASCII <code>FWDBG1</code> status line: the selected IMU, sample
+and control sequences, raw gyro, stale state, RC qualification, throttle and
+arm switch, arm state, pack voltage, and current.</p>
+<p>The same port accepts a bounded ASCII command line, which FerroConfigurator
+drives: configuration get,
+set, and save; serial port bindings; flash information and the scratch-sector
+test; log listing, page reads, sync acknowledgement, and erase; and the props-off
+motor test. The firmware validates every command. Writes and the motor test
+are refused while armed, a motor test is a request the safety master may
+refuse, and nothing on the command line can arm the craft. A UART bound to the
+<code>configurator</code> function accepts the same command line except the motor test and
+the unconditional log erase.</p>
+<p>USB service runs below the control, IMU, RC, and safety priorities, with
+fixed-size buffers.</p>
+<h2 id="esc-telemetry-1"><a class="header" href="#esc-telemetry-1">ESC Telemetry</a></h2>
+<p>The BLHeli legacy UART telemetry protocol, how a reply is associated with the
+motor that was asked, and how telemetry recovers after a timeout are described
+in <a href="#esc-telemetry">DShot</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sbus"><a class="header" href="#sbus">SBUS</a></h1>
 <p>SBUS is the active FerroWasp RC input path. Foxeer binds it to UART2 by
@@ -2605,8 +1749,9 @@ row 8, col 2: WARN ...
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The reusable STM32F4 UART DMA mechanism lives in
-<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. Each board’s pin conversion,
-storage shape, and device construction live in its app’s <code>src/board/</code>.</p>
+<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. Each board’s UART routes are data
+in its board crate (<code>board/src/serial.rs</code>); peripheral construction is in the
+app’s <code>src/board/</code>.</p>
 <p>It provides:</p>
 <ul>
 <li>mode-specific UART configuration</li>
@@ -2627,7 +1772,7 @@ storage shape, and device construction live in its app’s <code>src/board/</cod
 <tbody>
 <tr><td><code>Sbus</code></td><td>100000 baud, even parity, 2 stop bits, RX DMA</td><td>Active RC input path</td></tr>
 <tr><td><code>Msp</code></td><td>115200 baud, TX/RX DMA</td><td>Active DJI O4 OSD path on UART4</td></tr>
-<tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>Standard flight-board BLHeli legacy telemetry path on USART1</td></tr>
+<tr><td><code>EscTelemetry</code></td><td>115200 baud, 8N1, RX DMA</td><td>BLHeli legacy ESC telemetry</td></tr>
 <tr><td><code>Crsf</code></td><td>420000 baud, 8N1, not inverted, TX/RX DMA</td><td>RC input with battery telemetry when <code>rc_protocol</code> is <code>crsf</code></td></tr>
 <tr><td><code>Cli</code></td><td>115200 baud, 8N1, TX/RX DMA</td><td>The text command line, for a configurator over a cable or Bluetooth (<code>configurator</code>)</td></tr>
 <tr><td><code>Mavlink</code></td><td>57600 baud, RX DMA</td><td>Future telemetry/config subset</td></tr>
@@ -2636,7 +1781,7 @@ storage shape, and device construction live in its app’s <code>src/board/</cod
 </div>
 <h2 id="port-binding"><a class="header" href="#port-binding">Port Binding</a></h2>
 <p>Pins, DMA streams and interrupts are fixed per port at compile time, in each
-board’s <code>src/board/serial.rs</code> route table. A port is named by the UART’s
+board’s data crate route table (<code>board/src/serial.rs</code>). A port is named by the UART’s
 number on the chip, as the pilot sees it on the board: USART3 is <code>uart3</code>
 whatever it serves. Saved configuration holds a function for each of
 <code>uart1</code> to <code>uart8</code>. Which function a port serves (RC input, MSP OSD, ESC
@@ -2666,16 +1811,16 @@ function tasks keep their own priorities.</li>
 <p>Each function speaks one protocol today, so the protocol follows from the
 function. A function gains a protocol setting when it gets a second protocol.</p>
 <h2 id="default-bindings"><a class="header" href="#default-bindings">Default Bindings</a></h2>
-<p>On the F405 boards, USART2 is routed to RC input in SBUS mode:</p>
+<p>On Foxeer, USART2 is routed to RC input in SBUS mode:</p>
 <pre><code class="language-text">USART2 RX DMA/IDLE IRQ -&gt; owned RxChunk -&gt; persistent async SBUS parser
     -&gt; RC validity + rates/throttle/arm
 </code></pre>
-<p>The current prototype uses PA2/PA3 for USART2 TX/RX.</p>
+<p>Foxeer uses PA2/PA3 for USART2 TX/RX.</p>
 <p>UART4 is routed to the DJI O4 MSP OSD path:</p>
 <pre><code class="language-text">UART4 RX DMA/IDLE IRQ -&gt; owned RxChunk -&gt; osd_refresh task -&gt; MSP parser/responder
 OSD frame queue -&gt; UART4 TX DMA -&gt; DJI O4 air unit
 </code></pre>
-<p>The current prototype uses PA0/PA1 for UART4 TX/RX.</p>
+<p>Foxeer uses PA0/PA1 for UART4 TX/RX.</p>
 <p>USART1 is routed to the combined BLHeli legacy ESC telemetry wire. On Foxeer,
 UART4 can carry ESC telemetry instead:</p>
 <pre><code class="language-text">PA10 USART1 RX DMA -&gt; bounded chunks -&gt; ESC manager parser/association
@@ -2691,15 +1836,14 @@ configurator command line for log sync over a Bluetooth serial module:</p>
 into the flash manager, which answers every command on the link it came from
 (<code>crates/ferrowasp-flight/src/command_link.rs</code>). Motor commands and the
 unconditional log erase stay on USB.</p>
-<p>On the TBS Lucid H7, USART6 (<code>uart6</code>) carries SBUS, inverted in the UART;
-USART3 (<code>uart3</code>) carries MSP DisplayPort with TX DMA; and UART8 (<code>uart8</code>)
-carries ESC telemetry on PE0. Every H743 UART inverts in hardware, so any of
-the three can take SBUS or ESC telemetry; <code>uart3</code> and <code>uart6</code> have the transmit
-DMA that MSP and CRSF need. The Lucid has no configurator port yet. In the standard flight image, the manager sends typed telemetry requests through
-a bounded queue to the DShot actuator service; it never writes motor hardware
-itself. A CRC-valid response seen before the matching frame-start
-acknowledgement remains quarantined until that exact sequence/output
-acknowledgement arrives.</p>
+<p>On the TBS Lucid H7, USART1 (<code>uart1</code>, PA10, receive only) takes RC input from
+the digital VTX connector’s SBUS pin, inverted in the UART; USART3 (<code>uart3</code>)
+carries MSP DisplayPort with TX DMA; UART8 (<code>uart8</code>, PE0) carries ESC
+telemetry; and USART6 (<code>uart6</code>) is spare. Every H743 UART inverts in hardware,
+so any port can take SBUS or ESC telemetry; <code>uart3</code> and <code>uart6</code> have the
+transmit DMA that MSP and CRSF need. The Lucid has no configurator port yet.</p>
+<p>The ESC manager never writes motor hardware; how it pairs a telemetry reply
+with the motor that was asked is in <a href="#esc-telemetry">DShot</a>.</p>
 <h2 id="design-intent"><a class="header" href="#design-intent">Design Intent</a></h2>
 <p>The UART layer should only move bytes and frame buffers. Protocol parsers should interpret those bytes, and safety-critical authority should remain elsewhere.</p>
 <p>For example:</p>
@@ -2708,10 +1852,10 @@ acknowledgement arrives.</p>
 <li>MSP or MAVLink may request configuration changes.</li>
 <li>No UART protocol should directly write motor output or actuator permission.</li>
 </ul>
-<p>See <a href="#uart-1">UART RX</a> for the buffer ownership model.</p>
+<p>See <a href="#uart-rx">UART RX</a> for the buffer ownership model.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="uart-1"><a class="header" href="#uart-1">UART</a></h1>
-<p>UART support is divided into two layers:</p>
+<h1 id="uart-rx"><a class="header" href="#uart-rx">UART RX</a></h1>
+<p>UART receive support is divided into two layers:</p>
 <ul>
 <li><strong>HAL layer</strong></li>
 <li><strong>Software layer</strong></li>
@@ -2770,9 +1914,8 @@ let mut filled_queue: ferrowasp_stm32f4::uart_dma::FilledQueue = Queue::new();</
 </ul>
 <p>The parser task continuously pulls buffers from the filled queue until it is empty. After parsing a buffer, the parser returns it to the free queue.</p>
 <p>The hardware task takes buffers from the free queue and gives them to the DMA transfer. If the free queue is empty when the DMA transfer requests a new buffer, the hardware task returns an error.</p>
-<p>For the UART4 MSP/OSD, USART2 SBUS, and FCU3 PA10 / USART1 ESC-telemetry paths,
-the IRQ owner adds one portable ownership step after detaching the static DMA
-buffer. USART1 uses DMA2 Stream 5 Channel 4:</p>
+<p>On every bound port, the IRQ owner adds one portable ownership step after
+detaching the static DMA buffer:</p>
 <pre><code class="language-text">filled DMA buffer
     -&gt; copy bytes and metadata into bounded RxChunk
     -&gt; recycle DMA buffer immediately
@@ -2782,21 +1925,12 @@ buffer. USART1 uses DMA2 Stream 5 Channel 4:</p>
 <p><code>RxChunk</code> carries the IDLE/full completion cause, generation, timestamp, and
 continuity markers. Queue overflow is reported through a separate
 <code>DiscontinuityReader</code>; protocol framing and DMA chunk boundaries remain
-independent. USART2 wakes one persistent async SBUS parser. Its safety path
+independent. The RC port wakes one persistent async RC parser. Its safety path
 observes both parser results and out-of-band discontinuities so transport loss
 can invalidate RC state immediately.</p>
-<p>In the flight DShot image, USART1 feeds the low-priority ESC manager’s
-ten-byte BLHeli legacy parser. This service is part of the standard flight image. The manager owns framing, CRC validation, response association,
-samples, and timeouts. UART transport or parser state cannot command motors:
-telemetry-bit requests cross a bounded queue to the safety-owned DShot actuator
-service. A CRC-valid frame that arrives while its request is still queued can
-be buffered, but it remains quarantined and is published only after the manager
-receives the matching sequence/output acknowledgement for a frame that
-actually started.</p>
-<p>Transport, parser, queue, and timeout faults cannot grant actuator authority.
-If they withhold the fresh observations required during guarded idle, pre-arm
-qualification times out and returns all four outputs to stop. Telemetry loss
-after arming is currently observational and does not itself request disarm.</p>
+<p>The ESC telemetry port feeds the low-priority ESC manager’s ten-byte BLHeli
+parser; <a href="#esc-telemetry">DShot</a> describes how it pairs replies with
+motors and why its faults can only withhold arming, never grant authority.</p>
 <hr>
 <h2 id="buffer-flow"><a class="header" href="#buffer-flow">Buffer Flow</a></h2>
 <pre class="mermaid">flowchart LR
@@ -2844,8 +1978,11 @@ after arming is currently observational and does not itself request disarm.</p>
 <ul>
 <li><a href="#project-structure">Project Structure</a> for crate and application
 ownership;</li>
+<li><a href="#board-support">Board Support</a> for what a board owns and how ports are
+named;</li>
 <li><a href="#testing">Testing</a> for staged verification and repository checks;</li>
-<li><a href="#rtt-debug-tools">RTT Debug Tools</a> for target-side diagnostics;</li>
+<li><a href="#bench-and-analysis-tools">Bench and Analysis Tools</a> for RTT, storage, and log
+analysis tools;</li>
 <li><a href="#documentation-policy">Documentation Policy</a> when adding or moving written
 guidance.</li>
 </ul>
@@ -2879,15 +2016,8 @@ unless the change specifically requires a native or hardware-attached host.
 The guide also documents the pinned native fallback. The root workspace
 contains reusable crates; each deployable firmware app under <code>firmware/</code> has an
 isolated Cargo graph and must be checked separately.</p>
-<p>Before opening a pull request, run the checks relevant to the change. The
-normal source-only baseline is:</p>
-<pre><code class="language-text">cargo fmt --all --check
-cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
-python tools/check_repository_context.py
-mdbook build mdbook
-</code></pre>
-<p>For firmware changes, also run <code>cargo fmt --check</code> and
+<p>Before opening a pull request, run the <a href="#software-checks">software checks</a>
+relevant to the change. For firmware changes, also run <code>cargo fmt --check</code> and
 <code>cargo check --release --locked</code> from each affected app directory. Do not
 assume a probe or target board is available in CI, and do not weaken a target
 check merely because hardware is unavailable.</p>
@@ -2917,81 +2047,120 @@ source and licence are clearly identified and compatible with Apache-2.0.</p>
 pasting code.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="project-structure"><a class="header" href="#project-structure">Project Structure</a></h1>
-<p>The repository is currently a rapid prototype, not yet the final multi-crate layout.</p>
-<p>Current important paths:</p>
-<pre><code class="language-text">.
-|-- firmware/
-|   |-- tbs-lucid-h7/            # TBS Lucid H7 board support and H743 RTIC shell
-|   |-- stm32f401-bringup/       # Nucleo board support and minimal F401 RTIC shell
-|   `-- foxeer-f405-v2/          # Golden Foxeer board support and RTIC flight app
-|       |-- src/board/           # Immutable board facts and typed construction
-|       |-- src/lib.rs           # Internal app-support facade
-|       `-- src/main.rs          # ferroforge::app! declarations and wiring only
-|-- crates/
-|   |-- ferrowasp-core/          # Safety, signals, actuator command helpers
-|   |-- ferrowasp-drivers/       # IMU and BLHeli legacy telemetry drivers
-|   |-- ferrowasp-io-core/       # Portable bounded serial/SPI contracts
-|   |-- ferrowasp-mspv1/         # MSPv1 parser/serializer and OSD responder support
-|   |-- ferrowasp-flight/        # Portable flight logic: control, OSD, ESC manager, storage
-|   |-- ferrowasp-stm32/         # HAL-neutral STM32 UART/SPI/ADC/DShot mechanisms
-|   |-- ferrowasp-stm32-tasks/   # RTIC task definitions shared by the STM32 boards
-|   |-- ferrowasp-stm32f4/       # STM32F4 HAL backend
-|   |-- ferrowasp-stm32h7/       # STM32H743 HAL backend
-|   |-- ferrowasp-waveform/      # DShot packet and encoding helpers
-|   |-- ferrowasp-pid/           # no_std PID/rate-control primitive crate
-|   `-- rc-pwm/                  # Local PWM controller crate
-|-- mdbook/
-|   `-- src/                     # This documentation book
-|-- .github/
-|   |-- CONTRIBUTING.md          # GitHub pointer to the canonical guide
-|   `-- SECURITY.md              # Private security-reporting policy
-|-- LICENSE                      # Apache License, Version 2.0
-|-- NOTICE                       # Copyright, naming, and status notice
-`-- THIRD_PARTY_NOTICES.md       # Licences for vendored assets
+<p>FerroWasp is one root Cargo workspace of shared crates, plus one isolated Cargo
+workspace per firmware application. Each application selects one chip’s HAL and
+peripheral-access crate, and keeping them apart stops Cargo from unifying two
+chips’ features in one build. Firmware is composed with
+<a href="https://crates.io/crates/ferroforge">FerroForge</a>.</p>
+<h2 id="shared-crates"><a class="header" href="#shared-crates">Shared Crates</a></h2>
+<p>Under <code>crates/</code>, all members of the root workspace and host-tested there:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Crate</th><th>Owns</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ferrowasp-core</code></td><td>Safety state and the safety master’s rules, actuator command types, blackbox records, stored configuration, reference frames</td></tr>
+<tr><td><code>ferrowasp-drivers</code></td><td>Device and protocol drivers: IMUs (ICM-42688-P, MPU-6000, MPU-6500), CRSF, BLHeli telemetry, SPI NOR flash, and the <code>NorStorage</code> trait</td></tr>
+<tr><td><code>ferrowasp-flight</code></td><td>Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link</td></tr>
+<tr><td><code>ferrowasp-io-core</code></td><td>Bounded serial and SPI contracts, I/O health, statistics, and time types</td></tr>
+<tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
+<tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
+<tr><td><code>ferrowasp-pid</code></td><td>The PID rate-control primitive</td></tr>
+<tr><td><code>ferrowasp-waveform</code></td><td>DShot packet encoding and compare sequences</td></tr>
+<tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
+<tr><td><code>ferrowasp-stm32</code></td><td>STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types</td></tr>
+<tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend over <code>stm32f4xx-hal</code></td></tr>
+<tr><td><code>ferrowasp-stm32h7</code></td><td>The STM32H743 backend over <code>stm32h7xx-hal</code></td></tr>
+<tr><td><code>ferrowasp-stm32-tasks</code></td><td>The RTIC task definitions every STM32 flight board shares, including the flash manager</td></tr>
+</tbody>
+</table>
+</div>
+<p>Only <code>ferrowasp-stm32f4</code> and <code>ferrowasp-stm32h7</code> name a chip HAL, and only
+they hold unsafe code, at their DMA endpoint declarations.</p>
+<h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
+<p>Under <code>firmware/</code>, each its own Cargo workspace:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Application</th><th>Board</th></tr>
+</thead>
+<tbody>
+<tr><td><code>foxeer-f405-v2</code></td><td>Foxeer F405 V2, STM32F405; the golden flight app</td></tr>
+<tr><td><code>tbs-lucid-h7</code></td><td>TBS Lucid H7, STM32H743</td></tr>
+<tr><td><code>stm32f401-bringup</code></td><td>NUCLEO-F401RE; peripheral bring-up without actuators</td></tr>
+</tbody>
+</table>
+</div>
+<p>A flight application has three parts:</p>
+<pre><code class="language-text">firmware/&lt;board&gt;/
+|-- board/        board data crate: pins, DMA and serial routes, resource claims,
+|                 default configuration, USB identity; no HAL, host-tested
+|-- src/board/    HAL glue: type aliases and peripheral construction
+|-- src/lib.rs    the facade main.rs imports
+`-- src/main.rs   the ferroforge::app! declaration: resources, priorities,
+                  init wiring, and task selection only
 </code></pre>
-<h2 id="current-reality"><a class="header" href="#current-reality">Current Reality</a></h2>
-<p>Each deployable board has an independent Cargo/PAC graph. Its <code>src/main.rs</code>
-contains the RTIC resource and task declarations, locking, scheduling, and
-concrete initialization wiring. Board declarations and constructors live in
-the same package’s support library; reusable behavior remains in shared crates.
-Foxeer is the golden flight app.</p>
-<p>The code already contains early signs of the future shape:</p>
-<ul>
-<li>reusable safety, signal, and actuator conversion types in <code>crates/ferrowasp-core/</code></li>
-<li>board-specific pin, DMA, serial/SPI, timer, IRQ, profile, storage-shape, and
-construction policy under each app’s <code>src/board/</code></li>
-<li>isolated Foxeer flight, TBS Lucid H7, and NUCLEO-F401RE bring-up apps with
-independent Cargo and RTIC resource contracts</li>
-<li>HAL-neutral STM32 UART/SPI/ADC and DShot mechanisms under
-<code>crates/ferrowasp-stm32/</code>, with each family’s HAL under them in
-<code>crates/ferrowasp-stm32f4/</code> (also servo/auxiliary PWM) and
-<code>crates/ferrowasp-stm32h7/</code></li>
-<li>software-driver and control helpers, including the BLHeli parser and bounded
-ESC manager, under <code>crates/ferrowasp-drivers/</code> and <code>crates/ferrowasp-flight/</code></li>
-<li>local support crates for <code>rc-pwm</code>, <code>ferrowasp-pid</code>, <code>ferrowasp-mspv1</code>, and <code>ferrowasp-waveform</code></li>
-<li>active MSPv1 / DJI O4 OSD support under <code>crates/ferrowasp-mspv1/</code> and <code>crates/ferrowasp-flight/</code></li>
-<li>host-testable pure logic for safety, RC mapping, filters, PID, mixer, DShot,
-BLHeli telemetry/qualification, MSPv1, MPU6500, and ICM42688-P helpers</li>
-</ul>
-<h2 id="target-direction"><a class="header" href="#target-direction">Target Direction</a></h2>
-<p>The long-term layout is expected to move toward:</p>
-<pre><code class="language-text">ferrowasp-core       reusable types, units, safety state, queues
-ferrowasp-mcu        family-neutral MCU contracts
-ferrowasp-drivers    IMU, RC, ESC, telemetry, flash, sensor drivers
-ferrowasp-flight     portable flight logic, host-testable
-ferrowasp-stm32      HAL-neutral STM32 mechanisms
-ferrowasp-stm32f4    STM32F4 HAL backend (ferrowasp-stm32h7 for the H743)
-ferrowasp-stm32-tasks RTIC task definitions shared by the STM32 boards
-app src/board        board pin maps, clocks, DMA/timer assignments
-app src/lib.rs       board composition and internal support facade
-app src/main.rs      thin ferroforge::app! shell selecting shared definitions
-ferrowasp-gen        optional source generation for task/resource wiring
-manifest/            optional board, task, resource, and policy descriptions
-</code></pre>
-<p>Boards use isolated app packages so their PAC features and RTIC resource
-contracts cannot be accidentally unified.</p>
-<p>Reusable behavior moves outward only when its ownership and bounded execution
-are explicit; custom macros are not used to hide runtime work.</p>
+<p>Each board data crate is also a member of the root workspace, so
+<code>cargo test --workspace</code> runs its tests; the application’s own workspace
+excludes it and depends on it by path. <a href="#board-support">Board Support</a>
+describes what a board owns.</p>
+<h2 id="host-tools"><a class="header" href="#host-tools">Host Tools</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Path</th><th>What</th></tr>
+</thead>
+<tbody>
+<tr><td><code>tools/ferro-configurator/</code></td><td>FerroConfigurator, its own Cargo workspace: CLI and GUI for flashing, configuration, motor tests, and log download</td></tr>
+<tr><td><code>tools/*.py</code></td><td>Bench, RTT, analysis, evidence, and repository checks</td></tr>
+<tr><td><code>tools/rtic-app-builder/</code></td><td>The earlier app generator, its own workspace, due to be retired</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="documentation"><a class="header" href="#documentation">Documentation</a></h2>
+<p><code>mdbook/</code> is this book. <code>project_meta/</code> holds internal maintainer material and
+is not published.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="board-support"><a class="header" href="#board-support">Board Support</a></h1>
+<p>A flight board is a firmware application in <code>firmware/&lt;board&gt;/</code> with a board
+data crate, HAL glue, and an RTIC shell; <a href="#project-structure">Project Structure</a>
+shows the layout. This chapter covers what a board owns and the conventions
+every board follows.</p>
+<h2 id="what-a-board-owns"><a class="header" href="#what-a-board-owns">What a Board Owns</a></h2>
+<p>The board data crate, <code>firmware/&lt;board&gt;/board</code>, holds the board’s physical
+facts as plain, host-tested data: pins, DMA and serial routes, resource claims,
+the IMU orientation and motor output order, the control-loop rate, USB
+identity, and the board’s verification flags. It cannot import a chip HAL, so
+anything needing one belongs in <code>src/board/</code> or a backend crate.</p>
+<p>Each board owns its own configuration. Its default tuning and default stored
+configuration are <code>DEFAULT_TUNING</code> and <code>DEFAULT_STORED_CONFIG</code> in
+<code>board/src/profiles.rs</code>. A board never borrows another board’s defaults, and a
+shared crate never holds defaults named after a board. A valid configuration
+stored on the board takes precedence over its defaults.</p>
+<h2 id="serial-port-names"><a class="header" href="#serial-port-names">Serial Port Names</a></h2>
+<p>Serial ports are named after the chip’s own numbering and always spelled UART,
+whether the peripheral is a USART or a UART: the STM32’s USART3 is <code>UART3</code>,
+and <code>uart3</code> where the pilot types it, as in <code>config bind uart3 osd</code>. The same
+names are used in port types and configuration fields. HAL types, interrupt vectors,
+and the peripheral strings in route tables keep the HAL’s own names.</p>
+<h2 id="behavioural-reference"><a class="header" href="#behavioural-reference">Behavioural Reference</a></h2>
+<p>Foxeer F405 V2 is the golden flight application: the reference for arming,
+failsafe, task priorities, actuator handling, and logging. Another board matches
+its behaviour and differs only where its hardware does. Its hardware facts are
+never copied to another board.</p>
+<h2 id="adding-a-board"><a class="header" href="#adding-a-board">Adding a Board</a></h2>
+<ol>
+<li>Start from the sibling boards and the shared crates, not from a copy of one
+application. Code that would still work after substituting pins, routes, or
+configuration belongs in a shared crate.</li>
+<li>Put every hardware fact in the new board data crate, with tests, and its
+own defaults.</li>
+<li>Keep <code>src/main.rs</code> to the <code>ferroforge::app!</code> declaration, selecting the
+shared task definitions.</li>
+<li>Run <code>python tools/check_rtic_boundaries.py</code>, and compare the new board’s
+enabled features with Foxeer’s.</li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="testing"><a class="header" href="#testing">Testing</a></h1>
 <p>FerroWasp verification is staged so a successful software check is never
@@ -3036,180 +2205,58 @@ flight authorization.</p>
 engineering records are maintained as internal repository metadata rather
 than duplicated in the public documentation.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="rtt-debug-tools"><a class="header" href="#rtt-debug-tools">RTT Debug Tools</a></h1>
-<p>The current bench workflow includes Python tools for flashing the STM32F405
-target, decoding <code>defmt-rtt</code> output through <code>probe-rs</code>, logging terminal output,
-and live-viewing IMU data.</p>
-<p>These tools are for bring-up and bench analysis. They are not safety authority,
-and they do not command motors.</p>
+<h1 id="bench-and-analysis-tools"><a class="header" href="#bench-and-analysis-tools">Bench and Analysis Tools</a></h1>
+<p>These Python tools flash a board over SWD, decode its <code>defmt</code> RTT output
+through <code>probe-rs</code>, keep a log of it, read the onboard log store, and plot or
+analyze what they collect.
+They observe; they are not safety authority and never command motors. The
+flight log is the onboard blackbox, downloaded with FerroConfigurator; RTT is
+for the bench.</p>
 <h2 id="terminal-embed"><a class="header" href="#terminal-embed">Terminal Embed</a></h2>
-<p>Run from the repository root:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py
-</code></pre>
-<p>Foxeer F405 V2, the golden flight target, is the default. Name a board
-explicitly to be sure which one is flashed:</p>
+<p>From the repository root:</p>
 <pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked
 </code></pre>
-<p>The Foxeer board support leaves PA13/SWDIO and PA14/SWCLK untouched. The first SWD run
-must be unpowered at the ESC side; USB DFU remains the recovery path.</p>
-<p>Release and feature-selected images use the same logger:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_equal_motors bench_dshot_unequal_motors"
+<p>Foxeer F405 V2 is the only board it knows, and the default. It builds the image
+quietly, showing compiler output only if the build fails, then runs
+<code>probe-rs run</code> against the STM32F405RG over SWD and prints the decoded lines.
+Feature-selected images use the same command:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features "bench_actuator_validation bench_equal_motors"
 </code></pre>
-<p>The script performs a quiet firmware build, runs:</p>
-<pre><code class="language-text">probe-rs run --chip STM32F405RG --protocol swd --no-location --no-timestamps
+<p>Foxeer’s board support leaves PA13/SWDIO and PA14/SWCLK untouched. Make the
+first SWD connection with the ESCs unpowered; USB DFU remains the recovery path.</p>
+<p>Every printed line is also written, and flushed at once, to
+<code>logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log</code>, so an interrupted run keeps
+everything received. Before flashing, the log records the ELF’s path and
+SHA-256, so a retained log names its exact image. <code>--log-file</code> chooses another
+path. Prefer this tool over piping <code>cargo embed</code> into a file, whose interactive
+output carries cursor and colour control sequences.</p>
+<p>The tool prints milestones so a slow probe is not mistaken for a hang:</p>
+<pre><code class="language-text">HOST: === FLASH STARTED: connecting, erasing, and programming ===
+HOST: === FLASH ACTIVE: erase/program transfer observed ===
+HOST: === FLASH PROGRAMMED: waiting for firmware boot/RTT ===
+HOST: === FLASH SUCCEEDED: firmware boot and RTT observed ===
 </code></pre>
-<p>and prints decoded <code>defmt</code> RTT lines in the terminal.</p>
-<p>Successful build warnings are hidden to keep the terminal readable. If the build
-fails, compiler output is shown.</p>
-<p>Every line printed by the tool is also written to:</p>
-<pre><code class="language-text">logs\terminal_embed\YYYYMMDD_HHMMSS_rtt.log
+<p>Only <code>FLASH SUCCEEDED</code> means the image booted far enough to produce RTT. A
+failure prints <code>FLASH FAILED</code> and exits nonzero.</p>
+<p><code>--foxeer-smoke</code> is a self-terminating first check of a new SWD connection. It
+adds <code>imu_transport_rtt</code> and <code>smoke_actuator_inhibit</code>, so the image cannot
+drive motors, listens for 14 seconds after boot, checks the boot, RTT, IMU, and
+data-ready evidence, and prints PASS or FAIL. <code>--probe-speed-khz</code> and
+<code>--connect-under-reset</code> help a marginal SWD connection. Anything after <code>--</code>
+runs instead of the default <code>probe-rs</code> command, with the same logging.</p>
+<p>If nothing appears: check that <code>probe-rs</code> sees the probe, that no other
+debugger holds it, and that the image was built with <code>defmt-rtt</code>.</p>
+<h2 id="heartbeat"><a class="header" href="#heartbeat">Heartbeat</a></h2>
+<p>Every two seconds the heartbeat logs the isolated stale IMU ticks it
+tolerated, storage identity and capacity, and blackbox pages written, records
+dropped, write faults, and the log-rate divisor. The <code>imu_transport_rtt</code>
+feature adds raw gyro and data-ready interrupt counts, and
+<code>imu_orientation_rtt</code> an orientation snapshot; <a href="#imu">IMU</a> describes them.</p>
+<h2 id="blackbox-frames-over-rtt"><a class="header" href="#blackbox-frames-over-rtt">Blackbox Frames over RTT</a></h2>
+<p>The <code>blackbox_defmt</code> feature emits one compact <code>BB2</code> frame per control tick
+over the same RTT stream, which <code>defmt-rtt</code> owns:</p>
+<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features blackbox_defmt
 </code></pre>
-<p>Each line is flushed immediately, so an interrupted run retains all output
-received up to that point. Prefer this wrapper over piping cargo-embed through
-<code>Tee-Object</code>; cargo-embed’s interactive terminal stream may include cursor and
-ANSI control sequences rather than a clean line-oriented log. Default
-build-and-run mode records the firmware ELF path and SHA-256 before flashing,
-so a retained target log identifies its exact artifact.</p>
-<p>Use <code>--log-file</code> to choose a specific output path:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --log-file logs\bench_rtt.log
-</code></pre>
-<h2 id="remote-pi-probe"><a class="header" href="#remote-pi-probe">Remote Pi Probe</a></h2>
-<p>The bench setup can also use a Raspberry Pi as a network-connected SWD/RTT
-gateway. In the current workshop setup:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Role</th><th>Value</th></tr>
-</thead>
-<tbody>
-<tr><td>Pi host</td><td>configured in FerroDebugger or local config</td></tr>
-<tr><td>probe-rs server</td><td>configured in FerroDebugger or local config</td></tr>
-<tr><td>probe selector</td><td><code>0:0:/dev/spidev0.0</code></td></tr>
-<tr><td>target chip</td><td><code>STM32F405RG</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>Most helper scripts also accept a named link:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Link</th><th>Use When</th><th>Host Choice</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Cable</code></td><td>Laptop stays on normal internet Wi-Fi and is cabled to the Pi</td><td>link details live in FerroDebugger/local config</td></tr>
-<tr><td><code>Mobile</code></td><td>Laptop and Pi are both on the configured mobile router</td><td>SSH alias from FerroDebugger config</td></tr>
-<tr><td><code>Zero</code></td><td>Raspberry Pi Zero 2 W gateway on bench Wi-Fi</td><td>link details live in FerroDebugger/local config</td></tr>
-<tr><td><code>ZeroMobile</code></td><td>Zero 2 W gateway on the mobile router</td><td>link details live in FerroDebugger/local config</td></tr>
-</tbody>
-</table>
-</div>
-<p>Examples:</p>
-<pre><code class="language-powershell">.\tools\remote_info.ps1 -Link Cable
-.\tools\remote_info.ps1 -Link Mobile
-.\tools\remote_info.ps1 -Link Zero
-.\tools\remote_info.ps1 -Link ZeroMobile
-.\tools\pi_log_fetch.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Mobile
-python tools\imu_live_view.py --remote --link cable
-python tools\imu_live_view.py --remote --link mobile
-python tools\imu_live_view.py --remote --link zero
-python tools\imu_live_view.py --remote --link zeromobile
-</code></pre>
-<p>Start <code>probe-rs serve</code> on the Pi before using the Windows-side helpers. The
-server must have at least one configured user/token; otherwise remote clients
-connect and then fail authentication.</p>
-<p>From the repository root on Windows:</p>
-<pre><code class="language-powershell">.\tools\remote_info.ps1 -Link Cable
-.\tools\remote_run.ps1 -Link Cable -Build
-.\tools\remote_attach.ps1 -Link Cable
-.\tools\remote_attach_log.ps1 -Link Cable
-.\tools\pi_log_start.ps1 -Link Cable
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-</code></pre>
-<p>Command meaning:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Command</th><th>Purpose</th></tr>
-</thead>
-<tbody>
-<tr><td><code>remote_info.ps1</code></td><td>Checks the remote SWD connection through the Pi. It does not flash or reset the FCU.</td></tr>
-<tr><td><code>remote_run.ps1</code></td><td>Optionally builds, flashes the ELF, resets/runs the STM32, and streams RTT/defmt output. Pass <code>-Features blackbox_defmt</code> to build the 400 Hz compact blackbox frames.</td></tr>
-<tr><td><code>remote_attach.ps1</code></td><td>Attaches to already-running firmware and streams RTT/defmt output without reflashing.</td></tr>
-<tr><td><code>remote_attach_log.ps1</code></td><td>Attach-only RTT/defmt session that also writes full terminal output to a log file.</td></tr>
-<tr><td><code>pi_log_start.ps1</code></td><td>Starts a detached attach logger on the Pi so logging survives SSH disconnects.</td></tr>
-<tr><td><code>pi_log_stop.ps1</code></td><td>Stops the detached Pi-side logger.</td></tr>
-<tr><td><code>pi_log_fetch.ps1</code></td><td>Copies the latest Pi-side log into this repository under <code>logs\remote_probe</code>.</td></tr>
-<tr><td><code>pi_elf_sync.ps1</code></td><td>Copies the current local ELF to the Pi path used by <code>pi_log_start.ps1</code> for <code>defmt</code> decoding.</td></tr>
-</tbody>
-</table>
-</div>
-<p>The helpers default to the current bench host, token, probe path, and chip. Use
-environment variables to avoid putting a shared token in command history:</p>
-<pre><code class="language-powershell">$env:FERROWASP_PROBE_HOST = "ws://your-probe-host.local:3000"
-$env:FERROWASP_PROBE_TOKEN = "your-token"
-</code></pre>
-<p>For onboard use, install <code>probe-rs serve</code> as a boot-starting <code>systemd</code> service
-on the Pi:</p>
-<pre><code class="language-powershell">.\tools\install_probe_rs_service.ps1 -Token "your-token"
-</code></pre>
-<p>The service starts after network-online and restarts if it exits. Useful Pi-side
-checks:</p>
-<pre><code class="language-powershell">ssh your-pi-host 'systemctl status probe-rs-serve --no-pager'
-ssh your-pi-host 'ss -ltnp | grep probe-rs'
-ssh your-pi-host 'sudo systemctl stop probe-rs-serve'
-</code></pre>
-<p><code>remote_attach.ps1</code> needs a local ELF matching the firmware running on the FCU
-so <code>defmt</code> decoding uses the correct metadata.</p>
-<p>By default, <code>remote_attach_log.ps1</code> writes logs under:</p>
-<pre><code class="language-text">logs\remote_probe\YYYYMMDD_HHMMSS_attach.log
-</code></pre>
-<p>Choose a specific log path with:</p>
-<pre><code class="language-powershell">.\tools\remote_attach_log.ps1 -Link Cable -LogFile logs\bench_attach.log
-</code></pre>
-<p>For onboard or disconnected logging, start the logger on the Pi, disconnect as
-needed, then reconnect later to stop and fetch the log:</p>
-<pre><code class="language-powershell">.\tools\pi_log_start.ps1 -Link Cable
-# disconnect/reconnect later
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-</code></pre>
-<p>The Pi-side logger writes under:</p>
-<pre><code class="language-text">/home/pi/logs/ferrowasp-rtt
-</code></pre>
-<p>Fetched logs are copied into:</p>
-<pre><code class="language-text">logs\remote_probe
-</code></pre>
-<h2 id="400-hz-blackbox-frames"><a class="header" href="#400-hz-blackbox-frames">400 Hz Blackbox Frames</a></h2>
-<p>The current firmware uses <code>defmt-rtt</code> 1.2. That backend owns the SEGGER RTT
-control block and one RTT up-channel, so the MVP logger does not link
-<code>rtt-target</code> beside it. Instead, blackbox data is emitted as compact fixed-point
-<code>defmt</code> frames over the existing RTT stream.</p>
-<p>Build and flash the blackbox-enabled firmware:</p>
-<pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features blackbox_defmt
-</code></pre>
-<p>For the Foxeer F405 V2 over its retrofitted local SWD connection:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --board foxeer-f405-v2 --release --locked --features blackbox_defmt
-</code></pre>
-<p>Begin with ESC power disconnected and hold the board stationary for at least
-ten seconds. The offline analyzer’s <code>Sequence/timing</code> section should estimate
-about <code>1000 Hz</code> for the EXTI-driven Foxeer IMU, with contiguous IMU sequence
-deltas normally alternating between <code>2</code> and <code>3</code> at the unchanged 400 Hz control
-rate. Repeated IMU samples should be zero. Missing BB2 frames indicate RTT
-transport loss and are reported independently from IMU progress.</p>
-<p>For a clean motor-vibration check that disables the PID/mixer and commands all
-four motors equally through the normal actuator-output task, build with:</p>
-<pre><code class="language-powershell">.\tools\remote_run.ps1 -Link Cable -Build -Features "blackbox_defmt bench_equal_motors"
-</code></pre>
-<p>The craft must still be armed normally. This mode caps requested throttle to
-<code>250</code> PWM-style units, emits <code>BB2</code> frames with PID set to zero, and logs motors
-as <code>[throttle; 4]</code>. Use propellers removed only. If any motor or ESC smokes,
-smells hot, jitters abnormally, or heats rapidly, stop the test and inspect the
-hardware before running again.</p>
-<p>The 400 Hz control loop emits <code>BB2</code> frames. Disarmed frames still include raw
-gyro, filtered gyro, command, throttle, and freshness flags; PID and motor
-fields are zeroed until the craft is armed.</p>
 <pre><code class="language-text">BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
 </code></pre>
 <div class="table-wrapper">
@@ -3218,127 +2265,103 @@ fields are zeroed until the craft is armed.</p>
 <tr><th>Field</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td><code>seq</code></td><td>Control-rate sample sequence</td></tr>
-<tr><td><code>imu</code></td><td>IMU sample sequence used by this control update</td></tr>
+<tr><td><code>seq</code></td><td>Control-tick sequence</td></tr>
+<tr><td><code>imu</code></td><td>IMU sample sequence used by this tick</td></tr>
 <tr><td><code>flags</code></td><td>Bit 0 armed, bit 1 IMU fresh</td></tr>
-<tr><td><code>raw10</code></td><td>Unfiltered roll, pitch, yaw gyro rates in 0.1 deg/s</td></tr>
-<tr><td><code>gyro10</code></td><td>Filtered roll, pitch, yaw gyro rates in 0.1 deg/s</td></tr>
+<tr><td><code>raw10</code></td><td>Unfiltered roll, pitch, yaw rates in 0.1 deg/s</td></tr>
+<tr><td><code>gyro10</code></td><td>Filtered roll, pitch, yaw rates in 0.1 deg/s, as the PID sees them</td></tr>
 <tr><td><code>cmd10</code></td><td>Commanded roll, pitch, yaw rates in 0.1 deg/s</td></tr>
-<tr><td><code>pid</code></td><td>Total PID output per axis in controller output units</td></tr>
+<tr><td><code>pid</code></td><td>Total PID output per axis</td></tr>
 <tr><td><code>thr</code></td><td>Throttle setpoint in PWM-style command units</td></tr>
 <tr><td><code>motors</code></td><td>Mixed motor commands in PWM-style command units</td></tr>
 </tbody>
 </table>
 </div>
-<p>Future work: replace the RTT backend deliberately so channel 0 can carry
-<code>defmt</code> and channel 1 can carry raw binary blackbox samples.</p>
-<p>The live viewer auto-detects <code>BB1</code> and <code>BB2</code> frames:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable
-</code></pre>
-<p>When blackbox frames appear, it shows control-loop plots for gyro-vs-command
-rates, PID output, throttle, and motors.
-The viewer suppresses raw RTT echo by default to avoid lag with 400 Hz frames.
-Use <code>--echo-rtt</code> only when raw terminal output is more important than smooth
-plotting. If the PC still struggles, lower the UI refresh rate:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable --ui-hz 15
-</code></pre>
-<p>For offline analysis after a Pi-side recording:</p>
-<p>If you rebuilt/flashed from the PC and plan to log on the Pi, sync the matching
-ELF first so <code>defmt</code> decoding uses the right metadata:</p>
-<pre><code class="language-powershell">.\tools\pi_elf_sync.ps1 -Link Cable
-</code></pre>
-<pre><code class="language-powershell">.\tools\pi_log_start.ps1 -Link Cable -Restart
-# run the bench test
-.\tools\pi_log_stop.ps1 -Link Cable
-.\tools\pi_log_fetch.ps1 -Link Cable
-python tools\blackbox_analyzer.py --csv logs\remote_probe\latest_blackbox.csv
-</code></pre>
-<p>After a local <code>terminal_embed.py</code> capture, the analyzer selects the newest RTT
-log automatically:</p>
+<p>Disarmed, PID and motor fields are zero. With <code>bench_equal_motors</code>, PID is zero
+and every motor carries the capped throttle. A gap in <code>seq</code> is RTT transport
+loss, reported separately from IMU progress.</p>
+<h2 id="blackbox-analyzer"><a class="header" href="#blackbox-analyzer">Blackbox Analyzer</a></h2>
+<p>With no argument, the analyzer reads the newest RTT log and measures the
+control rate from it:</p>
 <pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
 </code></pre>
-<p>For deliberate hand-motion/swing tests, the default <code>--mode auto</code> should classify
-large low-frequency gyro movement as motion. Use <code>--mode rest</code> for stationary
-noise-floor or motor-vibration checks where large filtered gyro standard
-deviation should be treated as noise:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest
+<p><code>--mode auto</code>, the default, classifies large low-frequency movement as motion,
+for hand-motion tests. <code>--mode rest</code> treats all filtered-gyro variation as
+noise, for stationary noise-floor and props-off motor-vibration checks. For a
+hand swing, trim the pickup and put-down:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode swing --trim-start 6 --trim-end 6
 </code></pre>
-<p>For a hand-swing recording, trim the pickup and place-down sections by time:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode swing --trim-start 6 --trim-end 6 --csv logs\remote_probe\swing_trimmed.csv
-</code></pre>
-<p>With no log argument, the analyzer uses the newest <code>.log</code> in <code>logs\remote_probe</code>
-or <code>logs\terminal_embed</code>. You can also pass a specific fetched log:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\remote_probe\pi_20260710_193000_attach.log --csv logs\remote_probe\swing_test.csv
-</code></pre>
-<h2 id="heartbeat"><a class="header" href="#heartbeat">Heartbeat</a></h2>
-<p>The default firmware heartbeat logs once at startup and then alternates the
-red/green debug LEDs about once per second as a visible liveness indicator.
-High-rate IMU and control-loop observation is handled by BB2 frames when the
-<code>blackbox_defmt</code> feature is enabled.</p>
+<p>Pass a log path to analyze a specific capture.</p>
 <h2 id="imu-live-view"><a class="header" href="#imu-live-view">IMU Live View</a></h2>
-<p>Run:</p>
 <pre><code class="language-powershell">python tools\imu_live_view.py
 </code></pre>
-<p>The viewer launches <code>terminal_embed.py</code> or attaches through the remote probe
-helpers. With <code>blackbox_defmt</code> firmware it parses BB2 frames and shows:</p>
-<ul>
-<li>measured roll/pitch/yaw gyro-rate history,</li>
-<li>commanded roll/pitch/yaw rates,</li>
-<li>PID output, throttle, and motor commands.</li>
-</ul>
-<p>Older heartbeat-IMU firmware can still use the attitude-view options. The
-default attitude mode seeds roll and pitch once from accelerometer gravity, then
-integrates gyro rates only:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --attitude gyro
-</code></pre>
-<p>For a bench view that continuously nudges roll and pitch back toward gravity:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --attitude accel
-</code></pre>
-<p>To attach through the remote Pi probe-rs server and live-view already-running
-firmware:</p>
-<pre><code class="language-powershell">python tools\imu_live_view.py --remote --link cable
-</code></pre>
-<p>The remote viewer defaults to the cable link, <code>0:0:/dev/spidev0.0</code>, and
-<code>STM32F405RG</code>. It honors the same <code>FERROWASP_PROBE_HOST</code> and
-<code>FERROWASP_PROBE_TOKEN</code> environment variables as the PowerShell helpers when
-<code>--link auto</code> is used. Pass <code>--link mobile</code> on the mobile-router network.</p>
-<p>Yaw remains gyro-only in both modes and will drift.</p>
+<p>The viewer runs <code>terminal_embed.py</code> and plots what it reads. From <code>BB2</code> frames
+it shows measured against commanded rates, PID output, throttle, and motors. It
+does not echo every RTT line, which would make the plot lag; <code>--echo-rtt</code>
+turns echo on, and <code>--ui-hz 15</code> lowers the redraw rate on a slow PC.</p>
+<p>From heartbeat IMU lines it can also draw an attitude estimate. <code>--attitude gyro</code>, the default, seeds roll and pitch from gravity once and then integrates
+gyro rates; <code>--attitude accel</code> keeps pulling roll and pitch back toward
+gravity. Yaw is gyro-only in both and drifts. <code>accel_live_plot.py</code> is an older
+name for the same viewer.</p>
 <h2 id="imu-noise-analyzer"><a class="header" href="#imu-noise-analyzer">IMU Noise Analyzer</a></h2>
-<p>The noise analyzer gives a quick bench answer to:</p>
-<pre><code class="language-text">Is the filtered gyro signal quiet enough for the PID to use?
-</code></pre>
-<p>Analyze the newest RTT log:</p>
+<p>A quick bench answer to whether the filtered gyro is quiet enough for the PID,
+with the board still:</p>
 <pre><code class="language-powershell">python tools\imu_noise_analyzer.py --latest
+python tools\imu_noise_analyzer.py --capture 30
 </code></pre>
-<p>Or capture a still FCU/IMU run directly:</p>
-<pre><code class="language-powershell">python tools\imu_noise_analyzer.py --capture 30
+<p>It remaps raw gyro axes into the PID’s roll, pitch, and yaw convention,
+compares them with the filtered rates, and reports standard deviation,
+peak-to-peak noise, attenuation, drift, and a rough quiet, watch, or noisy
+verdict. It is a rest-noise screen, not a substitute for props-off motor checks
+or vibration analysis.</p>
+<h2 id="onboard-storage-from-python"><a class="header" href="#onboard-storage-from-python">Onboard Storage from Python</a></h2>
+<p>FerroConfigurator is the normal way to read configuration and download logs.
+<code>tools/ferrowasp_storage.py</code> is the lower-level Python client for the same USB
+storage commands, kept as a development reference; it needs <code>pyserial</code>.</p>
+<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port COM7 info
+python tools\ferrowasp_storage.py --port COM7 flights
+python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
 </code></pre>
-<p>The analyzer:</p>
-<ul>
-<li>parses BB2 or older heartbeat IMU lines,</li>
-<li>remaps raw gyro sensor axes into the current PID roll/pitch/yaw convention,</li>
-<li>compares raw gyro noise against filtered control-axis rates,</li>
-<li>reports standard deviation, peak-to-peak noise, attenuation, drift, and a
-rough quiet/watch/noisy verdict.</li>
-</ul>
-<p>Use this as a rest-noise screen only. It does not replace props-off motor output
-checks, motor-temperature checks, or later vibration/frequency analysis.</p>
+<p><code>read</code> fetches only the selected flight’s page range; <code>--resume</code> continues an
+interrupted download after validating every page already on disk against the
+flight ID, page sequence, and CRC. <code>erase --confirm</code> erases the log region
+only, and <code>test --confirm</code> exercises only the reserved scratch sector. Every
+write is refused while armed, and maintenance in progress stops if arming
+begins. Record what <code>info</code> reports for the flash; the capacity code for 16 MiB
+is <code>18</code>.</p>
+<p>The analyzer reads <code>.fwbb</code> files directly, rejects invalid or truncated pages,
+and reports what it kept. Select one flight so flight boundaries are not
+counted as gaps:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --mode auto
+</code></pre>
+<h2 id="ulog-reference-converter"><a class="header" href="#ulog-reference-converter">ULog Reference Converter</a></h2>
+<p>FerroConfigurator’s <code>convert</code> command is the normal path.
+<code>tools/fwbb_to_ulog.py</code> is its Python reference implementation and produces the
+same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic, with
+timestamps from the first selected sample and sequence gaps as ULog dropouts.
+It never combines flights.</p>
+<pre><code class="language-powershell">python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
+</code></pre>
+<h2 id="flight-reports"><a class="header" href="#flight-reports">Flight Reports</a></h2>
+<p><code>tools/flight_report.py</code> writes a Markdown summary and plots of
+setpoint against measured rate, tracking error, PID output, motor output, and
+the worst tracking-error events, under <code>logs\terminal_embed\reports\</code>:</p>
+<pre><code class="language-powershell">python tools\flight_report.py --trim-start 3 --trim-end 3
+</code></pre>
+<p>With no source it uses the newest log. It assumes a 400 Hz control rate, so on
+a faster loop pass the real rate with <code>--sample-rate</code>.</p>
 <h2 id="safety-notes"><a class="header" href="#safety-notes">Safety Notes</a></h2>
 <ul>
-<li>Run motor/axis checks with props removed.</li>
-<li><code>remote_run.ps1</code> flashes, resets, and starts firmware. Keep ESC power in the
-intended bench-safe state before using it.</li>
-<li>Do not leave <code>probe-rs serve</code> exposed on an untrusted network; the remote
-server provides debug-level control of the FCU.</li>
-<li>Treat BB2 <code>raw10</code> as unfiltered control-axis gyro data and <code>gyro10</code> as
-PID-convention measured data.</li>
-<li>The Python tools are observation tools only; motor authority must remain in
-the firmware safety/actuator-output path.</li>
+<li><code>terminal_embed.py</code> flashes, resets, and starts firmware. Put the ESCs in the
+intended bench-safe power state first.</li>
+<li>Run every motor or axis check with propellers removed.</li>
+<li>Motor authority stays in the firmware’s safety and actuator-output path;
+none of these tools can command a motor.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="documentation-policy"><a class="header" href="#documentation-policy">Documentation Policy</a></h1>
 <p>The mdBook is the canonical home for FerroWasp user and developer
-documentation. Its <a href="SUMMARY.html">Summary</a> is the maintained documentation
+documentation. Its <code>SUMMARY.md</code>, the sidebar, is the maintained documentation
 index.</p>
 <p>Use the following boundaries:</p>
 <ul>
@@ -3347,17 +2370,19 @@ index.</p>
 testing concepts, and the roadmap belong in this book.</li>
 <li>Crate, app, and tool READMEs may document a narrow package contract, but
 should link here instead of duplicating general guides.</li>
-<li><code>project_meta</code> is reserved for agent context, machine-enforced test and
-evidence metadata, design-decision provenance, internal work tracking, and
-archives. It is not a user or developer entry point.</li>
-<li>Agent instructions remain next to the files they govern.</li>
+<li><code>project_meta</code> is an internal maintainers’ book, never published: governing
+requirements, design decisions, remaining work, and the machine-checked test
+and evidence records. It is not a user or developer entry point.</li>
+<li><code>archive/</code> keeps retired documents verbatim, for provenance only.</li>
+<li>Agent instructions are one root <code>AGENTS.md</code>.</li>
 <li>Legal distribution files remain at the repository root. GitHub-recognized
 policy pointers and per-tag release-delivery metadata live under <code>.github/</code>.
 Canonical contribution guidance and release history remain in this book.</li>
 </ul>
-<p>When a public behavior, workflow, or supported feature changes, update the
-relevant chapter and the Summary in the same change. Do not add a second
-standalone guide elsewhere in the repository.</p>
+<p>Each topic has one owning chapter; other chapters link to it rather than
+restating it. When a public behavior, workflow, or supported feature changes,
+update the owning chapter and the Summary in the same change. Do not add a
+second standalone guide elsewhere in the repository.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="roadmap-1"><a class="header" href="#roadmap-1">Roadmap</a></h1>
 <p>This roadmap records product and engineering direction. Current board support
@@ -3386,7 +2411,7 @@ verify;</li>
 </ul>
 <h2 id="protocols-and-interfaces"><a class="header" href="#protocols-and-interfaces">Protocols and Interfaces</a></h2>
 <ul>
-<li>add CRSF/ELRS while retaining SBUS;</li>
+<li>validate CRSF/ELRS and its telemetry on the target, link loss included;</li>
 <li>evaluate bidirectional DShot telemetry separately from the current legacy
 UART telemetry path;</li>
 <li>mature configuration and telemetry protocols only after their bounds,
@@ -3397,14 +2422,15 @@ recovery behavior, and compatibility policy are explicit;</li>
 <ul>
 <li>continue thinning RTIC apps so they contain resource declarations, task
 bindings, scheduling, and board composition rather than reusable logic;</li>
-<li>move reusable STM32F4 initialization and mechanisms into
-<code>ferrowasp-stm32f4</code> without hiding runtime work behind custom macros;</li>
-<li>keep physical pins, DMA routes, timer assignments, sensor orientation, and
-other board facts in each app support module;</li>
+<li>make each chip backend cover its whole family, so a new board on a supported
+chip needs only its board data;</li>
+<li>generate a board’s data from its existing Betaflight or ArduPilot target;</li>
+<li>grow FerroForge alongside FerroWasp, building what the firmware needs into
+the framework rather than around it;</li>
 <li>add boards only when their explicit hardware contract and verification path
 are maintainable;</li>
-<li>explore STM32H7 and Pixhawk-class targets after the STM32F4 architecture is
-stable.</li>
+<li>bring the STM32H743 port to flight, and consider Pixhawk-class targets
+after that.</li>
 </ul>
 <h2 id="engineering-assurance"><a class="header" href="#engineering-assurance">Engineering Assurance</a></h2>
 <ul>
@@ -3420,12 +2446,12 @@ set.</li>
 <p>FerroWasp is open source under the Apache License, Version 2.0. Project-owned
 source is covered by <a href="../../LICENSE">LICENSE</a>; vendored assets and bundled
 tools retain the licences listed in
-<a href="../../THIRD_PARTY_NOTICES.html">THIRD_PARTY_NOTICES.md</a> and their accompanying
+<a href="https://github.com/Eirik2020/ferro-wasp/blob/main/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a> and their accompanying
 notices.</p>
 <p>The repository governance files are:</p>
 <ul>
 <li><a href="#contributing">Contributing</a> for contribution expectations;</li>
-<li><a href="../../.github/SECURITY.html">SECURITY.md</a> for private security reporting;</li>
+<li><a href="https://github.com/Eirik2020/ferro-wasp/blob/main/.github/SECURITY.md">SECURITY.md</a> for private security reporting;</li>
 <li><a href="../../NOTICE">NOTICE</a> for project naming and notices.</li>
 </ul>
 <p>Source publication and packaged releases do not make FerroWasp a stable,
@@ -3461,6 +2487,23 @@ only when every flight is acknowledged. A sync ledger in the flash’s last
 lower. FerroConfigurator’s <code>blackbox sync</code> and the GUI’s Sync button run it.</li>
 <li>A <code>configurator</code> serial function: the text command line on a UART, for a
 Bluetooth serial module. Foxeer binds it to <code>uart3</code> (PC10/PC11) by default.</li>
+<li>TBS Lucid H7 support on a new STM32H743 backend, with microSD log storage
+written back in 8 KiB windows, heartbeat and armed LEDs, and SBUS on the
+digital VTX connector’s <code>uart1</code>. It has run on the bench, not flown.</li>
+<li>An MPU-6000 IMU driver, detected on SPI1 alongside the ICM-42688-P and
+MPU6500.</li>
+<li>Serial ports bound to functions at boot from saved configuration, named by
+the chip’s UART number, with <code>config ports</code> and <code>config bind</code> in
+FerroConfigurator.</li>
+<li>CRSF receivers (ExpressLRS, Crossfire) with battery telemetry, and a
+configurable stick order and arm channel.</li>
+<li>A firmware-gated props-off motor test, ESC direction setting, and a saved
+motor order, from FerroConfigurator or the USB command line.</li>
+<li>FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
+live stick readout, and a rates curve.</li>
+<li>Test evidence tied to source components rather than whole firmware images,
+with <code>tools/components.py</code> listing which tests each board owes, and
+<code>tools/bench_rig.py</code> running the boot and idle gate on any board over SWD.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
@@ -3476,12 +2519,52 @@ bodies for every STM32 board). The HAL-neutral half of <code>ferrowasp-stm32f4</
 moved to a new <code>ferrowasp-stm32</code>, which the H7 backend now uses instead of
 the F4 crate; <code>ferrowasp-stm32f4</code> keeps only the F4 HAL code.</p>
 </li>
+<li>
+<p>Firmware is composed with FerroForge 0.4, and timestamps are 64-bit
+throughout, so no internal timestamp wraps.</p>
+</li>
+<li>
+<p>Foxeer’s IMU and control loop run at 2 kHz; the loop rate is a per-board
+fact, and the gyro filter is stored as a corner frequency.</p>
+</li>
+<li>
+<p>Each board’s physical facts live in a host-tested data crate,
+<code>firmware/&lt;board&gt;/board</code>, and one flash manager serves every board.</p>
+</li>
+<li>
+<p>ESC telemetry resumes after a timeout once the line has been quiet while
+disarmed, backing off to a 4 s window, instead of staying off until reboot.</p>
+</li>
+<li>
+<p>One isolated stale IMU tick is tolerated; two in a row still disarm.</p>
+</li>
+<li>
+<p>The documentation is two books: this public one, and an unpublished
+internal one for maintainers.</p>
+</li>
+</ul>
+<h3 id="fixed"><a class="header" href="#fixed">Fixed</a></h3>
+<ul>
+<li>The flash task no longer accepts a log record it cannot store, so log
+pages are not lost when the page assembler is full.</li>
+<li>A torn log page ends its flight instead of corrupting it, and an aborted
+erase rescans the log.</li>
+<li>Storage commands are answered while storage is unavailable, instead of
+timing out.</li>
+<li>The MPU-6000 leaves a gap between initialization transactions; a faster
+core started the next one too soon.</li>
+<li>The IMU parser runs above the UART transports, as designed.</li>
+<li><code>terminal_embed.py</code> reports a failed flash as failed.</li>
+<li>FerroConfigurator names the connected board instead of assuming Foxeer, and
+the blackbox analyzer measures the control rate from the log.</li>
 </ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
 2026-09-22. It is no longer built; its retained evidence stays in the
 project archive.</li>
+<li>The PowerShell wrappers for the Raspberry Pi remote-debug gateway, whose
+FerroDebugger counterpart was superseded by FerroConfigurator.</li>
 </ul>
 <h2 id="010---2026-07-28"><a class="header" href="#010---2026-07-28">0.1.0 - 2026-07-28</a></h2>
 <p>First public experimental pre-release.</p>
@@ -3505,7 +2588,7 @@ servo and auxiliary-output use.</li>
 <li>Foxeer USB, onboard flash storage, blackbox logging, and ESC telemetry are
 standard board services rather than optional app-local implementations.</li>
 </ul>
-<h3 id="fixed"><a class="header" href="#fixed">Fixed</a></h3>
+<h3 id="fixed-1"><a class="header" href="#fixed-1">Fixed</a></h3>
 <ul>
 <li>Strengthened SBUS startup/freshness handling, guarded DShot arming and stop
 behavior, synchronized TIM1/TIM8 output, and bounded ESC-telemetry

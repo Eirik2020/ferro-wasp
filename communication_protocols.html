@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -183,10 +183,10 @@
 <tr><th>Protocol/path</th><th>Status</th></tr>
 </thead>
 <tbody>
-<tr><td>SBUS</td><td>Active prototype RC input, by default on UART2 (Foxeer) or UART6 (Lucid)</td></tr>
-<tr><td>BLHeli legacy ESC telemetry</td><td>Active in the flight DShot image on PA10 / USART1 RX DMA; eRPM and frame integrity target-validated</td></tr>
-<tr><td>USB CDC serial</td><td>Mandatory on Foxeer, which emits bounded read-only <code>FWDBG1</code> status lines; was optional on the obsolete FCU3 via <code>usb_serial</code></td></tr>
-<tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype on UART4 using MSPv1 responses and DisplayPort OSD frames</td></tr>
+<tr><td>SBUS</td><td>Active prototype RC input, by default on <code>uart2</code> (Foxeer) or <code>uart1</code> (Lucid)</td></tr>
+<tr><td>BLHeli legacy ESC telemetry</td><td>Active in the flight DShot image, by default on <code>uart1</code> (Foxeer) or <code>uart8</code> (Lucid); eRPM and frame integrity target-validated on Foxeer</td></tr>
+<tr><td>USB CDC serial</td><td>Standard on both flight boards: <code>FWDBG1</code> status lines and the configurator command line</td></tr>
+<tr><td>MSPv1 / DJI O4 OSD</td><td>Active prototype, by default on <code>uart4</code> (Foxeer) or <code>uart3</code> (Lucid), using MSPv1 responses and DisplayPort OSD frames</td></tr>
 <tr><td>MAVLink</td><td>UART mode placeholder/config values exist, no active MAVLink implementation yet</td></tr>
 <tr><td>CRSF/ELRS</td><td>RC input with battery telemetry, selected by <code>rc_protocol</code>; not yet run on hardware</td></tr>
 </tbody>
@@ -253,44 +253,26 @@ disarmed. Because the arm switch may now be read from a channel that is
 already high, the change invalidates the RC link like a lost receiver: the
 link must recover, and the new arm channel must read low, before the craft
 can arm.</p>
-<h2 id="foxeer-usb-debug"><a class="header" href="#foxeer-usb-debug">Foxeer USB Debug</a></h2>
-<p>The Foxeer app’s optional CDC ACM endpoint reports a self-describing ASCII
-<code>FWDBG1</code> line on the existing roughly two-second heartbeat. It includes the
-selected IMU, sample and control sequences, raw gyro, stale state, RC
-qualification, throttle and arm switch, system arm state, pack voltage, and
-current.</p>
-<p>The implementation uses fixed-size buffers and coalesces status requests.
-OTG_FS service runs below control, IMU, RC, and safety priorities. Host input
-is drained and discarded; there is intentionally no USB command parser,
-parameter writer, arming request, or actuator resource.</p>
-<h2 id="fcu3-esc-telemetry"><a class="header" href="#fcu3-esc-telemetry">FCU3 ESC Telemetry</a></h2>
-<p>The combined legacy ESC telemetry wire is received on PA10 / USART1 RX at
-115,200 baud in the standard FCU3 flight image. The ESC manager issues
-bounded telemetry-bit requests through the actuator-owned DShot service. Since the
-ten-byte wire frame does not identify a motor, a low-priority ESC manager
-rotates physical-output requests. Both directions use bounded SPSC queues.</p>
-<p>The safety-owned DShot service acknowledges an exact sequence/output request
-only after the selected telemetry bit was present in a frame that actually
-started. If a CRC-valid response completes while that request is still queued,
-the manager may buffer it, but it remains quarantined and cannot be published
-until the matching acknowledgement arrives. Association timeouts stop the
-manager so a late response cannot be attributed to a later output. It resumes
-only while disarmed, after 500 ms with no wire byte and no acknowledgement,
-doubling to at most 4 s while retries bring nothing back.</p>
-<p>The physical-output association maps to the logical Quad X layout as follows:
-output 1 is M4/front-left, output 2 is M3/rear-left, output 3 is M1/rear-right,
-and output 4 is M2/front-right.</p>
-<p>The manager owns parsing, samples, cadence, association, and timeouts. It does
-not own a motor peripheral, arming state, actuator permit, or failsafe state.
-UART, parser, queue, and timeout faults cannot grant authority. When they
-prevent fresh observations during guarded idle, pre-arm qualification fails
-closed and selects stop; after <code>SYSTEM ARMED</code>, telemetry loss is currently
-observational and does not itself disarm.</p>
-<p>The manager waits five seconds after boot before its first request. An arm
-attempt that enters guarded idle before telemetry is available can fail closed
-at the 1.2-second qualification deadline. A switch-low observation and a new
-low-to-high arm request are then required. See <a href="./dshot.html">DShot</a> for the frame
-and target-evidence details.</p>
+<h2 id="usb"><a class="header" href="#usb">USB</a></h2>
+<p>Each flight board presents a USB CDC serial port. Every two seconds or so it
+sends a self-describing ASCII <code>FWDBG1</code> status line: the selected IMU, sample
+and control sequences, raw gyro, stale state, RC qualification, throttle and
+arm switch, arm state, pack voltage, and current.</p>
+<p>The same port accepts a bounded ASCII command line, which FerroConfigurator
+drives: configuration get,
+set, and save; serial port bindings; flash information and the scratch-sector
+test; log listing, page reads, sync acknowledgement, and erase; and the props-off
+motor test. The firmware validates every command. Writes and the motor test
+are refused while armed, a motor test is a request the safety master may
+refuse, and nothing on the command line can arm the craft. A UART bound to the
+<code>configurator</code> function accepts the same command line except the motor test and
+the unconditional log erase.</p>
+<p>USB service runs below the control, IMU, RC, and safety priorities, with
+fixed-size buffers.</p>
+<h2 id="esc-telemetry"><a class="header" href="#esc-telemetry">ESC Telemetry</a></h2>
+<p>The BLHeli legacy UART telemetry protocol, how a reply is associated with the
+motor that was asked, and how telemetry recovers after a timeout are described
+in <a href="./dshot.html#esc-telemetry">DShot</a>.</p>
 
                     </main>
 

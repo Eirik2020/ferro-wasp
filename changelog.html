@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d6ff1cdd.js";
+            window.path_to_searchindex_js = "searchindex-a179f26a.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-0cbe97ab.js"></script>
+        <script src="toc-5109988b.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -187,6 +187,23 @@ only when every flight is acknowledged. A sync ledger in the flash’s last
 lower. FerroConfigurator’s <code>blackbox sync</code> and the GUI’s Sync button run it.</li>
 <li>A <code>configurator</code> serial function: the text command line on a UART, for a
 Bluetooth serial module. Foxeer binds it to <code>uart3</code> (PC10/PC11) by default.</li>
+<li>TBS Lucid H7 support on a new STM32H743 backend, with microSD log storage
+written back in 8 KiB windows, heartbeat and armed LEDs, and SBUS on the
+digital VTX connector’s <code>uart1</code>. It has run on the bench, not flown.</li>
+<li>An MPU-6000 IMU driver, detected on SPI1 alongside the ICM-42688-P and
+MPU6500.</li>
+<li>Serial ports bound to functions at boot from saved configuration, named by
+the chip’s UART number, with <code>config ports</code> and <code>config bind</code> in
+FerroConfigurator.</li>
+<li>CRSF receivers (ExpressLRS, Crossfire) with battery telemetry, and a
+configurable stick order and arm channel.</li>
+<li>A firmware-gated props-off motor test, ESC direction setting, and a saved
+motor order, from FerroConfigurator or the USB command line.</li>
+<li>FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
+live stick readout, and a rates curve.</li>
+<li>Test evidence tied to source components rather than whole firmware images,
+with <code>tools/components.py</code> listing which tests each board owes, and
+<code>tools/bench_rig.py</code> running the boot and idle gate on any board over SWD.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
@@ -202,12 +219,52 @@ bodies for every STM32 board). The HAL-neutral half of <code>ferrowasp-stm32f4</
 moved to a new <code>ferrowasp-stm32</code>, which the H7 backend now uses instead of
 the F4 crate; <code>ferrowasp-stm32f4</code> keeps only the F4 HAL code.</p>
 </li>
+<li>
+<p>Firmware is composed with FerroForge 0.4, and timestamps are 64-bit
+throughout, so no internal timestamp wraps.</p>
+</li>
+<li>
+<p>Foxeer’s IMU and control loop run at 2 kHz; the loop rate is a per-board
+fact, and the gyro filter is stored as a corner frequency.</p>
+</li>
+<li>
+<p>Each board’s physical facts live in a host-tested data crate,
+<code>firmware/&lt;board&gt;/board</code>, and one flash manager serves every board.</p>
+</li>
+<li>
+<p>ESC telemetry resumes after a timeout once the line has been quiet while
+disarmed, backing off to a 4 s window, instead of staying off until reboot.</p>
+</li>
+<li>
+<p>One isolated stale IMU tick is tolerated; two in a row still disarm.</p>
+</li>
+<li>
+<p>The documentation is two books: this public one, and an unpublished
+internal one for maintainers.</p>
+</li>
+</ul>
+<h3 id="fixed"><a class="header" href="#fixed">Fixed</a></h3>
+<ul>
+<li>The flash task no longer accepts a log record it cannot store, so log
+pages are not lost when the page assembler is full.</li>
+<li>A torn log page ends its flight instead of corrupting it, and an aborted
+erase rescans the log.</li>
+<li>Storage commands are answered while storage is unavailable, instead of
+timing out.</li>
+<li>The MPU-6000 leaves a gap between initialization transactions; a faster
+core started the next one too soon.</li>
+<li>The IMU parser runs above the UART transports, as designed.</li>
+<li><code>terminal_embed.py</code> reports a failed flash as failed.</li>
+<li>FerroConfigurator names the connected board instead of assuming Foxeer, and
+the blackbox analyzer measures the control rate from the log.</li>
 </ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
 2026-09-22. It is no longer built; its retained evidence stays in the
 project archive.</li>
+<li>The PowerShell wrappers for the Raspberry Pi remote-debug gateway, whose
+FerroDebugger counterpart was superseded by FerroConfigurator.</li>
 </ul>
 <h2 id="010---2026-07-28"><a class="header" href="#010---2026-07-28">0.1.0 - 2026-07-28</a></h2>
 <p>First public experimental pre-release.</p>
@@ -231,7 +288,7 @@ servo and auxiliary-output use.</li>
 <li>Foxeer USB, onboard flash storage, blackbox logging, and ESC telemetry are
 standard board services rather than optional app-local implementations.</li>
 </ul>
-<h3 id="fixed"><a class="header" href="#fixed">Fixed</a></h3>
+<h3 id="fixed-1"><a class="header" href="#fixed-1">Fixed</a></h3>
 <ul>
 <li>Strengthened SBUS startup/freshness handling, guarded DShot arming and stop
 behavior, synchronized TIM1/TIM8 output, and bounded ESC-telemetry
