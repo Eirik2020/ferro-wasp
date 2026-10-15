@@ -127,6 +127,21 @@ pub fn control_loop(mut cx: control_loop::Context) {
             }
         }
     };
+    // Used by the flight log and the equal-motor bench image, both of which
+    // exist only without a single-motor selector, and by bench_blackbox.
+    #[cfg(any(
+        feature = "bench_blackbox",
+        not(any(
+            feature = "bench_motor1_only",
+            feature = "bench_motor2_only",
+            feature = "bench_motor3_only",
+            feature = "bench_motor4_only",
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        ))
+    ))]
     let mut enqueue_flash_record = |sample| {
         let outcome = flash_task::enqueue_rate_record(
             cx.local.flash_record_producer,
