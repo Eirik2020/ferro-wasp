@@ -1705,6 +1705,12 @@ fn print_conversion_summary(summary: &ConversionSummary) {
         summary.dropout_count,
         summary.output_bytes
     );
+    match summary.control_rate_hz {
+        Some(rate_hz) => println!("Control rate {rate_hz} Hz, measured from the log."),
+        None => println!(
+            "Too short to measure the control rate; timestamps are the records' own milliseconds."
+        ),
+    }
 }
 
 fn print_serial_bindings(bindings: &SerialBindings) {

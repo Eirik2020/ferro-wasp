@@ -28,6 +28,9 @@ artifact is stable, airworthy, or production-ready.
   motor order, from FerroConfigurator or the USB command line.
 - FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
   live stick readout, and a rates curve.
+- ULog conversion (`convert` and `tools/fwbb_to_ulog.py`) measures the
+  control rate from the log instead of assuming 400 Hz, times records by
+  control tick, and accepts records that share a millisecond timestamp.
 - `convert --csv` in FerroConfigurator: one flight as CSV for MATLAB, with
   units in the column names, time from the control-tick count at the rate
   measured from the log, and dropped-record gaps reported.

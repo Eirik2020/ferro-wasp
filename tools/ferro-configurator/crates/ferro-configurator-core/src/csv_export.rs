@@ -54,13 +54,24 @@ pub struct CsvSummary {
     pub output: PathBuf,
 }
 
-/// How the flight's records sit in time.
+/// How a flight's records sit in time; shared with the ULog export.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Timing {
-    control_rate_hz: u32,
-    measured_rate_hz: f64,
-    record_step: u32,
-    gaps: u32,
+pub(crate) struct Timing {
+    /// Control ticks per second, rounded to 10 Hz, and the unrounded
+    /// measurement; `None` for a flight under 2 s, too short to measure.
+    pub(crate) rate: Option<(u32, f64)>,
+    /// Control ticks between consecutive records: the log rate divisor.
+    pub(crate) record_step: u32,
+    /// Places where more than `record_step` ticks passed between records.
+    pub(crate) gaps: u32,
+}
+
+impl Timing {
+    /// Microseconds spanned by `ticks` control ticks, when the rate is known.
+    pub(crate) fn ticks_to_us(&self, ticks: u64) -> Option<u64> {
+        self.rate
+            .map(|(rate_hz, _)| ticks * 1_000_000 / u64::from(rate_hz.max(1)))
+    }
 }
 
 pub fn convert_fwbb_to_csv(
@@ -71,7 +82,13 @@ pub fn convert_fwbb_to_csv(
 ) -> Result<CsvSummary> {
     let (flight_id, records) = flight_records(input, selector)?;
     let timing = measure_timing(&records)?;
-    write_csv(output, &records, timing, force)?;
+    let Some((control_rate_hz, measured_rate_hz)) = timing.rate else {
+        return Err(FerroError::Ulog(
+            "the flight lasts under 2 s; at least 2 s is needed to measure its control rate"
+                .to_owned(),
+        ));
+    };
+    write_csv(output, &records, control_rate_hz, force)?;
     let ticks = records
         .windows(2)
         .map(|pair| {
@@ -85,16 +102,16 @@ pub fn convert_fwbb_to_csv(
     Ok(CsvSummary {
         flight_id,
         rows: records.len() as u32,
-        duration_s: ticks as f64 / f64::from(timing.control_rate_hz),
-        control_rate_hz: timing.control_rate_hz,
-        measured_rate_hz: timing.measured_rate_hz,
+        duration_s: ticks as f64 / f64::from(control_rate_hz),
+        control_rate_hz,
+        measured_rate_hz,
         record_step: timing.record_step,
         gaps: timing.gaps,
         output: output.to_path_buf(),
     })
 }
 
-fn measure_timing(records: &[FlightRecord]) -> Result<Timing> {
+pub(crate) fn measure_timing(records: &[FlightRecord]) -> Result<Timing> {
     let mut elapsed_us = 0u64;
     let mut ticks = 0u64;
     let mut steps: HashMap<u32, u32> = HashMap::new();
@@ -112,14 +129,12 @@ fn measure_timing(records: &[FlightRecord]) -> Result<Timing> {
         ticks += u64::from(step);
         *steps.entry(step).or_default() += 1;
     }
-    if elapsed_us < MIN_MEASURED_DURATION_US {
-        return Err(FerroError::Ulog(format!(
-            "the flight lasts {} ms; at least 2 s is needed to measure its control rate",
-            elapsed_us / 1_000
-        )));
-    }
-    let measured_rate_hz = ticks as f64 * 1e6 / elapsed_us as f64;
-    let control_rate_hz = ((measured_rate_hz / RATE_ROUNDING_HZ).round() * RATE_ROUNDING_HZ) as u32;
+    let rate = (elapsed_us >= MIN_MEASURED_DURATION_US).then(|| {
+        let measured_rate_hz = ticks as f64 * 1e6 / elapsed_us as f64;
+        let control_rate_hz =
+            ((measured_rate_hz / RATE_ROUNDING_HZ).round() * RATE_ROUNDING_HZ) as u32;
+        (control_rate_hz, measured_rate_hz)
+    });
     // The usual step is the divisor; the smallest wins a tie.
     let record_step = steps
         .iter()
@@ -134,14 +149,18 @@ fn measure_timing(records: &[FlightRecord]) -> Result<Timing> {
         .map(|(_, count)| *count)
         .sum();
     Ok(Timing {
-        control_rate_hz,
-        measured_rate_hz,
+        rate,
         record_step,
         gaps,
     })
 }
 
-fn write_csv(output: &Path, records: &[FlightRecord], timing: Timing, force: bool) -> Result<()> {
+fn write_csv(
+    output: &Path,
+    records: &[FlightRecord],
+    control_rate_hz: u32,
+    force: bool,
+) -> Result<()> {
     if output.exists() && !force {
         return Err(FerroError::FileIo {
             operation: "create",
@@ -184,7 +203,7 @@ fn write_csv(output: &Path, records: &[FlightRecord], timing: Timing, force: boo
     for record in records {
         ticks += u64::from(record.control_sequence.wrapping_sub(previous_sequence));
         previous_sequence = record.control_sequence;
-        let time_s = ticks as f64 / f64::from(timing.control_rate_hz);
+        let time_s = ticks as f64 / f64::from(control_rate_hz);
         write(&mut writer, &csv_row(record, time_s))?;
     }
     let file = writer
@@ -249,8 +268,9 @@ mod tests {
     #[test]
     fn the_rate_and_divisor_come_from_the_log() {
         let timing = measure_timing(&records(2_000, 2, 2_500)).unwrap();
-        assert_eq!(timing.control_rate_hz, 2_000);
-        assert!((timing.measured_rate_hz - 2_000.0).abs() < 2.0);
+        let (rate_hz, measured_hz) = timing.rate.unwrap();
+        assert_eq!(rate_hz, 2_000);
+        assert!((measured_hz - 2_000.0).abs() < 2.0);
         assert_eq!(timing.record_step, 2);
         assert_eq!(timing.gaps, 0);
 
@@ -260,10 +280,12 @@ mod tests {
             record.timestamp_us += 40_000;
         }
         let timing = measure_timing(&gapped).unwrap();
-        assert_eq!(timing.control_rate_hz, 1_000);
+        assert_eq!(timing.rate.unwrap().0, 1_000);
         assert_eq!(timing.gaps, 1);
 
-        assert!(measure_timing(&records(1_000, 1, 500)).is_err());
+        let short = measure_timing(&records(1_000, 1, 500)).unwrap();
+        assert_eq!(short.rate, None);
+        assert_eq!(short.record_step, 1);
     }
 
     #[test]
