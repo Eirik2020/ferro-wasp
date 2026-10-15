@@ -10,10 +10,10 @@ use ferrowasp_drivers::nor_storage::NorStorage;
 use ferrowasp_flight::accel_level::{AccelLevelCalibration, CalibrationError};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_flight::blackbox_storage as blackbox_task;
-use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter, reboot_refusal};
+use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
 use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
-use ferrowasp_flight::log_sync;
 use ferrowasp_flight::log_writer::{LogWriter, PageWrite};
+use ferrowasp_flight::storage_commands::{self, CommandAction, CommandContext};
 use ferrowasp_flight::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
@@ -21,7 +21,6 @@ use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
 use ferrowasp_stm32::system_reset::RebootTarget;
-use ferrowasp_stm32::uart_port as stm32_port;
 
 /// How long a reboot waits for the store to finish its last program, in
 /// milliseconds. With maintenance refused, that is one page program, a few
@@ -146,32 +145,6 @@ pub fn read_blackbox_chunk<F: NorStorage>(
 ) -> Result<mspv2::rpc::BlackboxChunk, mspv2::rpc::DeviceError> {
     let mut read = |address, output: &mut [u8]| flash.read(address, output).map_err(|_| ());
     blackbox_task::read_blackbox_chunk(&mut read, layout, used_pages, id, offset, requested_length)
-}
-
-pub fn queue_page_hex(
-    producer: &mut ResponseRouter,
-    page_index: u32,
-    page: &[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
-) -> bool {
-    flash_task::emit_page_hex_lines(page_index, page, |line| {
-        queue_storage_response(producer, line)
-    })
-}
-
-/// Starts saving `config` (`ConfigSave`), answering the link that asked
-/// when it completes. `Err` is the answer line when it cannot start.
-fn begin_config_save(
-    config_save: &mut ConfigSave,
-    config: flash_task::StoredConfig,
-    config_sequence: u32,
-    config_active_slot: u8,
-    flash_responses: &mut ResponseRouter,
-) -> Result<(), &'static str> {
-    config_save
-        .begin(config, config_sequence, config_active_slot)
-        .map_err(|_| "ERR config encoding failed\r\n")?;
-    flash_responses.start_maintenance();
-    Ok(())
 }
 
 /// The answer line for a calibration that produced nothing.
@@ -546,432 +519,86 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
 
             if let Some((command, link)) = flash_commands.take_next() {
                 flash_responses.answer(link);
-                let mut response = heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
-                let maintenance_busy = maintenance.is_active()
-                    || config_save.is_active()
-                    || accel_calibration.is_some();
-                let unfinished_flight = log.unfinished_flight();
-                match command {
-                    // The configurator link refuses these before queueing
-                    // them; this is the second check.
-                    command if link == CommandLink::Serial && command.usb_only() => {
-                        queue_storage_response(
-                            flash_responses,
-                            "ERR USB only for this command\r\n",
-                        );
-                    }
-                    flash_task::StorageCommand::Help => {
-                        queue_storage_response(
-                            flash_responses,
-                            "OK flash info | flash test CONFIRM | logs list\r\n",
-                        );
-                        queue_storage_response(
-                            flash_responses,
-                            "OK logs erase CONFIRM | config get/set KEY | config save\r\n",
-                        );
-                        queue_storage_response(
-                            flash_responses,
-                            "OK logs unsynced | logs ack FLIGHT PAGES\r\n",
-                        );
-                        queue_storage_response(flash_responses, "OK logs erase-synced CONFIRM\r\n");
-                        queue_storage_response(
-                            flash_responses,
-                            "OK serial | serial PORT FUNCTION\r\n",
-                        );
-                        queue_storage_response(
-                            flash_responses,
-                            "OK FUNCTION none/rc/osd/esc_telemetry/configurator\r\n",
-                        );
-                        queue_storage_response(
-                            flash_responses,
-                            "OK live | rc | motor stop | motor spin N CONFIRM\r\n",
-                        );
-                        queue_storage_response(
-                            flash_responses,
-                            "OK motor dir N normal|reversed CONFIRM\r\n",
-                        );
-                        queue_storage_response(flash_responses, "OK reboot | reboot dfu\r\n");
-                        queue_storage_response(flash_responses, "OK imu calibrate | imu level\r\n");
-                    }
-                    // Answered by the USB task; never queued here.
-                    flash_task::StorageCommand::Live
-                    | flash_task::StorageCommand::Rc
-                    | flash_task::StorageCommand::Motor(_) => {}
-                    flash_task::StorageCommand::SerialShow => {
-                        stm32_port::write_serial_bindings(
-                            stored_config.serial_bindings,
-                            CONFIG::DEFAULT_SERIAL_BINDINGS,
-                            CONFIG::SERIAL_ROUTES,
-                            |line| {
-                                queue_storage_response(flash_responses, line);
-                            },
-                        );
-                    }
-                    flash_task::StorageCommand::SerialSet(port, function) => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR config changes disabled while armed\r\n",
-                            );
-                        } else {
-                            let mut bindings = stored_config
-                                .serial_bindings
-                                .unwrap_or(CONFIG::DEFAULT_SERIAL_BINDINGS);
-                            bindings.set(port, function);
-                            stored_config.serial_bindings = Some(bindings);
-                            queue_storage_response(
-                                flash_responses,
-                                "OK staged; use config save, then reboot\r\n",
-                            );
-                        }
-                    }
-                    flash_task::StorageCommand::FlashInfo => {
-                        let _ = write!(
-                            response,
-                            "OK jedec={:02x}:{:02x}:{:02x} bytes={} ready=1\r\n",
+                let action = storage_commands::handle(
+                    command,
+                    &mut CommandContext {
+                        flash: &mut *flash_device,
+                        layout,
+                        responses: &mut *flash_responses,
+                        link,
+                        armed: SAFETY_ARMED.load(Ordering::Acquire),
+                        log: &*log,
+                        maintenance: &mut *maintenance,
+                        config_save: &mut *config_save,
+                        stored_config: &mut *stored_config,
+                        config_sequence: *config_sequence,
+                        config_active_slot: *config_active_slot,
+                        calibrating: accel_calibration.is_some(),
+                        jedec: [
                             FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
                             FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
                             FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
-                            layout.capacity_bytes
+                        ],
+                        default_serial_bindings: CONFIG::DEFAULT_SERIAL_BINDINGS,
+                        serial_routes: CONFIG::SERIAL_ROUTES,
+                    },
+                );
+                match action {
+                    CommandAction::None => {}
+                    CommandAction::StartCalibration => {
+                        *accel_calibration = Some(AccelLevelCalibration::new());
+                        flash_responses.start_maintenance();
+                        *accel_calibration_seq = IMU_LATEST_SEQ.load(Ordering::Acquire);
+                        *accel_calibration_deadline_ms =
+                            Mono::now().duration_since_epoch().to_millis()
+                                + IMU_CALIBRATION_DEADLINE_MS;
+                        queue_storage_response(
+                            flash_responses,
+                            "OK imu calibration started; keep the craft still\r\n",
                         );
-                        queue_storage_response(flash_responses, response.as_str());
                     }
-                    flash_task::StorageCommand::FlashTestConfirmed => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash test disabled while armed\r\n",
-                            );
-                        } else if maintenance.is_active()
-                            || config_save.is_active()
-                            || accel_calibration.is_some()
-                        {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else {
-                            *maintenance = Maintenance::scratch_test();
-                            flash_responses.start_maintenance();
-                            queue_storage_response(
-                                flash_responses,
-                                "OK flash scratch test started\r\n",
-                            );
+                    // The store is settled before restarting: written-back
+                    // pages flushed, and the last program or erase finished.
+                    CommandAction::Reboot { rom_bootloader } => {
+                        let flushed =
+                            !flash_device.write_back_pending() || flash_device.flush().is_ok();
+                        let mut idle = false;
+                        for _ in 0..REBOOT_STORAGE_SETTLE_MS {
+                            if matches!(flash_device.busy(), Ok(false)) {
+                                idle = true;
+                                break;
+                            }
+                            Mono::delay(1u64.millis()).await;
                         }
-                    }
-                    flash_task::StorageCommand::LogsList => {
-                        if let Some(response) = flash_task::format_log_info_response(
-                            log.next_page(),
-                            log.next_flight(),
-                            layout.log_page_count,
-                            log.writable(),
-                        ) {
-                            queue_storage_response(flash_responses, response.as_str());
+                        if !flushed || !idle {
+                            queue_storage_response(
+                                flash_responses,
+                                "ERR storage did not settle; not rebooting\r\n",
+                            );
                         } else {
                             queue_storage_response(
                                 flash_responses,
-                                "ERR log summary formatting failed\r\n",
+                                if rom_bootloader {
+                                    "OK rebooting to DFU\r\n"
+                                } else {
+                                    "OK rebooting\r\n"
+                                },
                             );
-                        }
-                    }
-                    flash_task::StorageCommand::LogsReadPage(page_index) => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log reads disabled while armed\r\n",
-                            );
-                        } else if page_index >= log.next_page() {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log page is not present\r\n",
-                            );
-                        } else if let Some(address) = layout.log_page_address(page_index) {
-                            let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
-                            if flash_device.read(address, &mut page).is_err()
-                                || !queue_page_hex(flash_responses, page_index, &page)
-                            {
+                            // Let the USB task send the answer before the
+                            // port goes away.
+                            Mono::delay(REBOOT_ANSWER_MS.millis()).await;
+                            if SAFETY_ARMED.load(Ordering::Acquire) {
                                 queue_storage_response(
                                     flash_responses,
-                                    "ERR log page read/response failed\r\n",
-                                );
-                            }
-                        }
-                    }
-                    flash_task::StorageCommand::LogsEraseConfirmed => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log erase disabled while armed\r\n",
-                            );
-                        } else if maintenance.is_active()
-                            || config_save.is_active()
-                            || accel_calibration.is_some()
-                        {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else {
-                            *maintenance = Maintenance::erase_log();
-                            flash_responses.start_maintenance();
-                            queue_storage_response(flash_responses, "OK log erase started\r\n");
-                        }
-                    }
-                    flash_task::StorageCommand::LogsUnsynced => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log reads disabled while armed\r\n",
-                            );
-                        } else {
-                            let mut read =
-                                |address, output: &mut [u8]| flash_device.read(address, output);
-                            match log_sync::unsynced_flights(
-                                layout,
-                                &mut read,
-                                log.next_page(),
-                                unfinished_flight,
-                            ) {
-                                Ok((flights, more)) => {
-                                    log_sync::emit_unsynced_lines(&flights, more, |line| {
-                                        queue_storage_response(flash_responses, line)
-                                    });
-                                }
-                                Err(_) => {
-                                    queue_storage_response(
-                                        flash_responses,
-                                        "ERR log scan failed\r\n",
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    flash_task::StorageCommand::LogsAck { flight, pages } => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log sync disabled while armed\r\n",
-                            );
-                        } else if maintenance_busy {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else {
-                            let mut read =
-                                |address, output: &mut [u8]| flash_device.read(address, output);
-                            match log_sync::check_ack(
-                                layout,
-                                &mut read,
-                                log.next_page(),
-                                unfinished_flight,
-                                flight,
-                                pages,
-                            ) {
-                                Ok(Ok(())) => {
-                                    *maintenance = Maintenance::sync_mark(flight);
-                                    flash_responses.start_maintenance();
-                                }
-                                Ok(Err(refusal)) => {
-                                    queue_storage_response(flash_responses, refusal.response());
-                                }
-                                Err(_) => {
-                                    queue_storage_response(
-                                        flash_responses,
-                                        "ERR log scan failed\r\n",
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    flash_task::StorageCommand::LogsEraseSyncedConfirmed => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log erase disabled while armed\r\n",
-                            );
-                        } else if !log.writable() && log.next_page() < layout.log_page_count {
-                            // Something other than flights follows the
-                            // last one, so nothing says it was stored.
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR log holds data that is not a flight; erase over USB\r\n",
-                            );
-                        } else if maintenance_busy {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else {
-                            let mut read =
-                                |address, output: &mut [u8]| flash_device.read(address, output);
-                            match log_sync::all_synced(
-                                layout,
-                                &mut read,
-                                log.next_page(),
-                                unfinished_flight,
-                            ) {
-                                Ok(true) => {
-                                    *maintenance = Maintenance::erase_log();
-                                    flash_responses.start_maintenance();
-                                    queue_storage_response(
-                                        flash_responses,
-                                        "OK log erase started\r\n",
-                                    );
-                                }
-                                Ok(false) => {
-                                    queue_storage_response(
-                                        flash_responses,
-                                        "ERR unsynced flights remain\r\n",
-                                    );
-                                }
-                                Err(_) => {
-                                    queue_storage_response(
-                                        flash_responses,
-                                        "ERR log scan failed\r\n",
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    flash_task::StorageCommand::ConfigGet(key) => {
-                        let _ = write!(
-                            response,
-                            "OK {}={:.4}\r\n",
-                            key.name(),
-                            stored_config.get(key)
-                        );
-                        queue_storage_response(flash_responses, response.as_str());
-                    }
-                    flash_task::StorageCommand::ConfigSet(key, value) => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR config changes disabled while armed\r\n",
-                            );
-                        } else if stored_config.set(key, value) {
-                            queue_storage_response(
-                                flash_responses,
-                                "OK staged; use config save\r\n",
-                            );
-                        } else {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR value outside allowed range\r\n",
-                            );
-                        }
-                    }
-                    flash_task::StorageCommand::ConfigSave => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR config save disabled while armed\r\n",
-                            );
-                        } else if maintenance.is_active()
-                            || config_save.is_active()
-                            || accel_calibration.is_some()
-                        {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else {
-                            let answer = match begin_config_save(
-                                config_save,
-                                *stored_config,
-                                *config_sequence,
-                                *config_active_slot,
-                                flash_responses,
-                            ) {
-                                Ok(()) => "OK config save started\r\n",
-                                Err(answer) => answer,
-                            };
-                            queue_storage_response(flash_responses, answer);
-                        }
-                    }
-                    flash_task::StorageCommand::ImuLevel => {
-                        let [x, y, z] = stored_config.accel_level.offset_mg;
-                        let _ = write!(response, "OK imu level x={x} y={y} z={z} mg\r\n");
-                        queue_storage_response(flash_responses, &response);
-                    }
-                    flash_task::StorageCommand::ImuCalibrate => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR imu calibration disabled while armed\r\n",
-                            );
-                        } else if maintenance_busy {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else {
-                            *accel_calibration = Some(AccelLevelCalibration::new());
-                            flash_responses.start_maintenance();
-                            *accel_calibration_seq = IMU_LATEST_SEQ.load(Ordering::Acquire);
-                            *accel_calibration_deadline_ms =
-                                Mono::now().duration_since_epoch().to_millis()
-                                    + IMU_CALIBRATION_DEADLINE_MS;
-                            queue_storage_response(
-                                flash_responses,
-                                "OK imu calibration started; keep the craft still\r\n",
-                            );
-                        }
-                    }
-                    // Restarting cuts the store off: only once disarmed, with no
-                    // maintenance or flight log open, written-back pages
-                    // flushed, and the last program or erase finished.
-                    flash_task::StorageCommand::Reboot { rom_bootloader } => {
-                        if let Some(refusal) = reboot_refusal(
-                            SAFETY_ARMED.load(Ordering::Acquire),
-                            maintenance_busy,
-                            unfinished_flight.is_some(),
-                        ) {
-                            queue_storage_response(flash_responses, refusal);
-                        } else {
-                            let flushed =
-                                !flash_device.write_back_pending() || flash_device.flush().is_ok();
-                            let mut idle = false;
-                            for _ in 0..REBOOT_STORAGE_SETTLE_MS {
-                                if matches!(flash_device.busy(), Ok(false)) {
-                                    idle = true;
-                                    break;
-                                }
-                                Mono::delay(1u64.millis()).await;
-                            }
-                            if !flushed || !idle {
-                                queue_storage_response(
-                                    flash_responses,
-                                    "ERR storage did not settle; not rebooting\r\n",
+                                    "ERR reboot cancelled; system armed\r\n",
                                 );
                             } else {
-                                queue_storage_response(
-                                    flash_responses,
-                                    if rom_bootloader {
-                                        "OK rebooting to DFU\r\n"
-                                    } else {
-                                        "OK rebooting\r\n"
-                                    },
-                                );
-                                // Let the USB task send the answer before the
-                                // port goes away.
-                                Mono::delay(REBOOT_ANSWER_MS.millis()).await;
-                                if SAFETY_ARMED.load(Ordering::Acquire) {
-                                    queue_storage_response(
-                                        flash_responses,
-                                        "ERR reboot cancelled; system armed\r\n",
-                                    );
+                                warn!("Rebooting on request, ROM bootloader: {}", rom_bootloader);
+                                backend::system_bootloader::reboot(if rom_bootloader {
+                                    RebootTarget::RomBootloader
                                 } else {
-                                    warn!(
-                                        "Rebooting on request, ROM bootloader: {}",
-                                        rom_bootloader
-                                    );
-                                    backend::system_bootloader::reboot(if rom_bootloader {
-                                        RebootTarget::RomBootloader
-                                    } else {
-                                        RebootTarget::Firmware
-                                    });
-                                }
+                                    RebootTarget::Firmware
+                                });
                             }
                         }
                     }
@@ -1230,7 +857,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         if config_save.is_active() || maintenance.is_active() {
                             return Err("ERR flash maintenance already active\r\n");
                         }
-                        begin_config_save(
+                        storage_commands::begin_config_save(
                             config_save,
                             config,
                             *config_sequence,

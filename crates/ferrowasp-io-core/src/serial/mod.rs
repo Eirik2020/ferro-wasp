@@ -4,6 +4,7 @@ mod discontinuity;
 mod fault;
 mod profile;
 mod reader;
+mod reply;
 mod routing;
 mod tx_chunk;
 mod writer;
@@ -22,6 +23,7 @@ pub use profile::{
 pub use reader::{
     DiscontinuityReader, SerialReader, SerialRxChannel, SerialRxProducer, SerialRxStatus,
 };
+pub use reply::{SERIAL_REPLY_LINE_CAPACITY, write_serial_bindings};
 pub use routing::{SerialCapabilities, SerialRoute, SerialRouteError};
 pub use tx_chunk::{TxChunk, TxChunkError};
 pub use writer::{
