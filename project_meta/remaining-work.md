@@ -80,6 +80,13 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
   (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
   needs a board variant.
+- **Configurator flashing** (ADR-0043). `reboot dfu` and the CLI's automatic
+  entry have not run on hardware: confirm on the Foxeer, disarmed, that it
+  enumerates as `0483:df11`, flashes, and returns as FerroWasp, and that
+  `reboot` refuses while a flight log is open. The H743's jump address
+  (`0x1FF09800`, from AN2606) is unverified until the Lucid's replacement
+  arrives. Still to build: the GUI's Flash tab (bundled image or a chosen
+  file) and Reboot button, and a Lucid board profile in FerroConfigurator.
 - **FerroForge adoption.** Retire `tools/rtic-app-builder`. FerroForge 0.4
   expands a group whose members are imported in one brace, `pub use
   crate::{a, b};`, into an empty group without an error, so

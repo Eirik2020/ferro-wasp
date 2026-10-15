@@ -92,17 +92,31 @@ Start the guided flasher:
 
 Follow its prompts:
 
-1. Disconnect USB.
-2. Hold the board's BOOT button.
-3. Reconnect USB, wait approximately one second, and release BOOT.
-4. Allow the configurator to detect exactly one STM32 ROM DFU device.
-5. Type the requested confirmation only after checking the selected board and
-   image.
-6. Do not disconnect USB during programming.
+1. Check the board and remove the propellers.
+2. Type the requested confirmation only after checking the board and image.
+   Nothing on the board changes before this.
+3. If the board runs FerroWasp and is connected over USB, the configurator
+   restarts it into the STM32 ROM bootloader. The board must be disarmed; it
+   refuses while armed, while a flight log is still being written, or while
+   flash maintenance is running.
+4. If the board does not run FerroWasp, or does not answer, the configurator
+   asks you to unplug USB, hold BOOT, reconnect, wait about a second, and
+   release BOOT.
+5. Do not disconnect USB during programming.
 
 The command must reach its final successful completion message and exit with
 code zero. Detection or programming progress is not, by itself, proof that
 the flash completed.
+
+To restart a connected board without flashing, or to leave it in the ROM
+bootloader for another flasher:
+
+```powershell
+.\ferro-configurator.exe device reboot
+.\ferro-configurator.exe device reboot --dfu
+```
+
+A power cycle leaves the ROM bootloader.
 
 If the normal FerroWasp COM port does not return after programming, disconnect
 and reconnect USB normally without holding BOOT.

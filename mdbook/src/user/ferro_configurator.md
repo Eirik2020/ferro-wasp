@@ -22,7 +22,8 @@ configuration validation and rejects storage changes while armed.
 2. Run `ferro-configurator.exe doctor`.
 3. Validate the bundled image with
    `ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run`.
-4. Flash the board through the guided USB DFU workflow.
+4. Flash the board through the guided USB DFU workflow; a board already
+   running FerroWasp is restarted into the bootloader without the BOOT button.
 5. Connect to its USB CDC port to inspect configuration or retrieve logs.
 
 The [Foxeer F405 V2 guide](foxeer_f405_v2.md) provides complete commands and

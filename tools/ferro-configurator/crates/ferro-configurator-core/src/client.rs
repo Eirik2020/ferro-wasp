@@ -611,6 +611,28 @@ impl<T: LineTransport> FerroClient<T> {
         .map(|_| ())
     }
 
+    /// Restarts the controller, or with `rom_bootloader` puts it in the
+    /// chip's ROM USB DFU bootloader. The firmware refuses while armed, while
+    /// storage is busy, or with a flight log open; after `Ok` the port goes
+    /// away.
+    pub fn reboot(&mut self, rom_bootloader: bool) -> Result<()> {
+        let (command, expected) = if rom_bootloader {
+            ("reboot dfu", "OK rebooting to DFU")
+        } else {
+            ("reboot", "OK rebooting")
+        };
+        // One attempt: a controller that answered late may already be gone.
+        let response = self.request(command, 1)?;
+        if response == expected {
+            Ok(())
+        } else {
+            Err(FerroError::UnexpectedResponse {
+                operation: command.to_owned(),
+                response,
+            })
+        }
+    }
+
     pub fn apply_config(&mut self, config: &FerroConfig) -> Result<FerroConfig> {
         let original = self.read_config()?;
         let desired = config.merged_over(&original)?;
@@ -1039,6 +1061,29 @@ mod tests {
 
         assert_eq!(info.jedec_id, "ef:40:18");
         assert_eq!(client.transport.writes, [RESYNC_LINE, "flash info"]);
+    }
+
+    #[test]
+    fn reboot_sends_one_command_and_accepts_only_its_answer() {
+        let mock = MockTransport::with_lines(["OK rebooting to DFU"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        client.reboot(true).unwrap();
+        assert_eq!(client.transport.writes, ["reboot dfu"]);
+
+        let mock = MockTransport::with_lines(["OK rebooting"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(matches!(
+            client.reboot(true),
+            Err(FerroError::UnexpectedResponse { .. })
+        ));
+
+        let mock = MockTransport::with_lines(["ERR reboot disabled while armed"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(matches!(
+            client.reboot(false),
+            Err(FerroError::DeviceRejected { .. })
+        ));
+        assert_eq!(client.transport.writes, ["reboot"]);
     }
 
     #[test]

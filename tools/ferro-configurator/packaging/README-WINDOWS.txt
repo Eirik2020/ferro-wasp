@@ -19,8 +19,10 @@ Open PowerShell in this extracted folder:
   .\ferro-configurator.exe flash --board foxeer-f405-v2
 
 The first flash command validates the bundled manifest, SHA-256, board memory
-map, and vector table without touching USB. The second starts the guided BOOT
-button/STM32 ROM DFU workflow. Require its final successful message.
+map, and vector table without touching USB. The second starts the guided
+STM32 ROM DFU workflow: a disarmed board running FerroWasp is restarted into
+the bootloader, and any other board needs the BOOT button. Require its final
+successful message.
 
 Windows may require a one-time WinUSB association for STM32 BOOTLOADER
 0483:DF11. Diagnose it with:

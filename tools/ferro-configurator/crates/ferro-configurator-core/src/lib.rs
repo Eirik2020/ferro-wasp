@@ -28,9 +28,10 @@ pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProto
 pub use device::{DeviceSelector, PortInfo, discover_ports, open_device};
 pub use error::{FerroError, Result};
 pub use firmware::{
-    BoardProfile, BundledFirmware, DfuDetection, FirmwareArtifact, FlashProgress, FlashResult,
-    PreparedImage, ReleaseManifest, detect_dfu, find_bundled_firmware, flash_firmware,
-    load_bundled_firmware, prepare_elf, sha256_file,
+    BoardProfile, BundledFirmware, DFU_ENTRY_TIMEOUT, DfuDetection, FirmwareArtifact,
+    FlashProgress, FlashResult, PreparedImage, RESTART_TIMEOUT, ReleaseManifest, detect_dfu,
+    enter_rom_bootloader, find_board_port, find_bundled_firmware, flash_firmware,
+    load_bundled_firmware, prepare_elf, sha256_file, wait_for_board_port, wait_for_dfu_device,
 };
 pub use prearm::{CheckState, PrearmCheck, prearm_checks};
 pub use profiles::{ProfileInfo, ProfileStore};
