@@ -21,8 +21,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   - per-lane GPIO-sampling receive in the F4 backend, with the stream
     turnaround in its unsafe boundary;
   - frame sets released by the control loop, with the 2 ms fallback;
-  - the RPM filter and its stored configuration in `ferrowasp-flight` and
-    FerroConfigurator;
+  - the RPM filter and its stored configuration in `ferrowasp-flight`, and
+    FerroConfigurator's Motors tab for the bidirectional-DShot setting and the
+    motor pole count;
   - the qualification source moved to bidirectional eRPM;
   - extended telemetry: the enable command before guarded idle, and decoding
     of temperature, voltage and current;
@@ -31,6 +32,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
     RPM filter has target evidence.
 
   Then, on target:
+  - the installed BLHeli_32 version and the EDT values it actually sends;
   - logic-analyzer captures of both directions;
   - a DMA2 errata 2.1.10 check under SPI1 and ADC load;
   - the filter's cost per loop;
