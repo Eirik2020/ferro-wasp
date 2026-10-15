@@ -20,6 +20,11 @@ pub(crate) struct MemoryNor {
     /// Programs this byte value over the first byte of each page program, as
     /// a cell that will not take the bit pattern asked for.
     pub(crate) stuck_first_byte: Option<u8>,
+    /// Holds programmed pages in RAM until `flush`, as an SD card's
+    /// write-back window does.
+    pub(crate) write_back: bool,
+    pub(crate) held: bool,
+    pub(crate) flushes: u32,
 }
 
 impl MemoryNor {
@@ -29,6 +34,9 @@ impl MemoryNor {
             fail_erase: false,
             fail_program: false,
             stuck_first_byte: None,
+            write_back: false,
+            held: false,
+            flushes: 0,
         }
     }
 }
@@ -53,6 +61,7 @@ impl NorStorage for MemoryNor {
         if let Some(stuck) = self.stuck_first_byte {
             self.bytes[start] = stuck;
         }
+        self.held |= self.write_back;
         Ok(())
     }
 
@@ -67,5 +76,15 @@ impl NorStorage for MemoryNor {
 
     fn busy(&mut self) -> Result<bool, Fault> {
         Ok(false)
+    }
+
+    fn write_back_pending(&self) -> bool {
+        self.held
+    }
+
+    fn flush(&mut self) -> Result<(), Fault> {
+        self.held = false;
+        self.flushes += 1;
+        Ok(())
     }
 }

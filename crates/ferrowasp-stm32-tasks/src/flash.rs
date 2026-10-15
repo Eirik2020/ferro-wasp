@@ -13,6 +13,7 @@ use ferrowasp_flight::blackbox_storage as blackbox_task;
 use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter, reboot_refusal};
 use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
 use ferrowasp_flight::log_sync;
+use ferrowasp_flight::log_writer::{LogWriter, PageWrite};
 use ferrowasp_flight::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
@@ -21,17 +22,6 @@ use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
 use ferrowasp_mspv2 as mspv2;
 use ferrowasp_stm32::system_reset::RebootTarget;
 use ferrowasp_stm32::uart_port as stm32_port;
-
-/// How many blackbox records the flash task consumes per pass.
-///
-/// Its loop yields for a millisecond, so one record per pass capped the store
-/// near a thousand records a second regardless of the flash. Bounded so a full
-/// queue cannot starve the rest of the system.
-pub const FLASH_RECORD_DRAIN_PER_PASS: u32 = 16;
-
-/// How long log pages may wait in a store's write-back buffer before the
-/// task writes them out; at most this much log is lost to a power cut.
-pub const WRITE_BACK_MAX_AGE_MS: u64 = 100;
 
 /// How long a reboot waits for the store to finish its last program, in
 /// milliseconds. With maintenance refused, that is one page program, a few
@@ -213,13 +203,8 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         flash_rpc_command_consumer: FlashRpcCommandConsumer,
         flash_rpc_response_producer: FlashRpcResponseProducer,
         flash_rpc_device_info: RpcDeviceInfoFn,
-        assembler: flash_task::PageAssembler = flash_task::PageAssembler::new(),
-        boot_session_start_pending: bool = true,
-        pending_page: Option<[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN]> = None,
+        log: LogWriter = LogWriter::new(),
         initialized: bool = false,
-        next_page_index: u32 = 0,
-        next_flight_id: u32 = 1,
-        log_region_writable: bool = false,
         stored_config: flash_task::StoredConfig,
         config_sequence: u32 = 0,
         config_active_slot: u8 = 1,
@@ -227,7 +212,6 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         config_save: ConfigSave = ConfigSave::idle(),
         staged_rpc_config: Option<flash_task::StoredConfig> = None,
         config_rpc_completion: Option<ConfigRpcCompletion> = None,
-        write_back_since_ms: Option<u64> = None,
         accel_calibration: Option<AccelLevelCalibration> = None,
         accel_calibration_seq: u32 = 0,
         accel_calibration_deadline_ms: u64 = 0,
@@ -253,13 +237,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let flash_rpc_command_consumer = cx.local.flash_rpc_command_consumer;
     let flash_rpc_response_producer = cx.local.flash_rpc_response_producer;
     let flash_rpc_device_info = cx.local.flash_rpc_device_info;
-    let assembler = cx.local.assembler;
-    let boot_session_start_pending = cx.local.boot_session_start_pending;
-    let pending_page = cx.local.pending_page;
+    let log = cx.local.log;
     let initialized = cx.local.initialized;
-    let next_page_index = cx.local.next_page_index;
-    let next_flight_id = cx.local.next_flight_id;
-    let log_region_writable = cx.local.log_region_writable;
     let stored_config = cx.local.stored_config;
     let config_sequence = cx.local.config_sequence;
     let config_active_slot = cx.local.config_active_slot;
@@ -267,7 +246,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let config_save = cx.local.config_save;
     let staged_rpc_config = cx.local.staged_rpc_config;
     let config_rpc_completion = cx.local.config_rpc_completion;
-    let write_back_since_ms = cx.local.write_back_since_ms;
     let accel_calibration = cx.local.accel_calibration;
     let accel_calibration_seq = cx.local.accel_calibration_seq;
     let accel_calibration_deadline_ms = cx.local.accel_calibration_deadline_ms;
@@ -280,24 +258,14 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
         config_rpc_completion,
     );
     loop {
-        // Log pages a store holds back in RAM (an SD card's write-back window)
-        // wait there until it fills. Write
-        // them out once they have waited WRITE_BACK_MAX_AGE_MS, or as
-        // soon as no flight is recording, so a power cut loses at most
-        // that much log. At the top of the pass, which every pass reaches.
-        if flash_device.write_back_pending() {
-            let now_ms = Mono::now().duration_since_epoch().to_millis();
-            let since_ms = *write_back_since_ms.get_or_insert(now_ms);
-            if !assembler.recording() || now_ms.saturating_sub(since_ms) >= WRITE_BACK_MAX_AGE_MS {
-                *write_back_since_ms = None;
-                if flash_device.flush().is_err() {
-                    FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                    FLASH_READY.store(false, Ordering::Release);
-                    warn!("Storage flush failed; recording stopped");
-                }
-            }
-        } else {
-            *write_back_since_ms = None;
+        // Log pages a store holds back in RAM (an SD card's write-back
+        // window) are written out at the top of every pass once they are old
+        // enough, or when no flight is recording (`LogWriter`).
+        let now_ms = Mono::now().duration_since_epoch().to_millis();
+        if log.flush_write_back(flash_device, now_ms).is_err() {
+            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+            FLASH_READY.store(false, Ordering::Release);
+            warn!("Storage flush failed; recording stopped");
         }
         {
             if !FLASH_READY.load(Ordering::Acquire) {
@@ -356,9 +324,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     warn!("Storage configuration read failed; storage disabled");
                     continue;
                 };
-                *next_page_index = page;
-                *next_flight_id = flight;
-                *log_region_writable = writable;
+                log.recover(page, flight, writable);
                 *stored_config = config;
                 *config_sequence = sequence;
                 *config_active_slot = slot;
@@ -411,9 +377,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 if maintenance.is_erasing_log() {
                     match scan_flash_log(flash_device, layout) {
                         Ok((page, flight, writable)) => {
-                            *next_page_index = page;
-                            *next_flight_id = flight;
-                            *log_region_writable = writable;
+                            log.recover(page, flight, writable);
                         }
                         Err(_) => {
                             FLASH_READY.store(false, Ordering::Release);
@@ -449,9 +413,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 step => {
                     match step {
                         MaintenanceStep::Done(MaintenanceDone::LogErased) => {
-                            *next_page_index = 0;
-                            *next_flight_id = 1;
-                            *log_region_writable = true;
+                            log.reset_after_erase();
                             queue_storage_response(flash_responses, "OK logs erased\r\n");
                         }
                         MaintenanceStep::Done(MaintenanceDone::Synced { flight }) => {
@@ -588,7 +550,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 let maintenance_busy = maintenance.is_active()
                     || config_save.is_active()
                     || accel_calibration.is_some();
-                let unfinished_flight = assembler.unfinished_flight(pending_page.is_some());
+                let unfinished_flight = log.unfinished_flight();
                 match command {
                     // The configurator link refuses these before queueing
                     // them; this is the second check.
@@ -699,10 +661,10 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     }
                     flash_task::StorageCommand::LogsList => {
                         if let Some(response) = flash_task::format_log_info_response(
-                            *next_page_index,
-                            *next_flight_id,
+                            log.next_page(),
+                            log.next_flight(),
                             layout.log_page_count,
-                            *log_region_writable,
+                            log.writable(),
                         ) {
                             queue_storage_response(flash_responses, response.as_str());
                         } else {
@@ -718,7 +680,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 flash_responses,
                                 "ERR log reads disabled while armed\r\n",
                             );
-                        } else if page_index >= *next_page_index {
+                        } else if page_index >= log.next_page() {
                             queue_storage_response(
                                 flash_responses,
                                 "ERR log page is not present\r\n",
@@ -767,7 +729,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             match log_sync::unsynced_flights(
                                 layout,
                                 &mut read,
-                                *next_page_index,
+                                log.next_page(),
                                 unfinished_flight,
                             ) {
                                 Ok((flights, more)) => {
@@ -801,7 +763,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             match log_sync::check_ack(
                                 layout,
                                 &mut read,
-                                *next_page_index,
+                                log.next_page(),
                                 unfinished_flight,
                                 flight,
                                 pages,
@@ -828,8 +790,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 flash_responses,
                                 "ERR log erase disabled while armed\r\n",
                             );
-                        } else if !*log_region_writable && *next_page_index < layout.log_page_count
-                        {
+                        } else if !log.writable() && log.next_page() < layout.log_page_count {
                             // Something other than flights follows the
                             // last one, so nothing says it was stored.
                             queue_storage_response(
@@ -847,7 +808,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             match log_sync::all_synced(
                                 layout,
                                 &mut read,
-                                *next_page_index,
+                                log.next_page(),
                                 unfinished_flight,
                             ) {
                                 Ok(true) => {
@@ -1023,9 +984,9 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 let maintenance_busy = maintenance.is_active()
                     || config_save.is_active()
                     || accel_calibration.is_some();
-                let active_blackbox_id = assembler
+                let active_blackbox_id = log
                     .recording()
-                    .then(|| next_flight_id.wrapping_sub(1).max(1));
+                    .then(|| log.next_flight().wrapping_sub(1).max(1));
                 let response = match request.operation {
                     mspv2::rpc::Request::Hello => Some(mspv2::rpc::ok(
                         request_id,
@@ -1154,7 +1115,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             match list_blackboxes(
                                 flash_device,
                                 layout,
-                                *next_page_index,
+                                log.next_page(),
                                 active_blackbox_id,
                             ) {
                                 Ok(list) => Some(mspv2::rpc::ok(
@@ -1178,7 +1139,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             match blackbox_info(
                                 flash_device,
                                 layout,
-                                *next_page_index,
+                                log.next_page(),
                                 id,
                                 active_blackbox_id,
                             ) {
@@ -1213,7 +1174,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             match read_blackbox_chunk(
                                 flash_device,
                                 layout,
-                                *next_page_index,
+                                log.next_page(),
                                 id,
                                 offset,
                                 requested_length,
@@ -1293,111 +1254,38 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 }
             }
 
-            if *log_region_writable && pending_page.is_none() {
-                *pending_page = assembler.take_ready_page();
-            }
-            if let Some(page) = pending_page.as_ref() {
-                let Some(address) = layout.log_page_address(*next_page_index) else {
+            match log.write_pending(flash_device, layout) {
+                PageWrite::Nothing => {}
+                PageWrite::Written => {
+                    FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
+                    // Fall through to the record drain rather than yielding
+                    // here: a pass that either wrote a page or consumed
+                    // records, never both, halved the store's throughput.
+                }
+                PageWrite::RegionFull => {
                     FLASH_READY.store(false, Ordering::Release);
                     warn!("Storage blackbox region full; recording stopped");
                     continue;
-                };
-                if flash_device.page_program(address, page).is_err() {
+                }
+                PageWrite::ProgramFailed => {
                     FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
                     FLASH_READY.store(false, Ordering::Release);
                     warn!("Storage page program failed; recording stopped");
                     continue;
                 }
-                *pending_page = None;
-                *next_page_index = next_page_index.saturating_add(1);
-                FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
-                // Fall through to the record drain rather than yielding
-                // here. Yielding meant a pass either wrote a page or
-                // consumed records, never both, so the store alternated
-                // between the two and halved its own throughput. The loop
-                // still yields once at the end of every pass.
             }
-            if !*log_region_writable {
-                if flash_record_consumer.dequeue().is_some() {
-                    FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
-                }
-            } else if flash_record_consumer.peek().is_some() {
-                // Drain a bounded batch rather than one record per pass.
-                //
-                // This loop ends in a one millisecond yield, so consuming a
-                // single record per pass capped the store near one record
-                // per millisecond however fast the flash is - measured at
-                // 84 pages/s, where the part itself programs a page in well
-                // under a millisecond. At 400 Hz that left about five
-                // percent of margin nobody had measured, and any higher
-                // rate silently dropped most of the log.
-                //
-                // The bound keeps this task from starving the rest of the
-                // system on a full queue.
-                let mut drained = 0;
-                while drained < FLASH_RECORD_DRAIN_PER_PASS {
-                    // Write a finished page before taking another record.
-                    // The assembler holds one page, so a record taken while
-                    // it is full was dropped: with a page written only once
-                    // a pass, a full-rate log lost about a third of its
-                    // records that way. A store that programs in the
-                    // background (SPI NOR) takes the next page once it is
-                    // idle, and the records wait queued until then; in an SD
-                    // card's window a page write is a RAM copy, so a pass can
-                    // write several. A failed write stays pending for the
-                    // check above to report.
-                    if pending_page.is_none() {
-                        *pending_page = assembler.take_ready_page();
-                    }
-                    if let Some(page) = pending_page.as_ref() {
-                        if flash_device.busy().unwrap_or(true) {
-                            break;
-                        }
-                        let Some(address) = layout.log_page_address(*next_page_index) else {
-                            break;
-                        };
-                        if flash_device.page_program(address, page).is_err() {
-                            break;
-                        }
-                        *pending_page = None;
-                        *next_page_index = next_page_index.saturating_add(1);
-                        FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
-                    }
-                    let Some(record) = flash_record_consumer.dequeue() else {
-                        break;
-                    };
-                    drained += 1;
-                    // Bench-only: record while disarmed so the flash write
-                    // path can be exercised without flying. The record's own
-                    // armed flag stays honest, so a capture made this way is
-                    // still identifiable as ground data.
-                    #[cfg(feature = "bench_blackbox")]
-                    let armed = true;
-                    #[cfg(not(feature = "bench_blackbox"))]
-                    let armed = record.flags & 1 != 0;
-                    if armed && !assembler.recording() {
-                        assembler.start(*next_flight_id, *boot_session_start_pending);
-                        *boot_session_start_pending = false;
-                        *next_flight_id = next_flight_id.wrapping_add(1).max(1);
-                    }
-                    if armed {
-                        if assembler.push(record).is_err() {
-                            FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
-                        }
-                    } else if assembler.recording() && assembler.stop().is_err() {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-            } else if !cfg!(feature = "bench_blackbox")
-                // A bench image records disarmed throughout; ending its
-                // flight whenever the queue ran dry split one run into
-                // hundreds of tiny flights.
-                && !SAFETY_ARMED.load(Ordering::Acquire)
-                && assembler.recording()
-                && assembler.stop().is_err()
-            {
-                FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-            }
+            let drained = log.drain(
+                flash_device,
+                layout,
+                flash_record_consumer,
+                SAFETY_ARMED.load(Ordering::Acquire),
+                // Bench-only: record while disarmed, so the flash write path
+                // can be exercised without flying.
+                cfg!(feature = "bench_blackbox"),
+            );
+            FLASH_PAGES_WRITTEN.fetch_add(drained.pages_written, Ordering::Relaxed);
+            FLASH_RECORDS_DROPPED.fetch_add(drained.records_dropped, Ordering::Relaxed);
+            FLASH_WRITE_FAULTS.fetch_add(drained.write_faults, Ordering::Relaxed);
         }
 
         Mono::delay(1u64.millis()).await;

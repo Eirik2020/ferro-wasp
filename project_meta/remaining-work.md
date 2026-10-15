@@ -75,10 +75,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Board data from existing targets.** Generate a board's data crate from its
   ArduPilot or Betaflight target definition.
 - **Host-testable flash manager.** The configuration save
-  (`ferrowasp-flight::config_save`) and the log erase, sync-ledger mark and
-  scratch test (`storage_maintenance`) are host-tested state machines. Still
-  inside the task: startup recovery, command dispatch, the MSPv2 handler, and
-  page writing.
+  (`ferrowasp-flight::config_save`), the log erase, sync-ledger mark and
+  scratch test (`storage_maintenance`), and the flight log writer
+  (`log_writer`) are host-tested. Still inside the task: startup recovery,
+  command dispatch, and the MSPv2 handler. The log writer has not recorded on
+  hardware since; a `bench_blackbox` run needs the BOOT button to leave.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3

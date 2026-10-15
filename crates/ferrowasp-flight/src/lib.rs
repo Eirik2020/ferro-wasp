@@ -12,6 +12,7 @@ pub mod drone_toolbox;
 pub mod esc_manager;
 pub mod flash_storage;
 pub mod log_sync;
+pub mod log_writer;
 pub mod osd;
 pub mod rc_receiver;
 pub mod storage_maintenance;
