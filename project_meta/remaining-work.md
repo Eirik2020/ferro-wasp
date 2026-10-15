@@ -74,8 +74,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   timebase moved to a 16-bit timer with wrap extension.
 - **Board data from existing targets.** Generate a board's data crate from its
   ArduPilot or Betaflight target definition.
-- **Host-testable flash manager.** Move the shared flash manager's logic into a
-  state machine with host tests.
+- **Host-testable flash manager.** The configuration save is a host-tested
+  state machine (`ferrowasp-flight::config_save`). Still inside the task: the
+  log erase, the sync-ledger mark, the scratch-sector test, startup recovery,
+  command dispatch, the MSPv2 handler, and page writing.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3

@@ -11,6 +11,7 @@ use ferrowasp_flight::accel_level::{AccelLevelCalibration, CalibrationError};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_flight::blackbox_storage as blackbox_task;
 use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter, reboot_refusal};
+use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
 use ferrowasp_flight::{log_sync, sync_ledger};
 use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
 #[cfg(feature = "mspv2_configurator")]
@@ -198,28 +199,18 @@ pub fn flash_scratch_test_page() -> [u8; ferrowasp_core::blackbox::FLASH_PAGE_LE
     flash_task::scratch_test_page()
 }
 
-/// Starts the two-slot atomic save of `config`: the phases in the task write,
-/// verify and then adopt it. `Err` is the answer line when it cannot start.
-#[allow(clippy::too_many_arguments)]
+/// Starts saving `config` (`ConfigSave`), answering the link that asked
+/// when it completes. `Err` is the answer line when it cannot start.
 fn begin_config_save(
+    config_save: &mut ConfigSave,
     config: flash_task::StoredConfig,
     config_sequence: u32,
     config_active_slot: u8,
-    config_save_candidate: &mut flash_task::StoredConfig,
-    config_save_page: &mut [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
-    config_save_slot: &mut u8,
-    config_save_phase: &mut u8,
     flash_responses: &mut ResponseRouter,
 ) -> Result<(), &'static str> {
-    let page = ferrowasp_core::blackbox::encode_config_page(
-        config_sequence.wrapping_add(1),
-        &config.encode(),
-    )
-    .map_err(|_| "ERR config encoding failed\r\n")?;
-    *config_save_candidate = config;
-    *config_save_page = page;
-    *config_save_slot = 1 - config_active_slot;
-    *config_save_phase = 1;
+    config_save
+        .begin(config, config_sequence, config_active_slot)
+        .map_err(|_| "ERR config encoding failed\r\n")?;
     flash_responses.start_maintenance();
     Ok(())
 }
@@ -265,13 +256,9 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         config_active_slot: u8 = 1,
         erase_sector_index: Option<u32> = None,
         flash_test_phase: u8 = 0,
-        config_save_phase: u8 = 0,
         sync_mark: Option<u32> = None,
         sync_mark_steps: u8 = 0,
-        config_save_slot: u8 = 0,
-        config_save_candidate: flash_task::StoredConfig,
-        config_save_page: [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] =
-            [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
+        config_save: ConfigSave = ConfigSave::idle(),
         staged_rpc_config: Option<flash_task::StoredConfig> = None,
         config_rpc_completion: Option<ConfigRpcCompletion> = None,
         write_back_since_ms: Option<u64> = None,
@@ -312,12 +299,9 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let config_active_slot = cx.local.config_active_slot;
     let erase_sector_index = cx.local.erase_sector_index;
     let flash_test_phase = cx.local.flash_test_phase;
-    let config_save_phase = cx.local.config_save_phase;
     let sync_mark = cx.local.sync_mark;
     let sync_mark_steps = cx.local.sync_mark_steps;
-    let config_save_slot = cx.local.config_save_slot;
-    let config_save_candidate = cx.local.config_save_candidate;
-    let config_save_page = cx.local.config_save_page;
+    let config_save = cx.local.config_save;
     let staged_rpc_config = cx.local.staged_rpc_config;
     let config_rpc_completion = cx.local.config_rpc_completion;
     let write_back_since_ms = cx.local.write_back_since_ms;
@@ -413,7 +397,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 *next_flight_id = flight;
                 *log_region_writable = writable;
                 *stored_config = config;
-                *config_save_candidate = config;
                 *config_sequence = sequence;
                 *config_active_slot = slot;
                 publish_accel_level(config.accel_level);
@@ -458,7 +441,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             if SAFETY_ARMED.load(Ordering::Acquire)
                 && (erase_sector_index.is_some()
                     || *flash_test_phase != 0
-                    || *config_save_phase != 0
+                    || config_save.is_active()
                     || sync_mark.is_some())
             {
                 // An erase stopped part-way has cleared the top of the log
@@ -482,7 +465,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 }
                 *erase_sector_index = None;
                 *flash_test_phase = 0;
-                *config_save_phase = 0;
+                config_save.cancel();
                 *sync_mark = None;
                 #[cfg(feature = "mspv2_configurator")]
                 let rpc_notified = finish_config_rpc_error(
@@ -611,94 +594,45 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 _ => {}
             }
 
-            match *config_save_phase {
-                1 => {
-                    let address = layout.config_slot_addresses[*config_save_slot as usize];
-                    if flash_device.erase_sector_4k(address).is_err() {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        *config_save_phase = 0;
-                        #[cfg(feature = "mspv2_configurator")]
-                        let rpc_notified = finish_config_rpc_error(
-                            flash_rpc_response_producer,
-                            config_rpc_completion,
-                            mspv2::rpc::DeviceError::WriteFailure,
+            match config_save.step(flash_device, layout) {
+                SaveStep::Idle => {}
+                SaveStep::Running => continue,
+                SaveStep::Failed(failure) => {
+                    FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                    #[cfg(feature = "mspv2_configurator")]
+                    let rpc_notified = finish_config_rpc_error(
+                        flash_rpc_response_producer,
+                        config_rpc_completion,
+                        match failure {
+                            SaveFailure::Verify => mspv2::rpc::DeviceError::ChecksumMismatch,
+                            _ => mspv2::rpc::DeviceError::WriteFailure,
+                        },
+                    );
+                    #[cfg(not(feature = "mspv2_configurator"))]
+                    let rpc_notified = false;
+                    if !rpc_notified {
+                        queue_storage_response(
+                            flash_responses,
+                            match failure {
+                                SaveFailure::Erase => "ERR config slot erase failed\r\n",
+                                SaveFailure::Program => "ERR config page program failed\r\n",
+                                SaveFailure::Verify | SaveFailure::Encoding => {
+                                    "ERR config persistence verification failed\r\n"
+                                }
+                            },
                         );
-                        #[cfg(not(feature = "mspv2_configurator"))]
-                        let rpc_notified = false;
-                        if !rpc_notified {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR config slot erase failed\r\n",
-                            );
-                        }
-                    } else {
-                        *config_save_phase = 2;
                     }
                     continue;
                 }
-                2 => {
-                    let address = layout.config_slot_addresses[*config_save_slot as usize];
-                    if flash_device
-                        .page_program(address, config_save_page)
-                        .is_err()
-                    {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        *config_save_phase = 0;
-                        #[cfg(feature = "mspv2_configurator")]
-                        let rpc_notified = finish_config_rpc_error(
-                            flash_rpc_response_producer,
-                            config_rpc_completion,
-                            mspv2::rpc::DeviceError::WriteFailure,
-                        );
-                        #[cfg(not(feature = "mspv2_configurator"))]
-                        let rpc_notified = false;
-                        if !rpc_notified {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR config page program failed\r\n",
-                            );
-                        }
-                    } else {
-                        *config_save_phase = 3;
-                    }
-                    continue;
-                }
-                3 => {
-                    let address = layout.config_slot_addresses[*config_save_slot as usize];
-                    let mut persisted = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
-                    let expected_sequence = config_sequence.wrapping_add(1);
-                    let expected_payload = config_save_candidate.encode();
-                    let verified = flash_device.read(address, &mut persisted).is_ok()
-                        && matches!(
-                            ferrowasp_core::blackbox::decode_config_page(&persisted),
-                            Ok((sequence, payload))
-                                if sequence == expected_sequence
-                                    && payload == expected_payload.as_slice()
-                        );
-                    if !verified {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        *config_save_phase = 0;
-                        #[cfg(feature = "mspv2_configurator")]
-                        let rpc_notified = finish_config_rpc_error(
-                            flash_rpc_response_producer,
-                            config_rpc_completion,
-                            mspv2::rpc::DeviceError::ChecksumMismatch,
-                        );
-                        #[cfg(not(feature = "mspv2_configurator"))]
-                        let rpc_notified = false;
-                        if !rpc_notified {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR config persistence verification failed\r\n",
-                            );
-                        }
-                        continue;
-                    }
-                    *stored_config = *config_save_candidate;
+                SaveStep::Saved {
+                    config,
+                    slot,
+                    sequence,
+                } => {
+                    *stored_config = config;
+                    *config_active_slot = slot;
+                    *config_sequence = sequence;
                     publish_accel_level(stored_config.accel_level);
-                    *config_active_slot = *config_save_slot;
-                    *config_sequence = config_sequence.wrapping_add(1);
-                    *config_save_phase = 0;
                     FLASH_LOG_RATE_DIVISOR
                         .store(u32::from(stored_config.log_rate_divisor), Ordering::Relaxed);
                     cx.shared
@@ -739,7 +673,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         queue_storage_response(flash_responses, "OK config saved\r\n");
                     }
                 }
-                _ => {}
             }
 
             if let Some((command, link)) = flash_commands.take_next() {
@@ -747,7 +680,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 let mut response = heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
                 let maintenance_busy = erase_sector_index.is_some()
                     || *flash_test_phase != 0
-                    || *config_save_phase != 0
+                    || config_save.is_active()
                     || sync_mark.is_some()
                     || accel_calibration.is_some();
                 let unfinished_flight = assembler.unfinished_flight(pending_page.is_some());
@@ -844,7 +777,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             );
                         } else if erase_sector_index.is_some()
                             || *flash_test_phase != 0
-                            || *config_save_phase != 0
+                            || config_save.is_active()
                             || sync_mark.is_some()
                             || accel_calibration.is_some()
                         {
@@ -907,7 +840,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             );
                         } else if erase_sector_index.is_some()
                             || *flash_test_phase != 0
-                            || *config_save_phase != 0
+                            || config_save.is_active()
                             || sync_mark.is_some()
                             || accel_calibration.is_some()
                         {
@@ -1075,7 +1008,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             );
                         } else if erase_sector_index.is_some()
                             || *flash_test_phase != 0
-                            || *config_save_phase != 0
+                            || config_save.is_active()
                             || sync_mark.is_some()
                             || accel_calibration.is_some()
                         {
@@ -1085,13 +1018,10 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             );
                         } else {
                             let answer = match begin_config_save(
+                                config_save,
                                 *stored_config,
                                 *config_sequence,
                                 *config_active_slot,
-                                config_save_candidate,
-                                config_save_page,
-                                config_save_slot,
-                                config_save_phase,
                                 flash_responses,
                             ) {
                                 Ok(()) => "OK config save started\r\n",
@@ -1194,7 +1124,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 let request_id = request.request_id;
                 let maintenance_busy = erase_sector_index.is_some()
                     || *flash_test_phase != 0
-                    || *config_save_phase != 0
+                    || config_save.is_active()
                     || sync_mark.is_some()
                     || accel_calibration.is_some();
                 let active_blackbox_id = assembler
@@ -1267,16 +1197,12 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                     mspv2::rpc::DeviceError::ConfigurationConflict,
                                 ))
                             } else {
-                                let next_sequence = config_sequence.wrapping_add(1);
-                                match ferrowasp_core::blackbox::encode_config_page(
-                                    next_sequence,
-                                    &candidate.encode(),
+                                match config_save.begin(
+                                    candidate,
+                                    *config_sequence,
+                                    *config_active_slot,
                                 ) {
-                                    Ok(page) => {
-                                        *config_save_candidate = candidate;
-                                        *config_save_page = page;
-                                        *config_save_slot = 1 - *config_active_slot;
-                                        *config_save_phase = 1;
+                                    Ok(()) => {
                                         *config_rpc_completion =
                                             Some(ConfigRpcCompletion::Commit(request_id));
                                         *staged_rpc_config = None;
@@ -1304,17 +1230,12 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         } else if maintenance_busy {
                             Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
                         } else {
-                            let candidate = CONFIG::DEFAULT_STORED_CONFIG;
-                            let next_sequence = config_sequence.wrapping_add(1);
-                            match ferrowasp_core::blackbox::encode_config_page(
-                                next_sequence,
-                                &candidate.encode(),
+                            match config_save.begin(
+                                CONFIG::DEFAULT_STORED_CONFIG,
+                                *config_sequence,
+                                *config_active_slot,
                             ) {
-                                Ok(page) => {
-                                    *config_save_candidate = candidate;
-                                    *config_save_page = page;
-                                    *config_save_slot = 1 - *config_active_slot;
-                                    *config_save_phase = 1;
+                                Ok(()) => {
                                     *config_rpc_completion =
                                         Some(ConfigRpcCompletion::Defaults(request_id));
                                     *staged_rpc_config = None;
@@ -1449,17 +1370,14 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     let saved = outcome.and_then(|level| {
                         let mut config = *stored_config;
                         config.accel_level = level;
-                        if *config_save_phase != 0 || erase_sector_index.is_some() {
+                        if config_save.is_active() || erase_sector_index.is_some() {
                             return Err("ERR flash maintenance already active\r\n");
                         }
                         begin_config_save(
+                            config_save,
                             config,
                             *config_sequence,
                             *config_active_slot,
-                            config_save_candidate,
-                            config_save_page,
-                            config_save_slot,
-                            config_save_phase,
                             flash_responses,
                         )
                         .map(|()| level)
