@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a179f26a.js";
+            window.path_to_searchindex_js = "searchindex-d1c1f02f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -205,9 +205,17 @@ and refused unless every motor is stopped and no command lease is active.</p>
 <h2 id="motor-bank"><a class="header" href="#motor-bank">Motor Bank</a></h2>
 <p>Each lane is a timer compare channel whose DMA stream writes the next bit’s
 compare value at every bit boundary. The four lanes form one bank and one
-fault domain: the bank owns both timers, all four DMA streams, every motor pin,
-and every DMA buffer. The timer and DMA routes are board facts, declared in
-each board’s data crate under <code>firmware/&lt;board&gt;/board/src/routes.rs</code>.</p>
+fault domain: the bank owns its timers, all four DMA streams, and every DMA
+buffer.</p>
+<p>Which timers, channels, and streams carry the motors is the board’s. Its glue
+hands the chip backend its timers and names each motor’s lane as a timer, a
+channel, and a stream; the DMA plan is in its data crate under
+<code>firmware/&lt;board&gt;/board/src/routes.rs</code>. A lane’s compare register and DMA
+request follow from the timer’s and channel’s types, so they cannot disagree,
+and a route the backend has not declared does not compile. All of a bank’s
+lane timers must count the same timer clock, because one bit timing encodes
+every lane; on the STM32F405 that means not mixing the APB2 timers (TIM1,
+TIM8) with the APB1 ones.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -219,8 +227,10 @@ each board’s data crate under <code>firmware/&lt;board&gt;/board/src/routes.rs
 </tbody>
 </table>
 </div>
-<p>Before each frame set the bank stops both timers, prepares all four streams,
-stages every lane’s first bit, and then starts the timers together. A frame set
+<p>Before each frame set the bank stops its timers, prepares all four streams,
+stages every lane’s first bit, and then starts the timers together: from one
+timer’s trigger output where the board chooses that and the chip wires it, or
+back to back in software. A frame set
 is complete only when all four lanes report transfer completion. A transfer or
 direct-mode error, an unexpected or duplicate interrupt, or a frame set still
 in flight after 1 ms faults the whole bank: the timers stop, the streams are

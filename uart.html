@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a179f26a.js";
+            window.path_to_searchindex_js = "searchindex-d1c1f02f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -232,8 +232,9 @@ verify the saved table by readback.</li>
 <li>Port transports are role-free and chip-neutral
 (<code>crates/ferrowasp-stm32/src/uart_port.rs</code>): they record faults on the
 stream, and the function task decides what a fault means. Each family’s
-backend starts its ports (<code>init_f405_uart_ports</code>, <code>init_h743_uart_ports</code>),
-and <code>crates/ferrowasp-stm32-tasks/src/uart_port.rs</code> defines the receive
+backend starts one port at a time (<code>start_rx_tx_port</code>, <code>start_rx_port</code>);
+a board’s <code>init_uart_ports</code>, in its <code>src/board/</code>, chooses which ports, pins,
+and DMA streams it has, and <code>crates/ferrowasp-stm32-tasks/src/uart_port.rs</code> defines the receive
 and transmit tasks of every logical port for a board to bind. All UART
 transports run at priority 11, since any port may serve any function; the
 function tasks keep their own priorities.</li>
