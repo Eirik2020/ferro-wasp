@@ -9,7 +9,7 @@ use core::fmt::Write as _;
 use ferrowasp_drivers::nor_storage::NorStorage;
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_flight::blackbox_storage as blackbox_task;
-use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
+use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter, reboot_refusal};
 use ferrowasp_flight::{log_sync, sync_ledger};
 use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
 #[cfg(feature = "mspv2_configurator")]
@@ -1052,21 +1052,12 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     // maintenance or flight log open, written-back pages
                     // flushed, and the last program or erase finished.
                     flash_task::StorageCommand::Reboot { rom_bootloader } => {
-                        if SAFETY_ARMED.load(Ordering::Acquire) {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR reboot disabled while armed\r\n",
-                            );
-                        } else if maintenance_busy {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flash maintenance already active\r\n",
-                            );
-                        } else if unfinished_flight.is_some() {
-                            queue_storage_response(
-                                flash_responses,
-                                "ERR flight log still being written\r\n",
-                            );
+                        if let Some(refusal) = reboot_refusal(
+                            SAFETY_ARMED.load(Ordering::Acquire),
+                            maintenance_busy,
+                            unfinished_flight.is_some(),
+                        ) {
+                            queue_storage_response(flash_responses, refusal);
                         } else {
                             let flushed =
                                 !flash_device.write_back_pending() || flash_device.flush().is_ok();

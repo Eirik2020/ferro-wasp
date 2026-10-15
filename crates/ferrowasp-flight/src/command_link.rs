@@ -29,6 +29,26 @@ impl StorageCommand {
     }
 }
 
+/// Why the storage owner refuses `reboot` now, as its answer line, or `None`
+/// when it may go ahead. A restart cuts the store off, so it waits for the
+/// craft to be disarmed, flash maintenance to finish, and the flight log to
+/// close.
+pub const fn reboot_refusal(
+    armed: bool,
+    maintenance_busy: bool,
+    flight_log_open: bool,
+) -> Option<&'static str> {
+    if armed {
+        Some("ERR reboot disabled while armed\r\n")
+    } else if maintenance_busy {
+        Some("ERR flash maintenance already active\r\n")
+    } else if flight_log_open {
+        Some("ERR flight log still being written\r\n")
+    } else {
+        None
+    }
+}
+
 /// The storage owner's command queues, read in turn so a busy link cannot
 /// starve the other.
 pub struct CommandSources {
@@ -191,6 +211,23 @@ mod tests {
                 CommandLink::Usb,
                 CommandLink::Serial
             ]
+        );
+    }
+
+    #[test]
+    fn reboot_waits_for_disarm_idle_storage_and_a_closed_log() {
+        assert_eq!(reboot_refusal(false, false, false), None);
+        assert_eq!(
+            reboot_refusal(true, true, true),
+            Some("ERR reboot disabled while armed\r\n")
+        );
+        assert_eq!(
+            reboot_refusal(false, true, true),
+            Some("ERR flash maintenance already active\r\n")
+        );
+        assert_eq!(
+            reboot_refusal(false, false, true),
+            Some("ERR flight log still being written\r\n")
         );
     }
 
