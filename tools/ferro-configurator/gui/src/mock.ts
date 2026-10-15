@@ -20,6 +20,7 @@ import {
   type DownloadSummary,
   type SyncedFlight,
   type SyncProgress,
+  type AccelLevel,
   type FlashReport,
   type FlashStage,
 } from "./api";
@@ -75,6 +76,7 @@ export class MockApi implements Api {
   readonly escReversed = [false, false, false, false];
   private aux = 988;
   private connected = false;
+  private level: AccelLevel = { x_mg: 0, y_mg: 0, z_mg: 0 };
   private config = baselineConfig();
   // The Foxeer F405 V2's default wiring.
   private bindings: SerialBindings = {
@@ -402,5 +404,20 @@ export class MockApi implements Api {
       base_address: 0x0800_0000,
       restarted_port: "COM6",
     };
+  }
+
+  async accelLevel(): Promise<AccelLevel> {
+    this.requireConnection();
+    return { ...this.level };
+  }
+
+  async calibrateAccelerometer(): Promise<AccelLevel> {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    await sleep(700);
+    this.level = { x_mg: 14, y_mg: -38, z_mg: 6 };
+    return { ...this.level };
   }
 }

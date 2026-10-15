@@ -10,6 +10,7 @@ import {
   SERIAL_FUNCTIONS,
   toBridgeError,
   type Api,
+  type AccelLevel,
   type FerroConfig,
   type FlashStage,
   type PrearmCheck,
@@ -370,6 +371,7 @@ async function connect(choice: string | null = selectedPort(), quiet = false): P
     await pollSafety();
     await loadConfig();
     await loadPorts();
+    await loadAccelLevel();
     motors.setConnected(true);
     startPolling();
     return true;
@@ -415,6 +417,7 @@ async function disconnect(): Promise<void> {
   config = null;
   bindings = null;
   element("device-description").textContent = "";
+  renderAccelLevel(null);
   renderSafety();
   renderConfig();
   renderPorts();
@@ -543,6 +546,12 @@ function updateWriteControls(): void {
   applyPorts.disabled = !portsAllowed;
   applyPorts.title = portsAllowed
     ? "Save and verify the changed ports; reboot the controller to apply them"
+    : "Available when a disarmed controller is connected";
+
+  const calibrate = element<HTMLButtonElement>("calibrate-accel");
+  calibrate.disabled = !writable || firmwareBusy;
+  calibrate.title = writable
+    ? "Average half a second of the accelerometer on a still, level craft"
     : "Available when a disarmed controller is connected";
 
   for (const id of ["reboot", "reboot-dfu"]) {
@@ -757,6 +766,40 @@ async function syncFlights(): Promise<void> {
     report(error);
   } finally {
     progress.hidden = true;
+  }
+}
+
+// ------------------------------------------------------------ calibration ---
+
+function renderAccelLevel(level: AccelLevel | null): void {
+  element("accel-level").textContent =
+    level === null
+      ? ""
+      : `Level offset: x ${String(level.x_mg)} mg, y ${String(level.y_mg)} mg, z ${String(level.z_mg)} mg`;
+}
+
+/** Older firmware has no `imu level`; the readout then stays empty. */
+async function loadAccelLevel(): Promise<void> {
+  try {
+    renderAccelLevel(await api.accelLevel());
+  } catch {
+    renderAccelLevel(null);
+  }
+}
+
+async function calibrateAccelerometer(): Promise<void> {
+  firmwareBusy = true;
+  updateWriteControls();
+  setStatusLine("Calibrating: keep the craft still…", "busy");
+  try {
+    const level = await api.calibrateAccelerometer();
+    renderAccelLevel(level);
+    setStatusLine("Accelerometer level calibrated and saved.");
+  } catch (error) {
+    report(error);
+  } finally {
+    firmwareBusy = false;
+    updateWriteControls();
   }
 }
 
@@ -1016,6 +1059,7 @@ function wire(): void {
   });
   addGainSliders();
   element("reboot").addEventListener("click", () => void reboot(false));
+  element("calibrate-accel").addEventListener("click", () => void calibrateAccelerometer());
   element("reboot-dfu").addEventListener("click", () => void reboot(true));
   element("flash").addEventListener("click", () => void flashFirmware());
   for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="firmware-source"]')) {

@@ -12,6 +12,7 @@ import {
   toBridgeError,
   type Api,
   type DownloadProgress,
+  type AccelLevel,
   type DownloadSummary,
   type FlashReport,
   type FlashStage,
@@ -127,6 +128,14 @@ export class TauriApi implements Api {
 
   reboot(dfu: boolean): Promise<void> {
     return call<void>("reboot", { dfu });
+  }
+
+  accelLevel(): Promise<AccelLevel> {
+    return call<AccelLevel>("accel_level");
+  }
+
+  calibrateAccelerometer(): Promise<AccelLevel> {
+    return call<AccelLevel>("calibrate_accelerometer");
   }
 
   async flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport> {

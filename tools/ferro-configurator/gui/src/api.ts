@@ -200,6 +200,13 @@ export interface DownloadSummary {
   path: string;
 }
 
+/** Where the accelerometer reads level, milli-g per drone axis. */
+export interface AccelLevel {
+  x_mg: number;
+  y_mg: number;
+  z_mg: number;
+}
+
 /** One step of a flash, as the Rust session reports it. */
 export type FlashStage =
   | { stage: "entering_bootloader"; port: string }
@@ -268,4 +275,12 @@ export interface Api {
    * bootloader is flashed as it is. Reconnects when the controller returns.
    */
   flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport>;
+  /** The stored accelerometer level. */
+  accelLevel(): Promise<AccelLevel>;
+  /**
+   * Calibrates the accelerometer's level and saves it. The craft must be
+   * disarmed, still and within 10 degrees of level; the controller refuses
+   * otherwise.
+   */
+  calibrateAccelerometer(): Promise<AccelLevel>;
 }

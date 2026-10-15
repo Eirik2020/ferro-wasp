@@ -217,6 +217,21 @@ PID changes can cause violent oscillation. Change one controlled variable at a
 time, verify the entire configuration, and repeat relevant props-off checks
 before flight.
 
+## Calibrate the accelerometer
+
+Set the craft still on level ground, disarmed, then press Calibrate
+accelerometer on the configurator's Setup tab, or run:
+
+```powershell
+.\ferro-configurator.exe --port $Port imu calibrate
+```
+
+The controller averages about half a second of the accelerometer and saves
+where it reads level with the configuration; `imu level` shows it. It refuses a
+craft that moves or leans more than 10 degrees. The level corrects the
+attitude the OSD and the configurator show; the rate loop that flies the craft
+does not use the accelerometer. The gyro still calibrates itself at every boot.
+
 ## Use a CRSF receiver
 
 Wire an ExpressLRS or Crossfire receiver to the plain R2/T2 pads, not the

@@ -76,10 +76,28 @@ enum Command {
     Flash(FlashArgs),
     /// Inspect the bundled flasher and connected STM32 DFU devices.
     Dfu(DfuArgs),
+    /// Calibrate the accelerometer's level, or show it.
+    Imu(ImuArgs),
     /// Run read-only host and USB diagnostics.
     Doctor,
     /// Observe a controller for bench evidence, without commanding it.
     Bench(BenchArgs),
+}
+
+#[derive(Debug, Args)]
+struct ImuArgs {
+    #[command(subcommand)]
+    command: ImuCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ImuCommand {
+    /// Calibrate the accelerometer's level and save it. Set the craft still
+    /// on level ground first; the controller refuses movement or a lean over
+    /// 10 degrees.
+    Calibrate,
+    /// Show the stored accelerometer level offsets.
+    Level,
 }
 
 #[derive(Debug, Args)]
@@ -907,6 +925,26 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 println!("dfu-util completed successfully and requested application start.");
                 println!(
                     "If BOOT0 was held or bridged, release it before the controller restarts."
+                );
+            })
+        }
+        Command::Imu(args) => {
+            let mut client = connect(cli, timeout)?;
+            let (operation, level) = match args.command {
+                ImuCommand::Calibrate => ("imu.calibrate", client.calibrate_accelerometer()?),
+                ImuCommand::Level => ("imu.level", client.accel_level()?),
+            };
+            emit(cli.format, operation, &level, || {
+                println!(
+                    "Accelerometer level offset: x {} mg, y {} mg, z {} mg{}",
+                    level.x_mg,
+                    level.y_mg,
+                    level.z_mg,
+                    if operation == "imu.calibrate" {
+                        "; calibrated and saved."
+                    } else {
+                        "."
+                    }
                 );
             })
         }

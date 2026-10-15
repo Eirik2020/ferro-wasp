@@ -28,6 +28,10 @@ artifact is stable, airworthy, or production-ready.
   motor order, from FerroConfigurator or the USB command line.
 - FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
   live stick readout, and a rates curve.
+- Accelerometer level calibration: `imu calibrate` on a still, level craft
+  saves where the accelerometer reads level, and the attitude estimate uses
+  it. FerroConfigurator's Setup tab has a Calibrate button, and `imu
+  calibrate` and `imu level` commands. Stored configuration version 7.
 - `reboot` and `reboot dfu` on the USB command line, disarmed only: the
   second restarts the board into the STM32 ROM bootloader. FerroConfigurator's
   `flash` uses it, so a board running FerroWasp is flashed without the BOOT

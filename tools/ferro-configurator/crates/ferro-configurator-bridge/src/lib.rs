@@ -21,8 +21,8 @@
 use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
-    BoardProfile, CatalogEntry, DFU_ENTRY_TIMEOUT, DeviceSelector, DownloadSummary, FerroClient,
-    FerroConfig, FerroError, FlashInfo, FlashProgress, FlightCatalog, FlightSelector,
+    AccelLevel, BoardProfile, CatalogEntry, DFU_ENTRY_TIMEOUT, DeviceSelector, DownloadSummary,
+    FerroClient, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightCatalog, FlightSelector,
     LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck, RESTART_TIMEOUT, SerialBindings,
     SerialTransport, StatusSnapshot, SyncedFlight, catalog_device, detect_dfu, discover_ports,
     download_flight, find_bundled_firmware, flash_firmware, open_device, prearm_checks,
@@ -192,7 +192,8 @@ impl<T: LineTransport> Session<T> {
 
     /// Runs `work` on the open client. A transport failure means the port
     /// is gone, so the session closes it and reports the loss rather than an
-    /// ordinary device error the front-end would retry forever.
+    /// ordinary device error the front-end would retry forever. A firmware
+    /// `ERR` answer is the controller refusing, and reads as one.
     fn with_client<R>(
         &mut self,
         work: impl FnOnce(&mut FerroClient<T>) -> std::result::Result<R, FerroError>,
@@ -203,6 +204,9 @@ impl<T: LineTransport> Session<T> {
                 Err(BridgeError::Lost {
                     message: format!("lost the connection to {port}: {reason}"),
                 })
+            }
+            Err(FerroError::DeviceRejected { message, .. }) => {
+                Err(BridgeError::Refused { reason: message })
             }
             result => result.map_err(Into::into),
         }
@@ -319,6 +323,18 @@ impl<T: LineTransport> Session<T> {
             });
         }
         Ok(())
+    }
+
+    /// The stored accelerometer level.
+    pub fn accel_level(&mut self) -> Result<AccelLevel> {
+        self.with_client(FerroClient::accel_level)
+    }
+
+    /// Calibrates the accelerometer's level and saves it. Refused here while
+    /// armed; the controller also refuses a craft that moves or leans.
+    pub fn calibrate_accelerometer(&mut self) -> Result<AccelLevel> {
+        self.require_disarmed()?;
+        self.with_client(FerroClient::calibrate_accelerometer)
     }
 
     /// Restarts the controller, or with `rom_bootloader` puts it in its ROM
@@ -560,6 +576,22 @@ mod tests {
         assert!(matches!(session.live(), Err(BridgeError::Lost { .. })));
         assert!(!session.is_connected());
         assert_eq!(session.live().unwrap_err(), BridgeError::NotConnected);
+    }
+
+    #[test]
+    fn a_failed_calibration_is_a_refusal_with_the_controllers_reason() {
+        let mut session = session_answering(&[
+            status_line(false),
+            "OK imu calibration started; keep the craft still".to_owned(),
+            "ERR imu calibration failed; the craft moved".to_owned(),
+        ]);
+        assert_eq!(
+            session.calibrate_accelerometer().unwrap_err(),
+            BridgeError::Refused {
+                reason: "imu calibration failed; the craft moved".to_owned()
+            }
+        );
+        assert!(session.is_connected());
     }
 
     #[test]

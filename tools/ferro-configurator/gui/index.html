@@ -53,6 +53,13 @@
         <p id="prearm-empty" class="note">Connect a disarmed controller to see what stops it arming.</p>
         <ul id="prearm-checks" aria-label="Pre-arm checks"></ul>
         <h2>Attitude</h2>
+        <div class="row">
+          <button id="calibrate-accel" type="button" disabled>Calibrate accelerometer</button>
+          <span id="accel-level" class="note"></span>
+        </div>
+        <p class="note">Set the craft still on level ground first. The level is
+          saved with the configuration and corrects the attitude shown here and
+          on the OSD.</p>
         <div id="quad-viewer"></div>
       </section>
 
