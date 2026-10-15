@@ -93,7 +93,9 @@ impl FrameRotation {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ImuControlAxisProfile {
-    pub gyro_raw_to_dps: u32,
+    /// Gyro counts per degree per second, times ten: 164 is 16.4, the
+    /// ±2000 °/s range. Divide a raw reading by a tenth of it for °/s.
+    pub gyro_counts_per_dps10: u32,
     pub drone_body_frame: DroneBodyFrame,
     pub imu_to_board_rotation: FrameRotation,
     pub board_to_drone_rotation: FrameRotation,
@@ -181,7 +183,7 @@ mod tests {
     #[test]
     fn imu_profile_composes_board_and_controller_frames() {
         let profile = ImuControlAxisProfile {
-            gyro_raw_to_dps: 164,
+            gyro_counts_per_dps10: 164,
             drone_body_frame: DroneBodyFrame::ForwardRightDown,
             imu_to_board_rotation: FrameRotation::new([1, 0, 2], [-1, -1, -1]),
             board_to_drone_rotation: FrameRotation::IDENTITY,

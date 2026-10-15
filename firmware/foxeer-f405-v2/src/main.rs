@@ -880,7 +880,7 @@ ferroforge::app! {
             serial_routes: &'static [SerialRoute] = board::serial::SERIAL_ROUTES,
             imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile =
                 IMU_CONTROL_AXIS_PROFILE,
-            imu_gyro_raw_to_dps: f32 = IMU_GYRO_RAW_TO_DPS,
+            imu_gyro_counts_per_dps: f32 = IMU_GYRO_COUNTS_PER_DPS,
             logical_to_physical_motor_output: [usize; 4] =
                 board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
             control_loop_rate_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,

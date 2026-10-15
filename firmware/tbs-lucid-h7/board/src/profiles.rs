@@ -60,7 +60,7 @@ const _: () = assert!(ferrowasp_flight::drone_toolbox::scheduler_divides_exactly
 /// ArduPilot's hwdef disagrees with Betaflight for this board, so the
 /// orientation must be bench-verified before arming.
 pub const IMU_CONTROL_AXIS_PROFILE: ImuControlAxisProfile = ImuControlAxisProfile {
-    gyro_raw_to_dps: 164,
+    gyro_counts_per_dps10: 164,
     drone_body_frame: DroneBodyFrame::ForwardRightDown,
     imu_to_board_rotation: FrameRotation::new([1, 0, 2], [1, -1, 1]),
     board_to_drone_rotation: FrameRotation::IDENTITY,
