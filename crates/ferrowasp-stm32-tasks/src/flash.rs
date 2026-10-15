@@ -14,6 +14,7 @@ use ferrowasp_flight::{log_sync, sync_ledger};
 use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
+use ferrowasp_stm32::system_reset::RebootTarget;
 use ferrowasp_stm32::uart_port as stm32_port;
 
 /// How many blackbox records the flash task consumes per pass.
@@ -29,6 +30,15 @@ pub const WRITE_BACK_MAX_AGE_MS: u64 = 100;
 
 /// Erase, header and bit are the most one acknowledgement can take.
 pub const MAX_SYNC_MARK_STEPS: u8 = 3;
+
+/// How long a reboot waits for the store to finish its last program, in
+/// milliseconds. With maintenance refused, that is one page program, a few
+/// milliseconds on SPI NOR; a 4 KiB sector erase takes at most 400.
+pub const REBOOT_STORAGE_SETTLE_MS: u32 = 500;
+
+/// How long a reboot waits after answering, so the answer leaves over USB
+/// before the port goes away.
+pub const REBOOT_ANSWER_MS: u64 = 100;
 
 #[derive(Clone, Copy)]
 #[cfg_attr(not(feature = "mspv2_configurator"), allow(dead_code))]
@@ -723,6 +733,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             flash_responses,
                             "OK motor dir N normal|reversed CONFIRM\r\n",
                         );
+                        queue_storage_response(flash_responses, "OK reboot | reboot dfu\r\n");
                     }
                     // Answered by the USB task; never queued here.
                     flash_task::StorageCommand::Live
@@ -1033,6 +1044,72 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                         flash_responses,
                                         "ERR config encoding failed\r\n",
                                     );
+                                }
+                            }
+                        }
+                    }
+                    // Restarting cuts the store off: only once disarmed, with no
+                    // maintenance or flight log open, written-back pages
+                    // flushed, and the last program or erase finished.
+                    flash_task::StorageCommand::Reboot { rom_bootloader } => {
+                        if SAFETY_ARMED.load(Ordering::Acquire) {
+                            queue_storage_response(
+                                flash_responses,
+                                "ERR reboot disabled while armed\r\n",
+                            );
+                        } else if maintenance_busy {
+                            queue_storage_response(
+                                flash_responses,
+                                "ERR flash maintenance already active\r\n",
+                            );
+                        } else if unfinished_flight.is_some() {
+                            queue_storage_response(
+                                flash_responses,
+                                "ERR flight log still being written\r\n",
+                            );
+                        } else {
+                            let flushed =
+                                !flash_device.write_back_pending() || flash_device.flush().is_ok();
+                            let mut idle = false;
+                            for _ in 0..REBOOT_STORAGE_SETTLE_MS {
+                                if matches!(flash_device.busy(), Ok(false)) {
+                                    idle = true;
+                                    break;
+                                }
+                                Mono::delay(1u64.millis()).await;
+                            }
+                            if !flushed || !idle {
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR storage did not settle; not rebooting\r\n",
+                                );
+                            } else {
+                                queue_storage_response(
+                                    flash_responses,
+                                    if rom_bootloader {
+                                        "OK rebooting to DFU\r\n"
+                                    } else {
+                                        "OK rebooting\r\n"
+                                    },
+                                );
+                                // Let the USB task send the answer before the
+                                // port goes away.
+                                Mono::delay(REBOOT_ANSWER_MS.millis()).await;
+                                if SAFETY_ARMED.load(Ordering::Acquire) {
+                                    queue_storage_response(
+                                        flash_responses,
+                                        "ERR reboot cancelled; system armed\r\n",
+                                    );
+                                } else {
+                                    warn!(
+                                        "Rebooting on request, ROM bootloader: {}",
+                                        rom_bootloader
+                                    );
+                                    backend::system_bootloader::reboot(if rom_bootloader {
+                                        RebootTarget::RomBootloader
+                                    } else {
+                                        RebootTarget::Firmware
+                                    });
                                 }
                             }
                         }

@@ -21,6 +21,7 @@ pub use ferrowasp_stm32h7::hal_prelude::*;
 pub use ferrowasp_stm32h7::signature::device_uid;
 pub use ferrowasp_stm32h7::spi_dma as stm32_spi;
 pub use ferrowasp_stm32h7::spi_dma::*;
+pub use ferrowasp_stm32h7::system_bootloader as stm32_bootloader;
 pub use ferrowasp_stm32h7::uart_dma as stm32_uart;
 pub use ferrowasp_stm32h7::usb_serial as stm32_usb;
 pub use fugit::Rate;

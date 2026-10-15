@@ -15,13 +15,16 @@ pub enum CommandLink {
 }
 
 impl StorageCommand {
-    /// Commands only the USB cable may give. They move motors or erase
-    /// flights no host has stored, and a serial link may be a Bluetooth
-    /// module anyone in range can pair with.
+    /// Commands only the USB cable may give. They move motors, erase
+    /// flights no host has stored, or restart the controller, and a serial
+    /// link may be a Bluetooth module anyone in range can pair with.
     pub const fn usb_only(&self) -> bool {
         matches!(
             self,
-            Self::Motor(_) | Self::LogsEraseConfirmed | Self::FlashTestConfirmed
+            Self::Motor(_)
+                | Self::LogsEraseConfirmed
+                | Self::FlashTestConfirmed
+                | Self::Reboot { .. }
         )
     }
 }
@@ -206,5 +209,11 @@ mod tests {
             .usb_only()
         );
         assert!(!StorageCommand::ConfigSave.usb_only());
+        assert!(
+            StorageCommand::Reboot {
+                rom_bootloader: true
+            }
+            .usb_only()
+        );
     }
 }

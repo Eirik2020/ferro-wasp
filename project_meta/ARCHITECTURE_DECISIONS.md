@@ -45,7 +45,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0019](decisions/ADR-0019.md) | The F401 Bring-Up App Uses A Minimal RTIC 2 Shell | accepted |
 | [ADR-0020](decisions/ADR-0020.md) | Foxeer F405 V2 Uses A Separate Inhibited Flight App | accepted in part: its RC PWM output and DShot deferral are superseded by ADR-0039, and its arming inhibit was lifted by target evidence |
 | [ADR-0021](decisions/ADR-0021.md) | Foxeer USB CDC Debug Is Read-Only And Bounded | superseded by ADR-0042 |
-| [ADR-0022](decisions/ADR-0022.md) | Foxeer Cargo Run Uses The STM32 ROM-DFU Bootloader | accepted |
+| [ADR-0022](decisions/ADR-0022.md) | Foxeer Cargo Run Uses The STM32 ROM-DFU Bootloader | accepted; amended by ADR-0043 |
 | [ADR-0023](decisions/ADR-0023.md) | FCU3 DShot Starts As An Opt-In Physical-M1 Actuator Backend | superseded by ADR-0039 |
 | [ADR-0024](decisions/ADR-0024.md) | FCU3 Four-Motor DShot Is One Synchronized Fault Domain | superseded by ADR-0039 |
 | [ADR-0025](decisions/ADR-0025.md) | IMU Orientation Uses Explicit Sensor, Board, And Drone Frames | accepted |
@@ -66,6 +66,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0040](decisions/ADR-0040.md) | DShot Arming Requires Telemetry-Qualified Idle On Every Motor | accepted |
 | [ADR-0041](decisions/ADR-0041.md) | Motor Bench Actuation Is Capped And Explicitly Gated | accepted |
 | [ADR-0042](decisions/ADR-0042.md) | USB And The Configurator Port Carry One Bounded Command Line | accepted |
+| [ADR-0043](decisions/ADR-0043.md) | The Command Line Reboots Into The STM32 ROM Bootloader | accepted |
 
 ## Adding Or Changing A Decision
 

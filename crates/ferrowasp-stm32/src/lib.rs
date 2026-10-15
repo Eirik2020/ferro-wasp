@@ -25,6 +25,7 @@ pub mod spi;
 pub mod spi1_imu;
 pub mod spi_common;
 pub mod status_led;
+pub mod system_reset;
 pub mod timebase;
 pub mod timer_dma;
 pub mod timer_tick;

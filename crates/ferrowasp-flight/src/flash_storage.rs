@@ -180,6 +180,12 @@ pub enum StorageCommand {
     /// A props-off motor check. Handled by the USB task, which hands it to
     /// the safety master; never by the storage task.
     Motor(BenchMotorRequest),
+    /// Restart the controller once it is disarmed and storage is idle: the
+    /// firmware again, or, with `dfu`, the chip's ROM bootloader, which a
+    /// configurator flashes over USB.
+    Reboot {
+        rom_bootloader: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -452,6 +458,12 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
         (Some("live"), None) => Ok(StorageCommand::Live),
         (Some("rc"), None) => Ok(StorageCommand::Rc),
+        (Some("reboot"), None) => Ok(StorageCommand::Reboot {
+            rom_bootloader: false,
+        }),
+        (Some("reboot"), Some("dfu")) if words.next().is_none() => Ok(StorageCommand::Reboot {
+            rom_bootloader: true,
+        }),
         (Some("motor"), Some("stop")) if words.next().is_none() => {
             Ok(StorageCommand::Motor(BenchMotorRequest::Stop))
         }
@@ -1676,6 +1688,30 @@ mod tests {
         );
         assert_eq!(parse_command("live"), Ok(StorageCommand::Live));
         assert_eq!(parse_command("rc"), Ok(StorageCommand::Rc));
+    }
+
+    #[test]
+    fn reboot_commands_parse() {
+        assert_eq!(
+            parse_command("reboot"),
+            Ok(StorageCommand::Reboot {
+                rom_bootloader: false
+            })
+        );
+        assert_eq!(
+            parse_command("reboot dfu"),
+            Ok(StorageCommand::Reboot {
+                rom_bootloader: true
+            })
+        );
+        assert_eq!(
+            parse_command("reboot dfu now"),
+            Err(CommandParseError::UnknownCommand)
+        );
+        assert_eq!(
+            parse_command("reboot bootloader"),
+            Err(CommandParseError::UnknownCommand)
+        );
     }
 
     #[test]

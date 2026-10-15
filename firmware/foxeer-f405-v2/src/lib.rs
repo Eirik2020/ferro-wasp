@@ -21,6 +21,7 @@ pub use ferrowasp_stm32f4::scheduler as stm32_scheduler;
 pub use ferrowasp_stm32f4::signature::device_uid;
 pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
 pub use ferrowasp_stm32f4::spi_dma::*;
+pub use ferrowasp_stm32f4::system_bootloader as stm32_bootloader;
 pub use ferrowasp_stm32f4::timebase as stm32_timebase;
 pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
 pub use ferrowasp_stm32f4::usb_serial as stm32_usb;

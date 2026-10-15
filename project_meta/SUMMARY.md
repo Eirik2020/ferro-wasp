@@ -47,6 +47,7 @@
   - [ADR-0040: DShot Arming Requires Telemetry-Qualified Idle On Every Motor](decisions/ADR-0040.md)
   - [ADR-0041: Motor Bench Actuation Is Capped And Explicitly Gated](decisions/ADR-0041.md)
   - [ADR-0042: USB And The Configurator Port Carry One Bounded Command Line](decisions/ADR-0042.md)
+  - [ADR-0043: The Command Line Reboots Into The STM32 ROM Bootloader](decisions/ADR-0043.md)
 - [Testing](testing/README.md)
   - [Run Evidence](testing/evidence/README.md)
   - [Evidence Index](testing/EVIDENCE_INDEX.md)

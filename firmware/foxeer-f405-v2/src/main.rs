@@ -216,6 +216,8 @@ ferroforge::app! {
             board::init::DshotDmaStorage::new(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
+        // Before anything is configured: a `reboot dfu` request ends here.
+        stm32_bootloader::enter_rom_bootloader_if_requested();
         info!("Begin system init..");
         // Take ownership of peripherals and configure RCC
         let dp: hal::pac::Peripherals = cx.device;
