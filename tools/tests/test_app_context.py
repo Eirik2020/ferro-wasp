@@ -92,6 +92,34 @@ ferroforge::app! {
         self.assertEqual(symbols[1].priority, 3)
         self.assertEqual([block.name for block in resources], ["Shared", "Local"])
 
+    def test_discovers_ferroforge_group_members(self) -> None:
+        source = """
+ferroforge::app! {
+    device = pac,
+
+    #[shared]
+    struct Shared {
+        value: u32,
+    }
+
+    #[local]
+    struct Local {
+    }
+
+    #[group(from = flight_tasks::groups::spi1_imu, shared = [value])]
+    mod spi1_imu {
+        #[task(binds = EXTI4, priority = 14)]
+        fn imu_data_ready;
+        #[task(priority = 12)]
+        async fn spi1_poll;
+    }
+}
+"""
+        symbols, _ = discover_symbols_from_text(source)
+        self.assertEqual([symbol.name for symbol in symbols], ["imu_data_ready", "spi1_poll"])
+        self.assertEqual([symbol.priority for symbol in symbols], [14, 12])
+        self.assertEqual(symbols[0].interrupt_binding, "EXTI4")
+
     def test_rejects_a_missing_routed_symbol(self) -> None:
         with self.assertRaisesRegex(RouteError, "routed symbol `missing`"):
             _select_symbols({}, ("missing",), label="fixture")

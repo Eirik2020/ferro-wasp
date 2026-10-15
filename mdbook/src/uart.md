@@ -56,8 +56,9 @@ telemetry, configurator) is chosen at boot from that table:
 - Port transports are role-free and chip-neutral
   (`crates/ferrowasp-stm32/src/uart_port.rs`): they record faults on the
   stream, and the function task decides what a fault means. Each family's
-  backend starts its ports (`init_f405_uart_ports`, `init_h743_uart_ports`),
-  and `crates/ferrowasp-stm32-tasks/src/uart_port.rs` defines the receive
+  backend starts one port at a time (`start_rx_tx_port`, `start_rx_port`);
+  a board's `init_uart_ports`, in its `src/board/`, chooses which ports, pins,
+  and DMA streams it has, and `crates/ferrowasp-stm32-tasks/src/uart_port.rs` defines the receive
   and transmit tasks of every logical port for a board to bind. All UART
   transports run at priority 11, since any port may serve any function; the
   function tasks keep their own priorities.

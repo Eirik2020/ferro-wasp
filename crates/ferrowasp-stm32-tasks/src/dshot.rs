@@ -2,14 +2,15 @@
 //! requests, and the DMA completion of each motor's frame.
 
 use crate::prelude::backend::dshot;
+use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
 use crate::snapshots::DSHOT_ACTIVE_LANES;
 
-pub fn service_dshot_dma_irq(
-    bank: &mut impl rtic::Mutex<T = dshot::DshotMotorBank>,
-    motor: dshot::DshotMotor,
-    stream: u8,
-) {
+pub fn service_dshot_dma_irq<Bank>(bank: &mut Bank, motor: dshot::DshotMotor, stream: u8)
+where
+    Bank: rtic::Mutex,
+    Bank::T: DshotMotors,
+{
     let event = bank.lock(|dshot| dshot.on_dma_interrupt(motor));
     if event == dshot::DshotInterruptEvent::Spurious {
         warn!("DShot received spurious DMA2 Stream{} interrupt", stream);
@@ -19,7 +20,8 @@ pub fn service_dshot_dma_irq(
 /// One motor's DShot DMA transfer complete. Selected once per motor: which
 /// motor, and which DMA2 stream carries it for the log, are the board's.
 #[ferroforge::task(
-    shared = [dshot_motors: dshot::DshotMotorBank],
+    bounds = [dshot_motors: dshot::DshotMotors],
+    shared = [dshot_motors],
     config = [motor: dshot::DshotMotor, stream: u8],
 )]
 pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
@@ -35,7 +37,8 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
 /// Which DShot motor each ESC output is wired to is the board's, so it is
 /// configuration.
 #[ferroforge::task(
-    shared = [dshot_motors: dshot::DshotMotorBank],
+    bounds = [dshot_motors: dshot::DshotMotors],
+    shared = [dshot_motors],
     local = [
         fault_reported: bool = false,
         disarm_pending: bool = false,

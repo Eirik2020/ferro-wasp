@@ -31,6 +31,10 @@ pub const ADC_OBSERVATION_PROFILE: AdcObservationProfile = AdcObservationProfile
     documented_baseline_verified: false,
 };
 
+/// The ADC reference: VDDA from the 3.3 V rail, not calibrated against
+/// VREFINT.
+pub const ADC_REFERENCE_MV: u32 = 3_300;
+
 /// How fast this board runs its rate loop, and the scheduler tick that drives
 /// it.
 ///

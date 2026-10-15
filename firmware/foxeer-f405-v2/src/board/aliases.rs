@@ -1,6 +1,6 @@
 use ferrowasp_stm32f4::hal_prelude::hal::gpio::{PB12, PB13, PC2, PC3, PC10, PC11};
 use ferrowasp_stm32f4::hal_prelude::hal::pac::{SPI2, TIM8, USART3};
-use ferrowasp_stm32f4::{adc, hal_prelude::*, spi_dma};
+use ferrowasp_stm32f4::{adc, dshot, hal_prelude::*, spi_dma, uart_dma};
 
 pub type Usart2TxPin = PA2<Input>;
 pub type Usart2RxPin = PA3<Input>;
@@ -34,9 +34,33 @@ pub type Motor4Pin = PB15<Input>;
 pub type AdcVoltagePin = PC0<Input>;
 pub type AdcCurrentPin = PC1<Input>;
 
+pub type Spi1ImuCs = PA4<Output<PushPull>>;
 pub type Spi1RxTransfer = spi_dma::SpiRxTransfer<Stream0<DMA2>, SPI1, 3>;
 pub type Spi1TxTransfer = spi_dma::SpiTxTransfer<Stream3<DMA2>, SPI1, 3>;
-pub type Spi1ImuOwner = spi_dma::SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, spi_dma::Spi1ImuCs>;
+pub type Spi1ImuOwner = spi_dma::SpiDmaOwner<Spi1RxTransfer, Spi1TxTransfer, Spi1ImuCs>;
+
+/// UART1 (USART1) receive-only on PA10, RX on DMA2 Stream 5.
+pub type Uart1RxIrq = uart_dma::UartRxIrq<Stream5<DMA2>, USART1, 4>;
+/// UART2 (USART2) on PA2/PA3, RX on DMA1 Stream 5 and TX on Stream 6.
+pub type Uart2RxIrq = uart_dma::UartRxIrq<Stream5<DMA1>, USART2, 4>;
+pub type Uart2TxDmaSide = uart_dma::UartTxSide<Stream6<DMA1>, USART2, 4>;
+/// UART3 (USART3) on PC10/PC11, RX on DMA1 Stream 1 and TX on Stream 3.
+pub type Uart3RxIrq = uart_dma::UartRxIrq<Stream1<DMA1>, USART3, 4>;
+pub type Uart3TxDmaSide = uart_dma::UartTxSide<Stream3<DMA1>, USART3, 4>;
+/// UART4 on PA0/PA1, RX on DMA1 Stream 2 and TX on Stream 4.
+pub type Uart4RxIrq = uart_dma::UartRxIrq<Stream2<DMA1>, UART4, 4>;
+pub type Uart4TxDmaSide = uart_dma::UartTxSide<Stream4<DMA1>, UART4, 4>;
+
+/// The four motor lanes: TIM1 CH1 on PA8, TIM8 CH4 on PC9, TIM8 CH3 on PC8,
+/// and TIM1 CH3N on PB15, carried by DMA2 streams 1, 7, 2, and 6. The type
+/// compiles only if the backend declares each lane's stream route.
+pub type DshotMotorBank = dshot::DshotMotorBank<
+    (dshot::DshotTimer<TIM1>, dshot::DshotTimer<TIM8>),
+    dshot::Lane<Stream1<DMA2>, TIM1, dshot::channel::Ch1, 6>,
+    dshot::Lane<Stream7<DMA2>, TIM8, dshot::channel::Ch4, 7>,
+    dshot::Lane<Stream2<DMA2>, TIM8, dshot::channel::Ch3, 0>,
+    dshot::Lane<Stream6<DMA2>, TIM1, dshot::channel::Ch3N, 6>,
+>;
 
 pub type Adc1ObservationTransfer = adc::Adc1ObservationTransferFor<Stream4<DMA2>, 0>;
 pub type Adc1ObservationParts = adc::Adc1ObservationPartsFor<Stream4<DMA2>, 0>;
@@ -107,8 +131,4 @@ pub fn assert_uart1_esc_telemetry_route_compile() {
         4,
         PeripheralToMemory,
     >();
-}
-
-pub fn assert_four_motor_dshot_routes_compile() {
-    ferrowasp_stm32f4::dshot::assert_foxeer_four_motor_dma_routes_compile();
 }

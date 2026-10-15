@@ -29,6 +29,8 @@ mod adc;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod arming;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod channels;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod cli_link;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod control;
@@ -45,9 +47,13 @@ mod esc;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod flash;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod groups;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod osd;
 // A convenience for task bodies; which names a body uses depends on the
 // firmware's features, so an unused one is not a mistake.
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod app;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod leds;
 #[allow(unused_imports)]
@@ -60,6 +66,8 @@ pub mod snapshots;
 mod spi1;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod uart_port;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod usb;
 
 #[cfg(all(
     target_arch = "arm",
@@ -74,6 +82,11 @@ pub use actuator::{
 pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use channels::{
+    CommandLinkChannels, EscChannels, StorageChannels, command_link_channels, esc_channels,
+    storage_channels,
+};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use cli_link::configurator_link;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
@@ -115,3 +128,5 @@ pub use uart_port::{
     uart7_rx_idle, uart7_tx_dma_complete, uart7_tx_worker, uart8_rx_dma, uart8_rx_idle,
     uart8_tx_dma_complete, uart8_tx_worker,
 };
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use usb::usb_fs;

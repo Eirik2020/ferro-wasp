@@ -3,47 +3,64 @@
 use ferrowasp_io_core::time::{TimestampMicros, WrappingCounterExtender};
 use ferrowasp_stm32::timebase::{MICROSECOND_TIMEBASE_HZ, Timebase};
 use ferrowasp_stm32::timer_tick::TimerTick;
-use ferrowasp_stm32::watchdog::IO_WATCHDOG_HZ;
 use stm32h7xx_hal::{
-    pac::{TIM2, TIM4, TIM6},
+    pac::{TIM2, TIM3, TIM4, TIM5, TIM6, TIM7, TIM12, TIM13, TIM14, TIM15, TIM16, TIM17},
     prelude::*,
     rcc::{CoreClocks, rec},
     timer::{Event, Timer},
 };
 
-/// A free-running microsecond clock on 32-bit TIM2.
-pub struct MicrosecondTimebase {
-    timer: Timer<TIM2>,
+/// A free-running microsecond clock on a 32-bit timer, TIM2 or TIM5: the
+/// board chooses which.
+pub struct MicrosecondTimebase<TIM> {
+    timer: Timer<TIM>,
     extender: WrappingCounterExtender,
 }
 
-impl MicrosecondTimebase {
-    pub fn new(timer: TIM2, prec: rec::Tim2, clocks: &CoreClocks) -> Self {
-        let mut timer = timer.tick_timer(MICROSECOND_TIMEBASE_HZ.Hz(), prec, clocks);
-        timer.resume();
-        Self {
-            timer,
-            extender: WrappingCounterExtender::new(u32::MAX),
-        }
-    }
+macro_rules! microsecond_timebase {
+    ($($TIM:ident: $rec:ident),+) => {
+        $(
+            impl MicrosecondTimebase<$TIM> {
+                pub fn new(timer: $TIM, prec: rec::$rec, clocks: &CoreClocks) -> Self {
+                    let mut timer = timer.tick_timer(MICROSECOND_TIMEBASE_HZ.Hz(), prec, clocks);
+                    timer.resume();
+                    Self {
+                        timer,
+                        extender: WrappingCounterExtender::new(u32::MAX),
+                    }
+                }
 
-    pub fn now(&mut self) -> TimestampMicros {
-        TimestampMicros(self.extender.observe(self.timer.counter()))
-    }
+                pub fn now(&mut self) -> TimestampMicros {
+                    TimestampMicros(self.extender.observe(self.timer.counter()))
+                }
+            }
+
+            impl Timebase for MicrosecondTimebase<$TIM> {
+                fn now(&mut self) -> TimestampMicros {
+                    MicrosecondTimebase::<$TIM>::now(self)
+                }
+            }
+        )+
+    };
 }
 
-impl Timebase for MicrosecondTimebase {
-    fn now(&mut self) -> TimestampMicros {
-        MicrosecondTimebase::now(self)
-    }
-}
+microsecond_timebase!(TIM2: Tim2, TIM5: Tim5);
 
-/// A timer raising its update interrupt at a fixed rate.
+/// A timer raising its update interrupt at a fixed rate: the control
+/// scheduler and the I/O watchdog, on whichever timers the board gives them.
 pub struct PeriodicTimer<TIM>(Timer<TIM>);
 
-macro_rules! periodic_tick {
-    ($($TIM:ident),+) => {
+macro_rules! periodic_timer {
+    ($($TIM:ident: $rec:ident),+) => {
         $(
+            impl PeriodicTimer<$TIM> {
+                pub fn new(timer: $TIM, prec: rec::$rec, clocks: &CoreClocks, rate_hz: u32) -> Self {
+                    let mut periodic = timer.timer(rate_hz.Hz(), prec, clocks);
+                    periodic.listen(Event::TimeOut);
+                    Self(periodic)
+                }
+            }
+
             impl TimerTick for PeriodicTimer<$TIM> {
                 fn acknowledge_tick(&mut self) {
                     self.0.clear_irq();
@@ -53,23 +70,7 @@ macro_rules! periodic_tick {
     };
 }
 
-periodic_tick!(TIM4, TIM6);
-
-/// The control scheduler: TIM4 raising its update interrupt at `rate_hz`.
-pub fn init_control_scheduler(
-    timer: TIM4,
-    prec: rec::Tim4,
-    clocks: &CoreClocks,
-    rate_hz: u32,
-) -> PeriodicTimer<TIM4> {
-    let mut scheduler = timer.timer(rate_hz.Hz(), prec, clocks);
-    scheduler.listen(Event::TimeOut);
-    PeriodicTimer(scheduler)
-}
-
-/// The I/O watchdog: TIM6 raising its update interrupt at `IO_WATCHDOG_HZ`.
-pub fn init_io_watchdog(timer: TIM6, prec: rec::Tim6, clocks: &CoreClocks) -> PeriodicTimer<TIM6> {
-    let mut watchdog = timer.timer(IO_WATCHDOG_HZ.Hz(), prec, clocks);
-    watchdog.listen(Event::TimeOut);
-    PeriodicTimer(watchdog)
-}
+periodic_timer!(
+    TIM2: Tim2, TIM3: Tim3, TIM4: Tim4, TIM5: Tim5, TIM6: Tim6, TIM7: Tim7,
+    TIM12: Tim12, TIM13: Tim13, TIM14: Tim14, TIM15: Tim15, TIM16: Tim16, TIM17: Tim17
+);

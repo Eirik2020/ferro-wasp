@@ -7,14 +7,13 @@
 //! F4's DMA completion does. No DMA stream is used.
 
 use cortex_m::peripheral::NVIC;
-use embedded_hal_02::adc::OneShot;
+use embedded_hal_02::{self as hal_02, adc::OneShot};
 pub use ferrowasp_stm32::adc::{
     Adc1ObservationDma, Adc1Sample, Adc1SampleBuffer, AdcDmaDeliveryError, AdcDmaIrqAction,
     AdcDmaIrqFlags, AdcDmaIrqPlanner,
 };
 use stm32h7xx_hal::{
     adc::{Adc, AdcSampleTime, Enabled, Resolution},
-    gpio::{Analog, PC0, PC1},
     pac::{ADC1, Interrupt},
     prelude::*,
     rcc::{CoreClocks, rec},
@@ -22,41 +21,42 @@ use stm32h7xx_hal::{
 
 use crate::eh1::CycleDelay;
 
-/// The ADC reference on the Lucid: VDDA from the 3.3 V rail. Not
-/// calibrated against VREFINT.
-pub const ADC_REFERENCE_MV: u32 = 3_300;
-
-pub struct Adc1BatteryResources {
-    pub adc: ADC1,
-    pub prec: rec::Adc12,
-    pub voltage_pin: PC0,
-    pub current_pin: PC1,
-}
-
-/// ADC1 with the battery voltage and current pins, and the buffer the next
-/// observation lands in.
-pub struct Adc1Observation {
+/// ADC1 with the board's battery voltage and current channels (pins in
+/// analog mode), and the buffer the next observation lands in.
+pub struct Adc1Observation<VoltageT, CurrentT> {
     adc: Adc<ADC1, Enabled>,
-    voltage_pin: PC0<Analog>,
-    current_pin: PC1<Analog>,
+    voltage: VoltageT,
+    current: CurrentT,
+    reference_mv: u32,
     buffer: Option<Adc1SampleBuffer>,
     sample_ready: bool,
     max_sample: u32,
 }
 
-pub struct Adc1ObservationParts {
-    pub transfer: Adc1Observation,
+pub struct Adc1ObservationParts<VoltageT, CurrentT> {
+    pub transfer: Adc1Observation<VoltageT, CurrentT>,
     pub spare_buffer: Adc1SampleBuffer,
 }
 
-pub fn init_adc1_observation(
-    resources: Adc1BatteryResources,
+/// Start ADC1 reading the board's voltage and current channels. The
+/// reference voltage is the board's: what feeds VDDA or VREF+.
+#[allow(clippy::too_many_arguments)]
+pub fn init_adc1_observation<VoltageT, CurrentT>(
+    adc: ADC1,
+    prec: rec::Adc12,
+    voltage: VoltageT,
+    current: CurrentT,
+    reference_mv: u32,
     delay: &mut CycleDelay,
     clocks: &CoreClocks,
     primary: Adc1SampleBuffer,
     spare: Adc1SampleBuffer,
-) -> Adc1ObservationParts {
-    let mut adc = Adc::adc1(resources.adc, 4.MHz(), delay, resources.prec, clocks).enable();
+) -> Adc1ObservationParts<VoltageT, CurrentT>
+where
+    VoltageT: hal_02::adc::Channel<ADC1, ID = u8>,
+    CurrentT: hal_02::adc::Channel<ADC1, ID = u8>,
+{
+    let mut adc = Adc::adc1(adc, 4.MHz(), delay, prec, clocks).enable();
     adc.set_resolution(Resolution::SixteenBit);
     adc.set_sample_time(AdcSampleTime::T_64);
     let max_sample = adc.slope() - 1;
@@ -64,8 +64,9 @@ pub fn init_adc1_observation(
     Adc1ObservationParts {
         transfer: Adc1Observation {
             adc,
-            voltage_pin: resources.voltage_pin.into_analog(),
-            current_pin: resources.current_pin.into_analog(),
+            voltage,
+            current,
+            reference_mv,
             buffer: Some(primary),
             sample_ready: false,
             max_sample,
@@ -74,19 +75,23 @@ pub fn init_adc1_observation(
     }
 }
 
-impl Adc1Observation {
+impl<VoltageT, CurrentT> Adc1Observation<VoltageT, CurrentT> {
     fn to_millivolts(&self, sample: u16) -> u16 {
-        (u32::from(sample) * ADC_REFERENCE_MV / self.max_sample.max(1)) as u16
+        (u32::from(sample) * self.reference_mv / self.max_sample.max(1)) as u16
     }
 }
 
-impl Adc1ObservationDma for Adc1Observation {
+impl<VoltageT, CurrentT> Adc1ObservationDma for Adc1Observation<VoltageT, CurrentT>
+where
+    VoltageT: hal_02::adc::Channel<ADC1, ID = u8>,
+    CurrentT: hal_02::adc::Channel<ADC1, ID = u8>,
+{
     fn start_conversion(&mut self) {
         let Some(buffer) = self.buffer.as_deref_mut() else {
             return;
         };
-        let voltage: Result<u32, _> = self.adc.read(&mut self.voltage_pin);
-        let current: Result<u32, _> = self.adc.read(&mut self.current_pin);
+        let voltage: Result<u32, _> = self.adc.read(&mut self.voltage);
+        let current: Result<u32, _> = self.adc.read(&mut self.current);
         let (Ok(voltage), Ok(current)) = (voltage, current) else {
             return;
         };

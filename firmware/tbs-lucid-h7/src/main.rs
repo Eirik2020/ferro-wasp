@@ -258,14 +258,11 @@ ferroforge::app! {
             },
         );
 
-        let control_loop_scheduler = ferrowasp_stm32h7::timers::init_control_scheduler(
-            dp.TIM4,
-            rec.TIM4,
-            &clocks,
-            scheduler_rate.to_Hz(),
-        );
-        let io_timebase = ferrowasp_stm32h7::timers::MicrosecondTimebase::new(dp.TIM2, rec.TIM2, &clocks);
-        let io_watchdog = ferrowasp_stm32h7::timers::init_io_watchdog(dp.TIM6, rec.TIM6, &clocks);
+        let control_loop_scheduler =
+            board::aliases::ControlScheduler::new(dp.TIM4, rec.TIM4, &clocks, scheduler_rate.to_Hz());
+        let io_timebase = board::aliases::IoTimebase::new(dp.TIM2, rec.TIM2, &clocks);
+        let io_watchdog =
+            board::init::init_io_watchdog(dp.TIM6, rec.TIM6, &clocks);
 
         let (usb_dev, usb_serial) = stm32_usb::init_usb_cdc_serial(
             stm32_usb::UsbResources {
@@ -281,7 +278,7 @@ ferroforge::app! {
         )
         .unwrap();
 
-        let (
+        let flight_tasks::EscChannels {
             esc_manager_state,
             esc_request_producer,
             esc_request_consumer,
@@ -289,28 +286,7 @@ ferroforge::app! {
             esc_ack_consumer,
             esc_telemetry_update_producer,
             esc_telemetry_update_consumer,
-        ) = {
-            let requests =
-                cortex_m::singleton!(: esc::EscRequestQueue = esc::EscRequestQueue::new()).unwrap();
-            let acknowledgements =
-                cortex_m::singleton!(: esc::EscAckQueue = esc::EscAckQueue::new()).unwrap();
-            let (request_producer, request_consumer) = requests.split();
-            let (ack_producer, ack_consumer) = acknowledgements.split();
-            let updates = cortex_m::singleton!(
-                : esc::EscTelemetryUpdateQueue = esc::EscTelemetryUpdateQueue::new()
-            )
-            .unwrap();
-            let (update_producer, update_consumer) = updates.split();
-            (
-                esc::EscManager::new(esc::EscManagerConfig::legacy_uart(), 0),
-                request_producer,
-                request_consumer,
-                ack_producer,
-                ack_consumer,
-                update_producer,
-                update_consumer,
-            )
-        };
+        } = flight_tasks::esc_channels();
 
         let dshot_motors = board::init::init_dshot_motor_bank(
             board::init::DshotMotorBankResources {
@@ -358,7 +334,7 @@ ferroforge::app! {
             &SPI1_MAILBOX,
             SpiDeadlineUs(SPI1_IMU_DEADLINE_US),
             || {
-                let _ = spi1_owner_service::spawn();
+                let _ = spi1_imu::spi1_owner_service::spawn();
             },
         ));
         if let Some(kind) = spi1_imu.bringup.kind() {
@@ -366,19 +342,7 @@ ferroforge::app! {
         }
         IMU_TRANSPORT_READY.store(spi1_imu.bringup.is_ready(), Ordering::Relaxed);
 
-        let (
-            mut flash_device,
-            flash_record_producer,
-            flash_record_consumer,
-            flash_command_producer,
-            flash_command_consumer,
-            flash_response_producer,
-            flash_response_consumer,
-            flash_rpc_command_producer,
-            flash_rpc_command_consumer,
-            flash_rpc_response_producer,
-            flash_rpc_response_consumer,
-        ) = {
+        let mut flash_device = {
             let mut flash = board::init::init_sd_flash(
                 board::init::SdCardResources {
                     sdmmc: dp.SDMMC1,
@@ -412,76 +376,33 @@ ferroforge::app! {
                     defmt::Debug2Format(&error)
                 ),
             }
-            let (producer, consumer) = {
-                let queue = cortex_m::singleton!(
+            flash
+        };
+        let flight_tasks::StorageChannels {
+            flash_record_producer,
+            flash_record_consumer,
+            flash_command_producer,
+            flash_command_consumer,
+            flash_response_producer,
+            flash_response_consumer,
+            flash_rpc_command_producer,
+            flash_rpc_command_consumer,
+            flash_rpc_response_producer,
+            flash_rpc_response_consumer,
+        } = flight_tasks::storage_channels(
+            cortex_m::singleton!(
                     : flash_task::RecordQueue<BLACKBOX_RECORD_QUEUE_CAPACITY> =
                         flash_task::RecordQueue::new()
                 )
-                .unwrap();
-                queue.split()
-            };
-            let commands = cortex_m::singleton!(
-                : flash_task::CommandQueue = flash_task::CommandQueue::new()
-            )
-            .unwrap();
-            let responses = cortex_m::singleton!(
-                : flash_task::ResponseQueue = flash_task::ResponseQueue::new()
-            )
-            .unwrap();
-            let (command_producer, command_consumer) = commands.split();
-            let (response_producer, response_consumer) = responses.split();
-            #[cfg(feature = "mspv2_configurator")]
-            let (
-                rpc_command_producer,
-                rpc_command_consumer,
-                rpc_response_producer,
-                rpc_response_consumer,
-            ) = {
-                let commands = cortex_m::singleton!(
-                    : flash_task::RpcCommandQueue = flash_task::RpcCommandQueue::new()
-                )
-                .unwrap();
-                let responses = cortex_m::singleton!(
-                    : flash_task::RpcResponseQueue = flash_task::RpcResponseQueue::new()
-                )
-                .unwrap();
-                let (command_producer, command_consumer) = commands.split();
-                let (response_producer, response_consumer) = responses.split();
-                (
-                    command_producer,
-                    command_consumer,
-                    response_producer,
-                    response_consumer,
-                )
-            };
-            #[cfg(not(feature = "mspv2_configurator"))]
-            let (
-                rpc_command_producer,
-                rpc_command_consumer,
-                rpc_response_producer,
-                rpc_response_consumer,
-            ) = ((), (), (), ());
-            (
-                flash,
-                producer,
-                consumer,
-                command_producer,
-                command_consumer,
-                response_producer,
-                response_consumer,
-                rpc_command_producer,
-                rpc_command_consumer,
-                rpc_response_producer,
-                rpc_response_consumer,
-            )
-        };
+                .unwrap(),
+        );
 
         // ------------  UART ports, bound at boot  ------------
         // Pins and DMA streams are fixed per port. Saved config chooses each
         // port's function and line settings; it is read once, here, so a
         // changed binding applies after a reboot.
         let serial_bindings = boot_serial_bindings(&mut flash_device);
-        let board::aliases::UartPorts {
+        let board::init::UartPorts {
             uart3_rx,
             uart3_tx:
                 stm32_port::UartTxPort {
@@ -499,42 +420,31 @@ ferroforge::app! {
             uart8_rx,
             uart1_rx,
             functions: serial_functions,
-        } = stm32_uart::init_h743_uart_ports(
-            stm32_uart::H743UartPortResources {
-                // DJI connector SBUS pin -> PA10 USART1_RX.
-                uart1: stm32_uart::Uart1PortResources {
-                    rx_pin: gpioa.pa10,
-                    uart: dp.USART1,
-                    prec: rec.USART1,
-                    rx_dma: dma2.4,
-                },
-                // PD8 USART3_TX -> DJI RX, PD9 USART3_RX <- DJI TX.
-                uart3: stm32_uart::Uart3PortResources {
-                    tx_pin: gpiod.pd8,
-                    rx_pin: gpiod.pd9,
-                    uart: dp.USART3,
-                    prec: rec.USART3,
-                    rx_dma: dma1.1,
-                    tx_dma: dma1.3,
-                },
-                uart6: stm32_uart::Uart6PortResources {
-                    tx_pin: gpioc.pc6,
-                    rx_pin: gpioc.pc7,
-                    uart: dp.USART6,
-                    prec: rec.USART6,
-                    rx_dma: dma1.0,
-                    tx_dma: dma1.6,
-                },
-                // ESC TLM -> PE0 UART8_RX.
-                uart8: stm32_uart::Uart8PortResources {
-                    rx_pin: gpioe.pe0,
-                    uart: dp.UART8,
-                    prec: rec.UART8,
-                    rx_dma: dma1.2,
-                },
+        } = board::init::init_uart_ports(
+            board::init::UartPortResources {
+                uart1_rx_pin: gpioa.pa10,
+                uart1: dp.USART1,
+                uart1_prec: rec.USART1,
+                uart1_rx_dma: dma2.4,
+                uart3_tx_pin: gpiod.pd8,
+                uart3_rx_pin: gpiod.pd9,
+                uart3: dp.USART3,
+                uart3_prec: rec.USART3,
+                uart3_rx_dma: dma1.1,
+                uart3_tx_dma: dma1.3,
+                uart6_tx_pin: gpioc.pc6,
+                uart6_rx_pin: gpioc.pc7,
+                uart6: dp.USART6,
+                uart6_prec: rec.USART6,
+                uart6_rx_dma: dma1.0,
+                uart6_tx_dma: dma1.6,
+                uart8_rx_pin: gpioe.pe0,
+                uart8: dp.UART8,
+                uart8_prec: rec.UART8,
+                uart8_rx_dma: dma1.2,
             },
             &clocks,
-            stm32_uart::H743UartPortStorage {
+            board::init::UartPortStorage {
                 uart1: stm32_port::UartRxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
                         buffers: cx.local.uart1_rx_buffers,
@@ -689,17 +599,17 @@ ferroforge::app! {
         );
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
-        heartbeat::spawn().unwrap();
+        flight::heartbeat::spawn().unwrap();
         status_leds::spawn().unwrap();
-        adc1_polling::spawn().ok();
+        flight::adc1_polling::spawn().ok();
         uart3_tx_worker::spawn().unwrap();
         uart6_tx_worker::spawn().unwrap();
-        rc_telemetry::spawn().unwrap();
-        rc_input::spawn().unwrap();
-        osd_refresh::spawn().ok();
-        dshot_service::spawn().unwrap();
-        esc_manager_task::spawn().unwrap();
-        flash_manager_task::spawn().unwrap();
+        flight::rc_telemetry::spawn().unwrap();
+        flight::rc_input::spawn().unwrap();
+        flight::osd_refresh::spawn().ok();
+        flight::dshot_service::spawn().unwrap();
+        flight::esc_manager_task::spawn().unwrap();
+        flight::flash_manager_task::spawn().unwrap();
 
         (
             Shared {
@@ -855,251 +765,141 @@ ferroforge::app! {
         )
     }
 
-    // ----  SAFETY MASTER  ----
-    //---------------------------------------------------------------------------------------------------------------------------
-    #[task(
-        from = flight_tasks::safety_master,
-        priority = 16,
+    // The flight tasks every board runs the same way. Each member's own
+    // resources and configuration are in its definition in
+    // ferrowasp-stm32-tasks; this selection binds them once.
+    #[group(
+        from = flight_tasks::groups::flight,
         local = [
-            safety_rc_arm_high_reader,
-            safety_rc_throttle_reader,
-            safety_rc_link_reader,
-            safety_arm_writer,
-            rc_link_invalidator,
-            actuator_arm_permit_writer,
-            actuator_arm_done_reader
+            // safety_master
+            safety_rc_arm_high_reader, safety_rc_throttle_reader, safety_rc_link_reader,
+            safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
+            actuator_arm_done_reader,
+            // usb_fs
+            usb_dev, usb_serial, usb_header_sent, flash_command_producer, flash_response_consumer,
+            flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
+            // heartbeat
+            usb_rc_link_reader,
+            // flash_manager_task
+            flash_device, flash_record_consumer, flash_commands, flash_responses,
+            flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
+            stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
+            config_save_candidate: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
+            // control_loop
+            control_loop_cnt, samples_per_control_loop, flight_controller, control_loop_scheduler,
+            imu_rate_filter, imu_angle_integrator, gyro_axis_map, gyro_bias_calibrator,
+            imu_last_sequence, imu_stale_ticks, applied_tuning_seq, rc_rates_reader,
+            control_throttle_reader, control_safety_arm_reader, control_rc_link_reader,
+            control_arm_permit_reader, motor_cmd_writer, motor_cmd_seq, flash_record_producer,
+            // dshot_service
+            esc_request_consumer, esc_ack_producer,
+            // esc_manager_task
+            esc_telemetry_port, esc_manager_state, esc_request_producer, esc_ack_consumer,
+            esc_telemetry_update_producer,
+            // actuator_output
+            actuator_safety_arm_reader, actuator_arm_permit_reader, actuator_rc_arm_high_reader,
+            actuator_rc_throttle_reader, actuator_rc_link_reader, actuator_arm_done_writer,
+            motor_cmd_reader, esc_telemetry_update_consumer,
+            // rc_input
+            rc_port, rc_receiver, arm_qualifier, rc_rates_writer, rc_throttle_writer,
+            rc_arm_high_writer, rc_link_frame_writer,
+            // rc_telemetry
+            rc_telemetry_writer,
+            // osd_refresh
+            osd_port, osd_tx_healthy, osd_task, osd_tx_buffer, osd_refresh_tick,
+            osd_safety_arm_reader, osd_rc_throttle_reader, osd_rc_rates_reader,
+            // dma_adc1
+            adc1_buffer,
+            battery_cell_detector: osd::BatteryCellDetector = osd::BatteryCellDetector::new(
+                BATTERY_MAX_CELL_MV,
+                BATTERY_DETECT_CELL_MV,
+                BATTERY_MAX_CELLS,
+            )
         ],
-        spawn = [actuator_output],
+        shared = [
+            tuning_profile,
+            tuning_request_seq,
+            imu_data,
+            imu_angles,
+            imu_rates,
+            dshot_motors,
+            battery_voltage_v10,
+            battery_cell_count,
+            battery_cell_voltage_v100,
+            battery_current_ca,
+            adc1_transfer
+        ],
         config = [
             actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
             actuator_inhibit_reason: &'static str = ACTUATOR_INHIBIT_REASON,
             bench_actuator_validation_enabled: bool = BENCH_ACTUATOR_VALIDATION_ENABLED,
-            validate_live_arming_guard: fn(
-                bool,
-                bool,
-                bool,
-                u32,
-            ) -> Result<(), safety::ArmingAbortReason> = validate_live_arming_guard,
-        ]
-    )]
-    async fn safety_master(cx: safety_master::Context, event: safety::SafetyEvent);
-    //---------------------------------------------------------------------------------------------------------------------------
-
-    // ---- USB CDC READ-ONLY DEBUG ----
-    #[task(
-        binds = OTG_FS,
-        priority = 5,
-        local = [
-            usb_dev,
-            usb_serial,
-            usb_header_sent,
-            flash_command_producer,
-            flash_response_consumer,
-            flash_rpc_command_producer,
-            flash_rpc_response_consumer,
-            flash_command_parser: flash_task::CommandParser = flash_task::CommandParser::new(),
-            flash_pending_response: Option<flash_task::ResponseFrame> = None,
-            configurator_usb
-        ]
-    )]
-    fn usb_fs(cx: usb_fs::Context) {
-        let usb_dev = cx.local.usb_dev;
-        let serial = cx.local.usb_serial;
-
-        let _ = usb_dev.poll(&mut [serial]);
-
-        let mut rx_buf = [0u8; 64];
-        let read_len = serial.read(&mut rx_buf).unwrap_or(0);
-
-        #[cfg(not(feature = "mspv2_configurator"))]
-        for byte in &rx_buf[..read_len] {
-            let Some(parsed) = cx.local.flash_command_parser.ingest(*byte) else {
-                continue;
-            };
-            match parsed {
-                Ok(flash_task::StorageCommand::Live) => {
-                    let line = usb_debug::format_live(live_snapshot());
-                    let _ = serial.write(line.as_bytes());
-                }
-                Ok(flash_task::StorageCommand::Rc) => {
-                    for line in usb_debug::format_rc(rc_channels_us()) {
-                        let _ = serial.write(line.as_bytes());
-                    }
-                }
-                // Bench motor requests go straight to the safety master, which
-                // outranks this task and decides before `spawn` returns. The
-                // check here only gives the host a reason; the safety master
-                // and the actuator each re-check before a motor moves.
-                Ok(flash_task::StorageCommand::Motor(request)) => {
-                    let precheck = safety::validate_bench_motor_request(
-                        request,
-                        SAFETY_ARMED.load(Ordering::Acquire),
-                        false,
-                        RC_ARM_HIGH.load(Ordering::Acquire),
-                        ACTUATOR_OUTPUT_ENABLED,
-                    );
-                    let reply: &[u8] = match precheck {
-                        Ok(()) => match safety_master::spawn(safety::SafetyEvent::BenchMotor(request)) {
-                            Ok(()) => b"OK motor\r\n",
-                            Err(_) => b"ERR motor safety master busy\r\n",
-                        },
-                        Err(safety::BenchMotorRefusal::Armed) => b"ERR motor armed\r\n",
-                        Err(safety::BenchMotorRefusal::ArmSwitchHigh) => {
-                            b"ERR motor arm switch is on\r\n"
-                        }
-                        Err(safety::BenchMotorRefusal::OutputDisabled) => {
-                            b"ERR motor output disabled in this firmware\r\n"
-                        }
-                        Err(_) => b"ERR motor refused\r\n",
-                    };
-                    let _ = serial.write(reply);
-                }
-                Ok(command) => {
-                    if cx.local.flash_command_producer.enqueue(command).is_err() {
-                        let _ = serial.write(b"ERR command queue full\r\n");
-                    }
-                }
-                Err(_) => {
-                    let _ = serial.write(b"ERR invalid command; type help\r\n");
-                }
-            }
-        }
-
-        #[cfg(feature = "mspv2_configurator")]
-        for byte in &rx_buf[..read_len] {
-            if let Ok(Some(packet)) = cx.local.configurator_usb.parser.parse(*byte) {
-                handle_msp_packet(
-                    packet,
-                    cx.local.configurator_usb,
-                    cx.local.flash_rpc_command_producer,
-                );
-            }
-        }
-
-        // Arming is refused while a computer has the board configured.
-        USB_HOST_CONNECTED.store(
-            usb_dev.state() == UsbDeviceState::Configured,
-            Ordering::Release,
-        );
-        if usb_dev.state() != UsbDeviceState::Configured {
-            *cx.local.usb_header_sent = false;
-            #[cfg(not(feature = "mspv2_configurator"))]
-            cx.local.flash_command_parser.clear();
-            #[cfg(feature = "mspv2_configurator")]
-            {
-                cx.local.configurator_usb.parser.clear();
-                cx.local.configurator_usb.pending_tx.clear();
-            }
-            return;
-        }
-
-        if serial.flush().is_err() {
-            return;
-        }
-
-        #[cfg(feature = "mspv2_configurator")]
-        {
-            if !cx.local.configurator_usb.pending_tx.is_pending()
-                && let Some(response) = cx.local.flash_rpc_response_consumer.dequeue()
-            {
-                let _ = stage_rpc_response(cx.local.configurator_usb, &response);
-            }
-            if cx.local.configurator_usb.pending_tx.is_pending()
-                && let Ok(written) = serial.write(cx.local.configurator_usb.pending_tx.remaining())
-            {
-                cx.local.configurator_usb.pending_tx.advance(written);
-            }
-            return;
-        }
-
-        #[cfg(not(feature = "mspv2_configurator"))]
-        if !*cx.local.usb_header_sent {
-            if matches!(
-                serial.write(USB_DEBUG_HEADER),
-                Ok(written) if written == USB_DEBUG_HEADER.len()
-            ) {
-                *cx.local.usb_header_sent = true;
-            }
-            return;
-        }
-
-        #[cfg(not(feature = "mspv2_configurator"))]
-        {
-            if cx.local.flash_pending_response.is_none() {
-                *cx.local.flash_pending_response = cx.local.flash_response_consumer.dequeue();
-            }
-            if let Some(response) = cx.local.flash_pending_response.as_ref() {
-                if matches!(
-                    serial.write(response.as_bytes()),
-                    Ok(written) if written == response.as_bytes().len()
-                ) {
-                    *cx.local.flash_pending_response = None;
-                    cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
-                }
-                return;
-            }
-        }
-
-        #[cfg(not(feature = "mspv2_configurator"))]
-        if !USB_DEBUG_DUE.swap(false, Ordering::AcqRel) {
-            return;
-        }
-
-        #[cfg(not(feature = "mspv2_configurator"))]
-        let snapshot = usb_debug::StatusSnapshot {
-            // The status format carries 32-bit milliseconds, 49.7 days.
-            uptime_ms: Mono::now().duration_since_epoch().to_millis() as u32,
-            imu_kind: active_usb_debug_imu_kind(),
-            imu_ready: IMU_TRANSPORT_READY.load(Ordering::Relaxed),
-            imu_sequence: IMU_LATEST_SEQ.load(Ordering::Relaxed),
-            gyro_raw: [
-                IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed),
-                IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed),
-                IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
-            ],
-            imu_stale: IMU_STALE.load(Ordering::Relaxed),
-            control_sequence: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-            control_loop_hz: board::profiles::CONTROL_LOOP_RATE_HZ,
-            rc_valid: USB_RC_VALID_SNAPSHOT.load(Ordering::Relaxed),
-            rc_armable: USB_RC_ARMABLE_SNAPSHOT.load(Ordering::Relaxed),
-            rc_throttle: RC_THROTTLE.load(Ordering::Relaxed),
-            rc_arm_high: RC_ARM_HIGH.load(Ordering::Relaxed),
-            system_armed: SAFETY_ARMED.load(Ordering::Relaxed),
-            battery_voltage_decivolts: BATTERY_VOLTAGE_V10_SNAPSHOT.load(Ordering::Relaxed),
-            battery_current_centiamps: BATTERY_CURRENT_CA_SNAPSHOT.load(Ordering::Relaxed),
-            adc_voltage_mv: ADC_VOLTAGE_MV_SNAPSHOT.load(Ordering::Relaxed),
-            adc_current_mv: ADC_CURRENT_MV_SNAPSHOT.load(Ordering::Relaxed),
-            rc_channels_us: rc_channels_us(),
-        };
-        #[cfg(not(feature = "mspv2_configurator"))]
-        let Ok(line) = usb_debug::format_status(snapshot) else {
-            USB_DEBUG_DUE.store(true, Ordering::Release);
-            return;
-        };
-
-        #[cfg(not(feature = "mspv2_configurator"))]
-        if !matches!(
-            serial.write(line.as_bytes()),
-            Ok(written) if written == line.len()
-        ) {
-            USB_DEBUG_DUE.store(true, Ordering::Release);
-        }
-    }
-
-    // IDLE TASK
-
-    #[task(
-        from = flight_tasks::heartbeat,
-        priority = 1,
-        local = [usb_rc_link_reader],
-        config = [
+            validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
+            usb_debug_header: &'static [u8] = USB_DEBUG_HEADER,
+            control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
+            msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
+            rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,
             physical_imu_to_drone_rotation: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation(),
             control_imu_to_rate_controller_map: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map(),
+            default_stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
+            default_serial_bindings: SerialBindings = board::serial::DEFAULT_SERIAL_BINDINGS,
+            serial_routes: &'static [SerialRoute] = board::serial::SERIAL_ROUTES,
+            imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile =
+                IMU_CONTROL_AXIS_PROFILE,
+            imu_gyro_raw_to_dps: f32 = IMU_GYRO_RAW_TO_DPS,
+            logical_to_physical_motor_output: [usize; 4] =
+                board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
+            control_loop_rate_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
+            dshot_motor_for_output: fn(esc::EscOutput) -> board::init::DshotMotor =
+                dshot_motor_for_output,
+            esc_output_to_logical_motor: [u8; 4] = [
+                logical_motor_for_physical_index(0),
+                logical_motor_for_physical_index(1),
+                logical_motor_for_physical_index(2),
+                logical_motor_for_physical_index(3),
+            ],
+            dshot_idle_command: f32 = BOARD_DSHOT_IDLE_COMMAND,
+            adc_vbat_divider_ratio: f32 = ADC_VBAT_DIVIDER_RATIO,
+            adc_current_betaflight_scale: u32 = ADC_CURRENT_BETAFLIGHT_SCALE,
+            adc_current_offset_ma: i32 = ADC_CURRENT_OFFSET_MA,
         ]
     )]
-    async fn heartbeat(cx: heartbeat::Context);
+    mod flight {
+        #[task(priority = 16)]
+        async fn safety_master;
+        // USB CDC: command line, bench motor requests, status.
+        #[task(binds = OTG_FS, priority = 5)]
+        fn usb_fs;
+        #[task(priority = 1)]
+        async fn heartbeat;
+        // Lowest priority: storage never preempts flight work.
+        #[task(priority = 1)]
+        async fn flash_manager_task;
+        #[task(binds = TIM4, priority = 14)]
+        fn control_loop;
+        #[task(priority = 13)]
+        async fn actuator_idle_notify;
+        #[task(priority = 13)]
+        async fn dshot_service;
+        // BLHeli legacy ESC telemetry, on the port bound to `esc_telemetry`.
+        #[task(priority = 4)]
+        async fn esc_manager_task;
+        #[task(priority = 15)]
+        async fn actuator_output;
+        #[task(priority = 10)]
+        async fn rc_input;
+        // Battery telemetry back through the RC receiver, when the RC protocol
+        // talks back. Lowest priority: it only reads snapshots.
+        #[task(priority = 1)]
+        async fn rc_telemetry;
+        #[task(priority = 3)]
+        async fn osd_refresh;
+        #[task(binds = ADC1_2, priority = 1)]
+        fn dma_adc1;
+        #[task(priority = 1)]
+        async fn adc1_polling;
+    }
 
     // Lowest priority, so a lit-and-blinking heartbeat shows that every
     // task above it leaves the core time to run.
@@ -1109,89 +909,6 @@ ferroforge::app! {
         local = [heartbeat_led, armed_led, led_safety_arm_reader]
     )]
     async fn status_leds(cx: status_leds::Context);
-
-    // Lowest priority: storage never preempts flight work.
-    #[task(
-        from = flight_tasks::flash_manager_task,
-        priority = 1,
-        local = [
-            flash_device,
-            flash_record_consumer,
-            flash_commands,
-            flash_responses,
-            flash_rpc_command_consumer,
-            flash_rpc_response_producer,
-            flash_rpc_device_info,
-            stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
-            config_save_candidate: flash_task::StoredConfig = DEFAULT_STORED_CONFIG
-        ],
-        shared = [tuning_profile, tuning_request_seq],
-        config = [
-            default_stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
-            default_serial_bindings: SerialBindings = board::serial::DEFAULT_SERIAL_BINDINGS,
-            serial_routes: &'static [SerialRoute] = board::serial::SERIAL_ROUTES,
-        ]
-    )]
-    async fn flash_manager_task(cx: flash_manager_task::Context);
-
-    // ---- MAIN CONTROL LOOP ----
-    #[task(
-        from = flight_tasks::control_loop,
-        binds = TIM4,
-        priority = 14,
-        local = [
-            control_loop_cnt,
-            samples_per_control_loop,
-            flight_controller,
-            control_loop_scheduler,
-            imu_rate_filter,
-            imu_angle_integrator,
-            gyro_axis_map,
-            gyro_bias_calibrator,
-            imu_last_sequence,
-            imu_stale_ticks,
-            applied_tuning_seq,
-            rc_rates_reader,
-            control_throttle_reader,
-            control_safety_arm_reader,
-            control_rc_link_reader,
-            control_arm_permit_reader,
-            motor_cmd_writer,
-            motor_cmd_seq,
-            flash_record_producer
-        ],
-        shared = [imu_data, imu_angles, imu_rates, tuning_profile, tuning_request_seq],
-        spawn = [actuator_output, safety_master],
-        config = [
-            imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile =
-                IMU_CONTROL_AXIS_PROFILE,
-            imu_gyro_raw_to_dps: f32 = IMU_GYRO_RAW_TO_DPS,
-            logical_to_physical_motor_output: [usize; 4] =
-                board::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT,
-            control_loop_rate_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
-        ]
-    )]
-    fn control_loop(cx: control_loop::Context);
-
-    #[task(
-        from = flight_tasks::actuator_idle_notify,
-        priority = 13,
-        spawn = [safety_master]
-    )]
-    async fn actuator_idle_notify(cx: actuator_idle_notify::Context);
-
-    #[task(
-        from = flight_tasks::dshot_service,
-        priority = 13,
-        shared = [dshot_motors],
-        local = [esc_request_consumer, esc_ack_producer],
-        spawn = [safety_master],
-        config = [
-            dshot_motor_for_output: fn(esc::EscOutput) -> board::init::DshotMotor =
-                dshot_motor_for_output,
-        ]
-    )]
-    async fn dshot_service(cx: dshot_service::Context);
 
     #[task(
         from = flight_tasks::dshot_dma_complete,
@@ -1241,116 +958,33 @@ ferroforge::app! {
     )]
     fn dshot_motor4_dma_complete(cx: dshot_motor4_dma_complete::Context);
 
-    #[task(
-        from = flight_tasks::esc_manager_task,
-        priority = 4,
-        local = [
-            esc_telemetry_port,
-            esc_manager_state,
-            esc_request_producer,
-            esc_ack_consumer,
-            esc_telemetry_update_producer
-        ],
-        config = [
-            esc_output_to_logical_motor: [u8; 4] = [
-                logical_motor_for_physical_index(0),
-                logical_motor_for_physical_index(1),
-                logical_motor_for_physical_index(2),
-                logical_motor_for_physical_index(3),
-            ],
-        ]
-    )]
-    async fn esc_manager_task(cx: esc_manager_task::Context);
-
-    #[task(
-        from = flight_tasks::actuator_output,
-        priority = 15,
-        shared = [dshot_motors],
-        local = [
-            actuator_safety_arm_reader,
-            actuator_arm_permit_reader,
-            actuator_rc_arm_high_reader,
-            actuator_rc_throttle_reader,
-            actuator_rc_link_reader,
-            actuator_arm_done_writer,
-            motor_cmd_reader,
-            esc_telemetry_update_consumer
-        ],
-        spawn = [safety_master, actuator_idle_notify],
-        config = [
-            validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
-            dshot_idle_command: f32 = BOARD_DSHOT_IDLE_COMMAND,
-            actuator_output_enabled: bool = ACTUATOR_OUTPUT_ENABLED,
-            actuator_inhibit_reason: &'static str = ACTUATOR_INHIBIT_REASON,
-            esc_output_to_logical_motor: [u8; 4] = [
-                logical_motor_for_physical_index(0),
-                logical_motor_for_physical_index(1),
-                logical_motor_for_physical_index(2),
-                logical_motor_for_physical_index(3),
-            ],
-        ]
-    )]
-    async fn actuator_output(cx: actuator_output::Context, cmd: safety::ActuatorCmd);
-
     // ########### SPI 1 ###################################
-    #[task(
-        from = flight_tasks::imu_data_ready,
-        binds = EXTI2,
-        priority = 14,
-        local = [imu_data_ready],
-        shared = [io_timebase],
-        spawn = [spi1_poll]
-    )]
-    fn imu_data_ready(cx: imu_data_ready::Context);
-
-    #[task(
-        from = flight_tasks::spi1_poll,
-        priority = 12,
-        local = [spi1_device],
-        config = [spi1_imu_burst_register: fn(u8) -> Option<u8> = spi1_imu_burst_register]
-    )]
-    async fn spi1_poll(cx: spi1_poll::Context, observed_at_us: u64);
-
-    #[task(
-        from = flight_tasks::spi1_owner_service,
-        priority = 13,
-        shared = [spi1_owner, io_timebase]
-    )]
-    async fn spi1_owner_service(cx: spi1_owner_service::Context);
-
-    #[task(
-        from = flight_tasks::spi1_rx_dma,
-        binds = DMA1_STR4,
-        priority = 13,
-        shared = [spi1_owner],
-        spawn = [spi1_parser]
-    )]
-    fn spi1_rx_dma(cx: spi1_rx_dma::Context);
-
-    #[task(
-        from = flight_tasks::io_watchdog,
-        binds = TIM6_DAC,
-        priority = 9,
-        local = [io_watchdog],
-        shared = [io_timebase],
-        spawn = [spi1_timeout]
-    )]
-    fn io_watchdog(cx: io_watchdog::Context);
-
-    #[task(from = flight_tasks::spi1_timeout, priority = 13, shared = [spi1_owner])]
-    async fn spi1_timeout(cx: spi1_timeout::Context, observed_at_us: u64);
-
     // Above every UART transport (11): a gyro sample published late makes
     // the next control tick stale, and one stale tick disarms. UART work at
     // the same level delayed it enough, with ESC telemetry and the OSD busy,
     // to disarm moments after arming. See mdbook/src/priority.md.
-    #[task(
-        from = flight_tasks::spi1_parser,
-        priority = 12,
-        local = [spi1_parser],
-        shared = [imu_data]
+    #[group(
+        from = flight_tasks::groups::spi1_imu,
+        local = [imu_data_ready, spi1_device, io_watchdog, spi1_parser],
+        shared = [io_timebase, spi1_owner, imu_data],
+        config = [spi1_imu_burst_register: fn(u8) -> Option<u8> = spi1_imu_burst_register],
     )]
-    async fn spi1_parser(cx: spi1_parser::Context);
+    mod spi1_imu {
+        #[task(binds = EXTI2, priority = 14)]
+        fn imu_data_ready;
+        #[task(priority = 12)]
+        async fn spi1_poll;
+        #[task(priority = 13)]
+        async fn spi1_owner_service;
+        #[task(binds = DMA1_STR4, priority = 13)]
+        fn spi1_rx_dma;
+        #[task(binds = TIM6_DAC, priority = 9)]
+        fn io_watchdog;
+        #[task(priority = 13)]
+        async fn spi1_timeout;
+        #[task(priority = 12)]
+        async fn spi1_parser;
+    }
 
     // ########### UART ports ##############################################
     // Every UART transport runs at priority 11, whatever function its port
@@ -1379,33 +1013,6 @@ ferroforge::app! {
 
     #[task(from = flight_tasks::uart8_rx_idle, binds = UART8, priority = 11, shared = [uart8_rx])]
     fn uart8_rx_idle(cx: uart8_rx_idle::Context);
-
-    #[task(
-        from = flight_tasks::osd_refresh,
-        priority = 3,
-        local = [
-            osd_port,
-            osd_tx_healthy,
-            osd_task,
-            osd_tx_buffer,
-            osd_refresh_tick,
-            osd_safety_arm_reader,
-            osd_rc_throttle_reader,
-            osd_rc_rates_reader
-        ],
-        shared = [
-            battery_voltage_v10,
-            battery_cell_count,
-            battery_cell_voltage_v100,
-            battery_current_ca,
-            imu_angles,
-            imu_rates,
-            imu_data,
-            tuning_profile,
-            tuning_request_seq
-        ]
-    )]
-    async fn osd_refresh(cx: osd_refresh::Context);
 
     #[task(
         from = flight_tasks::uart6_tx_worker,
@@ -1441,57 +1048,4 @@ ferroforge::app! {
     )]
     fn uart3_tx_dma_complete(cx: uart3_tx_dma_complete::Context);
 
-    #[task(
-        from = flight_tasks::rc_input,
-        priority = 10,
-        local = [
-            rc_port,
-            rc_receiver,
-            arm_qualifier,
-            rc_rates_writer,
-            rc_throttle_writer,
-            rc_arm_high_writer,
-            rc_link_frame_writer
-        ],
-        shared = [tuning_profile],
-        spawn = [safety_master]
-    )]
-    async fn rc_input(cx: rc_input::Context);
-
-    // Battery telemetry back through the RC receiver, when the RC protocol
-    // talks back. Lowest priority: it only reads snapshots.
-    #[task(from = flight_tasks::rc_telemetry, priority = 1, local = [rc_telemetry_writer])]
-    async fn rc_telemetry(cx: rc_telemetry::Context);
-
-    // ---- ADC1 ----
-    #[task(
-        from = flight_tasks::dma_adc1,
-        binds = ADC1_2,
-        priority = 1,
-        shared = [
-            adc1_transfer,
-            battery_voltage_v10,
-            battery_cell_count,
-            battery_cell_voltage_v100,
-            battery_current_ca
-        ],
-        local = [
-            adc1_buffer,
-            battery_cell_detector: osd::BatteryCellDetector =
-                osd::BatteryCellDetector::new(
-                    BATTERY_MAX_CELL_MV,
-                    BATTERY_DETECT_CELL_MV,
-                    BATTERY_MAX_CELLS,
-                )
-        ],
-        config = [
-            adc_vbat_divider_ratio: f32 = ADC_VBAT_DIVIDER_RATIO,
-            adc_current_betaflight_scale: u32 = ADC_CURRENT_BETAFLIGHT_SCALE,
-            adc_current_offset_ma: i32 = ADC_CURRENT_OFFSET_MA,
-        ]
-    )]
-    fn dma_adc1(cx: dma_adc1::Context);
-
-    #[task(from = flight_tasks::adc1_polling, priority = 1, shared = [adc1_transfer])]
-    async fn adc1_polling(cx: adc1_polling::Context);
 }

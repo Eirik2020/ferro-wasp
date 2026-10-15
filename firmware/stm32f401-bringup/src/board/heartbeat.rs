@@ -1,7 +1,10 @@
+//! The NUCLEO-F401RE heartbeat: LD2 on PA5 and a line over USART2 TX on
+//! PA2, once per period.
+
 use core::fmt::Write;
 
 use defmt::{info, warn};
-use fugit::ExtU64 as _;
+use rtic_monotonics::systick::prelude::*;
 use stm32f4xx_hal::{
     gpio::{Input, Output, PA2, PA5, PushPull},
     pac::USART2,
@@ -51,7 +54,7 @@ pub fn init_heartbeat_resources(
         .usart
         .tx(resources.tx_pin, config.baud.bps(), rcc)?;
 
-    let _ = led.set_low();
+    led.set_low();
 
     Ok(HeartbeatResources {
         led,

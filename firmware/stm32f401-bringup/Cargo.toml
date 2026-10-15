@@ -32,6 +32,8 @@ rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick", "systick-
 stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["stm32f401", "defmt", "rtic2"] }
 
 ferroforge = "0.4"
+# The heartbeat task definition expands to `::fugit` paths.
+fugit = "0.3.9"
 
 
 [profile.dev.package."*"]

@@ -1,484 +1,122 @@
 //! STM32F405 four-motor DShot600 transmitter.
 //!
 //! The command lease, telemetry, completion, and fault policy are the shared
-//! `DshotBank` state machine; this module is the STM32F405 hardware under it.
-//! The backend owns TIM1, TIM8, four fixed DMA2 streams, every motor pin, and
-//! all DMA buffers as one fault-containment unit. TIM1 is the frame master and
-//! starts TIM8 through ITR0, so all four lanes begin from the same hardware
-//! trigger. A frame set is complete only after every DMA lane completes.
+//! `DshotBank` state machine; this module is the STM32F405 hardware under
+//! it. The bank owns its timers, its four DMA streams, and all DMA buffers
+//! as one fault-containment unit. A frame set is complete only after every
+//! DMA lane completes.
+//!
+//! Which timers and channels carry the motors, and on which streams, is the
+//! board's: it hands over its timers as a `TimerSet`, names each motor's
+//! lane with `lane::<Timer, Channel, DMA_CHANNEL, _>(stream)`, and chooses
+//! how the timers start: in software, one after another, or from one
+//! timer's trigger output so every lane begins on the same edge. The board
+//! latches the motor pads low as GPIO before building the bank and connects
+//! them afterwards, so no pad sees a timer until its outputs are configured.
+//!
+//! Every lane timer must run from the same timer clock: one bank encodes
+//! all lanes with one bit timing.
 //!
 //! # Unsafe boundary
 //!
 //! This is the only project-local unsafe boundary used by the DShot backend.
-//! It proves these fixed STM32F405 hardware facts to the HAL:
+//! It proves these STM32F405 hardware facts to the HAL:
 //!
-//! - DMA peripheral addresses are the owned TIM1/TIM8 compare registers;
+//! - a lane endpoint's address is the compare register of channel `C` of a
+//!   timer its caller owns;
 //! - compare-register DMA transfers are 16-bit halfwords;
-//! - the four memory-to-timer DMA routes are exactly those documented below.
+//! - each declared stream/channel route carries that timer channel's
+//!   compare request (RM0090 table 43), memory to peripheral.
 //!
-//! Endpoint constructors are private. They can only be created while
-//! `DshotMotorBank` takes exclusive ownership of both timers. DMA buffer
-//! ownership, stream fencing, and buffer exchange remain delegated to
+//! Endpoints are built only from a reference to an owned timer, while the
+//! bank takes exclusive ownership of it. DMA buffer ownership, stream
+//! fencing, and buffer exchange remain delegated to
 //! `stm32f4xx-hal::dma::Transfer`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use ferrowasp_waveform::dshot::{
-    COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotPacket, DshotTiming, encode_compare_sequence,
-};
+use core::marker::PhantomData;
+
+use ferrowasp_stm32::dshot_bank::channel::{Ch1, Ch3, Ch3N, Ch4, LaneChannel};
+use ferrowasp_stm32::dshot_lanes::{self, build_bank};
+use ferrowasp_waveform::dshot::{COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotTiming};
 use stm32f4xx_hal::{
     dma::{
         ChannelX, DMAError, MemoryToPeripheral, Stream1, Stream2, Stream6, Stream7, Transfer,
         config::{DmaConfig, Priority},
         traits::{Channel, DMASet, PeriAddress, StreamISR},
     },
-    gpio::{Alternate, Input, PA8, PB15, PC8, PC9, Speed},
     pac::{DMA2, TIM1, TIM8, tim1::RegisterBlock},
     rcc::Clocks,
-    timer::Timer,
 };
 
+pub use ferrowasp_stm32::dshot_bank::channel;
 pub use ferrowasp_stm32::dshot_bank::{
     DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotBank,
     DshotCommandError, DshotCommandSequence, DshotInitError, DshotInterruptEvent, DshotLanes,
-    DshotMotor, DshotServiceEvent, DshotSpecialCommandError, DshotStats,
+    DshotMotor, DshotMotors, DshotServiceEvent, DshotSpecialCommandError, DshotStats,
     DshotTelemetryRequestError,
+};
+pub use ferrowasp_stm32::dshot_lanes::{
+    DshotMotorBank, IntoLane, LaneDma, LaneOutputs, LaneTimer, SoftwareStart, StartMode, TimerSet,
+    TriggerMaster, TriggerSlave,
 };
 
 pub type DshotDmaBuffer = [u16; COMPARE_DMA_SLOTS];
 type DshotBuffer = &'static mut DshotDmaBuffer;
-type Motor1Transfer = Transfer<Stream1<DMA2>, 6, Tim1Ch1Dma, MemoryToPeripheral, DshotBuffer>;
-type Motor2Transfer = Transfer<Stream7<DMA2>, 7, Tim8Ch4Dma, MemoryToPeripheral, DshotBuffer>;
-type Motor3Transfer = Transfer<Stream2<DMA2>, 0, Tim8Ch3DmaFoxeer, MemoryToPeripheral, DshotBuffer>;
-type Motor4Transfer = Transfer<Stream6<DMA2>, 6, Tim1Ch3Dma, MemoryToPeripheral, DshotBuffer>;
+pub type DshotDmaStorage = dshot_lanes::DshotDmaStorage<DshotDmaBuffer>;
 
-/// The STM32F405 four-motor bank: the shared DShot state machine over TIM1,
-/// TIM8, and their four DMA2 streams.
-pub type DshotMotorBank = DshotBank<Stm32f4DshotLanes>;
+/// The clock domain of the APB2 timers, TIM1 and TIM8. The APB1 timers
+/// count a clock half as fast, so a bank cannot mix the two.
+const APB2_TIMERS: u8 = 2;
 
-/// Static storage for two DMA buffers per motor lane.
-pub struct DshotDmaStorage {
-    buffers: [DshotDmaBuffer; 8],
-}
+/// A timer the bank drives. The shared lane traits are implemented for this
+/// wrapper, since neither they nor the PAC's timer types belong to this
+/// crate.
+pub struct DshotTimer<T>(pub T);
 
-impl DshotDmaStorage {
-    pub const fn new() -> Self {
-        Self {
-            buffers: [[0; COMPARE_DMA_SLOTS]; 8],
-        }
-    }
+/// Start `M` in software and `S` from `M`'s trigger output, for timers this
+/// backend wires that way.
+pub type TriggeredStart<M, S> = dshot_lanes::TriggeredStart<DshotTimer<M>, DshotTimer<S>>;
 
-    fn split(&'static mut self) -> DshotBuffers {
-        let [
-            motor1_active,
-            motor1_spare,
-            motor2_active,
-            motor2_spare,
-            motor3_active,
-            motor3_spare,
-            motor4_active,
-            motor4_spare,
-        ] = self.buffers.each_mut();
+/// TIM1 and TIM8 share the advanced-timer register block.
+macro_rules! advanced_lane_timers {
+    ($($TIM:ident),+) => {
+        $(
+            impl LaneTimer for DshotTimer<$TIM> {
+                fn clock_domain(&self) -> u8 {
+                    APB2_TIMERS
+                }
 
-        DshotBuffers {
-            motor1_active,
-            motor1_spare,
-            motor2_active,
-            motor2_spare,
-            motor3_active,
-            motor3_spare,
-            motor4_active,
-            motor4_spare,
-        }
-    }
-}
+                fn configure(&self, timing: DshotTiming, outputs: LaneOutputs) {
+                    configure_advanced(&self.0, timing, outputs);
+                }
 
-impl Default for DshotDmaStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+                fn stage(&self, channels: u8, first: &[u16; 4], period_end: u16) {
+                    stage(&self.0, channels, first, period_end);
+                }
 
-struct DshotBuffers {
-    motor1_active: DshotBuffer,
-    motor1_spare: DshotBuffer,
-    motor2_active: DshotBuffer,
-    motor2_spare: DshotBuffer,
-    motor3_active: DshotBuffer,
-    motor3_spare: DshotBuffer,
-    motor4_active: DshotBuffer,
-    motor4_spare: DshotBuffer,
-}
+                fn start(&self) {
+                    self.0.cr1().modify(|_, w| w.cen().set_bit());
+                }
 
-macro_rules! dma_endpoint {
-    (
-        $(#[$meta:meta])*
-        $name:ident,
-        $stream:ty,
-        $channel:literal
-    ) => {
-        $(#[$meta])*
-        struct $name {
-            address: u32,
-        }
+                fn stop(&self, channels: u8) {
+                    stop(&self.0, channels);
+                }
 
-        impl $name {
-            fn new(address: u32) -> Self {
-                Self { address }
+                fn force_inactive(&self, outputs: LaneOutputs) {
+                    stop(&self.0, outputs.channels);
+                    self.0.bdtr().modify(|_, w| w.moe().clear_bit());
+                    set_outputs_enabled(&self.0, outputs, false);
+                }
             }
-        }
-
-        // SAFETY: the endpoint is constructed only by `DshotMotorBank::new`
-        // from a compare register belonging to its exclusively owned timer.
-        // The STM32F405 timer compare register accepts 16-bit DMA writes.
-        unsafe impl PeriAddress for $name {
-            type MemSize = u16;
-
-            #[inline]
-            fn address(&self) -> u32 {
-                self.address
-            }
-        }
-
-        // SAFETY: RM0090 maps this fixed STM32F405 timer compare request to
-        // the declared DMA2 stream/channel in the memory-to-peripheral
-        // direction. The endpoint cannot be constructed outside this module.
-        unsafe impl DMASet<$stream, $channel, MemoryToPeripheral> for $name {}
+        )+
     };
 }
 
-dma_endpoint!(
-    /// TIM1_CH1 compare endpoint for physical motor output 1.
-    Tim1Ch1Dma,
-    Stream1<DMA2>,
-    6
-);
-dma_endpoint!(
-    /// TIM8_CH4 compare endpoint for physical motor output 2.
-    Tim8Ch4Dma,
-    Stream7<DMA2>,
-    7
-);
-dma_endpoint!(
-    /// Foxeer F405 V2 TIM8_CH3 compare endpoint for physical motor output 3.
-    Tim8Ch3DmaFoxeer,
-    Stream2<DMA2>,
-    0
-);
-dma_endpoint!(
-    /// TIM1_CH3 compare endpoint for physical TIM1_CH3N motor output 4.
-    Tim1Ch3Dma,
-    Stream6<DMA2>,
-    6
-);
+advanced_lane_timers!(TIM1, TIM8);
 
-/// Compile-time proof for the Foxeer F405 V2 motor DMA allocation.
-pub fn assert_foxeer_four_motor_dma_routes_compile() {
-    assert_dma_route::<Stream1<DMA2>, 6, Tim1Ch1Dma>();
-    assert_dma_route::<Stream7<DMA2>, 7, Tim8Ch4Dma>();
-    assert_dma_route::<Stream2<DMA2>, 0, Tim8Ch3DmaFoxeer>();
-    assert_dma_route::<Stream6<DMA2>, 6, Tim1Ch3Dma>();
-}
-
-fn assert_dma_route<STREAM, const CHANNEL: u8, ENDPOINT>()
-where
-    STREAM: stm32f4xx_hal::dma::traits::Stream,
-    ChannelX<CHANNEL>: Channel,
-    ENDPOINT: PeriAddress<MemSize = u16> + DMASet<STREAM, CHANNEL, MemoryToPeripheral>,
-{
-}
-
-struct DshotTimerBank {
-    tim1: TIM1,
-    tim8: TIM8,
-    period_end: u16,
-}
-
-impl DshotTimerBank {
-    fn new(tim1: TIM1, tim8: TIM8, timing: DshotTiming) -> Self {
-        configure_timer_base(&tim1, timing);
-        configure_timer_base(&tim8, timing);
-        configure_tim1_channels(&tim1);
-        configure_tim8_channels(&tim8);
-
-        // TIM1 CEN is the master trigger. On its rising edge, TIM8 starts
-        // through ITR0 in trigger mode. Both counters are staged at ARR before
-        // the edge, so their first update loads the four first-bit duties.
-        tim1.cr2()
-            .modify(|_, w| w.ccds().on_compare().mms().enable());
-        tim8.cr2().modify(|_, w| w.ccds().on_compare());
-        tim8.smcr()
-            .modify(|_, w| w.ts().itr0().sms().trigger_mode());
-
-        // M4 uses TIM1_CH3N while TIM1_CH3 is disabled. RM0090 Table 96 defines
-        // that case as OC3N = OC3REF xor CC3NP, so active-high polarity must
-        // keep CC3NP clear for the same pulse shape as the ordinary outputs.
-        tim1.ccer().modify(|_, w| {
-            w.cc1p()
-                .clear_bit()
-                .cc1e()
-                .set_bit()
-                .cc3p()
-                .clear_bit()
-                .cc3e()
-                .clear_bit()
-                .cc3np()
-                .active_high()
-                .cc3ne()
-                .set_bit()
-        });
-        tim8.ccer().modify(|_, w| {
-            w.cc3p()
-                .clear_bit()
-                .cc3e()
-                .set_bit()
-                .cc4p()
-                .clear_bit()
-                .cc4e()
-                .set_bit()
-        });
-
-        tim1.cr2()
-            .modify(|_, w| w.ois1().clear_bit().ois3n().clear_bit());
-        tim8.cr2()
-            .modify(|_, w| w.ois3().clear_bit().ois4().clear_bit());
-        configure_output_gate(&tim1);
-        configure_output_gate(&tim8);
-        force_update(&tim1);
-        force_update(&tim8);
-        clear_timer_flags(&tim1);
-        clear_timer_flags(&tim8);
-
-        Self {
-            tim1,
-            tim8,
-            period_end: timing.arr,
-        }
-    }
-
-    fn start_frame(&mut self, first_duties: [u16; 4]) {
-        self.disable_dma_requests();
-        self.tim1.cr1().modify(|_, w| w.cen().clear_bit());
-        self.tim8.cr1().modify(|_, w| w.cen().clear_bit());
-
-        write_compare(&self.tim1, 0, first_duties[0]);
-        write_compare(&self.tim8, 3, first_duties[1]);
-        write_compare(&self.tim8, 2, first_duties[2]);
-        write_compare(&self.tim1, 2, first_duties[3]);
-        write_counter(&self.tim1, self.period_end);
-        write_counter(&self.tim8, self.period_end);
-        clear_timer_flags(&self.tim1);
-        clear_timer_flags(&self.tim8);
-
-        self.tim1
-            .dier()
-            .modify(|_, w| w.cc1de().enabled().cc3de().enabled());
-        self.tim8
-            .dier()
-            .modify(|_, w| w.cc3de().enabled().cc4de().enabled());
-
-        // Only the master is started in software. TIM8 starts from TIM1_TRGO.
-        self.tim1.cr1().modify(|_, w| w.cen().set_bit());
-    }
-
-    fn stop_frame(&mut self) {
-        self.disable_dma_requests();
-        self.tim1.cr1().modify(|_, w| w.cen().clear_bit());
-        self.tim8.cr1().modify(|_, w| w.cen().clear_bit());
-        write_all_compares_zero(&self.tim1);
-        write_all_compares_zero(&self.tim8);
-        force_update(&self.tim1);
-        force_update(&self.tim8);
-        clear_timer_flags(&self.tim1);
-        clear_timer_flags(&self.tim8);
-    }
-
-    fn force_outputs_low(&mut self) {
-        self.stop_frame();
-        self.tim1.bdtr().modify(|_, w| w.moe().clear_bit());
-        self.tim8.bdtr().modify(|_, w| w.moe().clear_bit());
-        self.tim1
-            .ccer()
-            .modify(|_, w| w.cc1e().clear_bit().cc3ne().clear_bit());
-        self.tim8
-            .ccer()
-            .modify(|_, w| w.cc3e().clear_bit().cc4e().clear_bit());
-    }
-
-    fn disable_dma_requests(&mut self) {
-        self.tim1
-            .dier()
-            .modify(|_, w| w.cc1de().disabled().cc3de().disabled());
-        self.tim8
-            .dier()
-            .modify(|_, w| w.cc3de().disabled().cc4de().disabled());
-    }
-}
-
-/// TIM1/TIM8 compare lanes and their DMA2 streams, the STM32F405 hardware
-/// under a `DshotMotorBank`.
-pub struct Stm32f4DshotLanes {
-    timers: DshotTimerBank,
-    _motor1_pin: PA8<Alternate<1>>,
-    _motor2_pin: PC9<Alternate<3>>,
-    _motor3_pin: PC8<Alternate<3>>,
-    _motor4_pin: PB15<Alternate<1>>,
-    motor1_transfer: Motor1Transfer,
-    motor2_transfer: Motor2Transfer,
-    motor3_transfer: Motor3Transfer,
-    motor4_transfer: Motor4Transfer,
-}
-
-impl DshotLanes for Stm32f4DshotLanes {
-    type Buffer = DshotDmaBuffer;
-
-    fn encode(packet: DshotPacket, timing: DshotTiming, buffer: &mut DshotDmaBuffer) -> u16 {
-        encode_compare_sequence(packet, timing, buffer)
-    }
-
-    fn exchange_buffer(
-        &mut self,
-        motor: DshotMotor,
-        next: DshotBuffer,
-    ) -> Result<DshotBuffer, DshotBuffer> {
-        match motor {
-            DshotMotor::Motor1 => exchange_buffer(&mut self.motor1_transfer, next),
-            DshotMotor::Motor2 => exchange_buffer(&mut self.motor2_transfer, next),
-            DshotMotor::Motor3 => exchange_buffer(&mut self.motor3_transfer, next),
-            DshotMotor::Motor4 => exchange_buffer(&mut self.motor4_transfer, next),
-        }
-    }
-
-    fn start_dma(&mut self, motor: DshotMotor) {
-        match motor {
-            DshotMotor::Motor1 => self.motor1_transfer.start(|_| {}),
-            DshotMotor::Motor2 => self.motor2_transfer.start(|_| {}),
-            DshotMotor::Motor3 => self.motor3_transfer.start(|_| {}),
-            DshotMotor::Motor4 => self.motor4_transfer.start(|_| {}),
-        }
-    }
-
-    fn start_frame(&mut self, first_duties: [u16; 4]) {
-        self.timers.start_frame(first_duties);
-    }
-
-    fn stop_frame(&mut self) {
-        self.timers.stop_frame();
-    }
-
-    fn force_outputs_low(&mut self) {
-        self.timers.force_outputs_low();
-    }
-
-    fn dma_status(&self, motor: DshotMotor) -> (bool, bool) {
-        match motor {
-            DshotMotor::Motor1 => (
-                self.motor1_transfer.is_transfer_complete(),
-                self.motor1_transfer.is_transfer_error()
-                    || self.motor1_transfer.is_direct_mode_error(),
-            ),
-            DshotMotor::Motor2 => (
-                self.motor2_transfer.is_transfer_complete(),
-                self.motor2_transfer.is_transfer_error()
-                    || self.motor2_transfer.is_direct_mode_error(),
-            ),
-            DshotMotor::Motor3 => (
-                self.motor3_transfer.is_transfer_complete(),
-                self.motor3_transfer.is_transfer_error()
-                    || self.motor3_transfer.is_direct_mode_error(),
-            ),
-            DshotMotor::Motor4 => (
-                self.motor4_transfer.is_transfer_complete(),
-                self.motor4_transfer.is_transfer_error()
-                    || self.motor4_transfer.is_direct_mode_error(),
-            ),
-        }
-    }
-
-    fn pause_and_clear(&mut self, motor: DshotMotor) {
-        match motor {
-            DshotMotor::Motor1 => pause_and_clear(&mut self.motor1_transfer),
-            DshotMotor::Motor2 => pause_and_clear(&mut self.motor2_transfer),
-            DshotMotor::Motor3 => pause_and_clear(&mut self.motor3_transfer),
-            DshotMotor::Motor4 => pause_and_clear(&mut self.motor4_transfer),
-        }
-    }
-}
-
-/// Constructs the Foxeer F405 V2 DShot bank with TIM8_CH3 on DMA2 Stream2
-/// Channel0.
-#[allow(clippy::too_many_arguments)]
-pub fn new_foxeer(
-    motor1_pin: PA8<Input>,
-    motor2_pin: PC9<Input>,
-    motor3_pin: PC8<Input>,
-    motor4_pin: PB15<Input>,
-    tim1: Timer<TIM1>,
-    tim8: Timer<TIM8>,
-    motor1_dma: Stream1<DMA2>,
-    motor2_dma: Stream7<DMA2>,
-    motor3_dma: Stream2<DMA2>,
-    motor4_dma: Stream6<DMA2>,
-    clocks: &Clocks,
-    storage: &'static mut DshotDmaStorage,
-) -> Result<DshotBank<Stm32f4DshotLanes>, DshotInitError> {
-    let timing = DshotTiming::from_clocks(clocks.timclk2().raw(), DSHOT600_BITRATE_HZ)
-        .map_err(DshotInitError::InvalidTiming)?;
-
-    // Keep all external pads at a GPIO low latch until timer polarity,
-    // off-state behavior, compare values, and output gates are configured.
-    let mut motor1_pin = motor1_pin.into_push_pull_output();
-    let mut motor2_pin = motor2_pin.into_push_pull_output();
-    let mut motor3_pin = motor3_pin.into_push_pull_output();
-    let mut motor4_pin = motor4_pin.into_push_pull_output();
-    motor1_pin.set_low();
-    motor2_pin.set_low();
-    motor3_pin.set_low();
-    motor4_pin.set_low();
-
-    let tim1 = tim1.release();
-    let tim8 = tim8.release();
-    let motor1_endpoint = Tim1Ch1Dma::new(tim1.ccr(0).as_ptr() as u32);
-    let motor2_endpoint = Tim8Ch4Dma::new(tim8.ccr(3).as_ptr() as u32);
-    let motor4_endpoint = Tim1Ch3Dma::new(tim1.ccr(2).as_ptr() as u32);
-    let motor3_endpoint = Tim8Ch3DmaFoxeer::new(tim8.ccr(2).as_ptr() as u32);
-    let timers = DshotTimerBank::new(tim1, tim8, timing);
-
-    let motor1_pin = motor1_pin.into_alternate::<1>().speed(Speed::VeryHigh);
-    let motor2_pin = motor2_pin.into_alternate::<3>().speed(Speed::VeryHigh);
-    let motor3_pin = motor3_pin.into_alternate::<3>().speed(Speed::VeryHigh);
-    let motor4_pin = motor4_pin.into_alternate::<1>().speed(Speed::VeryHigh);
-
-    let buffers = storage.split();
-    let motor1_transfer = init_transfer(motor1_dma, motor1_endpoint, buffers.motor1_active);
-    let motor2_transfer = init_transfer(motor2_dma, motor2_endpoint, buffers.motor2_active);
-    let motor3_transfer = init_transfer(motor3_dma, motor3_endpoint, buffers.motor3_active);
-    let motor4_transfer = init_transfer(motor4_dma, motor4_endpoint, buffers.motor4_active);
-
-    let lanes = Stm32f4DshotLanes {
-        timers,
-        _motor1_pin: motor1_pin,
-        _motor2_pin: motor2_pin,
-        _motor3_pin: motor3_pin,
-        _motor4_pin: motor4_pin,
-        motor1_transfer,
-        motor2_transfer,
-        motor3_transfer,
-        motor4_transfer,
-    };
-    Ok(DshotBank::from_lanes(
-        lanes,
-        [
-            buffers.motor1_spare,
-            buffers.motor2_spare,
-            buffers.motor3_spare,
-            buffers.motor4_spare,
-        ],
-        timing,
-    ))
-}
-
-fn configure_timer_base(timer: &RegisterBlock, timing: DshotTiming) {
+fn configure_advanced(timer: &RegisterBlock, timing: DshotTiming, outputs: LaneOutputs) {
     timer.cr1().reset();
     timer.cr2().reset();
     timer.smcr().reset();
@@ -486,41 +124,58 @@ fn configure_timer_base(timer: &RegisterBlock, timing: DshotTiming) {
     timer.sr().reset();
     timer.ccer().reset();
     timer.bdtr().reset();
+    timer.ccmr1_output().reset();
+    timer.ccmr2_output().reset();
     timer.psc().write(|w| w.psc().set(0));
     timer.rcr().write(|w| w.rep().set(0));
     timer.arr().write(|w| w.arr().set(timing.arr));
     write_all_compares_zero(timer);
-    write_counter(timer, 0);
+    timer.cnt().write(|w| w.cnt().set(0));
     timer.cr1().modify(|_, w| w.arpe().set_bit());
-}
 
-fn configure_tim1_channels(timer: &RegisterBlock) {
-    timer
-        .ccmr1_output()
-        .write(|w| w.cc1s().output().oc1pe().enabled().oc1m().pwm_mode1());
-    timer
-        .ccmr2_output()
-        .write(|w| w.cc3s().output().oc3pe().enabled().oc3m().pwm_mode1());
-}
+    let used = |index: u8| outputs.channels & (1 << index) != 0;
+    if used(0) {
+        timer
+            .ccmr1_output()
+            .modify(|_, w| w.cc1s().output().oc1pe().enabled().oc1m().pwm_mode1());
+    }
+    if used(1) {
+        timer
+            .ccmr1_output()
+            .modify(|_, w| w.cc2s().output().oc2pe().enabled().oc2m().pwm_mode1());
+    }
+    if used(2) {
+        timer
+            .ccmr2_output()
+            .modify(|_, w| w.cc3s().output().oc3pe().enabled().oc3m().pwm_mode1());
+    }
+    if used(3) {
+        timer
+            .ccmr2_output()
+            .modify(|_, w| w.cc4s().output().oc4pe().enabled().oc4m().pwm_mode1());
+    }
+    timer.cr2().modify(|_, w| w.ccds().on_compare());
 
-fn configure_tim8_channels(timer: &RegisterBlock) {
-    timer.ccmr2_output().write(|w| {
-        w.cc3s()
-            .output()
-            .oc3pe()
-            .enabled()
-            .oc3m()
-            .pwm_mode1()
-            .cc4s()
-            .output()
-            .oc4pe()
-            .enabled()
-            .oc4m()
-            .pwm_mode1()
+    // A complementary lane drives CHxN with CHx disabled. RM0090 table 96
+    // defines that case as OCxN = OCxREF xor CCxNP, so active-high polarity
+    // keeps CCxNP clear for the same pulse shape as an ordinary output.
+    set_outputs_enabled(timer, outputs, true);
+    timer.cr2().modify(|_, w| {
+        w.ois1()
+            .clear_bit()
+            .ois1n()
+            .clear_bit()
+            .ois2()
+            .clear_bit()
+            .ois2n()
+            .clear_bit()
+            .ois3()
+            .clear_bit()
+            .ois3n()
+            .clear_bit()
+            .ois4()
+            .clear_bit()
     });
-}
-
-fn configure_output_gate(timer: &RegisterBlock) {
     timer.bdtr().modify(|_, w| {
         w.ossi()
             .set_bit()
@@ -533,28 +188,305 @@ fn configure_output_gate(timer: &RegisterBlock) {
             .moe()
             .set_bit()
     });
+    force_update(timer);
+    timer.sr().reset();
 }
 
-fn write_compare(timer: &RegisterBlock, channel_index: usize, value: u16) {
-    timer.ccr(channel_index).write(|w| w.ccr().set(value));
+/// Enable (or disable) each lane's output, active high: CHx for an ordinary
+/// lane, CHxN with CHx off for a complementary one.
+fn set_outputs_enabled(timer: &RegisterBlock, outputs: LaneOutputs, enabled: bool) {
+    let normal = |index: u8| {
+        outputs.channels & (1 << index) != 0 && outputs.complementary & (1 << index) == 0
+    };
+    let complementary = |index: u8| {
+        outputs.channels & (1 << index) != 0 && outputs.complementary & (1 << index) != 0
+    };
+    timer.ccer().modify(|_, w| {
+        if normal(0) {
+            w.cc1p().clear_bit().cc1e().bit(enabled);
+        }
+        if complementary(0) {
+            w.cc1p().clear_bit().cc1e().clear_bit();
+            w.cc1np().active_high().cc1ne().bit(enabled);
+        }
+        if normal(1) {
+            w.cc2p().clear_bit().cc2e().bit(enabled);
+        }
+        if complementary(1) {
+            w.cc2p().clear_bit().cc2e().clear_bit();
+            w.cc2np().active_high().cc2ne().bit(enabled);
+        }
+        if normal(2) {
+            w.cc3p().clear_bit().cc3e().bit(enabled);
+        }
+        if complementary(2) {
+            w.cc3p().clear_bit().cc3e().clear_bit();
+            w.cc3np().active_high().cc3ne().bit(enabled);
+        }
+        if normal(3) {
+            w.cc4p().clear_bit().cc4e().bit(enabled);
+        }
+        w
+    });
+}
+
+fn stage(timer: &RegisterBlock, channels: u8, first: &[u16; 4], period_end: u16) {
+    set_requests(timer, channels, false);
+    timer.cr1().modify(|_, w| w.cen().clear_bit());
+    for (index, duty) in first.iter().enumerate() {
+        if channels & (1 << index) != 0 {
+            timer.ccr(index).write(|w| w.ccr().set(*duty));
+        }
+    }
+    timer.cnt().write(|w| w.cnt().set(period_end));
+    timer.sr().reset();
+    set_requests(timer, channels, true);
+}
+
+fn stop(timer: &RegisterBlock, channels: u8) {
+    set_requests(timer, channels, false);
+    timer.cr1().modify(|_, w| w.cen().clear_bit());
+    write_all_compares_zero(timer);
+    force_update(timer);
+    timer.sr().reset();
+}
+
+fn set_requests(timer: &RegisterBlock, channels: u8, open: bool) {
+    timer.dier().modify(|r, w| {
+        let bit = |index: u8, current: bool| {
+            if channels & (1 << index) != 0 {
+                open
+            } else {
+                current
+            }
+        };
+        w.cc1de()
+            .bit(bit(0, r.cc1de().bit()))
+            .cc2de()
+            .bit(bit(1, r.cc2de().bit()))
+            .cc3de()
+            .bit(bit(2, r.cc3de().bit()))
+            .cc4de()
+            .bit(bit(3, r.cc4de().bit()))
+    });
 }
 
 fn write_all_compares_zero(timer: &RegisterBlock) {
-    for channel_index in 0..4 {
-        write_compare(timer, channel_index, 0);
+    for index in 0..4 {
+        timer.ccr(index).write(|w| w.ccr().set(0));
     }
-}
-
-fn write_counter(timer: &RegisterBlock, value: u16) {
-    timer.cnt().write(|w| w.cnt().set(value));
 }
 
 fn force_update(timer: &RegisterBlock) {
     timer.egr().write(|w| w.ug().update());
 }
 
-fn clear_timer_flags(timer: &RegisterBlock) {
-    timer.sr().reset();
+impl TriggerMaster for DshotTimer<TIM1> {
+    fn lead(&self) {
+        self.0.cr2().modify(|_, w| w.mms().enable());
+    }
+}
+
+// RM0090 table 94: TIM8's ITR0 is TIM1's TRGO.
+impl TriggerSlave<DshotTimer<TIM1>> for DshotTimer<TIM8> {
+    fn follow(&self) {
+        self.0
+            .smcr()
+            .modify(|_, w| w.ts().itr0().sms().trigger_mode());
+    }
+}
+
+/// A timer channel's compare register, as a DMA destination.
+pub struct CompareEndpoint<T, C> {
+    address: u32,
+    _channel: PhantomData<(T, C)>,
+}
+
+/// A timer that has compare channel `C`: the address of its CCRx.
+pub trait CompareRegister<C: LaneChannel> {
+    fn compare_address(&self) -> u32;
+}
+
+impl<C: LaneChannel> CompareRegister<C> for TIM1 {
+    fn compare_address(&self) -> u32 {
+        self.ccr(C::INDEX).as_ptr() as u32
+    }
+}
+
+impl<C: LaneChannel> CompareRegister<C> for TIM8 {
+    fn compare_address(&self) -> u32 {
+        self.ccr(C::INDEX).as_ptr() as u32
+    }
+}
+
+impl<T, C> CompareEndpoint<T, C>
+where
+    T: CompareRegister<C>,
+    C: LaneChannel,
+{
+    fn new(timer: &T) -> Self {
+        Self {
+            address: timer.compare_address(),
+            _channel: PhantomData,
+        }
+    }
+}
+
+// SAFETY: `new` takes the address of channel `C`'s compare register from a
+// timer its caller owns, and the STM32F405 compare registers accept 16-bit
+// DMA writes.
+unsafe impl<T, C> PeriAddress for CompareEndpoint<T, C>
+where
+    T: CompareRegister<C>,
+    C: LaneChannel,
+{
+    type MemSize = u16;
+
+    #[inline]
+    fn address(&self) -> u32 {
+        self.address
+    }
+}
+
+/// Declare stream/channel routes for timer compare requests. Each line must
+/// match RM0090 table 43; a channel's complementary lane uses the same
+/// compare register and request as the channel itself.
+macro_rules! compare_routes {
+    ($($TIM:ident [$($C:ident),+] => $stream:ty, $channel:literal;)+) => {
+        $($(
+            // SAFETY: RM0090 table 43 maps this STM32F405 timer compare
+            // request to the declared DMA2 stream and channel, memory to
+            // peripheral.
+            unsafe impl DMASet<$stream, $channel, MemoryToPeripheral>
+                for CompareEndpoint<$TIM, $C>
+            {
+            }
+        )+)+
+    };
+}
+
+compare_routes! {
+    TIM1 [Ch1] => Stream1<DMA2>, 6;
+    TIM1 [Ch3, Ch3N] => Stream6<DMA2>, 6;
+    TIM8 [Ch3] => Stream2<DMA2>, 0;
+    TIM8 [Ch4] => Stream7<DMA2>, 7;
+}
+
+/// A motor lane as the board names it: channel `C` of timer `T`, on DMA
+/// `stream` and stream channel `DMA_CHANNEL`.
+pub struct LaneStream<S, T, C, const DMA_CHANNEL: u8> {
+    stream: S,
+    _lane: PhantomData<(T, C)>,
+}
+
+/// Name a motor lane: channel `C` of timer `T`, carried by `stream` on its
+/// channel `DMA_CHANNEL`. The route must be one declared above.
+pub fn lane<T, C, const DMA_CHANNEL: u8, S>(stream: S) -> LaneStream<S, T, C, DMA_CHANNEL> {
+    LaneStream {
+        stream,
+        _lane: PhantomData,
+    }
+}
+
+type LaneTransfer<S, T, C, const DMA_CHANNEL: u8> =
+    Transfer<S, DMA_CHANNEL, CompareEndpoint<T, C>, MemoryToPeripheral, DshotBuffer>;
+
+/// A built lane: its timer slot and its DMA transfer.
+pub struct Lane<S, T, C, const DMA_CHANNEL: u8>
+where
+    S: stm32f4xx_hal::dma::traits::Stream,
+    ChannelX<DMA_CHANNEL>: Channel,
+    T: CompareRegister<C>,
+    C: LaneChannel,
+    CompareEndpoint<T, C>: DMASet<S, DMA_CHANNEL, MemoryToPeripheral>,
+{
+    slot: usize,
+    transfer: LaneTransfer<S, T, C, DMA_CHANNEL>,
+}
+
+impl<S, T, C, const DMA_CHANNEL: u8> LaneDma for Lane<S, T, C, DMA_CHANNEL>
+where
+    S: stm32f4xx_hal::dma::traits::Stream + StreamISR,
+    ChannelX<DMA_CHANNEL>: Channel,
+    T: CompareRegister<C>,
+    C: LaneChannel,
+    CompareEndpoint<T, C>: DMASet<S, DMA_CHANNEL, MemoryToPeripheral>,
+{
+    type Buffer = DshotDmaBuffer;
+
+    fn slot(&self) -> usize {
+        self.slot
+    }
+
+    fn channel(&self) -> usize {
+        C::INDEX
+    }
+
+    fn complementary(&self) -> bool {
+        C::COMPLEMENTARY
+    }
+
+    fn exchange(&mut self, next: DshotBuffer) -> Result<DshotBuffer, DshotBuffer> {
+        self.transfer
+            .next_transfer(next)
+            .map(|(old, _)| old)
+            .map_err(dma_error_buffer)
+    }
+
+    fn start(&mut self) {
+        self.transfer.start(|_| {});
+    }
+
+    fn status(&self) -> (bool, bool) {
+        (
+            self.transfer.is_transfer_complete(),
+            self.transfer.is_transfer_error() || self.transfer.is_direct_mode_error(),
+        )
+    }
+
+    fn pause_and_clear(&mut self) {
+        self.transfer.pause(|_| {});
+        self.transfer.clear_transfer_complete();
+        self.transfer.clear_half_transfer();
+        self.transfer.clear_transfer_error();
+        self.transfer.clear_direct_mode_error();
+        self.transfer.clear_fifo_error();
+    }
+}
+
+fn dma_error_buffer(error: DMAError<DshotBuffer>) -> DshotBuffer {
+    match error {
+        DMAError::NotReady(buffer) | DMAError::SmallBuffer(buffer) | DMAError::Overrun(buffer) => {
+            buffer
+        }
+    }
+}
+
+impl<TS, S, T, C, const DMA_CHANNEL: u8> IntoLane<TS> for LaneStream<S, T, C, DMA_CHANNEL>
+where
+    TS: TimerSet,
+    S: stm32f4xx_hal::dma::traits::Stream + StreamISR,
+    ChannelX<DMA_CHANNEL>: Channel,
+    T: CompareRegister<C> + 'static,
+    C: LaneChannel,
+    CompareEndpoint<T, C>: DMASet<S, DMA_CHANNEL, MemoryToPeripheral>,
+{
+    type Lane = Lane<S, T, C, DMA_CHANNEL>;
+
+    fn into_lane(self, timers: &TS, buffer: DshotBuffer) -> Result<Self::Lane, DshotInitError> {
+        let (slot, timer) = timers
+            .find::<DshotTimer<T>>()
+            .ok_or(DshotInitError::LaneTimerMissing)?;
+        buffer.fill(0);
+        let transfer = Transfer::init_memory_to_peripheral(
+            self.stream,
+            CompareEndpoint::<T, C>::new(&timer.0),
+            buffer,
+            None,
+            dma_config(),
+        );
+        Ok(Lane { slot, transfer })
+    }
 }
 
 fn dma_config() -> DmaConfig {
@@ -567,54 +499,36 @@ fn dma_config() -> DmaConfig {
         .direct_mode_error_interrupt(true)
 }
 
-fn init_transfer<STREAM, const CHANNEL: u8, ENDPOINT>(
-    stream: STREAM,
-    endpoint: ENDPOINT,
-    buffer: DshotBuffer,
-) -> Transfer<STREAM, CHANNEL, ENDPOINT, MemoryToPeripheral, DshotBuffer>
+/// Build a bank over `timers` with `lanes` for motors 1-4, started as
+/// `start` says. Each timer that carries a lane is configured with its
+/// outputs parked low; the board connects the motor pads afterwards.
+#[allow(clippy::type_complexity)]
+pub fn init_dshot_motor_bank<TS, LA, LB, LC, LD>(
+    timers: TS,
+    lanes: (LA, LB, LC, LD),
+    start: impl StartMode<TS>,
+    clocks: &Clocks,
+    storage: &'static mut DshotDmaStorage,
+) -> Result<DshotMotorBank<TS, LA::Lane, LB::Lane, LC::Lane, LD::Lane>, DshotInitError>
 where
-    STREAM: stm32f4xx_hal::dma::traits::Stream,
-    ChannelX<CHANNEL>: Channel,
-    ENDPOINT: PeriAddress<MemSize = u16> + DMASet<STREAM, CHANNEL, MemoryToPeripheral>,
+    TS: TimerSet,
+    LA: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
+    LB: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
+    LC: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
+    LD: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
 {
-    buffer.fill(0);
-    Transfer::init_memory_to_peripheral(stream, endpoint, buffer, None, dma_config())
-}
-
-fn exchange_buffer<STREAM, const CHANNEL: u8, ENDPOINT>(
-    transfer: &mut Transfer<STREAM, CHANNEL, ENDPOINT, MemoryToPeripheral, DshotBuffer>,
-    next: DshotBuffer,
-) -> Result<DshotBuffer, DshotBuffer>
-where
-    STREAM: stm32f4xx_hal::dma::traits::Stream,
-    ChannelX<CHANNEL>: Channel,
-    ENDPOINT: PeriAddress<MemSize = u16> + DMASet<STREAM, CHANNEL, MemoryToPeripheral>,
-{
-    transfer
-        .next_transfer(next)
-        .map(|(old, _)| old)
-        .map_err(dma_error_buffer)
-}
-
-fn dma_error_buffer(error: DMAError<DshotBuffer>) -> DshotBuffer {
-    match error {
-        DMAError::NotReady(buffer) | DMAError::SmallBuffer(buffer) | DMAError::Overrun(buffer) => {
-            buffer
-        }
-    }
-}
-
-fn pause_and_clear<STREAM, const CHANNEL: u8, ENDPOINT>(
-    transfer: &mut Transfer<STREAM, CHANNEL, ENDPOINT, MemoryToPeripheral, DshotBuffer>,
-) where
-    STREAM: stm32f4xx_hal::dma::traits::Stream,
-    ChannelX<CHANNEL>: Channel,
-    ENDPOINT: PeriAddress<MemSize = u16> + DMASet<STREAM, CHANNEL, MemoryToPeripheral>,
-{
-    transfer.pause(|_| {});
-    transfer.clear_transfer_complete();
-    transfer.clear_half_transfer();
-    transfer.clear_transfer_error();
-    transfer.clear_direct_mode_error();
-    transfer.clear_fifo_error();
+    build_bank(
+        timers,
+        lanes,
+        start,
+        |domain| {
+            let timer_clock_hz = match domain {
+                APB2_TIMERS => clocks.timclk2().raw(),
+                _ => clocks.timclk1().raw(),
+            };
+            DshotTiming::from_clocks(timer_clock_hz, DSHOT600_BITRATE_HZ)
+                .map_err(DshotInitError::InvalidTiming)
+        },
+        storage,
+    )
 }

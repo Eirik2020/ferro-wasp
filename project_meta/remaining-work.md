@@ -65,8 +65,12 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Foxeer status LEDs.** The shared `status_leds` task (green heartbeat, blue
   armed) runs on the TBS Lucid H7 only; wire it on Foxeer to bring the golden
   app level.
-- **Chip-family backends.** A backend should cover its whole family: H7 DShot
-  is hard-wired to TIM3/TIM5 while TIM2 is the timebase.
+- **Chip-family backends.** Board assembly has left both backends, and DShot
+  lanes are named by each board. What remains is added when a board needs it:
+  F4 DShot covers only the advanced timers (TIM1, TIM8) and the Foxeer's four
+  DMA routes; the H7 covers TIM2-TIM5. A board whose motors use both of the
+  H743's 32-bit timers (the Lucid V3: TIM2 and TIM5) needs the microsecond
+  timebase moved to a 16-bit timer with wrap extension.
 - **Board data from existing targets.** Generate a board's data crate from its
   ArduPilot or Betaflight target definition.
 - **Host-testable flash manager.** Move the shared flash manager's logic into a
@@ -76,7 +80,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
   (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
   needs a board variant.
-- **FerroForge adoption.** Convert `usb_fs`, then retire `tools/rtic-app-builder`.
+- **FerroForge adoption.** Retire `tools/rtic-app-builder`. FerroForge 0.4
+  expands a group whose members are imported in one brace, `pub use
+  crate::{a, b};`, into an empty group without an error, so
+  `ferrowasp-stm32-tasks::groups` imports each member on its own line; the fix
+  belongs in FerroForge.
 
 ## Tooling and Environment
 

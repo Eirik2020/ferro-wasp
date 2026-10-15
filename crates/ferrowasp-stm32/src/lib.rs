@@ -15,6 +15,8 @@ pub mod board_manifest;
 pub mod board_routes;
 #[cfg(any(test, feature = "dshot"))]
 pub mod dshot_bank;
+#[cfg(any(test, feature = "dshot"))]
+pub mod dshot_lanes;
 pub mod memory;
 pub mod pwm_config;
 pub mod scheduler;

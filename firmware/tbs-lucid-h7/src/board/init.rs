@@ -5,11 +5,16 @@ use super::aliases::{SdFlash, Spi1ImuOwner};
 use super::manifest::Spi1ImuKind;
 use embedded_hal::delay::DelayNs;
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
+use ferrowasp_io_core::serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::status_led::{LedPolarity, StatusLed};
+use ferrowasp_stm32::uart_port::{
+    SerialPortEndpoint, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
+};
 use ferrowasp_stm32h7 as backend;
 use ferrowasp_stm32h7::eh1::CycleDelay;
 use ferrowasp_stm32h7::hal_prelude::*;
+use ferrowasp_stm32h7::uart_dma;
 
 const _: () = {
     assert!(Spi1ImuKind::MPU6500_WHO_AM_I == mpu6500::WHO_AM_I_EXPECTED);
@@ -20,11 +25,20 @@ const _: () = {
     assert!(Spi1ImuKind::Mpu6000.dma_burst_register() == mpu6000::Register::AccelXoutH as u8);
 };
 
-pub use backend::adc::{Adc1BatteryResources, Adc1ObservationParts};
+use super::aliases::{Adc1ObservationParts, DshotMotorBank};
+use backend::dshot::channel::{Ch1, Ch2, Ch3, Ch4};
+use hal::rcc::ResetEnable;
+
+pub struct Adc1BatteryResources {
+    pub adc: pac::ADC1,
+    pub prec: rec::Adc12,
+    pub voltage_pin: PC0,
+    pub current_pin: PC1,
+}
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
-    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotMotorBank,
-    DshotMotorBankResources, DshotServiceEvent, DshotTelemetryRequestError, init_dshot_motor_bank,
+    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotServiceEvent,
+    DshotTelemetryRequestError,
 };
 use backend::sd_storage::CardSlot;
 pub use backend::sd_storage::SdCardResources;
@@ -86,19 +100,20 @@ pub fn init_spi1_imu(
         tx_dma,
     } = resources;
 
-    let mut cs = backend::spi_dma::init_spi1_imu_cs(cs_pin);
-    let mut spi = backend::spi_dma::init_spi1_bus(
-        spi,
-        backend::spi_dma::Spi1BusPins {
-            sck: sck_pin,
-            miso: miso_pin,
-            mosi: mosi_pin,
-        },
+    let mut cs = cs_pin.into_push_pull_output();
+    cs.set_high();
+    let mut cs = backend::eh1::OutputPin::new(cs);
+    let mut spi = backend::eh1::SpiBus::new(spi.spi(
+        (
+            sck_pin.into_alternate::<5>(),
+            miso_pin.into_alternate::<5>(),
+            mosi_pin.into_alternate::<5>(),
+        ),
         hal::spi::MODE_3,
-        1_000_000,
+        1_000_000.Hz(),
         prec,
         clocks,
-    );
+    ));
 
     delay.delay_ms(10);
     let bringup = match icm42688p::read_who_am_i(&mut spi, &mut cs) {
@@ -152,7 +167,17 @@ pub fn init_adc1_battery(
 ) -> Adc1ObservationParts {
     let (primary, spare) = storage.split();
 
-    backend::adc::init_adc1_observation(resources, delay, clocks, primary, spare)
+    backend::adc::init_adc1_observation(
+        resources.adc,
+        resources.prec,
+        resources.voltage_pin.into_analog(),
+        resources.current_pin.into_analog(),
+        super::profiles::ADC_REFERENCE_MV,
+        delay,
+        clocks,
+        primary,
+        spare,
+    )
 }
 
 /// The microSD card as the flash manager's storage. Nothing is written here;
@@ -199,4 +224,222 @@ pub fn init_status_leds(pins: StatusLedPins) -> StatusLeds {
         heartbeat: StatusLed::new(heartbeat, STATUS_LED_POLARITY),
         armed: StatusLed::new(armed, STATUS_LED_POLARITY),
     }
+}
+
+/// Every UART this board routes, with the DMA streams `routes.rs` gives each.
+pub struct UartPortResources {
+    /// The DJI connector's SBUS pin, PA10 USART1_RX.
+    pub uart1_rx_pin: PA10,
+    pub uart1: USART1,
+    pub uart1_prec: rec::Usart1,
+    pub uart1_rx_dma: Stream4<DMA2>,
+    /// PD8 USART3_TX to the DJI unit's RX, PD9 USART3_RX from its TX.
+    pub uart3_tx_pin: PD8,
+    pub uart3_rx_pin: PD9,
+    pub uart3: USART3,
+    pub uart3_prec: rec::Usart3,
+    pub uart3_rx_dma: Stream1<DMA1>,
+    pub uart3_tx_dma: Stream3<DMA1>,
+    pub uart6_tx_pin: PC6,
+    pub uart6_rx_pin: PC7,
+    pub uart6: USART6,
+    pub uart6_prec: rec::Usart6,
+    pub uart6_rx_dma: Stream0<DMA1>,
+    pub uart6_tx_dma: Stream6<DMA1>,
+    /// ESC telemetry, PE0 UART8_RX.
+    pub uart8_rx_pin: PE0,
+    pub uart8: UART8,
+    pub uart8_prec: rec::Uart8,
+    pub uart8_rx_dma: Stream2<DMA1>,
+}
+
+/// Static buffers and stream owners for each port.
+pub struct UartPortStorage {
+    pub uart1: UartRxPortStorage,
+    pub uart3: UartRxTxPortStorage,
+    pub uart6: UartRxTxPortStorage,
+    pub uart8: UartRxPortStorage,
+}
+
+/// The started ports. A port left unbound stays `None`: its peripheral is
+/// never enabled, so its interrupts never fire.
+pub struct UartPorts {
+    pub uart1_rx: Option<super::aliases::Uart1RxPort>,
+    pub uart3_rx: Option<super::aliases::Uart3RxPort>,
+    pub uart3_tx: UartTxPort<super::aliases::Uart3TxDmaSide>,
+    pub uart6_rx: Option<super::aliases::Uart6RxPort>,
+    pub uart6_tx: UartTxPort<super::aliases::Uart6TxDmaSide>,
+    pub uart8_rx: Option<super::aliases::Uart8RxPort>,
+    pub functions: SerialFunctionSlots<SerialPortEndpoint>,
+}
+
+/// Start every bound port with its function's line settings and give each
+/// function its endpoint.
+pub fn init_uart_ports(
+    resources: UartPortResources,
+    clocks: &CoreClocks,
+    storage: UartPortStorage,
+    bindings: &ResolvedBindings,
+) -> UartPorts {
+    let mut functions = SerialFunctionSlots::empty();
+    let r = resources;
+    let (uart3_rx, uart3_tx) = uart_dma::start_rx_tx_port(
+        LogicalSerialPort::Uart3,
+        |config| {
+            r.uart3
+                .serial(
+                    (
+                        r.uart3_tx_pin.into_alternate::<7>(),
+                        r.uart3_rx_pin.into_alternate::<7>(),
+                    ),
+                    config,
+                    r.uart3_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart3_rx_dma,
+        r.uart3_tx_dma,
+        storage.uart3,
+        bindings,
+        &mut functions,
+    );
+    let (uart6_rx, uart6_tx) = uart_dma::start_rx_tx_port(
+        LogicalSerialPort::Uart6,
+        |config| {
+            r.uart6
+                .serial(
+                    (
+                        r.uart6_tx_pin.into_alternate::<7>(),
+                        r.uart6_rx_pin.into_alternate::<7>(),
+                    ),
+                    config,
+                    r.uart6_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart6_rx_dma,
+        r.uart6_tx_dma,
+        storage.uart6,
+        bindings,
+        &mut functions,
+    );
+    let uart1_rx = uart_dma::start_rx_port(
+        LogicalSerialPort::Uart1,
+        |config| {
+            r.uart1
+                .serial(
+                    (hal::serial::NoTx, r.uart1_rx_pin.into_alternate::<7>()),
+                    config,
+                    r.uart1_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart1_rx_dma,
+        storage.uart1,
+        bindings,
+        &mut functions,
+    );
+    let uart8_rx = uart_dma::start_rx_port(
+        LogicalSerialPort::Uart8,
+        |config| {
+            r.uart8
+                .serial(
+                    (hal::serial::NoTx, r.uart8_rx_pin.into_alternate::<8>()),
+                    config,
+                    r.uart8_prec,
+                    clocks,
+                )
+                .unwrap()
+                .release()
+        },
+        r.uart8_rx_dma,
+        storage.uart8,
+        bindings,
+        &mut functions,
+    );
+    UartPorts {
+        uart1_rx,
+        uart3_rx,
+        uart3_tx,
+        uart6_rx,
+        uart6_tx,
+        uart8_rx,
+        functions,
+    }
+}
+
+/// The I/O deadline watchdog, on TIM6 at the shared watchdog rate.
+pub fn init_io_watchdog(
+    timer: pac::TIM6,
+    prec: rec::Tim6,
+    clocks: &CoreClocks,
+) -> super::aliases::IoWatchdog {
+    super::aliases::IoWatchdog::new(
+        timer,
+        prec,
+        clocks,
+        ferrowasp_stm32::watchdog::IO_WATCHDOG_HZ,
+    )
+}
+
+pub struct DshotMotorBankResources {
+    pub tim3: TIM3,
+    pub tim3_rec: rec::Tim3,
+    pub tim5: TIM5,
+    pub tim5_rec: rec::Tim5,
+    pub motor1_pin: PB0,
+    pub motor2_pin: PB1,
+    pub motor3_pin: PA0,
+    pub motor4_pin: PA1,
+    pub motor1_dma: Stream0<DMA2>,
+    pub motor2_dma: Stream1<DMA2>,
+    pub motor3_dma: Stream2<DMA2>,
+    pub motor4_dma: Stream3<DMA2>,
+}
+
+/// Build the four-motor bank. The pads are latched low as GPIO until both
+/// timers are configured with their outputs parked low, then connected.
+pub fn init_dshot_motor_bank(
+    resources: DshotMotorBankResources,
+    clocks: &CoreClocks,
+    storage: &'static mut DshotDmaStorage,
+) -> Result<DshotMotorBank, DshotInitError> {
+    let r = resources;
+    let mut motor1_pin = r.motor1_pin.into_push_pull_output();
+    let mut motor2_pin = r.motor2_pin.into_push_pull_output();
+    let mut motor3_pin = r.motor3_pin.into_push_pull_output();
+    let mut motor4_pin = r.motor4_pin.into_push_pull_output();
+    motor1_pin.set_low();
+    motor2_pin.set_low();
+    motor3_pin.set_low();
+    motor4_pin.set_low();
+
+    r.tim3_rec.enable().reset();
+    r.tim5_rec.enable().reset();
+    let bank = backend::dshot::init_dshot_motor_bank(
+        (
+            backend::dshot::DshotTimer(r.tim3),
+            backend::dshot::DshotTimer(r.tim5),
+        ),
+        (
+            backend::dshot::lane::<TIM3, Ch3, _>(r.motor1_dma),
+            backend::dshot::lane::<TIM3, Ch4, _>(r.motor2_dma),
+            backend::dshot::lane::<TIM5, Ch1, _>(r.motor3_dma),
+            backend::dshot::lane::<TIM5, Ch2, _>(r.motor4_dma),
+        ),
+        clocks,
+        storage,
+    )?;
+
+    motor1_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    motor2_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    motor3_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    motor4_pin.into_alternate::<2>().speed(Speed::VeryHigh);
+    Ok(bank)
 }

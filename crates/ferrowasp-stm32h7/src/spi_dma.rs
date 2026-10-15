@@ -16,11 +16,8 @@ use stm32h7xx_hal::{
         dma::DmaConfig,
         traits::{DoubleBufferedStream, Stream},
     },
-    gpio::{PA5, PA6, PC15, PD7},
     pac::SPI1,
-    prelude::*,
-    rcc::{CoreClocks, rec},
-    spi::{self, Enabled, HalDisabledSpi, HalEnabledSpi, Spi},
+    spi::{Enabled, HalDisabledSpi, HalEnabledSpi, Spi},
 };
 
 pub type Spi1RxStreamTransfer<S> =
@@ -28,48 +25,11 @@ pub type Spi1RxStreamTransfer<S> =
 pub type Spi1TxStreamTransfer<S> =
     Transfer<S, Spi1TxEndpoint, MemoryToPeripheral, SpiTxBuf, DBTransfer>;
 
-pub type Spi1ImuCs = eh1::OutputPin<'C', 15>;
 /// The blocking bus the IMU is brought up on before DMA takes it over.
 pub type Spi1ImuBus = eh1::SpiBus<Spi<SPI1, Enabled, u8>>;
 
 /// An H7 SPI1 DMA owner: the shared owner over this module's two sides.
 pub type Spi1DmaOwner<RxS, TxS, CsT> = SpiDmaOwner<Spi1RxDma<RxS>, Spi1Poller<TxS>, CsT>;
-
-pub struct Spi1BusPins {
-    pub sck: PA5,
-    pub miso: PA6,
-    pub mosi: PD7,
-}
-
-pub fn init_spi1_imu_cs(cs_pin: PC15) -> Spi1ImuCs {
-    let mut cs = cs_pin.into_push_pull_output();
-    cs.set_high();
-    eh1::OutputPin::new(cs)
-}
-
-/// SPI1 as a blocking master for bring-up: 8-bit frames, software chip
-/// select.
-pub fn init_spi1_bus(
-    spi: SPI1,
-    pins: Spi1BusPins,
-    mode: spi::Mode,
-    frequency_hz: u32,
-    prec: rec::Spi1,
-    clocks: &CoreClocks,
-) -> Spi1ImuBus {
-    let spi: Spi<SPI1, Enabled, u8> = spi.spi(
-        (
-            pins.sck.into_alternate::<5>(),
-            pins.miso.into_alternate::<5>(),
-            pins.mosi.into_alternate::<5>(),
-        ),
-        mode,
-        frequency_hz.Hz(),
-        prec,
-        clocks,
-    );
-    eh1::SpiBus::new(spi)
-}
 
 /// The receive stream. It is armed before each frame starts and re-armed
 /// by the owner when the frame completes.
