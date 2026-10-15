@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9f661229.js";
+            window.path_to_searchindex_js = "searchindex-de6077f4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -202,8 +202,9 @@ verify;</li>
 <h2 id="protocols-and-interfaces"><a class="header" href="#protocols-and-interfaces">Protocols and Interfaces</a></h2>
 <ul>
 <li>validate CRSF/ELRS and its telemetry on the target, link loss included;</li>
-<li>evaluate bidirectional DShot telemetry separately from the current legacy
-UART telemetry path;</li>
+<li>add bidirectional DShot, giving per-motor eRPM on every frame at the
+control-loop rate, for an RPM-tracking gyro notch filter and for arming
+qualification in place of the legacy UART telemetry path;</li>
 <li>mature configuration and telemetry protocols only after their bounds,
 recovery behavior, and compatibility policy are explicit;</li>
 <li>keep RC-PWM available for servos and auxiliary devices rather than ESCs.</li>
