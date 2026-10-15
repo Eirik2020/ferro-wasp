@@ -178,9 +178,12 @@ python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --m
 
 FerroConfigurator's `convert` command is the normal path.
 `tools/fwbb_to_ulog.py` is its Python reference implementation and produces the
-same file: one CRC-validated flight as the `ferrowasp_rate_control` topic, with
-timestamps from the first selected sample and sequence gaps as ULog dropouts.
-It never combines flights.
+same file: one CRC-validated flight as the `ferrowasp_rate_control` topic. The
+log does not store its control rate, so both measure it over the flight, write
+it as the `control_rate_hz` info field, and time each record by its control
+tick at that rate; sequence gaps become ULog dropouts. A flight under 2 s is
+too short to measure and keeps the records' millisecond timestamps. It never
+combines flights.
 
 ```powershell
 python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg

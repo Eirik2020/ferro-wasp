@@ -1,5 +1,6 @@
 use ferrowasp_core::actuator::MotorOutputMap;
 use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+use ferrowasp_flight::accel_level::AccelLevel;
 use ferrowasp_flight::drone_toolbox::{
     IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, TuningProfile,
 };
@@ -56,7 +57,7 @@ const _: () = assert!(ferrowasp_flight::drone_toolbox::scheduler_divides_exactly
 ));
 
 pub const IMU_CONTROL_AXIS_PROFILE: ImuControlAxisProfile = ImuControlAxisProfile {
-    gyro_raw_to_dps: 164,
+    gyro_counts_per_dps10: 164,
     drone_body_frame: DroneBodyFrame::ForwardRightDown,
     imu_to_board_rotation: FrameRotation::new([1, 0, 2], [-1, -1, -1]),
     board_to_drone_rotation: FrameRotation::IDENTITY,
@@ -126,6 +127,7 @@ pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
     log_rate_divisor: 1,
     serial_bindings: None,
     rc_protocol: RcProtocol::Sbus,
+    accel_level: AccelLevel::ZERO,
 };
 
 // The approved P-only baseline: changing it is a tuning change and re-gates

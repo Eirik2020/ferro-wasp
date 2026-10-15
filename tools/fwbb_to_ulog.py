@@ -15,7 +15,6 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.blackbox_analyzer import (
-    CONTROL_RATE_HZ,
     BlackboxSample,
     flash_log_stats,
     samples_from_flash_bytes,
@@ -28,8 +27,12 @@ ULOG_VERSION = 1
 SCHEMA_VERSION = 1
 TOPIC_NAME = "ferrowasp_rate_control"
 TOPIC_MESSAGE_ID = 0
-EXPECTED_SAMPLE_INTERVAL_US = round(1_000_000 / CONTROL_RATE_HZ)
 MAX_REASONABLE_INTERVAL_US = 60_000_000
+# The shortest flight whose control rate is measured: millisecond timestamps
+# then cost well under a tick. Rates round to 10 Hz. Both match
+# FerroConfigurator's exports.
+MIN_MEASURED_DURATION_US = 2_000_000
+RATE_ROUNDING_HZ = 10
 
 ULOG_HEADER = struct.Struct("<7sBQ")
 MESSAGE_HEADER = struct.Struct("<HB")
@@ -132,7 +135,8 @@ def elapsed_timestamps(samples: list[BlackboxSample]) -> list[int]:
         if sample.timestamp_us is None:
             raise ValueError("BB2 sample has no control timestamp")
         interval = u32_forward_delta(previous, sample.timestamp_us)
-        if interval == 0 or interval > MAX_REASONABLE_INTERVAL_US:
+        # Two records can share a millisecond stamp; only a leap is invalid.
+        if interval > MAX_REASONABLE_INTERVAL_US:
             raise ValueError(
                 f"invalid BB2 control timestamp interval {interval} us "
                 f"at sequence {sample.seq}"
@@ -169,20 +173,37 @@ def encode_data_record(
     )
 
 
-def dropout_duration_ms(
-    previous: BlackboxSample,
-    current: BlackboxSample,
-    previous_timestamp_us: int,
-    current_timestamp_us: int,
-) -> int | None:
-    sequence_delta = u32_forward_delta(previous.seq, current.seq)
-    if sequence_delta <= 1:
-        return None
-    missing_duration_us = max(
-        (sequence_delta - 1) * EXPECTED_SAMPLE_INTERVAL_US,
-        current_timestamp_us - previous_timestamp_us - EXPECTED_SAMPLE_INTERVAL_US,
-    )
-    return min(0xFFFF, max(1, round(missing_duration_us / 1_000)))
+@dataclass(frozen=True)
+class Timing:
+    """How a flight's records sit in time."""
+
+    # Control ticks per second, rounded to 10 Hz; None under 2 s of log.
+    control_rate_hz: int | None
+    # Control ticks between consecutive records: the log rate divisor.
+    record_step: int
+
+
+def measure_timing(samples: list[BlackboxSample], elapsed: list[int]) -> Timing:
+    """The control rate over the whole flight, and the usual record step.
+
+    The log stores no rate, and its timestamps tick in whole milliseconds,
+    so the rate comes from the span of the whole flight.
+    """
+    steps: dict[int, int] = {}
+    ticks = 0
+    for previous, current in zip(samples, samples[1:]):
+        step = u32_forward_delta(previous.seq, current.seq)
+        if step == 0:
+            raise ValueError(f"BB2 control sequence {current.seq} repeats")
+        ticks += step
+        steps[step] = steps.get(step, 0) + 1
+    # The usual step is the divisor; the smallest wins a tie.
+    record_step = min(steps, key=lambda step: (-steps[step], step)) if steps else 1
+    rate = None
+    if elapsed and elapsed[-1] >= MIN_MEASURED_DURATION_US:
+        measured = ticks * 1_000_000 / elapsed[-1]
+        rate = round(measured / RATE_ROUNDING_HZ) * RATE_ROUNDING_HZ
+    return Timing(control_rate_hz=rate, record_step=record_step)
 
 
 def build_ulog(
@@ -191,7 +212,18 @@ def build_ulog(
     selected = list(samples)
     if not selected:
         raise ValueError("selected flight contains no BB2 samples")
-    timestamps = elapsed_timestamps(selected)
+    millisecond_clock = elapsed_timestamps(selected)
+    timing = measure_timing(selected, millisecond_clock)
+    # Timestamps count control ticks at the measured rate; a flight too short
+    # to measure keeps the records' own milliseconds.
+    if timing.control_rate_hz is None:
+        timestamps = millisecond_clock
+    else:
+        timestamps = [0]
+        ticks = 0
+        for previous, current in zip(selected, selected[1:]):
+            ticks += u32_forward_delta(previous.seq, current.seq)
+            timestamps.append(ticks * 1_000_000 // timing.control_rate_hz)
 
     output = bytearray(ULOG_HEADER.pack(ULOG_MAGIC, ULOG_VERSION, 0))
     output += ulog_message("B", bytes(40))
@@ -201,7 +233,8 @@ def build_ulog(
     output += info_string("source_format", "FerroWasp BB2")
     output += info_u32("schema_version", SCHEMA_VERSION)
     output += info_u32("flight_id", selected_flight_id)
-    output += info_u32("control_rate_hz", round(CONTROL_RATE_HZ))
+    if timing.control_rate_hz is not None:
+        output += info_u32("control_rate_hz", timing.control_rate_hz)
     output += ulog_message(
         "A",
         struct.pack("<BH", 0, TOPIC_MESSAGE_ID) + TOPIC_NAME.encode("ascii"),
@@ -210,13 +243,15 @@ def build_ulog(
     dropout_count = 0
     for index, (sample, timestamp_us) in enumerate(zip(selected, timestamps)):
         if index:
-            duration_ms = dropout_duration_ms(
-                selected[index - 1],
-                sample,
-                timestamps[index - 1],
-                timestamp_us,
-            )
-            if duration_ms is not None:
+            step = u32_forward_delta(selected[index - 1].seq, sample.seq)
+            if step > timing.record_step:
+                if timing.control_rate_hz is None:
+                    missing_us = timestamp_us - timestamps[index - 1]
+                else:
+                    missing_us = (
+                        (step - timing.record_step) * 1_000_000 // timing.control_rate_hz
+                    )
+                duration_ms = min(0xFFFF, max(1, round(missing_us / 1_000)))
                 output += ulog_message("O", struct.pack("<H", duration_ms))
                 dropout_count += 1
         record = encode_data_record(sample, timestamp_us, selected_flight_id)

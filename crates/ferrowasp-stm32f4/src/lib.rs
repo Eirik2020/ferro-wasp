@@ -23,6 +23,9 @@ pub mod signature;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod spi_dma;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+#[allow(unsafe_code)]
+pub mod system_bootloader;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod timebase;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod timer_tick;

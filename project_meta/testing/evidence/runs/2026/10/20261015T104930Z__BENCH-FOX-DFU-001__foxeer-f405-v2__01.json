@@ -1,0 +1,164 @@
+{
+  "schema_version": 2,
+  "run_id": "20261015T104930Z__BENCH-FOX-DFU-001__foxeer-f405-v2__01",
+  "test_id": "BENCH-FOX-DFU-001",
+  "started_at_utc": "2026-10-15T10:41:35Z",
+  "completed_at_utc": "2026-10-15T10:49:30Z",
+  "target": "foxeer-f405-v2",
+  "tier": "bench-unpowered",
+  "result": "pass",
+  "definition": {
+    "catalog_sha256": "5537d389a08bddcfdc29374623fedd19e3a7946fb743be6bf78d07e58bc2e9ee",
+    "procedure_path": "project_meta/testing/targets/foxeer-f405-v2.md",
+    "procedure_heading": "Foxeer USB Reboot And DFU Flash Gate",
+    "procedure_sha256": "e649e52d42529e5bf4f1bccfd17aecdc32435109056da39d8ad63053aea0e447"
+  },
+  "execution": {
+    "performed_by": "user-with-agent-assistance",
+    "user_confirmed": true
+  },
+  "candidate": {
+    "revision": "7fef77905bc7d4229e62e7a199961fcd328a4044",
+    "working_tree": "clean",
+    "firmware_sha256": "072fc8f38f3cdca0d440738d258f4319babdd44ce8468d5b27b3a2101f2d03ca",
+    "features": [
+      "board-foxeer-f405-v2"
+    ],
+    "target_triple": "thumbv7em-none-eabihf",
+    "configuration": {
+      "profile": "release",
+      "firmware_sha256_of": "ELF",
+      "bench_image_sha256": "47854b7b8da019545fb1737a289b0fad17c967ea2a27a46bcafcfce0a7ca324f",
+      "bench_image_features": "board-foxeer-f405-v2 bench_blackbox",
+      "stored_config": "unchanged pilot configuration, exported before and after",
+      "host_tool": "ferro-configurator 0.1.0 at 3f5ee8a, dfu-util 0.11 on Linux"
+    }
+  },
+  "components": [
+    {
+      "id": "app-foxeer-f405-v2",
+      "content_sha256": "71e17707f9ccdbfbe1302206842b63a3350331abe1f0551a477517ea8a23d74e"
+    },
+    {
+      "id": "stm32f4",
+      "content_sha256": "c68d410bd8d167e94b8d285cfaa0c94856d56b201d3f14a5c70cc0550476bf8b"
+    },
+    {
+      "id": "stm32",
+      "content_sha256": "2483c8f65fbc0cc2af72199423e14a9d943de3f8ab377ae9c70d374a35c304f2"
+    },
+    {
+      "id": "stm32-tasks",
+      "content_sha256": "efc7354b19e748b839ba2f911d0486cec33cefb8cb57935c9ab044125f02cdf0"
+    },
+    {
+      "id": "flight-links",
+      "content_sha256": "4cbd71c20a4d010dc2d7f7dbf5b2d2adc42afdd1c30215dc51a24e527974cfd0"
+    },
+    {
+      "id": "flight-storage",
+      "content_sha256": "2a6cf74a32368e0e51634f78897eb9aa2f8748d21d54a27eabfa09f3a0c02822"
+    },
+    {
+      "id": "driver-spi-nor",
+      "content_sha256": "90cb0d59ffc981ba277a3892fd1f447e636cc2c8e5d223f4c146a203bd951993"
+    }
+  ],
+  "conditions": {
+    "propellers": "removed",
+    "actuator_power": "disconnected",
+    "equipment": [
+      "Foxeer F405 V2 on USB only",
+      "Linux host"
+    ],
+    "environment": [
+      "bench"
+    ]
+  },
+  "commands": [
+    {
+      "command": "ferro-configurator flash --board foxeer-f405-v2 --dry-run <candidate>",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 device reboot",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator --port /dev/ttyACM0 device reboot --dfu",
+      "exit_code": 0
+    },
+    {
+      "command": "dfu-util -d 0483:df11 -a 0 -s 0x08000000:187608 -U readback.bin",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator flash --board foxeer-f405-v2 --yes <candidate>",
+      "exit_code": 0
+    },
+    {
+      "command": "ferro-configurator flash --board foxeer-f405-v2 --yes <candidate> (bench image running, flight log open)",
+      "exit_code": 5
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "steps-1-5",
+      "kind": "command-output",
+      "path": "logs/bench/20261015-BENCH-FOX-DFU-001/steps-1-5-transcript.txt",
+      "bytes": 1448,
+      "sha256": "73e2ea4108fe4f849f4977d0901874ef61a4201ac4223e449703421d54b48711"
+    },
+    {
+      "id": "step-6",
+      "kind": "command-output",
+      "path": "logs/bench/20261015-BENCH-FOX-DFU-001/step-6-transcript.txt",
+      "bytes": 1838,
+      "sha256": "1599e96970a9eb0e3f7b614c118cb4489129a166be5d7964b737f33347d6f487"
+    },
+    {
+      "id": "config-before",
+      "kind": "configuration",
+      "path": "logs/bench/20261015-BENCH-FOX-DFU-001/config-before.toml",
+      "bytes": 549,
+      "sha256": "9d8ee501a3511191f3ce0a67e3f14acdb159dad956bc95cdaf6b181b93ebccba"
+    },
+    {
+      "id": "config-after",
+      "kind": "configuration",
+      "path": "logs/bench/20261015-BENCH-FOX-DFU-001/config-after.toml",
+      "bytes": 549,
+      "sha256": "9d8ee501a3511191f3ce0a67e3f14acdb159dad956bc95cdaf6b181b93ebccba"
+    },
+    {
+      "id": "readback",
+      "kind": "firmware",
+      "path": "logs/bench/20261015-BENCH-FOX-DFU-001/readback.bin",
+      "bytes": 187608,
+      "sha256": "2816ea37bd7858281ec90d060862db7861a55acbad398db426afc61961e74342"
+    }
+  ],
+  "measurements": {
+    "reboot_uptime_before_ms": 91980,
+    "reboot_uptime_after_ms": 3840,
+    "dfu_enumeration_after_command_s": 0.61,
+    "readback_bytes_in_load_segments": 187600,
+    "readback_mismatches_in_load_segments": 0,
+    "readback_gap_bytes_erased_0xff": 8,
+    "automatic_flash_duration_s": 27
+  },
+  "observations": [
+    "Disarmed throughout; battery reading 0.0 V, so ESCs were unpowered.",
+    "reboot and reboot dfu were both refused with 'ERR flight log still being written' by the bench_blackbox image; flash --yes then exited 5 and the board kept running FerroWasp.",
+    "The F405 ROM bootloader reported dfuERROR / 'firmware is corrupt' as its first status after both command entry and BOOT-button entry; dfu-util cleared it each time.",
+    "Configuration exports before and after flashing are byte-identical.",
+    "The bench_blackbox image appended flight 14 (10970880 bytes) to the board's log; flights 1-13 were downloaded beforehand."
+  ],
+  "limitations": [
+    "Step 6 ran on the same commit before this procedure was written; steps 1-5 ran after it was committed.",
+    "Propeller state is as stated in the session plan the user approved, not separately confirmed during the run.",
+    "Linux host only; the Windows package's bundled dfu-util and WinUSB path were not exercised.",
+    "The GUI has no flash or reboot controls yet."
+  ],
+  "stop_conditions_triggered": []
+}

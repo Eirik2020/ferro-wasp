@@ -21,10 +21,12 @@
 use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
-    CatalogEntry, DeviceSelector, DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo,
-    FlightCatalog, FlightSelector, LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck,
-    SerialBindings, SerialTransport, StatusSnapshot, SyncedFlight, catalog_device, discover_ports,
-    download_flight, open_device, prearm_checks, resolve_device_flight, sync_flights,
+    AccelLevel, BoardProfile, CatalogEntry, DFU_ENTRY_TIMEOUT, DeviceSelector, DownloadSummary,
+    FerroClient, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightCatalog, FlightSelector,
+    LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck, RESTART_TIMEOUT, SerialBindings,
+    SerialTransport, StatusSnapshot, SyncedFlight, catalog_device, detect_dfu, discover_ports,
+    download_flight, find_bundled_firmware, flash_firmware, open_device, prearm_checks,
+    prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port, wait_for_dfu_device,
 };
 use serde::Serialize;
 
@@ -41,6 +43,10 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(2);
 pub enum BridgeError {
     /// No device is open. The front-end should offer to connect.
     NotConnected,
+    /// The open device went away, a cable pulled or a port gone; the
+    /// session has closed it. The front-end should say so and offer to
+    /// connect again.
+    Lost { message: String },
     /// The controller reports itself armed, so a write was refused.
     Refused { reason: String },
     /// The device, transport or host filesystem failed.
@@ -51,6 +57,7 @@ impl std::fmt::Display for BridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotConnected => f.write_str("not connected to a controller"),
+            Self::Lost { message } => f.write_str(message),
             Self::Refused { reason } => write!(f, "refused: {reason}"),
             Self::Device { message } => f.write_str(message),
         }
@@ -81,6 +88,60 @@ pub struct Safety {
     pub writes_allowed: bool,
     /// Why the controller would or would not arm, first failure first.
     pub checks: Vec<PrearmCheck>,
+}
+
+/// One step of a flash, for a front-end's progress line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "stage", rename_all = "snake_case")]
+pub enum FlashStage {
+    /// The connected controller is restarting into its ROM bootloader.
+    EnteringBootloader {
+        port: String,
+    },
+    ImageValidated {
+        bytes: usize,
+        base_address: u32,
+    },
+    DfuDetected {
+        device: String,
+    },
+    Programming {
+        bytes: usize,
+    },
+    Programmed,
+    /// Waiting for the controller to come back as FerroWasp.
+    Restarting,
+}
+
+impl From<FlashProgress> for FlashStage {
+    fn from(progress: FlashProgress) -> Self {
+        match progress {
+            FlashProgress::ImageValidated {
+                bytes,
+                base_address,
+            } => Self::ImageValidated {
+                bytes,
+                base_address,
+            },
+            FlashProgress::DfuDetected { device } => Self::DfuDetected { device },
+            FlashProgress::Programming { bytes } => Self::Programming { bytes },
+            FlashProgress::Completed => Self::Programmed,
+        }
+    }
+}
+
+/// What a finished flash reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FlashReport {
+    pub board: String,
+    pub firmware: String,
+    /// The bundled release's version, when the bundled image was flashed.
+    pub release: Option<String>,
+    pub bytes_written: usize,
+    pub base_address: u32,
+    /// The port the controller came back on, now connected; `None` when it
+    /// did not come back in time.
+    pub restarted_port: Option<String>,
 }
 
 /// One connected controller, or none.
@@ -129,10 +190,32 @@ impl<T: LineTransport> Session<T> {
         self.client.as_mut().ok_or(BridgeError::NotConnected)
     }
 
+    /// Runs `work` on the open client. A transport failure means the port
+    /// is gone, so the session closes it and reports the loss rather than an
+    /// ordinary device error the front-end would retry forever. A firmware
+    /// `ERR` answer is the controller refusing, and reads as one.
+    fn with_client<R>(
+        &mut self,
+        work: impl FnOnce(&mut FerroClient<T>) -> std::result::Result<R, FerroError>,
+    ) -> Result<R> {
+        match work(self.client_mut()?) {
+            Err(FerroError::Transport { port, reason }) => {
+                self.client = None;
+                Err(BridgeError::Lost {
+                    message: format!("lost the connection to {port}: {reason}"),
+                })
+            }
+            Err(FerroError::DeviceRejected { message, .. }) => {
+                Err(BridgeError::Refused { reason: message })
+            }
+            result => result.map_err(Into::into),
+        }
+    }
+
     /// The controller's live safety status, and whether this session would
     /// accept a write right now.
     pub fn safety(&mut self) -> Result<Safety> {
-        let status = self.client_mut()?.read_status_fresh()?;
+        let status = self.with_client(FerroClient::read_status_fresh)?;
         Ok(Safety {
             writes_allowed: !status.armed,
             checks: prearm_checks(&status),
@@ -205,7 +288,7 @@ impl<T: LineTransport> Session<T> {
     /// `live` polling that runs beside it reads those lines as they arrive,
     /// so the cache stays current.
     pub fn safety_display(&mut self) -> Result<Safety> {
-        let status = self.client_mut()?.read_status()?;
+        let status = self.with_client(FerroClient::read_status)?;
         Ok(Safety {
             writes_allowed: !status.armed,
             checks: prearm_checks(&status),
@@ -215,13 +298,13 @@ impl<T: LineTransport> Session<T> {
 
     /// Attitude and motor activity, quick enough to poll for a 3D view.
     pub fn live(&mut self) -> Result<LiveSnapshot> {
-        Ok(self.client_mut()?.live()?)
+        self.with_client(FerroClient::live)
     }
 
     /// The receiver's sixteen channels in microseconds, as fresh as the last
     /// frame. A read; never gated.
     pub fn rc_channels(&mut self) -> Result<[u16; 16]> {
-        Ok(self.client_mut()?.rc_channels()?)
+        self.with_client(FerroClient::rc_channels)
     }
 
     /// Refuses unless the controller reports itself disarmed with the arm
@@ -240,6 +323,37 @@ impl<T: LineTransport> Session<T> {
             });
         }
         Ok(())
+    }
+
+    /// The stored accelerometer level.
+    pub fn accel_level(&mut self) -> Result<AccelLevel> {
+        self.with_client(FerroClient::accel_level)
+    }
+
+    /// Calibrates the accelerometer's level and saves it. Refused here while
+    /// armed; the controller also refuses a craft that moves or leans.
+    pub fn calibrate_accelerometer(&mut self) -> Result<AccelLevel> {
+        self.require_disarmed()?;
+        self.with_client(FerroClient::calibrate_accelerometer)
+    }
+
+    /// Restarts the controller, or with `rom_bootloader` puts it in its ROM
+    /// USB DFU bootloader, and closes the session: the port goes away.
+    ///
+    /// Refused here while armed, and by the firmware while armed, while
+    /// storage is busy, or with a flight log open.
+    pub fn reboot(&mut self, rom_bootloader: bool) -> Result<()> {
+        self.require_disarmed()?;
+        match self.client_mut()?.reboot(rom_bootloader) {
+            Ok(()) => {
+                self.client = None;
+                Ok(())
+            }
+            Err(FerroError::DeviceRejected { message, .. }) => {
+                Err(BridgeError::Refused { reason: message })
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     /// Idles one logical motor for one short firmware lease. The front-end
@@ -306,6 +420,78 @@ impl<T: LineTransport> Session<T> {
 }
 
 impl Session<SerialTransport> {
+    /// Flashes `firmware`, or the bundled release image when `None`, onto a
+    /// Foxeer F405 V2, the only board FerroConfigurator flashes.
+    ///
+    /// A controller already in its ROM bootloader is flashed as it is.
+    /// Otherwise the connected controller must report this board and be
+    /// disarmed; it is restarted into the bootloader. Afterwards the session
+    /// reconnects to the controller when it comes back.
+    pub fn flash(
+        &mut self,
+        firmware: Option<&Path>,
+        mut progress: impl FnMut(FlashStage),
+    ) -> Result<FlashReport> {
+        let profile = BoardProfile::FOXEER_F405_V2;
+        let (path, release) = match firmware {
+            Some(path) => (path.to_path_buf(), None),
+            None => {
+                let bundled = find_bundled_firmware(&profile)?;
+                (bundled.path, Some(bundled.release_version))
+            }
+        };
+        let image = prepare_elf(&path, &profile)?;
+
+        if detect_dfu()?.devices.is_empty() {
+            let port = self.connected_board_port(&profile)?;
+            progress(FlashStage::EnteringBootloader { port: port.port });
+            self.reboot(true)?;
+            wait_for_dfu_device(DFU_ENTRY_TIMEOUT)?;
+        } else {
+            self.client = None;
+        }
+        let result = flash_firmware(&image, &profile, &mut |event: FlashProgress| {
+            progress(event.into());
+        })?;
+
+        progress(FlashStage::Restarting);
+        let restarted = wait_for_board_port(&profile, RESTART_TIMEOUT)?;
+        if let Some(port) = &restarted {
+            self.connect(DeviceSelector::Port(port.port.clone()), DEFAULT_TIMEOUT)?;
+        }
+        Ok(FlashReport {
+            board: profile.display_name.to_owned(),
+            firmware: path.display().to_string(),
+            release,
+            bytes_written: result.bytes_written,
+            base_address: result.base_address,
+            restarted_port: restarted.map(|port| port.port),
+        })
+    }
+
+    /// The connected controller's port, refused unless it reports `profile`'s
+    /// board: restarting another board into DFU would flash it with this image.
+    fn connected_board_port(&self, profile: &BoardProfile) -> Result<PortInfo> {
+        let name = self.description().ok_or_else(|| BridgeError::Refused {
+            reason: "connect the controller, or start its ROM bootloader with the BOOT button"
+                .to_owned(),
+        })?;
+        let port = discover_ports()?
+            .into_iter()
+            .find(|port| port.port == name)
+            .ok_or(BridgeError::NotConnected)?;
+        if port.serial_number.as_deref() != Some(profile.usb_serial) {
+            return Err(BridgeError::Refused {
+                reason: format!(
+                    "{name} runs FerroWasp for {}, not {}",
+                    port.board_name().unwrap_or("another board"),
+                    profile.display_name
+                ),
+            });
+        }
+        Ok(port)
+    }
+
     /// Opens a controller, replacing any currently open one.
     pub fn connect(&mut self, selector: DeviceSelector, timeout: Duration) -> Result<String> {
         // Drop the old client first so its port is closed before the new open,
@@ -347,6 +533,65 @@ mod tests {
     fn session_answering(lines: &[String]) -> Session<MockTransport> {
         let transport = MockTransport::with_lines(lines.iter().cloned());
         Session::from_client(FerroClient::new(transport, DEFAULT_TIMEOUT))
+    }
+
+    #[test]
+    fn reboot_is_refused_while_armed_and_closes_the_session_once_accepted() {
+        let mut session = session_answering(&[status_line(true)]);
+        assert!(matches!(
+            session.reboot(true),
+            Err(BridgeError::Refused { .. })
+        ));
+        assert!(session.is_connected());
+
+        let mut session =
+            session_answering(&[status_line(false), "OK rebooting to DFU".to_owned()]);
+        session
+            .reboot(true)
+            .expect("a disarmed controller restarts");
+        assert!(!session.is_connected());
+    }
+
+    #[test]
+    fn a_firmware_refusal_to_reboot_is_a_safety_refusal() {
+        let mut session = session_answering(&[
+            status_line(false),
+            "ERR flight log still being written".to_owned(),
+        ]);
+        assert_eq!(
+            session.reboot(false).unwrap_err(),
+            BridgeError::Refused {
+                reason: "flight log still being written".to_owned()
+            }
+        );
+        assert!(session.is_connected());
+    }
+
+    #[test]
+    fn a_failed_port_closes_the_session_and_reports_the_loss() {
+        let mut transport = MockTransport::with_lines(Vec::<String>::new());
+        transport.push_transport_error("Input/output error");
+        let mut session = Session::from_client(FerroClient::new(transport, DEFAULT_TIMEOUT));
+
+        assert!(matches!(session.live(), Err(BridgeError::Lost { .. })));
+        assert!(!session.is_connected());
+        assert_eq!(session.live().unwrap_err(), BridgeError::NotConnected);
+    }
+
+    #[test]
+    fn a_failed_calibration_is_a_refusal_with_the_controllers_reason() {
+        let mut session = session_answering(&[
+            status_line(false),
+            "OK imu calibration started; keep the craft still".to_owned(),
+            "ERR imu calibration failed; the craft moved".to_owned(),
+        ]);
+        assert_eq!(
+            session.calibrate_accelerometer().unwrap_err(),
+            BridgeError::Refused {
+                reason: "imu calibration failed; the craft moved".to_owned()
+            }
+        );
+        assert!(session.is_connected());
     }
 
     #[test]

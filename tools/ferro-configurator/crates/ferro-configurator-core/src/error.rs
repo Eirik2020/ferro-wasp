@@ -72,6 +72,6 @@ pub enum FerroError {
         reason: String,
     },
 
-    #[error("ULog conversion failed: {0}")]
+    #[error("log conversion failed: {0}")]
     Ulog(String),
 }

@@ -28,6 +28,22 @@ artifact is stable, airworthy, or production-ready.
   motor order, from FerroConfigurator or the USB command line.
 - FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
   live stick readout, and a rates curve.
+- ULog conversion (`convert` and `tools/fwbb_to_ulog.py`) measures the
+  control rate from the log instead of assuming 400 Hz, times records by
+  control tick, and accepts records that share a millisecond timestamp.
+- `convert --csv` in FerroConfigurator: one flight as CSV for MATLAB, with
+  units in the column names, time from the control-tick count at the rate
+  measured from the log, and dropped-record gaps reported.
+- Accelerometer level calibration: `imu calibrate` on a still, level craft
+  saves where the accelerometer reads level, and the attitude estimate uses
+  it. FerroConfigurator's Setup tab has a Calibrate button, and `imu
+  calibrate` and `imu level` commands. Stored configuration version 7.
+- `reboot` and `reboot dfu` on the USB command line, disarmed only: the
+  second restarts the board into the STM32 ROM bootloader. FerroConfigurator's
+  `flash` uses it, so a board running FerroWasp is flashed without the BOOT
+  button, and `device reboot [--dfu]` gives both directly. The GUI gains a
+  Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
+  the TBS Lucid H7's entry is not yet tested.
 - Test evidence tied to source components rather than whole firmware images,
   with `tools/components.py` listing which tests each board owes, and
   `tools/bench_rig.py` running the boot and idle gate on any board over SWD.

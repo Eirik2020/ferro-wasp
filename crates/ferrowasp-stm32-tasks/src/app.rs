@@ -454,7 +454,9 @@ macro_rules! flight_app_facade {
             assert!(DSHOT_IDLE_QUALIFICATION_CONFIG.is_valid());
         };
 
-        pub const IMU_GYRO_RAW_TO_DPS: f32 = IMU_CONTROL_AXIS_PROFILE.gyro_raw_to_dps as f32 / 10.0;
+        /// Gyro counts per degree per second.
+        pub const IMU_GYRO_COUNTS_PER_DPS: f32 =
+            IMU_CONTROL_AXIS_PROFILE.gyro_counts_per_dps10 as f32 / 10.0;
         #[cfg(feature = "imu_orientation_rtt")]
         pub const PHYSICAL_IMU_TO_DRONE_ROTATION: dt::FrameRotation =
             IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation();

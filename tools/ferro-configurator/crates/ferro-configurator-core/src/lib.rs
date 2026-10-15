@@ -8,6 +8,7 @@
 pub mod blackbox;
 pub mod client;
 pub mod config;
+pub mod csv_export;
 pub mod device;
 pub mod error;
 pub mod firmware;
@@ -21,16 +22,18 @@ pub use blackbox::{
     catalog_device, download_flight, resolve_device_flight, sync_file_name, sync_flights,
 };
 pub use client::{
-    FerroClient, FlashInfo, LiveSnapshot, LogInfo, SERIAL_FUNCTIONS, SerialBindings,
+    AccelLevel, FerroClient, FlashInfo, LiveSnapshot, LogInfo, SERIAL_FUNCTIONS, SerialBindings,
     SerialPortBinding, StatusSnapshot, UnsyncedFlight, UnsyncedFlights,
 };
 pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
+pub use csv_export::{CsvSummary, convert_fwbb_to_csv};
 pub use device::{DeviceSelector, PortInfo, discover_ports, open_device};
 pub use error::{FerroError, Result};
 pub use firmware::{
-    BoardProfile, BundledFirmware, DfuDetection, FirmwareArtifact, FlashProgress, FlashResult,
-    PreparedImage, ReleaseManifest, detect_dfu, find_bundled_firmware, flash_firmware,
-    load_bundled_firmware, prepare_elf, sha256_file,
+    BoardProfile, BundledFirmware, DFU_ENTRY_TIMEOUT, DfuDetection, FirmwareArtifact,
+    FlashProgress, FlashResult, PreparedImage, RESTART_TIMEOUT, ReleaseManifest, detect_dfu,
+    enter_rom_bootloader, find_board_port, find_bundled_firmware, flash_firmware,
+    load_bundled_firmware, prepare_elf, sha256_file, wait_for_board_port, wait_for_dfu_device,
 };
 pub use prearm::{CheckState, PrearmCheck, prearm_checks};
 pub use profiles::{ProfileInfo, ProfileStore};

@@ -131,6 +131,14 @@ impl MockTransport {
     pub fn push_line(&mut self, line: impl Into<String>) {
         self.responses.push_back(Ok(Some(line.into())));
     }
+
+    /// The port failing, as a serial port does when its cable is pulled.
+    pub fn push_transport_error(&mut self, reason: impl Into<String>) {
+        self.responses.push_back(Err(FerroError::Transport {
+            port: self.description.clone(),
+            reason: reason.into(),
+        }));
+    }
 }
 
 impl LineTransport for MockTransport {

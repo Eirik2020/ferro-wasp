@@ -10,7 +10,9 @@ import {
   SERIAL_FUNCTIONS,
   toBridgeError,
   type Api,
+  type AccelLevel,
   type FerroConfig,
+  type FlashStage,
   type PrearmCheck,
   type Safety,
   type SerialBindings,
@@ -55,6 +57,24 @@ let activeTab = "setup";
 
 const TAB_STORAGE_KEY = "ferro-configurator.tab";
 
+/** Why the last connection ended on its own, shown until the next connect. */
+let lostMessage: string | null = null;
+/** Consecutive failed live polls; this many in a row means it stopped answering. */
+let liveFailures = 0;
+const LIVE_FAILURES_LOST = 3;
+
+/** The port last connected to, so a restarted controller can be found again. */
+let lastPort: string | null = null;
+/** A flash or reboot is running; every other control waits. */
+let firmwareBusy = false;
+/** How long a restarted controller gets to come back before giving up. */
+const RECONNECT_ATTEMPTS = 10;
+const RECONNECT_INTERVAL_MS = 1_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
   if (!found) {
@@ -90,9 +110,9 @@ function renderSafety(): void {
   const detail = element("safety-detail");
 
   if (!connected || !safetyState) {
-    banner.textContent = "No controller connected";
-    banner.dataset["state"] = "unknown";
-    detail.textContent = "";
+    banner.textContent = lostMessage === null ? "No controller connected" : "Connection lost";
+    banner.dataset["state"] = lostMessage === null ? "unknown" : "lost";
+    detail.textContent = lostMessage ?? "";
     element("prearm-checks").replaceChildren();
     renderReceiver();
     updateWriteControls();
@@ -220,11 +240,36 @@ async function pollSafety(): Promise<void> {
     safetyState = await api.safetyDisplay();
     renderSafety();
   } catch (error) {
+    if (await handleLoss(error)) {
+      return;
+    }
     if (toBridgeError(error).kind === "notConnected") {
       connected = false;
     }
     renderSafety();
   }
+}
+
+/**
+ * Ends the connection in the interface when the controller went away, and
+ * says so. True when `error` was such a loss.
+ */
+async function handleLoss(error: unknown): Promise<boolean> {
+  const bridged = toBridgeError(error);
+  if (bridged.kind !== "lost") {
+    return false;
+  }
+  await connectionLost(bridged.message);
+  return true;
+}
+
+async function connectionLost(message: string): Promise<void> {
+  if (!connected) {
+    return;
+  }
+  lostMessage = message;
+  await disconnect();
+  setStatusLine("Connection lost. Reconnect USB, then press Connect.", "bad");
 }
 
 /** Reads the channels at once, between the two-second status lines. */
@@ -238,6 +283,9 @@ async function pollRc(): Promise<void> {
     renderReceiver();
   } catch (error) {
     fastChannels = null;
+    if (await handleLoss(error)) {
+      return;
+    }
     if (toBridgeError(error).kind !== "notConnected") {
       rcUnsupported = true;
     }
@@ -265,8 +313,16 @@ async function pollLive(): Promise<void> {
       }
     });
     viewer.showSpinning(spinning);
-  } catch {
+    liveFailures = 0;
+  } catch (error) {
     viewer.render(null);
+    if (!(await handleLoss(error))) {
+      liveFailures += 1;
+      if (liveFailures >= LIVE_FAILURES_LOST) {
+        liveFailures = 0;
+        await connectionLost("The controller stopped answering.");
+      }
+    }
   } finally {
     liveInFlight = false;
   }
@@ -291,37 +347,63 @@ async function refreshPorts(): Promise<void> {
   }
 }
 
-async function connect(): Promise<void> {
+function selectedPort(): string | null {
   const select = element<HTMLSelectElement>("port-select");
-  const choice = select.value === "" ? null : select.value;
-  setStatusLine("Connecting…", "busy");
+  return select.value === "" ? null : select.value;
+}
+
+/**
+ * Connects to `choice`, the selected port by default. `quiet` keeps a failed
+ * attempt off the status line, for retries while a controller restarts.
+ */
+async function connect(choice: string | null = selectedPort(), quiet = false): Promise<boolean> {
+  if (!quiet) {
+    setStatusLine("Connecting…", "busy");
+  }
   try {
     const description = await api.connect(choice);
     connected = true;
+    lastPort = choice;
+    lostMessage = null;
+    liveFailures = 0;
     element("device-description").textContent = description;
     setStatusLine(`Connected to ${description}.`);
     await pollSafety();
     await loadConfig();
     await loadPorts();
+    await loadAccelLevel();
     motors.setConnected(true);
-    pollTimer = window.setInterval(() => void pollSafety(), SAFETY_POLL_MS);
-    liveTimer = window.setInterval(() => void pollLive(), LIVE_POLL_MS);
-    rcUnsupported = false;
-    rcTimer = window.setInterval(() => void pollRc(), RC_POLL_MS);
+    startPolling();
+    return true;
   } catch (error) {
     connected = false;
-    report(error);
+    if (!quiet) {
+      report(error);
+    }
     renderSafety();
+    return false;
   }
 }
 
-async function disconnect(): Promise<void> {
+function startPolling(): void {
+  stopPolling();
+  pollTimer = window.setInterval(() => void pollSafety(), SAFETY_POLL_MS);
+  liveTimer = window.setInterval(() => void pollLive(), LIVE_POLL_MS);
+  rcUnsupported = false;
+  rcTimer = window.setInterval(() => void pollRc(), RC_POLL_MS);
+}
+
+function stopPolling(): void {
   window.clearInterval(pollTimer);
   pollTimer = undefined;
   window.clearInterval(liveTimer);
   liveTimer = undefined;
   window.clearInterval(rcTimer);
   rcTimer = undefined;
+}
+
+async function disconnect(): Promise<void> {
+  stopPolling();
   fastChannels = null;
   // Stops any held motor before the port closes.
   motors.setConnected(false);
@@ -335,6 +417,7 @@ async function disconnect(): Promise<void> {
   config = null;
   bindings = null;
   element("device-description").textContent = "";
+  renderAccelLevel(null);
   renderSafety();
   renderConfig();
   renderPorts();
@@ -385,6 +468,7 @@ function renderConfig(): void {
   protocol.value = config?.rc_protocol ?? "sbus";
   protocol.disabled = config?.rc_protocol === undefined;
   dirtyTabs.clear();
+  syncGainSliders();
   renderRates();
   renderDirty();
   updateWriteControls();
@@ -463,6 +547,25 @@ function updateWriteControls(): void {
   applyPorts.title = portsAllowed
     ? "Save and verify the changed ports; reboot the controller to apply them"
     : "Available when a disarmed controller is connected";
+
+  const calibrate = element<HTMLButtonElement>("calibrate-accel");
+  calibrate.disabled = !writable || firmwareBusy;
+  calibrate.title = writable
+    ? "Average half a second of the accelerometer on a still, level craft"
+    : "Available when a disarmed controller is connected";
+
+  for (const id of ["reboot", "reboot-dfu"]) {
+    const button = element<HTMLButtonElement>(id);
+    button.disabled = !writable || firmwareBusy;
+    button.title = writable
+      ? "Refused while storage is busy or a flight log is open"
+      : "Available when a disarmed controller is connected";
+  }
+  // Without a connection the controller may already be in its bootloader
+  // from the BOOT button; the session decides.
+  const flash = element<HTMLButtonElement>("flash");
+  flash.disabled = firmwareBusy || (connected && !writable);
+  flash.title = connected && !writable ? "Disarm the controller first" : "Flash the selected firmware";
 }
 
 async function loadConfig(): Promise<void> {
@@ -666,6 +769,237 @@ async function syncFlights(): Promise<void> {
   }
 }
 
+// ------------------------------------------------------------ calibration ---
+
+function renderAccelLevel(level: AccelLevel | null): void {
+  element("accel-level").textContent =
+    level === null
+      ? ""
+      : `Level offset: x ${String(level.x_mg)} mg, y ${String(level.y_mg)} mg, z ${String(level.z_mg)} mg`;
+}
+
+/** Older firmware has no `imu level`; the readout then stays empty. */
+async function loadAccelLevel(): Promise<void> {
+  try {
+    renderAccelLevel(await api.accelLevel());
+  } catch {
+    renderAccelLevel(null);
+  }
+}
+
+async function calibrateAccelerometer(): Promise<void> {
+  firmwareBusy = true;
+  updateWriteControls();
+  setStatusLine("Calibrating: keep the craft still…", "busy");
+  try {
+    const level = await api.calibrateAccelerometer();
+    renderAccelLevel(level);
+    setStatusLine("Accelerometer level calibrated and saved.");
+  } catch (error) {
+    report(error);
+  } finally {
+    firmwareBusy = false;
+    updateWriteControls();
+  }
+}
+
+// ------------------------------------------------------------ PID sliders ---
+
+/** Every gain the PID tab edits, by input id. */
+const GAIN_IDS = ["roll", "pitch", "yaw"].flatMap((axis) => ["p", "i", "d"].map((term) => `${axis}-${term}`));
+/** The firmware's accepted range for every gain (`ferrowasp-core` `value_spec`). */
+const GAIN_MIN = 0;
+const GAIN_MAX = 20;
+/** The gains when the master slider was grabbed; null when it is at rest. */
+let masterBase: Map<string, number> | null = null;
+
+function gainSlider(id: string): HTMLInputElement {
+  return element<HTMLInputElement>(`${id}-slider`);
+}
+
+/** Writes `value` into a gain's number box as if typed, so it is marked edited. */
+function setGain(id: string, value: number): void {
+  const input = element<HTMLInputElement>(id);
+  input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/** A slider beside each gain's number box, kept in step with it both ways. */
+function addGainSliders(): void {
+  for (const id of GAIN_IDS) {
+    const input = element<HTMLInputElement>(id);
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.id = `${id}-slider`;
+    slider.min = String(GAIN_MIN);
+    slider.max = String(GAIN_MAX);
+    slider.step = "0.01";
+    slider.setAttribute("aria-label", `${id} slider`);
+    input.before(slider);
+    slider.addEventListener("input", () => setGain(id, Number(slider.value)));
+    input.addEventListener("input", () => {
+      slider.value = input.value;
+    });
+  }
+  const master = element<HTMLInputElement>("pid-master");
+  const shown = element<HTMLOutputElement>("pid-master-value");
+  master.addEventListener("input", () => {
+    if (masterBase === null) {
+      masterBase = new Map(GAIN_IDS.map((id) => [id, Number(element<HTMLInputElement>(id).value)]));
+    }
+    const factor = Number(master.value) / 100;
+    shown.value = `×${factor.toFixed(2)}`;
+    for (const [id, base] of masterBase) {
+      const scaled = Math.round(base * factor * 100) / 100;
+      setGain(id, Math.min(Math.max(scaled, GAIN_MIN), GAIN_MAX));
+    }
+  });
+  // No master value is stored: released, it returns to 1.00 over the new gains.
+  master.addEventListener("change", () => {
+    masterBase = null;
+    master.value = "100";
+    shown.value = "×1.00";
+  });
+}
+
+function syncGainSliders(): void {
+  for (const id of GAIN_IDS) {
+    const input = element<HTMLInputElement>(id);
+    const slider = gainSlider(id);
+    slider.value = input.value === "" ? "0" : input.value;
+    slider.disabled = input.disabled;
+  }
+  element<HTMLInputElement>("pid-master").disabled = config === null;
+}
+
+// --------------------------------------------------------------- firmware ---
+
+/**
+ * Restarts the controller, or into its ROM bootloader with `dfu`. A plain
+ * restart reconnects once the controller is back, as Betaflight does.
+ */
+async function reboot(dfu: boolean): Promise<void> {
+  const port = lastPort;
+  firmwareBusy = true;
+  updateWriteControls();
+  setStatusLine(dfu ? "Restarting into the bootloader…" : "Restarting…", "busy");
+  try {
+    await api.reboot(dfu);
+  } catch (error) {
+    report(error);
+    firmwareBusy = false;
+    updateWriteControls();
+    return;
+  }
+  await disconnect();
+  if (dfu) {
+    firmwareBusy = false;
+    updateWriteControls();
+    setStatusLine("The controller is in its ROM bootloader, ready to flash. A power cycle leaves it.");
+    return;
+  }
+  for (let attempt = 0; attempt < RECONNECT_ATTEMPTS; attempt++) {
+    await sleep(RECONNECT_INTERVAL_MS);
+    if (await connect(port, true)) {
+      break;
+    }
+  }
+  firmwareBusy = false;
+  updateWriteControls();
+  if (!connected) {
+    setStatusLine("The controller restarted but did not come back; connect again when it is ready.", "bad");
+  }
+}
+
+/** The firmware file the user picked, flashed when "A file" is selected. */
+let chosenFirmware: string | null = null;
+
+async function chooseFirmware(): Promise<void> {
+  try {
+    const path = await api.chooseFirmwareFile();
+    if (path === null) {
+      return;
+    }
+    chosenFirmware = path;
+    const shown = element("firmware-path");
+    shown.textContent = path.split(/[\\/]/).pop() ?? path;
+    shown.title = path;
+    const radio = document.querySelector<HTMLInputElement>('input[name="firmware-source"][value="file"]');
+    if (radio) {
+      radio.checked = true;
+    }
+  } catch (error) {
+    report(error);
+  }
+}
+
+function describeStage(stage: FlashStage): string {
+  switch (stage.stage) {
+    case "entering_bootloader":
+      return `Restarting the controller on ${stage.port} into its bootloader…`;
+    case "image_validated":
+      return `Firmware checked: ${String(stage.bytes)} bytes.`;
+    case "dfu_detected":
+      return "Bootloader found.";
+    case "programming":
+      return `Programming ${String(stage.bytes)} bytes. Do not disconnect USB…`;
+    case "programmed":
+      return "Programmed.";
+    case "restarting":
+      return "Waiting for the controller to restart…";
+  }
+}
+
+async function flashFirmware(): Promise<void> {
+  const source =
+    document.querySelector<HTMLInputElement>('input[name="firmware-source"]:checked')?.value ?? "bundled";
+  const path = source === "file" ? chosenFirmware : null;
+  if (source === "file" && path === null) {
+    setStatusLine("Choose a firmware file first.", "bad");
+    return;
+  }
+  const wasConnected = connected;
+  firmwareBusy = true;
+  stopPolling();
+  motors.setConnected(false);
+  updateWriteControls();
+  const progress = element<HTMLProgressElement>("flash-progress");
+  progress.hidden = false;
+  progress.removeAttribute("value");
+  try {
+    const result = await api.flash(path, (stage) => setStatusLine(describeStage(stage), "busy"));
+    connected = false;
+    if (result.restarted_port !== null) {
+      await connect(result.restarted_port, true);
+    } else {
+      await disconnect();
+    }
+    const release = result.release === null ? "" : ` (release ${result.release})`;
+    setStatusLine(
+      result.restarted_port === null
+        ? `Flashed ${String(result.bytes_written)} bytes${release}. The controller did not come back; unplug and reconnect USB.`
+        : `Flashed ${String(result.bytes_written)} bytes${release}; the controller is back on ${result.restarted_port}.`,
+      result.restarted_port === null ? "bad" : "idle",
+    );
+  } catch (error) {
+    report(error);
+    // Refused before anything changed: the connection is still good.
+    if (wasConnected) {
+      try {
+        await api.safetyDisplay();
+        motors.setConnected(true);
+        startPolling();
+      } catch {
+        await disconnect();
+      }
+    }
+  } finally {
+    progress.hidden = true;
+    firmwareBusy = false;
+    updateWriteControls();
+  }
+}
+
 // ------------------------------------------------------------------- tabs ---
 
 function showTab(tab: string): void {
@@ -741,7 +1075,16 @@ function wire(): void {
 
   element("refresh-ports").addEventListener("click", () => void refreshPorts());
   element("connect").addEventListener("click", () => void connect());
-  element("disconnect").addEventListener("click", () => void disconnect());
+  element("disconnect").addEventListener("click", () => {
+    lostMessage = null;
+    void disconnect();
+  });
+  addGainSliders();
+  element("reboot").addEventListener("click", () => void reboot(false));
+  element("calibrate-accel").addEventListener("click", () => void calibrateAccelerometer());
+  element("reboot-dfu").addEventListener("click", () => void reboot(true));
+  element("flash").addEventListener("click", () => void flashFirmware());
+  element("choose-firmware").addEventListener("click", () => void chooseFirmware());
   const template = element<HTMLTemplateElement>("config-actions-template");
   for (const slot of document.querySelectorAll<HTMLElement>(".config-actions")) {
     slot.append(template.content.cloneNode(true));

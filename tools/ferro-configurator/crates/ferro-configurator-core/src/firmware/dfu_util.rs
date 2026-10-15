@@ -165,11 +165,12 @@ fn resolve_dfu_util() -> Result<PathBuf> {
     }
 
     // This path is only for `cargo run` and tests from the source tree. Release
-    // packaging always puts the same binary beside FerroConfigurator.
+    // packaging always puts the same binary beside FerroConfigurator. The
+    // vendored binary is Windows-only; elsewhere `dfu-util` comes from PATH.
     let development = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("third_party/dfu-util/windows-x86_64/dfu-util.exe");
-    if development.is_file() {
+    if cfg!(windows) && development.is_file() {
         return Ok(development);
     }
 

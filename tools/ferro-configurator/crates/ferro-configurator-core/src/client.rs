@@ -65,6 +65,15 @@ pub struct LogInfo {
     pub writable: bool,
 }
 
+/// Where the accelerometer reads level: the offset subtracted from gravity
+/// before the attitude estimate, in milli-g per drone axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct AccelLevel {
+    pub x_mg: i16,
+    pub y_mg: i16,
+    pub z_mg: i16,
+}
+
 /// The functions a serial port can be bound to, as the firmware names them.
 pub const SERIAL_FUNCTIONS: [&str; 5] = ["none", "rc", "osd", "esc_telemetry", "configurator"];
 
@@ -611,6 +620,72 @@ impl<T: LineTransport> FerroClient<T> {
         .map(|_| ())
     }
 
+    /// The stored accelerometer level.
+    pub fn accel_level(&mut self) -> Result<AccelLevel> {
+        let response = self.request("imu level", 2)?;
+        response
+            .strip_prefix("OK imu level ")
+            .and_then(parse_accel_level)
+            .ok_or_else(|| FerroError::UnexpectedResponse {
+                operation: "imu level".to_owned(),
+                response,
+            })
+    }
+
+    /// Calibrates the accelerometer's level on a still, level craft, and
+    /// waits until the controller has saved it. The controller refuses while
+    /// armed, and when the craft moves or leans more than 10 degrees.
+    pub fn calibrate_accelerometer(&mut self) -> Result<AccelLevel> {
+        const OPERATION: &str = "imu calibrate";
+        let started = self.request(OPERATION, 1)?;
+        if !started.starts_with("OK imu calibration started") {
+            return Err(FerroError::UnexpectedResponse {
+                operation: OPERATION.to_owned(),
+                response: started,
+            });
+        }
+        // Half a second of samples, with margin for a busy controller.
+        let result = self.wait_for_response(OPERATION, Duration::from_secs(5), |line| {
+            line.starts_with("OK imu calibrated ") || line.starts_with("ERR ")
+        })?;
+        let result = self.accept_response(OPERATION, result)?;
+        let level = result
+            .strip_prefix("OK imu calibrated ")
+            .and_then(parse_accel_level)
+            .ok_or_else(|| FerroError::UnexpectedResponse {
+                operation: OPERATION.to_owned(),
+                response: result.clone(),
+            })?;
+        let saved =
+            self.wait_for_response("imu calibration save", Duration::from_secs(10), |line| {
+                line == "OK config saved" || line.starts_with("ERR ")
+            })?;
+        self.accept_response("imu calibration save", saved)?;
+        Ok(level)
+    }
+
+    /// Restarts the controller, or with `rom_bootloader` puts it in the
+    /// chip's ROM USB DFU bootloader. The firmware refuses while armed, while
+    /// storage is busy, or with a flight log open; after `Ok` the port goes
+    /// away.
+    pub fn reboot(&mut self, rom_bootloader: bool) -> Result<()> {
+        let (command, expected) = if rom_bootloader {
+            ("reboot dfu", "OK rebooting to DFU")
+        } else {
+            ("reboot", "OK rebooting")
+        };
+        // One attempt: a controller that answered late may already be gone.
+        let response = self.request(command, 1)?;
+        if response == expected {
+            Ok(())
+        } else {
+            Err(FerroError::UnexpectedResponse {
+                operation: command.to_owned(),
+                response,
+            })
+        }
+    }
+
     pub fn apply_config(&mut self, config: &FerroConfig) -> Result<FerroConfig> {
         let original = self.read_config()?;
         let desired = config.merged_over(&original)?;
@@ -693,6 +768,25 @@ impl<T: LineTransport> FerroClient<T> {
             Ok(line)
         }
     }
+}
+
+/// `x=12 y=-52 z=3 mg`.
+fn parse_accel_level(fields: &str) -> Option<AccelLevel> {
+    let mut words = fields.split_ascii_whitespace();
+    let mut axis = |name: &str| {
+        words
+            .next()?
+            .strip_prefix(name)?
+            .strip_prefix('=')?
+            .parse::<i16>()
+            .ok()
+    };
+    let level = AccelLevel {
+        x_mg: axis("x")?,
+        y_mg: axis("y")?,
+        z_mg: axis("z")?,
+    };
+    (words.next() == Some("mg") && words.next().is_none()).then_some(level)
 }
 
 fn complete_value(config: &FerroConfig, key: ConfigKey) -> Result<f32> {
@@ -1039,6 +1133,63 @@ mod tests {
 
         assert_eq!(info.jedec_id, "ef:40:18");
         assert_eq!(client.transport.writes, [RESYNC_LINE, "flash info"]);
+    }
+
+    #[test]
+    fn calibration_waits_for_the_result_and_the_save() {
+        let mock = MockTransport::with_lines([
+            "OK imu calibration started; keep the craft still",
+            "OK imu calibrated x=12 y=-52 z=3 mg",
+            "OK config saved",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert_eq!(
+            client.calibrate_accelerometer().unwrap(),
+            AccelLevel {
+                x_mg: 12,
+                y_mg: -52,
+                z_mg: 3
+            }
+        );
+        assert_eq!(client.transport.writes, ["imu calibrate"]);
+
+        let mock = MockTransport::with_lines([
+            "OK imu calibration started; keep the craft still",
+            "ERR imu calibration failed; the craft moved",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(matches!(
+            client.calibrate_accelerometer(),
+            Err(FerroError::DeviceRejected { .. })
+        ));
+
+        let mock = MockTransport::with_lines(["OK imu level x=0 y=0 z=-4 mg"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert_eq!(client.accel_level().unwrap().z_mg, -4);
+        assert_eq!(parse_accel_level("x=1 y=2 mg"), None);
+    }
+
+    #[test]
+    fn reboot_sends_one_command_and_accepts_only_its_answer() {
+        let mock = MockTransport::with_lines(["OK rebooting to DFU"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        client.reboot(true).unwrap();
+        assert_eq!(client.transport.writes, ["reboot dfu"]);
+
+        let mock = MockTransport::with_lines(["OK rebooting"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(matches!(
+            client.reboot(true),
+            Err(FerroError::UnexpectedResponse { .. })
+        ));
+
+        let mock = MockTransport::with_lines(["ERR reboot disabled while armed"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(matches!(
+            client.reboot(false),
+            Err(FerroError::DeviceRejected { .. })
+        ));
+        assert_eq!(client.transport.writes, ["reboot"]);
     }
 
     #[test]

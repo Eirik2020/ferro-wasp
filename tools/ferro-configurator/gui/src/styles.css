@@ -206,6 +206,10 @@ section {
   background: var(--ok);
 }
 
+#safety-banner[data-state="lost"] {
+  background: var(--danger);
+}
+
 #safety-banner[data-state="unknown"] {
   background: var(--line);
   color: var(--muted);
@@ -753,4 +757,36 @@ footer[data-tone="busy"] {
 
 .motor-message[data-tone="busy"] {
   color: #ffd98a;
+}
+
+/* PID sliders sit between the label and its number; the number keeps its
+   column on the right. */
+#tab-pid .grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 360px));
+}
+
+label input[type="range"] {
+  flex: 1;
+  min-width: 6rem;
+  padding: 0;
+  accent-color: var(--ok);
+}
+
+label input[type="range"] + input[type="number"] {
+  margin-left: 0;
+}
+
+.master label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.master input[type="range"] {
+  width: 16rem;
+  flex: none;
+}
+
+.master output {
+  width: 3.5rem;
+  font-variant-numeric: tabular-nums;
 }

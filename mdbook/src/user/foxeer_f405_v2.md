@@ -92,17 +92,30 @@ Start the guided flasher:
 
 Follow its prompts:
 
-1. Disconnect USB.
-2. Hold the board's BOOT button.
-3. Reconnect USB, wait approximately one second, and release BOOT.
-4. Allow the configurator to detect exactly one STM32 ROM DFU device.
-5. Type the requested confirmation only after checking the selected board and
-   image.
-6. Do not disconnect USB during programming.
+1. Type the requested confirmation only after checking the board and image.
+   Nothing on the board changes before this.
+2. If the board runs FerroWasp and is connected over USB, the configurator
+   restarts it into the STM32 ROM bootloader. The board must be disarmed; it
+   refuses while armed, while a flight log is still being written, or while
+   flash maintenance is running.
+3. If the board does not run FerroWasp, or does not answer, the configurator
+   asks you to unplug USB, hold BOOT, reconnect, wait about a second, and
+   release BOOT.
+4. Do not disconnect USB during programming.
 
 The command must reach its final successful completion message and exit with
 code zero. Detection or programming progress is not, by itself, proof that
 the flash completed.
+
+To restart a connected board without flashing, or to leave it in the ROM
+bootloader for another flasher:
+
+```powershell
+.\ferro-configurator.exe device reboot
+.\ferro-configurator.exe device reboot --dfu
+```
+
+A power cycle leaves the ROM bootloader.
 
 If the normal FerroWasp COM port does not return after programming, disconnect
 and reconnect USB normally without holding BOOT.
@@ -203,6 +216,21 @@ RC-rate settings.
 PID changes can cause violent oscillation. Change one controlled variable at a
 time, verify the entire configuration, and repeat relevant props-off checks
 before flight.
+
+## Calibrate the accelerometer
+
+Set the craft still on level ground, disarmed, then press Calibrate
+accelerometer on the configurator's Setup tab, or run:
+
+```powershell
+.\ferro-configurator.exe --port $Port imu calibrate
+```
+
+The controller averages about half a second of the accelerometer and saves
+where it reads level with the configuration; `imu level` shows it. It refuses a
+craft that moves or leans more than 10 degrees. The level corrects the
+attitude the OSD and the configurator show; the rate loop that flies the craft
+does not use the accelerometer. The gyro still calibrates itself at every boot.
 
 ## Use a CRSF receiver
 
@@ -354,6 +382,25 @@ Open the `.ulg` file in PlotJuggler and select
 `ferrowasp_rate_control`. The current topic includes raw and filtered gyro
 rates, rate setpoints, PID effort, throttle, four motor commands, sequences,
 and armed/fresh-IMU flags.
+
+For MATLAB or a spreadsheet, write CSV instead:
+
+```powershell
+.\ferro-configurator.exe convert flight-34.fwbb --flight latest --csv
+```
+
+```matlab
+T = readtable("flight-34.csv");
+plot(T.time_s, [T.setpoint_roll_dps T.gyro_roll_dps])
+```
+
+Each row is one logged record and each column names its unit: degrees per
+second for gyro rates and setpoints, mixer counts (0 to 2000) for PID effort,
+throttle and motors. `time_s` is computed from the control-tick count at the
+control rate measured from the log, which the conversion prints with the log
+rate divisor. Where records were dropped, rows are missing but `time_s` stays
+correct, so resample onto a uniform grid (`retime`, `resample`) before
+frequency-domain analysis; the conversion reports how many gaps it found.
 
 ## Erase logs
 

@@ -17,9 +17,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ferro_configurator_bridge::{BridgeError, DEFAULT_TIMEOUT, Safety, Session, ports as discover};
+use ferro_configurator_bridge::{
+    BridgeError, DEFAULT_TIMEOUT, FlashReport, Safety, Session, ports as discover,
+};
 use ferro_configurator_core::{
-    DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, LiveSnapshot, PortInfo,
+    AccelLevel, DeviceSelector, FerroConfig, FlightCatalog, FlightSelector, LiveSnapshot, PortInfo,
     SerialBindings, SerialTransport, SyncedFlight,
 };
 use serde::Serialize;
@@ -241,8 +243,47 @@ async fn sync_flights(
     .await
 }
 
+#[tauri::command]
+async fn accel_level(state: State<'_, AppState>) -> Result<AccelLevel, BridgeError> {
+    blocking(&state.session, Session::accel_level).await
+}
+
+/// Refused by the session unless disarmed, and by the firmware unless the
+/// craft is still and level.
+#[tauri::command]
+async fn calibrate_accelerometer(state: State<'_, AppState>) -> Result<AccelLevel, BridgeError> {
+    blocking(&state.session, Session::calibrate_accelerometer).await
+}
+
+/// Restarts the controller, or into its ROM bootloader with `dfu`. Refused
+/// by the session while armed, and by the firmware while storage is busy.
+#[tauri::command]
+async fn reboot(state: State<'_, AppState>, dfu: bool) -> Result<(), BridgeError> {
+    blocking(&state.session, move |session| session.reboot(dfu)).await
+}
+
+/// Flashes `path`, or the bundled image, restarting a connected disarmed
+/// controller into its bootloader first. Every gate is in the session.
+#[tauri::command]
+async fn flash_firmware(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: Option<String>,
+) -> Result<FlashReport, BridgeError> {
+    let path = path.filter(|path| !path.is_empty()).map(PathBuf::from);
+    blocking(&state.session, move |session| {
+        session.flash(path.as_deref(), |stage| {
+            // Best effort, as for a download.
+            let _ = app.emit("flash-progress", stage);
+        })
+    })
+    .await
+}
+
 fn main() {
     tauri::Builder::default()
+        // The Firmware tab's file chooser.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(AppState {
                 session: Arc::new(Mutex::new(Session::new())),
@@ -267,6 +308,10 @@ fn main() {
             flights,
             download_flight,
             sync_flights,
+            reboot,
+            flash_firmware,
+            accel_level,
+            calibrate_accelerometer,
         ])
         .run(tauri::generate_context!())
         .expect("the FerroConfigurator window failed to start");

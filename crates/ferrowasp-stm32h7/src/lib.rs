@@ -33,6 +33,9 @@ pub mod signature;
 #[cfg(all(target_arch = "arm", feature = "stm32h743"))]
 pub mod spi_dma;
 #[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+#[allow(unsafe_code)]
+pub mod system_bootloader;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
 pub mod timers;
 #[cfg(all(target_arch = "arm", feature = "stm32h743"))]
 pub mod uart_dma;

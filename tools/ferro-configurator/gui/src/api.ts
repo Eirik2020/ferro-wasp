@@ -148,7 +148,7 @@ export interface FlightCatalog {
  * the controller reports itself armed. The interface presents it as a safety
  * state, never as an error to retry.
  */
-export type BridgeErrorKind = "notConnected" | "refused" | "device";
+export type BridgeErrorKind = "notConnected" | "lost" | "refused" | "device";
 
 export class BridgeError extends Error {
   readonly kind: BridgeErrorKind;
@@ -200,6 +200,33 @@ export interface DownloadSummary {
   path: string;
 }
 
+/** Where the accelerometer reads level, milli-g per drone axis. */
+export interface AccelLevel {
+  x_mg: number;
+  y_mg: number;
+  z_mg: number;
+}
+
+/** One step of a flash, as the Rust session reports it. */
+export type FlashStage =
+  | { stage: "entering_bootloader"; port: string }
+  | { stage: "image_validated"; bytes: number; base_address: number }
+  | { stage: "dfu_detected"; device: string }
+  | { stage: "programming"; bytes: number }
+  | { stage: "programmed" }
+  | { stage: "restarting" };
+
+export interface FlashReport {
+  board: string;
+  firmware: string;
+  /** The bundled release's version, when the bundled image was flashed. */
+  release: string | null;
+  bytes_written: number;
+  base_address: number;
+  /** The port the controller came back on, already reconnected. */
+  restarted_port: string | null;
+}
+
 export interface Api {
   ports(): Promise<PortInfo[]>;
   /** `null` selects the only FerroWasp port, matching the CLI's auto mode. */
@@ -237,4 +264,25 @@ export interface Api {
    * and acknowledges them so the controller may later erase its log.
    */
   syncFlights(directory: string, onProgress: (progress: SyncProgress) => void): Promise<SyncedFlight[]>;
+  /**
+   * Restarts the controller, or into its ROM bootloader with `dfu`, and
+   * closes the connection. Refused while armed or while storage is busy.
+   */
+  reboot(dfu: boolean): Promise<void>;
+  /**
+   * Flashes `path`, or the bundled image when `null`. A connected, disarmed
+   * controller is restarted into its bootloader first; one already in its
+   * bootloader is flashed as it is. Reconnects when the controller returns.
+   */
+  flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport>;
+  /** Asks the user for a firmware file; `null` when they cancel. */
+  chooseFirmwareFile(): Promise<string | null>;
+  /** The stored accelerometer level. */
+  accelLevel(): Promise<AccelLevel>;
+  /**
+   * Calibrates the accelerometer's level and saves it. The craft must be
+   * disarmed, still and within 10 degrees of level; the controller refuses
+   * otherwise.
+   */
+  calibrateAccelerometer(): Promise<AccelLevel>;
 }

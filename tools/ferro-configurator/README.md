@@ -38,7 +38,9 @@ script completes.
   `ferrowasp_rate_control` ULog topic.
 - Erase logs only through an explicit confirmed command and verify the empty
   catalogue afterward.
-- Validate and flash the packaged Foxeer F405 V2 image through STM32 ROM DFU.
+- Validate and flash the packaged Foxeer F405 V2 image through STM32 ROM DFU,
+  restarting a board that runs FerroWasp into the bootloader on command.
+- Restart a board, or restart it into the ROM bootloader, while disarmed.
 
 The configurator cannot arm, grant actuator authority, bypass firmware
 validation, or alter safety policy. Configuration and log mutation remain
@@ -77,6 +79,9 @@ ferro-configurator.exe convert retained.fwbb --output retained.ulg
 
 ferro-configurator.exe flash --board foxeer-f405-v2 --dry-run
 ferro-configurator.exe flash --board foxeer-f405-v2
+
+ferro-configurator.exe --port COM6 device reboot
+ferro-configurator.exe --port COM6 device reboot --dfu
 ```
 
 Use `--format json` for machine-readable output.

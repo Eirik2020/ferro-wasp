@@ -15,14 +15,37 @@ pub enum CommandLink {
 }
 
 impl StorageCommand {
-    /// Commands only the USB cable may give. They move motors or erase
-    /// flights no host has stored, and a serial link may be a Bluetooth
-    /// module anyone in range can pair with.
+    /// Commands only the USB cable may give. They move motors, erase
+    /// flights no host has stored, or restart the controller, and a serial
+    /// link may be a Bluetooth module anyone in range can pair with.
     pub const fn usb_only(&self) -> bool {
         matches!(
             self,
-            Self::Motor(_) | Self::LogsEraseConfirmed | Self::FlashTestConfirmed
+            Self::Motor(_)
+                | Self::LogsEraseConfirmed
+                | Self::FlashTestConfirmed
+                | Self::Reboot { .. }
         )
+    }
+}
+
+/// Why the storage owner refuses `reboot` now, as its answer line, or `None`
+/// when it may go ahead. A restart cuts the store off, so it waits for the
+/// craft to be disarmed, flash maintenance to finish, and the flight log to
+/// close.
+pub const fn reboot_refusal(
+    armed: bool,
+    maintenance_busy: bool,
+    flight_log_open: bool,
+) -> Option<&'static str> {
+    if armed {
+        Some("ERR reboot disabled while armed\r\n")
+    } else if maintenance_busy {
+        Some("ERR flash maintenance already active\r\n")
+    } else if flight_log_open {
+        Some("ERR flight log still being written\r\n")
+    } else {
+        None
     }
 }
 
@@ -192,6 +215,23 @@ mod tests {
     }
 
     #[test]
+    fn reboot_waits_for_disarm_idle_storage_and_a_closed_log() {
+        assert_eq!(reboot_refusal(false, false, false), None);
+        assert_eq!(
+            reboot_refusal(true, true, true),
+            Some("ERR reboot disabled while armed\r\n")
+        );
+        assert_eq!(
+            reboot_refusal(false, true, true),
+            Some("ERR flash maintenance already active\r\n")
+        );
+        assert_eq!(
+            reboot_refusal(false, false, true),
+            Some("ERR flight log still being written\r\n")
+        );
+    }
+
+    #[test]
     fn motors_and_unconditional_erase_stay_on_usb() {
         use ferrowasp_core::safety::BenchMotorRequest;
 
@@ -206,5 +246,11 @@ mod tests {
             .usb_only()
         );
         assert!(!StorageCommand::ConfigSave.usb_only());
+        assert!(
+            StorageCommand::Reboot {
+                rom_bootloader: true
+            }
+            .usb_only()
+        );
     }
 }

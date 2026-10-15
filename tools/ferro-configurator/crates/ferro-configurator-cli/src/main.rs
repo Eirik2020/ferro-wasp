@@ -5,7 +5,6 @@ use std::{
     io::{self, BufWriter, IsTerminal, Write},
     path::{Path, PathBuf},
     process::ExitCode,
-    thread,
     time::{Duration, Instant},
 };
 
@@ -13,20 +12,20 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
     BoardProfile, CatalogEntry, CheckState, ConfigKey, ConversionSummary, DeviceSelector,
     DfuDetection, DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress,
-    FlightSelector, PortInfo, PreparedImage, ProfileStore, SERIAL_FUNCTIONS, SerialBindings,
-    StatusSnapshot, SyncedFlight, catalog_device, config::lpf_alpha_for_corner,
-    convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight, find_bundled_firmware,
-    flash_firmware, open_device, prearm_checks, prepare_elf, resolve_device_flight, sync_flights,
+    FlightSelector, PortInfo, PreparedImage, ProfileStore, RESTART_TIMEOUT, SERIAL_FUNCTIONS,
+    SerialBindings, StatusSnapshot, SyncedFlight, catalog_device, config::lpf_alpha_for_corner,
+    convert_fwbb_to_csv, convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight,
+    enter_rom_bootloader, find_board_port, find_bundled_firmware, flash_firmware, open_device,
+    prearm_checks, prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port,
+    wait_for_dfu_device,
 };
 use serde::Serialize;
 
-const FLASH_WIZARD_STEP_TITLES: [&str; 6] = [
-    "Step 1 of 6 - Check the firmware and make the bench safe",
-    "Step 2 of 6 - Disconnect USB",
-    "Step 3 of 6 - Enter the STM32 ROM bootloader",
-    "Step 4 of 6 - Detect the controller",
-    "Step 5 of 6 - Final confirmation",
-    "Step 6 of 6 - Program and restart",
+const FLASH_WIZARD_STEP_TITLES: [&str; 4] = [
+    "Step 1 of 4 - Check the firmware",
+    "Step 2 of 4 - Final confirmation",
+    "Step 3 of 4 - Enter the STM32 ROM bootloader",
+    "Step 4 of 4 - Program and restart",
 ];
 
 #[derive(Debug, Parser)]
@@ -78,10 +77,28 @@ enum Command {
     Flash(FlashArgs),
     /// Inspect the bundled flasher and connected STM32 DFU devices.
     Dfu(DfuArgs),
+    /// Calibrate the accelerometer's level, or show it.
+    Imu(ImuArgs),
     /// Run read-only host and USB diagnostics.
     Doctor,
     /// Observe a controller for bench evidence, without commanding it.
     Bench(BenchArgs),
+}
+
+#[derive(Debug, Args)]
+struct ImuArgs {
+    #[command(subcommand)]
+    command: ImuCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ImuCommand {
+    /// Calibrate the accelerometer's level and save it. Set the craft still
+    /// on level ground first; the controller refuses movement or a lean over
+    /// 10 degrees.
+    Calibrate,
+    /// Show the stored accelerometer level offsets.
+    Level,
 }
 
 #[derive(Debug, Args)]
@@ -190,9 +207,13 @@ struct BlackboxSyncReport {
 struct ConvertArgs {
     /// CRC-validated onboard FWBB archive.
     input: PathBuf,
-    /// Output ULog path. Defaults to the input path with `.ulg`.
+    /// Output path. Defaults to the input path with `.ulg`, or `.csv`.
     #[arg(long)]
     output: Option<PathBuf>,
+    /// Write CSV, one row per record with units in the column names, for
+    /// MATLAB's readtable, instead of ULog.
+    #[arg(long)]
+    csv: bool,
     /// Numeric flight ID, or `latest`.
     #[arg(long, default_value = "latest")]
     flight: String,
@@ -261,6 +282,13 @@ enum DeviceCommand {
     },
     /// Show storage and live safety status.
     Info,
+    /// Restart the controller; refused while armed or while storage is busy.
+    Reboot {
+        /// Restart into the STM32 ROM USB DFU bootloader instead, ready to
+        /// flash. A power cycle leaves it.
+        #[arg(long)]
+        dfu: bool,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -317,6 +345,12 @@ enum ConfigCommand {
         #[arg(value_parser = clap::builder::PossibleValuesParser::new(SERIAL_FUNCTIONS))]
         function: String,
     },
+}
+
+#[derive(Debug, Serialize)]
+struct RebootReport {
+    port: String,
+    target: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -394,6 +428,26 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                             let product = port.product.as_deref().unwrap_or("serial device");
                             println!("{:<10} {:<9} {}", port.port, identity, product);
                         }
+                    }
+                })
+            }
+            DeviceCommand::Reboot { dfu } => {
+                let mut client = connect(cli, timeout)?;
+                let port = client.description().to_owned();
+                client.reboot(*dfu)?;
+                let report = RebootReport {
+                    port,
+                    target: if *dfu { "rom-dfu" } else { "firmware" },
+                };
+                emit(cli.format, "device.reboot", &report, || {
+                    if *dfu {
+                        println!(
+                            "{} is restarting into the STM32 ROM DFU bootloader.",
+                            report.port
+                        );
+                        println!("Flash it with `flash`, or power-cycle it to leave.");
+                    } else {
+                        println!("{} is restarting.", report.port);
                     }
                 })
             }
@@ -812,6 +866,35 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
         },
         Command::Convert(args) => {
             let selector = FlightSelector::parse(&args.flight)?;
+            if args.csv {
+                let output = args
+                    .output
+                    .clone()
+                    .unwrap_or_else(|| args.input.with_extension("csv"));
+                let summary = convert_fwbb_to_csv(&args.input, &output, selector, args.force)?;
+                return emit(cli.format, "convert.csv", &summary, || {
+                    println!(
+                        "Wrote flight {} to {}: {} rows, {:.2} s.",
+                        summary.flight_id,
+                        summary.output.display(),
+                        summary.rows,
+                        summary.duration_s
+                    );
+                    println!(
+                        "Control rate {} Hz (measured {:.1} Hz); one record every {} tick(s), {} Hz.",
+                        summary.control_rate_hz,
+                        summary.measured_rate_hz,
+                        summary.record_step,
+                        summary.control_rate_hz / summary.record_step.max(1)
+                    );
+                    if summary.gaps > 0 {
+                        println!(
+                            "{} gap(s) where records were dropped; time_s stays correct across them.",
+                            summary.gaps
+                        );
+                    }
+                });
+            }
             let output = args
                 .output
                 .clone()
@@ -853,7 +936,14 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 });
             }
             if !args.yes {
-                return run_flash_wizard(cli, &firmware, &image, &profile);
+                return run_flash_wizard(cli, &firmware, &image, &profile, timeout);
+            }
+            // Unattended: a board already in ROM DFU is flashed as it is; one
+            // running FerroWasp for this board is rebooted into it first.
+            if detect_dfu()?.devices.is_empty()
+                && let Some(port) = board_port(cli, &profile)?
+            {
+                enter_rom_bootloader(&port, timeout)?;
             }
             let mut progress = |event: FlashProgress| {
                 if cli.format == OutputFormat::Human {
@@ -868,7 +958,27 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 );
                 println!("dfu-util completed successfully and requested application start.");
                 println!(
-                    "For unattended mode, confirm BOOT0 is released before the controller restarts."
+                    "If BOOT0 was held or bridged, release it before the controller restarts."
+                );
+            })
+        }
+        Command::Imu(args) => {
+            let mut client = connect(cli, timeout)?;
+            let (operation, level) = match args.command {
+                ImuCommand::Calibrate => ("imu.calibrate", client.calibrate_accelerometer()?),
+                ImuCommand::Level => ("imu.level", client.accel_level()?),
+            };
+            emit(cli.format, operation, &level, || {
+                println!(
+                    "Accelerometer level offset: x {} mg, y {} mg, z {} mg{}",
+                    level.x_mg,
+                    level.y_mg,
+                    level.z_mg,
+                    if operation == "imu.calibrate" {
+                        "; calibrated and saved."
+                    } else {
+                        "."
+                    }
                 );
             })
         }
@@ -916,6 +1026,7 @@ fn run_flash_wizard(
     firmware: &Path,
     image: &PreparedImage,
     profile: &BoardProfile,
+    timeout: Duration,
 ) -> Result<(), FerroError> {
     if cli.format != OutputFormat::Human
         || !io::stdin().is_terminal()
@@ -942,32 +1053,12 @@ fn run_flash_wizard(
     );
     println!("  Reset:      {:#010x}", image.reset_vector);
     println!();
-    println!("  WARNING: This replaces the firmware currently in MCU application flash.");
-    println!("  Remove all propellers and keep the flight controller on a safe bench.");
-    prompt_enter("Press Enter when you have checked the board and removed the propellers...")?;
+    println!("  This replaces the firmware currently in MCU application flash.");
 
     println!();
     println!("{}", FLASH_WIZARD_STEP_TITLES[1]);
-    println!("  Unplug the USB cable from the flight controller now.");
-    prompt_enter("Press Enter after USB is disconnected...")?;
-
-    println!();
-    println!("{}", FLASH_WIZARD_STEP_TITLES[2]);
-    println!("  1. Hold the BOOT0 button, or bridge the board's BOOT0 pads.");
-    println!("  2. While BOOT0 is held, reconnect the USB cable.");
-    println!("  3. Wait one second, then release the button or remove the temporary bridge.");
-    prompt_enter("Press Enter after reconnecting in BOOT0 mode; detection will begin...")?;
-
-    println!();
-    println!("{}", FLASH_WIZARD_STEP_TITLES[3]);
-    println!("  Waiting up to 45 seconds for STM32 BOOTLOADER (0483:df11)...");
-    let detection = wait_for_dfu_device(Duration::from_secs(45))?;
-    println!("  Detected: {}", detection.devices[0]);
-    println!("  Flasher:  {}", detection.utility_version);
-
-    println!();
-    println!("{}", FLASH_WIZARD_STEP_TITLES[4]);
-    println!("  Keep USB connected until FerroConfigurator says programming is complete.");
+    println!("  Nothing on the board has changed yet. Keep USB connected from here");
+    println!("  until FerroConfigurator says programming is complete.");
     let confirmation =
         prompt_line("Type FLASH to erase/program application flash, or anything else to cancel: ")?;
     if confirmation.trim() != "FLASH" {
@@ -977,15 +1068,94 @@ fn run_flash_wizard(
     }
 
     println!();
-    println!("{}", FLASH_WIZARD_STEP_TITLES[5]);
+    println!("{}", FLASH_WIZARD_STEP_TITLES[2]);
+    let detection = enter_bootloader_for_wizard(cli, profile, timeout)?;
+    println!("  Detected: {}", detection.devices[0]);
+    println!("  Flasher:  {}", detection.utility_version);
+
+    println!();
+    println!("{}", FLASH_WIZARD_STEP_TITLES[3]);
     let mut progress = |event: FlashProgress| print_flash_progress(&event);
     let result = flash_firmware(image, profile, &mut progress)?;
     println!(
         "Successfully flashed {} bytes at {:#010x}.",
         result.bytes_written, result.base_address
     );
-    finish_flash_guidance(Duration::from_secs(10));
+    finish_flash_guidance(profile);
     Ok(())
+}
+
+/// A board already in ROM DFU is used as it is. One running FerroWasp for
+/// this board is asked to reboot into it. Otherwise, or when the board does
+/// not answer, the user holds BOOT0.
+fn enter_bootloader_for_wizard(
+    cli: &Cli,
+    profile: &BoardProfile,
+    timeout: Duration,
+) -> Result<DfuDetection, FerroError> {
+    let present = detect_dfu()?;
+    match present.devices.len() {
+        1 => {
+            println!("  The controller is already in the ROM bootloader.");
+            return Ok(present);
+        }
+        0 => {}
+        _ => {
+            return Err(FerroError::MultipleDfuDevices {
+                devices: present.devices,
+            });
+        }
+    }
+    if let Some(port) = board_port(cli, profile)? {
+        println!(
+            "  Restarting {} on {} into the ROM bootloader...",
+            profile.display_name, port.port
+        );
+        match enter_rom_bootloader(&port, timeout) {
+            Ok(detection) => return Ok(detection),
+            // Armed, storage busy, a flight log open: the user fixes it and
+            // runs the flash again. Nothing was changed.
+            Err(error @ FerroError::DeviceRejected { .. }) => return Err(error),
+            Err(error) => {
+                println!("  The controller did not restart into the bootloader: {error}");
+                println!("  Continue with the BOOT0 button instead.");
+            }
+        }
+    } else {
+        println!(
+            "  No FerroWasp {} is connected over USB.",
+            profile.display_name
+        );
+    }
+    println!("  1. Unplug the USB cable from the flight controller.");
+    println!("  2. Hold the BOOT0 button, or bridge the board's BOOT0 pads.");
+    println!("  3. While BOOT0 is held, reconnect the USB cable.");
+    println!("  4. Wait one second, then release the button or remove the temporary bridge.");
+    prompt_enter("Press Enter after reconnecting in BOOT0 mode; detection will begin...")?;
+    println!("  Waiting up to 45 seconds for STM32 BOOTLOADER (0483:df11)...");
+    wait_for_dfu_device(Duration::from_secs(45))
+}
+
+/// This board's FerroWasp port: the one `--port` names, or the only one
+/// connected. `None` when none is connected.
+fn board_port(cli: &Cli, profile: &BoardProfile) -> Result<Option<PortInfo>, FerroError> {
+    let Some(name) = cli.port.as_ref() else {
+        return find_board_port(profile);
+    };
+    let port = discover_ports()?
+        .into_iter()
+        .find(|port| &port.port == name)
+        .ok_or_else(|| FerroError::OpenPort {
+            port: name.clone(),
+            reason: "no such serial port".to_owned(),
+        })?;
+    if port.serial_number.as_deref() != Some(profile.usb_serial) {
+        return Err(FerroError::InvalidConfiguration(format!(
+            "{name} does not report FerroWasp for {}",
+            profile.display_name
+        )));
+    }
+    Ok(Some(port))
 }
 
 fn prompt_enter(prompt: &str) -> Result<(), FerroError> {
@@ -1015,52 +1185,29 @@ fn prompt_line(prompt: &str) -> Result<String, FerroError> {
     Ok(response)
 }
 
-fn wait_for_dfu_device(timeout: Duration) -> Result<DfuDetection, FerroError> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        let detection = detect_dfu()?;
-        match detection.devices.len() {
-            1 => return Ok(detection),
-            count if count > 1 => {
-                return Err(FerroError::MultipleDfuDevices {
-                    devices: detection.devices,
-                });
-            }
-            _ if Instant::now() >= deadline => return Err(FerroError::DfuDeviceNotFound),
-            _ => thread::sleep(Duration::from_millis(500)),
-        }
-    }
-}
-
-fn finish_flash_guidance(timeout: Duration) {
+fn finish_flash_guidance(profile: &BoardProfile) {
     println!("  Programming is complete. It is now safe to disconnect USB.");
-    println!("  Waiting briefly for FerroWasp to restart in normal USB mode...");
-    let deadline = Instant::now() + timeout;
-    loop {
-        match discover_ports() {
-            Ok(ports) => {
-                if let Some(port) = ports.into_iter().find(|port| port.is_ferrowasp) {
-                    println!("  FerroWasp restarted normally on {}.", port.port);
-                    println!("  No USB power cycle is required.");
-                    return;
-                }
-            }
-            Err(error) => {
-                eprintln!("  Could not check normal USB ports: {error}");
-                println!(
-                    "  Disconnect USB, remove any BOOT0 bridge, and reconnect with BOOT0 released."
-                );
-                return;
-            }
+    println!("  Waiting for FerroWasp to restart...");
+    match wait_for_board_port(profile, RESTART_TIMEOUT) {
+        Ok(Some(port)) => {
+            println!("  FerroWasp restarted on {}.", port.port);
+            println!("  No USB power cycle is required.");
         }
-        if Instant::now() >= deadline {
-            println!("  No normal FerroWasp USB port appeared within 10 seconds.");
+        Ok(None) => {
+            println!(
+                "  No FerroWasp port appeared within {} seconds.",
+                RESTART_TIMEOUT.as_secs()
+            );
             println!(
                 "  Disconnect USB, remove any BOOT0 bridge, and reconnect with BOOT0 released."
             );
-            return;
         }
-        thread::sleep(Duration::from_millis(500));
+        Err(error) => {
+            eprintln!("  Could not check for the restarted controller: {error}");
+            println!(
+                "  Disconnect USB, remove any BOOT0 bridge, and reconnect with BOOT0 released."
+            );
+        }
     }
 }
 
@@ -1558,6 +1705,12 @@ fn print_conversion_summary(summary: &ConversionSummary) {
         summary.dropout_count,
         summary.output_bytes
     );
+    match summary.control_rate_hz {
+        Some(rate_hz) => println!("Control rate {rate_hz} Hz, measured from the log."),
+        None => println!(
+            "Too short to measure the control rate; timestamps are the records' own milliseconds."
+        ),
+    }
 }
 
 fn print_serial_bindings(bindings: &SerialBindings) {

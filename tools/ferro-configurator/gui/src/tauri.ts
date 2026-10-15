@@ -7,12 +7,16 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import {
   toBridgeError,
   type Api,
   type DownloadProgress,
+  type AccelLevel,
   type DownloadSummary,
+  type FlashReport,
+  type FlashStage,
   type SyncedFlight,
   type SyncProgress,
   type FerroConfig,
@@ -118,6 +122,40 @@ export class TauriApi implements Api {
     });
     try {
       return await call<SyncedFlight[]>("sync_flights", { directory });
+    } finally {
+      stop();
+    }
+  }
+
+  reboot(dfu: boolean): Promise<void> {
+    return call<void>("reboot", { dfu });
+  }
+
+  async chooseFirmwareFile(): Promise<string | null> {
+    // No extension filter: the ELF cargo builds has none. The session checks
+    // that whatever is chosen is a FerroWasp image for this board.
+    const path = await open({
+      title: "Choose FerroWasp firmware (ELF)",
+      multiple: false,
+      directory: false,
+    });
+    return typeof path === "string" ? path : null;
+  }
+
+  accelLevel(): Promise<AccelLevel> {
+    return call<AccelLevel>("accel_level");
+  }
+
+  calibrateAccelerometer(): Promise<AccelLevel> {
+    return call<AccelLevel>("calibrate_accelerometer");
+  }
+
+  async flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport> {
+    const stop = await listen<FlashStage>("flash-progress", (event) => {
+      onStage(event.payload);
+    });
+    try {
+      return await call<FlashReport>("flash_firmware", { path });
     } finally {
       stop();
     }

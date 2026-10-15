@@ -123,19 +123,32 @@ class ULogWriterTests(unittest.TestCase):
         self.assertEqual(summary.duration_us, 2_500)
         self.assertEqual(summary.dropout_count, 0)
 
-    def test_emits_dropout_for_missing_control_records(self) -> None:
-        encoded, summary = build_ulog(
-            [sample(10, 100_000), sample(13, 107_500)],
-            7,
-        )
-        dropouts = [
-            struct.unpack("<H", payload)[0]
-            for kind, payload in messages(encoded)
-            if kind == "O"
-        ]
+    def test_times_a_flight_at_its_measured_rate_with_a_dropout(self) -> None:
+        # 3 s at 2 kHz, a record every 2 ticks, 20 ticks lost after 1000.
+        values = []
+        for index in range(3_000):
+            ticks = index * 2 + (20 if index >= 1_000 else 0)
+            values.append(sample(100 + ticks, 1_000_000 + ticks * 500 // 1_000 * 1_000))
+        encoded, summary = build_ulog(values, 7)
+        parsed = messages(encoded)
+        dropouts = [struct.unpack("<H", payload)[0] for kind, payload in parsed if kind == "O"]
+        records = [DATA_RECORD.unpack_from(payload, 2) for kind, payload in parsed if kind == "D"]
 
-        self.assertEqual(dropouts, [5])
+        self.assertEqual(dropouts, [10])
         self.assertEqual(summary.dropout_count, 1)
+        self.assertEqual(records[1][0], 1_000)
+        self.assertEqual(summary.duration_us, 3_009_000)
+        rate = next(
+            payload for kind, payload in parsed if kind == "I" and b"control_rate_hz" in payload
+        )
+        self.assertEqual(struct.unpack("<I", rate[-4:])[0], 2_000)
+
+    def test_records_sharing_a_millisecond_convert(self) -> None:
+        # Every tick logged at 2 kHz: two records per millisecond stamp.
+        values = [sample(100 + tick, 1_000_000 + tick // 2 * 1_000) for tick in range(5_000)]
+        encoded, summary = build_ulog(values, 7)
+        self.assertEqual(summary.dropout_count, 0)
+        self.assertEqual(summary.duration_us, 2_499_500)
 
     def test_output_is_deterministic(self) -> None:
         values = [sample(10, 100_000), sample(11, 102_500)]

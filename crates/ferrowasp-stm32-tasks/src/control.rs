@@ -80,7 +80,7 @@ fn deg10(angle_deg: f32) -> i16 {
     // without one of them running on samples it has already seen.
     config = [
         imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile,
-        imu_gyro_raw_to_dps: f32,
+        imu_gyro_counts_per_dps: f32,
         logical_to_physical_motor_output: [usize; 4],
         control_loop_rate_hz: u32,
     ],
@@ -127,6 +127,21 @@ pub fn control_loop(mut cx: control_loop::Context) {
             }
         }
     };
+    // Used by the flight log and the equal-motor bench image, both of which
+    // exist only without a single-motor selector, and by bench_blackbox.
+    #[cfg(any(
+        feature = "bench_blackbox",
+        not(any(
+            feature = "bench_motor1_only",
+            feature = "bench_motor2_only",
+            feature = "bench_motor3_only",
+            feature = "bench_motor4_only",
+            feature = "bench_logical_motor1_only",
+            feature = "bench_logical_motor2_only",
+            feature = "bench_logical_motor3_only",
+            feature = "bench_logical_motor4_only"
+        ))
+    ))]
     let mut enqueue_flash_record = |sample| {
         let outcome = flash_task::enqueue_rate_record(
             cx.local.flash_record_producer,
@@ -193,9 +208,9 @@ pub fn control_loop(mut cx: control_loop::Context) {
             );
         }
         let control_gyro_raw = gyro_bias_update.corrected_raw;
-        let imu_roll_raw = control_gyro_raw[0] as f32 / CONFIG::IMU_GYRO_RAW_TO_DPS;
-        let imu_pitch_raw = control_gyro_raw[1] as f32 / CONFIG::IMU_GYRO_RAW_TO_DPS;
-        let imu_yaw_raw = control_gyro_raw[2] as f32 / CONFIG::IMU_GYRO_RAW_TO_DPS;
+        let imu_roll_raw = control_gyro_raw[0] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
+        let imu_pitch_raw = control_gyro_raw[1] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
+        let imu_yaw_raw = control_gyro_raw[2] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
         CONTROL_ROLL_RAW.store(control_gyro_raw[0], Ordering::Relaxed);
         CONTROL_PITCH_RAW.store(control_gyro_raw[1], Ordering::Relaxed);
         CONTROL_YAW_RAW.store(control_gyro_raw[2], Ordering::Relaxed);
@@ -353,7 +368,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
         let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
             body_rates,
-            drone_gravity,
+            accel_level().apply(drone_gravity),
             1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32,
         );
         cx.shared.imu_angles.lock(|angles| {

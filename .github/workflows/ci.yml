@@ -178,7 +178,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ripgrep
 
-      - name: Enforce isolated DShot and STM32H7 DMA unsafe boundaries
+      - name: Enforce isolated DShot, STM32H7 DMA and ROM bootloader unsafe boundaries
         shell: bash
         run: |
           # A missing directory must fail the audit, not shrink it: rg reports
@@ -195,7 +195,7 @@ jobs:
           unexpected="$(
             printf '%s\n' "$unsafe_matches" |
               rg --invert-match \
-                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]*unsafe impl(<[^>]*>)? (PeriAddress|DMASet)|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]dma_endpoints.rs:[0-9]+:(unsafe impl(<[^>]*>)? TargetAddress<|[[:space:]]+let dma = unsafe \{ &\*I::ptr\(\) \};$))' ||
+                '^(crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]*unsafe impl(<[^>]*>)? (PeriAddress|DMASet)|crates[/\\]ferrowasp-stm32(f4|h7)[/\\]src[/\\]system_bootloader.rs:[0-9]+:|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32h7[/\\]src[/\\]dma_endpoints.rs:[0-9]+:(unsafe impl(<[^>]*>)? TargetAddress<|[[:space:]]+let dma = unsafe \{ &\*I::ptr\(\) \};$))' ||
               true
           )"
 
@@ -206,10 +206,12 @@ jobs:
           fi
 
           # 3 for the F4 DShot boundary; 7 for the H7 DMA endpoints (the
-          # module allow, five TargetAddress impls, one status-register read).
-          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 10 ]]; then
+          # module allow, five TargetAddress impls, one status-register read);
+          # 5 per chip for the ROM bootloader reboot (the module allow, the
+          # request word's write and read, the reset-flag read, the jump).
+          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 20 ]]; then
             printf '%s\n' "$unsafe_matches"
-            echo "the reviewed DShot or STM32H7 DMA unsafe boundary changed"
+            echo "the reviewed DShot, STM32H7 DMA or ROM bootloader unsafe boundary changed"
             exit 1
           fi
 

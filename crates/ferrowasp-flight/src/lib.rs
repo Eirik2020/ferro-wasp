@@ -1,6 +1,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod accel_level;
 pub mod actuator;
 pub mod arming;
 #[cfg(feature = "mspv2_configurator")]

@@ -22,13 +22,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   evidence shows every disarm, RC loss, aborted arm, and rearm starts with clean
   controller state. Roll P 3.0 stays withdrawn after a 10-13 Hz oscillation.
   Command tracking has never been evaluated.
-- **IMU calibration.** A user-requested, disarmed-only calibration of a
-  stationary aircraft on level ground, exposed through the USB configuration
-  CLI without actuator authority. It rejects motion or excessive tilt, uses a
-  bounded sample window, reports success or failure, and persists atomically
-  with integrity protection. Define which gyro bias, accelerometer level
-  offsets, and trim are stored, how they are validated at boot, and whether
-  boot gyro calibration remains a fallback or becomes a check.
+- **IMU calibration.** Accelerometer level calibration is built (ADR-0044);
+  the gyro still calibrates at every boot. Storing gyro bias, and whether boot
+  calibration then becomes a check, remains open. A self-level mode should
+  require a calibrated level.
 - **Self-level mode.** A bounded attitude outer loop over the rate loop, after
   the rate-command and controller-reset changes are flight-verified, keeping
   the safety and actuator boundary.
@@ -41,6 +38,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Foxeer blackbox rate.** At the 2 kHz loop, `log_rate_divisor` 1 needs about
   400 pages/s. The drain fix that reached that rate on the Lucid's SD card has
   not run on Foxeer's SPI-NOR; measure it there, or default the divisor to 2.
+- **Periodic record loss on Foxeer.** Flights 1-13 (older firmware, logged at
+  2 kHz with divisor 2) lose exactly one record in six: four 2-tick steps, then
+  one 4-tick step, every time. Check whether current firmware still does it
+  before relying on uniform sampling.
 - **Timestamp resolution.** Blackbox `timestamp_us` has 1 ms resolution from
   the 1 kHz monotonic; use `control_sequence` as the time base. A 1 MHz timer
   monotonic would fix it, and is a timer-assignment decision for the user.
@@ -80,6 +81,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
   (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
   needs a board variant.
+- **Configurator flashing** (ADR-0043). The GUI's Firmware tab and Reboot
+  button have run only against the browser mock, not a desktop build on a
+  board. Deferred with the Lucid: the H743's jump address (`0x1FF09800`, from
+  AN2606) is unverified on hardware, and FerroConfigurator has no Lucid board
+  profile.
 - **FerroForge adoption.** Retire `tools/rtic-app-builder`. FerroForge 0.4
   expands a group whose members are imported in one brace, `pub use
   crate::{a, b};`, into an empty group without an error, so

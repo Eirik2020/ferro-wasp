@@ -27,7 +27,8 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-stm32-tasks` | The RTIC task definitions every STM32 flight board shares, including the flash manager |
 
 Only `ferrowasp-stm32f4` and `ferrowasp-stm32h7` name a chip HAL, and only
-they hold unsafe code, at their DMA endpoint declarations.
+they hold unsafe code: their DMA endpoint declarations and their jump into the
+chip's ROM bootloader.
 
 ## Firmware Applications
 

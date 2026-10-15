@@ -7,6 +7,9 @@ pub struct BoardProfile {
     pub flash_range: Range<u32>,
     pub ram_range: Range<u32>,
     pub dfu_alt: u8,
+    /// The USB serial number its FerroWasp firmware reports, as the board's
+    /// `src/board/usb.rs` sets it.
+    pub usb_serial: &'static str,
 }
 
 impl BoardProfile {
@@ -17,5 +20,6 @@ impl BoardProfile {
         flash_range: 0x0800_0000..0x0810_0000,
         ram_range: 0x2000_0000..0x2002_0000,
         dfu_alt: 0,
+        usb_serial: "FW-FOX-F405V2",
     };
 }

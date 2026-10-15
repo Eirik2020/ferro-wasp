@@ -20,6 +20,9 @@ import {
   type DownloadSummary,
   type SyncedFlight,
   type SyncProgress,
+  type AccelLevel,
+  type FlashReport,
+  type FlashStage,
 } from "./api";
 
 /** The reviewed Foxeer baseline. */
@@ -73,6 +76,7 @@ export class MockApi implements Api {
   readonly escReversed = [false, false, false, false];
   private aux = 988;
   private connected = false;
+  private level: AccelLevel = { x_mg: 0, y_mg: 0, z_mg: 0 };
   private config = baselineConfig();
   // The Foxeer F405 V2's default wiring.
   private bindings: SerialBindings = {
@@ -359,5 +363,66 @@ export class MockApi implements Api {
       });
     }
     return synced;
+  }
+
+  async reboot(dfu: boolean): Promise<void> {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    void dfu;
+    this.connected = false;
+  }
+
+  async flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport> {
+    if (this.connected && this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    if (!this.connected) {
+      throw new BridgeError(
+        "refused",
+        "connect the controller, or start its ROM bootloader with the BOOT button",
+      );
+    }
+    const bytes = 187_608;
+    onStage({ stage: "entering_bootloader", port: "COM6" });
+    this.connected = false;
+    await sleep(600);
+    onStage({ stage: "image_validated", bytes, base_address: 0x0800_0000 });
+    onStage({ stage: "dfu_detected", device: "Found DFU: [0483:df11] (simulated)" });
+    onStage({ stage: "programming", bytes });
+    await sleep(2_000);
+    onStage({ stage: "programmed" });
+    onStage({ stage: "restarting" });
+    await sleep(1_000);
+    this.connected = true;
+    return {
+      board: "Foxeer F405 V2 (STM32F405RGT6)",
+      firmware: path ?? "FerroWaspFoxeerF405V2 (bundled)",
+      release: path === null ? "0.1.0-simulated" : null,
+      bytes_written: bytes,
+      base_address: 0x0800_0000,
+      restarted_port: "COM6",
+    };
+  }
+
+  async accelLevel(): Promise<AccelLevel> {
+    this.requireConnection();
+    return { ...this.level };
+  }
+
+  async calibrateAccelerometer(): Promise<AccelLevel> {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    await sleep(700);
+    this.level = { x_mg: 14, y_mg: -38, z_mg: 6 };
+    return { ...this.level };
+  }
+
+  async chooseFirmwareFile(): Promise<string | null> {
+    await sleep(100);
+    return "/home/pilot/FerroWaspFoxeerF405V2";
   }
 }

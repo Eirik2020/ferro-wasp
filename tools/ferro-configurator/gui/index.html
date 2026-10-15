@@ -15,6 +15,7 @@
         <button id="refresh-ports" type="button">Refresh</button>
         <button id="connect" type="button">Connect</button>
         <button id="disconnect" type="button">Disconnect</button>
+        <button id="reboot" type="button" disabled>Reboot</button>
       </div>
     </header>
 
@@ -41,6 +42,7 @@
       <button type="button" role="tab" data-tab="pid" data-config>PID Tuning</button>
       <button type="button" role="tab" data-tab="rates" data-config>Rates</button>
       <button type="button" role="tab" data-tab="blackbox" data-config>Blackbox</button>
+      <button type="button" role="tab" data-tab="firmware">Firmware</button>
     </nav>
 
     <main>
@@ -51,6 +53,13 @@
         <p id="prearm-empty" class="note">Connect a disarmed controller to see what stops it arming.</p>
         <ul id="prearm-checks" aria-label="Pre-arm checks"></ul>
         <h2>Attitude</h2>
+        <div class="row">
+          <button id="calibrate-accel" type="button" disabled>Calibrate accelerometer</button>
+          <span id="accel-level" class="note"></span>
+        </div>
+        <p class="note">Set the craft still on level ground first. The level is
+          saved with the configuration and corrects the attitude shown here and
+          on the OSD.</p>
         <div id="quad-viewer"></div>
       </section>
 
@@ -99,6 +108,11 @@
 
       <section id="tab-pid" role="tabpanel" data-panel="pid" hidden>
         <h2>PID tuning</h2>
+        <div class="row master">
+          <label>Master <input id="pid-master" type="range" min="50" max="150" step="1" value="100" disabled />
+            <output id="pid-master-value">×1.00</output></label>
+          <span class="note">Scales every P, I and D together; springs back when released.</span>
+        </div>
         <div class="grid">
           <fieldset>
             <legend>Roll</legend>
@@ -177,6 +191,30 @@
         <div id="storage-summary"></div>
         <ul id="flight-list"></ul>
         <progress id="download-progress" value="0" max="100" hidden></progress>
+      </section>
+
+      <section id="tab-firmware" role="tabpanel" data-panel="firmware" hidden>
+        <h2>Firmware flasher</h2>
+        <p class="note">A connected controller running FerroWasp is restarted into
+          its bootloader, flashed and reconnected. It must be disarmed, and it
+          refuses while a flight log is still being written. Any other board:
+          hold BOOT while plugging in USB, then flash without connecting.</p>
+        <fieldset>
+          <legend>Firmware</legend>
+          <label><input type="radio" name="firmware-source" value="bundled" checked /> The firmware bundled with FerroConfigurator</label>
+          <div class="row">
+            <label><input type="radio" name="firmware-source" value="file" /> A file</label>
+            <button id="choose-firmware" type="button">Choose file…</button>
+            <span id="firmware-path" class="note">No file chosen</span>
+          </div>
+        </fieldset>
+        <div class="row">
+          <button id="flash" type="button" disabled>Flash firmware</button>
+          <button id="reboot-dfu" type="button" disabled>Reboot to bootloader</button>
+        </div>
+        <progress id="flash-progress" hidden></progress>
+        <p class="note">Flashing replaces the firmware in the controller. Its
+          configuration and flight logs are kept.</p>
       </section>
     </main>
 

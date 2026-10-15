@@ -17,6 +17,7 @@ use ferrowasp_mspv2::rpc;
 use ferrowasp_core::actuator::MotorOutputMap;
 use ferrowasp_core::safety::BenchMotorRequest;
 
+use crate::accel_level::AccelLevel;
 use crate::drone_toolbox::{
     ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, RcRateProfile,
     TuningProfile, gyro_lpf_corner_hz,
@@ -180,6 +181,17 @@ pub enum StorageCommand {
     /// A props-off motor check. Handled by the USB task, which hands it to
     /// the safety master; never by the storage task.
     Motor(BenchMotorRequest),
+    /// Restart the controller once it is disarmed and storage is idle: the
+    /// firmware again, or, with `dfu`, the chip's ROM bootloader, which a
+    /// configurator flashes over USB.
+    Reboot {
+        rom_bootloader: bool,
+    },
+    /// Calibrate the accelerometer's level on a still, level craft, and save
+    /// it with the configuration. Disarmed only.
+    ImuCalibrate,
+    /// Show the stored accelerometer level offsets.
+    ImuLevel,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -452,6 +464,16 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
         (Some("live"), None) => Ok(StorageCommand::Live),
         (Some("rc"), None) => Ok(StorageCommand::Rc),
+        (Some("imu"), Some("calibrate")) if words.next().is_none() => {
+            Ok(StorageCommand::ImuCalibrate)
+        }
+        (Some("imu"), Some("level")) if words.next().is_none() => Ok(StorageCommand::ImuLevel),
+        (Some("reboot"), None) => Ok(StorageCommand::Reboot {
+            rom_bootloader: false,
+        }),
+        (Some("reboot"), Some("dfu")) if words.next().is_none() => Ok(StorageCommand::Reboot {
+            rom_bootloader: true,
+        }),
         (Some("motor"), Some("stop")) if words.next().is_none() => {
             Ok(StorageCommand::Motor(BenchMotorRequest::Stop))
         }
@@ -518,7 +540,11 @@ const RC_FIELDS_OFFSET: usize = V4_STORED_CONFIG_LEN;
 pub const V5_STORED_CONFIG_LEN: usize = RC_FIELDS_OFFSET + 4;
 /// Where version 6's motor order starts (two bytes).
 const MOTOR_MAP_OFFSET: usize = V5_STORED_CONFIG_LEN;
-pub const STORED_CONFIG_LEN: usize = MOTOR_MAP_OFFSET + 2;
+/// Version 6.
+pub const V6_STORED_CONFIG_LEN: usize = MOTOR_MAP_OFFSET + 2;
+/// Where version 7's accelerometer level offsets start: three `i16` milli-g.
+const ACCEL_LEVEL_OFFSET: usize = V6_STORED_CONFIG_LEN;
+pub const STORED_CONFIG_LEN: usize = ACCEL_LEVEL_OFFSET + 6;
 /// Version 5 adds the RC channel map and RC protocol after the version 4
 /// payload. Every earlier payload decodes with [`RcChannelMap::AETR_ARM_CH9`]
 /// and SBUS, the fixed map and protocol firmware used before, so updating
@@ -532,7 +558,8 @@ pub const STORED_CONFIG_LEN: usize = MOTOR_MAP_OFFSET + 2;
 /// change keeps the filter it had.
 /// Version 6 adds the motor order after the version 5 payload; earlier
 /// payloads decode with [`MotorOutputMap::IDENTITY`], the board's wiring.
-const STORED_CONFIG_SCHEMA_VERSION: u16 = 6;
+const STORED_CONFIG_SCHEMA_VERSION: u16 = 7;
+const STORED_CONFIG_SCHEMA_VERSION_MOTOR_MAP: u16 = 6;
 const STORED_CONFIG_SCHEMA_VERSION_RC: u16 = 5;
 const STORED_CONFIG_SCHEMA_VERSION_BINDINGS: u16 = 4;
 const STORED_CONFIG_SCHEMA_VERSION_CORNER: u16 = 3;
@@ -553,6 +580,10 @@ pub struct StoredConfig {
     /// The receiver protocol on the port bound to RC input. Read once at
     /// boot, since it sets that port's line settings.
     pub rc_protocol: RcProtocol,
+    /// Where the accelerometer reads level, set by `imu calibrate`. Not a
+    /// [`ConfigKey`]: it belongs to this craft, not to a tune copied to
+    /// another.
+    pub accel_level: AccelLevel,
 }
 
 impl StoredConfig {
@@ -562,6 +593,7 @@ impl StoredConfig {
             log_rate_divisor: 1,
             serial_bindings: None,
             rc_protocol: RcProtocol::Sbus,
+            accel_level: AccelLevel::ZERO,
         }
     }
 
@@ -715,8 +747,12 @@ impl StoredConfig {
             .copy_from_slice(&self.tuning.rc_map.stick_order().to_le_bytes());
         output[RC_FIELDS_OFFSET + 2] = self.tuning.rc_map.arm_channel();
         output[RC_FIELDS_OFFSET + 3] = self.rc_protocol as u8;
-        output[MOTOR_MAP_OFFSET..STORED_CONFIG_LEN]
+        output[MOTOR_MAP_OFFSET..V6_STORED_CONFIG_LEN]
             .copy_from_slice(&self.tuning.motor_map.to_config().to_le_bytes());
+        for (axis, offset) in self.accel_level.offset_mg.iter().enumerate() {
+            let start = ACCEL_LEVEL_OFFSET + axis * 2;
+            output[start..start + 2].copy_from_slice(&offset.to_le_bytes());
+        }
         output
     }
 
@@ -726,6 +762,7 @@ impl StoredConfig {
             V3_STORED_CONFIG_LEN,
             V4_STORED_CONFIG_LEN,
             V5_STORED_CONFIG_LEN,
+            V6_STORED_CONFIG_LEN,
             STORED_CONFIG_LEN,
         ]
         .contains(&input.len())
@@ -750,6 +787,7 @@ impl StoredConfig {
             let stored_version = u16::from_le_bytes([input[42], input[43]]);
             let expected_len = match stored_version {
                 STORED_CONFIG_SCHEMA_VERSION => STORED_CONFIG_LEN,
+                STORED_CONFIG_SCHEMA_VERSION_MOTOR_MAP => V6_STORED_CONFIG_LEN,
                 STORED_CONFIG_SCHEMA_VERSION_RC => V5_STORED_CONFIG_LEN,
                 STORED_CONFIG_SCHEMA_VERSION_BINDINGS => V4_STORED_CONFIG_LEN,
                 STORED_CONFIG_SCHEMA_VERSION_CORNER | STORED_CONFIG_SCHEMA_VERSION_ALPHA => {
@@ -787,13 +825,23 @@ impl StoredConfig {
         } else {
             (RcChannelMap::AETR_ARM_CH9, RcProtocol::Sbus)
         };
-        let motor_map = if schema_version == STORED_CONFIG_SCHEMA_VERSION {
+        let motor_map = if schema_version >= STORED_CONFIG_SCHEMA_VERSION_MOTOR_MAP {
             MotorOutputMap::from_config(u16::from_le_bytes([
                 input[MOTOR_MAP_OFFSET],
                 input[MOTOR_MAP_OFFSET + 1],
             ]))?
         } else {
             MotorOutputMap::IDENTITY
+        };
+        // Older payloads predate calibration: the accelerometer is uncorrected.
+        let accel_level = if schema_version == STORED_CONFIG_SCHEMA_VERSION {
+            let axis = |index: usize| {
+                let start = ACCEL_LEVEL_OFFSET + index * 2;
+                i16::from_le_bytes([input[start], input[start + 1]])
+            };
+            AccelLevel::new([axis(0), axis(1), axis(2)])?
+        } else {
+            AccelLevel::ZERO
         };
         let candidate = Self {
             tuning: TuningProfile {
@@ -828,6 +876,7 @@ impl StoredConfig {
             },
             log_rate_divisor: u16::from_le_bytes([input[40], input[41]]),
             rc_protocol,
+            accel_level,
             serial_bindings: match input.get(V3_STORED_CONFIG_LEN..V4_STORED_CONFIG_LEN) {
                 Some(bytes) if bytes.len() == SERIAL_PORT_SLOTS => {
                     let bytes: &[u8; SERIAL_PORT_SLOTS] = bytes.try_into().ok()?;
@@ -1613,7 +1662,7 @@ mod tests {
         assert_eq!(decoded.tuning.rc_map.stick_order(), 2314);
 
         let mut bad_protocol = encoded;
-        bad_protocol[STORED_CONFIG_LEN - 1] = 7;
+        bad_protocol[V6_STORED_CONFIG_LEN - 1] = 7;
         assert_eq!(StoredConfig::decode(&bad_protocol), None);
         let mut bad_map = encoded;
         bad_map[RC_FIELDS_OFFSET..RC_FIELDS_OFFSET + 2].copy_from_slice(&1224u16.to_le_bytes());
@@ -1639,8 +1688,28 @@ mod tests {
         assert_eq!(decoded.tuning.rc_map, config.tuning.rc_map);
 
         let mut bad = encoded;
-        bad[MOTOR_MAP_OFFSET..STORED_CONFIG_LEN].copy_from_slice(&1123u16.to_le_bytes());
+        bad[MOTOR_MAP_OFFSET..V6_STORED_CONFIG_LEN].copy_from_slice(&1123u16.to_le_bytes());
         assert_eq!(StoredConfig::decode(&bad), None);
+    }
+
+    #[test]
+    fn accelerometer_level_is_saved_and_older_payloads_are_uncorrected() {
+        let mut config = StoredConfig::first_hop_default();
+        config.accel_level = AccelLevel::new([12, -52, 3]).unwrap();
+        let encoded = config.encode();
+        assert_eq!(StoredConfig::decode(&encoded), Some(config));
+
+        let mut version_six = [0u8; V6_STORED_CONFIG_LEN];
+        version_six.copy_from_slice(&encoded[..V6_STORED_CONFIG_LEN]);
+        version_six[42..44].copy_from_slice(&STORED_CONFIG_SCHEMA_VERSION_MOTOR_MAP.to_le_bytes());
+        let decoded = StoredConfig::decode(&version_six).expect("version 6 must still be readable");
+        assert_eq!(decoded.accel_level, AccelLevel::ZERO);
+        assert_eq!(decoded.tuning, config.tuning);
+
+        let mut out_of_range = encoded;
+        out_of_range[ACCEL_LEVEL_OFFSET..ACCEL_LEVEL_OFFSET + 2]
+            .copy_from_slice(&900i16.to_le_bytes());
+        assert_eq!(StoredConfig::decode(&out_of_range), None);
     }
 
     #[test]
@@ -1676,6 +1745,43 @@ mod tests {
         );
         assert_eq!(parse_command("live"), Ok(StorageCommand::Live));
         assert_eq!(parse_command("rc"), Ok(StorageCommand::Rc));
+    }
+
+    #[test]
+    fn imu_commands_parse() {
+        assert_eq!(
+            parse_command("imu calibrate"),
+            Ok(StorageCommand::ImuCalibrate)
+        );
+        assert_eq!(parse_command("imu level"), Ok(StorageCommand::ImuLevel));
+        assert_eq!(
+            parse_command("imu calibrate now"),
+            Err(CommandParseError::UnknownCommand)
+        );
+    }
+
+    #[test]
+    fn reboot_commands_parse() {
+        assert_eq!(
+            parse_command("reboot"),
+            Ok(StorageCommand::Reboot {
+                rom_bootloader: false
+            })
+        );
+        assert_eq!(
+            parse_command("reboot dfu"),
+            Ok(StorageCommand::Reboot {
+                rom_bootloader: true
+            })
+        );
+        assert_eq!(
+            parse_command("reboot dfu now"),
+            Err(CommandParseError::UnknownCommand)
+        );
+        assert_eq!(
+            parse_command("reboot bootloader"),
+            Err(CommandParseError::UnknownCommand)
+        );
     }
 
     #[test]
