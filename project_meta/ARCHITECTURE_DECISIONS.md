@@ -72,6 +72,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0046](decisions/ADR-0046.md) | DShot Frames Follow The Control Loop | accepted, not yet implemented; amends the cadence in ADR-0039 |
 | [ADR-0047](decisions/ADR-0047.md) | The RPM Filter Follows Betaflight | accepted, not yet implemented |
 | [ADR-0048](decisions/ADR-0048.md) | Bidirectional eRPM Supersedes UART Telemetry For Arming | accepted, not yet implemented; supersedes ADR-0040's eRPM source where bidirectional DShot runs |
+| [ADR-0049](decisions/ADR-0049.md) | Dynamic Idle Raises The Motor Floor From The Slowest Motor's eRPM | accepted, not yet implemented |
 
 ## Adding Or Changing A Decision
 

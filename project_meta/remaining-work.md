@@ -26,14 +26,17 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   - the qualification source moved to bidirectional eRPM;
   - extended telemetry: the enable command before guarded idle, and decoding
     of temperature, voltage and current;
-  - blackbox eRPM, reply-loss and extended-telemetry fields.
+  - blackbox eRPM, reply-loss and extended-telemetry fields;
+  - dynamic idle (ADR-0049) with a mixer output floor, enabled only after the
+    RPM filter has target evidence.
 
   Then, on target:
   - logic-analyzer captures of both directions;
   - a DMA2 errata 2.1.10 check under SPI1 and ADC load;
   - the filter's cost per loop;
   - props-off arming;
-  - spectral evidence before the gyro low-pass corner moves.
+  - spectral evidence before the gyro low-pass corner moves;
+  - a stale-reply fault-injection test for dynamic idle.
 
   Open: the TBS Lucid H7 receive path.
 - **ESC-only power cycle.** PR #16 resumes ESC telemetry while disarmed after a

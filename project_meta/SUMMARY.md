@@ -53,6 +53,7 @@
   - [ADR-0046: DShot Frames Follow The Control Loop](decisions/ADR-0046.md)
   - [ADR-0047: The RPM Filter Follows Betaflight](decisions/ADR-0047.md)
   - [ADR-0048: Bidirectional eRPM Supersedes UART Telemetry For Arming](decisions/ADR-0048.md)
+  - [ADR-0049: Dynamic Idle Raises The Motor Floor From The Slowest Motor's eRPM](decisions/ADR-0049.md)
 - [Testing](testing/README.md)
   - [Run Evidence](testing/evidence/README.md)
   - [Evidence Index](testing/EVIDENCE_INDEX.md)
