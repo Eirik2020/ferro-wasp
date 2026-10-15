@@ -16,3 +16,6 @@
 *.woff binary
 *.woff2 binary
 *.zip binary
+
+# Fixtures are compared byte for byte; never convert their line endings.
+fixtures/** -text

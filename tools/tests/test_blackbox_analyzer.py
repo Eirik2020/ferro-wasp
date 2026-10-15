@@ -110,6 +110,15 @@ class SequenceStatsTests(unittest.TestCase):
         self.assertEqual(value.pid, (10, -11, 12))
         self.assertEqual((value.throttle, value.motors), (321, (100, 101, 102, 103)))
 
+    def test_reads_the_shared_fixture_as_the_configurator_exported_it(self) -> None:
+        # fixtures/blackbox/SOURCE.txt: a real Foxeer flight at 2 kHz, divisor 2.
+        path = Path(__file__).resolve().parents[2] / "fixtures/blackbox/foxeer-f405-2khz.csv"
+        samples = samples_from_file(path)
+
+        self.assertEqual(len(samples), 2_000)
+        self.assertEqual(round(measured_control_rate_hz(samples)), 2_000)
+        self.assertTrue(all(sample.armed for sample in samples))
+
     def test_a_raw_onboard_log_points_at_the_configurator(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "flight-3.fwbb"

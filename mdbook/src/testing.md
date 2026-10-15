@@ -36,7 +36,12 @@ mdbook build mdbook
   `#[cfg(test)] mod tests`, and runs on the host. Name it for the behaviour it
   pins, as a sentence: `reboot_waits_for_disarm_idle_storage_and_a_closed_log`.
 - A test that spans crates, or checks a recorded file against its expected
-  decoding, goes in the crate's `tests/` directory.
+  decoding, goes in the crate's `tests/` directory. Recorded files shared
+  between suites live in `fixtures/`, each directory's `SOURCE.txt` saying
+  where they came from and how to regenerate what is expected of them. The
+  blackbox fixture, a real Foxeer log slice, is checked by the shared format
+  code, by FerroConfigurator's CSV and ULog exports byte for byte, and by the
+  analyzer.
 - Firmware decisions are tested on the host, so they cannot live where only the
   target runs them. A task in `ferrowasp-stm32-tasks` wires resources, locks,
   spawns and queues; each decision it makes, a refusal rule, a state machine, a

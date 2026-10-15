@@ -1,0 +1,28 @@
+Shared fixtures for the onboard blackbox format.
+
+foxeer-f405-2khz.fwbb
+    The first 400 pages (102400 bytes) of flight 13 from the Foxeer F405 V2,
+    as downloaded on 2026-10-15 into
+    logs/foxeer-flights/20261015-before-dfu-reboot/flight-13.fwbb. Recorded
+    by older firmware at a 2000 Hz control loop with log divisor 2: 2000
+    records over 2.40 s, with the one-record-in-six loss that firmware showed
+    (398 gaps). Real data on purpose: tests must handle what the firmware
+    actually writes.
+
+foxeer-f405-2khz.csv
+    What `ferro-configurator convert foxeer-f405-2khz.fwbb --csv` writes for
+    it.
+
+foxeer-f405-2khz.ulg.sha256
+    The SHA-256 of what `ferro-configurator convert foxeer-f405-2khz.fwbb`
+    writes as ULog.
+
+Checked by crates/ferrowasp-core/tests/golden_blackbox.rs (decoding,
+re-encoding, records), FerroConfigurator's
+crates/ferro-configurator-core/tests/golden_blackbox.rs (CSV and ULog bytes),
+and tools/tests/test_blackbox_analyzer.py (reading the CSV).
+
+Regenerate the expected outputs only for a deliberate format change, and
+review the diff: from tools/ferro-configurator,
+
+    cargo run --release -p ferro-configurator-cli -- convert ../../fixtures/blackbox/foxeer-f405-2khz.fwbb --csv --force
