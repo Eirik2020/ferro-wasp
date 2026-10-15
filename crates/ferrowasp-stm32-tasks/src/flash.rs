@@ -12,7 +12,10 @@ use ferrowasp_flight::accel_level::{AccelLevelCalibration, CalibrationError};
 use ferrowasp_flight::blackbox_storage as blackbox_task;
 use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter, reboot_refusal};
 use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
-use ferrowasp_flight::{log_sync, sync_ledger};
+use ferrowasp_flight::log_sync;
+use ferrowasp_flight::storage_maintenance::{
+    Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
+};
 use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
@@ -29,9 +32,6 @@ pub const FLASH_RECORD_DRAIN_PER_PASS: u32 = 16;
 /// How long log pages may wait in a store's write-back buffer before the
 /// task writes them out; at most this much log is lost to a power cut.
 pub const WRITE_BACK_MAX_AGE_MS: u64 = 100;
-
-/// Erase, header and bit are the most one acknowledgement can take.
-pub const MAX_SYNC_MARK_STEPS: u8 = 3;
 
 /// How long a reboot waits for the store to finish its last program, in
 /// milliseconds. With maintenance refused, that is one page program, a few
@@ -93,33 +93,6 @@ pub fn queue_storage_response(responses: &mut ResponseRouter, text: &str) -> boo
         cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
     }
     true
-}
-
-/// The next ledger operation toward acknowledging `flight_id`.
-pub fn sync_mark_step<F: NorStorage>(
-    flash: &mut F,
-    layout: flash_task::StorageLayout,
-    flight_id: u32,
-) -> Result<sync_ledger::MarkStep, sync_ledger::LedgerError<F::Error>> {
-    let mut read = |address, output: &mut [u8]| flash.read(address, output);
-    sync_ledger::next_mark_step(layout, &mut read, flight_id)
-}
-
-/// Starts one ledger operation; the storage owner waits for it to finish.
-pub fn start_sync_mark_step<F: NorStorage>(
-    flash: &mut F,
-    step: sync_ledger::MarkStep,
-) -> Result<(), F::Error> {
-    match step {
-        sync_ledger::MarkStep::EraseLedger { address } => flash.erase_sector_4k(address),
-        sync_ledger::MarkStep::ProgramHeader { address } => {
-            flash.page_program(address, &sync_ledger::SYNC_LEDGER_MAGIC)
-        }
-        sync_ledger::MarkStep::ProgramBit { address, value } => {
-            flash.page_program(address, &[value])
-        }
-        sync_ledger::MarkStep::Done => Ok(()),
-    }
 }
 
 #[cfg(feature = "mspv2_configurator")]
@@ -195,10 +168,6 @@ pub fn queue_page_hex(
     })
 }
 
-pub fn flash_scratch_test_page() -> [u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN] {
-    flash_task::scratch_test_page()
-}
-
 /// Starts saving `config` (`ConfigSave`), answering the link that asked
 /// when it completes. `Err` is the answer line when it cannot start.
 fn begin_config_save(
@@ -254,10 +223,7 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         stored_config: flash_task::StoredConfig,
         config_sequence: u32 = 0,
         config_active_slot: u8 = 1,
-        erase_sector_index: Option<u32> = None,
-        flash_test_phase: u8 = 0,
-        sync_mark: Option<u32> = None,
-        sync_mark_steps: u8 = 0,
+        maintenance: Maintenance = Maintenance::Idle,
         config_save: ConfigSave = ConfigSave::idle(),
         staged_rpc_config: Option<flash_task::StoredConfig> = None,
         config_rpc_completion: Option<ConfigRpcCompletion> = None,
@@ -297,10 +263,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let stored_config = cx.local.stored_config;
     let config_sequence = cx.local.config_sequence;
     let config_active_slot = cx.local.config_active_slot;
-    let erase_sector_index = cx.local.erase_sector_index;
-    let flash_test_phase = cx.local.flash_test_phase;
-    let sync_mark = cx.local.sync_mark;
-    let sync_mark_steps = cx.local.sync_mark_steps;
+    let maintenance = cx.local.maintenance;
     let config_save = cx.local.config_save;
     let staged_rpc_config = cx.local.staged_rpc_config;
     let config_rpc_completion = cx.local.config_rpc_completion;
@@ -439,16 +402,13 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             flash_responses.answer_maintenance();
 
             if SAFETY_ARMED.load(Ordering::Acquire)
-                && (erase_sector_index.is_some()
-                    || *flash_test_phase != 0
-                    || config_save.is_active()
-                    || sync_mark.is_some())
+                && (maintenance.is_active() || config_save.is_active())
             {
                 // An erase stopped part-way has cleared the top of the log
                 // and maybe some of its newest pages. Find the append
                 // point again, or new pages would land above a blank gap
                 // that hides them from every later scan.
-                if erase_sector_index.is_some() {
+                if maintenance.is_erasing_log() {
                     match scan_flash_log(flash_device, layout) {
                         Ok((page, flight, writable)) => {
                             *next_page_index = page;
@@ -463,10 +423,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         }
                     }
                 }
-                *erase_sector_index = None;
-                *flash_test_phase = 0;
+                maintenance.cancel();
                 config_save.cancel();
-                *sync_mark = None;
                 #[cfg(feature = "mspv2_configurator")]
                 let rpc_notified = finish_config_rpc_error(
                     flash_rpc_response_producer,
@@ -483,115 +441,64 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 }
             }
 
-            // Top down, sync ledger first: see `log_erase_sector_address`.
-            if let Some(step) = *erase_sector_index {
-                if let Some(address) = layout.log_erase_sector_address(step) {
-                    if flash_device.erase_sector_4k(address).is_err() {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        *erase_sector_index = None;
-                        queue_storage_response(flash_responses, "ERR log sector erase failed\r\n");
-                    } else {
-                        *erase_sector_index = Some(step + 1);
-                    }
-                } else {
-                    *erase_sector_index = None;
-                    *next_page_index = 0;
-                    *next_flight_id = 1;
-                    *log_region_writable = true;
-                    queue_storage_response(flash_responses, "OK logs erased\r\n");
-                }
-                Mono::delay(1u64.millis()).await;
-                continue;
-            }
-
-            // A host's acknowledgement, written to the sync ledger one
-            // operation per pass, each awaited by the busy check above.
-            if let Some(flight_id) = *sync_mark {
-                let failed = match sync_mark_step(flash_device, layout, flight_id) {
-                    Ok(sync_ledger::MarkStep::Done) => Some(false),
-                    Ok(_) if *sync_mark_steps >= MAX_SYNC_MARK_STEPS => Some(true),
-                    Ok(step) => {
-                        *sync_mark_steps += 1;
-                        if start_sync_mark_step(flash_device, step).is_err() {
-                            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                            Some(true)
-                        } else {
-                            None
+            // A log erase, a sync-ledger acknowledgement or the scratch test:
+            // one flash operation a pass, each awaited by the busy check above.
+            let erasing_log = maintenance.is_erasing_log();
+            match maintenance.step(flash_device, layout) {
+                MaintenanceStep::Idle => {}
+                step => {
+                    match step {
+                        MaintenanceStep::Done(MaintenanceDone::LogErased) => {
+                            *next_page_index = 0;
+                            *next_flight_id = 1;
+                            *log_region_writable = true;
+                            queue_storage_response(flash_responses, "OK logs erased\r\n");
                         }
+                        MaintenanceStep::Done(MaintenanceDone::Synced { flight }) => {
+                            let mut line =
+                                heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
+                            let _ = write!(line, "OK synced flight={flight}\r\n");
+                            queue_storage_response(flash_responses, line.as_str());
+                        }
+                        MaintenanceStep::Done(MaintenanceDone::ScratchVerified) => {
+                            queue_storage_response(
+                                flash_responses,
+                                "OK flash scratch erase/program/read verified\r\n",
+                            );
+                        }
+                        MaintenanceStep::Failed(failure) => {
+                            if failure.is_write_fault() {
+                                FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                            }
+                            queue_storage_response(
+                                flash_responses,
+                                match failure {
+                                    MaintenanceFailure::LogErase => {
+                                        "ERR log sector erase failed\r\n"
+                                    }
+                                    MaintenanceFailure::SyncLedger { .. } => {
+                                        "ERR sync ledger write failed\r\n"
+                                    }
+                                    MaintenanceFailure::ScratchErase => {
+                                        "ERR flash test scratch erase failed\r\n"
+                                    }
+                                    MaintenanceFailure::ScratchProgram => {
+                                        "ERR flash test scratch program failed\r\n"
+                                    }
+                                    MaintenanceFailure::ScratchReadback => {
+                                        "ERR flash test readback mismatch\r\n"
+                                    }
+                                },
+                            );
+                        }
+                        MaintenanceStep::Running | MaintenanceStep::Idle => {}
                     }
-                    Err(_) => Some(true),
-                };
-                if let Some(failed) = failed {
-                    *sync_mark = None;
-                    if failed {
-                        queue_storage_response(flash_responses, "ERR sync ledger write failed\r\n");
-                    } else {
-                        let mut line =
-                            heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
-                        let _ = write!(line, "OK synced flight={flight_id}\r\n");
-                        queue_storage_response(flash_responses, line.as_str());
-                    }
-                }
-                continue;
-            }
-
-            match *flash_test_phase {
-                1 => {
-                    if flash_device
-                        .erase_sector_4k(flash_task::SCRATCH_SECTOR_ADDRESS)
-                        .is_err()
-                    {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        *flash_test_phase = 0;
-                        queue_storage_response(
-                            flash_responses,
-                            "ERR flash test scratch erase failed\r\n",
-                        );
-                    } else {
-                        *flash_test_phase = 2;
-                    }
-                    continue;
-                }
-                2 => {
-                    let page = flash_scratch_test_page();
-                    if flash_device
-                        .page_program(flash_task::SCRATCH_SECTOR_ADDRESS, &page)
-                        .is_err()
-                    {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        *flash_test_phase = 0;
-                        queue_storage_response(
-                            flash_responses,
-                            "ERR flash test scratch program failed\r\n",
-                        );
-                    } else {
-                        *flash_test_phase = 3;
+                    // A log erase yields a millisecond after every sector.
+                    if erasing_log {
+                        Mono::delay(1u64.millis()).await;
                     }
                     continue;
                 }
-                3 => {
-                    let expected = flash_scratch_test_page();
-                    let mut actual = [0u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
-                    *flash_test_phase = 0;
-                    if flash_device
-                        .read(flash_task::SCRATCH_SECTOR_ADDRESS, &mut actual)
-                        .is_ok()
-                        && actual == expected
-                    {
-                        queue_storage_response(
-                            flash_responses,
-                            "OK flash scratch erase/program/read verified\r\n",
-                        );
-                    } else {
-                        FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                        queue_storage_response(
-                            flash_responses,
-                            "ERR flash test readback mismatch\r\n",
-                        );
-                    }
-                    continue;
-                }
-                _ => {}
             }
 
             match config_save.step(flash_device, layout) {
@@ -678,10 +585,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             if let Some((command, link)) = flash_commands.take_next() {
                 flash_responses.answer(link);
                 let mut response = heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
-                let maintenance_busy = erase_sector_index.is_some()
-                    || *flash_test_phase != 0
+                let maintenance_busy = maintenance.is_active()
                     || config_save.is_active()
-                    || sync_mark.is_some()
                     || accel_calibration.is_some();
                 let unfinished_flight = assembler.unfinished_flight(pending_page.is_some());
                 match command {
@@ -775,10 +680,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 flash_responses,
                                 "ERR flash test disabled while armed\r\n",
                             );
-                        } else if erase_sector_index.is_some()
-                            || *flash_test_phase != 0
+                        } else if maintenance.is_active()
                             || config_save.is_active()
-                            || sync_mark.is_some()
                             || accel_calibration.is_some()
                         {
                             queue_storage_response(
@@ -786,7 +689,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 "ERR flash maintenance already active\r\n",
                             );
                         } else {
-                            *flash_test_phase = 1;
+                            *maintenance = Maintenance::scratch_test();
                             flash_responses.start_maintenance();
                             queue_storage_response(
                                 flash_responses,
@@ -838,10 +741,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 flash_responses,
                                 "ERR log erase disabled while armed\r\n",
                             );
-                        } else if erase_sector_index.is_some()
-                            || *flash_test_phase != 0
+                        } else if maintenance.is_active()
                             || config_save.is_active()
-                            || sync_mark.is_some()
                             || accel_calibration.is_some()
                         {
                             queue_storage_response(
@@ -849,7 +750,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 "ERR flash maintenance already active\r\n",
                             );
                         } else {
-                            *erase_sector_index = Some(0);
+                            *maintenance = Maintenance::erase_log();
                             flash_responses.start_maintenance();
                             queue_storage_response(flash_responses, "OK log erase started\r\n");
                         }
@@ -906,8 +807,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 pages,
                             ) {
                                 Ok(Ok(())) => {
-                                    *sync_mark = Some(flight);
-                                    *sync_mark_steps = 0;
+                                    *maintenance = Maintenance::sync_mark(flight);
                                     flash_responses.start_maintenance();
                                 }
                                 Ok(Err(refusal)) => {
@@ -951,7 +851,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 unfinished_flight,
                             ) {
                                 Ok(true) => {
-                                    *erase_sector_index = Some(0);
+                                    *maintenance = Maintenance::erase_log();
                                     flash_responses.start_maintenance();
                                     queue_storage_response(
                                         flash_responses,
@@ -1006,10 +906,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 flash_responses,
                                 "ERR config save disabled while armed\r\n",
                             );
-                        } else if erase_sector_index.is_some()
-                            || *flash_test_phase != 0
+                        } else if maintenance.is_active()
                             || config_save.is_active()
-                            || sync_mark.is_some()
                             || accel_calibration.is_some()
                         {
                             queue_storage_response(
@@ -1122,10 +1020,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             #[cfg(feature = "mspv2_configurator")]
             if let Some(request) = flash_rpc_command_consumer.dequeue() {
                 let request_id = request.request_id;
-                let maintenance_busy = erase_sector_index.is_some()
-                    || *flash_test_phase != 0
+                let maintenance_busy = maintenance.is_active()
                     || config_save.is_active()
-                    || sync_mark.is_some()
                     || accel_calibration.is_some();
                 let active_blackbox_id = assembler
                     .recording()
@@ -1370,7 +1266,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     let saved = outcome.and_then(|level| {
                         let mut config = *stored_config;
                         config.accel_level = level;
-                        if config_save.is_active() || erase_sector_index.is_some() {
+                        if config_save.is_active() || maintenance.is_active() {
                             return Err("ERR flash maintenance already active\r\n");
                         }
                         begin_config_save(

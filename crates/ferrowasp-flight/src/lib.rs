@@ -14,6 +14,7 @@ pub mod flash_storage;
 pub mod log_sync;
 pub mod osd;
 pub mod rc_receiver;
+pub mod storage_maintenance;
 pub mod sync_ledger;
 pub mod usb_debug;
 
