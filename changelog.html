@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
+            window.path_to_searchindex_js = "searchindex-9f661229.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -201,9 +201,9 @@ configurable stick order and arm channel.</li>
 motor order, from FerroConfigurator or the USB command line.</li>
 <li>FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
 live stick readout, and a rates curve.</li>
-<li>ULog conversion (<code>convert</code> and <code>tools/fwbb_to_ulog.py</code>) measures the
-control rate from the log instead of assuming 400 Hz, times records by
-control tick, and accepts records that share a millisecond timestamp.</li>
+<li>ULog conversion (<code>convert</code>) measures the control rate from the log instead
+of assuming 400 Hz, times records by control tick, and accepts records that
+share a millisecond timestamp.</li>
 <li><code>convert --csv</code> in FerroConfigurator: one flight as CSV for MATLAB, with
 units in the column names, time from the control-tick count at the rate
 measured from the log, and dropped-record gaps reported.</li>
@@ -222,6 +222,13 @@ with <code>tools/components.py</code> listing which tests each board owes, and
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>FerroConfigurator is the one reader of the onboard log format.
+<code>tools/blackbox_analyzer.py</code> analyzes its <code>convert --csv</code> export, and the
+duplicate Python tools <code>tools/ferrowasp_storage.py</code> and
+<code>tools/fwbb_to_ulog.py</code> are removed; their commands are FerroConfigurator’s
+<code>blackbox</code> and <code>convert</code>.</p>
+</li>
 <li>
 <p>Arming is refused while a computer is connected: a USB host has the board
 configured, or the configurator link was used in the last 2 seconds. The

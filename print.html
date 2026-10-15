@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
+            window.path_to_searchindex_js = "searchindex-9f661229.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -2214,15 +2214,47 @@ enabled features with Foxeer’s.</li>
 <p>FerroWasp verification is staged so a successful software check is never
 mistaken for target or flight evidence.</p>
 <h2 id="software-checks"><a class="header" href="#software-checks">Software Checks</a></h2>
-<p>From the repository root, contributors normally run:</p>
+<p>Every test suite runs from the repository root with one command, the same one
+CI runs:</p>
+<pre><code class="language-text">python tools/run_tests.py
+</code></pre>
+<p>It runs the root workspace, the tests a workspace-wide run compiles out through
+feature unification, the bring-up app’s board manifest, FerroConfigurator, its
+GUI (TypeScript types, page build, and the Tauri shell), the Python tools, and
+the RTIC app builder. <code>--list</code> shows each suite’s commands; naming suites, as
+in <code>python tools/run_tests.py rust python</code>, runs only those. The summary counts
+the tests each suite ran, so a suite that quietly runs fewer reads as a smaller
+number, not as a pass.</p>
+<p>The remaining checks are separate:</p>
 <pre><code class="language-text">cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check --workspace --locked
-cargo test --workspace --locked
-python -m unittest discover -s tools/tests -v
 python tools/check_repository_context.py
+python tools/check_rtic_boundaries.py
 mdbook build mdbook
 </code></pre>
+<h3 id="where-tests-go"><a class="header" href="#where-tests-go">Where tests go</a></h3>
+<ul>
+<li>A unit test sits beside the code it tests, in the module’s
+<code>#[cfg(test)] mod tests</code>, and runs on the host. Name it for the behaviour it
+pins, as a sentence: <code>reboot_waits_for_disarm_idle_storage_and_a_closed_log</code>.</li>
+<li>A test that spans crates, or checks a recorded file against its expected
+decoding, goes in the crate’s <code>tests/</code> directory. Recorded files shared
+between suites live in <code>fixtures/</code>, each directory’s <code>SOURCE.txt</code> saying
+where they came from and how to regenerate what is expected of them. The
+blackbox fixture, a real Foxeer log slice, is checked by the shared format
+code, by FerroConfigurator’s CSV and ULog exports byte for byte, and by the
+analyzer.</li>
+<li>Firmware decisions are tested on the host, so they cannot live where only the
+target runs them. A task in <code>ferrowasp-stm32-tasks</code> wires resources, locks,
+spawns and queues; each decision it makes, a refusal rule, a state machine, a
+unit conversion, is a function in a HAL-free crate with tests, such as
+<code>reboot_refusal</code> and <code>AccelLevelCalibration</code> in <code>ferrowasp-flight</code>.</li>
+<li>Chip backends hold the peripheral and DMA code that only the target can run;
+keep logic out of them, so that target verification covers what is left.</li>
+<li>A test that needs a Cargo feature the workspace does not turn on, or that a
+workspace-wide run compiles out, goes into the <code>rust-features</code> suite in
+<code>tools/run_tests.py</code>. A new suite is added there, never to CI directly.</li>
+</ul>
 <p>Embedded applications are isolated Cargo workspaces. Check the selected app
 from its own directory with the exact board features being reviewed. A build
 proves source compatibility only; it does not prove pin routing, timing,
@@ -2362,37 +2394,20 @@ compares them with the filtered rates, and reports standard deviation,
 peak-to-peak noise, attenuation, drift, and a rough quiet, watch, or noisy
 verdict. It is a rest-noise screen, not a substitute for props-off motor checks
 or vibration analysis.</p>
-<h2 id="onboard-storage-from-python"><a class="header" href="#onboard-storage-from-python">Onboard Storage from Python</a></h2>
-<p>FerroConfigurator is the normal way to read configuration and download logs.
-<code>tools/ferrowasp_storage.py</code> is the lower-level Python client for the same USB
-storage commands, kept as a development reference; it needs <code>pyserial</code>.</p>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port COM7 info
-python tools\ferrowasp_storage.py --port COM7 flights
-python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
+<h2 id="onboard-logs"><a class="header" href="#onboard-logs">Onboard Logs</a></h2>
+<p>FerroConfigurator is the one tool that reads the onboard log format: it
+downloads a flight, checking every page’s CRC and sequence, and converts it.
+The analyzer reads its CSV export, one flight per file:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port COM7 blackbox download --flight latest --output logs\foxeer-latest.fwbb
+.\ferro-configurator.exe convert logs\foxeer-latest.fwbb --csv
+python tools\blackbox_analyzer.py logs\foxeer-latest.csv --mode auto
 </code></pre>
-<p><code>read</code> fetches only the selected flight’s page range; <code>--resume</code> continues an
-interrupted download after validating every page already on disk against the
-flight ID, page sequence, and CRC. <code>erase --confirm</code> erases the log region
-only, and <code>test --confirm</code> exercises only the reserved scratch sector. Every
-write is refused while armed, and maintenance in progress stops if arming
-begins. Record what <code>info</code> reports for the flash; the capacity code for 16 MiB
-is <code>18</code>.</p>
-<p>The analyzer reads <code>.fwbb</code> files directly, rejects invalid or truncated pages,
-and reports what it kept. Select one flight so flight boundaries are not
-counted as gaps:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --mode auto
-</code></pre>
-<h2 id="ulog-reference-converter"><a class="header" href="#ulog-reference-converter">ULog Reference Converter</a></h2>
-<p>FerroConfigurator’s <code>convert</code> command is the normal path.
-<code>tools/fwbb_to_ulog.py</code> is its Python reference implementation and produces the
-same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic. The
-log does not store its control rate, so both measure it over the flight, write
-it as the <code>control_rate_hz</code> info field, and time each record by its control
-tick at that rate; sequence gaps become ULog dropouts. A flight under 2 s is
-too short to measure and keeps the records’ millisecond timestamps. It never
-combines flights.</p>
-<pre><code class="language-powershell">python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
-</code></pre>
+<p><code>convert</code> without <code>--csv</code> writes ULog instead: one flight as the
+<code>ferrowasp_rate_control</code> topic. The log does not store its control rate, so
+both formats measure it over the flight and time each record by its control
+tick at that rate; ULog carries it as the <code>control_rate_hz</code> info field and
+sequence gaps as dropouts. A flight under 2 s is too short to measure; its CSV
+export is refused, and its ULog keeps the records’ millisecond timestamps.</p>
 <h2 id="flight-reports"><a class="header" href="#flight-reports">Flight Reports</a></h2>
 <p><code>tools/flight_report.py</code> writes a Markdown summary and plots of
 setpoint against measured rate, tracking error, PID output, motor output, and
@@ -2552,9 +2567,9 @@ configurable stick order and arm channel.</li>
 motor order, from FerroConfigurator or the USB command line.</li>
 <li>FerroConfigurator GUI tabs, a pre-arm checklist, a receiver panel with a
 live stick readout, and a rates curve.</li>
-<li>ULog conversion (<code>convert</code> and <code>tools/fwbb_to_ulog.py</code>) measures the
-control rate from the log instead of assuming 400 Hz, times records by
-control tick, and accepts records that share a millisecond timestamp.</li>
+<li>ULog conversion (<code>convert</code>) measures the control rate from the log instead
+of assuming 400 Hz, times records by control tick, and accepts records that
+share a millisecond timestamp.</li>
 <li><code>convert --csv</code> in FerroConfigurator: one flight as CSV for MATLAB, with
 units in the column names, time from the control-tick count at the rate
 measured from the log, and dropped-record gaps reported.</li>
@@ -2573,6 +2588,13 @@ with <code>tools/components.py</code> listing which tests each board owes, and
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>FerroConfigurator is the one reader of the onboard log format.
+<code>tools/blackbox_analyzer.py</code> analyzes its <code>convert --csv</code> export, and the
+duplicate Python tools <code>tools/ferrowasp_storage.py</code> and
+<code>tools/fwbb_to_ulog.py</code> are removed; their commands are FerroConfigurator’s
+<code>blackbox</code> and <code>convert</code>.</p>
+</li>
 <li>
 <p>Arming is refused while a computer is connected: a USB host has the board
 configured, or the configurator link was used in the last 2 seconds. The

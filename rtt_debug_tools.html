@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cb2ba6d3.js";
+            window.path_to_searchindex_js = "searchindex-9f661229.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -283,37 +283,20 @@ compares them with the filtered rates, and reports standard deviation,
 peak-to-peak noise, attenuation, drift, and a rough quiet, watch, or noisy
 verdict. It is a rest-noise screen, not a substitute for props-off motor checks
 or vibration analysis.</p>
-<h2 id="onboard-storage-from-python"><a class="header" href="#onboard-storage-from-python">Onboard Storage from Python</a></h2>
-<p>FerroConfigurator is the normal way to read configuration and download logs.
-<code>tools/ferrowasp_storage.py</code> is the lower-level Python client for the same USB
-storage commands, kept as a development reference; it needs <code>pyserial</code>.</p>
-<pre><code class="language-powershell">python tools\ferrowasp_storage.py --port COM7 info
-python tools\ferrowasp_storage.py --port COM7 flights
-python tools\ferrowasp_storage.py --port COM7 read --flight-id latest --output logs\foxeer-latest.fwbb
+<h2 id="onboard-logs"><a class="header" href="#onboard-logs">Onboard Logs</a></h2>
+<p>FerroConfigurator is the one tool that reads the onboard log format: it
+downloads a flight, checking every page’s CRC and sequence, and converts it.
+The analyzer reads its CSV export, one flight per file:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port COM7 blackbox download --flight latest --output logs\foxeer-latest.fwbb
+.\ferro-configurator.exe convert logs\foxeer-latest.fwbb --csv
+python tools\blackbox_analyzer.py logs\foxeer-latest.csv --mode auto
 </code></pre>
-<p><code>read</code> fetches only the selected flight’s page range; <code>--resume</code> continues an
-interrupted download after validating every page already on disk against the
-flight ID, page sequence, and CRC. <code>erase --confirm</code> erases the log region
-only, and <code>test --confirm</code> exercises only the reserved scratch sector. Every
-write is refused while armed, and maintenance in progress stops if arming
-begins. Record what <code>info</code> reports for the flash; the capacity code for 16 MiB
-is <code>18</code>.</p>
-<p>The analyzer reads <code>.fwbb</code> files directly, rejects invalid or truncated pages,
-and reports what it kept. Select one flight so flight boundaries are not
-counted as gaps:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\foxeer-latest.fwbb --flight-id latest --mode auto
-</code></pre>
-<h2 id="ulog-reference-converter"><a class="header" href="#ulog-reference-converter">ULog Reference Converter</a></h2>
-<p>FerroConfigurator’s <code>convert</code> command is the normal path.
-<code>tools/fwbb_to_ulog.py</code> is its Python reference implementation and produces the
-same file: one CRC-validated flight as the <code>ferrowasp_rate_control</code> topic. The
-log does not store its control rate, so both measure it over the flight, write
-it as the <code>control_rate_hz</code> info field, and time each record by its control
-tick at that rate; sequence gaps become ULog dropouts. A flight under 2 s is
-too short to measure and keeps the records’ millisecond timestamps. It never
-combines flights.</p>
-<pre><code class="language-powershell">python tools\fwbb_to_ulog.py logs\foxeer-flight.fwbb --flight-id latest --output logs\foxeer-flight.ulg
-</code></pre>
+<p><code>convert</code> without <code>--csv</code> writes ULog instead: one flight as the
+<code>ferrowasp_rate_control</code> topic. The log does not store its control rate, so
+both formats measure it over the flight and time each record by its control
+tick at that rate; ULog carries it as the <code>control_rate_hz</code> info field and
+sequence gaps as dropouts. A flight under 2 s is too short to measure; its CSV
+export is refused, and its ULog keeps the records’ millisecond timestamps.</p>
 <h2 id="flight-reports"><a class="header" href="#flight-reports">Flight Reports</a></h2>
 <p><code>tools/flight_report.py</code> writes a Markdown summary and plots of
 setpoint against measured rate, tracking error, PID output, motor output, and
