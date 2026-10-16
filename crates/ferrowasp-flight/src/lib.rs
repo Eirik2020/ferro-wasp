@@ -17,6 +17,7 @@ pub mod osd;
 pub mod rc_receiver;
 #[cfg(feature = "mspv2_configurator")]
 pub mod rpc_commands;
+pub mod rpm_filter;
 pub mod storage_commands;
 pub mod storage_maintenance;
 pub mod sync_ledger;
