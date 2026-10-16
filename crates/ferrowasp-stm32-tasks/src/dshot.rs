@@ -4,7 +4,10 @@
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
-use crate::snapshots::{DSHOT_ACTIVE_LANES, DSHOT_LAST_RELEASE_MS};
+use crate::snapshots::{
+    DSHOT_ACTIVE_LANES, DSHOT_LAST_RELEASE_MS, DSHOT_REPLIES_INVALID, DSHOT_REPLIES_VALID,
+    DSHOT_REPLY_ERPM_DIV100,
+};
 
 /// How often the service reports the bank's state to the log.
 const DSHOT_REPORT_PERIOD_MS: u64 = 2_000;
@@ -111,6 +114,19 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
                 if let Ok(dshot::DshotReply::Erpm { erpm_div100 }) = reply {
                     *latest = Some(erpm_div100);
                 }
+            }
+            // For the `esc` command, by physical ESC output, so each line
+            // matches that output's UART telemetry.
+            let stats = dshot.reply_stats();
+            for output in esc::EscOutput::ALL {
+                let lane = CONFIG::DSHOT_MOTOR_FOR_OUTPUT(output).index();
+                let slot = output.index();
+                DSHOT_REPLY_ERPM_DIV100[slot].store(
+                    cx.local.reply_erpm_div100[lane].unwrap_or(u32::MAX),
+                    Ordering::Relaxed,
+                );
+                DSHOT_REPLIES_VALID[slot].store(stats.valid[lane], Ordering::Relaxed);
+                DSHOT_REPLIES_INVALID[slot].store(stats.invalid[lane], Ordering::Relaxed);
             }
         }
         if dshot.stats().frames_started != frames_before {

@@ -36,6 +36,8 @@ pub enum EscOutput {
 }
 
 impl EscOutput {
+    pub const ALL: [Self; 4] = [Self::Output1, Self::Output2, Self::Output3, Self::Output4];
+
     pub const fn index(self) -> usize {
         match self {
             Self::Output1 => 0,

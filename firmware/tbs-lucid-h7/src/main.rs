@@ -839,6 +839,7 @@ ferroforge::app! {
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,
+            build_identity: flight_tasks::BuildIdentity = BUILD_IDENTITY,
             physical_imu_to_drone_rotation: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation(),
             control_imu_to_rate_controller_map: dt::FrameRotation =

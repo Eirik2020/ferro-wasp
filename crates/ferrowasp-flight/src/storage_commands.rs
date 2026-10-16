@@ -121,12 +121,15 @@ pub fn handle<F: NorStorage>(
                 "OK live | rc | motor stop | motor spin N CONFIRM\r\n",
             );
             answer(ctx.responses, "OK motor dir N normal|reversed CONFIRM\r\n");
+            answer(ctx.responses, "OK esc | build\r\n");
             answer(ctx.responses, "OK reboot | reboot dfu\r\n");
             answer(ctx.responses, "OK imu calibrate | imu level\r\n");
         }
         // Answered by the USB task; never queued here.
         flash_task::StorageCommand::Live
         | flash_task::StorageCommand::Rc
+        | flash_task::StorageCommand::Esc
+        | flash_task::StorageCommand::Build
         | flash_task::StorageCommand::Motor(_) => {}
         flash_task::StorageCommand::SerialShow => {
             write_serial_bindings(

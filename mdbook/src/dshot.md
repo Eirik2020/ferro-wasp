@@ -181,6 +181,15 @@ cargo build --release --locked --features "bench_actuator_validation bench_equal
   periodic DShot log, beside the legacy UART telemetry, which still qualifies
   arming. It needs the props-off gate and a capped motor feature, and prints
   `BENCH: bidirectional DShot active` at startup.
+
+Over USB, the `esc` command reports each physical output's UART eRPM and its
+age, the reply eRPM, and the reply counts, and `build` reports the commit,
+dirty tree, and features the image was built with. `ferro-configurator bench
+esc --seconds 60 --csv run.csv` samples `esc` ten times a second and reports,
+per output, how far the reply eRPM is from fresh UART eRPM and what share of
+replies were lost; the CSV reads straight into MATLAB's `readtable`. It only
+reads: the motor test spins the motor, because the controller does not arm
+with USB connected.
 - `bench_dshot_idle_output1_not_running` reports zero eRPM for physical output
   1 at the qualification input only, to prove that a missing motor aborts
   arming. It prints `FAULT INJECTION ACTIVE` at startup and must never be used

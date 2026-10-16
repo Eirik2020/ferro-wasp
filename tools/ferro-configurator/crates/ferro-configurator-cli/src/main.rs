@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{self, BufWriter, IsTerminal, Write},
     path::{Path, PathBuf},
     process::ExitCode,
@@ -10,14 +10,16 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
-    BoardProfile, CatalogEntry, CheckState, ConfigKey, ConversionSummary, DeviceSelector,
-    DfuDetection, DownloadSummary, FerroConfig, FerroError, FlashInfo, FlashProgress,
-    FlightSelector, PortInfo, PreparedImage, ProfileStore, RESTART_TIMEOUT, SERIAL_FUNCTIONS,
-    SerialBindings, StatusSnapshot, SyncedFlight, catalog_device, config::lpf_alpha_for_corner,
+    BoardProfile, BuildIdentity, CatalogEntry, CheckState, ConfigKey, ConversionSummary,
+    DeviceSelector, DfuDetection, DownloadSummary, EscLane, FerroConfig, FerroError, FlashInfo,
+    FlashProgress, FlightSelector, PortInfo, PreparedImage, ProfileStore, RESTART_TIMEOUT,
+    SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, SyncedFlight, catalog_device,
+    config::lpf_alpha_for_corner,
     convert_fwbb_to_csv, convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight,
-    enter_rom_bootloader, find_board_port, find_bundled_firmware, flash_firmware, open_device,
-    prearm_checks, prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port,
-    wait_for_dfu_device,
+    enter_rom_bootloader,
+    esc_bench::{self, EscBenchOutput, EscBenchSample},
+    find_board_port, find_bundled_firmware, flash_firmware, open_device, prearm_checks,
+    prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port, wait_for_dfu_device,
 };
 use serde::Serialize;
 
@@ -132,6 +134,21 @@ enum BenchCommand {
         /// controller reports has millisecond resolution.
         #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u64).range(2..))]
         seconds: u64,
+    },
+    /// Compare bidirectional DShot reply eRPM with UART telemetry eRPM, and
+    /// count lost replies, per physical ESC output.
+    ///
+    /// Read-only: it samples the `esc` command about ten times a second. Spin
+    /// a motor with the motor test yourself while it runs; the controller
+    /// will not arm with USB connected.
+    Esc {
+        /// How long to sample.
+        #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..))]
+        seconds: u64,
+        /// Write every sample to this new CSV file, for MATLAB's `readtable`.
+        /// An existing file is never overwritten.
+        #[arg(long)]
+        csv: Option<PathBuf>,
     },
 }
 
@@ -358,8 +375,12 @@ struct DeviceReport {
     port: String,
     board: String,
     protocol: &'static str,
+    /// `None` when the firmware predates the `build` command.
+    build: Option<BuildIdentity>,
     flash: FlashInfo,
     status: Option<StatusSnapshot>,
+    /// `None` when the firmware predates the `esc` command.
+    esc: Option<[EscLane; 4]>,
 }
 
 #[derive(Debug, Serialize)]
@@ -454,6 +475,8 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
             DeviceCommand::Info => {
                 let mut client = connect(cli, timeout)?;
                 let flash = client.flash_info()?;
+                let build = client.build_identity().ok();
+                let esc = client.esc_telemetry().ok();
                 let status = client.read_status().ok();
                 let port = client.description().to_owned();
                 let board = board_of(&port);
@@ -461,8 +484,10 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                     port,
                     board,
                     protocol: "FerroWasp storage CLI v1",
+                    build,
                     flash,
                     status,
+                    esc,
                 };
                 emit(cli.format, "device.info", &report, || {
                     print_device_report(&report)
@@ -993,6 +1018,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 bench_watch(cli, timeout, *seconds, out.as_ref())
             }
             BenchCommand::Loop { seconds } => bench_loop(cli, timeout, *seconds),
+            BenchCommand::Esc { seconds, csv } => bench_esc(cli, timeout, *seconds, csv.as_ref()),
         },
         Command::Doctor => {
             let ports = discover_ports()?;
@@ -1578,6 +1604,23 @@ fn print_device_report(report: &DeviceReport) {
     println!("Port:       {}", report.port);
     println!("Board:      {}", report.board);
     println!("Protocol:   {}", report.protocol);
+    match &report.build {
+        Some(build) => {
+            println!(
+                "Firmware:   {}{}",
+                build.revision,
+                if build.dirty {
+                    " (built with uncommitted changes)"
+                } else {
+                    ""
+                }
+            );
+            if !build.features.is_empty() {
+                println!("Features:   {}", build.features.join(", "));
+            }
+        }
+        None => println!("Firmware:   not reported (this firmware predates the build command)"),
+    }
     println!(
         "Flash:      {} ({} bytes)",
         report.flash.jedec_id, report.flash.capacity_bytes
@@ -1605,6 +1648,154 @@ fn print_device_report(report: &DeviceReport) {
     } else {
         println!("Live status: unavailable within the configured timeout");
     }
+    if let Some(lanes) = &report.esc {
+        print_esc_lanes(lanes);
+    }
+}
+
+fn print_esc_lanes(lanes: &[EscLane; 4]) {
+    let erpm = |value: Option<u32>| value.map_or_else(|| "-".to_owned(), |v| v.to_string());
+    println!("ESC telemetry (physical outputs, eRPM):");
+    println!("  Output  UART      Age ms  Reply     Valid      Invalid");
+    for lane in lanes {
+        println!(
+            "  {:<6}  {:<8}  {:<6}  {:<8}  {:<9}  {}",
+            lane.output,
+            erpm(lane.uart_erpm),
+            erpm(lane.uart_age_ms),
+            erpm(lane.reply_erpm),
+            lane.replies_valid,
+            lane.replies_invalid
+        );
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct EscBenchReport {
+    seconds: u64,
+    samples: usize,
+    failed_polls: usize,
+    outputs: [EscBenchOutput; 4],
+    csv: Option<String>,
+}
+
+fn bench_esc(
+    cli: &Cli,
+    timeout: Duration,
+    seconds: u64,
+    csv: Option<&PathBuf>,
+) -> Result<(), FerroError> {
+    let mut client = connect(cli, timeout)?;
+    let file_error =
+        |path: &PathBuf, operation: &'static str, error: io::Error| FerroError::FileIo {
+            operation,
+            path: path.clone(),
+            reason: error.to_string(),
+        };
+    let mut writer = match csv {
+        Some(path) => {
+            let file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .map_err(|error| file_error(path, "create", error))?;
+            let mut writer = BufWriter::new(file);
+            writeln!(writer, "{}", esc_bench::CSV_HEADER)
+                .map_err(|error| file_error(path, "write", error))?;
+            Some((path, writer))
+        }
+        None => None,
+    };
+
+    let human = cli.format == OutputFormat::Human;
+    if human {
+        println!(
+            "Sampling ESC telemetry for {seconds}s. Run the motor test yourself; this only reads."
+        );
+        println!("  time  output: UART/reply eRPM");
+    }
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(seconds);
+    let mut samples = Vec::new();
+    let mut failed_polls = 0usize;
+    let mut next_line_ms = 1_000u64;
+    while Instant::now() < deadline {
+        let host_ms = started.elapsed().as_millis() as u64;
+        match client.esc_telemetry() {
+            Ok(lanes) => {
+                let sample = EscBenchSample { host_ms, lanes };
+                if let Some((path, writer)) = writer.as_mut() {
+                    for row in esc_bench::csv_rows(&sample) {
+                        writeln!(writer, "{row}")
+                            .map_err(|error| file_error(path, "write", error))?;
+                    }
+                }
+                if human && host_ms >= next_line_ms {
+                    next_line_ms += 1_000;
+                    let erpm = |value: Option<u32>| {
+                        value.map_or_else(|| "-".to_owned(), |v| v.to_string())
+                    };
+                    let cells: Vec<String> = lanes
+                        .iter()
+                        .map(|lane| {
+                            format!(
+                                "{}: {}/{}",
+                                lane.output,
+                                erpm(lane.uart_erpm),
+                                erpm(lane.reply_erpm)
+                            )
+                        })
+                        .collect();
+                    println!("  {:>3}s  {}", host_ms / 1_000, cells.join("  "));
+                }
+                samples.push(sample);
+            }
+            Err(error @ FerroError::DeviceRejected { .. }) => return Err(error),
+            Err(_) => failed_polls += 1,
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if let Some((path, writer)) = writer.as_mut() {
+        writer
+            .flush()
+            .map_err(|error| file_error(path, "write", error))?;
+    }
+
+    let report = EscBenchReport {
+        seconds,
+        samples: samples.len(),
+        failed_polls,
+        outputs: esc_bench::summarise(&samples),
+        csv: csv.map(|path| path.display().to_string()),
+    };
+    emit(cli.format, "bench.esc", &report, || {
+        println!();
+        println!(
+            "{} samples, {} failed polls. Compared where the UART sample was at most {} ms old.",
+            report.samples,
+            report.failed_polls,
+            esc_bench::FRESH_UART_MS
+        );
+        println!("  Output  Compared  Mean diff  Max diff  Replies  Invalid  Loss");
+        for output in &report.outputs {
+            let loss = output
+                .loss()
+                .map_or_else(|| "-".to_owned(), |loss| format!("{:.3} %", loss * 100.0));
+            println!(
+                "  {:<6}  {:<8}  {:<9.0}  {:<8}  {:<7}  {:<7}  {}",
+                output.output,
+                output.compared,
+                output.mean_difference_erpm,
+                output.max_abs_difference_erpm,
+                output.replies_valid + output.replies_invalid,
+                output.replies_invalid,
+                loss
+            );
+        }
+        if let Some(path) = &report.csv {
+            println!("Samples written to {path}");
+        }
+    })
 }
 
 fn print_prearm_checks(status: &StatusSnapshot) {

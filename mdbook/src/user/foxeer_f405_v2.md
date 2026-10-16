@@ -145,6 +145,11 @@ Require a ready Winbond-compatible external flash, a ready IMU, and plausible
 status. Close RTT readers, serial terminals, and other programs holding the
 same COM port.
 
+`device info` also shows what the firmware was built from: its commit, whether
+the build had uncommitted changes, and any bench or diagnostic features. Check
+it after every flash. It also shows each physical ESC output's latest UART
+telemetry eRPM and, with bidirectional DShot, the reply eRPM and reply counts.
+
 ## Back up and inspect configuration
 
 Keep the aircraft disarmed. The firmware rejects configuration writes while

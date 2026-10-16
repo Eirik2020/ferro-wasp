@@ -11,6 +11,7 @@ pub mod config;
 pub mod csv_export;
 pub mod device;
 pub mod error;
+pub mod esc_bench;
 pub mod firmware;
 pub mod prearm;
 pub mod profiles;
@@ -22,8 +23,9 @@ pub use blackbox::{
     catalog_device, download_flight, resolve_device_flight, sync_file_name, sync_flights,
 };
 pub use client::{
-    AccelLevel, FerroClient, FlashInfo, LiveSnapshot, LogInfo, SERIAL_FUNCTIONS, SerialBindings,
-    SerialPortBinding, StatusSnapshot, UnsyncedFlight, UnsyncedFlights,
+    AccelLevel, BuildIdentity, EscLane, FerroClient, FlashInfo, LiveSnapshot, LogInfo,
+    SERIAL_FUNCTIONS, SerialBindings, SerialPortBinding, StatusSnapshot, UnsyncedFlight,
+    UnsyncedFlights,
 };
 pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
 pub use csv_export::{CsvSummary, convert_fwbb_to_csv};

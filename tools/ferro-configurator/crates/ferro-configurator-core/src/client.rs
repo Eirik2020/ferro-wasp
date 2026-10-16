@@ -57,6 +57,31 @@ pub struct LiveSnapshot {
     pub active_outputs: u8,
 }
 
+/// One physical ESC output's telemetry from the `esc` command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct EscLane {
+    /// Physical ESC output, 1 to 4.
+    pub output: u8,
+    /// The latest legacy UART eRPM, if any has arrived.
+    pub uart_erpm: Option<u32>,
+    /// How long ago it arrived, saturating at 65,535 ms.
+    pub uart_age_ms: Option<u32>,
+    /// The latest valid bidirectional DShot reply eRPM, if any.
+    pub reply_erpm: Option<u32>,
+    pub replies_valid: u32,
+    pub replies_invalid: u32,
+}
+
+/// What the firmware was built from, from the `build` command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BuildIdentity {
+    pub revision: String,
+    /// The tree had uncommitted changes to tracked files.
+    pub dirty: bool,
+    /// Enabled features other than the board's.
+    pub features: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LogInfo {
     pub used_pages: u32,
@@ -334,6 +359,63 @@ impl<T: LineTransport> FerroClient<T> {
         parse_rc(&first, &second).ok_or_else(|| FerroError::UnexpectedResponse {
             operation: OPERATION.to_owned(),
             response: format!("{first} / {second}"),
+        })
+    }
+
+    /// Each physical ESC output's UART and bidirectional DShot telemetry,
+    /// answered at once. Read-only.
+    pub fn esc_telemetry(&mut self) -> Result<[EscLane; 4]> {
+        const OPERATION: &str = "esc";
+        let mut lines = vec![self.request(OPERATION, 2)?];
+        for _ in 1..4 {
+            let line = self
+                .wait_for_response(OPERATION, self.timeout, |line| {
+                    line.starts_with("OK ") || line.starts_with("ERR ")
+                })
+                .and_then(|line| self.accept_response(OPERATION, line))?;
+            lines.push(line);
+        }
+        let mut lanes = [None; 4];
+        for (index, line) in lines.iter().enumerate() {
+            lanes[index] = parse_esc_line(index as u8 + 1, line);
+        }
+        match lanes {
+            [Some(a), Some(b), Some(c), Some(d)] => Ok([a, b, c, d]),
+            _ => Err(FerroError::UnexpectedResponse {
+                operation: OPERATION.to_owned(),
+                response: lines.join(" / "),
+            }),
+        }
+    }
+
+    /// What the firmware was built from. Firmware older than the `build`
+    /// command rejects it.
+    pub fn build_identity(&mut self) -> Result<BuildIdentity> {
+        const OPERATION: &str = "build";
+        let summary = self.request(OPERATION, 2)?;
+        let unexpected = |response: String| FerroError::UnexpectedResponse {
+            operation: OPERATION.to_owned(),
+            response,
+        };
+        let (revision, dirty, count) =
+            parse_build_summary(&summary).ok_or_else(|| unexpected(summary.clone()))?;
+        let mut features = Vec::with_capacity(count);
+        for _ in 0..count {
+            let line = self
+                .wait_for_response(OPERATION, self.timeout, |line| {
+                    line.starts_with("OK ") || line.starts_with("ERR ")
+                })
+                .and_then(|line| self.accept_response(OPERATION, line))?;
+            let name = line
+                .strip_prefix("OK feature ")
+                .filter(|name| !name.is_empty() && !name.contains(char::is_whitespace))
+                .ok_or_else(|| unexpected(line.clone()))?;
+            features.push(name.to_owned());
+        }
+        Ok(BuildIdentity {
+            revision,
+            dirty,
+            features,
         })
     }
 
@@ -882,6 +964,60 @@ fn parse_rc(first: &str, second: &str) -> Option<[u16; 16]> {
     Some(channels)
 }
 
+/// `OK esc1 u=66 a=12 b=66 v=48211 x=3`, eRPM in hundreds and `-` for a
+/// value never received. Every field must be present, and no other.
+fn parse_esc_line(output: u8, line: &str) -> Option<EscLane> {
+    let fields = parse_fields(line.strip_prefix(&format!("OK esc{output} "))?);
+    if fields.len() != 5 {
+        return None;
+    }
+    let get = |key: &str| {
+        fields
+            .iter()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| *value)
+    };
+    let optional = |key: &str| -> Option<Option<u32>> {
+        match get(key)? {
+            "-" => Some(None),
+            value => value.parse().ok().map(Some),
+        }
+    };
+    let erpm = |hundreds: Option<u32>| hundreds.and_then(|value| value.checked_mul(100));
+    let uart = optional("u")?;
+    let age = optional("a")?;
+    if uart.is_some() != age.is_some() {
+        return None;
+    }
+    Some(EscLane {
+        output,
+        uart_erpm: erpm(uart),
+        uart_age_ms: age,
+        reply_erpm: erpm(optional("b")?),
+        replies_valid: get("v")?.parse().ok()?,
+        replies_invalid: get("x")?.parse().ok()?,
+    })
+}
+
+/// `OK build rev=d1f1bc3 dirty=0 features=2`.
+fn parse_build_summary(line: &str) -> Option<(String, bool, usize)> {
+    let fields = parse_fields(line.strip_prefix("OK build ")?);
+    let get = |key: &str| {
+        fields
+            .iter()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| *value)
+    };
+    let dirty = match get("dirty")? {
+        "0" => false,
+        "1" => true,
+        _ => return None,
+    };
+    // The firmware lists at most eight.
+    let count: usize = get("features")?.parse().ok().filter(|count| *count <= 8)?;
+    Some((get("rev")?.to_owned(), dirty, count))
+}
+
 fn parse_live(line: &str) -> Option<LiveSnapshot> {
     let fields = parse_fields(line.strip_prefix("OK live ")?);
     let get = |key: &str| {
@@ -1065,6 +1201,89 @@ mod tests {
             parse_rc("OK rc2 1,2,3,4,5,6,7,8", "OK rc1 1,2,3,4,5,6,7,8"),
             None,
             "lines out of order are refused"
+        );
+    }
+
+    #[test]
+    fn esc_telemetry_reads_all_four_outputs() {
+        let mock = MockTransport::with_lines([
+            "OK esc1 u=66 a=12 b=67 v=48211 x=3",
+            "OK esc2 u=- a=- b=- v=0 x=0",
+            "OK esc3 u=- a=- b=0 v=9 x=0",
+            "OK esc4 u=0 a=65535 b=- v=0 x=0",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        let lanes = client.esc_telemetry().unwrap();
+        assert_eq!(
+            lanes[0],
+            EscLane {
+                output: 1,
+                uart_erpm: Some(6_600),
+                uart_age_ms: Some(12),
+                reply_erpm: Some(6_700),
+                replies_valid: 48_211,
+                replies_invalid: 3,
+            }
+        );
+        assert_eq!(lanes[1].uart_erpm, None);
+        assert_eq!(lanes[1].reply_erpm, None);
+        assert_eq!(lanes[2].reply_erpm, Some(0));
+        assert_eq!(lanes[3].uart_age_ms, Some(65_535));
+        assert_eq!(client.transport.writes, ["esc"]);
+    }
+
+    #[test]
+    fn malformed_esc_lines_are_refused() {
+        assert_eq!(parse_esc_line(1, "OK esc2 u=1 a=1 b=1 v=1 x=1"), None);
+        assert_eq!(parse_esc_line(1, "OK esc1 u=1 a=1 b=1 v=1"), None);
+        assert_eq!(parse_esc_line(1, "OK esc1 u=1 a=- b=1 v=1 x=1"), None);
+        assert_eq!(parse_esc_line(1, "OK esc1 u=1 a=1 b=1 v=1 x=1 y=2"), None);
+        assert_eq!(parse_esc_line(1, "OK esc1 u=z a=1 b=1 v=1 x=1"), None);
+        let mock = MockTransport::with_lines([
+            "OK esc1 u=1 a=1 b=1 v=1 x=1",
+            "OK esc3 u=1 a=1 b=1 v=1 x=1",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(client.esc_telemetry().is_err());
+    }
+
+    #[test]
+    fn build_identity_reads_the_summary_and_each_feature() {
+        let mock = MockTransport::with_lines([
+            "OK build rev=d1f1bc3 dirty=0 features=2",
+            "OK feature bench_actuator_validation",
+            "OK feature bench_bidirectional_dshot",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert_eq!(
+            client.build_identity().unwrap(),
+            BuildIdentity {
+                revision: "d1f1bc3".to_owned(),
+                dirty: false,
+                features: vec![
+                    "bench_actuator_validation".to_owned(),
+                    "bench_bidirectional_dshot".to_owned()
+                ],
+            }
+        );
+        assert_eq!(client.transport.writes, ["build"]);
+    }
+
+    #[test]
+    fn firmware_without_the_build_command_is_reported_as_rejected() {
+        let mock = MockTransport::with_lines(["ERR invalid command; type help"]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert!(matches!(
+            client.build_identity(),
+            Err(FerroError::DeviceRejected { .. })
+        ));
+        assert_eq!(
+            parse_build_summary("OK build rev=x dirty=2 features=0"),
+            None
+        );
+        assert_eq!(
+            parse_build_summary("OK build rev=x dirty=0 features=9"),
+            None
         );
     }
 
