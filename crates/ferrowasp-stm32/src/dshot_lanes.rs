@@ -16,11 +16,21 @@ use ferrowasp_waveform::dshot::{
 
 /// Which outputs of one timer the bank drives: bit n is channel n + 1, and
 /// a bit also set in `complementary` drives that channel's CHxN output
-/// instead of CHx.
+/// instead of CHx. `inverted` drives them active low, idling high, for
+/// bidirectional DShot (ADR-0045).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct LaneOutputs {
     pub channels: u8,
     pub complementary: u8,
+    pub inverted: bool,
+}
+
+/// Whether a bank sends plain DShot or bidirectional DShot (ADR-0045), fixed
+/// when it is built.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DshotMode {
+    Unidirectional,
+    Bidirectional,
 }
 
 /// The register sequencing DShot needs from one timer.
@@ -30,7 +40,8 @@ pub trait LaneTimer: Any {
     /// every lane.
     fn clock_domain(&self) -> u8;
     /// Count at the DShot bit rate with the outputs in PWM mode 1, preload
-    /// on, enabled active high, and every compare at zero.
+    /// on, enabled active high (active low if `outputs.inverted`), and every
+    /// compare at zero.
     fn configure(&self, timing: DshotTiming, outputs: LaneOutputs);
     /// Stop the counter with the requests closed, load each channel's first
     /// duty from `first[channel]`, stage the counter at ARR so its first
@@ -41,6 +52,19 @@ pub trait LaneTimer: Any {
     fn stop(&self, channels: u8);
     /// Stop, then hold the outputs inactive until the bank is rebuilt.
     fn force_inactive(&self, outputs: LaneOutputs);
+
+    /// For a reply window (ADR-0045): stop with the requests closed, release
+    /// the outputs so the pins' pull-ups hold the lines, and count at
+    /// `sample_arr` with each channel's compare event once per period.
+    /// Only backends whose lanes receive replies implement it.
+    fn prepare_receive(&self, _outputs: LaneOutputs, _sample_arr: u16) {}
+
+    /// Open the compare DMA requests of `channels`.
+    fn open_requests(&self, _channels: u8) {}
+
+    /// After a reply window: stop with the requests closed, count at the
+    /// bit rate again in PWM mode, and drive the outputs, parked.
+    fn prepare_transmit(&self, _timing: DshotTiming, _outputs: LaneOutputs) {}
 }
 
 /// The timers a bank drives, in slots. A lane finds its timer by type.
@@ -177,6 +201,28 @@ pub trait LaneDma {
     /// (transfer complete, transfer or direct-mode error).
     fn status(&self) -> (bool, bool);
     fn pause_and_clear(&mut self);
+
+    /// Whether the lane can receive bidirectional replies.
+    fn receives_replies(&self) -> bool {
+        false
+    }
+
+    /// Switch the stream to fill the lane's sample buffer from its pin, and
+    /// enable it. `false` if it could not.
+    fn begin_receive(&mut self) -> bool {
+        false
+    }
+
+    /// Switch the stream back to transmit, not yet enabled. `false` if it
+    /// could not.
+    fn end_receive(&mut self) -> bool {
+        false
+    }
+
+    /// The last receive window's samples and the pin's mask in each.
+    fn reply_samples(&self) -> Option<(&[u16], u16)> {
+        None
+    }
 }
 
 /// Static storage for two DMA buffers per motor lane.
@@ -230,6 +276,7 @@ pub struct Lanes<TS, A, B, C, D> {
     /// The slot started by another timer's trigger, if any.
     triggered_slot: Option<usize>,
     period_end: u16,
+    timing: DshotTiming,
     motor1: A,
     motor2: B,
     motor3: C,
@@ -339,17 +386,64 @@ where
     fn pause_and_clear(&mut self, motor: DshotMotor) {
         self.lane_mut(motor).pause_and_clear();
     }
+
+    fn receives_replies(&self) -> bool {
+        DshotMotor::ALL
+            .into_iter()
+            .all(|motor| self.lane(motor).receives_replies())
+    }
+
+    fn begin_receive(&mut self) -> bool {
+        // Close every request before a stream changes direction, enable
+        // every stream before a request opens, then start the timers.
+        for (slot, outputs) in self.used_slots() {
+            self.timers
+                .timer(slot)
+                .prepare_receive(outputs, self.timing.reply_sample_arr);
+        }
+        for motor in DshotMotor::ALL {
+            if !self.lane_mut(motor).begin_receive() {
+                return false;
+            }
+        }
+        for (slot, outputs) in self.used_slots() {
+            self.timers.timer(slot).open_requests(outputs.channels);
+        }
+        for (slot, _) in self.used_slots() {
+            if Some(slot) != self.triggered_slot {
+                self.timers.timer(slot).start();
+            }
+        }
+        true
+    }
+
+    fn end_receive(&mut self) -> bool {
+        for (slot, outputs) in self.used_slots() {
+            self.timers
+                .timer(slot)
+                .prepare_transmit(self.timing, outputs);
+        }
+        DshotMotor::ALL
+            .into_iter()
+            .all(|motor| self.lane_mut(motor).end_receive())
+    }
+
+    fn reply_samples(&self, motor: DshotMotor) -> Option<(&[u16], u16)> {
+        self.lane(motor).reply_samples()
+    }
 }
 
 /// Build a bank over `timers` with `lanes` for motors 1-4, started as
-/// `start` says. `timing_for` turns the lane timers' shared clock domain
-/// into the bit timing; the backend knows what each domain counts. Each
-/// timer that carries a lane is configured with its outputs parked low.
+/// `start` says, in `mode`. `timing_for` turns the lane timers' shared clock
+/// domain into the bit timing; the backend knows what each domain counts.
+/// Each timer that carries a lane is configured with its outputs parked:
+/// low, or high for bidirectional DShot.
 #[allow(clippy::type_complexity)]
 pub fn build_bank<TS, LA, LB, LC, LD>(
     timers: TS,
     lanes: (LA, LB, LC, LD),
     start: impl StartMode<TS>,
+    mode: DshotMode,
     timing_for: impl FnOnce(u8) -> Result<DshotTiming, DshotInitError>,
     storage: &'static mut DshotDmaStorage<<LA::Lane as LaneDma>::Buffer>,
 ) -> Result<DshotMotorBank<TS, LA::Lane, LB::Lane, LC::Lane, LD::Lane>, DshotInitError>
@@ -378,7 +472,11 @@ where
     let motor3 = lanes.2.into_lane(&timers, motor3_active)?;
     let motor4 = lanes.3.into_lane(&timers, motor4_active)?;
 
-    let mut outputs = [LaneOutputs::default(); 4];
+    let bidirectional = mode == DshotMode::Bidirectional;
+    let mut outputs = [LaneOutputs {
+        inverted: bidirectional,
+        ..LaneOutputs::default()
+    }; 4];
     let lane_slots = [
         (motor1.slot(), motor1.channel(), motor1.complementary()),
         (motor2.slot(), motor2.channel(), motor2.complementary()),
@@ -425,16 +523,21 @@ where
         outputs,
         triggered_slot,
         period_end: timing.arr,
+        timing,
         motor1,
         motor2,
         motor3,
         motor4,
     };
-    Ok(DshotBank::from_lanes(
+    let mut bank = DshotBank::from_lanes(
         lanes,
         [motor1_spare, motor2_spare, motor3_spare, motor4_spare],
         timing,
-    ))
+    );
+    if bidirectional {
+        bank.enable_bidirectional()?;
+    }
+    Ok(bank)
 }
 
 #[cfg(test)]
@@ -463,6 +566,7 @@ mod tests {
 
         fn record(&self, call: &'static str, channels: u8) {
             self.calls.borrow_mut().push((ID, call, channels));
+            ORDER.with(|order| order.borrow_mut().push((ID, call)));
         }
     }
 
@@ -485,6 +589,23 @@ mod tests {
         fn force_inactive(&self, outputs: LaneOutputs) {
             self.record("force_inactive", outputs.channels);
         }
+        fn prepare_receive(&self, outputs: LaneOutputs, sample_arr: u16) {
+            assert_eq!(sample_arr, 74);
+            self.record("prepare_receive", outputs.channels);
+        }
+        fn open_requests(&self, channels: u8) {
+            self.record("open_requests", channels);
+        }
+        fn prepare_transmit(&self, _timing: DshotTiming, outputs: LaneOutputs) {
+            assert!(outputs.inverted);
+            self.record("prepare_transmit", outputs.channels);
+        }
+    }
+
+    std::thread_local! {
+        /// Every timer and lane call in the order made: (timer or lane id,
+        /// call). Lanes are ids 11-14.
+        static ORDER: RefCell<Vec<(u8, &'static str)>> = const { RefCell::new(Vec::new()) };
     }
 
     impl TriggerMaster for FakeTimer<1> {
@@ -504,6 +625,7 @@ mod tests {
     struct FakeLane {
         slot: usize,
         channel: usize,
+        receives: bool,
     }
 
     impl LaneDma for FakeLane {
@@ -528,18 +650,38 @@ mod tests {
             (false, false)
         }
         fn pause_and_clear(&mut self) {}
+        fn receives_replies(&self) -> bool {
+            self.receives
+        }
+        fn begin_receive(&mut self) -> bool {
+            ORDER.with(|order| order.borrow_mut().push((11 + self.channel as u8, "begin")));
+            true
+        }
+        fn end_receive(&mut self) -> bool {
+            ORDER.with(|order| order.borrow_mut().push((11 + self.channel as u8, "end")));
+            true
+        }
     }
 
     /// A lane on channel `channel` of the timer of type `T`.
     struct LaneOn<T> {
         channel: usize,
+        receives: bool,
         _timer: PhantomData<T>,
     }
 
     fn lane<T>(channel: usize) -> LaneOn<T> {
         LaneOn {
             channel,
+            receives: false,
             _timer: PhantomData,
+        }
+    }
+
+    fn receiving_lane<T>(channel: usize) -> LaneOn<T> {
+        LaneOn {
+            receives: true,
+            ..lane(channel)
         }
     }
 
@@ -554,6 +696,7 @@ mod tests {
             Ok(FakeLane {
                 slot,
                 channel: self.channel,
+                receives: self.receives,
             })
         }
     }
@@ -593,6 +736,7 @@ mod tests {
                 lane::<FakeTimer<1>>(2),
             ),
             TriggeredStart::<FakeTimer<1>, FakeTimer<2>>::new(),
+            DshotMode::Unidirectional,
             timing,
             storage(),
         )
@@ -615,6 +759,7 @@ mod tests {
                 lane::<FakeTimer<1>>(2),
             ),
             TriggeredStart::<FakeTimer<1>, FakeTimer<2>>::new(),
+            DshotMode::Unidirectional,
             timing,
             storage(),
         )
@@ -638,6 +783,7 @@ mod tests {
                 lane::<FakeTimer<2>>(1),
             ),
             SoftwareStart,
+            DshotMode::Unidirectional,
             timing,
             storage(),
         )
@@ -659,6 +805,7 @@ mod tests {
                 lane::<FakeTimer<2>>(1),
             ),
             SoftwareStart,
+            DshotMode::Unidirectional,
             timing,
             storage(),
         );
@@ -676,6 +823,7 @@ mod tests {
                 lane::<FakeTimer<2>>(1),
             ),
             SoftwareStart,
+            DshotMode::Unidirectional,
             timing,
             storage(),
         );
@@ -693,9 +841,105 @@ mod tests {
                 lane::<FakeTimer<2>>(3),
             ),
             SoftwareStart,
+            DshotMode::Unidirectional,
             timing,
             storage(),
         );
         assert!(matches!(result, Err(DshotInitError::LaneTimerMissing)));
+    }
+
+    fn receiving_bank(
+        mode: DshotMode,
+    ) -> Result<DshotMotorBank<Pair, FakeLane, FakeLane, FakeLane, FakeLane>, DshotInitError> {
+        build_bank(
+            pair((2, 2)),
+            (
+                receiving_lane::<FakeTimer<1>>(0),
+                receiving_lane::<FakeTimer<2>>(3),
+                receiving_lane::<FakeTimer<2>>(2),
+                receiving_lane::<FakeTimer<1>>(2),
+            ),
+            TriggeredStart::<FakeTimer<1>, FakeTimer<2>>::new(),
+            mode,
+            timing,
+            storage(),
+        )
+    }
+
+    #[test]
+    fn bidirectional_needs_every_lane_to_receive() {
+        let result = build_bank(
+            pair((2, 2)),
+            (
+                receiving_lane::<FakeTimer<1>>(0),
+                receiving_lane::<FakeTimer<2>>(3),
+                lane::<FakeTimer<2>>(2),
+                receiving_lane::<FakeTimer<1>>(2),
+            ),
+            TriggeredStart::<FakeTimer<1>, FakeTimer<2>>::new(),
+            DshotMode::Bidirectional,
+            timing,
+            storage(),
+        );
+        assert!(matches!(result, Err(DshotInitError::RepliesUnsupported)));
+    }
+
+    #[test]
+    fn bidirectional_lanes_are_configured_inverted() {
+        let bank = receiving_bank(DshotMode::Bidirectional).unwrap_or_else(|_| panic!("builds"));
+        assert!(bank.is_bidirectional());
+        assert!(
+            bank.lanes().outputs[..2]
+                .iter()
+                .all(|outputs| outputs.inverted)
+        );
+        let plain = receiving_bank(DshotMode::Unidirectional).unwrap_or_else(|_| panic!("builds"));
+        assert!(!plain.is_bidirectional());
+        assert!(
+            plain
+                .lanes()
+                .outputs
+                .iter()
+                .all(|outputs| !outputs.inverted)
+        );
+    }
+
+    #[test]
+    fn the_turnaround_closes_requests_before_streams_switch_and_opens_them_after() {
+        let mut bank =
+            receiving_bank(DshotMode::Bidirectional).unwrap_or_else(|_| panic!("builds"));
+        ORDER.with(|order| order.borrow_mut().clear());
+        assert!(bank.lanes_mut().begin_receive());
+        let order = ORDER.with(|order| order.borrow().clone());
+        assert_eq!(
+            order,
+            [
+                (1, "prepare_receive"),
+                (2, "prepare_receive"),
+                (11, "begin"),
+                (14, "begin"),
+                (13, "begin"),
+                (13, "begin"),
+                (1, "open_requests"),
+                (2, "open_requests"),
+                // TIM2 here follows TIM1's trigger.
+                (1, "start"),
+            ]
+        );
+
+        ORDER.with(|order| order.borrow_mut().clear());
+        assert!(bank.lanes_mut().end_receive());
+        let order = ORDER.with(|order| order.borrow().clone());
+        assert_eq!(
+            order,
+            [
+                (1, "prepare_transmit"),
+                (2, "prepare_transmit"),
+                (11, "end"),
+                (14, "end"),
+                (13, "end"),
+                (13, "end"),
+            ]
+        );
     }
 }

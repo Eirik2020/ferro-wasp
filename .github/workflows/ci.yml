@@ -88,6 +88,12 @@ jobs:
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
           --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
 
+      - name: Check Foxeer bidirectional DShot bench image
+        working-directory: firmware/foxeer-f405-v2
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_actuator_validation bench_equal_motors bench_bidirectional_dshot"
+
       - name: Build Foxeer F405 V2 release firmware
         working-directory: firmware/foxeer-f405-v2
         run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
@@ -202,11 +208,13 @@ jobs:
             exit 1
           fi
 
-          # 3 for the F4 DShot boundary; 7 for the H7 DMA endpoints (the
+          # 5 for the F4 DShot boundary (the module allow, the compare and
+          # reply endpoints' PeriAddress impls, and the compare and reply
+          # DMASet route declarations); 7 for the H7 DMA endpoints (the
           # module allow, five TargetAddress impls, one status-register read);
           # 5 per chip for the ROM bootloader reboot (the module allow, the
           # request word's write and read, the reset-flag read, the jump).
-          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 20 ]]; then
+          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 22 ]]; then
             printf '%s\n' "$unsafe_matches"
             echo "the reviewed DShot, STM32H7 DMA or ROM bootloader unsafe boundary changed"
             exit 1

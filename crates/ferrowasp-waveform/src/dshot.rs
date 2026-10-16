@@ -72,6 +72,10 @@ pub struct DshotTiming {
     pub arr: u16,
     pub zero_high: u16,
     pub one_high: u16,
+    /// Auto-reload that paces bidirectional reply sampling (ADR-0045):
+    /// `REPLY_SAMPLES_PER_BIT` samples per reply bit, which runs at 5/4 of
+    /// the command bit rate.
+    pub reply_sample_arr: u16,
 }
 
 impl DshotTiming {
@@ -97,10 +101,19 @@ impl DshotTiming {
             return Err(DshotTimingError::PeriodTooShort);
         }
 
+        let reply_sample_hz =
+            bitrate_hz as u64 * 5 * crate::dshot_reply::REPLY_SAMPLES_PER_BIT as u64 / 4;
+        let reply_sample_period =
+            ((timer_hz as u64 + reply_sample_hz / 2) / reply_sample_hz) as u32;
+        if reply_sample_period < 2 {
+            return Err(DshotTimingError::PeriodTooShort);
+        }
+
         Ok(Self {
             arr: (period - 1) as u16,
             zero_high: zero_high as u16,
             one_high: one_high as u16,
+            reply_sample_arr: (reply_sample_period - 1) as u16,
         })
     }
 
@@ -311,6 +324,9 @@ mod tests {
                 arr: 279,
                 zero_high: 105,
                 one_high: 210,
+                // 168 MHz / 75 = 2.24 MHz, 0.4% under three samples per
+                // 750 kbit/s reply bit.
+                reply_sample_arr: 74,
             })
         );
     }

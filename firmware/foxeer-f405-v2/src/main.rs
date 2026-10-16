@@ -214,6 +214,8 @@ ferroforge::app! {
             stm32_storage::new_adc_buffer_bank(),
         dshot_dma_storage: board::init::DshotDmaStorage =
             board::init::DshotDmaStorage::new(),
+        dshot_reply_storage: board::init::DshotReplyStorage =
+            board::init::DshotReplyStorage::new(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         // Before anything is configured: a `reboot dfu` request ends here.
@@ -306,6 +308,7 @@ ferroforge::app! {
                 },
                 &clocks.clocks,
                 cx.local.dshot_dma_storage,
+                cx.local.dshot_reply_storage,
             )
             .expect("Foxeer DShot600 timing must be valid")
         };
@@ -624,6 +627,8 @@ ferroforge::app! {
         warn!(
             "FAULT INJECTION ACTIVE: Foxeer physical ESC output 1 (logical M1/rear-right) idle qualification eRPM forced to zero; arming must fail"
         );
+        #[cfg(feature = "bench_bidirectional_dshot")]
+        warn!("BENCH: bidirectional DShot active; props-off only, never a flight image");
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         flight::heartbeat::spawn().unwrap();

@@ -1,6 +1,7 @@
 use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxTransfer};
 use super::manifest::Spi1ImuKind;
 use backend::dshot::channel::{Ch1, Ch3, Ch3N, Ch4};
+use backend::dshot::{GpioA, GpioB, GpioC, ReplyPin};
 use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
 use ferrowasp_io_core::serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
@@ -23,8 +24,24 @@ const _: () = {
 
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
-    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotServiceEvent,
-    DshotTelemetryRequestError,
+    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMode, DshotMotor, DshotReplyStorage,
+    DshotServiceEvent, DshotTelemetryRequestError,
+};
+
+#[cfg(all(
+    feature = "bench_bidirectional_dshot",
+    not(feature = "bench_actuator_validation")
+))]
+compile_error!(
+    "Foxeer bidirectional DShot is props-off only until a stored setting selects it: add `bench_actuator_validation` and a capped motor feature."
+);
+
+/// Plain DShot, or bidirectional DShot (ADR-0045) in the props-off
+/// `bench_bidirectional_dshot` image until a stored setting selects it.
+pub const DSHOT_MODE: DshotMode = if cfg!(feature = "bench_bidirectional_dshot") {
+    DshotMode::Bidirectional
+} else {
+    DshotMode::Unidirectional
 };
 
 pub struct Spi1ImuResources {
@@ -222,15 +239,24 @@ pub struct DshotMotorBankResources {
 }
 
 /// Build the four-motor bank. The pads are latched low as GPIO until both
-/// timers are configured with their outputs parked low, then connected.
-/// TIM1 starts TIM8 through its trigger output, so all four lanes begin on
-/// the same edge.
+/// timers are configured with their outputs parked, then connected. TIM1
+/// starts TIM8 through its trigger output, so all four lanes begin on the
+/// same edge. Each lane names its pad, so a bidirectional bank can sample
+/// it for replies; bidirectional pads get pull-ups to hold the idle-high
+/// line while the timers release it.
 pub fn init_dshot_motor_bank(
     resources: DshotMotorBankResources,
     clocks: &hal::rcc::Clocks,
     storage: &'static mut DshotDmaStorage,
+    replies: &'static mut DshotReplyStorage,
 ) -> Result<super::aliases::DshotMotorBank, DshotInitError> {
     let r = resources;
+    let [
+        motor1_replies,
+        motor2_replies,
+        motor3_replies,
+        motor4_replies,
+    ] = replies.buffers();
     let mut motor1_pin = r.motor1_pin.into_push_pull_output();
     let mut motor2_pin = r.motor2_pin.into_push_pull_output();
     let mut motor3_pin = r.motor3_pin.into_push_pull_output();
@@ -246,20 +272,46 @@ pub fn init_dshot_motor_bank(
             backend::dshot::DshotTimer(r.tim8.release()),
         ),
         (
-            backend::dshot::lane::<TIM1, Ch1, 6, _>(r.motor1_dma),
-            backend::dshot::lane::<TIM8, Ch4, 7, _>(r.motor2_dma),
-            backend::dshot::lane::<TIM8, Ch3, 0, _>(r.motor3_dma),
-            backend::dshot::lane::<TIM1, Ch3N, 6, _>(r.motor4_dma),
+            backend::dshot::lane::<TIM1, Ch1, 6, ReplyPin<GpioA, 8>, _>(
+                r.motor1_dma,
+                motor1_replies,
+            ),
+            backend::dshot::lane::<TIM8, Ch4, 7, ReplyPin<GpioC, 9>, _>(
+                r.motor2_dma,
+                motor2_replies,
+            ),
+            backend::dshot::lane::<TIM8, Ch3, 0, ReplyPin<GpioC, 8>, _>(
+                r.motor3_dma,
+                motor3_replies,
+            ),
+            backend::dshot::lane::<TIM1, Ch3N, 6, ReplyPin<GpioB, 15>, _>(
+                r.motor4_dma,
+                motor4_replies,
+            ),
         ),
         backend::dshot::TriggeredStart::<TIM1, TIM8>::new(),
+        DSHOT_MODE,
         clocks,
         storage,
     )?;
 
-    motor1_pin.into_alternate::<1>().speed(Speed::VeryHigh);
-    motor2_pin.into_alternate::<3>().speed(Speed::VeryHigh);
-    motor3_pin.into_alternate::<3>().speed(Speed::VeryHigh);
-    motor4_pin.into_alternate::<1>().speed(Speed::VeryHigh);
+    let pull_up = DSHOT_MODE == DshotMode::Bidirectional;
+    motor1_pin
+        .into_alternate::<1>()
+        .speed(Speed::VeryHigh)
+        .internal_pull_up(pull_up);
+    motor2_pin
+        .into_alternate::<3>()
+        .speed(Speed::VeryHigh)
+        .internal_pull_up(pull_up);
+    motor3_pin
+        .into_alternate::<3>()
+        .speed(Speed::VeryHigh)
+        .internal_pull_up(pull_up);
+    motor4_pin
+        .into_alternate::<1>()
+        .speed(Speed::VeryHigh)
+        .internal_pull_up(pull_up);
     Ok(bank)
 }
 

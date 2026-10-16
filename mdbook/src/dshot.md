@@ -137,6 +137,28 @@ motor peripheral or safety state: a UART, parser, queue, or timeout fault can
 only withhold the samples arming needs, which fails closed. Once armed,
 telemetry is observational; losing it does not by itself disarm.
 
+## Bidirectional DShot
+
+In bidirectional mode each ESC answers every frame on its own motor wire,
+which gives per-motor eRPM at the frame rate. The command waveform is
+inverted, idling high, and its checksum is inverted, which is what tells
+the ESC to answer. About 30 us after a frame ends the ESC sends a 21-bit
+GCR reply at 750 kbit/s.
+
+Once all four lanes have transmitted, each lane's DMA stream is rebuilt to
+read its pin's GPIO input register, paced by its own timer channel at three
+samples per reply bit. The timer outputs are released for the window, about
+71 us, so each pad's pull-up holds its line, and then driven again, parked
+high. The DShot service decodes the samples before the next frame: GCR
+symbols, checksum, and the eRPM period. A missing or bad reply is counted,
+never a fault; a lane that cannot turn around faults the bank as any DMA
+fault does. Decoding is host-tested in `ferrowasp-waveform::dshot_reply`.
+
+On the Foxeer every lane samples its pin, including motor 4 on TIM1's
+complementary output, which a timer cannot input-capture. Bidirectional mode
+is fixed when the bank is built, and for now only the props-off bench feature
+below selects it. The TBS Lucid H7 sends plain DShot only.
+
 ## Bench Images
 
 Bench features build images for props-off work and never ship as the flight
@@ -154,6 +176,11 @@ cargo build --release --locked --features "bench_actuator_validation bench_equal
 - `bench_logical_motorN_only`, added to it, spins only logical motor N, to
   confirm the logical-to-physical map and each motor's direction. Selecting
   two is a compile error.
+- `bench_bidirectional_dshot` (Foxeer) builds the bank bidirectional and adds
+  each lane's latest reply eRPM and its valid and invalid reply counts to the
+  periodic DShot log, beside the legacy UART telemetry, which still qualifies
+  arming. It needs the props-off gate and a capped motor feature, and prints
+  `BENCH: bidirectional DShot active` at startup.
 - `bench_dshot_idle_output1_not_running` reports zero eRPM for physical output
   1 at the qualification input only, to prove that a missing motor aborts
   arming. It prints `FAULT INJECTION ACTIVE` at startup and must never be used
@@ -167,4 +194,5 @@ with propellers fitted.
 
 Pulse width, jitter, polarity margin, lane-to-lane phase, and physical stop
 latency have not been measured with a logic analyzer; flights so far do not
-establish them. Bidirectional DShot telemetry is not implemented.
+establish them. Bidirectional DShot has not run on target: the turnaround, the
+reply window, and reply loss under DMA load are unmeasured.

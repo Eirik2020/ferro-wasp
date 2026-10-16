@@ -24,6 +24,12 @@ pub const REPLY_BITS: u32 = 21;
 /// Pin samples per reply bit: 2.25 MHz at DShot600.
 pub const REPLY_SAMPLES_PER_BIT: usize = 3;
 
+/// Samples a lane takes after each frame: about 71 us at DShot600, which
+/// covers the ESC's ~30 us turnaround and its 28 us reply with margin.
+/// Betaflight takes 140; the margin absorbs this firmware's slower
+/// turnaround until it is measured.
+pub const REPLY_WINDOW_SAMPLES: usize = 160;
+
 /// A start edge needs this many samples after it, two bits short of a whole
 /// reply, to be taken as one.
 const MIN_REPLY_SAMPLES: usize = (REPLY_BITS as usize - 2) * REPLY_SAMPLES_PER_BIT;
@@ -57,6 +63,25 @@ pub enum DshotReplyError {
     Checksum,
     /// An eRPM period of zero, which no ESC sends.
     ZeroPeriod,
+}
+
+/// What an ESC sends for `value`, as transition bits: the checksum, the GCR
+/// symbols, and the start edge. For simulating replies.
+pub const fn reply_transitions_for(value: u16) -> u32 {
+    const GCR_ENCODE: [u32; 16] = [
+        0x19, 0x1b, 0x12, 0x13, 0x1d, 0x15, 0x16, 0x17, 0x1a, 0x09, 0x0a, 0x0b, 0x1e, 0x0d, 0x0e,
+        0x0f,
+    ];
+    let value = value & 0x0fff;
+    let checksum = !(value ^ (value >> 4) ^ (value >> 8)) & 0x0f;
+    let word = (value << 4) | checksum;
+    let mut gcr = 0;
+    let mut nibble = 0;
+    while nibble < 4 {
+        gcr |= GCR_ENCODE[((word >> (4 * nibble)) & 0x0f) as usize] << (5 * nibble);
+        nibble += 1;
+    }
+    (1 << 20) | gcr
 }
 
 /// Turns pin samples into a reply's 21 transition bits, most significant
@@ -215,12 +240,8 @@ mod tests {
         0x0f,
     ];
 
-    /// What an ESC sends for `value`: the checksum, the GCR symbols, and the
-    /// start edge, as transition bits.
     fn encode(value: u16) -> u32 {
-        let value = value & 0x0fff;
-        let checksum = !(value ^ (value >> 4) ^ (value >> 8)) & 0x0f;
-        transitions_for((value << 4) | checksum)
+        reply_transitions_for(value)
     }
 
     fn transitions_for(word: u16) -> u32 {
