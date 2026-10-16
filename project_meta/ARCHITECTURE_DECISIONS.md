@@ -31,14 +31,14 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0005](decisions/ADR-0005.md) | Workspace Split Starts With Contracts | retired: the workspace split it began is complete |
 | [ADR-0006](decisions/ADR-0006.md) | STM32F4 Backend Starts As Compile-Shaped Metadata | superseded by ADR-0007 |
 | [ADR-0007](decisions/ADR-0007.md) | BSP Owns Board Policy, MCU Backend Owns HAL Mechanisms | superseded by ADR-0035 |
-| [ADR-0008](decisions/ADR-0008.md) | Control Scheduling Is Board-Selected And TIM2 Is The I/O Timebase | accepted |
+| [ADR-0008](decisions/ADR-0008.md) | Control Scheduling Is Board-Selected And TIM2 Is The I/O Timebase | accepted; its control scheduler is superseded by ADR-0058, its TIM2 I/O timebase stands |
 | [ADR-0009](decisions/ADR-0009.md) | TIM6 Watchdog Posts Recovery To The SPI Owner Priority | accepted |
-| [ADR-0010](decisions/ADR-0010.md) | SPI1 Uses One Owned Async Mailbox Between Task And IRQ Owner | accepted |
-| [ADR-0011](decisions/ADR-0011.md) | Serial RX Uses Owned Chunks With Out-Of-Band Continuity | accepted |
+| [ADR-0010](decisions/ADR-0010.md) | SPI1 Uses One Owned Async Mailbox Between Task And IRQ Owner | accepted; its mailbox becomes SPSC queues per ADR-0055 |
+| [ADR-0011](decisions/ADR-0011.md) | Serial RX Uses Owned Chunks With Out-Of-Band Continuity | accepted; its RX mailbox becomes an SPSC link per ADR-0057 |
 | [ADR-0012](decisions/ADR-0012.md) | Serial TX Separates Writer Capacity From Hardware Completion | accepted |
 | [ADR-0013](decisions/ADR-0013.md) | USART2 RC Validity Is Separate From Parsed Setpoints | accepted |
 | [ADR-0014](decisions/ADR-0014.md) | The Actuator Owner Guards Long Arming Holds | superseded by ADR-0040 |
-| [ADR-0015](decisions/ADR-0015.md) | Active Motor Values Cross One SPSC Authority Boundary | accepted |
+| [ADR-0015](decisions/ADR-0015.md) | Active Motor Values Cross One SPSC Authority Boundary | accepted; generalized by ADR-0055, and the motor-output boundary moves to the output group per ADR-0057 |
 | [ADR-0016](decisions/ADR-0016.md) | FCU3 Is An Explicit BSP Target Without An App Adapter | superseded by ADR-0035; historical board facts retained |
 | [ADR-0017](decisions/ADR-0017.md) | The First Multi-Target Proof Is An Isolated Nucleo Bring-Up App | accepted |
 | [ADR-0018](decisions/ADR-0018.md) | Deployable Firmware Uses Isolated App Packages | accepted |
@@ -61,18 +61,29 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0035](decisions/ADR-0035.md) | Board Support Lives With Each Isolated App | accepted; location amended by ADR-0036 |
 | [ADR-0036](decisions/ADR-0036.md) | Each Board's Facts Live In A Host-Tested Data Crate | accepted; amends the location in ADR-0035 |
 | [ADR-0037](decisions/ADR-0037.md) | One Flash Manager Serves Every Board Through NorStorage | accepted, pending target validation |
-| [ADR-0038](decisions/ADR-0038.md) | Test Evidence Is Tied To Component IDs, Not Image Hashes | accepted |
+| [ADR-0038](decisions/ADR-0038.md) | Test Evidence Is Tied To Component IDs, Not Image Hashes | superseded by ADR-0050; its tooling stays in use until reqtool replaces it |
 | [ADR-0039](decisions/ADR-0039.md) | Flight Boards Drive Four DShot600 Lanes As One Fault Domain | accepted; cadence amended by ADR-0046 |
 | [ADR-0040](decisions/ADR-0040.md) | DShot Arming Requires Telemetry-Qualified Idle On Every Motor | accepted; its eRPM source is superseded by ADR-0048 where bidirectional DShot runs |
-| [ADR-0041](decisions/ADR-0041.md) | Motor Bench Actuation Is Capped And Explicitly Gated | accepted |
-| [ADR-0042](decisions/ADR-0042.md) | USB And The Configurator Port Carry One Bounded Command Line | accepted |
-| [ADR-0043](decisions/ADR-0043.md) | The Command Line Reboots Into The STM32 ROM Bootloader | accepted |
-| [ADR-0044](decisions/ADR-0044.md) | Accelerometer Level Is Calibrated On Command And Stored Per Craft | accepted |
+| [ADR-0041](decisions/ADR-0041.md) | Motor Bench Actuation Is Capped And Explicitly Gated | accepted; motor-test routing amended by ADR-0056 |
+| [ADR-0042](decisions/ADR-0042.md) | USB And The Configurator Port Carry One Bounded Command Line | accepted; request routing amended by ADR-0056 |
+| [ADR-0043](decisions/ADR-0043.md) | The Command Line Reboots Into The STM32 ROM Bootloader | accepted; reboot routing amended by ADR-0056 |
+| [ADR-0044](decisions/ADR-0044.md) | Accelerometer Level Is Calibrated On Command And Stored Per Craft | accepted; calibration owner amended by ADR-0059 |
 | [ADR-0045](decisions/ADR-0045.md) | Bidirectional DShot Replies Return On Each Lane's Own Pin And Stream | accepted, implemented on the Foxeer behind a props-off bench feature, pending target validation |
 | [ADR-0046](decisions/ADR-0046.md) | DShot Frames Follow The Control Loop | accepted, pending target validation; amends the cadence in ADR-0039 |
 | [ADR-0047](decisions/ADR-0047.md) | The RPM Filter Follows Betaflight | accepted, not yet implemented |
-| [ADR-0048](decisions/ADR-0048.md) | Bidirectional eRPM Supersedes UART Telemetry For Arming | accepted, not yet implemented; supersedes ADR-0040's eRPM source where bidirectional DShot runs |
+| [ADR-0048](decisions/ADR-0048.md) | Bidirectional eRPM Supersedes UART Telemetry For Arming | accepted, not yet implemented; supersedes ADR-0040's eRPM source where bidirectional DShot runs; code placement set by ADR-0057 |
 | [ADR-0049](decisions/ADR-0049.md) | Dynamic Idle Raises The Motor Floor From The Slowest Motor's eRPM | accepted, not yet implemented |
+| [ADR-0050](decisions/ADR-0050.md) | Requirement Status Is Computed From Evidence, Never Recorded | accepted, not yet implemented; supersedes ADR-0038 |
+| [ADR-0051](decisions/ADR-0051.md) | Verification Levels Are One Enum And Only Gates Block | accepted, not yet implemented |
+| [ADR-0052](decisions/ADR-0052.md) | Fingerprints Are Derived, And Parents And Children Verify Each Other | accepted, not yet implemented |
+| [ADR-0053](decisions/ADR-0053.md) | Requirements Are YAML Data Rooted In W1-W7 And Checked By reqtool | accepted, not yet implemented |
+| [ADR-0054](decisions/ADR-0054.md) | Safety-Critical Code Is Separated By Crate And Never Depends On Non-Critical Code | accepted, not yet implemented |
+| [ADR-0055](decisions/ADR-0055.md) | Tasks Communicate Over Declared SPSC Links And Single-Writer Flags | accepted, not yet implemented; generalizes ADR-0015, amends ADR-0010 |
+| [ADR-0056](decisions/ADR-0056.md) | The Observer Is The Only Way Out And The Coordinator The Only Way In | accepted, not yet implemented; amends ADR-0041, ADR-0042, ADR-0043 |
+| [ADR-0057](decisions/ADR-0057.md) | Hardware Meets The Core Through Message Contracts | accepted, not yet implemented; amends ADR-0011 and ADR-0015, places ADR-0048 |
+| [ADR-0058](decisions/ADR-0058.md) | The Control Loop Is Gyro-Synced | accepted, not yet implemented; supersedes ADR-0008's control scheduler, its TIM2 I/O timebase stands |
+| [ADR-0059](decisions/ADR-0059.md) | Stored Configuration Passes One Safety-Critical Gate | accepted, not yet implemented; amends ADR-0044's calibration owner |
+| [ADR-0060](decisions/ADR-0060.md) | Crates Follow The Safety-Critical Split And Own Their Tasks | accepted, not yet implemented |
 
 ## Adding Or Changing A Decision
 

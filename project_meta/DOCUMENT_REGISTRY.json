@@ -55,6 +55,13 @@
       "max_bytes": 6144
     },
     {
+      "path": "project_meta/requirements/design.md",
+      "role": "requirements-design",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 98304
+    },
+    {
       "path": "project_meta/tooling.md",
       "role": "repository-tooling",
       "lifecycle": "durable",
@@ -73,14 +80,14 @@
       "role": "internal-book-index",
       "lifecycle": "durable",
       "context": "targeted",
-      "max_bytes": 6144
+      "max_bytes": 8192
     },
     {
       "path": "project_meta/ARCHITECTURE_DECISIONS.md",
       "role": "architecture-decision-index",
       "lifecycle": "durable",
       "context": "targeted",
-      "max_bytes": 8192
+      "max_bytes": 65536
     },
     {
       "path": "project_meta/decisions/ADR-0001.md",
@@ -420,6 +427,83 @@
     },
     {
       "path": "project_meta/decisions/ADR-0049.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0050.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0051.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0052.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0053.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0054.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0055.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0056.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0057.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0058.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0059.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0060.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",

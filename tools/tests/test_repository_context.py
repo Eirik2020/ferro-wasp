@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.check_repository_context import (
+    ADR_INDEX_MAX_BYTES,
     _discover_agent_instruction_paths,
     validate_always_loaded,
     validate_architecture_decisions,
@@ -42,10 +43,11 @@ class RepositoryContextTests(unittest.TestCase):
             )
         }
         self.assertEqual(set(adr_entries), discovered_adrs)
-        self.assertEqual(
-            documents["project_meta/ARCHITECTURE_DECISIONS.md"]["max_bytes"],
-            8192,
-        )
+        if ADR_INDEX_MAX_BYTES is not None:
+            self.assertEqual(
+                documents["project_meta/ARCHITECTURE_DECISIONS.md"]["max_bytes"],
+                ADR_INDEX_MAX_BYTES,
+            )
         self.assertTrue(
             all(entry["max_bytes"] == 4096 for entry in adr_entries.values())
         )
