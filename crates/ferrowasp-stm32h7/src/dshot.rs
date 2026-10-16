@@ -42,7 +42,7 @@ pub use ferrowasp_stm32::dshot_bank::{
     COMPARE_DMA_SLOTS, DSHOT_COMMAND_MAX, DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS,
     DSHOT600_BITRATE_HZ, DshotBank, DshotCommandError, DshotCommandSequence, DshotInitError,
     DshotInterruptEvent, DshotLanes, DshotMotor, DshotMotors, DshotServiceEvent,
-    DshotSpecialCommandError, DshotStats, DshotTelemetryRequestError,
+    DshotSpecialCommandError, DshotStats, DshotTelemetryRequestError, fallback_release_due,
 };
 pub use ferrowasp_stm32::dshot_lanes::{
     DshotMotorBank, IntoLane, LaneDma, LaneOutputs, LaneTimer, SoftwareStart, TimerSet,

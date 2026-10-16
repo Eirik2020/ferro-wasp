@@ -232,7 +232,11 @@ pub const fn inject_idle_qualification_fault(
         motor_cmd_reader: signals::MotorCmdReader,
         esc_telemetry_update_consumer: esc::EscTelemetryUpdateConsumer,
     ],
-    spawn = [safety_master(event: safety::SafetyEvent), actuator_idle_notify()],
+    spawn = [
+        safety_master(event: safety::SafetyEvent),
+        actuator_idle_notify(),
+        dshot_service(),
+    ],
     config = [
         validate_live_arming_guard: ArmingGuard,
         dshot_idle_command: f32,
@@ -262,6 +266,8 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
             cx.local.motor_cmd_reader.discard_all();
             cx.local.actuator_arm_done_writer.clear();
             actuator.force_off();
+            // Stop frames now rather than at the next fallback release.
+            let _ = cx.spawn.dshot_service();
             return;
         }
 
@@ -576,4 +582,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
     if !actuator.apply(output, Mono::now().duration_since_epoch().to_millis()) {
         return;
     }
+    // Send it now, so frames follow the control loop (ADR-0046). A release
+    // already pending or running carries it; the fallback covers the rest.
+    let _ = cx.spawn.dshot_service();
 }

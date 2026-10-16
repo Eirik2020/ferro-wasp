@@ -20,7 +20,6 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   - the receive phase and reply-loss accounting in the shared DShot bank;
   - per-lane GPIO-sampling receive in the F4 backend, with the stream
     turnaround in its unsafe boundary;
-  - frame sets released by the control loop, with the 2 ms fallback;
   - the RPM filter and its stored configuration in `ferrowasp-flight`, and
     FerroConfigurator's Motors tab for the bidirectional-DShot setting and the
     motor pole count;
