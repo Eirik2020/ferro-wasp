@@ -145,9 +145,10 @@ NRST. Without it the attach times out and nothing is flashed; drop the flag
 SWDIO, SWCLK and ground only.
 
 It owns TIM1/TIM8 and DMA2 Streams 1, 7, 2, and 6 as one synchronized fault
-domain. The 500 Hz actuator service continuously emits frames, enforces the
-bounded nonzero-command lease, and requests disarm on lease expiry, DMA fault,
-spurious completion, or frame timeout.
+domain. The DShot service sends one frame set per accepted motor command, and
+at least every 2 ms without one; it enforces the bounded nonzero-command lease
+and requests disarm on lease expiry, DMA fault, spurious completion, or frame
+timeout.
 
 DShot arming is protocol-specific. It keeps continuous stop frames selected
 through a guarded 100 ms pre-arm dwell, then applies idle under a temporary

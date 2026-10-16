@@ -65,12 +65,20 @@ other lanes.
 
 ## Cadence and Leases
 
-The DShot service is the only task that starts a frame set. Every 2 ms (500 Hz)
-it resends the current authorized four-lane vector, using absolute release
-times so the cadence does not drift. Motor commands only update that vector
-and renew its lease. A nonzero command older than 20 ms is rejected, and if the
-lease is not renewed the service selects four stops and requests disarm.
-Disarmed, it keeps sending stop frames.
+The DShot service is the only task that starts a frame set. Each motor command
+the actuator output accepts updates the authorized four-lane vector, renews its
+lease, and releases the service, so frames follow the control loop: 2 kHz on
+both flight boards. A disarm releases it too, so stop frames go out at once.
+
+When no command releases it - disarmed, during guarded idle, or if the control
+loop stops - a fallback task releases the service whenever no frame set has
+started for 2 ms, on absolute deadlines so that cadence does not drift. The ESCs always see
+frames, at no less than 500 Hz. A release that finds the service already
+pending or running folds into that run.
+
+A nonzero command older than 20 ms is rejected, and if the lease is not renewed
+the service selects four stops and requests disarm. Disarmed, it keeps sending
+stop frames.
 
 ## Safety Ownership
 

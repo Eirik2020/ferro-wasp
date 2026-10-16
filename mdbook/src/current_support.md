@@ -103,7 +103,7 @@ SBUS or CRSF input
   -> fresh IMU sample
   -> 2 kHz rate controller and Quad X mixer
   -> bounded motor-command queue
-  -> safety-owned 500 Hz DShot600 service
+  -> safety-owned DShot600 service, one frame set per control output
   -> legacy ESC telemetry and idle-eRPM qualification
 ```
 

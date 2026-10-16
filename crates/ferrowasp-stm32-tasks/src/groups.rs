@@ -27,6 +27,7 @@ pub mod flight {
     pub use crate::adc1_polling;
     pub use crate::control_loop;
     pub use crate::dma_adc1;
+    pub use crate::dshot_fallback;
     pub use crate::dshot_service;
     pub use crate::esc_manager_task;
     pub use crate::flash_manager_task;

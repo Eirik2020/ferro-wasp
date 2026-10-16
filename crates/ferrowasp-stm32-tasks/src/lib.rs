@@ -98,7 +98,7 @@ pub use diagnostics::heartbeat;
     any(feature = "stm32f405", feature = "stm32h743"),
     feature = "dshot"
 ))]
-pub use dshot::{dshot_dma_complete, dshot_service, service_dshot_dma_irq};
+pub use dshot::{dshot_dma_complete, dshot_fallback, dshot_service, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use esc::esc_manager_task;
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
