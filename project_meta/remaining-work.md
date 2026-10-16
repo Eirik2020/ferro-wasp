@@ -16,19 +16,21 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   establish them.
 - **Bidirectional DShot and RPM filter** (ADR-0045 to ADR-0048), Foxeer
   first. Pieces, in order:
-  - reply decoding and inverted-checksum encoding in `ferrowasp-waveform`;
-  - the receive phase and reply-loss accounting in the shared DShot bank;
+  - the receive phase and reply-loss accounting in the shared DShot bank,
+    sending `four_motor_bidirectional_packets` and decoding with
+    `ferrowasp-waveform::dshot_reply`;
   - per-lane GPIO-sampling receive in the F4 backend, with the stream
     turnaround in its unsafe boundary;
-  - the RPM filter and its stored configuration in `ferrowasp-flight`, and
-    FerroConfigurator's Motors tab for the bidirectional-DShot setting and the
-    motor pole count;
+  - `ferrowasp-flight::rpm_filter` in the control loop, its stored
+    configuration, and FerroConfigurator's Motors tab for the
+    bidirectional-DShot setting and the motor pole count;
   - the qualification source moved to bidirectional eRPM;
-  - extended telemetry: the enable command before guarded idle, and decoding
-    of temperature, voltage and current;
+  - extended telemetry: the enable command before guarded idle;
   - blackbox eRPM, reply-loss and extended-telemetry fields;
-  - dynamic idle (ADR-0049) with a mixer output floor, enabled only after the
-    RPM filter has target evidence.
+  - `ferrowasp-flight::dynamic_idle` (ADR-0049) on a mixer output floor,
+    enabled only after the RPM filter has target evidence. Its stale hold
+    (provisionally 100 ms) and decay (500 ms) are set from logged reply-loss
+    data.
 
   Then, on target:
   - the installed BLHeli_32 version and the EDT values it actually sends;

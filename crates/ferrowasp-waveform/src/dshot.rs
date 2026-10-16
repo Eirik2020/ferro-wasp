@@ -30,6 +30,14 @@ impl DshotPacket {
 
         Self((payload << 4) | crc)
     }
+
+    /// The same payload for a bidirectional-DShot ESC (ADR-0045): its
+    /// checksum is inverted, which is what tells the ESC to answer on the
+    /// same wire.
+    pub const fn from_value_bidirectional(value: u16, telemetry: bool) -> Self {
+        let normal = Self::from_value(value, telemetry).0;
+        Self(normal ^ 0x0f)
+    }
 }
 
 /// Packs one synchronized four-lane frame set and sets the telemetry bit on at
@@ -37,6 +45,17 @@ impl DshotPacket {
 pub fn four_motor_packets(values: [u16; 4], telemetry_lane: Option<usize>) -> [DshotPacket; 4] {
     core::array::from_fn(|index| {
         DshotPacket::from_value(values[index], telemetry_lane == Some(index))
+    })
+}
+
+/// [`four_motor_packets`] for bidirectional-DShot ESCs: every checksum is
+/// inverted.
+pub fn four_motor_bidirectional_packets(
+    values: [u16; 4],
+    telemetry_lane: Option<usize>,
+) -> [DshotPacket; 4] {
+    core::array::from_fn(|index| {
+        DshotPacket::from_value_bidirectional(values[index], telemetry_lane == Some(index))
     })
 }
 
@@ -217,6 +236,32 @@ mod tests {
             DshotPacket::try_from_value(2048, false),
             Err(DshotFrameError::ValueOutOfRange)
         );
+    }
+
+    #[test]
+    fn bidirectional_packets_invert_only_the_checksum() {
+        for value in 0..=DSHOT_MAX_VALUE {
+            for telemetry in [false, true] {
+                let normal = DshotPacket::from_value(value, telemetry).0;
+                let bidirectional = DshotPacket::from_value_bidirectional(value, telemetry).0;
+                assert_eq!(bidirectional >> 4, normal >> 4);
+                assert_eq!(bidirectional & 0x0f, !normal & 0x0f);
+            }
+        }
+        // Stop: an all-zero payload sends an all-ones checksum.
+        assert_eq!(DshotPacket::from_value_bidirectional(0, false).0, 0x000f);
+    }
+
+    #[test]
+    fn bidirectional_packet_set_keeps_lane_order_and_telemetry_lane() {
+        let packets = four_motor_bidirectional_packets([48, 49, 50, 51], Some(1));
+        for (index, packet) in packets.iter().enumerate() {
+            let value = 48 + index as u16;
+            assert_eq!(
+                *packet,
+                DshotPacket::from_value_bidirectional(value, index == 1)
+            );
+        }
     }
 
     #[test]
