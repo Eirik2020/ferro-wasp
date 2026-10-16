@@ -33,8 +33,6 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   - the installed BLHeli_32 version and the EDT values it actually sends;
   - logic-analyzer captures of both directions, including the turnaround:
     the line released and pulled high, and the reply inside the 71 us window;
-  - ES0182's DMA2 erratum wording confirmed from the sheet: GPIO reads
-    unaffected (ADR-0045);
   - reply loss under SPI1, ADC and USART1 DMA load;
   - the filter's cost per loop;
   - props-off arming;
