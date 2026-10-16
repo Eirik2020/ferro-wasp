@@ -147,6 +147,7 @@ TOPIC_ROUTES = {
         common_symbols=(
             "actuator_idle_notify",
             "dshot_service",
+            "dshot_fallback",
             "dshot_motor1_dma_complete",
             "dshot_motor2_dma_complete",
             "dshot_motor3_dma_complete",
@@ -165,6 +166,7 @@ TOPIC_ROUTES = {
         summary="DShot mapping, qualification fault injection, service, and lane IRQs.",
         common_symbols=(
             "dshot_service",
+            "dshot_fallback",
             "dshot_motor1_dma_complete",
             "dshot_motor2_dma_complete",
             "dshot_motor3_dma_complete",

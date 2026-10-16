@@ -37,6 +37,10 @@ pub static ATTITUDE_PITCH_DEG10: AtomicI16 = AtomicI16::new(0);
 pub static ATTITUDE_YAW_DEG10: AtomicI16 = AtomicI16::new(0);
 /// Bit per physical DShot lane currently commanded above zero.
 pub static DSHOT_ACTIVE_LANES: AtomicU8 = AtomicU8::new(0);
+/// When the DShot service last started a frame set, in wrapping
+/// milliseconds. The fallback reads it to release frames only while nothing
+/// else has.
+pub static DSHOT_LAST_RELEASE_MS: AtomicU32 = AtomicU32::new(0);
 pub static IMU_BIAS_CALIBRATED: AtomicBool = AtomicBool::new(false);
 /// A USB host has the board configured, written by the USB task. The
 /// Foxeer has no VBUS sense pin, so a power-only USB supply does not count.
