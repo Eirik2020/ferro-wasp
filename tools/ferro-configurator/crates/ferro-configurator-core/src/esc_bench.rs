@@ -1,12 +1,21 @@
 //! The props-off ESC telemetry bench check over USB (ADR-0045): sample the
 //! `esc` command over time, then report per physical output how well the
 //! bidirectional DShot reply eRPM agrees with the legacy UART eRPM, and how
-//! many replies were lost. Read-only: the operator spins the motors, with
-//! the configurator's motor test, never this.
+//! many replies were lost.
+//!
+//! `summarise` and the CSV only read. `run_motor_spin` is the operator's
+//! motor test with sampling between renewals: the same lease request the
+//! configurator's motor test sends, which the firmware refuses unless
+//! disarmed with the arm switch off, and which lapses within 250 ms of the
+//! last renewal.
+
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::client::EscLane;
+use crate::client::{EscLane, FerroClient};
+use crate::error::{FerroError, Result};
+use crate::transport::LineTransport;
 
 /// A UART sample older than this is not compared: it may describe a speed
 /// the motor has left.
@@ -101,9 +110,120 @@ pub fn csv_rows(sample: &EscBenchSample) -> [String; 4] {
     })
 }
 
+/// How a motor spin run ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SpinOutcome {
+    pub samples: usize,
+    /// `esc` polls that failed; the motor kept spinning.
+    pub failed_polls: usize,
+}
+
+/// Holds logical motor `motor` (1-4) at idle for `duration`, renewing its
+/// lease every `period` and handing each `esc` sample to `record`, then stops
+/// every motor. A refused or failed renewal ends the run; the stop is sent
+/// whatever ended it, and the firmware's lease stops the motor regardless.
+pub fn run_motor_spin<T: LineTransport>(
+    client: &mut FerroClient<T>,
+    motor: u8,
+    duration: Duration,
+    period: Duration,
+    mut record: impl FnMut(&EscBenchSample) -> Result<()>,
+) -> Result<SpinOutcome> {
+    let started = Instant::now();
+    let mut outcome = SpinOutcome {
+        samples: 0,
+        failed_polls: 0,
+    };
+    let mut run = || -> Result<()> {
+        while started.elapsed() < duration {
+            let tick = Instant::now();
+            client.motor_spin(motor)?;
+            match client.esc_telemetry() {
+                Ok(lanes) => {
+                    let sample = EscBenchSample {
+                        host_ms: started.elapsed().as_millis() as u64,
+                        lanes,
+                    };
+                    record(&sample)?;
+                    outcome.samples += 1;
+                }
+                Err(error @ FerroError::DeviceRejected { .. }) => return Err(error),
+                Err(_) => outcome.failed_polls += 1,
+            }
+            if let Some(rest) = period.checked_sub(tick.elapsed()) {
+                std::thread::sleep(rest);
+            }
+        }
+        Ok(())
+    };
+    let result = run();
+    let stopped = client.motor_stop();
+    result?;
+    stopped?;
+    Ok(outcome)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transport::MockTransport;
+
+    const ESC_LINES: [&str; 4] = [
+        "OK esc1 u=66 a=12 b=67 v=10 x=0",
+        "OK esc2 u=- a=- b=0 v=10 x=0",
+        "OK esc3 u=- a=- b=0 v=10 x=0",
+        "OK esc4 u=- a=- b=0 v=10 x=0",
+    ];
+
+    #[test]
+    fn a_spin_renews_samples_and_stops() {
+        let mut lines = std::vec::Vec::new();
+        for _ in 0..3 {
+            lines.push("OK motor");
+            lines.extend(ESC_LINES);
+        }
+        lines.push("OK motor stop");
+        let mut client =
+            FerroClient::new(MockTransport::with_lines(lines), Duration::from_millis(20));
+        let mut recorded = 0;
+        let outcome = run_motor_spin(
+            &mut client,
+            2,
+            Duration::from_millis(30),
+            Duration::from_millis(10),
+            |sample| {
+                assert_eq!(sample.lanes[0].reply_erpm, Some(6_700));
+                recorded += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(outcome.samples >= 1 && outcome.samples <= 3, "{outcome:?}");
+        assert_eq!(outcome.samples, recorded);
+        let writes = client.into_transport().writes;
+        assert_eq!(
+            writes.first().map(String::as_str),
+            Some("motor spin 2 CONFIRM")
+        );
+        assert_eq!(writes.last().map(String::as_str), Some("motor stop"));
+    }
+
+    #[test]
+    fn a_refused_spin_ends_the_run_and_still_stops() {
+        let lines = ["ERR motor arm switch is on", "OK motor stop"];
+        let mut client =
+            FerroClient::new(MockTransport::with_lines(lines), Duration::from_millis(20));
+        let result = run_motor_spin(
+            &mut client,
+            1,
+            Duration::from_secs(5),
+            Duration::from_millis(10),
+            |_| Ok(()),
+        );
+        assert!(matches!(result, Err(FerroError::DeviceRejected { .. })));
+        let writes = client.into_transport().writes;
+        assert_eq!(writes, ["motor spin 1 CONFIRM", "motor stop"]);
+    }
 
     fn lane(output: u8) -> EscLane {
         EscLane {

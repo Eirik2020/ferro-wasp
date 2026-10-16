@@ -188,8 +188,12 @@ dirty tree, and features the image was built with. `ferro-configurator bench
 esc --seconds 60 --csv run.csv` samples `esc` ten times a second and reports,
 per output, how far the reply eRPM is from fresh UART eRPM and what share of
 replies were lost; the CSV reads straight into MATLAB's `readtable`. It only
-reads: the motor test spins the motor, because the controller does not arm
-with USB connected.
+reads. The controller does not arm with USB connected, so a motor is spun for
+the comparison with the props-off motor test: `ferro-configurator motor spin
+--motor N --seconds 10 --props-off --csv idle.csv` idles one logical motor
+under the same short lease as the GUI's motor test, samples `esc` between
+renewals, and stops the motor at the end. Stopping the program stops the
+motor within the lease.
 - `bench_dshot_idle_output1_not_running` reports zero eRPM for physical output
   1 at the qualification input only, to prove that a missing motor aborts
   arming. It prints `FAULT INJECTION ACTIVE` at startup and must never be used

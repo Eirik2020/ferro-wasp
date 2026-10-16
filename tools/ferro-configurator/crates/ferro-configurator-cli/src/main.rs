@@ -85,6 +85,41 @@ enum Command {
     Doctor,
     /// Observe a controller for bench evidence, without commanding it.
     Bench(BenchArgs),
+    /// Props-off motor test: idle one motor while recording ESC telemetry.
+    Motor(MotorArgs),
+}
+
+#[derive(Debug, Args)]
+struct MotorArgs {
+    #[command(subcommand)]
+    command: MotorCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum MotorCommand {
+    /// Idle one logical motor (Betaflight Quad X, 1-4) for a few seconds,
+    /// sampling the `esc` command between lease renewals, then stop.
+    ///
+    /// The same request as the configurator's motor test. The controller
+    /// refuses it unless disarmed with the arm switch off, and stops the
+    /// motor within 250 ms of the last renewal, so stopping this program
+    /// (Ctrl-C, a crash, a pulled cable) stops the motor.
+    Spin {
+        /// Logical motor, 1 to 4.
+        #[arg(long, value_parser = clap::value_parser!(u8).range(1..=4))]
+        motor: u8,
+        /// How long to idle it.
+        #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u64).range(1..=30))]
+        seconds: u64,
+        /// Write every sample to this new CSV file, for MATLAB's `readtable`.
+        #[arg(long)]
+        csv: Option<PathBuf>,
+        /// Confirms the propellers are off. Required.
+        #[arg(long, required = true)]
+        props_off: bool,
+    },
+    /// Stop every motor now. Refused while armed.
+    Stop,
 }
 
 #[derive(Debug, Args)]
@@ -1020,6 +1055,26 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
             BenchCommand::Loop { seconds } => bench_loop(cli, timeout, *seconds),
             BenchCommand::Esc { seconds, csv } => bench_esc(cli, timeout, *seconds, csv.as_ref()),
         },
+        Command::Motor(args) => match &args.command {
+            MotorCommand::Spin {
+                motor,
+                seconds,
+                csv,
+                props_off,
+            } => {
+                // Clap refuses the command without it; this keeps the
+                // requirement visible where the motor is commanded.
+                assert!(*props_off);
+                motor_spin(cli, *motor, *seconds, csv.as_ref())
+            }
+            MotorCommand::Stop => {
+                let mut client = connect(cli, timeout)?;
+                client.motor_stop()?;
+                emit(cli.format, "motor.stop", &"stopped", || {
+                    println!("Motors stopped.")
+                })
+            }
+        },
         Command::Doctor => {
             let ports = discover_ports()?;
             let count = ports.iter().filter(|port| port.is_ferrowasp).count();
@@ -1672,11 +1727,121 @@ fn print_esc_lanes(lanes: &[EscLane; 4]) {
 
 #[derive(Debug, Serialize)]
 struct EscBenchReport {
+    /// The logical motor spun, for a motor test.
+    motor: Option<u8>,
     seconds: u64,
     samples: usize,
     failed_polls: usize,
     outputs: [EscBenchOutput; 4],
     csv: Option<String>,
+}
+
+fn print_esc_bench_report(report: &EscBenchReport) {
+    println!();
+    println!(
+        "{} samples, {} failed polls. Compared where the UART sample was at most {} ms old.",
+        report.samples,
+        report.failed_polls,
+        esc_bench::FRESH_UART_MS
+    );
+    println!("  Output  Compared  Mean diff  Max diff  Replies  Invalid  Loss");
+    for output in &report.outputs {
+        let loss = output
+            .loss()
+            .map_or_else(|| "-".to_owned(), |loss| format!("{:.3} %", loss * 100.0));
+        println!(
+            "  {:<6}  {:<8}  {:<9.0}  {:<8}  {:<7}  {:<7}  {}",
+            output.output,
+            output.compared,
+            output.mean_difference_erpm,
+            output.max_abs_difference_erpm,
+            output.replies_valid + output.replies_invalid,
+            output.replies_invalid,
+            loss
+        );
+    }
+    if let Some(path) = &report.csv {
+        println!("Samples written to {path}");
+    }
+}
+
+/// A new CSV file with its header; an existing file is never overwritten.
+fn create_esc_csv(path: &Path) -> Result<BufWriter<File>, FerroError> {
+    let error = |operation: &'static str, error: io::Error| FerroError::FileIo {
+        operation,
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    };
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| error("create", e))?;
+    let mut writer = BufWriter::new(file);
+    writeln!(writer, "{}", esc_bench::CSV_HEADER).map_err(|e| error("write", e))?;
+    Ok(writer)
+}
+
+fn write_esc_rows(
+    path: &Path,
+    writer: &mut BufWriter<File>,
+    sample: &EscBenchSample,
+) -> Result<(), FerroError> {
+    for row in esc_bench::csv_rows(sample) {
+        writeln!(writer, "{row}").map_err(|error| FerroError::FileIo {
+            operation: "write",
+            path: path.to_path_buf(),
+            reason: error.to_string(),
+        })?;
+    }
+    Ok(())
+}
+
+fn motor_spin(cli: &Cli, motor: u8, seconds: u64, csv: Option<&PathBuf>) -> Result<(), FerroError> {
+    // Short request timeouts: a reply that never comes must not hold the
+    // run while the lease, renewed every 100 ms, is meant to stay fresh.
+    let mut client = connect(cli, Duration::from_millis(200))?;
+    let mut writer = csv.map(|path| create_esc_csv(path)).transpose()?;
+    let human = cli.format == OutputFormat::Human;
+    if human {
+        println!("Idling logical motor {motor} for {seconds}s while sampling ESC telemetry.");
+        println!("Stop this program to stop the motor.");
+    }
+    let mut samples = Vec::new();
+    let outcome = esc_bench::run_motor_spin(
+        &mut client,
+        motor,
+        Duration::from_secs(seconds),
+        Duration::from_millis(100),
+        |sample| {
+            if let (Some(path), Some(writer)) = (csv, writer.as_mut()) {
+                write_esc_rows(path, writer, sample)?;
+            }
+            samples.push(*sample);
+            Ok(())
+        },
+    )?;
+    if let (Some(path), Some(writer)) = (csv, writer.as_mut()) {
+        writer.flush().map_err(|error| FerroError::FileIo {
+            operation: "write",
+            path: path.clone(),
+            reason: error.to_string(),
+        })?;
+    }
+    let report = EscBenchReport {
+        motor: Some(motor),
+        seconds,
+        samples: outcome.samples,
+        failed_polls: outcome.failed_polls,
+        outputs: esc_bench::summarise(&samples),
+        csv: csv.map(|path| path.display().to_string()),
+    };
+    emit(cli.format, "motor.spin", &report, || {
+        if human {
+            println!("Motor {motor} stopped.");
+        }
+        print_esc_bench_report(&report)
+    })
 }
 
 fn bench_esc(
@@ -1686,31 +1851,11 @@ fn bench_esc(
     csv: Option<&PathBuf>,
 ) -> Result<(), FerroError> {
     let mut client = connect(cli, timeout)?;
-    let file_error =
-        |path: &PathBuf, operation: &'static str, error: io::Error| FerroError::FileIo {
-            operation,
-            path: path.clone(),
-            reason: error.to_string(),
-        };
-    let mut writer = match csv {
-        Some(path) => {
-            let file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(path)
-                .map_err(|error| file_error(path, "create", error))?;
-            let mut writer = BufWriter::new(file);
-            writeln!(writer, "{}", esc_bench::CSV_HEADER)
-                .map_err(|error| file_error(path, "write", error))?;
-            Some((path, writer))
-        }
-        None => None,
-    };
-
+    let mut writer = csv.map(|path| create_esc_csv(path)).transpose()?;
     let human = cli.format == OutputFormat::Human;
     if human {
         println!(
-            "Sampling ESC telemetry for {seconds}s. Run the motor test yourself; this only reads."
+            "Sampling ESC telemetry for {seconds}s. Spin a motor with `motor spin` or the GUI; this only reads."
         );
         println!("  time  output: UART/reply eRPM");
     }
@@ -1724,11 +1869,8 @@ fn bench_esc(
         match client.esc_telemetry() {
             Ok(lanes) => {
                 let sample = EscBenchSample { host_ms, lanes };
-                if let Some((path, writer)) = writer.as_mut() {
-                    for row in esc_bench::csv_rows(&sample) {
-                        writeln!(writer, "{row}")
-                            .map_err(|error| file_error(path, "write", error))?;
-                    }
+                if let (Some(path), Some(writer)) = (csv, writer.as_mut()) {
+                    write_esc_rows(path, writer, &sample)?;
                 }
                 if human && host_ms >= next_line_ms {
                     next_line_ms += 1_000;
@@ -1755,13 +1897,16 @@ fn bench_esc(
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    if let Some((path, writer)) = writer.as_mut() {
-        writer
-            .flush()
-            .map_err(|error| file_error(path, "write", error))?;
+    if let (Some(path), Some(writer)) = (csv, writer.as_mut()) {
+        writer.flush().map_err(|error| FerroError::FileIo {
+            operation: "write",
+            path: path.clone(),
+            reason: error.to_string(),
+        })?;
     }
 
     let report = EscBenchReport {
+        motor: None,
         seconds,
         samples: samples.len(),
         failed_polls,
@@ -1769,32 +1914,7 @@ fn bench_esc(
         csv: csv.map(|path| path.display().to_string()),
     };
     emit(cli.format, "bench.esc", &report, || {
-        println!();
-        println!(
-            "{} samples, {} failed polls. Compared where the UART sample was at most {} ms old.",
-            report.samples,
-            report.failed_polls,
-            esc_bench::FRESH_UART_MS
-        );
-        println!("  Output  Compared  Mean diff  Max diff  Replies  Invalid  Loss");
-        for output in &report.outputs {
-            let loss = output
-                .loss()
-                .map_or_else(|| "-".to_owned(), |loss| format!("{:.3} %", loss * 100.0));
-            println!(
-                "  {:<6}  {:<8}  {:<9.0}  {:<8}  {:<7}  {:<7}  {}",
-                output.output,
-                output.compared,
-                output.mean_difference_erpm,
-                output.max_abs_difference_erpm,
-                output.replies_valid + output.replies_invalid,
-                output.replies_invalid,
-                loss
-            );
-        }
-        if let Some(path) = &report.csv {
-            println!("Samples written to {path}");
-        }
+        print_esc_bench_report(&report)
     })
 }
 
