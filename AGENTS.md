@@ -36,6 +36,7 @@ Start from the task, not the chapter. Read the named sections, not whole files.
 | Adding or changing a board | W4, W5, W6; `mdbook/src/board_support.md` |
 | Arming, motors, DShot | W1, W2, W6; `mdbook/src/arming.md`, `mdbook/src/dshot.md` |
 | Selecting or running a test, recording evidence | W7; Operating Rules below; `project_meta/testing/README.md` |
+| Writing or checking a requirement | W7; `tools/reqtool/README.md`; `reqtool check <item>` before changing it |
 | Blackbox and logging | `project_meta/LOGGING_FORMAT.md` |
 | Host tools or FerroConfigurator | W1; Host Tools below |
 | Public documentation | Public Book below; `mdbook/src/SUMMARY.md` |
@@ -54,6 +55,7 @@ links into the internal book.
 | What was decided, and why | `project_meta/ARCHITECTURE_DECISIONS.md` and `decisions/` |
 | What is left to build | `project_meta/remaining-work.md` |
 | Test definitions, procedures, evidence workflow | `project_meta/testing/README.md` |
+| Requirements and their design | `project_meta/requirements/` and its `design.md` |
 | Blackbox format requirements | `project_meta/LOGGING_FORMAT.md` |
 | Board and feature support | `mdbook/src/current_support.md` |
 | Public direction | `mdbook/src/roadmap.md` |

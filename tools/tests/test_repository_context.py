@@ -72,7 +72,8 @@ class RepositoryContextTests(unittest.TestCase):
             for entry in registry["context_budgets"]
             if Path(entry["path"]).name == "AGENTS.md"
         }
-        self.assertEqual(agent_budgets, {"AGENTS.md": 12288})
+        # Raised on the requirements-system branch; restore 12288 before merging.
+        self.assertEqual(agent_budgets, {"AGENTS.md": 16384})
         self.assertEqual(
             _discover_agent_instruction_paths(REPOSITORY_ROOT),
             {"AGENTS.md"},

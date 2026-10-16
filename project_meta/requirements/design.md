@@ -342,6 +342,14 @@ Foxeer; that is an option if a dedicated devboard is not otherwise wanted.)
 An explicit deferral marker (`deferred: { until: devboard }`) was considered
 and dropped: `covered_by_parent` made it unnecessary.
 
+**Two rules found while implementing.**
+- A child covered by its parent takes its status from that parent, so it never
+  counts towards the parent's `via_children` or `either` status; otherwise each
+  would wait on the other. A `via_children` or `either` requirement therefore
+  needs at least one child that verifies itself.
+- Under `either`, a failing own entry is never outvoted by passing children: a
+  failure stands until it is cleared as section 2 describes.
+
 ---
 
 ## 6. Schema, tooling and the parser
@@ -409,8 +417,18 @@ existence.
   `project_meta/testing/evidence/runs/YYYY/MM/`, written by `reqtool record`.
   Raw artifacts stay in `logs/`.
 - Schema types are `serde` with `deny_unknown_fields`; `schemars` can emit a
-  JSON Schema from the same types. `serde_yaml` is archived, so the YAML crate
-  is chosen at implementation.
+  JSON Schema from the same types. `serde_yaml` is archived; the YAML crate is
+  `serde-saphyr`: pure Rust, panic-free parsing, and errors that point into the
+  file, which matters most for a tool agents call. `serde_yml` is deprecated,
+  and `serde_norway` keeps `serde_yaml`'s C-translated `unsafe-libyaml`.
+  Evidence records stay JSON, since only the tool writes them.
+- A method is `test: <crate-qualified path>` (a `#[test]` function, found by
+  parsing) or `procedure: <path>#<heading>` (a Markdown heading that must
+  exist). Each level fixes its target and setup: `analysis` and `unit` run on
+  the host with no setup, `sitl` on the host in simulation, `mcu` on the FCU
+  or a devboard with no setup, `bench` on the FCU or a devboard props-off, and
+  `flight` on the FCU. `unit` takes a test; `mcu`, `bench` and `flight` take a
+  procedure.
 
 The governance Markdown mirrors a requirement as prose: header, "shall"
 statement, rationale, verification method, derived-from. The plan's
@@ -476,22 +494,22 @@ new system. The user chose (b). W1-W7 stay prose Markdown in
 requirements reference them through `derived_from` (`CMD-INPUT-001`
 `derived_from: [W2]`) and never copy them, which keeps one owner per topic.
 
-W7 is reworded, because "evidence is tied to component IDs" names the retired
-mechanism. The agreed direction:
+W7 is reworded, because "evidence is tied to component IDs" named the retired
+mechanism. As landed with the first schema:
 
 > 7. **W7 - Evidence.** A compile does not establish target behaviour, a
 > target boot does not establish actuator behaviour, and props-off operation
 > does not establish flight readiness; each claim needs evidence at its own
-> level. Evidence verifies requirements and carries a fingerprint the tooling
-> derives from the code those requirements are allocated to, or from the path
-> where behaviour depends on timing or scheduling; a record stands while its
-> fingerprint is unchanged. Requirement status is computed from evidence,
-> never recorded by hand.
+> level. Evidence verifies the requirements in `project_meta/requirements/`,
+> which derive from W1-W7, and carries a fingerprint the tooling derives from
+> the code they are allocated to, or from the path where behaviour depends on
+> timing or scheduling. A record stands while its fingerprint is unchanged,
+> and status is computed from evidence, never recorded by hand.
 
-W4 gains criticality as a layering dimension (section 8). The governing
-document edits land together with the first schema, on the requirements
-branch, so the governing document never describes tooling that does not
-exist.
+W4 gains criticality as a layering dimension (section 8): "Each crate is
+safety-critical or not, and a safety-critical crate never depends on a
+non-critical one." `reqtool` reads W1-W7's IDs and titles from the governing
+document itself, so it stays their one owner.
 
 ---
 
@@ -1345,12 +1363,10 @@ keeps its own hardware list and never ingests imported targets.
 - **Datasheet rates.** The MPU-6000 and ICM-42688-P output rates above are
   recalled, not checked.
 - **Betaflight's scheduler.** Gyro-locking is to be confirmed in its source.
-- **The YAML crate,** chosen at implementation.
 - **Stack-analysis tooling** for the image-level check, chosen at
   implementation.
-- **W7's final wording,** fixed with the first schema.
 - **Document sizes.** On the requirements branch the user set the size
   limits aside to avoid lossy compression: the ADR index limit is disabled in
-  `check_repository_context.py`, and this document and `SUMMARY.md` have
-  raised budgets. The limits are restored once the documentation has moved
+  `check_repository_context.py`, and this document, `SUMMARY.md` and
+  `AGENTS.md` have raised budgets. The limits are restored once the documentation has moved
   into the requirements system.

@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+
+[package]
+name = "reqtool"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/Eirik2020/ferro-wasp"
+rust-version = "1.89"
+publish = false
+description = "FerroWasp's requirements and verification tool"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "reqtool"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde-saphyr = { version = "2.0", default-features = false, features = ["deserialize"] }
+syn = { version = "2.0", default-features = false, features = ["full", "parsing", "clone-impls"] }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[dev-dependencies]
+tempfile = "3.23"

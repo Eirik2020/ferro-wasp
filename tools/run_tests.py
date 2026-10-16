@@ -87,6 +87,12 @@ def suites() -> list[Suite]:
             [Step(["cargo", "test", "--locked", "--workspace"], "tools/ferro-configurator")],
         ),
         Suite(
+            "reqtool",
+            "the requirements tool, its own workspace, including a check that "
+            "every requirement file in the repository is valid",
+            [Step(["cargo", "test", "--locked"], "tools/reqtool")],
+        ),
+        Suite(
             "gui",
             "the configurator GUI: TypeScript types, the page build, and the "
             "Tauri shell, which has no other check",

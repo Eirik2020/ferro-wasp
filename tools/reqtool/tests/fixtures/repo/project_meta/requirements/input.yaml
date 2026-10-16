@@ -1,0 +1,66 @@
+schema_version: 1
+requirements:
+  - id: INPUT-001
+    title: Reject stale RC input
+    statement: >-
+      Command Input shall treat RC frames older than the link's limit as
+      invalid and signal loss of link to the safety master.
+    rationale: Stale input must never be acted on as a live command.
+    derived_from: [W2]
+    allocated_to:
+      - alpha::input
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: alpha::input::tests::rejects_stale
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/procedures.md#Bench Gate
+
+  - id: INPUT-002
+    title: Decode frames
+    statement: Command Input shall decode every valid frame.
+    rationale: Children of a decomposed parent.
+    derived_from: [INPUT-003]
+    allocated_to:
+      - alpha::input::Frame::decode
+      - alpha::Renamed
+      - alpha::deep
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: alpha::input::tests::rejects_stale
+
+  - id: INPUT-003
+    title: Input path
+    statement: The input path shall deliver valid commands.
+    rationale: A parent verified through its children.
+    derived_from: [W1, W7]
+    verification:
+      mode: via_children
+      reason: Decoding and staleness together cover the path.
+
+  - id: INPUT-004
+    title: Timing of the input path
+    statement: Every input task shall finish within its budget.
+    rationale: Covered while the parent path runs without overruns.
+    derived_from: [INPUT-003]
+    allocated_to:
+      - beta::checked
+      - alpha::input::inline::from_parent
+      - alpha::input::Kind::Sbus
+      - alpha::renamed_module::reexported
+    verification:
+      mode: covered_by_parent
+      observed_by: loop_overrun_counter
+      reason: The parent's bench run fails on any overrun.
