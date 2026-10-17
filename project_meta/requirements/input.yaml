@@ -79,13 +79,43 @@ requirements:
       values, corrupted frames, and a frame split across a discontinuity.
     rationale: >-
       sbus-rs is not verified in-house (trust: external), so the boundary
-      where its output enters FerroWasp is where it is proven. Today only a
-      valid frame is tested through it.
+      where its output enters FerroWasp is where it is proven.
     derived_from: [INPUT-001]
     allocated_to:
       - ferrowasp_flight::rc_receiver::RcReceiver::sbus
     verification:
       mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::sbus_failsafe_and_frame_lost_flags_reach_the_frame
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::sbus_out_of_range_channels_pass_through_unclamped
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::sbus_partial_frame_is_dropped_on_reset
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::sbus_skips_leading_noise_before_a_header
 
   - id: INPUT-005
     title: Corrupt input is rejected without losing sync
