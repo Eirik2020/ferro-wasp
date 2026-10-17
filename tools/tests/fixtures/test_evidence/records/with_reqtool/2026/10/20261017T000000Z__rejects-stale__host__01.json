@@ -1,0 +1,21 @@
+{
+  "schema_version": 3,
+  "run_id": "20261017T000000Z__rejects-stale__host__01",
+  "recorded_at_utc": "2026-10-17T00:00:00Z",
+  "board": null,
+  "revision": "0000000000000000000000000000000000000000",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "INPUT-001",
+      "method": {
+        "test": "alpha::input::tests::rejects_stale"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "result": "pass"
+    }
+  ]
+}

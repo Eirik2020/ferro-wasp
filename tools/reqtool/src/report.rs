@@ -19,13 +19,21 @@ pub fn summary(project: &Project, evidence: &dyn Evidence) -> String {
     for (status, count) in &counts {
         let _ = write!(out, ", {count} {}", status.name());
     }
-    let unmethoded = project.requirements.values().filter(|r| has_no_method(r)).count();
+    let unmethoded = project
+        .requirements
+        .values()
+        .filter(|r| has_no_method(r))
+        .count();
     if unmethoded > 0 {
         let _ = write!(out, "; {unmethoded} with no verification method yet");
     }
     out.push('\n');
     for requirement in project.requirements.values() {
-        let gap = if has_no_method(requirement) { "  (no method)" } else { "" };
+        let gap = if has_no_method(requirement) {
+            "  (no method)"
+        } else {
+            ""
+        };
         let _ = writeln!(
             out,
             "{:<16} {:<10} {}{gap}",

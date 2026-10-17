@@ -6,6 +6,7 @@ use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use reqtool::evidence::{self, Outcome, Recorded, RunRequest, Timestamp};
 use reqtool::project::Project;
 use reqtool::report;
+use reqtool::runner::{self, Ran};
 use reqtool::schema::Method;
 
 /// FerroWasp's requirements and verification tool.
@@ -59,6 +60,16 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Run the host tests that requirements name, and record what each did.
+    /// Tests that fail or do not run exit nonzero; only tests that ran are
+    /// recorded.
+    Test {
+        /// Only these requirements' tests; every requirement's when omitted.
+        requirements: Vec<String>,
+        /// Run the tests and print the records without writing them.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -88,6 +99,13 @@ fn main() -> ExitCode {
         eprintln!("{} problem(s)", problems.len());
         return ExitCode::FAILURE;
     }
+    if let Command::Test {
+        requirements,
+        dry_run,
+    } = &cli.command
+    {
+        return test(&project, requirements, *dry_run);
+    }
     let result = match cli.command {
         Command::Validate => Ok(format!(
             "{} requirements valid\n",
@@ -113,13 +131,13 @@ fn main() -> ExitCode {
                 (None, Some(reference)) => Method::Procedure(reference),
                 _ => unreachable!("clap requires exactly one method"),
             };
+            let outcome = match result {
+                RunOutcome::Pass => Outcome::Pass,
+                RunOutcome::Fail => Outcome::Fail,
+            };
             let request = RunRequest {
-                method,
+                runs: vec![(method, outcome)],
                 board: board.as_deref(),
-                outcome: match result {
-                    RunOutcome::Pass => Outcome::Pass,
-                    RunOutcome::Fail => Outcome::Fail,
-                },
                 failed: &failed,
                 note: note.as_deref(),
                 supersedes: &supersedes,
@@ -142,6 +160,7 @@ fn main() -> ExitCode {
                 }
             })
         }
+        Command::Test { .. } => unreachable!("handled above"),
     };
     match result {
         Ok(text) => {
@@ -149,6 +168,72 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(message) => fail(&message),
+    }
+}
+
+/// Runs the named tests, then records the session: one record holding a
+/// result for every test that ran, minus passes already on record at the
+/// same fingerprint.
+fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
+    let outcomes = match runner::named_tests(project, requirements)
+        .and_then(|tests| runner::run(project, &tests))
+    {
+        Ok(outcomes) => outcomes,
+        Err(message) => return fail(&message),
+    };
+    let mut clean = true;
+    let mut runs = Vec::new();
+    for (path, ran) in &outcomes {
+        println!("{:<11} {path}", ran.name());
+        match ran {
+            Ran::Passed => runs.push((Method::Test(path.clone()), Outcome::Pass)),
+            Ran::Failed => {
+                clean = false;
+                runs.push((Method::Test(path.clone()), Outcome::Fail));
+            }
+            Ran::Ignored | Ran::NotRun => clean = false,
+        }
+    }
+    if runs.is_empty() {
+        println!("nothing ran, nothing recorded");
+        return ExitCode::FAILURE;
+    }
+    let request = RunRequest {
+        runs,
+        board: None,
+        failed: &[],
+        note: None,
+        supersedes: &[],
+        ruling: None,
+    };
+    let now = Timestamp::now();
+    let recorded = evidence::load(&project.repository).and_then(|existing| {
+        let mut record = evidence::build(project, &request, now)?;
+        evidence::drop_repeats(&mut record, &existing);
+        if record.results.is_empty() {
+            return Ok("nothing new to record: every pass is already on record".to_owned());
+        }
+        if dry_run {
+            return serde_json::to_string_pretty(&record).map_err(|e| e.to_string());
+        }
+        let written = evidence::write(&project.repository, &record, &now)?;
+        Ok(format!(
+            "recorded {} ({} results)",
+            written
+                .strip_prefix(&project.repository)
+                .unwrap_or(&written)
+                .display(),
+            record.results.len()
+        ))
+    });
+    match recorded {
+        Ok(text) => println!("{text}"),
+        Err(message) => return fail(&message),
+    }
+    if clean {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 

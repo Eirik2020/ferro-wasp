@@ -48,6 +48,12 @@ class TestEvidenceTests(unittest.TestCase):
             [],
         )
 
+    def test_leaves_reqtool_schema_3_records_to_reqtool(self) -> None:
+        self.assertEqual(
+            self._validate("records/with_reqtool"),
+            [],
+        )
+
     def test_accepts_user_confirmed_hardware_record_and_matching_artifact(
         self,
     ) -> None:

@@ -1,9 +1,11 @@
-//! Evidence records (schema 3), written only by `reqtool record`, and the
-//! entry statuses computed from them (ADR-0050).
+//! Evidence records (schema 3), written only by `reqtool record` and
+//! `reqtool test`, and the entry statuses computed from them (ADR-0050).
 //!
+//! A record is one session: one or more methods run together, with a result
+//! and fingerprint for every requirement entry that names each method.
 //! Records live beside the old schema 2 run records in
-//! `project_meta/testing/evidence/runs/YYYY/MM/`; only schema 3 is read here.
-//! Until the switch to this system, nothing real is recorded with it.
+//! `project_meta/testing/evidence/runs/YYYY/MM/`; only schema 3 is read here,
+//! and the old validator leaves schema 3 to this tool.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -25,7 +27,6 @@ pub struct Record {
     pub schema_version: u32,
     pub run_id: String,
     pub recorded_at_utc: String,
-    pub method: Method,
     /// The board's firmware app, for target-level evidence.
     pub board: Option<String>,
     pub revision: String,
@@ -45,6 +46,7 @@ pub struct Record {
 #[serde(deny_unknown_fields)]
 pub struct RunResult {
     pub requirement: String,
+    pub method: Method,
     pub level: Level,
     pub target: Target,
     pub setup: Setup,
@@ -107,17 +109,32 @@ fn collect_json(directory: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn same_entry(
-    result: &RunResult,
-    record: &Record,
-    requirement: &Requirement,
-    entry: &Entry,
-) -> bool {
+fn same_entry(result: &RunResult, requirement: &Requirement, entry: &Entry) -> bool {
     result.requirement == requirement.id
+        && result.method == entry.method
         && result.level == entry.level
         && result.target == entry.target
         && result.setup == entry.setup
-        && record.method == entry.method
+}
+
+/// Leaves out passes already on record at the same fingerprint, so re-running
+/// unchanged code adds nothing. A fail is always kept.
+pub fn drop_repeats(record: &mut Record, existing: &[Record]) {
+    record.results.retain(|result| {
+        result.result == Outcome::Fail
+            || !existing.iter().any(|old| {
+                old.board == record.board
+                    && old.results.iter().any(|before| {
+                        before.result == Outcome::Pass
+                            && before.requirement == result.requirement
+                            && before.method == result.method
+                            && before.level == result.level
+                            && before.target == result.target
+                            && before.setup == result.setup
+                            && before.fingerprint == result.fingerprint
+                    })
+            })
+    });
 }
 
 /// One entry's status from its records at one fingerprint:
@@ -163,7 +180,7 @@ impl Recorded {
                 let relevant: Vec<(&Record, &RunResult)> = records
                     .iter()
                     .flat_map(|record| record.results.iter().map(move |result| (record, result)))
-                    .filter(|(record, result)| same_entry(result, record, requirement, entry))
+                    .filter(|(_, result)| same_entry(result, requirement, entry))
                     .collect();
                 if !entry.level.on_target() {
                     let current = fingerprints.entry(requirement, entry, None)?;
@@ -216,20 +233,19 @@ impl Evidence for Recorded {
     }
 }
 
-/// What one `reqtool record` call covers.
+/// What one session covers: each method that ran, with its result.
 pub struct RunRequest<'a> {
-    pub method: Method,
+    pub runs: Vec<(Method, Outcome)>,
     pub board: Option<&'a str>,
-    pub outcome: Outcome,
-    /// Requirements that failed although the run as a whole passed.
+    /// Requirements that failed although their method as a whole passed.
     pub failed: &'a [String],
     pub note: Option<&'a str>,
     pub supersedes: &'a [String],
     pub ruling: Option<&'a str>,
 }
 
-/// Builds the record for one run of `method`: a result for every entry, in
-/// every requirement, that names this method.
+/// Builds the record for one session: a result for every entry, in every
+/// requirement, that names one of the methods that ran.
 pub fn build(
     project: &Project,
     request: &RunRequest<'_>,
@@ -243,40 +259,47 @@ pub fn build(
     let fingerprints = Fingerprinter::new(&project.repository, &project.workspace);
     let mut results = Vec::new();
     let mut named = BTreeSet::new();
-    for requirement in project.requirements.values() {
-        for entry in &requirement.verification.entries {
-            if entry.method != request.method {
-                continue;
-            }
-            let board = if entry.level.on_target() {
-                Some(request.board.ok_or_else(|| {
-                    format!(
-                        "{} has {} evidence, which needs --board",
-                        requirement.id,
-                        entry.level.name()
-                    )
-                })?)
-            } else {
-                None
-            };
-            named.insert(requirement.id.as_str());
-            let outcome = if request.failed.contains(&requirement.id) {
-                Outcome::Fail
-            } else {
-                request.outcome
-            };
-            results.push(RunResult {
-                requirement: requirement.id.clone(),
-                level: entry.level,
-                target: entry.target,
-                setup: entry.setup,
-                fingerprint: fingerprints.entry(requirement, entry, board)?,
-                result: outcome,
-            });
-        }
+    if request.runs.is_empty() {
+        return Err("nothing ran".into());
     }
-    if results.is_empty() {
-        return Err("no requirement names this method".into());
+    for (method, method_outcome) in &request.runs {
+        let before = results.len();
+        for requirement in project.requirements.values() {
+            for entry in &requirement.verification.entries {
+                if &entry.method != method {
+                    continue;
+                }
+                let board = if entry.level.on_target() {
+                    Some(request.board.ok_or_else(|| {
+                        format!(
+                            "{} has {} evidence, which needs --board",
+                            requirement.id,
+                            entry.level.name()
+                        )
+                    })?)
+                } else {
+                    None
+                };
+                named.insert(requirement.id.as_str());
+                let outcome = if request.failed.contains(&requirement.id) {
+                    Outcome::Fail
+                } else {
+                    *method_outcome
+                };
+                results.push(RunResult {
+                    requirement: requirement.id.clone(),
+                    method: method.clone(),
+                    level: entry.level,
+                    target: entry.target,
+                    setup: entry.setup,
+                    fingerprint: fingerprints.entry(requirement, entry, board)?,
+                    result: outcome,
+                });
+            }
+        }
+        if results.len() == before {
+            return Err(format!("no requirement names {}", describe(method)));
+        }
     }
     for id in request.failed {
         if !named.contains(id.as_str()) {
@@ -289,13 +312,15 @@ pub fn build(
     }
     let (revision, working_tree) = git_state(&project.repository)?;
     let scope = request.board.unwrap_or("host");
-    let slug = method_slug(&request.method);
+    let slug = match request.runs.as_slice() {
+        [(method, _)] => method_slug(method),
+        runs => format!("{}-methods", runs.len()),
+    };
     let run_id = next_run_id(&project.repository, &now, &slug, scope);
     Ok(Record {
         schema_version: RECORD_SCHEMA_VERSION,
         run_id,
         recorded_at_utc: now.iso(),
-        method: request.method.clone(),
         board: request.board.map(str::to_owned),
         revision,
         working_tree,
@@ -342,6 +367,13 @@ fn git_state(repository: &Path) -> Result<(String, String), String> {
         revision,
         if status.is_empty() { "clean" } else { "dirty" }.to_owned(),
     ))
+}
+
+fn describe(method: &Method) -> String {
+    match method {
+        Method::Test(path) => format!("test {path}"),
+        Method::Procedure(reference) => format!("procedure {reference}"),
+    }
 }
 
 fn method_slug(method: &Method) -> String {
@@ -444,6 +476,7 @@ mod tests {
     fn result(fingerprint: &str, result: Outcome) -> RunResult {
         RunResult {
             requirement: "A-001".into(),
+            method: Method::Test("a::tests::t".into()),
             level: Level::Unit,
             target: Target::Host,
             setup: Setup::None,

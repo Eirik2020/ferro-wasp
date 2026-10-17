@@ -211,7 +211,10 @@ fn a_requirement_without_a_method_is_valid_and_shows_as_a_gap() {
     let detail = report::check(&project, "INPUT-001", &NoEvidence).unwrap();
     assert!(detail.contains("no verification method yet"), "{detail}");
     let summary = report::summary(&project, &NoEvidence);
-    assert!(summary.contains("1 with no verification method yet"), "{summary}");
+    assert!(
+        summary.contains("1 with no verification method yet"),
+        "{summary}"
+    );
 }
 
 #[test]

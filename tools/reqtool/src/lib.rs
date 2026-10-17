@@ -11,6 +11,7 @@ pub mod items;
 pub mod project;
 pub mod report;
 pub mod roots;
+pub mod runner;
 pub mod schema;
 pub mod status;
 pub mod workspace;

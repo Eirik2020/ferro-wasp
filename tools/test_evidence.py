@@ -50,6 +50,7 @@ OPTIONAL_POLICY_FIELDS = {"components"}
 # a run exercised and their content IDs.
 CURRENT_SCHEMA_VERSION = 2
 ALLOWED_SCHEMA_VERSIONS = {1, CURRENT_SCHEMA_VERSION}
+REQTOOL_SCHEMA_VERSION = 3
 REQUIRED_COMPONENT_ENTRY_FIELDS = {"content_sha256", "id"}
 REQUIRED_RECORD_FIELDS = {
     "artifacts",
@@ -655,16 +656,19 @@ def _validate_record(
     errors: list[str],
 ) -> None:
     raw_path = path.relative_to(root).as_posix()
+    data = _load_json(path, raw_path, errors)
+    if data is None:
+        return
+    schema_version = data.get("schema_version") if isinstance(data, dict) else None
+    if schema_version == REQTOOL_SCHEMA_VERSION:
+        # Written and validated by tools/reqtool (ADR-0050); the two record
+        # formats share runs/ until the switch to the requirements system.
+        return
     if path.stat().st_size > max_record_bytes:
         errors.append(
             f"{raw_path}: {path.stat().st_size} bytes exceeds evidence budget "
             f"{max_record_bytes}"
         )
-
-    data = _load_json(path, raw_path, errors)
-    if data is None:
-        return
-    schema_version = data.get("schema_version") if isinstance(data, dict) else None
     required = REQUIRED_RECORD_FIELDS
     if schema_version == CURRENT_SCHEMA_VERSION:
         required = REQUIRED_RECORD_FIELDS | {"components"}

@@ -29,6 +29,10 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
   that requirement; with `W1`-`W7` the requirements derived from it; with an
   item path every requirement allocated to that item, inside it, or around
   it. Agents run `check` on an item before changing it.
+- `test` runs the host tests that requirements name (all, or those of the
+  requirements given) with cargo, in each package's own workspace, and
+  records the session. Tests that fail or do not run exit nonzero; passes
+  already on record at the same fingerprint are not recorded again.
 - `record` writes one run of a test or procedure: a result, at the current
   fingerprint, for every requirement entry that names that method. `mcu`,
   `bench` and `flight` evidence needs `--board`. `--failed REQ` fails one
@@ -58,7 +62,8 @@ checksum, the toolchain file, the requirement's statement and verification
 entry (whitespace-insensitive), and a procedure's own section. Host evidence
 takes the closure of the allocated and test crates; board evidence takes the
 board's whole firmware app, until the `app!` parser allows a narrower path
-scope. Records are JSON, schema 3, in `project_meta/testing/evidence/runs/`.
+scope. Records are JSON, schema 3, in `project_meta/testing/evidence/runs/`:
+one record per session, each result naming its own method.
 
 ## A requirement
 

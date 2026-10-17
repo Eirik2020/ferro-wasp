@@ -65,9 +65,8 @@ fn load(repository: &Path) -> Project {
 
 fn request<'a>(method: Method, board: Option<&'a str>, outcome: Outcome) -> RunRequest<'a> {
     RunRequest {
-        method,
+        runs: vec![(method, outcome)],
         board,
-        outcome,
         failed: &[],
         note: None,
         supersedes: &[],
@@ -368,4 +367,54 @@ fn fingerprints_cover_the_lockfile_and_toolchain() {
     assert_ne!(before, after_lock);
     edit(path, "rust-toolchain.toml", "1.93.1", "1.94.0");
     assert_ne!(after_lock, fingerprint());
+}
+
+#[test]
+fn a_session_records_several_methods_and_repeats_add_nothing() {
+    let repo = repository();
+    let path = repo.path();
+    let session = RunRequest {
+        runs: vec![
+            (Method::Test(TEST.into()), Outcome::Pass),
+            (Method::Procedure(BENCH.into()), Outcome::Pass),
+        ],
+        ..request(Method::Test(TEST.into()), Some("demo-board"), Outcome::Pass)
+    };
+    let project = load(path);
+    let now = Timestamp::from_unix(1_792_195_200);
+    let built = evidence::build(&project, &session, now).unwrap();
+    assert!(
+        built.run_id.contains("__2-methods__demo-board__"),
+        "{}",
+        built.run_id
+    );
+    assert_eq!(built.results.len(), 3, "INPUT-001 twice, INPUT-002 once");
+    evidence::write(path, &built, &now).unwrap();
+    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Verified);
+    assert_eq!(entry_status(path, "INPUT-001", 1), Status::Verified);
+
+    let existing = evidence::load(path).unwrap();
+    let mut again = evidence::build(&load(path), &session, now).unwrap();
+    evidence::drop_repeats(&mut again, &existing);
+    assert!(
+        again.results.is_empty(),
+        "unchanged passes are already on record"
+    );
+
+    edit(
+        path,
+        "crates/alpha/src/input.rs",
+        "pub fn validate() {}",
+        "pub fn validate() { let _ = 4; }",
+    );
+    let existing = evidence::load(path).unwrap();
+    let mut changed = evidence::build(&load(path), &session, now).unwrap();
+    evidence::drop_repeats(&mut changed, &existing);
+    assert!(!changed.results.is_empty(), "changed code is new evidence");
+
+    let failing = request(Method::Test(TEST.into()), None, Outcome::Fail);
+    let mut fail = evidence::build(&load(path), &failing, now).unwrap();
+    let before = fail.results.len();
+    evidence::drop_repeats(&mut fail, &evidence::load(path).unwrap());
+    assert_eq!(fail.results.len(), before, "a fail is always kept");
 }
