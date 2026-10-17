@@ -237,6 +237,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_core::safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
   - id: INPUT-009
     title: Stick values are bounded
@@ -268,6 +273,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_flight::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
   - id: INPUT-010
     title: RC loss while armed stops the motors and disarms

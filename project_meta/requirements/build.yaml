@@ -1,0 +1,21 @@
+schema_version: 1
+requirements:
+  - id: BUILD-001
+    title: Each board's release image builds from locked, released dependencies
+    statement: >-
+      Each board's release image shall build with --locked against
+      FerroForge as released on crates.io, with no path dependency or
+      patch on FerroForge.
+    rationale: >-
+      A path dependency or patch silently changes the flight image (W3).
+    derived_from: [W3]
+    allocated_to:
+      - ferrowasp_app_foxeer_f405_v2
+    verification:
+      mode: direct
+      entries:
+        - level: analysis
+          target: host
+          setup: none
+          method:
+            procedure: firmware/foxeer-f405-v2/README.md#Build

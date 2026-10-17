@@ -1,0 +1,111 @@
+schema_version: 1
+requirements:
+  - id: CTRL-001
+    title: Sticks command the configured positive directions
+    statement: >-
+      Centred sticks inside the deadband shall command zero, and right
+      roll, forward pitch and right yaw shall command the controller's
+      positive directions.
+    rationale: >-
+      A reversed stick is a crash; command signs are controlled
+      configuration.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight::drone_toolbox::remap_rc_channels_with_profile
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: CTRL-002
+    title: Correction opposes the imposed motion
+    statement: >-
+      On every axis, the rate controller's correction shall oppose an
+      imposed motion, never reinforce it; physical nose-down shall give
+      positive controller pitch, negative pitch PID, and front motors
+      above rear.
+    rationale: >-
+      A sign hidden anywhere between the IMU and the mixer turns
+      stabilization into a runaway.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight::drone_toolbox::FlightController
+      - ferrowasp_board_foxeer_f405_v2::profiles
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::imu_frame_profile_matches_the_measured_foxeer_orientation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_up_rate_maps_negative_for_the_golden_controller
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_down_rate_maps_positive_for_the_golden_controller
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: CTRL-003
+    title: In flight, commands are tracked without oscillation or saturation
+    statement: >-
+      In a conservative hop, commanded roll, pitch and yaw rates shall
+      be tracked without autonomous or command-excited oscillation,
+      sustained mixer saturation or clipping, or reinforcing correction.
+    rationale: >-
+      Props-off checks cannot show flight readiness; only flight
+      evidence can.
+    derived_from: [W6, W7]
+    allocated_to:
+      - ferrowasp_flight::drone_toolbox::FlightController
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds
+        - level: flight
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test

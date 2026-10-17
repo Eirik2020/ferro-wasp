@@ -1,0 +1,43 @@
+schema_version: 1
+requirements:
+  - id: LOG-001
+    title: A flight's log is complete and verifiable
+    statement: >-
+      Each arming shall be one flight of pages in order; after disarm
+      the final page shall commit within two seconds; and a downloaded
+      flight shall be CRC-valid with no missing or repeated samples.
+    rationale: >-
+      The blackbox is the evidence for every flight claim; an incomplete
+      log proves nothing.
+    derived_from: [W7]
+    allocated_to:
+      - ferrowasp_flight::log_writer
+      - ferrowasp_flight::flash_storage
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::flash_storage::tests::a_flight_is_unfinished_until_its_last_page_is_written
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::flash_storage::tests::a_torn_page_ends_its_flight_and_logging_carries_on_after_it
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+        - level: flight
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test

@@ -1,0 +1,97 @@
+schema_version: 1
+requirements:
+  - id: CONFIG-001
+    title: An out-of-range value is refused and changes nothing
+    statement: >-
+      A configuration value outside its allowed range shall be refused
+      with a nonzero exit and a range message, and the stored value
+      shall stay as it was.
+    rationale: >-
+      Gains, rates and RC settings fly the craft; an invalid one must
+      never be stored or applied.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_core::config
+      - ferrowasp_flight::flash_storage::StoredConfig
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::config::tests::scalar_ranges_match_the_public_usb_contract
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::flash_storage::tests::stored_config_round_trips_and_rejects_unsafe_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::flash_storage::tests::rpc_config_round_trips_and_reports_the_invalid_field
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-002
+    title: A configuration change applies at once and survives a cold boot
+    statement: >-
+      A disarmed configuration change shall take effect without a
+      reboot, be verified by complete readback, and still be in force
+      after a cold power cycle; a failed save shall leave the
+      configuration the board boots with untouched.
+    rationale: >-
+      The pilot must be able to trust that what was set is what flies,
+      now and after the next power-up.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight::config_save
+      - ferrowasp_flight::flash_storage::StoredConfig
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::config_save::tests::every_failure_leaves_the_booting_configuration_untouched
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::config_save::tests::a_cancelled_save_stops_and_the_active_slot_still_boots
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-003
+    title: A complete baseline can be restored
+    statement: >-
+      A complete exported configuration shall validate offline and apply
+      as one change, after which every value shall read back as
+      exported, before and after a cold boot.
+    rationale: >-
+      Restoring a known-good tune is the recovery path after any
+      experiment.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight::flash_storage::StoredConfig
+    verification:
+      mode: direct
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
