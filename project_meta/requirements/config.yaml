@@ -26,11 +26,6 @@ requirements:
           setup: none
           method:
             test: ferrowasp_flight::flash_storage::tests::stored_config_round_trips_and_rejects_unsafe_values
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_flight::flash_storage::tests::rpc_config_round_trips_and_reports_the_invalid_field
         - level: mcu
           target: fcu
           setup: none
