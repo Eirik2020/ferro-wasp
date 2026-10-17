@@ -431,6 +431,13 @@ macro_rules! flight_app_facade {
 
         pub const USB_DEBUG_HEADER: &[u8] =
             concat!("FerroWasp ", $board_name, " storage CLI v1; type help\r\n").as_bytes();
+        /// What this image was built from, for the `build` command; the
+        /// app's build script supplies the values.
+        pub const BUILD_IDENTITY: $crate::BuildIdentity = $crate::BuildIdentity {
+            revision: env!("FWSP_GIT_REV"),
+            dirty: env!("FWSP_GIT_DIRTY").as_bytes()[0] == b'1',
+            features: env!("FWSP_FEATURES"),
+        };
         pub static RC_RATES: Mutex<RefCell<safety::RcRates>> =
             Mutex::new(RefCell::new(safety::RcRates {
                 roll: 0,

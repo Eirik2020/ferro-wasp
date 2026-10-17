@@ -101,6 +101,8 @@ pub use diagnostics::heartbeat;
 pub use dshot::{dshot_dma_complete, dshot_fallback, dshot_service, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use esc::esc_manager_task;
+/// What a firmware was built from, for the `build` command.
+pub use ferrowasp_flight::usb_debug::BuildIdentity;
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use flash::{

@@ -44,8 +44,9 @@ pub use ferrowasp_stm32::dshot_bank::{
     DshotInterruptEvent, DshotLanes, DshotMotor, DshotMotors, DshotServiceEvent,
     DshotSpecialCommandError, DshotStats, DshotTelemetryRequestError, fallback_release_due,
 };
+pub use ferrowasp_stm32::dshot_bank::{DshotReplies, DshotReply, DshotReplyError, DshotReplyStats};
 pub use ferrowasp_stm32::dshot_lanes::{
-    DshotMotorBank, IntoLane, LaneDma, LaneOutputs, LaneTimer, SoftwareStart, TimerSet,
+    DshotMode, DshotMotorBank, IntoLane, LaneDma, LaneOutputs, LaneTimer, SoftwareStart, TimerSet,
 };
 
 pub type DshotDmaBuffer = [u32; COMPARE_DMA_SLOTS];
@@ -372,10 +373,13 @@ where
     LC: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
     LD: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
 {
+    // H7 lanes do not receive replies yet (ADR-0045 leaves the Lucid's
+    // receive path open), so an H7 bank is always unidirectional.
     build_bank(
         timers,
         lanes,
         SoftwareStart,
+        dshot_lanes::DshotMode::Unidirectional,
         |_domain| {
             DshotTiming::from_clocks(clocks.timx_ker_ck().raw(), DSHOT600_BITRATE_HZ)
                 .map_err(DshotInitError::InvalidTiming)

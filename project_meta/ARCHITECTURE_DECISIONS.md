@@ -68,7 +68,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0042](decisions/ADR-0042.md) | USB And The Configurator Port Carry One Bounded Command Line | accepted |
 | [ADR-0043](decisions/ADR-0043.md) | The Command Line Reboots Into The STM32 ROM Bootloader | accepted |
 | [ADR-0044](decisions/ADR-0044.md) | Accelerometer Level Is Calibrated On Command And Stored Per Craft | accepted |
-| [ADR-0045](decisions/ADR-0045.md) | Bidirectional DShot Replies Return On Each Lane's Own Pin And Stream | accepted, not yet implemented |
+| [ADR-0045](decisions/ADR-0045.md) | Bidirectional DShot Replies Return On Each Lane's Own Pin And Stream | accepted, implemented on the Foxeer behind a props-off bench feature, pending target validation |
 | [ADR-0046](decisions/ADR-0046.md) | DShot Frames Follow The Control Loop | accepted, pending target validation; amends the cadence in ADR-0039 |
 | [ADR-0047](decisions/ADR-0047.md) | The RPM Filter Follows Betaflight | accepted, not yet implemented |
 | [ADR-0048](decisions/ADR-0048.md) | Bidirectional eRPM Supersedes UART Telemetry For Arming | accepted, not yet implemented; supersedes ADR-0040's eRPM source where bidirectional DShot runs |
