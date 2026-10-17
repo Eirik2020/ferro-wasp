@@ -2,17 +2,16 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.test_evidence import ARTIFACT_ID
 from tools.foxeer_bench_gates import (
     REVIEWED_BASELINE,
     TEMPORARY_ROLL,
     REPO_ROOT,
-    artifact_id,
     check_usb_snapshots,
     operator_notes,
     repository_relative,
     parse_snapshot,
 )
+from tools.reqtool_bridge import ARTIFACT_ID, artifact_id
 
 BASELINE_SHOW = """schema_version = 2
 imu_lpf_hz = 50.8346
@@ -108,7 +107,7 @@ class UsbConfigGateTests(unittest.TestCase):
 
 
 class RecordTests(unittest.TestCase):
-    def test_artifact_ids_satisfy_the_evidence_validator(self) -> None:
+    def test_artifact_ids_satisfy_reqtool(self) -> None:
         for name in ("1-initial.txt", "20260930_005150_rtt.log", "boot-2.log", "foxeer-baseline.toml"):
             identifier = artifact_id(Path(name))
             self.assertRegex(identifier, ARTIFACT_ID, name)

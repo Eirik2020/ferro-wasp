@@ -766,6 +766,22 @@ fn artifacts_are_hashed_from_logs_and_checked_on_load() {
             .contains("no longer matches")
     );
 
+    let mut bad_id = details.clone();
+    bad_id.artifacts[0].id = "Boot Log".into();
+    let named_badly = RunRequest {
+        details: Some(bad_id),
+        ..request(
+            Method::Procedure(BENCH.into()),
+            Some("demo-board"),
+            Outcome::Pass,
+        )
+    };
+    assert!(
+        evidence::build(&project, &named_badly, now)
+            .unwrap_err()
+            .contains("lowercase words")
+    );
+
     details.artifacts[0].path = "project_meta/secret.log".into();
     let outside = RunRequest {
         details: Some(details),

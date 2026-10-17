@@ -136,6 +136,18 @@ impl Details {
     /// Hashes every artifact from its file, refusing a path outside `logs/`,
     /// a missing file, or a stated hash that does not match.
     pub fn seal_artifacts(&mut self, repository: &Path) -> Result<(), String> {
+        let mut ids = std::collections::BTreeSet::new();
+        for artifact in &self.artifacts {
+            if !valid_artifact_id(&artifact.id) {
+                return Err(format!(
+                    "artifact ID {:?} must be lowercase words joined by hyphens, led by a letter, at most 64 characters",
+                    artifact.id
+                ));
+            }
+            if !ids.insert(artifact.id.as_str()) {
+                return Err(format!("artifact ID {} is used twice", artifact.id));
+            }
+        }
         for artifact in &mut self.artifacts {
             let (bytes, sha256) = hash_artifact(repository, &artifact.path)?
                 .ok_or_else(|| format!("artifact {} does not exist", artifact.path))?;
@@ -170,6 +182,17 @@ impl Details {
         }
         Ok(())
     }
+}
+
+fn valid_artifact_id(id: &str) -> bool {
+    id.len() <= 64
+        && id
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn hash_artifact(repository: &Path, path: &str) -> Result<Option<(u64, String)>, String> {
