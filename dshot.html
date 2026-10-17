@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-de6077f4.js";
+            window.path_to_searchindex_js = "searchindex-a0e0ba77.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -239,12 +239,18 @@ fenced, every output is forced low, and the bank requests disarm.</p>
 output disabled; the backend selects active-high polarity so it pulses like the
 other lanes.</p>
 <h2 id="cadence-and-leases"><a class="header" href="#cadence-and-leases">Cadence and Leases</a></h2>
-<p>The DShot service is the only task that starts a frame set. Every 2 ms (500 Hz)
-it resends the current authorized four-lane vector, using absolute release
-times so the cadence does not drift. Motor commands only update that vector
-and renew its lease. A nonzero command older than 20 ms is rejected, and if the
-lease is not renewed the service selects four stops and requests disarm.
-Disarmed, it keeps sending stop frames.</p>
+<p>The DShot service is the only task that starts a frame set. Each motor command
+the actuator output accepts updates the authorized four-lane vector, renews its
+lease, and releases the service, so frames follow the control loop: 2 kHz on
+both flight boards. A disarm releases it too, so stop frames go out at once.</p>
+<p>When no command releases it - disarmed, during guarded idle, or if the control
+loop stops - a fallback task releases the service whenever no frame set has
+started for 2 ms, on absolute deadlines so that cadence does not drift. The ESCs always see
+frames, at no less than 500 Hz. A release that finds the service already
+pending or running folds into that run.</p>
+<p>A nonzero command older than 20 ms is rejected, and if the lease is not renewed
+the service selects four stops and requests disarm. Disarmed, it keeps sending
+stop frames.</p>
 <h2 id="safety-ownership"><a class="header" href="#safety-ownership">Safety Ownership</a></h2>
 <pre><code class="language-text">control loop
     -&gt; bounded MotorCmd queue
