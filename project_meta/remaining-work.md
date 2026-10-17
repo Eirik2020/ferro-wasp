@@ -16,14 +16,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   establish them.
 - **Bidirectional DShot and RPM filter** (ADR-0045 to ADR-0048), Foxeer
   first. Pieces, in order:
-  - the receive phase and reply-loss accounting in the shared DShot bank,
-    sending `four_motor_bidirectional_packets` and decoding with
-    `ferrowasp-waveform::dshot_reply`;
-  - per-lane GPIO-sampling receive in the F4 backend, with the stream
-    turnaround in its unsafe boundary;
-  - `ferrowasp-flight::rpm_filter` in the control loop, its stored
-    configuration, and FerroConfigurator's Motors tab for the
-    bidirectional-DShot setting and the motor pole count;
+  - the stored bidirectional-DShot setting, in place of the props-off
+    `bench_bidirectional_dshot` feature, and FerroConfigurator's Motors tab
+    for it and the motor pole count;
+  - `ferrowasp-flight::rpm_filter` in the control loop, with its stored
+    configuration;
   - the qualification source moved to bidirectional eRPM;
   - extended telemetry: the enable command before guarded idle;
   - blackbox eRPM, reply-loss and extended-telemetry fields;
@@ -34,8 +31,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
   Then, on target:
   - the installed BLHeli_32 version and the EDT values it actually sends;
-  - logic-analyzer captures of both directions;
-  - a DMA2 errata 2.1.10 check under SPI1 and ADC load;
+  - logic-analyzer captures of both directions, including the turnaround:
+    the line released and pulled high, and the reply inside the 71 us window;
+  - reply loss under SPI1, ADC and USART1 DMA load;
   - the filter's cost per loop;
   - props-off arming;
   - spectral evidence before the gyro low-pass corner moves;

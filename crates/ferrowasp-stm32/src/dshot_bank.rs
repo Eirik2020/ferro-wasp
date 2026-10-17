@@ -7,14 +7,25 @@
 //! fault that forces all outputs low. Each STM32 family's backend implements
 //! `DshotLanes` over its own timers and DMA; the policy here is shared, so a
 //! board on either family runs the flight-tested sequencing.
+//!
+//! In bidirectional mode (ADR-0045) a frame set has two phases. Once every
+//! lane has transmitted, the lanes turn around and sample their pins for the
+//! ESCs' replies; the set completes when every sample window has. The
+//! replies are decoded at the next `service`, outside the DMA interrupts. A
+//! missing or bad reply is counted, never a fault; a lane that cannot turn
+//! around, or a stream that never completes, faults the bank as a transmit
+//! fault does.
 
 use ferrowasp_waveform::dshot::{
-    DshotPacket, DshotTiming, command_lease_expired, four_motor_packets, throttles_to_dshot,
+    DshotPacket, DshotTiming, command_lease_expired, four_motor_bidirectional_packets,
+    four_motor_packets, throttles_to_dshot,
 };
+use ferrowasp_waveform::dshot_reply::{decode_gcr, reply_transitions};
 
 pub use ferrowasp_waveform::dshot::{
     COMPARE_DMA_SLOTS, DSHOT600_BITRATE_HZ, DshotCommandSequence, DshotTimingError,
 };
+pub use ferrowasp_waveform::dshot_reply::{DshotReply, DshotReplyError, REPLY_WINDOW_SAMPLES};
 
 pub const DSHOT_COMMAND_MAX: u16 = 2000;
 /// The longest the bank goes without a frame set. Each accepted motor command
@@ -83,6 +94,8 @@ pub enum DshotInitError {
     /// The lane timers run from different clocks; one bank encodes every
     /// lane with one bit timing.
     LaneClocksDiffer,
+    /// Bidirectional DShot was asked for, but a lane cannot receive replies.
+    RepliesUnsupported,
 }
 
 /// The timer channels a DShot lane can drive. A lane's channel is part of
@@ -169,6 +182,18 @@ pub struct DshotStats {
     pub spurious_interrupts: u32,
 }
 
+/// One frame set's decoded replies, by physical lane.
+pub type DshotReplies = [Result<DshotReply, DshotReplyError>; 4];
+
+/// Each lane's bidirectional reply accounting (ADR-0047 logs it).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DshotReplyStats {
+    pub valid: [u32; 4],
+    pub invalid: [u32; 4],
+    /// Missing or bad replies since each lane's last valid one.
+    pub consecutive_invalid: [u32; 4],
+}
+
 /// The hardware under a DShot bank: four timer compare lanes, each fed by
 /// its own memory-to-timer DMA stream, and the timers that clock them.
 pub trait DshotLanes {
@@ -207,6 +232,30 @@ pub trait DshotLanes {
 
     /// Disable `motor`'s DMA stream and clear its flags.
     fn pause_and_clear(&mut self, motor: DshotMotor);
+
+    /// Whether every lane can receive bidirectional replies.
+    fn receives_replies(&self) -> bool {
+        false
+    }
+
+    /// After every lane has transmitted: release the pins, retime the timers
+    /// to pace sampling, switch each stream to fill its lane's sample buffer
+    /// from the pin, and start. `false` if a lane could not turn around.
+    fn begin_receive(&mut self) -> bool {
+        false
+    }
+
+    /// After every sample window: turn each lane back to transmit, with its
+    /// output parked. `false` if a lane could not turn back.
+    fn end_receive(&mut self) -> bool {
+        false
+    }
+
+    /// `motor`'s samples from its last receive window, and its pin's mask in
+    /// each sample.
+    fn reply_samples(&self, _motor: DshotMotor) -> Option<(&[u16], u16)> {
+        None
+    }
 }
 
 /// A DShot motor bank, whatever lanes it drives: what the shared tasks
@@ -232,6 +281,9 @@ pub trait DshotMotors {
     fn is_faulted(&self) -> bool;
     fn stats(&self) -> DshotStats;
     fn requested_values(&self) -> [u16; 4];
+    fn is_bidirectional(&self) -> bool;
+    fn take_replies(&mut self) -> Option<DshotReplies>;
+    fn reply_stats(&self) -> DshotReplyStats;
 }
 
 impl<L> DshotMotors for DshotBank<L>
@@ -290,6 +342,18 @@ where
     fn requested_values(&self) -> [u16; 4] {
         DshotBank::requested_values(self)
     }
+
+    fn is_bidirectional(&self) -> bool {
+        DshotBank::is_bidirectional(self)
+    }
+
+    fn take_replies(&mut self) -> Option<DshotReplies> {
+        DshotBank::take_replies(self)
+    }
+
+    fn reply_stats(&self) -> DshotReplyStats {
+        DshotBank::reply_stats(self)
+    }
 }
 
 pub struct DshotBank<L>
@@ -312,6 +376,14 @@ where
     /// Special-command frames still to send, for one motor. Sent only while
     /// every throttle is zero; any throttle demand cancels it.
     command_sequence: Option<(DshotMotor, DshotCommandSequence)>,
+    /// Inverted checksums and a receive phase per frame set (ADR-0045).
+    bidirectional: bool,
+    /// The current frame set has transmitted and is sampling replies.
+    receiving: bool,
+    /// A receive window has completed and not been decoded yet.
+    replies_waiting: bool,
+    replies: Option<DshotReplies>,
+    reply_stats: DshotReplyStats,
 }
 
 impl<L> DshotBank<L>
@@ -353,7 +425,60 @@ where
             faulted: false,
             stats: DshotStats::default(),
             command_sequence: None,
+            bidirectional: false,
+            receiving: false,
+            replies_waiting: false,
+            replies: None,
+            reply_stats: DshotReplyStats::default(),
         }
+    }
+
+    /// Switches to bidirectional DShot, before the first frame. Refused if a
+    /// lane cannot receive replies.
+    pub fn enable_bidirectional(&mut self) -> Result<(), DshotInitError> {
+        if !self.lanes.receives_replies() {
+            return Err(DshotInitError::RepliesUnsupported);
+        }
+        self.bidirectional = true;
+        Ok(())
+    }
+
+    pub const fn is_bidirectional(&self) -> bool {
+        self.bidirectional
+    }
+
+    /// The replies decoded since the last call, once.
+    pub fn take_replies(&mut self) -> Option<DshotReplies> {
+        self.replies.take()
+    }
+
+    pub const fn reply_stats(&self) -> DshotReplyStats {
+        self.reply_stats
+    }
+
+    /// Decodes the last receive window. Extended telemetry is not enabled
+    /// yet, so every value is read as eRPM.
+    fn decode_replies(&mut self) {
+        let replies = DshotMotor::ALL.map(|motor| {
+            let (samples, pin_mask) = self
+                .lanes
+                .reply_samples(motor)
+                .ok_or(DshotReplyError::NoReply)?;
+            let value = decode_gcr(reply_transitions(samples, pin_mask)?)?;
+            DshotReply::from_value(value, false)
+        });
+        for (index, reply) in replies.iter().enumerate() {
+            let stats = &mut self.reply_stats;
+            if reply.is_ok() {
+                stats.valid[index] = stats.valid[index].wrapping_add(1);
+                stats.consecutive_invalid[index] = 0;
+            } else {
+                stats.invalid[index] = stats.invalid[index].wrapping_add(1);
+                stats.consecutive_invalid[index] =
+                    stats.consecutive_invalid[index].saturating_add(1);
+            }
+        }
+        self.replies = Some(replies);
     }
 
     pub fn command_stop(&mut self) {
@@ -481,6 +606,11 @@ where
             };
         }
 
+        if self.replies_waiting {
+            self.replies_waiting = false;
+            self.decode_replies();
+        }
+
         if self.send_requested(now_ms).is_err() {
             return DshotServiceEvent::Faulted;
         }
@@ -516,11 +646,31 @@ where
         }
 
         self.completion_mask |= completion_bit;
-        let lane = &mut self.stats.lane_completions[motor.index()];
-        *lane = lane.wrapping_add(1);
+        if !self.receiving {
+            let lane = &mut self.stats.lane_completions[motor.index()];
+            *lane = lane.wrapping_add(1);
+        }
 
         if self.completion_mask == ALL_MOTORS_COMPLETE {
-            self.lanes.stop_frame();
+            if self.bidirectional && !self.receiving {
+                if !self.lanes.begin_receive() {
+                    self.latch_fault(false);
+                    return DshotInterruptEvent::Faulted;
+                }
+                self.receiving = true;
+                self.completion_mask = 0;
+                return DshotInterruptEvent::Completed;
+            }
+            if self.receiving {
+                self.receiving = false;
+                if !self.lanes.end_receive() {
+                    self.latch_fault(false);
+                    return DshotInterruptEvent::Faulted;
+                }
+                self.replies_waiting = true;
+            } else {
+                self.lanes.stop_frame();
+            }
             self.busy = false;
             self.stats.frames_completed = self.stats.frames_completed.wrapping_add(1);
         }
@@ -574,7 +724,11 @@ where
                 self.telemetry_request,
             ),
         };
-        let packets = four_motor_packets(values, telemetry_lane);
+        let packets = if self.bidirectional {
+            four_motor_bidirectional_packets(values, telemetry_lane)
+        } else {
+            four_motor_packets(values, telemetry_lane)
+        };
         let mut first_duties = [0; 4];
         for (index, packet) in packets.into_iter().enumerate() {
             if let Some(buffer) = next[index].as_deref_mut() {
@@ -641,6 +795,8 @@ where
 
         self.faulted = true;
         self.busy = false;
+        self.receiving = false;
+        self.replies_waiting = false;
         self.telemetry_request = None;
         self.telemetry_request_sent = None;
         self.command_sequence = None;
@@ -663,10 +819,36 @@ mod tests {
     use std::{boxed::Box, vec::Vec};
 
     /// Lanes that record, for each started frame, every lane's DShot value
-    /// and telemetry bit, and complete every DMA transfer.
+    /// and telemetry bit, and complete every DMA transfer. With `replies`
+    /// set they can receive: each lane's ESC answers with its value, or
+    /// stays silent for `None`.
     #[derive(Default)]
     struct RecordingLanes {
         frames: Vec<[(u16, bool); 4]>,
+        packets: Vec<[u16; 4]>,
+        replies: Option<[Option<u16>; 4]>,
+        samples: [Vec<u16>; 4],
+        receive_calls: Vec<&'static str>,
+        fail_begin: bool,
+        fail_end: bool,
+    }
+
+    /// A pin sampled through one receive window: idle high, then `value`'s
+    /// reply at three samples per bit, then idle.
+    fn sampled_reply(value: Option<u16>) -> Vec<u16> {
+        let mut samples = std::vec![1u16; 40];
+        if let Some(value) = value {
+            let transitions = ferrowasp_waveform::dshot_reply::reply_transitions_for(value);
+            let mut level = 1;
+            for bit in (0..21).rev() {
+                if transitions & (1 << bit) != 0 {
+                    level ^= 1;
+                }
+                samples.extend([level; 3]);
+            }
+        }
+        samples.resize(REPLY_WINDOW_SAMPLES, 1);
+        samples
     }
 
     impl DshotLanes for RecordingLanes {
@@ -685,8 +867,12 @@ mod tests {
             if motor == DshotMotor::Motor1 {
                 self.frames.push([(0, false); 4]);
             }
+            if motor == DshotMotor::Motor1 {
+                self.packets.push([0; 4]);
+            }
             let frame = self.frames.last_mut().expect("motor 1 starts each frame");
             frame[motor.index()] = (*next >> 5, (*next >> 4) & 1 == 1);
+            self.packets.last_mut().expect("motor 1 starts each frame")[motor.index()] = *next;
             Ok(next)
         }
 
@@ -700,6 +886,29 @@ mod tests {
         }
 
         fn pause_and_clear(&mut self, _motor: DshotMotor) {}
+
+        fn receives_replies(&self) -> bool {
+            self.replies.is_some()
+        }
+
+        fn begin_receive(&mut self) -> bool {
+            self.receive_calls.push("begin");
+            if let Some(replies) = self.replies {
+                for (samples, reply) in self.samples.iter_mut().zip(replies) {
+                    *samples = sampled_reply(reply);
+                }
+            }
+            !self.fail_begin
+        }
+
+        fn end_receive(&mut self) -> bool {
+            self.receive_calls.push("end");
+            !self.fail_end
+        }
+
+        fn reply_samples(&self, motor: DshotMotor) -> Option<(&[u16], u16)> {
+            Some((&self.samples[motor.index()], 1))
+        }
     }
 
     fn bank() -> DshotBank<RecordingLanes> {
@@ -714,6 +923,171 @@ mod tests {
         for motor in DshotMotor::ALL {
             assert_eq!(bank.on_dma_interrupt(motor), DshotInterruptEvent::Completed);
         }
+    }
+
+    /// A bidirectional bank whose ESCs answer with `replies`.
+    fn bidirectional_bank(replies: [Option<u16>; 4]) -> DshotBank<RecordingLanes> {
+        let mut bank = bank();
+        bank.lanes.replies = Some(replies);
+        bank.enable_bidirectional().unwrap();
+        bank
+    }
+
+    /// Start a bidirectional frame set and complete both phases on every
+    /// lane.
+    fn bidirectional_frame(bank: &mut DshotBank<RecordingLanes>, now_ms: u64) {
+        assert_eq!(bank.service(now_ms), DshotServiceEvent::FrameStarted);
+        for _phase in 0..2 {
+            for motor in DshotMotor::ALL {
+                assert_eq!(bank.on_dma_interrupt(motor), DshotInterruptEvent::Completed);
+            }
+        }
+    }
+
+    /// eRPM/100 of a reply value: 1,000 us is 500 << 1, 600.
+    const PERIOD_1000_US: u16 = (1 << 9) | 500;
+
+    #[test]
+    fn bidirectional_needs_lanes_that_receive() {
+        let mut bank = bank();
+        assert_eq!(
+            bank.enable_bidirectional(),
+            Err(DshotInitError::RepliesUnsupported)
+        );
+        assert!(!bank.is_bidirectional());
+    }
+
+    #[test]
+    fn bidirectional_frames_invert_every_checksum() {
+        let mut bank = bidirectional_bank([None; 4]);
+        bank.command_throttles([100, 200, 300, 400], 0, 250)
+            .unwrap();
+        bidirectional_frame(&mut bank, 0);
+        let packets = bank.lanes.packets[0];
+        let values = throttles_to_dshot([100, 200, 300, 400]);
+        for (packet, value) in packets.into_iter().zip(values) {
+            assert_eq!(
+                DshotPacket(packet),
+                DshotPacket::from_value_bidirectional(value, false)
+            );
+        }
+    }
+
+    #[test]
+    fn a_bidirectional_frame_set_completes_only_after_its_receive_window() {
+        let mut bank = bidirectional_bank([Some(PERIOD_1000_US); 4]);
+        assert_eq!(bank.service(0), DshotServiceEvent::FrameStarted);
+        for motor in DshotMotor::ALL {
+            bank.on_dma_interrupt(motor);
+        }
+        assert_eq!(bank.lanes.receive_calls, ["begin"]);
+        assert_eq!(bank.service(0), DshotServiceEvent::Busy);
+        for motor in DshotMotor::ALL {
+            assert_eq!(bank.on_dma_interrupt(motor), DshotInterruptEvent::Completed);
+        }
+        assert_eq!(bank.lanes.receive_calls, ["begin", "end"]);
+        assert_eq!(bank.stats().frames_completed, 1);
+        assert_eq!(bank.stats().lane_completions, [1; 4]);
+        assert_eq!(bank.service(1), DshotServiceEvent::FrameStarted);
+    }
+
+    #[test]
+    fn replies_are_decoded_at_the_next_service_and_taken_once() {
+        let mut bank = bidirectional_bank([Some(PERIOD_1000_US), Some(0x0fff), None, Some(1)]);
+        bidirectional_frame(&mut bank, 0);
+        assert_eq!(
+            bank.take_replies(),
+            None,
+            "decoded only at the next service"
+        );
+        bidirectional_frame(&mut bank, 1);
+        assert_eq!(
+            bank.take_replies(),
+            Some([
+                Ok(DshotReply::Erpm { erpm_div100: 600 }),
+                Ok(DshotReply::Erpm { erpm_div100: 0 }),
+                Err(DshotReplyError::NoReply),
+                Ok(DshotReply::Erpm {
+                    erpm_div100: 600_000
+                }),
+            ])
+        );
+        assert_eq!(bank.take_replies(), None);
+    }
+
+    #[test]
+    fn missing_replies_are_counted_never_a_fault() {
+        let mut bank = bidirectional_bank([Some(PERIOD_1000_US), None, None, None]);
+        for now in 0..5 {
+            bidirectional_frame(&mut bank, now);
+        }
+        // Four windows decoded; the fifth waits for the next service.
+        let stats = bank.reply_stats();
+        assert_eq!(stats.valid, [4, 0, 0, 0]);
+        assert_eq!(stats.invalid, [0, 4, 4, 4]);
+        assert_eq!(stats.consecutive_invalid, [0, 4, 4, 4]);
+        assert!(!bank.is_faulted());
+
+        bank.lanes.replies = Some([Some(PERIOD_1000_US); 4]);
+        bidirectional_frame(&mut bank, 5);
+        bidirectional_frame(&mut bank, 6);
+        assert_eq!(bank.reply_stats().consecutive_invalid, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn a_lane_that_cannot_turn_around_faults_the_bank() {
+        let mut bank = bidirectional_bank([None; 4]);
+        bank.lanes.fail_begin = true;
+        assert_eq!(bank.service(0), DshotServiceEvent::FrameStarted);
+        for motor in [DshotMotor::Motor1, DshotMotor::Motor2, DshotMotor::Motor3] {
+            assert_eq!(bank.on_dma_interrupt(motor), DshotInterruptEvent::Completed);
+        }
+        assert_eq!(
+            bank.on_dma_interrupt(DshotMotor::Motor4),
+            DshotInterruptEvent::Faulted
+        );
+        assert!(bank.is_faulted());
+    }
+
+    #[test]
+    fn a_lane_that_cannot_turn_back_faults_the_bank() {
+        let mut bank = bidirectional_bank([None; 4]);
+        bank.lanes.fail_end = true;
+        assert_eq!(bank.service(0), DshotServiceEvent::FrameStarted);
+        for motor in DshotMotor::ALL {
+            bank.on_dma_interrupt(motor);
+        }
+        for motor in [DshotMotor::Motor1, DshotMotor::Motor2, DshotMotor::Motor3] {
+            bank.on_dma_interrupt(motor);
+        }
+        assert_eq!(
+            bank.on_dma_interrupt(DshotMotor::Motor4),
+            DshotInterruptEvent::Faulted
+        );
+        assert!(bank.is_faulted());
+    }
+
+    #[test]
+    fn a_receive_window_that_never_closes_times_out_as_a_frame() {
+        let mut bank = bidirectional_bank([None; 4]);
+        assert_eq!(bank.service(0), DshotServiceEvent::FrameStarted);
+        for motor in DshotMotor::ALL {
+            bank.on_dma_interrupt(motor);
+        }
+        assert_eq!(bank.service(1), DshotServiceEvent::Busy);
+        assert_eq!(bank.service(2), DshotServiceEvent::Faulted);
+        assert_eq!(bank.stats().frame_timeouts, 1);
+    }
+
+    #[test]
+    fn a_unidirectional_bank_never_receives() {
+        let mut bank = bank();
+        frame(&mut bank, 0);
+        frame(&mut bank, 1);
+        assert!(bank.lanes.receive_calls.is_empty());
+        assert_eq!(bank.take_replies(), None);
+        let normal = DshotPacket::from_value(0, false).0;
+        assert!(bank.lanes.packets.iter().all(|set| set == &[normal; 4]));
     }
 
     #[test]
