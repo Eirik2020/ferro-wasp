@@ -381,6 +381,68 @@ pub const fn classify_rc_frame_flags(
     }
 }
 
+/// A fault on the RC input path, as the RC task sees it.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RcInputFault {
+    /// The input stream stopped and will not deliver again.
+    StreamStopped,
+    /// The transport lost bytes; `dma` when its DMA reported the error.
+    Discontinuity { dma: bool },
+    /// A frame failed to parse.
+    ParseError,
+    /// The receiver flagged the frame, as [`classify_rc_frame_flags`] judged.
+    Flagged(RcLinkInvalidation),
+    /// The channel map changed, so the arm switch may now be read elsewhere.
+    ChannelMapChanged,
+}
+
+/// What the RC task does about a fault. Every fault neutralizes the RC
+/// outputs ([`neutralize_rc_outputs`]) and reports `invalidation` to the
+/// safety master; the rest is what differs between faults.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct RcFaultResponse {
+    pub invalidation: RcLinkInvalidation,
+    /// Drop any partial frame: bytes are missing, so the next byte cannot
+    /// continue it. A parse error needs no reset; the parser resyncs itself.
+    pub reset_parser: bool,
+    /// Stop reading: the stream is gone, so the link stays invalid and the
+    /// craft cannot arm.
+    pub stop: bool,
+}
+
+pub const fn rc_fault_response(fault: RcInputFault) -> RcFaultResponse {
+    let (invalidation, reset_parser, stop) = match fault {
+        RcInputFault::StreamStopped => (RcLinkInvalidation::TransportDiscontinuity, false, true),
+        RcInputFault::Discontinuity { dma: true } => (RcLinkInvalidation::DmaError, true, false),
+        RcInputFault::Discontinuity { dma: false } => {
+            (RcLinkInvalidation::TransportDiscontinuity, true, false)
+        }
+        RcInputFault::ParseError => (RcLinkInvalidation::ParserError, false, false),
+        RcInputFault::Flagged(reason) => (reason, false, false),
+        RcInputFault::ChannelMapChanged => (RcLinkInvalidation::ChannelMapChanged, false, false),
+    };
+    RcFaultResponse {
+        invalidation,
+        reset_parser,
+        stop,
+    }
+}
+
+/// What the rest of the firmware sees from RC input while the link is not
+/// valid: centred sticks, zero throttle, the arm switch low, and the arm
+/// qualifier reset so a hold in progress cannot complete.
+pub fn neutralize_rc_outputs(
+    arm_qualifier: &mut ArmQualifier,
+    rates: &signals::RcRatesWriter,
+    throttle: &signals::RcThrottleWriter,
+    arm_high: &signals::RcArmHighWriter,
+) {
+    arm_qualifier.reset();
+    rates.write(RcRates::default());
+    throttle.write(0);
+    arm_high.write(false);
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct MotorCmd {
     pub motors: [f32; 4],
@@ -905,6 +967,118 @@ mod tests {
         assert_eq!(
             classify_rc_frame_flags(true, true),
             Err(RcLinkInvalidation::Failsafe)
+        );
+    }
+
+    #[test]
+    fn every_rc_fault_invalidates_with_its_own_reason() {
+        let cases = [
+            (
+                RcInputFault::StreamStopped,
+                RcLinkInvalidation::TransportDiscontinuity,
+                false,
+                true,
+            ),
+            (
+                RcInputFault::Discontinuity { dma: true },
+                RcLinkInvalidation::DmaError,
+                true,
+                false,
+            ),
+            (
+                RcInputFault::Discontinuity { dma: false },
+                RcLinkInvalidation::TransportDiscontinuity,
+                true,
+                false,
+            ),
+            (
+                RcInputFault::ParseError,
+                RcLinkInvalidation::ParserError,
+                false,
+                false,
+            ),
+            (
+                RcInputFault::Flagged(RcLinkInvalidation::Failsafe),
+                RcLinkInvalidation::Failsafe,
+                false,
+                false,
+            ),
+            (
+                RcInputFault::Flagged(RcLinkInvalidation::FrameLost),
+                RcLinkInvalidation::FrameLost,
+                false,
+                false,
+            ),
+            (
+                RcInputFault::ChannelMapChanged,
+                RcLinkInvalidation::ChannelMapChanged,
+                false,
+                false,
+            ),
+        ];
+        for (fault, invalidation, reset_parser, stop) in cases {
+            assert_eq!(
+                rc_fault_response(fault),
+                RcFaultResponse {
+                    invalidation,
+                    reset_parser,
+                    stop
+                },
+                "{fault:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_lost_bytes_reset_the_parser_and_only_a_stopped_stream_stops() {
+        let discontinuity = rc_fault_response(RcInputFault::Discontinuity { dma: false });
+        assert!(discontinuity.reset_parser && !discontinuity.stop);
+        let stopped = rc_fault_response(RcInputFault::StreamStopped);
+        assert!(stopped.stop);
+        for fault in [
+            RcInputFault::ParseError,
+            RcInputFault::Flagged(RcLinkInvalidation::Failsafe),
+            RcInputFault::ChannelMapChanged,
+        ] {
+            let response = rc_fault_response(fault);
+            assert!(!response.reset_parser && !response.stop, "{fault:?}");
+        }
+    }
+
+    #[test]
+    fn neutralizing_centres_the_sticks_drops_the_switch_and_cancels_an_arm_hold() {
+        use core::cell::RefCell;
+        use critical_section::Mutex;
+        use std::boxed::Box;
+        use std::sync::atomic::{AtomicBool, AtomicU32};
+
+        let rates = Box::leak(Box::new(Mutex::new(RefCell::new(RcRates::default()))));
+        let (rates_writer, rates_reader) = signals::split_rc_rates(rates);
+        let (throttle_writer, throttle_reader) =
+            signals::split_rc_throttle(Box::leak(Box::new(AtomicU32::new(0))));
+        let (arm_writer, arm_reader) =
+            signals::split_rc_arm_high(Box::leak(Box::new(AtomicBool::new(false))));
+
+        rates_writer.write(RcRates {
+            roll: 300,
+            pitch: -200,
+            yaw: 150,
+        });
+        throttle_writer.write(1_500);
+        arm_writer.write(true);
+        let mut qualifier = ArmQualifier::default();
+        assert_eq!(qualifier.update(true, 0), None, "a hold starts");
+
+        neutralize_rc_outputs(&mut qualifier, &rates_writer, &throttle_writer, &arm_writer);
+
+        let read = rates_reader.read();
+        assert_eq!((read.roll, read.pitch, read.yaw), (0, 0, 0));
+        assert_eq!(throttle_reader.read(), 0);
+        assert!(!arm_reader.read());
+        assert_eq!(
+            qualifier.update(true, ARM_HOLD_US),
+            None,
+            "the hold restarted instead of completing"
         );
     }
 

@@ -59,6 +59,14 @@ impl RcChannelMap {
         arm: 4,
     };
 
+    /// Records `current` as the map in use, and says whether it replaced a
+    /// different one. The first map seen is not a change.
+    pub fn replaced(in_use: &mut Option<Self>, current: Self) -> bool {
+        in_use
+            .replace(current)
+            .is_some_and(|previous| previous != current)
+    }
+
     /// Build a map from its configuration values, or `None` when the stick
     /// order is not a permutation of channels 1-4 or the arm channel is
     /// outside 5-16.
@@ -1468,6 +1476,28 @@ mod tests {
         );
         assert_eq!(map.arm(&channels), 400);
         assert_eq!(RcChannelMap::AETR_ARM_CH9.arm(&channels), 800);
+    }
+
+    #[test]
+    fn a_channel_map_change_is_seen_once_and_the_first_map_is_not_one() {
+        let mut in_use = None;
+        assert!(!RcChannelMap::replaced(
+            &mut in_use,
+            RcChannelMap::AETR_ARM_CH5
+        ));
+        assert!(!RcChannelMap::replaced(
+            &mut in_use,
+            RcChannelMap::AETR_ARM_CH5
+        ));
+        assert!(RcChannelMap::replaced(
+            &mut in_use,
+            RcChannelMap::AETR_ARM_CH9
+        ));
+        assert!(!RcChannelMap::replaced(
+            &mut in_use,
+            RcChannelMap::AETR_ARM_CH9
+        ));
+        assert_eq!(in_use, Some(RcChannelMap::AETR_ARM_CH9));
     }
 
     #[test]
