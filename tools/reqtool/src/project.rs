@@ -199,11 +199,9 @@ impl Project {
             .is_some_and(|reason| !reason.trim().is_empty());
         let mut problems = Vec::new();
         match verification.mode {
-            Mode::Direct => {
-                if verification.entries.is_empty() {
-                    problems.push("direct verification has no entries".into());
-                }
-            }
+            // A requirement may exist before anything verifies it; `check`
+            // reports it as having no method, which is how a gap shows.
+            Mode::Direct => {}
             Mode::ViaChildren => {
                 if !has_children {
                     problems.push(

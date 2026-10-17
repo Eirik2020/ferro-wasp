@@ -1,0 +1,263 @@
+schema_version: 1
+requirements:
+  - id: INPUT-001
+    title: Command Input fails closed
+    statement: >-
+      Command Input shall pass stick commands and arm requests on only from a
+      qualified, fresh RC link, and on any loss, fault or doubt about that
+      link shall neutralize its outputs and invalidate the link.
+    rationale: >-
+      RC input is the pilot's only authority over the craft; acting on stale,
+      corrupt or misread input is the failure this requirement exists to
+      prevent.
+    derived_from: [W1, W2]
+    verification:
+      mode: via_children
+      reason: >-
+        The children cover every way the link can fail (staleness,
+        receiver-flagged loss, corrupt or interrupted input, a changed channel
+        map) and every way RC input acts (neutral outputs, stick scaling, arm
+        qualification, disarm on loss).
+
+  - id: INPUT-002
+    title: Stale RC input invalidates the link
+    statement: >-
+      The RC link shall become invalid when no healthy frame has arrived for
+      more than RC_LINK_TIMEOUT_US (100 ms), and shall become valid again only
+      after RC_LINK_RECOVERY_FRAMES (3) consecutive healthy frames.
+    rationale: Stale input must never be acted on as a live command.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_core::safety::RcLinkState
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::rc_link_requires_healthy_recovery_and_arm_switch_low
+
+  - id: INPUT-003
+    title: Receiver-flagged loss invalidates the link
+    statement: >-
+      A frame carrying SBUS's failsafe or frame-lost flag, or a CRSF frame
+      while the uplink reports zero link quality, shall invalidate the RC link
+      and shall not be acted on.
+    rationale: >-
+      The receiver knows before the flight controller does that the radio link
+      has gone.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_core::safety::classify_rc_frame_flags
+      - ferrowasp_flight::rc_receiver::RcReceiver
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::rc_frame_flags_reject_failsafe_and_lost_frames
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers
+
+  - id: INPUT-004
+    title: The external SBUS parser is contract-tested
+    statement: >-
+      The SBUS parser, an external crate pinned to one version, shall be
+      contract-tested at the RcReceiver interface with known byte sequences:
+      valid frames, the failsafe and frame-lost flags, out-of-range channel
+      values, corrupted frames, and a frame split across a discontinuity.
+    rationale: >-
+      sbus-rs is not verified in-house (trust: external), so the boundary
+      where its output enters FerroWasp is where it is proven. Today only a
+      valid frame is tested through it.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_flight::rc_receiver::RcReceiver::sbus
+    verification:
+      mode: direct
+
+  - id: INPUT-005
+    title: Corrupt input is rejected without losing sync
+    statement: >-
+      A frame with a bad CRC, an impossible length or a short payload shall be
+      reported as a parse error and never delivered, and the next valid frame
+      shall still decode.
+    rationale: >-
+      Corruption must invalidate the link (INPUT-006), and a single bad frame
+      must not leave the parser stuck.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_drivers::crsf
+      - ferrowasp_flight::rc_receiver::RcReceiver::push_byte
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rc_receiver::tests::crsf_crc_error_is_a_parse_error
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_drivers::crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_drivers::crsf::tests::impossible_length_is_rejected_without_buffering
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_drivers::crsf::tests::short_rc_payload_is_an_error_not_a_frame
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_drivers::crsf::tests::rc_frame_decodes_after_leading_noise
+
+  - id: INPUT-006
+    title: Every RC fault neutralizes the outputs and invalidates the link
+    statement: >-
+      On a transport stop, a stream discontinuity, a DMA error, a parse error,
+      a receiver-flagged frame or a channel-map change, Command Input shall
+      neutralize its outputs (centred sticks, zero throttle, arm switch low,
+      arm qualifier reset), reset the parser where bytes may have been lost,
+      and report the invalidation to the safety master.
+    rationale: >-
+      These decisions are made inline in the rc_input task body, which cannot
+      be host-tested; AGENTS.md requires each decision a task makes to be a
+      host-tested function. This requirement has no method until they are
+      extracted.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_stm32_tasks::rc_input
+      - ferrowasp_stm32_tasks::neutralize_rc_input
+    verification:
+      mode: direct
+
+  - id: INPUT-007
+    title: A changed channel map requires the arm switch seen low again
+    statement: >-
+      After the RC link is invalidated for any reason, including a change of
+      channel map, arming shall need fresh healthy frames and the arm switch
+      seen low on the arm channel now in use.
+    rationale: >-
+      A new map may read the arm switch from a channel that is already high,
+      which would otherwise look like the pilot arming.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_core::safety::RcLinkState
+      - ferrowasp_flight::drone_toolbox::RcChannelMap
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::channel_map_reads_taer_and_round_trips_its_config_values
+
+  - id: INPUT-008
+    title: Arm requests are qualified and disarm follows the switch
+    statement: >-
+      An arm request shall be raised only after the arm switch has been held
+      high for ARM_HOLD_US (200 ms) on an armable link, a low reading seen
+      while the link is still qualifying shall not satisfy the rearm
+      interlock, and a falling edge of the switch shall raise a disarm
+      request.
+    rationale: A glitch or a switch already high at connect must never arm.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_core::safety::ArmQualifier
+      - ferrowasp_core::safety::RcLinkState
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::an_arm_hold_straddling_the_old_u32_wrap_still_arms
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes
+
+  - id: INPUT-009
+    title: Stick values are bounded
+    statement: >-
+      Channel values outside the RC channel range shall be clamped, the centre
+      deadband applied, and commanded rates bounded by the active rate
+      profile.
+    rationale: >-
+      A receiver or parser fault must not command more than full stick.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_flight::drone_toolbox::remap_rc_channels_with_profile
+      - ferrowasp_flight::drone_toolbox::remap_rc_throttle_channel
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
+
+  - id: INPUT-010
+    title: RC loss while armed stops the motors and disarms
+    statement: >-
+      When the RC link times out or is invalidated while armed, motor commands
+      shall stop and the safety master shall disarm, and the craft shall not
+      rearm until the link and the arm switch requalify.
+    rationale: >-
+      The reaction to a lost link is the point of detecting it. The decisions
+      sit in the control_loop and safety_master task bodies, so only the bench
+      procedure covers them today.
+    derived_from: [INPUT-001, W2]
+    allocated_to:
+      - ferrowasp_stm32_tasks::control_loop
+      - ferrowasp_stm32_tasks::safety_master
+    verification:
+      mode: direct
+      entries:
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate

@@ -92,7 +92,9 @@ requirements:
 `via_children`, `covered_by_parent` and `either` need a `reason`;
 `covered_by_parent` also needs `observed_by`, naming what in the parent's run
 would show a failure. A child covered by its parent never counts towards that
-parent. Unknown fields are refused, and there is no `status` field.
+parent. Unknown fields are refused, and there is no `status` field. A
+`direct` requirement with no entries is valid: nothing verifies it yet, and
+`check` reports it as a gap.
 
 Paths resolve through modules, `use` re-exports and globs, plus one segment
 after a type for an enum variant or a method in an `impl` in the type's own

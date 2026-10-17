@@ -200,8 +200,18 @@ fn modes_need_their_reasons_and_relations() {
         &VALID_ONE.replace("mode: direct", "mode: direct\n      observed_by: counter"),
         "observed_by only applies to covered_by_parent",
     );
+}
+
+#[test]
+fn a_requirement_without_a_method_is_valid_and_shows_as_a_gap() {
     let no_entries = VALID_ONE.split("      entries:").next().unwrap().to_owned();
-    assert_problem(&no_entries, "direct verification has no entries");
+    let copy = with_requirements(&no_entries);
+    let (project, problems) = Project::load(copy.path()).unwrap();
+    assert!(problems.is_empty(), "{problems:#?}");
+    let detail = report::check(&project, "INPUT-001", &NoEvidence).unwrap();
+    assert!(detail.contains("no verification method yet"), "{detail}");
+    let summary = report::summary(&project, &NoEvidence);
+    assert!(summary.contains("1 with no verification method yet"), "{summary}");
 }
 
 #[test]

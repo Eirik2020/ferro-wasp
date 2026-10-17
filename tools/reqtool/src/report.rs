@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use crate::items::Resolver;
 use crate::project::Project;
-use crate::schema::{Method, Requirement};
+use crate::schema::{Method, Mode, Requirement};
 use crate::status::{self, Evidence, Status};
 
 /// The whole project: a count per status, then one line per requirement.
@@ -19,17 +19,27 @@ pub fn summary(project: &Project, evidence: &dyn Evidence) -> String {
     for (status, count) in &counts {
         let _ = write!(out, ", {count} {}", status.name());
     }
+    let unmethoded = project.requirements.values().filter(|r| has_no_method(r)).count();
+    if unmethoded > 0 {
+        let _ = write!(out, "; {unmethoded} with no verification method yet");
+    }
     out.push('\n');
     for requirement in project.requirements.values() {
+        let gap = if has_no_method(requirement) { "  (no method)" } else { "" };
         let _ = writeln!(
             out,
-            "{:<16} {:<10} {}",
+            "{:<16} {:<10} {}{gap}",
             requirement.id,
             statuses[&requirement.id].name(),
             requirement.title
         );
     }
     out
+}
+
+/// A `direct` requirement with no entries: nothing verifies it yet.
+fn has_no_method(requirement: &Requirement) -> bool {
+    requirement.verification.mode == Mode::Direct && requirement.verification.entries.is_empty()
 }
 
 /// One requirement by ID, or every requirement allocated to, inside, or
@@ -137,6 +147,9 @@ fn detail(
         let _ = write!(out, ", observed by {observed}");
     }
     out.push('\n');
+    if has_no_method(requirement) {
+        out.push_str("    no verification method yet\n");
+    }
     for (index, entry) in verification.entries.iter().enumerate() {
         let method = match &entry.method {
             Method::Test(path) => format!("test {path}"),
