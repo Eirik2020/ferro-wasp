@@ -33,6 +33,12 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
   requirements given) with cargo, in each package's own workspace, and
   records the session. Tests that fail or do not run exit nonzero; passes
   already on record at the same fingerprint are not recorded again.
+- `import` carries the old schema 1 and 2 run records over as schema 3
+  evidence, beside the originals, which stay unchanged. Each requirement
+  entry naming the old test's procedure gets a result fingerprinted in a
+  temporary worktree of the record's own revision; a revision not in this
+  repository, or one whose items did not exist yet, gets an unavailable
+  fingerprint, so its pass shows as stale. Re-running it changes nothing.
 - `record` writes one run of a test or procedure: a result, at the current
   fingerprint, for every requirement entry that names that method. `mcu`,
   `bench` and `flight` evidence needs `--board`. `--failed REQ` fails one

@@ -7,6 +7,7 @@
 
 pub mod evidence;
 pub mod fingerprint;
+pub mod import;
 pub mod items;
 pub mod project;
 pub mod report;
