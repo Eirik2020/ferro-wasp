@@ -1,0 +1,266 @@
+{
+  "schema_version": 3,
+  "run_id": "20261017T130959Z__23-methods__host__01",
+  "recorded_at_utc": "2026-10-17T13:09:59Z",
+  "board": null,
+  "revision": "1776a3e943d590199debccaf5641513ffdd6dcf8",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::an_arm_hold_straddling_the_old_u32_wrap_still_arms"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:9e24d92780a427206224723e93a653aeaff78b63efd6120ac48acff75ec149a3",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:ffef08ef690968db8fea2f560ce32c0735381e0acc3b925de20493dca79f587d",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-003",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_frame_flags_reject_failsafe_and_lost_frames"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:cfe93d79a35590e8066ceb8332166b41d0f9066dec920f8bd651339a740c80f0",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:c8cc8b9e6bcc81b6c00838f157ba139524e3564b8e0fdbc6d58b4c59a5df5bf7",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-007",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:a7a4e6e01cc680995e0c53acabed321fec2f90073b602e441453e31549b9af43",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-002",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_requires_healthy_recovery_and_arm_switch_low"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:dda996b4511e0c764711a931c251b4f62af7e97f0d6927fb130ff67c168e03d0",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-002",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:b7ce59918e9032cee8f7c7bf13b6647d0681eee12c5d38200f63baa28a0f6f16",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:d9ce1c89bed8e3b8292df0e63d8131812a7f1fde667ea9d0509e9ad739f8cdad",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::impossible_length_is_rejected_without_buffering"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:66e0a09117e620918b884a1efb37c1d2e2b32a3c93431327bfcd4aa045fa5924",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::rc_frame_decodes_after_leading_noise"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:80e7d8e6b07f978a15d8f228054f96a0e140941f1bf330e91d3ed78d8bfb6933",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::short_rc_payload_is_an_error_not_a_frame"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:a52cf5aeff82613f5d6b4cfbbb32a2007205e0d11542437c716cc71c4778cb5a",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:87f477d6f19f46131b476260697ec5f8172e7aa97e06f21eca434a94277b61e4",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-007",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::channel_map_reads_taer_and_round_trips_its_config_values"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:0ad189c3f9a2dfe4167f1a18d40877d37d658cf9ad346158fc6477172b8d8d08",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:a71a116cc5b197abe8b763874ed151ddb465d5081abf12c7d14e93eb1ccb011d",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:41c05a04d5951074036d1a616a08c65ef356f5fcd7f53f8922e3531c44d0e4f3",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::crsf_crc_error_is_a_parse_error"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:845d3bf929888c48741597d1d38164c7da6af158606441ebb2d2aa49e801712b",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-003",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:a9feb9d22f1681d913ca226d3b889d2487f17c11ebe35c3ec66bd2d8fae9cd9d",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:be4b429a15e288838e54833d7f45fa62e3ad69c9494cf0aa2b24f9de90e2902e",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:119f29818118fb5974aab81d297986c90b81ae2088eba34f29e9c1979e129c4e",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_failsafe_and_frame_lost_flags_reach_the_frame"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:4c1341d55cec71b2c0ae2de5f0e871c66ba4cafe29db3a01de94aa9654e27aa7",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_out_of_range_channels_pass_through_unclamped"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:218f8b2b8859a15c3ba9637f8693a0393f4f4b7eaf06967b7c77aa43298741d8",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_partial_frame_is_dropped_on_reset"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:940eb63d36f41f796749094d24f7dfd9df610f9a33cf4539d66af78f32cb06d5",
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_skips_leading_noise_before_a_header"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:32997f4e40b25d2673ee63a4ee6a6d215d7ea479366da347cd02fd96f9c4c1ec",
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}
