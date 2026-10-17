@@ -17,9 +17,21 @@ pub use ferrowasp_waveform::dshot::{
 };
 
 pub const DSHOT_COMMAND_MAX: u16 = 2000;
+/// The longest the bank goes without a frame set. Each accepted motor command
+/// releases one at the control-loop rate (ADR-0046); without commands - while
+/// disarmed, in guarded idle, or after the control loop stops - a fallback
+/// releases one at this period, so the ESCs always see frames and an
+/// unrenewed lease is always found.
 pub const DSHOT_SERVICE_PERIOD_MS: u32 = 2;
 pub const DSHOT_FRAME_TIMEOUT_MS: u32 = 1;
 const ALL_MOTORS_COMPLETE: u8 = 0b1111;
+
+/// Whether the fallback must release the service: no frame set has started
+/// for a full service period. Times are wrapping milliseconds, so the answer holds
+/// across the counter's wrap.
+pub const fn fallback_release_due(now_ms: u32, last_release_ms: u32) -> bool {
+    now_ms.wrapping_sub(last_release_ms) >= DSHOT_SERVICE_PERIOD_MS
+}
 
 /// Physical four-lane DShot bank output, before any airframe motor remap.
 ///
@@ -790,6 +802,30 @@ mod tests {
         frame(&mut bank, 0);
         assert_eq!(bank.take_telemetry_request_sent(), None);
         assert_eq!(bank.lanes.frames[0][3], (0, false));
+    }
+
+    #[test]
+    fn the_fallback_waits_out_one_service_period_after_any_release() {
+        assert!(!fallback_release_due(100, 100));
+        assert!(!fallback_release_due(101, 100));
+        assert!(fallback_release_due(102, 100));
+        assert!(fallback_release_due(150, 100));
+    }
+
+    #[test]
+    fn commands_at_the_control_rate_hold_the_fallback_off() {
+        // A 2 kHz control loop releases twice per millisecond tick, so the
+        // newest release is never a full period old.
+        for tick in 0..10u32 {
+            assert!(!fallback_release_due(tick, tick));
+            assert!(!fallback_release_due(tick + 1, tick));
+        }
+    }
+
+    #[test]
+    fn the_fallback_survives_the_millisecond_counter_wrap() {
+        assert!(!fallback_release_due(0, u32::MAX));
+        assert!(fallback_release_due(1, u32::MAX));
     }
 
     #[test]

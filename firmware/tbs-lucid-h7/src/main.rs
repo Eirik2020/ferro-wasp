@@ -609,7 +609,7 @@ ferroforge::app! {
         flight::rc_telemetry::spawn().unwrap();
         flight::rc_input::spawn().unwrap();
         flight::osd_refresh::spawn().ok();
-        flight::dshot_service::spawn().unwrap();
+        flight::dshot_fallback::spawn().unwrap();
         flight::esc_manager_task::spawn().unwrap();
         flight::flash_manager_task::spawn().unwrap();
 
@@ -881,8 +881,14 @@ ferroforge::app! {
         fn control_loop;
         #[task(priority = 13)]
         async fn actuator_idle_notify;
+        // Released by each accepted motor command, so frames follow the
+        // control loop, and by the fallback when none arrives (ADR-0046).
         #[task(priority = 13)]
         async fn dshot_service;
+        // Same priority as the service it releases, as the old 2 ms service
+        // loop had: it only checks a timestamp and spawns, every 2 ms.
+        #[task(priority = 13)]
+        async fn dshot_fallback;
         // BLHeli legacy ESC telemetry, on the port bound to `esc_telemetry`.
         #[task(priority = 4)]
         async fn esc_manager_task;

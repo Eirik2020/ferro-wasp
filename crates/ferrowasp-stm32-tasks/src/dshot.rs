@@ -4,7 +4,10 @@
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
-use crate::snapshots::DSHOT_ACTIVE_LANES;
+use crate::snapshots::{DSHOT_ACTIVE_LANES, DSHOT_LAST_RELEASE_MS};
+
+/// How often the service reports the bank's state to the log.
+const DSHOT_REPORT_PERIOD_MS: u64 = 2_000;
 
 pub fn service_dshot_dma_irq<Bank>(bank: &mut Bank, motor: dshot::DshotMotor, stream: u8)
 where
@@ -28,11 +31,18 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
     service_dshot_dma_irq(&mut cx.shared.dshot_motors, CONFIG::MOTOR, CONFIG::STREAM);
 }
 
-/// Every `DSHOT_SERVICE_PERIOD_MS`: pass one ESC telemetry request to the
-/// motor bank, service the bank - which stops the motors itself when a
-/// command lease expires or the bank faults - acknowledge a sent request to
-/// the ESC manager, and ask the safety master to disarm after an expiry or
-/// fault. It does not choose motor commands; `actuator_output` does.
+/// One release of the motor bank (ADR-0046): pass one ESC telemetry request
+/// to the bank, service it - which starts a frame set, and stops the motors
+/// itself when a command lease expires or the bank faults - acknowledge a
+/// sent request to the ESC manager, and ask the safety master to disarm after
+/// an expiry or fault. It does not choose motor commands; `actuator_output`
+/// does.
+///
+/// It is the only frame starter. `actuator_output` releases it after each
+/// command it accepts, so frames follow the control loop; `dshot_fallback`
+/// releases it whenever no frame set has started for
+/// `DSHOT_SERVICE_PERIOD_MS`. A release that finds it already pending or
+/// running folds into that run.
 ///
 /// Which DShot motor each ESC output is wired to is the board's, so it is
 /// configuration.
@@ -42,7 +52,7 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
     local = [
         fault_reported: bool = false,
         disarm_pending: bool = false,
-        report_ticks: u16 = 0,
+        last_report_ms: u64 = 0,
         esc_request_consumer: esc::EscRequestConsumer,
         esc_ack_producer: esc::EscAckProducer,
         esc_actuator_request: Option<esc::EscActuatorRequest> = None,
@@ -54,129 +64,151 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
     monotonic = Mono,
 )]
 pub async fn dshot_service(mut cx: dshot_service::Context) {
-    loop {
-        let release = Mono::now();
-        let next_release = release + u64::from(dshot::DSHOT_SERVICE_PERIOD_MS).millis();
-        let now_ms = release.duration_since_epoch().to_millis();
-        if cx.local.esc_actuator_request.is_none() {
-            *cx.local.esc_actuator_request = cx.local.esc_request_consumer.dequeue();
-            *cx.local.esc_actuator_request_submitted = false;
-            *cx.local.esc_actuator_request_taken_ms = now_ms;
-        }
-        // The ESC manager gives up on an acknowledgement after the same
-        // time. Drop the request unsent, so no frame it would cause can be
-        // credited to a later one.
-        let expired = cx.local.esc_actuator_request.is_some()
-            && now_ms.saturating_sub(*cx.local.esc_actuator_request_taken_ms)
-                >= u64::from(esc::ESC_REQUEST_EXPIRY_MS);
+    let now_ms = Mono::now().duration_since_epoch().to_millis();
+    if cx.local.esc_actuator_request.is_none() {
+        *cx.local.esc_actuator_request = cx.local.esc_request_consumer.dequeue();
+        *cx.local.esc_actuator_request_submitted = false;
+        *cx.local.esc_actuator_request_taken_ms = now_ms;
+    }
+    // The ESC manager gives up on an acknowledgement after the same
+    // time. Drop the request unsent, so no frame it would cause can be
+    // credited to a later one.
+    let expired = cx.local.esc_actuator_request.is_some()
+        && now_ms.saturating_sub(*cx.local.esc_actuator_request_taken_ms)
+            >= u64::from(esc::ESC_REQUEST_EXPIRY_MS);
 
-        let (event, telemetry_sent) = cx.shared.dshot_motors.lock(|dshot| {
-            if expired {
-                if *cx.local.esc_actuator_request_submitted {
-                    dshot.cancel_telemetry_request();
-                }
-                *cx.local.esc_actuator_request = None;
-                *cx.local.esc_actuator_request_submitted = false;
-            }
-            if let Some(request) = *cx.local.esc_actuator_request
-                && !*cx.local.esc_actuator_request_submitted
-            {
-                let result = match request.operation {
-                    esc::EscOperation::RequestTelemetry => {
-                        dshot.request_telemetry(CONFIG::DSHOT_MOTOR_FOR_OUTPUT(request.output))
-                    }
-                };
-                match result {
-                    Ok(()) => *cx.local.esc_actuator_request_submitted = true,
-                    Err(dshot::DshotTelemetryRequestError::Busy) => {}
-                    Err(dshot::DshotTelemetryRequestError::Faulted) => {
-                        *cx.local.esc_actuator_request = None;
-                    }
-                }
-            }
-
-            let event = dshot.service(now_ms);
-            let telemetry_sent = dshot.take_telemetry_request_sent();
-            let active =
-                dshot
-                    .requested_values()
-                    .iter()
-                    .enumerate()
-                    .fold(0u8, |mask, (lane, value)| {
-                        if *value != 0 {
-                            mask | (1 << lane)
-                        } else {
-                            mask
-                        }
-                    });
-            DSHOT_ACTIVE_LANES.store(active, Ordering::Relaxed);
-            (event, telemetry_sent)
-        });
-        if let (Some(request), Some(sent_motor)) = (*cx.local.esc_actuator_request, telemetry_sent)
-        {
-            if sent_motor == CONFIG::DSHOT_MOTOR_FOR_OUTPUT(request.output) {
-                let ack = esc::EscActuatorAck {
-                    request,
-                    started_at_ms: now_ms,
-                };
-                if cx.local.esc_ack_producer.enqueue(ack).is_err() {
-                    warn!("ESC actuator acknowledgement queue full");
-                }
-            } else {
-                warn!("ESC telemetry acknowledgement output mismatch");
+    let (event, telemetry_sent) = cx.shared.dshot_motors.lock(|dshot| {
+        if expired {
+            if *cx.local.esc_actuator_request_submitted {
+                dshot.cancel_telemetry_request();
             }
             *cx.local.esc_actuator_request = None;
             *cx.local.esc_actuator_request_submitted = false;
         }
-
-        match event {
-            dshot::DshotServiceEvent::LeaseExpired => {
-                warn!("DShot command lease expired; stop frames selected");
-                *cx.local.disarm_pending = true;
-            }
-            dshot::DshotServiceEvent::Faulted if !*cx.local.fault_reported => {
-                warn!("DShot bank faulted; all outputs forced low");
-                *cx.local.fault_reported = true;
-                *cx.local.disarm_pending = true;
-            }
-            _ => {}
-        }
-
-        if *cx.local.disarm_pending
-            && cx
-                .spawn
-                .safety_master(safety::SafetyEvent::DisarmRequested)
-                .is_ok()
+        if let Some(request) = *cx.local.esc_actuator_request
+            && !*cx.local.esc_actuator_request_submitted
         {
-            *cx.local.disarm_pending = false;
+            let result = match request.operation {
+                esc::EscOperation::RequestTelemetry => {
+                    dshot.request_telemetry(CONFIG::DSHOT_MOTOR_FOR_OUTPUT(request.output))
+                }
+            };
+            match result {
+                Ok(()) => *cx.local.esc_actuator_request_submitted = true,
+                Err(dshot::DshotTelemetryRequestError::Busy) => {}
+                Err(dshot::DshotTelemetryRequestError::Faulted) => {
+                    *cx.local.esc_actuator_request = None;
+                }
+            }
         }
 
-        *cx.local.report_ticks = cx.local.report_ticks.wrapping_add(1);
-        if *cx.local.report_ticks >= 1_000 {
-            *cx.local.report_ticks = 0;
-            let (requested, stats) = cx
-                .shared
-                .dshot_motors
-                .lock(|dshot| (dshot.requested_values(), dshot.stats()));
-            info!(
-                "DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
-                requested[0],
-                requested[1],
-                requested[2],
-                requested[3],
-                stats.frames_completed,
-                stats.frames_started,
-                stats.lane_completions[0],
-                stats.lane_completions[1],
-                stats.lane_completions[2],
-                stats.lane_completions[3],
-                stats.busy_skips,
-                stats.lease_expiries,
-                stats.frame_timeouts,
-                stats.dma_faults,
-                now_ms
-            );
+        let frames_before = dshot.stats().frames_started;
+        let event = dshot.service(now_ms);
+        if dshot.stats().frames_started != frames_before {
+            // Wrapping milliseconds: the fallback compares differences only.
+            // A release that found the bank busy started nothing, so it does
+            // not hold the fallback off.
+            DSHOT_LAST_RELEASE_MS.store(now_ms as u32, Ordering::Relaxed);
         }
-        Mono::delay_until(next_release).await;
+        let telemetry_sent = dshot.take_telemetry_request_sent();
+        let active =
+            dshot
+                .requested_values()
+                .iter()
+                .enumerate()
+                .fold(0u8, |mask, (lane, value)| {
+                    if *value != 0 {
+                        mask | (1 << lane)
+                    } else {
+                        mask
+                    }
+                });
+        DSHOT_ACTIVE_LANES.store(active, Ordering::Relaxed);
+        (event, telemetry_sent)
+    });
+    if let (Some(request), Some(sent_motor)) = (*cx.local.esc_actuator_request, telemetry_sent) {
+        if sent_motor == CONFIG::DSHOT_MOTOR_FOR_OUTPUT(request.output) {
+            let ack = esc::EscActuatorAck {
+                request,
+                started_at_ms: now_ms,
+            };
+            if cx.local.esc_ack_producer.enqueue(ack).is_err() {
+                warn!("ESC actuator acknowledgement queue full");
+            }
+        } else {
+            warn!("ESC telemetry acknowledgement output mismatch");
+        }
+        *cx.local.esc_actuator_request = None;
+        *cx.local.esc_actuator_request_submitted = false;
+    }
+
+    match event {
+        dshot::DshotServiceEvent::LeaseExpired => {
+            warn!("DShot command lease expired; stop frames selected");
+            *cx.local.disarm_pending = true;
+        }
+        dshot::DshotServiceEvent::Faulted if !*cx.local.fault_reported => {
+            warn!("DShot bank faulted; all outputs forced low");
+            *cx.local.fault_reported = true;
+            *cx.local.disarm_pending = true;
+        }
+        _ => {}
+    }
+
+    if *cx.local.disarm_pending
+        && cx
+            .spawn
+            .safety_master(safety::SafetyEvent::DisarmRequested)
+            .is_ok()
+    {
+        *cx.local.disarm_pending = false;
+    }
+
+    if now_ms.saturating_sub(*cx.local.last_report_ms) >= DSHOT_REPORT_PERIOD_MS {
+        *cx.local.last_report_ms = now_ms;
+        let (requested, stats) = cx
+            .shared
+            .dshot_motors
+            .lock(|dshot| (dshot.requested_values(), dshot.stats()));
+        info!(
+            "DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
+            requested[0],
+            requested[1],
+            requested[2],
+            requested[3],
+            stats.frames_completed,
+            stats.frames_started,
+            stats.lane_completions[0],
+            stats.lane_completions[1],
+            stats.lane_completions[2],
+            stats.lane_completions[3],
+            stats.busy_skips,
+            stats.lease_expiries,
+            stats.frame_timeouts,
+            stats.dma_faults,
+            now_ms
+        );
+    }
+}
+
+/// Keeps frames going when no command releases them (ADR-0046): while
+/// disarmed, during guarded idle, or after the control loop stops. Every
+/// `DSHOT_SERVICE_PERIOD_MS` it releases the service if no frame set has
+/// started in that time, so the ESCs always see frames and an unrenewed lease
+/// is always found. Absolute deadlines keep its own cadence from drifting.
+#[ferroforge::task(
+    spawn = [dshot_service()],
+    monotonic = Mono,
+)]
+pub async fn dshot_fallback(mut cx: dshot_fallback::Context) {
+    let mut next_check = Mono::now();
+    loop {
+        let now_ms = next_check.duration_since_epoch().to_millis() as u32;
+        if dshot::fallback_release_due(now_ms, DSHOT_LAST_RELEASE_MS.load(Ordering::Relaxed)) {
+            // Already pending or running: that run is the release.
+            let _ = cx.spawn.dshot_service();
+        }
+        next_check += u64::from(dshot::DSHOT_SERVICE_PERIOD_MS).millis();
+        Mono::delay_until(next_check).await;
     }
 }
