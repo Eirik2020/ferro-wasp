@@ -1,0 +1,112 @@
+{
+  "schema_version": 3,
+  "run_id": "20260921T205100Z__BENCH-FOX-001__foxeer-f405-v2__01__imported",
+  "recorded_at_utc": "2026-09-21T20:51:00Z",
+  "board": "foxeer-f405-v2",
+  "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "ARM-001",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "ARM-002",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "CTRL-001",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "INPUT-010",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "LOG-001",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    },
+    {
+      "requirement": "MOTOR-001",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate"
+      },
+      "level": "bench",
+      "target": "fcu",
+      "setup": "props-off",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "fail"
+    }
+  ],
+  "note": "imported from project_meta/testing/evidence/runs/2026/09/20260921T205100Z__BENCH-FOX-001__foxeer-f405-v2__01.json (BENCH-FOX-001, schema 1); its observations and limitations stay there",
+  "supersedes": [],
+  "ruling": null
+}

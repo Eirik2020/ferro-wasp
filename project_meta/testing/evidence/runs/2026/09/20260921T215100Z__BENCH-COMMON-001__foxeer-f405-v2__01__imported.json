@@ -1,0 +1,35 @@
+{
+  "schema_version": 3,
+  "run_id": "20260921T215100Z__BENCH-COMMON-001__foxeer-f405-v2__01__imported",
+  "recorded_at_utc": "2026-09-21T21:51:00Z",
+  "board": "foxeer-f405-v2",
+  "revision": "a921ffe7e96905b77b1bbc57114bfbd40d1d7b2e",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "BOOT-001",
+      "method": {
+        "procedure": "project_meta/testing/targets/common-boot-idle.md#Boot and Idle State"
+      },
+      "level": "mcu",
+      "target": "fcu",
+      "setup": "none",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "pass"
+    },
+    {
+      "requirement": "BOOT-002",
+      "method": {
+        "procedure": "project_meta/testing/targets/common-boot-idle.md#Boot and Idle State"
+      },
+      "level": "mcu",
+      "target": "fcu",
+      "setup": "none",
+      "fingerprint": "unavailable: revision a921ffe7e9 is not in this repository",
+      "result": "pass"
+    }
+  ],
+  "note": "imported from project_meta/testing/evidence/runs/2026/09/20260921T215100Z__BENCH-COMMON-001__foxeer-f405-v2__01.json (BENCH-COMMON-001, schema 1); its observations and limitations stay there",
+  "supersedes": [],
+  "ruling": null
+}

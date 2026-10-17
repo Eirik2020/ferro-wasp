@@ -1,0 +1,46 @@
+{
+  "schema_version": 3,
+  "run_id": "20261015T104930Z__BENCH-FOX-DFU-001__foxeer-f405-v2__01__imported",
+  "recorded_at_utc": "2026-10-15T10:49:30Z",
+  "board": "foxeer-f405-v2",
+  "revision": "7fef77905bc7d4229e62e7a199961fcd328a4044",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "REBOOT-001",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate"
+      },
+      "level": "mcu",
+      "target": "fcu",
+      "setup": "none",
+      "fingerprint": "unavailable: procedure project_meta/testing/targets/foxeer-f405-v2.md has no heading \"Foxeer USB Reboot And DFU Flash Gate\"",
+      "result": "pass"
+    },
+    {
+      "requirement": "REBOOT-002",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate"
+      },
+      "level": "mcu",
+      "target": "fcu",
+      "setup": "none",
+      "fingerprint": "unavailable: procedure project_meta/testing/targets/foxeer-f405-v2.md has no heading \"Foxeer USB Reboot And DFU Flash Gate\"",
+      "result": "pass"
+    },
+    {
+      "requirement": "REBOOT-003",
+      "method": {
+        "procedure": "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate"
+      },
+      "level": "mcu",
+      "target": "fcu",
+      "setup": "none",
+      "fingerprint": "unavailable: procedure project_meta/testing/targets/foxeer-f405-v2.md has no heading \"Foxeer USB Reboot And DFU Flash Gate\"",
+      "result": "pass"
+    }
+  ],
+  "note": "imported from project_meta/testing/evidence/runs/2026/10/20261015T104930Z__BENCH-FOX-DFU-001__foxeer-f405-v2__01.json (BENCH-FOX-DFU-001, schema 2); its observations and limitations stay there",
+  "supersedes": [],
+  "ruling": null
+}
