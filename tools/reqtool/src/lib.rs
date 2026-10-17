@@ -2,9 +2,11 @@
 //!
 //! Requirements are YAML in `project_meta/requirements/`, rooted in the
 //! governing requirements W1-W7 and allocated to items in the code. Status is
-//! computed, never stored. The design is `project_meta/requirements/design.md`
-//! and ADR-0050 to ADR-0053.
+//! computed from evidence records and derived fingerprints, never stored. The
+//! design is `project_meta/requirements/design.md` and ADR-0050 to ADR-0053.
 
+pub mod evidence;
+pub mod fingerprint;
 pub mod items;
 pub mod project;
 pub mod report;

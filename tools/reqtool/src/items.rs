@@ -115,12 +115,13 @@ impl<'a> Resolver<'a> {
 
     fn crate_root(&self, name: &str) -> Option<Module> {
         let found = self.crates.get(name)?;
-        let items = self.parse(&found.lib).ok()?;
+        let lib = found.lib.as_ref()?;
+        let items = self.parse(lib).ok()?;
         Some(Module {
             crate_name: found.name.clone(),
             path: Vec::new(),
-            file: found.lib.clone(),
-            directory: found.lib.parent().unwrap_or(Path::new(".")).to_path_buf(),
+            file: lib.clone(),
+            directory: lib.parent().unwrap_or(Path::new(".")).to_path_buf(),
             items,
         })
     }

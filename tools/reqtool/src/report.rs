@@ -56,7 +56,7 @@ pub fn check(project: &Project, target: &str, evidence: &dyn Evidence) -> Result
         }
         return Ok(out);
     }
-    Resolver::new(&project.crates).resolve(target)?;
+    Resolver::new(&project.workspace.crates).resolve(target)?;
     let related: Vec<&Requirement> = project
         .requirements
         .values()
@@ -69,6 +69,7 @@ pub fn check(project: &Project, target: &str, evidence: &dyn Evidence) -> Result
         .collect();
     let crate_name = target.split("::").next().unwrap_or(target);
     let critical = project
+        .workspace
         .crates
         .get(crate_name)
         .is_some_and(|found| found.critical);
@@ -149,6 +150,9 @@ fn detail(
             entry.setup.name(),
             evidence.entry(requirement, index).name()
         );
+        for (board, status) in evidence.boards(requirement, index) {
+            let _ = writeln!(out, "      {board}: {}", status.name());
+        }
     }
     out
 }

@@ -464,6 +464,32 @@ verification:
 - Later: `analysis`-level checks (direction rule, priority rule, names versus
   metadata, bus rule) once the parser lands.
 
+**Evidence as implemented.** These choices were made while building
+`record`, within the design above:
+- A record is one run of one method. It carries a result for every
+  requirement entry that names that method, each with its own fingerprint, so
+  one run can pass one requirement and fail another. An entry is identified by
+  requirement, level, target, setup and method, not by its position in the
+  file.
+- A record also carries the git revision and whether tracked files had
+  uncommitted changes; the fingerprint covers the files as they were, so a
+  dirty run is still exact.
+- The fingerprint is taken from the governing `Cargo.lock`, which lists every
+  crate in the closure, dev-dependencies included. Path crates contribute
+  every file git tracks or would track under their directory, leaving out
+  nested packages and build output; registry crates contribute their version
+  and checksum. The nearest `rust-toolchain.toml` is included.
+- Until the `app!` parser exists, board evidence takes the board's whole
+  firmware app as its closure. That is coarse but cannot miss a change, and
+  because fingerprints are derived, every such record can be re-fingerprinted
+  with the narrower path scope once it exists.
+- A procedure contributes the text of its own section, so editing another
+  section of the same file leaves the evidence standing.
+- Board evidence is reported per board, and an entry takes the worst board
+  that has evidence, until gates name the boards they require.
+- `reqtool` reads only schema 3 records and ignores the schema 2 ones beside
+  them, so both coexist in `runs/` until the switch.
+
 **Tooling transition.**
 
 | Tool | Fate |

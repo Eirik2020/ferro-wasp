@@ -4,7 +4,7 @@
 //! error rather than silently ignored. There is deliberately no `status`
 //! field anywhere: status is computed from evidence (ADR-0050).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The only schema version this tool reads.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -74,7 +74,7 @@ pub struct Entry {
 }
 
 /// Verification levels, ordered by cost and risk (ADR-0051).
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "snake_case")]
 pub enum Level {
     Analysis,
@@ -85,7 +85,7 @@ pub enum Level {
     Flight,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Target {
     Host,
@@ -93,7 +93,7 @@ pub enum Target {
     Devboard,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Setup {
     None,
@@ -103,7 +103,7 @@ pub enum Setup {
 
 /// What runs the verification: a Rust test found by parsing, or a written
 /// procedure named by `path#heading`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Method {
     Test(String),
@@ -111,6 +111,11 @@ pub enum Method {
 }
 
 impl Level {
+    /// Levels run on target hardware, whose evidence belongs to one board.
+    pub const fn on_target(self) -> bool {
+        matches!(self, Self::Mcu | Self::Bench | Self::Flight)
+    }
+
     pub const fn name(self) -> &'static str {
         match self {
             Self::Analysis => "analysis",

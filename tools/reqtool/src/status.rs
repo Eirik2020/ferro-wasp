@@ -28,10 +28,15 @@ impl Status {
     }
 }
 
-/// Where entry statuses come from. Evidence records are not read yet, so the
-/// only source today reports every entry unverified.
+/// Where entry statuses come from: the evidence records
+/// ([`crate::evidence::Recorded`]), or nothing at all ([`NoEvidence`]).
 pub trait Evidence {
     fn entry(&self, requirement: &Requirement, entry: usize) -> Status;
+
+    /// For a target-level entry, its status on each board with evidence.
+    fn boards(&self, _requirement: &Requirement, _entry: usize) -> Vec<(String, Status)> {
+        Vec::new()
+    }
 }
 
 pub struct NoEvidence;

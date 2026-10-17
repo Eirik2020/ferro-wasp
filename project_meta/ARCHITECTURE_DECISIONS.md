@@ -76,7 +76,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0050](decisions/ADR-0050.md) | Requirement Status Is Computed From Evidence, Never Recorded | accepted, not yet implemented; supersedes ADR-0038 |
 | [ADR-0051](decisions/ADR-0051.md) | Verification Levels Are One Enum And Only Gates Block | accepted, not yet implemented |
 | [ADR-0052](decisions/ADR-0052.md) | Fingerprints Are Derived, And Parents And Children Verify Each Other | accepted, not yet implemented |
-| [ADR-0053](decisions/ADR-0053.md) | Requirements Are YAML Data Rooted In W1-W7 And Checked By reqtool | accepted; first increment in tools/reqtool (validate, check), evidence not yet read |
+| [ADR-0053](decisions/ADR-0053.md) | Requirements Are YAML Data Rooted In W1-W7 And Checked By reqtool | accepted; tools/reqtool validates, checks and records evidence; import and analysis checks not yet built |
 | [ADR-0054](decisions/ADR-0054.md) | Safety-Critical Code Is Separated By Crate And Never Depends On Non-Critical Code | accepted, not yet implemented |
 | [ADR-0055](decisions/ADR-0055.md) | Tasks Communicate Over Declared SPSC Links And Single-Writer Flags | accepted, not yet implemented; generalizes ADR-0015, amends ADR-0010 |
 | [ADR-0056](decisions/ADR-0056.md) | The Observer Is The Only Way Out And The Coordinator The Only Way In | accepted, not yet implemented; amends ADR-0041, ADR-0042, ADR-0043 |

@@ -10,7 +10,7 @@ use crate::roots::{self, Root};
 use crate::schema::{
     Entry, Level, Method, Mode, Requirement, RequirementFile, SCHEMA_VERSION, Setup, Target,
 };
-use crate::workspace::{self, Crate};
+use crate::workspace::{self, Workspace};
 
 pub const REQUIREMENTS: &str = "project_meta/requirements";
 
@@ -33,7 +33,7 @@ pub struct Project {
     pub requirements: BTreeMap<String, Requirement>,
     /// The file each requirement came from, relative to the repository.
     pub sources: BTreeMap<String, String>,
-    pub crates: BTreeMap<String, Crate>,
+    pub workspace: Workspace,
 }
 
 impl Project {
@@ -41,7 +41,7 @@ impl Project {
     /// An `Err` means the repository itself could not be read.
     pub fn load(repository: &Path) -> Result<(Self, Vec<Problem>), String> {
         let roots = roots::load(repository)?;
-        let crates = workspace::discover(repository)?;
+        let workspace = workspace::discover(repository)?;
         let mut problems = Vec::new();
         let mut requirements = BTreeMap::new();
         let mut sources = BTreeMap::new();
@@ -104,7 +104,7 @@ impl Project {
             roots,
             requirements,
             sources,
-            crates,
+            workspace,
         };
         problems.extend(project.validate());
         Ok((project, problems))
@@ -128,7 +128,7 @@ impl Project {
 
     fn validate(&self) -> Vec<Problem> {
         let mut problems = Vec::new();
-        let resolver = Resolver::new(&self.crates);
+        let resolver = Resolver::new(&self.workspace.crates);
         for requirement in self.requirements.values() {
             let location = self.location(&requirement.id);
             let mut problem = |message: String| {
