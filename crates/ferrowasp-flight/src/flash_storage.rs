@@ -178,6 +178,11 @@ pub enum StorageCommand {
     /// The last receiver frame's sixteen channels, answered at once like
     /// `Live`, so a configurator can show the sticks as they move.
     Rc,
+    /// Each ESC output's UART and bidirectional telemetry, answered at once
+    /// by the command link, for props-off bench checks over USB.
+    Esc,
+    /// What the firmware was built from: commit, dirty tree, and features.
+    Build,
     /// A props-off motor check. Handled by the USB task, which hands it to
     /// the safety master; never by the storage task.
     Motor(BenchMotorRequest),
@@ -464,6 +469,8 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
         (Some("live"), None) => Ok(StorageCommand::Live),
         (Some("rc"), None) => Ok(StorageCommand::Rc),
+        (Some("esc"), None) => Ok(StorageCommand::Esc),
+        (Some("build"), None) => Ok(StorageCommand::Build),
         (Some("imu"), Some("calibrate")) if words.next().is_none() => {
             Ok(StorageCommand::ImuCalibrate)
         }
@@ -1745,6 +1752,8 @@ mod tests {
         );
         assert_eq!(parse_command("live"), Ok(StorageCommand::Live));
         assert_eq!(parse_command("rc"), Ok(StorageCommand::Rc));
+        assert_eq!(parse_command("esc"), Ok(StorageCommand::Esc));
+        assert_eq!(parse_command("build"), Ok(StorageCommand::Build));
     }
 
     #[test]

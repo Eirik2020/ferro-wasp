@@ -39,6 +39,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
             if let esc::EscAckOutcome::Sample(update) =
                 cx.local.esc_manager_state.on_actuator_ack(ack)
             {
+                publish_uart_sample(&update, now_ms);
                 let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
             }
         }
@@ -53,6 +54,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
             }
             for byte in &bytes[..read_len] {
                 if let Some(update) = cx.local.esc_manager_state.push_wire_byte(*byte, now_ms) {
+                    publish_uart_sample(&update, now_ms);
                     let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
                 }
             }
@@ -138,4 +140,15 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
 
         Mono::delay_until(next_release).await;
     }
+}
+
+/// Records a UART sample for the `esc` command, by physical output.
+fn publish_uart_sample(update: &esc::EscTelemetryUpdate, now_ms: u64) {
+    let index = update.output.index();
+    crate::snapshots::ESC_UART_ERPM_DIV100[index].store(
+        u32::from(update.observation.sample.erpm_div100),
+        Ordering::Relaxed,
+    );
+    // Wrapping milliseconds: the snapshot reports a difference only.
+    crate::snapshots::ESC_UART_SEEN_MS[index].store(now_ms as u32, Ordering::Relaxed);
 }
