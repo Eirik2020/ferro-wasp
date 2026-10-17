@@ -57,6 +57,12 @@ enum Command {
         supersedes: Vec<String>,
         #[arg(long)]
         ruling: Option<String>,
+        /// A JSON file of how the run was done: execution, candidate,
+        /// conditions, commands, artifacts (under logs/, hashed here),
+        /// measurements, observations, limitations, and any triggered stop
+        /// conditions. Required for mcu, bench and flight evidence.
+        #[arg(long, value_name = "FILE")]
+        details: Option<PathBuf>,
         /// Print the record without writing it.
         #[arg(long)]
         dry_run: bool,
@@ -147,8 +153,13 @@ fn main() -> ExitCode {
             note,
             supersedes,
             ruling,
+            details,
             dry_run,
         } => {
+            let details = match details.map(|path| read_details(&path)).transpose() {
+                Ok(details) => details,
+                Err(message) => return fail(&message),
+            };
             let method = match (test, procedure) {
                 (Some(path), None) => Method::Test(path),
                 (None, Some(reference)) => Method::Procedure(reference),
@@ -165,6 +176,7 @@ fn main() -> ExitCode {
                 note: note.as_deref(),
                 supersedes: &supersedes,
                 ruling: ruling.as_deref(),
+                details,
             };
             let now = Timestamp::now();
             evidence::build(&project, &request, now).and_then(|record| {
@@ -230,6 +242,7 @@ fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
         note: None,
         supersedes: &[],
         ruling: None,
+        details: None,
     };
     let now = Timestamp::now();
     let recorded = evidence::load(&project.repository).and_then(|existing| {
@@ -361,6 +374,11 @@ fn import(project: &Project, dry_run: bool) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+fn read_details(path: &std::path::Path) -> Result<reqtool::details::Details, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn recorded(project: &Project) -> Result<Recorded, String> {

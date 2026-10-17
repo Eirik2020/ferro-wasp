@@ -40,7 +40,124 @@
       "result": "pass"
     }
   ],
-  "note": "imported from project_meta/testing/evidence/runs/2026/10/20261015T104930Z__BENCH-FOX-DFU-001__foxeer-f405-v2__01.json (BENCH-FOX-DFU-001, schema 2); its observations and limitations stay there",
+  "note": "imported from project_meta/testing/evidence/runs/2026/10/20261015T104930Z__BENCH-FOX-DFU-001__foxeer-f405-v2__01.json (BENCH-FOX-DFU-001, schema 2)",
   "supersedes": [],
-  "ruling": null
+  "ruling": null,
+  "details": {
+    "execution": {
+      "performed_by": "user-with-agent-assistance",
+      "user_confirmed": true
+    },
+    "candidate": {
+      "firmware_sha256": "072fc8f38f3cdca0d440738d258f4319babdd44ce8468d5b27b3a2101f2d03ca",
+      "features": [
+        "board-foxeer-f405-v2"
+      ],
+      "target_triple": "thumbv7em-none-eabihf",
+      "configuration": {
+        "bench_image_features": "board-foxeer-f405-v2 bench_blackbox",
+        "bench_image_sha256": "47854b7b8da019545fb1737a289b0fad17c967ea2a27a46bcafcfce0a7ca324f",
+        "firmware_sha256_of": "ELF",
+        "host_tool": "ferro-configurator 0.1.0 at 3f5ee8a, dfu-util 0.11 on Linux",
+        "profile": "release",
+        "stored_config": "unchanged pilot configuration, exported before and after"
+      }
+    },
+    "conditions": {
+      "propellers": "removed",
+      "actuator_power": "disconnected",
+      "equipment": [
+        "Foxeer F405 V2 on USB only",
+        "Linux host"
+      ],
+      "environment": [
+        "bench"
+      ]
+    },
+    "commands": [
+      {
+        "command": "ferro-configurator flash --board foxeer-f405-v2 --dry-run <candidate>",
+        "exit_code": 0
+      },
+      {
+        "command": "ferro-configurator --port /dev/ttyACM0 device reboot",
+        "exit_code": 0
+      },
+      {
+        "command": "ferro-configurator --port /dev/ttyACM0 device reboot --dfu",
+        "exit_code": 0
+      },
+      {
+        "command": "dfu-util -d 0483:df11 -a 0 -s 0x08000000:187608 -U readback.bin",
+        "exit_code": 0
+      },
+      {
+        "command": "ferro-configurator flash --board foxeer-f405-v2 --yes <candidate>",
+        "exit_code": 0
+      },
+      {
+        "command": "ferro-configurator flash --board foxeer-f405-v2 --yes <candidate> (bench image running, flight log open)",
+        "exit_code": 5
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "steps-1-5",
+        "kind": "command-output",
+        "path": "logs/bench/20261015-BENCH-FOX-DFU-001/steps-1-5-transcript.txt",
+        "bytes": 1448,
+        "sha256": "73e2ea4108fe4f849f4977d0901874ef61a4201ac4223e449703421d54b48711"
+      },
+      {
+        "id": "step-6",
+        "kind": "command-output",
+        "path": "logs/bench/20261015-BENCH-FOX-DFU-001/step-6-transcript.txt",
+        "bytes": 1838,
+        "sha256": "1599e96970a9eb0e3f7b614c118cb4489129a166be5d7964b737f33347d6f487"
+      },
+      {
+        "id": "config-before",
+        "kind": "configuration",
+        "path": "logs/bench/20261015-BENCH-FOX-DFU-001/config-before.toml",
+        "bytes": 549,
+        "sha256": "9d8ee501a3511191f3ce0a67e3f14acdb159dad956bc95cdaf6b181b93ebccba"
+      },
+      {
+        "id": "config-after",
+        "kind": "configuration",
+        "path": "logs/bench/20261015-BENCH-FOX-DFU-001/config-after.toml",
+        "bytes": 549,
+        "sha256": "9d8ee501a3511191f3ce0a67e3f14acdb159dad956bc95cdaf6b181b93ebccba"
+      },
+      {
+        "id": "readback",
+        "kind": "firmware",
+        "path": "logs/bench/20261015-BENCH-FOX-DFU-001/readback.bin",
+        "bytes": 187608,
+        "sha256": "2816ea37bd7858281ec90d060862db7861a55acbad398db426afc61961e74342"
+      }
+    ],
+    "measurements": {
+      "automatic_flash_duration_s": 27,
+      "dfu_enumeration_after_command_s": 0.61,
+      "readback_bytes_in_load_segments": 187600,
+      "readback_gap_bytes_erased_0xff": 8,
+      "readback_mismatches_in_load_segments": 0,
+      "reboot_uptime_after_ms": 3840,
+      "reboot_uptime_before_ms": 91980
+    },
+    "observations": [
+      "Disarmed throughout; battery reading 0.0 V, so ESCs were unpowered.",
+      "reboot and reboot dfu were both refused with 'ERR flight log still being written' by the bench_blackbox image; flash --yes then exited 5 and the board kept running FerroWasp.",
+      "The F405 ROM bootloader reported dfuERROR / 'firmware is corrupt' as its first status after both command entry and BOOT-button entry; dfu-util cleared it each time.",
+      "Configuration exports before and after flashing are byte-identical.",
+      "The bench_blackbox image appended flight 14 (10970880 bytes) to the board's log; flights 1-13 were downloaded beforehand."
+    ],
+    "limitations": [
+      "Step 6 ran on the same commit before this procedure was written; steps 1-5 ran after it was committed.",
+      "Propeller state is as stated in the session plan the user approved, not separately confirmed during the run.",
+      "Linux host only; the Windows package's bundled dfu-util and WinUSB path were not exercised.",
+      "The GUI has no flash or reboot controls yet."
+    ]
+  }
 }

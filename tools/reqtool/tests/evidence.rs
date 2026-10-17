@@ -63,6 +63,16 @@ fn load(repository: &Path) -> Project {
     project
 }
 
+/// Board evidence as a props-off bench run records it.
+fn bench_details() -> reqtool::details::Details {
+    serde_json::from_str(
+        r#"{"execution": {"performed_by": "user", "user_confirmed": true},
+            "candidate": {"firmware_sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+            "conditions": {"propellers": "removed", "actuator_power": "connected"}}"#,
+    )
+    .unwrap()
+}
+
 fn request<'a>(method: Method, board: Option<&'a str>, outcome: Outcome) -> RunRequest<'a> {
     RunRequest {
         runs: vec![(method, outcome)],
@@ -71,6 +81,7 @@ fn request<'a>(method: Method, board: Option<&'a str>, outcome: Outcome) -> RunR
         note: None,
         supersedes: &[],
         ruling: None,
+        details: board.map(|_| bench_details()),
     }
 }
 
@@ -447,7 +458,14 @@ fn old_record(repository: &Path, run_id: &str, test_id: &str, revision: &str, re
     let record = format!(
         r#"{{"schema_version": 2, "run_id": "{run_id}", "test_id": "{test_id}",
             "target": "demo-board", "result": "{result}", "completed_at_utc": "2026-10-01T12:00:00Z",
-            "candidate": {{"revision": "{revision}", "working_tree": "clean"}}}}"#
+            "candidate": {{"revision": "{revision}", "working_tree": "clean",
+                "firmware_sha256": "{zero}", "features": ["board-demo"]}},
+            "execution": {{"performed_by": "user", "user_confirmed": true}},
+            "conditions": {{"propellers": "removed", "actuator_power": "connected",
+                "equipment": ["bench supply"], "environment": ["bench"]}},
+            "observations": ["motors stopped on disarm"], "limitations": [],
+            "stop_conditions_triggered": []}}"#,
+        zero = "0".repeat(64)
     );
     std::fs::write(directory.join(format!("{run_id}.json")), record).unwrap();
 }
@@ -648,4 +666,118 @@ gates:
             "{expected} in {text:#?}"
         );
     }
+}
+
+#[test]
+fn board_evidence_must_say_who_ran_it_on_which_image_in_what_conditions() {
+    let repo = repository();
+    let path = repo.path();
+    let project = load(path);
+    let now = Timestamp::from_unix(1_792_195_200);
+    let with = |details: Option<reqtool::details::Details>| {
+        let request = RunRequest {
+            details,
+            ..request(
+                Method::Procedure(BENCH.into()),
+                Some("demo-board"),
+                Outcome::Pass,
+            )
+        };
+        evidence::build(&project, &request, now)
+    };
+    let parsed =
+        |json: &str| Some(serde_json::from_str::<reqtool::details::Details>(json).unwrap());
+    let sha = "0".repeat(64);
+
+    assert!(with(None).unwrap_err().contains("needs details"));
+    let agent = format!(
+        r#"{{"execution": {{"performed_by": "agent", "user_confirmed": true}},
+        "candidate": {{"firmware_sha256": "{sha}"}},
+        "conditions": {{"propellers": "removed", "actuator_power": "connected"}}}}"#
+    );
+    assert!(with(parsed(&agent)).unwrap_err().contains("agent-only"));
+    let unconfirmed = agent.replace(
+        "\"agent\", \"user_confirmed\": true",
+        "\"user\", \"user_confirmed\": false",
+    );
+    assert!(
+        with(parsed(&unconfirmed))
+            .unwrap_err()
+            .contains("confirmation")
+    );
+    let ok = agent.replace("\"agent\"", "\"user\"");
+    assert!(with(parsed(&ok)).is_ok());
+    let installed = ok.replace("\"removed\"", "\"installed\"");
+    assert!(
+        with(parsed(&installed))
+            .unwrap_err()
+            .contains("propellers removed")
+    );
+    let unknown = ok.replace("\"connected\"", "\"unknown\"");
+    assert!(with(parsed(&unknown)).unwrap_err().contains("known power"));
+    let no_hash = ok.replace(&sha, "abc");
+    assert!(with(parsed(&no_hash)).unwrap_err().contains("SHA-256"));
+    let stopped = format!(
+        "{}, \"stop_conditions_triggered\": [\"smoke\"]}}",
+        ok.trim_end().strip_suffix('}').unwrap()
+    );
+    assert!(
+        with(parsed(&stopped))
+            .unwrap_err()
+            .contains("stop conditions")
+    );
+}
+
+#[test]
+fn artifacts_are_hashed_from_logs_and_checked_on_load() {
+    let repo = repository();
+    let path = repo.path();
+    std::fs::create_dir_all(path.join("logs/bench")).unwrap();
+    std::fs::write(path.join("logs/bench/boot.log"), "boot ok\n").unwrap();
+    let mut details = bench_details();
+    details.artifacts = vec![reqtool::details::Artifact {
+        id: "boot-log".into(),
+        kind: reqtool::details::ArtifactKind::Log,
+        path: "logs/bench/boot.log".into(),
+        bytes: None,
+        sha256: None,
+    }];
+    let run = RunRequest {
+        details: Some(details.clone()),
+        ..request(
+            Method::Procedure(BENCH.into()),
+            Some("demo-board"),
+            Outcome::Pass,
+        )
+    };
+    let project = load(path);
+    let now = Timestamp::from_unix(1_792_195_200);
+    let built = evidence::build(&project, &run, now).unwrap();
+    let sealed = &built.details.as_ref().unwrap().artifacts[0];
+    assert_eq!(sealed.bytes, Some(8));
+    assert!(sealed.sha256.as_ref().is_some_and(|sha| sha.len() == 64));
+    evidence::write(path, &built, &now).unwrap();
+    assert!(evidence::load(path).is_ok());
+
+    std::fs::write(path.join("logs/bench/boot.log"), "boot changed\n").unwrap();
+    assert!(
+        evidence::load(path)
+            .unwrap_err()
+            .contains("no longer matches")
+    );
+
+    details.artifacts[0].path = "project_meta/secret.log".into();
+    let outside = RunRequest {
+        details: Some(details),
+        ..request(
+            Method::Procedure(BENCH.into()),
+            Some("demo-board"),
+            Outcome::Pass,
+        )
+    };
+    assert!(
+        evidence::build(&project, &outside, now)
+            .unwrap_err()
+            .contains("under logs/")
+    );
 }

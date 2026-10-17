@@ -5,6 +5,7 @@
 //! computed from evidence records and derived fingerprints, never stored. The
 //! design is `project_meta/requirements/design.md` and ADR-0050 to ADR-0053.
 
+pub mod details;
 pub mod evidence;
 pub mod fingerprint;
 pub mod gates;

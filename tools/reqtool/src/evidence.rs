@@ -13,6 +13,7 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use crate::details::{self, Details};
 use crate::fingerprint::Fingerprinter;
 use crate::project::Project;
 use crate::schema::{Entry, Level, Method, Requirement, Setup, Target};
@@ -40,6 +41,9 @@ pub struct Record {
     pub supersedes: Vec<String>,
     #[serde(default)]
     pub ruling: Option<String>,
+    /// How the run was done; required for board evidence ([`details::check`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<Details>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -82,6 +86,13 @@ pub fn load(repository: &Path) -> Result<Vec<Record>, String> {
         }
         let record: Record =
             serde_json::from_value(value).map_err(|e| format!("{}: {e}", file.display()))?;
+        details::check(&record.results, record.details.as_ref())
+            .map_err(|why| format!("{}: {why}", file.display()))?;
+        if let Some(details) = &record.details {
+            details
+                .verify_artifacts(repository)
+                .map_err(|why| format!("{}: {why}", file.display()))?;
+        }
         records.push(record);
     }
     let superseded: BTreeSet<String> = records
@@ -242,6 +253,8 @@ pub struct RunRequest<'a> {
     pub note: Option<&'a str>,
     pub supersedes: &'a [String],
     pub ruling: Option<&'a str>,
+    /// How the run was done; its artifacts are hashed here.
+    pub details: Option<Details>,
 }
 
 /// Builds the record for one session: a result for every entry, in every
@@ -310,6 +323,11 @@ pub fn build(
     if host_only && request.board.is_some() {
         return Err("--board applies only to mcu, bench and flight evidence".into());
     }
+    let mut sealed = request.details.clone();
+    if let Some(details) = &mut sealed {
+        details.seal_artifacts(&project.repository)?;
+    }
+    details::check(&results, sealed.as_ref())?;
     let (revision, working_tree) = git_state(&project.repository)?;
     let scope = request.board.unwrap_or("host");
     let slug = match request.runs.as_slice() {
@@ -328,6 +346,7 @@ pub fn build(
         note: request.note.map(str::to_owned),
         supersedes: request.supersedes.to_vec(),
         ruling: request.ruling.map(str::to_owned),
+        details: sealed,
     })
 }
 

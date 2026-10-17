@@ -29,7 +29,90 @@
       "result": "pass"
     }
   ],
-  "note": "imported from project_meta/testing/evidence/runs/2026/09/20260929T232706Z__BENCH-COMMON-001__foxeer-f405-v2__01.json (BENCH-COMMON-001, schema 1); its observations and limitations stay there",
+  "note": "imported from project_meta/testing/evidence/runs/2026/09/20260929T232706Z__BENCH-COMMON-001__foxeer-f405-v2__01.json (BENCH-COMMON-001, schema 1)",
   "supersedes": [],
-  "ruling": null
+  "ruling": null,
+  "details": {
+    "execution": {
+      "performed_by": "user",
+      "user_confirmed": true
+    },
+    "candidate": {
+      "firmware_sha256": "b020bdfe1ad9056fbab034752828fbf28be3e63241da60efdd18924dd7c3863f",
+      "features": [
+        "board-foxeer-f405-v2"
+      ],
+      "target_triple": "thumbv7em-none-eabihf"
+    },
+    "conditions": {
+      "propellers": "removed",
+      "actuator_power": "disconnected",
+      "equipment": [
+        "SWD probe",
+        "USB host power",
+        "no oscilloscope or logic analyzer"
+      ],
+      "environment": [
+        "bench",
+        "battery disconnected",
+        "no RC link"
+      ]
+    },
+    "commands": [
+      {
+        "command": "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked --log-file <capture>/boot-1.log",
+        "exit_code": 0
+      },
+      {
+        "command": "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked --log-file <capture>/boot-2.log",
+        "exit_code": 0
+      },
+      {
+        "command": "python3 tools/terminal_embed.py --board foxeer-f405-v2 --release --locked --log-file <capture>/boot-3.log",
+        "exit_code": 0
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "boot-1",
+        "kind": "log",
+        "path": "logs/bench/20260929T232456Z-boot-idle/boot-1.log",
+        "bytes": 7051,
+        "sha256": "98a9c4ef621ef951af7f646c248c357717eff3f83687bfa0084bea059239f231"
+      },
+      {
+        "id": "boot-2",
+        "kind": "log",
+        "path": "logs/bench/20260929T232456Z-boot-idle/boot-2.log",
+        "bytes": 7051,
+        "sha256": "05dd3325c8d601e973f549e8c1361ba9a38b66907d8655616047797f562236d3"
+      },
+      {
+        "id": "boot-3",
+        "kind": "log",
+        "path": "logs/bench/20260929T232456Z-boot-idle/boot-3.log",
+        "bytes": 7051,
+        "sha256": "6d94d0a0206e07800acf1c56585a755426aa8981fd8f56b39ec68d567ae20161"
+      }
+    ],
+    "measurements": {
+      "boot_cycles": 3,
+      "dshot_nonzero_output_reports": 0,
+      "dshot_zero_output_reports": 30,
+      "longest_capture_seconds": 20
+    },
+    "observations": [
+      "Every capture printed ELF SHA-256 cd873d6b..., the candidate's release ELF.",
+      "3 boots each reached system init, IMU ready and the heartbeat; every DShot report was [0, 0, 0, 0] with no expired commands, timeouts or faults; none armed or panicked.",
+      "The only warnings were the expected boot-time IMU stale tick and ESC telemetry latching faulted with no ESC power.",
+      "Run by tools/foxeer_bench_gates.py boot-idle; each capture ended by interrupting terminal_embed, then the operator cold-cycled USB before the next.",
+      "The operator answered 'none' when asked about anything abnormal. The tool took that word for a note and drafted `inconclusive`; the result was corrected to pass on review, and the tool fixed."
+    ],
+    "limitations": [
+      "No oscilloscope or logic analyzer: pulses before the actuator task initializes were not observed electrically; actuator power was disconnected throughout.",
+      "Motor outputs at stop are the firmware's own DShot reports, not measurements at the pins.",
+      "Each captured boot is the reset after probe-rs programs the image; the cold USB power cycles between captures were not captured.",
+      "The LED heartbeat check does not apply to this board with SWD attached; the RTT heartbeat was used instead."
+    ]
+  }
 }

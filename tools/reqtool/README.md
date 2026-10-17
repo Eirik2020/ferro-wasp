@@ -43,11 +43,22 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
   entry naming the old test's procedure gets a result fingerprinted in a
   temporary worktree of the record's own revision; a revision not in this
   repository, or one whose items did not exist yet, gets an unavailable
-  fingerprint, so its pass shows as stale. Re-running it changes nothing.
+  fingerprint, so its pass shows as stale. The old record's execution,
+  candidate, conditions, artifacts, observations and limitations come with
+  it. Re-running it changes nothing.
 - `record` writes one run of a test or procedure: a result, at the current
   fingerprint, for every requirement entry that names that method. `mcu`,
   `bench` and `flight` evidence needs `--board`. `--failed REQ` fails one
   requirement in a run that otherwise passed; `--dry-run` prints the record.
+  `--details FILE` adds how the run was done (JSON): `execution`
+  (`performed_by`, `user_confirmed`), `candidate` (`firmware_sha256`,
+  `features`, ...), `conditions` (`propellers`, `actuator_power`,
+  `equipment`, `environment`), `commands`, `artifacts` (paths under `logs/`;
+  `reqtool` hashes them), `measurements`, `observations`, `limitations` and
+  `stop_conditions_triggered`. Board evidence must have it: user-confirmed,
+  not agent-only, with the image's SHA-256 and a known power and propeller
+  state; a props-off pass needs propellers removed and a flight pass needs
+  them installed; and no pass may include a triggered stop condition.
 
 ```text
 cargo run --release -- record --test ferrowasp_flight::rc_receiver::tests::name --result pass

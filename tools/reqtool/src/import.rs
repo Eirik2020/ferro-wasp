@@ -16,6 +16,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
+use crate::details::Details;
 use crate::evidence::{self, Outcome, RUNS, Record, RunResult};
 use crate::fingerprint::Fingerprinter;
 use crate::project::Project;
@@ -159,11 +160,12 @@ pub fn plan(project: &Project) -> Result<Vec<Plan>, String> {
                     .to_owned(),
                 results,
                 note: Some(format!(
-                    "imported from {} ({test}, schema {version}); its observations and limitations stay there",
+                    "imported from {} ({test}, schema {version})",
                     relative.display()
                 )),
                 supersedes: Vec::new(),
                 ruling: None,
+                details: Some(old_details(&old).map_err(|why| format!("{test}: {why}"))?),
             }))
         })();
         plans.push(Plan { source, outcome });
@@ -208,6 +210,40 @@ pub fn write(project: &Project, plans: Vec<Plan>) -> Vec<(PathBuf, Imported)> {
             (plan.source, imported)
         })
         .collect()
+}
+
+/// The old record's account of how the run was done, carried over as is.
+fn old_details(old: &Value) -> Result<Details, String> {
+    let mut candidate = old["candidate"].clone();
+    if let Some(fields) = candidate.as_object_mut() {
+        fields.remove("revision");
+        fields.remove("working_tree");
+    }
+    let mut details = serde_json::Map::new();
+    for key in [
+        "execution",
+        "conditions",
+        "commands",
+        "artifacts",
+        "measurements",
+        "observations",
+        "limitations",
+        "stop_conditions_triggered",
+    ] {
+        if let Some(value) = old.get(key)
+            && !value.is_null()
+        {
+            details.insert(key.to_owned(), value.clone());
+        }
+    }
+    if candidate
+        .get("firmware_sha256")
+        .is_some_and(|sha| sha.is_string())
+    {
+        details.insert("candidate".to_owned(), candidate);
+    }
+    serde_json::from_value(Value::Object(details))
+        .map_err(|e| format!("its details do not fit schema 3: {e}"))
 }
 
 /// Temporary detached worktrees, one per revision.
