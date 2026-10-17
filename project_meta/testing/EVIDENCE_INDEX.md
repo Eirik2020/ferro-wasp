@@ -8,13 +8,13 @@ a current procedure, pass status, or flight-clearance document.
 
 Use these sources for current work:
 
-- `python tools/components.py due` for evidence owed by changed components;
-- `README.md` and `TEST_CATALOG.json` for test selection and prerequisites;
+- `reqtool check` and `reqtool gate` for what is verified and what is owed;
+- `README.md` and `../requirements/gates.yaml` for test selection and order;
 - `targets/foxeer-f405-v2.md` for the current Foxeer F405 V2 procedure;
 - `../../mdbook/src/user/foxeer_f405_v2.md` for the Foxeer user guide.
 
-Current code, manifests, features, and tests outrank historical prose. An
-active catalog entry means selectable after prerequisites, not passed.
+Current code, manifests, features, and tests outrank historical prose. A
+current procedure means runnable after its gate, not passed.
 
 ## Target Verification Baseline
 

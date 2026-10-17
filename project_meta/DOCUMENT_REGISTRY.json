@@ -1,15 +1,5 @@
 {
   "schema_version": 1,
-  "test_catalog": "project_meta/testing/TEST_CATALOG.json",
-  "test_evidence": {
-    "records_root": "project_meta/testing/evidence/runs",
-    "template": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
-    "max_record_bytes": 8192,
-    "artifact_roots": [
-      "logs"
-    ],
-    "components": "project_meta/testing/COMPONENTS.json"
-  },
   "immutable_archives": [
     {
       "path": "tools/rtic-app-builder/docs/archive/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN_FULL_BASELINE_2026-07-24.md",
@@ -571,18 +561,6 @@
     {
       "path": "project_meta/DOCUMENT_REGISTRY.json",
       "max_bytes": 16000
-    },
-    {
-      "path": "project_meta/testing/TEST_CATALOG.json",
-      "max_bytes": 32768
-    },
-    {
-      "path": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/testing/COMPONENTS.json",
-      "max_bytes": 8192
     }
   ]
 }

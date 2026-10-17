@@ -19,8 +19,8 @@ about what the code does, the code is right and the document is fixed.
   FerroWasp works, how to build, flash, configure, and test it, what is
   supported, and where it is going. Start at `mdbook/src/SUMMARY.md`.
 - **The internal book**, `project_meta/` (never published): for maintainers and
-  agents. Governing requirements, decisions, remaining work, the test catalog
-  and evidence, the logging format, and the publication checklist.
+  agents. Governing requirements, decisions, remaining work, requirements,
+  procedures and evidence, the logging format, and the publication checklist.
 
 Keep agreed design, current implementation, and open proposals distinct. Keep
 remaining work visible; agreement on an approach does not mean it is
@@ -149,9 +149,10 @@ support or safety claim; label board-specific limits.
 
 **Internal Book (`project_meta/`).** Register every Markdown file in
 `DOCUMENT_REGISTRY.json`, and list every non-historical one in `SUMMARY.md`.
-`mdbook build project_meta` builds it into `target/internal-book`. Test definitions (`TEST_CATALOG.json`,
-`testing/targets/`) stay separate from dated run evidence (`testing/evidence/`);
-`active` means selectable, not passed. Moving evidence preserves its dates,
+`mdbook build project_meta` builds it into `target/internal-book`. Requirements
+(`requirements/`) and procedures (`testing/targets/`) stay separate from dated
+run evidence (`testing/evidence/`); status is computed by `reqtool`, never
+written. Moving evidence preserves its dates,
 hashes, feature sets, artifact identities, and limitations.
 
 ## Always-Loaded Context Budget

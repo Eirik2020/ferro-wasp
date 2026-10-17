@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from dataclasses import dataclass
@@ -29,6 +28,7 @@ ATTRIBUTE_KIND = re.compile(r"#\[\s*(task|init|idle)\b")
 FEATURE_NAME = re.compile(r'feature\s*=\s*"([^"]+)"')
 PRIORITY = re.compile(r"\bpriority\s*=\s*(\d+)")
 INTERRUPT_BINDING = re.compile(r"\bbinds\s*=\s*([A-Z][A-Z0-9_]*)")
+GATE_NAME = re.compile(r"^\s*- name:\s*([a-z][a-z0-9-]*)\s*$", re.MULTILINE)
 RESOURCE_FIELD = re.compile(r"^ {8}([A-Za-z_][A-Za-z0-9_]*)\s*:")
 
 
@@ -44,7 +44,7 @@ class AppTarget:
     readme: PurePosixPath
     cargo_toml: PurePosixPath
     instructions: tuple[PurePosixPath, ...]
-    test_chain: tuple[str, ...]
+    gate_chain: tuple[str, ...]
     board_directory: PurePosixPath
     board_data_directory: PurePosixPath
 
@@ -89,15 +89,7 @@ APP_TARGETS = {
             PurePosixPath("AGENTS.md"),
             PurePosixPath("project_meta/governing-requirements.md"),
         ),
-        test_chain=(
-            "SW-COMMON-001",
-            "BUILD-FOX-001",
-            "BENCH-COMMON-001",
-            "BENCH-FOX-USB-001",
-            "BENCH-FOX-001",
-            "PREFLIGHT-FOX-001",
-            "FLIGHT-FOX-001",
-        ),
+        gate_chain=("mcu-session", "bench-session", "preflight"),
         board_directory=PurePosixPath(
             "firmware/foxeer-f405-v2/src/board"
         ),
@@ -556,7 +548,7 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
 
     companion_paths = (
         PurePosixPath("project_meta/testing/README.md"),
-        PurePosixPath("project_meta/testing/TEST_CATALOG.json"),
+        PurePosixPath("project_meta/requirements/gates.yaml"),
         target.support,
         target.board_directory,
         target.board_data_directory,
@@ -569,11 +561,12 @@ def _render_route(root: Path, board: str, topic_name: str) -> str:
     lines.extend(
         [
             "",
-            "Potential catalog chain if app code changes:",
-            f"- {' -> '.join(target.test_chain)}",
+            "Gates before the next flight if app code changes",
+            f"(`reqtool gate <name> --board {target.name}`):",
+            f"- {' -> '.join(target.gate_chain)}",
             "",
             "This route selects context only. It does not authorize hardware work,",
-            "decide that every listed test is required, or claim that a test passed.",
+            "or say whether a gate is open: `reqtool gate` does.",
         ]
     )
 
@@ -605,17 +598,12 @@ def validate_routes(root: Path = REPOSITORY_ROOT) -> list[str]:
 
     root = root.resolve()
     errors: list[str] = []
-    catalog_path = root / "project_meta" / "testing" / "TEST_CATALOG.json"
+    gates_path = root / "project_meta" / "requirements" / "gates.yaml"
     try:
-        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-        test_ids = {
-            entry["id"]
-            for entry in catalog["tests"]
-            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
-        }
-    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
-        errors.append(f"cannot read test catalog identities: {error}")
-        test_ids = set()
+        gate_names = set(GATE_NAME.findall(gates_path.read_text(encoding="utf-8")))
+    except OSError as error:
+        errors.append(f"cannot read the gates: {error}")
+        gate_names = set()
 
     discovered_by_board: dict[str, list[RustSymbol]] = {}
     for board, target in APP_TARGETS.items():
@@ -632,9 +620,9 @@ def validate_routes(root: Path = REPOSITORY_ROOT) -> list[str]:
             if not _repository_path(root, path).exists():
                 errors.append(f"{board}: routed path does not exist: {path.as_posix()}")
 
-        for test_id in target.test_chain:
-            if test_id not in test_ids:
-                errors.append(f"{board}: routed test ID does not exist: {test_id}")
+        for gate in target.gate_chain:
+            if gate not in gate_names:
+                errors.append(f"{board}: routed gate does not exist: {gate}")
 
         try:
             discovered_by_board[board], _ = discover_symbols(root, target)

@@ -370,6 +370,12 @@ fn check_procedure(repository: &Path, reference: &str) -> Result<(), String> {
     let (path, heading) = reference
         .split_once('#')
         .ok_or_else(|| format!("procedure {reference:?} is not path#heading"))?;
+    if Path::new(path).components().next() == Some(std::path::Component::Normal("archive".as_ref()))
+    {
+        return Err(format!(
+            "procedure {path} is archived; an active procedure never points into an archive"
+        ));
+    }
     let text = std::fs::read_to_string(repository.join(path))
         .map_err(|error| format!("procedure {path}: {error}"))?;
     let found = text.lines().any(|line| {

@@ -61,7 +61,7 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0035](decisions/ADR-0035.md) | Board Support Lives With Each Isolated App | accepted; location amended by ADR-0036 |
 | [ADR-0036](decisions/ADR-0036.md) | Each Board's Facts Live In A Host-Tested Data Crate | accepted; amends the location in ADR-0035 |
 | [ADR-0037](decisions/ADR-0037.md) | One Flash Manager Serves Every Board Through NorStorage | accepted, pending target validation |
-| [ADR-0038](decisions/ADR-0038.md) | Test Evidence Is Tied To Component IDs, Not Image Hashes | superseded by ADR-0050; its tooling stays in use until reqtool replaces it |
+| [ADR-0038](decisions/ADR-0038.md) | Test Evidence Is Tied To Component IDs, Not Image Hashes | superseded by ADR-0050 |
 | [ADR-0039](decisions/ADR-0039.md) | Flight Boards Drive Four DShot600 Lanes As One Fault Domain | accepted; cadence amended by ADR-0046 |
 | [ADR-0040](decisions/ADR-0040.md) | DShot Arming Requires Telemetry-Qualified Idle On Every Motor | accepted; its eRPM source is superseded by ADR-0048 where bidirectional DShot runs |
 | [ADR-0041](decisions/ADR-0041.md) | Motor Bench Actuation Is Capped And Explicitly Gated | accepted; motor-test routing amended by ADR-0056 |
@@ -73,10 +73,10 @@ Its immutable size and SHA-256 are enforced through
 | [ADR-0047](decisions/ADR-0047.md) | The RPM Filter Follows Betaflight | accepted, not yet implemented |
 | [ADR-0048](decisions/ADR-0048.md) | Bidirectional eRPM Supersedes UART Telemetry For Arming | accepted, not yet implemented; supersedes ADR-0040's eRPM source where bidirectional DShot runs; code placement set by ADR-0057 |
 | [ADR-0049](decisions/ADR-0049.md) | Dynamic Idle Raises The Motor Floor From The Slowest Motor's eRPM | accepted, not yet implemented |
-| [ADR-0050](decisions/ADR-0050.md) | Requirement Status Is Computed From Evidence, Never Recorded | accepted, not yet implemented; supersedes ADR-0038 |
+| [ADR-0050](decisions/ADR-0050.md) | Requirement Status Is Computed From Evidence, Never Recorded | accepted; implemented in tools/reqtool |
 | [ADR-0051](decisions/ADR-0051.md) | Verification Levels Are One Enum And Only Gates Block | accepted, not yet implemented |
 | [ADR-0052](decisions/ADR-0052.md) | Fingerprints Are Derived, And Parents And Children Verify Each Other | accepted, not yet implemented |
-| [ADR-0053](decisions/ADR-0053.md) | Requirements Are YAML Data Rooted In W1-W7 And Checked By reqtool | accepted; tools/reqtool validates, checks and records evidence; import and analysis checks not yet built |
+| [ADR-0053](decisions/ADR-0053.md) | Requirements Are YAML Data Rooted In W1-W7 And Checked By reqtool | accepted; implemented in tools/reqtool except the app! parser and the analysis-level checks |
 | [ADR-0054](decisions/ADR-0054.md) | Safety-Critical Code Is Separated By Crate And Never Depends On Non-Critical Code | accepted, not yet implemented |
 | [ADR-0055](decisions/ADR-0055.md) | Tasks Communicate Over Declared SPSC Links And Single-Writer Flags | accepted, not yet implemented; generalizes ADR-0015, amends ADR-0010 |
 | [ADR-0056](decisions/ADR-0056.md) | The Observer Is The Only Way Out And The Coordinator The Only Way In | accepted, not yet implemented; amends ADR-0041, ADR-0042, ADR-0043 |

@@ -9,7 +9,6 @@ pub mod details;
 pub mod evidence;
 pub mod fingerprint;
 pub mod gates;
-pub mod import;
 pub mod items;
 pub mod project;
 pub mod report;

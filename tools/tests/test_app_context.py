@@ -127,12 +127,12 @@ ferroforge::app! {
     def test_current_routes_have_no_drift(self) -> None:
         self.assertEqual(validate_routes(), [])
 
-    def test_foxeer_arming_route_is_bounded_and_names_its_test_chain(self) -> None:
+    def test_foxeer_arming_route_is_bounded_and_names_its_gate_chain(self) -> None:
         route = build_route("foxeer-f405-v2", "arming")
 
         self.assertIn("actuator_output [task priority=15]", route)
         self.assertIn("firmware/foxeer-f405-v2/src/main.rs", route)
-        self.assertIn("BENCH-FOX-001", route)
+        self.assertIn("mcu-session -> bench-session -> preflight", route)
         self.assertLessEqual(len(route.encode("utf-8")), MAX_OUTPUT_BYTES)
 
     def test_overview_reports_interrupt_and_resource_anchors(self) -> None:

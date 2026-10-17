@@ -267,3 +267,16 @@ requirements:
 ";
     assert_problem(only_covered, "no child verifies itself");
 }
+
+#[test]
+fn a_procedure_never_points_into_an_archive() {
+    let archived = VALID_ONE
+        .replace("level: unit", "level: bench")
+        .replace("target: host", "target: fcu")
+        .replace("setup: none", "setup: props-off")
+        .replace(
+            "test: alpha::input::tests::rejects_stale",
+            "procedure: archive/old.md#Gate",
+        );
+    assert_problem(&archived, "is archived");
+}

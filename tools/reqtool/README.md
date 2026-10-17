@@ -7,9 +7,10 @@ design is [`project_meta/requirements/design.md`](../../project_meta/requirement
 with ADR-0050 to ADR-0053.
 
 Requirements are defined, validated, linked to code, checked, and verified by
-evidence records that carry a derived fingerprint. The old evidence system
-(`tools/components.py`, `TEST_CATALOG.json`) stays in use until `reqtool` can
-also import its records; until that switch, nothing real is recorded here.
+evidence records that carry a derived fingerprint. Gates say what must be
+verified before each step toward flight. The testing chapter,
+[`project_meta/testing/README.md`](../../project_meta/testing/README.md), owns
+the workflow.
 
 ## Commands
 
@@ -38,14 +39,6 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
   entry in its way. It exits zero only when the gate is open. A gate names
   requirements (an ID, a prefix ending in `*`, or `*`) and the levels they
   must be verified at, and may include other gates.
-- `import` carries the old schema 1 and 2 run records over as schema 3
-  evidence, beside the originals, which stay unchanged. Each requirement
-  entry naming the old test's procedure gets a result fingerprinted in a
-  temporary worktree of the record's own revision; a revision not in this
-  repository, or one whose items did not exist yet, gets an unavailable
-  fingerprint, so its pass shows as stale. The old record's execution,
-  candidate, conditions, artifacts, observations and limitations come with
-  it. Re-running it changes nothing.
 - `record` writes one run of a test or procedure: a result, at the current
   fingerprint, for every requirement entry that names that method. `mcu`,
   `bench` and `flight` evidence needs `--board`. `--failed REQ` fails one

@@ -487,8 +487,22 @@ verification:
   section of the same file leaves the evidence standing.
 - Board evidence is reported per board, and an entry takes the worst board
   that has evidence, until gates name the boards they require.
-- `reqtool` reads only schema 3 records and ignores the schema 2 ones beside
-  them, so both coexist in `runs/` until the switch.
+- `reqtool` reads only schema 3 records and leaves the schema 1 and 2 ones
+  beside them untouched.
+- A record carries `details`, what each procedure's "Required evidence" asks
+  for: execution, candidate image, conditions, commands, artifacts,
+  measurements, observations, limitations and triggered stop conditions.
+  The old run-record validator's hardware rules apply to it, checked when
+  recording and when reading: no pass with a triggered stop condition; board
+  evidence user-confirmed, not agent-only, with the image's SHA-256 and a
+  known power and propeller state. Two rules follow from the setups: a
+  props-off pass needs propellers removed, a flight pass installed.
+  Artifacts live under `logs/`; `reqtool` hashes them and re-checks the hash
+  whenever the file is present.
+- `reqtool test` runs the host tests requirements name, per package in its
+  own workspace and toolchain, and records one session; a test that fails or
+  does not run is never recorded as a pass, and passes already on record at
+  the same fingerprint are not recorded again.
 
 **Tooling transition.**
 
@@ -496,14 +510,17 @@ verification:
 |---|---|
 | `components.py`, `COMPONENTS.json` | retired; fingerprints are derived, and `due` becomes `reqtool check` |
 | `test_evidence.py` | retired; `reqtool record` writes and validates evidence |
-| `TEST_CATALOG.json` | replaced; procedures keep their Markdown, metadata (level, target, setup, stop conditions) moves into the schema, trigger paths are dropped because what is owed is computed |
-| schema 2 run records (about 15) | imported once by `reqtool import`, re-fingerprinted from each record's git revision; originals kept unchanged |
-| `check_repository_context.py` | kept for document checks; its run-record checks removed |
+| `TEST_CATALOG.json` | dissolved: stop conditions and required evidence stay in each procedure's Markdown, which they duplicated; who may run a procedure follows from its level under the AGENTS.md Operating Rules; prerequisites became the gates in `gates.yaml`; trigger paths are dropped because what is owed is computed |
+| `RUN_RECORD_TEMPLATE.json` | replaced by schema 3 records and their `details` |
+| schema 1 and 2 run records (16) | 13 imported once, re-fingerprinted at each record's own revision with their details, as `<run_id>__imported.json`; the software-suite and preflight records were not, by design; originals unchanged. The one-off `import` command was removed with the catalog it read |
+| `bench_rig.py`, `foxeer_bench_gates.py` | kept; they judge their gates as before and record through `reqtool record` (`reqtool_bridge.py`) |
+| `check_repository_context.py` | kept for document checks; its catalog and run-record checks removed |
 | `check_rtic_boundaries.py` | kept until the parser lands; its mechanical checks then move into `reqtool` |
-| `app_context.py` | kept; it routes agent context, a different job, and can adopt the parser later |
+| `app_context.py` | kept; it routes agent context, a different job, names the gate chain in place of the catalog chain, and can adopt the parser later |
 
-Old and new run side by side until `reqtool` can record and import; then the
-switch happens in one commit. Evidence is never recorded under both systems.
+Evidence is never recorded under two systems at once: the old one was
+retired as a whole, in one change, once `reqtool` could record, import and
+gate.
 Re-fingerprinting from git also covers the flown candidate: its record stays
 tag `foxeer-candidate-16f6e8ed` plus the preserved binaries, never a rebuild.
 
@@ -1383,9 +1400,12 @@ keeps its own hardware list and never ingests imported targets.
   `CONFIGURATOR_LINK_ACTIVE`). That breaks the flag rule. It moves either to
   an inhibit lease each link holds through the coordinator or to a
   safety-critical VBUS sense; decided during the redesign.
-- **Discontinuity handling in the RC group.** The RC group must observe
-  ADR-0011's out-of-band handle and call the parser's `reset`; whether the
-  current RC path does so is unverified.
+- **Discontinuity handling in the RC group.** The RC group observes
+  ADR-0011's out-of-band handle and calls the parser's `reset` (`rc_input`);
+  its fault decisions move into host-tested functions on the
+  `rc-input-fault-decisions` branch, which INPUT-006 links once merged.
+- **Feature-gated tests.** `reqtool test` runs each package with its default
+  features, so a test behind an opt-in feature cannot be evidence yet.
 - **Datasheet rates.** The MPU-6000 and ICM-42688-P output rates above are
   recalled, not checked.
 - **Betaflight's scheduler.** Gyro-locking is to be confirmed in its source.

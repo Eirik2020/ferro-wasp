@@ -4,7 +4,6 @@ use std::process::ExitCode;
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 
 use reqtool::evidence::{self, Outcome, Recorded, RunRequest, Timestamp};
-use reqtool::import::Imported;
 use reqtool::project::Project;
 use reqtool::report;
 use reqtool::runner::{self, Ran};
@@ -76,13 +75,6 @@ enum Command {
         #[arg(long)]
         board: Option<String>,
     },
-    /// Carry the old schema 1 and 2 run records over as schema 3 evidence,
-    /// re-fingerprinted at each record's own revision. Originals stay.
-    Import {
-        /// Show what would be imported without writing.
-        #[arg(long)]
-        dry_run: bool,
-    },
     /// Run the host tests that requirements name, and record what each did.
     /// Tests that fail or do not run exit nonzero; only tests that ran are
     /// recorded.
@@ -124,9 +116,6 @@ fn main() -> ExitCode {
     }
     if let Command::Gate { name, board } = &cli.command {
         return gate(&project, name.as_deref(), board.as_deref());
-    }
-    if let Command::Import { dry_run } = &cli.command {
-        return import(&project, *dry_run);
     }
     if let Command::Test {
         requirements,
@@ -195,7 +184,7 @@ fn main() -> ExitCode {
                 }
             })
         }
-        Command::Test { .. } | Command::Import { .. } | Command::Gate { .. } => {
+        Command::Test { .. } | Command::Gate { .. } => {
             unreachable!("handled above")
         }
     };
@@ -323,57 +312,6 @@ fn gate(project: &Project, name: Option<&str>, board: Option<&str>) -> ExitCode 
             ExitCode::FAILURE
         }
     }
-}
-
-fn import(project: &Project, dry_run: bool) -> ExitCode {
-    let plans = match reqtool::import::plan(project) {
-        Ok(plans) => plans,
-        Err(message) => return fail(&message),
-    };
-    let relative = |path: &std::path::Path| {
-        path.strip_prefix(&project.repository)
-            .unwrap_or(path)
-            .display()
-            .to_string()
-    };
-    if dry_run {
-        for plan in &plans {
-            match &plan.outcome {
-                Ok(Some(record)) => {
-                    println!(
-                        "would import {} ({} results)",
-                        relative(&plan.source),
-                        record.results.len()
-                    );
-                    for result in &record.results {
-                        println!(
-                            "    {} {}: {}",
-                            result.requirement,
-                            result.level.name(),
-                            result.fingerprint
-                        );
-                    }
-                }
-                Ok(None) => {}
-                Err(why) => println!("would skip   {}: {why}", relative(&plan.source)),
-            }
-        }
-        return ExitCode::SUCCESS;
-    }
-    for (source, imported) in reqtool::import::write(project, plans) {
-        match imported {
-            Imported::Written { path, results } => {
-                println!(
-                    "imported {} -> {} ({results} results)",
-                    relative(&source),
-                    relative(&path)
-                );
-            }
-            Imported::Present(path) => println!("present  {}", relative(&path)),
-            Imported::Skipped(why) => println!("skipped  {}: {why}", relative(&source)),
-        }
-    }
-    ExitCode::SUCCESS
 }
 
 fn read_details(path: &std::path::Path) -> Result<reqtool::details::Details, String> {
