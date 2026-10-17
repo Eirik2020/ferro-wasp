@@ -530,3 +530,122 @@ fn import_of_an_unknown_revision_is_never_current() {
     reqtool::import::write(&project, plans);
     assert_eq!(entry_status(path, "INPUT-001", 1), Status::Stale);
 }
+
+const GATES: &str = "schema_version: 1
+gates:
+  - name: host
+    description: host evidence
+    requires:
+      - requirements: [\"*\"]
+        levels: [unit]
+  - name: bench
+    description: board evidence
+    includes: [host]
+    requires:
+      - requirements: [INPUT-001]
+        levels: [bench]
+";
+
+fn gate(
+    path: &Path,
+    name: &str,
+    board: Option<&str>,
+) -> Result<Vec<reqtool::gates::Missing>, String> {
+    let project = load(path);
+    let recorded = Recorded::new(&project, &evidence::load(path).unwrap()).unwrap();
+    reqtool::gates::check(
+        &project.gates,
+        name,
+        board,
+        &project.requirements,
+        &recorded,
+    )
+}
+
+#[test]
+fn a_gate_opens_only_when_everything_it_includes_is_verified() {
+    let repo = repository();
+    let path = repo.path();
+    std::fs::write(path.join("project_meta/requirements/gates.yaml"), GATES).unwrap();
+    assert_eq!(
+        gate(path, "host", None).unwrap().len(),
+        2,
+        "two unit entries, none verified"
+    );
+    assert!(
+        gate(path, "bench", None)
+            .unwrap_err()
+            .contains("pass --board")
+    );
+
+    record(
+        path,
+        &request(Method::Test(TEST.into()), None, Outcome::Pass),
+        1,
+    );
+    assert!(
+        gate(path, "host", None).unwrap().is_empty(),
+        "host gate open"
+    );
+    let bench = gate(path, "bench", Some("demo-board")).unwrap();
+    assert_eq!(bench.len(), 1, "{bench:?}");
+    assert_eq!(bench[0].requirement, "INPUT-001");
+
+    record(
+        path,
+        &request(
+            Method::Procedure(BENCH.into()),
+            Some("demo-board"),
+            Outcome::Pass,
+        ),
+        2,
+    );
+    assert!(
+        gate(path, "bench", Some("demo-board")).unwrap().is_empty(),
+        "bench gate open"
+    );
+
+    edit(
+        path,
+        "crates/alpha/src/input.rs",
+        "pub fn validate() {}",
+        "pub fn validate() { let _ = 6; }",
+    );
+    let stale = gate(path, "bench", Some("demo-board")).unwrap();
+    assert!(
+        stale.iter().all(|m| m.status == Status::Stale) && stale.len() == 3,
+        "{stale:?}"
+    );
+}
+
+#[test]
+fn gates_are_validated_against_the_requirements() {
+    let repo = repository();
+    let path = repo.path();
+    let broken = "schema_version: 1
+gates:
+  - name: a
+    description: a
+    includes: [b, missing]
+    requires:
+      - requirements: [NOPE-*, INPUT-003]
+        levels: [unit]
+  - name: b
+    description: b
+    includes: [a]
+";
+    std::fs::write(path.join("project_meta/requirements/gates.yaml"), broken).unwrap();
+    let (_, problems) = Project::load(path).unwrap();
+    let text: Vec<String> = problems.iter().map(ToString::to_string).collect();
+    for expected in [
+        "includes unknown gate missing",
+        "NOPE-* selects no requirement",
+        "INPUT-003 has no entry at unit",
+        "gate a includes itself",
+    ] {
+        assert!(
+            text.iter().any(|p| p.contains(expected)),
+            "{expected} in {text:#?}"
+        );
+    }
+}

@@ -1,0 +1,36 @@
+schema_version: 1
+gates:
+  - name: mcu-session
+    description: >-
+      Before running mcu procedures on a board: every requirement's host
+      evidence is current, and the board's image builds.
+    requires:
+      - requirements: ["*"]
+        levels: [unit, analysis]
+
+  - name: bench-session
+    description: >-
+      Before connecting ESC power with propellers removed: the board boots
+      to a stopped, disarmed state and holds its configuration.
+    includes: [mcu-session]
+    requires:
+      - requirements: ["BOOT-*", "CONFIG-*"]
+        levels: [mcu]
+
+  - name: preflight
+    description: >-
+      Before the preflight procedure's checklist for a flight: arming,
+      motors, control signs, RC loss and logging are verified props-off on
+      this board.
+    includes: [bench-session]
+    requires:
+      - requirements:
+          - "ARM-*"
+          - MOTOR-001
+          - CTRL-001
+          - CTRL-002
+          - INPUT-008
+          - INPUT-009
+          - INPUT-010
+          - LOG-001
+        levels: [bench]

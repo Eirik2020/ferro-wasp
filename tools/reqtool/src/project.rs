@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use crate::gates::{self, Gate};
 use crate::items::Resolver;
 use crate::roots::{self, Root};
 use crate::schema::{
@@ -34,6 +35,7 @@ pub struct Project {
     /// The file each requirement came from, relative to the repository.
     pub sources: BTreeMap<String, String>,
     pub workspace: Workspace,
+    pub gates: Vec<Gate>,
 }
 
 impl Project {
@@ -99,14 +101,33 @@ impl Project {
             }
         }
 
+        let gates = match gates::load(repository) {
+            Ok(gates) => gates,
+            Err(message) => {
+                problems.push(Problem {
+                    location: gates::GATES.to_owned(),
+                    message,
+                });
+                Vec::new()
+            }
+        };
         let project = Self {
             repository: repository.to_path_buf(),
             roots,
             requirements,
             sources,
             workspace,
+            gates,
         };
         problems.extend(project.validate());
+        problems.extend(
+            gates::validate(&project.gates, &project.requirements)
+                .into_iter()
+                .map(|message| Problem {
+                    location: gates::GATES.to_owned(),
+                    message,
+                }),
+        );
         Ok((project, problems))
     }
 
@@ -397,6 +418,9 @@ fn requirement_files(repository: &Path) -> Result<Vec<PathBuf>, String> {
         .filter(|path| {
             path.extension()
                 .is_some_and(|extension| extension == "yaml" || extension == "yml")
+                && path
+                    .file_name()
+                    .is_none_or(|name| name != gates::GATES_FILE_NAME)
         })
         .collect();
     files.sort();

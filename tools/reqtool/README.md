@@ -33,6 +33,11 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
   requirements given) with cargo, in each package's own workspace, and
   records the session. Tests that fail or do not run exit nonzero; passes
   already on record at the same fingerprint are not recorded again.
+- `gate` lists the gates in `project_meta/requirements/gates.yaml`;
+  `gate <name> --board <board>` says whether one is open and lists every
+  entry in its way. It exits zero only when the gate is open. A gate names
+  requirements (an ID, a prefix ending in `*`, or `*`) and the levels they
+  must be verified at, and may include other gates.
 - `import` carries the old schema 1 and 2 run records over as schema 3
   evidence, beside the originals, which stay unchanged. Each requirement
   entry naming the old test's procedure gets a result fingerprinted in a

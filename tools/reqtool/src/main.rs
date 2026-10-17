@@ -61,6 +61,15 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Say whether a gate is open, and what stands in its way: every
+    /// requirement entry it needs that is not verified.
+    Gate {
+        /// The gate, as named in project_meta/requirements/gates.yaml.
+        name: Option<String>,
+        /// The board, for gates with board-level requirements.
+        #[arg(long)]
+        board: Option<String>,
+    },
     /// Carry the old schema 1 and 2 run records over as schema 3 evidence,
     /// re-fingerprinted at each record's own revision. Originals stay.
     Import {
@@ -106,6 +115,9 @@ fn main() -> ExitCode {
     if !problems.is_empty() {
         eprintln!("{} problem(s)", problems.len());
         return ExitCode::FAILURE;
+    }
+    if let Command::Gate { name, board } = &cli.command {
+        return gate(&project, name.as_deref(), board.as_deref());
     }
     if let Command::Import { dry_run } = &cli.command {
         return import(&project, *dry_run);
@@ -171,7 +183,9 @@ fn main() -> ExitCode {
                 }
             })
         }
-        Command::Test { .. } | Command::Import { .. } => unreachable!("handled above"),
+        Command::Test { .. } | Command::Import { .. } | Command::Gate { .. } => {
+            unreachable!("handled above")
+        }
     };
     match result {
         Ok(text) => {
@@ -245,6 +259,56 @@ fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+/// Lists the gates, or checks one: exits zero only when it is open.
+fn gate(project: &Project, name: Option<&str>, board: Option<&str>) -> ExitCode {
+    let Some(name) = name else {
+        for gate in &project.gates {
+            println!("{:<16} {}", gate.name, gate.description);
+        }
+        return ExitCode::SUCCESS;
+    };
+    if let Some(board) = board
+        && !project.workspace.boards.contains_key(board)
+    {
+        return fail(&format!("no firmware app for board {board}"));
+    }
+    let missing = recorded(project).and_then(|evidence| {
+        reqtool::gates::check(
+            &project.gates,
+            name,
+            board,
+            &project.requirements,
+            &evidence,
+        )
+    });
+    match missing {
+        Err(message) => fail(&message),
+        Ok(missing) if missing.is_empty() => {
+            println!(
+                "gate {name} is open{}",
+                board.map(|b| format!(" for {b}")).unwrap_or_default()
+            );
+            ExitCode::SUCCESS
+        }
+        Ok(missing) => {
+            println!(
+                "gate {name} is closed{}: {} entries are not verified",
+                board.map(|b| format!(" for {b}")).unwrap_or_default(),
+                missing.len()
+            );
+            for item in missing {
+                println!(
+                    "  {:<12} {:<9} {}",
+                    item.requirement,
+                    item.level.name(),
+                    item.status.name()
+                );
+            }
+            ExitCode::FAILURE
+        }
     }
 }
 
