@@ -168,16 +168,38 @@ requirements:
       arm qualifier reset), reset the parser where bytes may have been lost,
       and report the invalidation to the safety master.
     rationale: >-
-      These decisions are made inline in the rc_input task body, which cannot
-      be host-tested; AGENTS.md requires each decision a task makes to be a
-      host-tested function. This requirement has no method until they are
-      extracted.
+      These are the decisions that keep a lost or corrupt RC link from
+      reaching the control loop. They live in host-tested functions; the
+      rc_input task body only wires them, as AGENTS.md requires.
     derived_from: [INPUT-001]
     allocated_to:
+      - ferrowasp_core::safety::rc_fault_response
+      - ferrowasp_core::safety::neutralize_rc_outputs
+      - ferrowasp_flight::drone_toolbox::RcChannelMap::replaced
       - ferrowasp_stm32_tasks::rc_input
-      - ferrowasp_stm32_tasks::neutralize_rc_input
     verification:
       mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::every_rc_fault_invalidates_with_its_own_reason
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::only_lost_bytes_reset_the_parser_and_only_a_stopped_stream_stops
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::neutralizing_centres_the_sticks_drops_the_switch_and_cancels_an_arm_hold
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::a_channel_map_change_is_seen_once_and_the_first_map_is_not_one
 
   - id: INPUT-007
     title: A changed channel map requires the arm switch seen low again
