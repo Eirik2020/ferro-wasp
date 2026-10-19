@@ -214,6 +214,8 @@ ferroforge::app! {
             stm32_storage::new_adc_buffer_bank(),
         dshot_dma_storage: board::init::DshotDmaStorage =
             board::init::DshotDmaStorage::new(),
+        dshot_reply_storage: board::init::DshotReplyStorage =
+            board::init::DshotReplyStorage::new(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         // Before anything is configured: a `reboot dfu` request ends here.
@@ -306,6 +308,7 @@ ferroforge::app! {
                 },
                 &clocks.clocks,
                 cx.local.dshot_dma_storage,
+                cx.local.dshot_reply_storage,
             )
             .expect("Foxeer DShot600 timing must be valid")
         };
@@ -624,6 +627,8 @@ ferroforge::app! {
         warn!(
             "FAULT INJECTION ACTIVE: Foxeer physical ESC output 1 (logical M1/rear-right) idle qualification eRPM forced to zero; arming must fail"
         );
+        #[cfg(feature = "bench_bidirectional_dshot")]
+        warn!("BENCH: bidirectional DShot active; props-off only, never a flight image");
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         flight::heartbeat::spawn().unwrap();
@@ -870,6 +875,7 @@ ferroforge::app! {
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,
+            build_identity: flight_tasks::BuildIdentity = BUILD_IDENTITY,
             physical_imu_to_drone_rotation: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation(),
             control_imu_to_rate_controller_map: dt::FrameRotation =
@@ -1082,7 +1088,8 @@ ferroforge::app! {
     #[task(
         from = flight_tasks::configurator_link,
         priority = 3,
-        local = [configurator_port, configurator_commands, configurator_responses]
+        local = [configurator_port, configurator_commands, configurator_responses],
+        config = [build_identity: flight_tasks::BuildIdentity = BUILD_IDENTITY]
     )]
     async fn configurator_link(cx: configurator_link::Context);
 

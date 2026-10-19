@@ -60,6 +60,28 @@ fn main() {
         "HEAD",
     ])
     .unwrap_or_else(|| "00:00:00".to_owned());
+    // Whether tracked files differ from the commit. The script reruns when
+    // the index or any source it could report on changes.
+    for path in [
+        "../../.git/index",
+        "../../.git/refs/heads",
+        "../../crates",
+        "src",
+        "board/src",
+        "Cargo.toml",
+    ] {
+        println!("cargo:rerun-if-changed={path}");
+    }
+    let dirty = git_value(&["status", "--porcelain", "--untracked-files=no"]).is_some();
+    // Enabled features other than the board's and the default, as Cargo
+    // names them to build scripts.
+    let mut features: Vec<String> = env::vars()
+        .filter_map(|(key, _)| key.strip_prefix("CARGO_FEATURE_").map(str::to_lowercase))
+        .filter(|name| name != "default" && !name.starts_with("board_"))
+        .collect();
+    features.sort();
+    println!("cargo:rustc-env=FWSP_GIT_DIRTY={}", u8::from(dirty));
+    println!("cargo:rustc-env=FWSP_FEATURES={}", features.join(","));
     println!("cargo:rustc-env=FWSP_GIT_REV={revision}");
     println!("cargo:rustc-env=FWSP_BUILD_DATE={build_date}");
     println!("cargo:rustc-env=FWSP_BUILD_TIME={build_time}");

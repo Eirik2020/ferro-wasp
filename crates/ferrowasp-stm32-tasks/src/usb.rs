@@ -39,6 +39,7 @@ use ferrowasp_flight::usb_debug;
         control_loop_hz: u32,
         msp_common_info: MspCommonInfoFn,
         rpc_device_info: crate::RpcDeviceInfoFn,
+        build_identity: crate::BuildIdentity,
     ],
     monotonic = Mono,
 )]
@@ -63,6 +64,17 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
             }
             Ok(flash_task::StorageCommand::Rc) => {
                 for line in usb_debug::format_rc(rc_channels_us()) {
+                    let _ = serial.write(line.as_bytes());
+                }
+            }
+            Ok(flash_task::StorageCommand::Esc) => {
+                let now_ms = Mono::now().duration_since_epoch().to_millis() as u32;
+                for line in usb_debug::format_esc(esc_snapshot(now_ms)) {
+                    let _ = serial.write(line.as_bytes());
+                }
+            }
+            Ok(flash_task::StorageCommand::Build) => {
+                for line in usb_debug::format_build(CONFIG::BUILD_IDENTITY) {
                     let _ = serial.write(line.as_bytes());
                 }
             }

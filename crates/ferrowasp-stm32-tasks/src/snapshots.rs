@@ -109,6 +109,29 @@ pub fn rc_channels_us() -> [u16; 16] {
     core::array::from_fn(|index| RC_CHANNELS_US[index].load(Ordering::Relaxed))
 }
 
+/// Each physical ESC output's latest legacy UART eRPM/100, `u32::MAX` until
+/// one arrives, and when it did, in wrapping milliseconds.
+pub static ESC_UART_ERPM_DIV100: [AtomicU32; 4] = [const { AtomicU32::new(u32::MAX) }; 4];
+pub static ESC_UART_SEEN_MS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+/// Each physical ESC output's latest valid bidirectional reply eRPM/100,
+/// `u32::MAX` until one arrives, and its valid and invalid reply counts.
+pub static DSHOT_REPLY_ERPM_DIV100: [AtomicU32; 4] = [const { AtomicU32::new(u32::MAX) }; 4];
+pub static DSHOT_REPLIES_VALID: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+pub static DSHOT_REPLIES_INVALID: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
+/// What the `esc` command reports, on whichever link asked.
+pub fn esc_snapshot(now_ms: u32) -> [ferrowasp_flight::usb_debug::EscLaneSnapshot; 4] {
+    let known = |value: u32| (value != u32::MAX).then_some(value);
+    core::array::from_fn(|index| ferrowasp_flight::usb_debug::EscLaneSnapshot {
+        uart_erpm_div100: known(ESC_UART_ERPM_DIV100[index].load(Ordering::Relaxed))
+            .map(|erpm| erpm as u16),
+        uart_age_ms: now_ms.wrapping_sub(ESC_UART_SEEN_MS[index].load(Ordering::Relaxed)),
+        reply_erpm_div100: known(DSHOT_REPLY_ERPM_DIV100[index].load(Ordering::Relaxed)),
+        replies_valid: DSHOT_REPLIES_VALID[index].load(Ordering::Relaxed),
+        replies_invalid: DSHOT_REPLIES_INVALID[index].load(Ordering::Relaxed),
+    })
+}
+
 /// What the `live` command reports, on whichever link asked.
 pub fn live_snapshot() -> ferrowasp_flight::usb_debug::LiveSnapshot {
     ferrowasp_flight::usb_debug::LiveSnapshot {

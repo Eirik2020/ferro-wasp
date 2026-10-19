@@ -61,6 +61,7 @@ impl Outbox {
         configurator_commands: Option<flash_task::CommandProducer>,
         configurator_responses: Option<flash_task::ResponseConsumer>,
     ],
+    config = [build_identity: crate::BuildIdentity],
     monotonic = Mono,
 )]
 pub async fn configurator_link(cx: configurator_link::Context) {
@@ -112,6 +113,19 @@ pub async fn configurator_link(cx: configurator_link::Context) {
                     }
                     Ok(flash_task::StorageCommand::Rc) => {
                         for line in ferrowasp_flight::usb_debug::format_rc(rc_channels_us()) {
+                            outbox.push(&mut writer, line.as_bytes()).await;
+                        }
+                    }
+                    Ok(flash_task::StorageCommand::Esc) => {
+                        let now_ms = Mono::now().duration_since_epoch().to_millis() as u32;
+                        for line in ferrowasp_flight::usb_debug::format_esc(esc_snapshot(now_ms)) {
+                            outbox.push(&mut writer, line.as_bytes()).await;
+                        }
+                    }
+                    Ok(flash_task::StorageCommand::Build) => {
+                        for line in
+                            ferrowasp_flight::usb_debug::format_build(CONFIG::BUILD_IDENTITY)
+                        {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }

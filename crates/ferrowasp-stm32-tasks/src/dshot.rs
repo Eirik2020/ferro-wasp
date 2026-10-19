@@ -4,7 +4,10 @@
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
-use crate::snapshots::{DSHOT_ACTIVE_LANES, DSHOT_LAST_RELEASE_MS};
+use crate::snapshots::{
+    DSHOT_ACTIVE_LANES, DSHOT_LAST_RELEASE_MS, DSHOT_REPLIES_INVALID, DSHOT_REPLIES_VALID,
+    DSHOT_REPLY_ERPM_DIV100,
+};
 
 /// How often the service reports the bank's state to the log.
 const DSHOT_REPORT_PERIOD_MS: u64 = 2_000;
@@ -53,6 +56,8 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
         fault_reported: bool = false,
         disarm_pending: bool = false,
         last_report_ms: u64 = 0,
+        // Each lane's latest valid eRPM/100 from bidirectional replies.
+        reply_erpm_div100: [Option<u32>; 4] = [None; 4],
         esc_request_consumer: esc::EscRequestConsumer,
         esc_ack_producer: esc::EscAckProducer,
         esc_actuator_request: Option<esc::EscActuatorRequest> = None,
@@ -104,6 +109,26 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
 
         let frames_before = dshot.stats().frames_started;
         let event = dshot.service(now_ms);
+        if let Some(replies) = dshot.take_replies() {
+            for (latest, reply) in cx.local.reply_erpm_div100.iter_mut().zip(replies) {
+                if let Ok(dshot::DshotReply::Erpm { erpm_div100 }) = reply {
+                    *latest = Some(erpm_div100);
+                }
+            }
+            // For the `esc` command, by physical ESC output, so each line
+            // matches that output's UART telemetry.
+            let stats = dshot.reply_stats();
+            for output in esc::EscOutput::ALL {
+                let lane = CONFIG::DSHOT_MOTOR_FOR_OUTPUT(output).index();
+                let slot = output.index();
+                DSHOT_REPLY_ERPM_DIV100[slot].store(
+                    cx.local.reply_erpm_div100[lane].unwrap_or(u32::MAX),
+                    Ordering::Relaxed,
+                );
+                DSHOT_REPLIES_VALID[slot].store(stats.valid[lane], Ordering::Relaxed);
+                DSHOT_REPLIES_INVALID[slot].store(stats.invalid[lane], Ordering::Relaxed);
+            }
+        }
         if dshot.stats().frames_started != frames_before {
             // Wrapping milliseconds: the fallback compares differences only.
             // A release that found the bank busy started nothing, so it does
@@ -166,10 +191,14 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
 
     if now_ms.saturating_sub(*cx.local.last_report_ms) >= DSHOT_REPORT_PERIOD_MS {
         *cx.local.last_report_ms = now_ms;
-        let (requested, stats) = cx
-            .shared
-            .dshot_motors
-            .lock(|dshot| (dshot.requested_values(), dshot.stats()));
+        let (requested, stats, bidirectional, replies) = cx.shared.dshot_motors.lock(|dshot| {
+            (
+                dshot.requested_values(),
+                dshot.stats(),
+                dshot.is_bidirectional(),
+                dshot.reply_stats(),
+            )
+        });
         info!(
             "DShot values [{}, {}, {}, {}], sets {}/{}, lanes [{}, {}, {}, {}], busy {}, expired {}, timeouts {}, faults {}, at {} ms",
             requested[0],
@@ -188,6 +217,28 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
             stats.dma_faults,
             now_ms
         );
+        if bidirectional {
+            // -1: no valid reply from that lane yet.
+            let erpm = cx
+                .local
+                .reply_erpm_div100
+                .map(|erpm| erpm.map_or(-1, i64::from));
+            info!(
+                "DShot replies eRPM/100 [{}, {}, {}, {}], valid [{}, {}, {}, {}], invalid [{}, {}, {}, {}]",
+                erpm[0],
+                erpm[1],
+                erpm[2],
+                erpm[3],
+                replies.valid[0],
+                replies.valid[1],
+                replies.valid[2],
+                replies.valid[3],
+                replies.invalid[0],
+                replies.invalid[1],
+                replies.invalid[2],
+                replies.invalid[3]
+            );
+        }
     }
 }
 
