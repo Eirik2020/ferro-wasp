@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.check_repository_context import (
-    ADR_INDEX_MAX_BYTES,
     _discover_agent_instruction_paths,
     validate_always_loaded,
     validate_architecture_decisions,
@@ -41,14 +40,21 @@ class RepositoryContextTests(unittest.TestCase):
             )
         }
         self.assertEqual(set(adr_entries), discovered_adrs)
-        if ADR_INDEX_MAX_BYTES is not None:
-            self.assertEqual(
-                documents["project_meta/ARCHITECTURE_DECISIONS.md"]["max_bytes"],
-                ADR_INDEX_MAX_BYTES,
-            )
+        self.assertEqual(
+            documents["project_meta/ARCHITECTURE_DECISIONS.md"]["max_bytes"],
+            8192,
+        )
         self.assertTrue(
             all(entry["max_bytes"] == 4096 for entry in adr_entries.values())
         )
+
+    def test_retired_and_active_decisions_sit_in_their_own_index(self) -> None:
+        errors = validate_architecture_decisions(FIXTURES / "adr_history")
+
+        self.assertTrue(any("ADR-0002 is retired" in e and "HISTORY" in e for e in errors), errors)
+        self.assertTrue(any("ADR-0004 is active" in e for e in errors), errors)
+        self.assertFalse(any("ADR-0001" in e or "ADR-0003" in e for e in errors), errors)
+        self.assertFalse(any("orphan" in e or "does not resolve" in e for e in errors), errors)
 
     def test_architecture_decision_guard_rejects_drift(self) -> None:
         errors = validate_architecture_decisions(FIXTURES / "invalid_adr")
