@@ -6,18 +6,28 @@
 
 use crate::prelude::*;
 
-/// Neutral sticks, zero throttle, arm switch low, and the arm qualifier
-/// reset: what the rest of the firmware sees while the link is not valid.
-pub fn neutralize_rc_input(
+/// Carries out a fault's response (`safety::rc_fault_response`): report the
+/// invalidation to the safety master, drop any partial frame if bytes were
+/// lost, and neutralize the outputs.
+#[allow(clippy::too_many_arguments)]
+fn respond_to_fault(
+    fault: safety::RcInputFault,
+    receiver: &mut RcReceiver,
     arm_qualifier: &mut safety::ArmQualifier,
     rates: &signals::RcRatesWriter,
     throttle: &signals::RcThrottleWriter,
     arm_high: &signals::RcArmHighWriter,
-) {
-    arm_qualifier.reset();
-    rates.write(safety::RcRates::default());
-    throttle.write(0);
-    arm_high.write(false);
+    reported_valid: &mut bool,
+    report: impl FnOnce(safety::SafetyEvent),
+) -> safety::RcFaultResponse {
+    let response = safety::rc_fault_response(fault);
+    report(safety::SafetyEvent::RcLinkInvalid(response.invalidation));
+    if response.reset_parser {
+        receiver.reset();
+    }
+    safety::neutralize_rc_outputs(arm_qualifier, rates, throttle, arm_high);
+    *reported_valid = false;
+    response
 }
 
 /// Read the receiver from the bound port, publish stick state, qualify the RC
@@ -34,6 +44,9 @@ pub fn neutralize_rc_input(
 /// from a channel that is already high, which would otherwise look like the
 /// pilot flipping it; so a change invalidates the link like a lost receiver,
 /// and arming needs the new arm channel seen low first.
+///
+/// What each fault does is decided by `safety::rc_fault_response`, which is
+/// host-tested; this body only wires it.
 #[ferroforge::task(
     local = [
         rc_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
@@ -61,37 +74,41 @@ pub async fn rc_input(mut cx: rc_input::Context) {
         let read_len = match port.reader.read(&mut bytes).await {
             Ok(read_len) => read_len,
             Err(_) => {
-                let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
-                    safety::RcLinkInvalidation::TransportDiscontinuity,
-                ));
-                neutralize_rc_input(
+                let response = respond_to_fault(
+                    safety::RcInputFault::StreamStopped,
+                    cx.local.rc_receiver,
                     cx.local.arm_qualifier,
                     cx.local.rc_rates_writer,
                     cx.local.rc_throttle_writer,
                     cx.local.rc_arm_high_writer,
+                    cx.local.rc_link_reported_valid,
+                    |event| {
+                        let _ = cx.spawn.safety_master(event);
+                    },
                 );
-                *cx.local.rc_link_reported_valid = false;
                 warn!("RC input stream stopped");
-                return;
+                if response.stop {
+                    return;
+                }
+                continue;
             }
         };
 
         if let Some(event) = port.discontinuities.take_new() {
-            let reason = match event.cause {
-                Discontinuity::DmaError => safety::RcLinkInvalidation::DmaError,
-                _ => safety::RcLinkInvalidation::TransportDiscontinuity,
-            };
-            let _ = cx
-                .spawn
-                .safety_master(safety::SafetyEvent::RcLinkInvalid(reason));
-            cx.local.rc_receiver.reset();
-            neutralize_rc_input(
+            respond_to_fault(
+                safety::RcInputFault::Discontinuity {
+                    dma: matches!(event.cause, Discontinuity::DmaError),
+                },
+                cx.local.rc_receiver,
                 cx.local.arm_qualifier,
                 cx.local.rc_rates_writer,
                 cx.local.rc_throttle_writer,
                 cx.local.rc_arm_high_writer,
+                cx.local.rc_link_reported_valid,
+                |event| {
+                    let _ = cx.spawn.safety_master(event);
+                },
             );
-            *cx.local.rc_link_reported_valid = false;
             warn!("RC input discontinuity sequence {}", event.sequence);
         }
 
@@ -102,31 +119,35 @@ pub async fn rc_input(mut cx: rc_input::Context) {
             let frame = match frame {
                 Ok(frame) => frame,
                 Err(_) => {
-                    let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
-                        safety::RcLinkInvalidation::ParserError,
-                    ));
-                    neutralize_rc_input(
+                    respond_to_fault(
+                        safety::RcInputFault::ParseError,
+                        cx.local.rc_receiver,
                         cx.local.arm_qualifier,
                         cx.local.rc_rates_writer,
                         cx.local.rc_throttle_writer,
                         cx.local.rc_arm_high_writer,
+                        cx.local.rc_link_reported_valid,
+                        |event| {
+                            let _ = cx.spawn.safety_master(event);
+                        },
                     );
-                    *cx.local.rc_link_reported_valid = false;
                     continue;
                 }
             };
 
             if let Err(reason) = safety::classify_rc_frame_flags(frame.failsafe, frame.frame_lost) {
-                let _ = cx
-                    .spawn
-                    .safety_master(safety::SafetyEvent::RcLinkInvalid(reason));
-                neutralize_rc_input(
+                respond_to_fault(
+                    safety::RcInputFault::Flagged(reason),
+                    cx.local.rc_receiver,
                     cx.local.arm_qualifier,
                     cx.local.rc_rates_writer,
                     cx.local.rc_throttle_writer,
                     cx.local.rc_arm_high_writer,
+                    cx.local.rc_link_reported_valid,
+                    |event| {
+                        let _ = cx.spawn.safety_master(event);
+                    },
                 );
-                *cx.local.rc_link_reported_valid = false;
                 continue;
             }
 
@@ -134,22 +155,19 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 .shared
                 .tuning_profile
                 .lock(|profile| (profile.rc_rates, profile.rc_map));
-            let map_changed = cx
-                .local
-                .rc_map_in_use
-                .replace(rc_map)
-                .is_some_and(|in_use| in_use != rc_map);
-            if map_changed {
-                let _ = cx.spawn.safety_master(safety::SafetyEvent::RcLinkInvalid(
-                    safety::RcLinkInvalidation::ChannelMapChanged,
-                ));
-                neutralize_rc_input(
+            if dt::RcChannelMap::replaced(cx.local.rc_map_in_use, rc_map) {
+                respond_to_fault(
+                    safety::RcInputFault::ChannelMapChanged,
+                    cx.local.rc_receiver,
                     cx.local.arm_qualifier,
                     cx.local.rc_rates_writer,
                     cx.local.rc_throttle_writer,
                     cx.local.rc_arm_high_writer,
+                    cx.local.rc_link_reported_valid,
+                    |event| {
+                        let _ = cx.spawn.safety_master(event);
+                    },
                 );
-                *cx.local.rc_link_reported_valid = false;
                 continue;
             }
             for (snapshot, raw) in crate::snapshots::RC_CHANNELS_US.iter().zip(frame.channels) {
