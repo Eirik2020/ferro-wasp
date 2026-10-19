@@ -1,135 +1,87 @@
 # Test-Run Evidence Records
 
-Use this directory for small, reviewable metadata records describing new test
-runs. Test definitions remain in `../TEST_CATALOG.json`; raw logs, firmware,
-plots, traces, CSV files, and reports remain outside model context under the
-ignored `logs/` tree.
+This directory holds small, reviewable records of test runs. Raw logs,
+firmware, plots, traces, CSV files and reports stay outside model context
+under the ignored `logs/` tree; a record references them by path, size and
+SHA-256.
 
-A run record is evidence for the components it names, at the content it
-names. It does not change a catalog entry's status, waive a prerequisite,
-authorize hardware operation, or clear an aircraft for flight.
+A record is evidence for the requirement entries it names, at the fingerprints
+it names. It does not waive a gate, authorize hardware operation, or clear an
+aircraft for flight. Only `reqtool` writes records (`reqtool record`,
+`reqtool test`, and the gate tools that call it); nobody edits one by hand.
 
-## Storage Layout
+## Records
 
-Copy `RUN_RECORD_TEMPLATE.json` and save the completed record as:
-
-```text
-runs/YYYY/MM/YYYYMMDDTHHMMSSZ__TEST-ID__target__NN.json
-```
-
-The filename timestamp is the UTC completion time. `NN` is a two-digit
-sequence used when more than one record could otherwise share the same name.
-The JSON `run_id` must equal the filename stem.
-
-Examples of `target` are `common`, `foxeer-f405-v2`, and `tbs-lucid-h7`. For a common
-hardware gate, record the actual board target rather than `common`.
-
-Do not create a cumulative results file or append run results to current
-procedures. Locate records by year, test ID, target, or result using filenames
-and targeted search.
-
-## Required Identity
-
-Every record captures:
-
-- the test ID, target, validation tier, UTC start/completion times, and result;
-- the SHA-256 of the catalog and selected procedure, plus the procedure path
-  and heading;
-- repository revision or dirty-working-tree identity, feature set, target
-  triple, firmware SHA-256 where applicable, and relevant configuration;
-- the components the run exercised, each with its content ID (see below);
-- who performed the work and whether the user confirmed a hardware run;
-- propeller, actuator-power, equipment, and environment state;
-- commands and exit codes without inline command output;
-- bounded measurements and observations;
-- limitations and any triggered stop conditions;
-- artifact identities as repository-relative `logs/...` paths, byte sizes, and
-  SHA-256 values.
-
-Use result `pass`, `fail`, `aborted`, or `inconclusive`.
-
-## Component Evidence
-
-Evidence belongs to components, not to firmware images. `../COMPONENTS.json`
-divides the source into components: one per driver, the flight crate by
-concern, other crates and each firmware app whole. A component's content ID is
-a hash of its files, so it changes only when the component does.
-
-A pass proves the components it lists at the content IDs it lists, on any
-board. A test is due again only when one of those components changes; an
-unrelated change elsewhere in the image does not repeat it. Integration
-facts such as task priorities, pins and wiring live in the app component, so
-changing them re-tests that board.
-
-List only components the run actually exercised: a boot test on one board
-proves its IMU driver, not a driver it never loads.
+Schema 3 records live at:
 
 ```text
-python tools/components.py due
-python tools/components.py record app-tbs-lucid-h7 driver-mpu6000
-python tools/components.py status
+runs/YYYY/MM/YYYYMMDDTHHMMSSZ__<method>__<board-or-host>__NN.json
 ```
 
-`due` lists every active catalog test on every board it runs on: `current`
-when its last pass still matches the components it named, `due` with the
-changed components, or `never`. A common hardware test runs on each
-`hardware_targets` board in `../COMPONENTS.json`; a common software test runs
-once. `record` prints the `components` entry for a new record; `status` lists
-the components no passing record proves at their current content. Records before schema 2 name no components
-and prove none.
+A record is one session: one or more methods run together. It holds:
 
-## Artifact Rules
+- the UTC time, the git revision, and whether tracked files had uncommitted
+  changes;
+- the board, for mcu, bench and flight evidence;
+- one result per requirement entry that names a method that ran: the
+  requirement, method, level, target, setup, the entry's fingerprint, and
+  `pass` or `fail`;
+- optionally, `supersedes` with the user's `ruling`, and a `note`;
+- `details`: how the run was done (required for board evidence).
 
-Raw artifacts stay ignored and are not committed as run-record content.
+A fingerprint covers every source file of the path crates in the dependency
+closure, each registry crate's checksum, the toolchain file, the
+requirement's statement and verification entry, and a procedure's own
+section; board evidence takes the board's whole firmware app. `reqtool`
+derives it; nobody lists components.
 
-- Reference individual files under `logs/`; do not reference directories.
-- Record each artifact's byte size and SHA-256.
-- Do not embed logs, samples, command output, binary data, base64, plots, CSV
-  rows, or report bodies in JSON.
-- Use concise observations and measurements that are necessary to evaluate
-  the catalog requirement.
-- Do not store credentials, tokens, private network details, operator names,
-  precise flight locations, or other unnecessary personal data.
+## Details
 
-The validator permits a referenced local artifact to be absent because a clean
-checkout does not contain ignored logs. When the file is present, its declared
-size and SHA-256 must match.
+`details` carries what each procedure's "Required evidence" asks for:
+
+- `execution` — `performed_by` (`user`, `user-with-agent-assistance`,
+  `agent`) and `user_confirmed`;
+- `candidate` — the image's `firmware_sha256`, `features`, `target_triple`,
+  `profile`, and relevant `configuration`;
+- `conditions` — `propellers` and `actuator_power`, and the `equipment` and
+  `environment`;
+- `commands` with exit codes, never their output;
+- `artifacts` — files under `logs/` by `id`, `kind` and `path`; `reqtool`
+  hashes them;
+- bounded `measurements`, `observations`, `limitations`, and any
+  `stop_conditions_triggered`.
 
 ## Hardware Boundary
 
-For bench, preflight, and flight records:
+`reqtool` refuses, when recording and when reading records back:
 
-- the user must perform or directly participate in execution;
-- `user_confirmed` must be true;
-- firmware identity and explicit propeller/actuator-power states are required;
-- a `pass` cannot contain an unknown power/propeller state or a triggered stop
-  condition.
+- a pass that includes a triggered stop condition;
+- mcu, bench or flight evidence that is agent-only, lacks the user's
+  confirmation, lacks the image's SHA-256, or lacks a known power and
+  propeller state;
+- a props-off pass without propellers removed, and a flight pass without
+  them installed.
 
 Recording a failure, abort, or stop condition is valuable evidence. Never
 change a result to make a gate appear complete.
 
-## Workflow
+## Artifact Rules
 
-1. Select the test through `../TEST_CATALOG.json` and run its prerequisites.
-2. Copy `RUN_RECORD_TEMPLATE.json` to the required dated path.
-3. Replace every placeholder and remove unused example command/artifact rows.
-   Fill `components` from `tools/components.py record` for the exact source
-   that was built and run.
-4. Calculate file hashes without modifying the artifacts. On PowerShell:
+- Reference individual files under `logs/`, never directories.
+- Do not embed logs, samples, command output, binary data, base64, plots, CSV
+  rows, or report bodies in a record.
+- Keep observations and measurements to what evaluating the run needs.
+- Do not store credentials, tokens, private network details, operator names,
+  precise flight locations, or other unnecessary personal data.
 
-   ```powershell
-   Get-FileHash -Algorithm SHA256 -LiteralPath <path>
-   ```
+A referenced artifact may be absent, because a clean checkout has no ignored
+logs. When it is present, its size and SHA-256 must still match.
 
-5. Run:
+## History
 
-   ```text
-   python tools/check_repository_context.py
-   python -m unittest tools.tests.test_test_evidence -v
-   ```
-
-6. Review the record and referenced evidence before making any operational
-   decision.
-
-The system is forward-looking. Do not backfill retained history merely to
-populate this directory; use `../EVIDENCE_INDEX.md` for pre-rollout evidence.
+The schema 1 and 2 records of the earlier evidence system stay in `runs/`,
+unchanged. Each has a schema 3 counterpart, `<run_id>__imported.json`,
+re-fingerprinted at the record's own revision with its details carried over;
+where that revision is outside this repository, or its crates or procedure
+section did not exist yet, the fingerprint is unavailable and a pass reads
+as stale. `../EVIDENCE_INDEX.md` locates evidence from before run records.

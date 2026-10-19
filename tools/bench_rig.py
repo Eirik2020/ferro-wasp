@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run BENCH-COMMON-001, the boot and idle gate, on any flight board over SWD.
+"""Run the boot and idle gate on any flight board over SWD.
 
 `boot-idle --board <target>` builds the board's release image from the
 checkout, flashes it and captures a boot from SWD reset, checks the status
@@ -7,8 +7,10 @@ LEDs at the pins where the board drives any, then asks the operator for one
 USB power cycle, notices it over SWD and captures that boot too. The operator
 confirms the bench state once and unplugs and replugs USB once; everything
 else is driven and judged here. Captures land in a new directory under
-`logs/bench/` and a schema 2 run record naming the components that booted is
-written for review; nothing is committed.
+`logs/bench/`, and a passing run is recorded with reqtool against the
+procedure's requirements (BOOT-001, BOOT-002), for review; nothing is
+committed. An inconclusive run is not recorded; its details are kept beside
+the captures with the command that would record them.
 
 `check-boot-idle` applies the same judgement to captures that already exist.
 """
@@ -29,16 +31,14 @@ from pathlib import Path
 from typing import Any
 
 if __package__:
-    from . import components as component_ids
+    from . import reqtool_bridge
 else:
-    import components as component_ids
+    import reqtool_bridge
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CATALOG = REPO_ROOT / "project_meta/testing/TEST_CATALOG.json"
-COMPONENTS = REPO_ROOT / "project_meta/testing/COMPONENTS.json"
-RUNS_DIR = REPO_ROOT / "project_meta/testing/evidence/runs"
 BENCH_LOGS = REPO_ROOT / "logs/bench"
-TEST_ID = "BENCH-COMMON-001"
+GATE = "Boot and idle gate"
+PROCEDURE = "project_meta/testing/targets/common-boot-idle.md#Boot and Idle State"
 TARGET_TRIPLE = "thumbv7em-none-eabihf"
 # The Cortex-M CPUID register: readable whenever the core has power.
 CPUID = "0xE000ED00"
@@ -60,7 +60,6 @@ class Board:
     name: str
     chip: str
     elf: str
-    backend: str
     features: tuple[str, ...]
     # How the app names itself in its IMU bring-up lines.
     imu_log_prefix: str
@@ -89,7 +88,6 @@ BOARDS = {
         name="Foxeer F405 V2",
         chip="STM32F405RG",
         elf="FerroWaspFoxeerF405V2",
-        backend="stm32f4",
         features=("board-foxeer-f405-v2",),
         imu_log_prefix="Foxeer",
     ),
@@ -98,7 +96,6 @@ BOARDS = {
         name="TBS Lucid H7",
         chip="STM32H743VITx",
         elf="FerroWaspTbsLucidH7",
-        backend="stm32h7",
         features=("board-tbs-lucid-h7",),
         imu_log_prefix="TBS Lucid H7",
         expected_warnings=(
@@ -110,25 +107,6 @@ BOARDS = {
     ),
 }
 
-IMU_DRIVERS = {
-    "MPU-6000": "driver-mpu6000",
-    "ICM42688-P": "driver-icm42688p",
-    "MPU6500": "driver-mpu6500",
-}
-# What a boot and idle run exercises besides the board's app, its backend and
-# its IMU driver.
-SHARED_COMPONENTS = (
-    "stm32",
-    "stm32-tasks",
-    "core",
-    "drivers",
-    "flight",
-    "flight-arming",
-    "flight-control",
-    "flight-esc",
-    "flight-links",
-    "io-core",
-)
 STORAGE_UNAVAILABLE = r"(SD storage unavailable|SPI2 flash JEDEC probe failed).*storage"
 # A boot's first DShot report comes 2 s after the scheduler starts; one later
 # than this is not a fresh boot.
@@ -354,10 +332,6 @@ def utc_now() -> datetime:
     return datetime.now(UTC).replace(microsecond=0)
 
 
-def iso(moment: datetime) -> str:
-    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 def git(*args: str) -> str:
     return subprocess.run(
         ["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True, check=True
@@ -382,113 +356,6 @@ def build(board: Board, capture_dir: Path) -> Path:
     return kept
 
 
-def run_components(board: Board, imu: str | None) -> list[str]:
-    names = [f"app-{board.target}", board.backend, *SHARED_COMPONENTS]
-    if imu is not None:
-        names.append(IMU_DRIVERS[imu])
-    return names
-
-
-def content_ids() -> dict[str, str]:
-    data = json.loads(COMPONENTS.read_text(encoding="utf-8"))
-    current, uncovered = component_ids.current_content_ids(REPO_ROOT, data)
-    if uncovered:
-        raise GateStop(f"source files belong to no component: {', '.join(uncovered)}")
-    return current
-
-
-def catalog_entry() -> dict[str, Any]:
-    for entry in json.loads(CATALOG.read_text())["tests"]:
-        if entry["id"] == TEST_ID:
-            return entry
-    raise GateStop(f"{TEST_ID} is not in the test catalog")
-
-
-def artifact_id(path: Path) -> str:
-    words = re.sub(r"[^a-z0-9]+", "-", path.stem.lower()).strip("-")
-    if not words[:1].isalpha():
-        words = f"capture-{words}"
-    return words[:64].rstrip("-")
-
-
-def write_record(
-    *,
-    board: Board,
-    started: datetime,
-    completed: datetime,
-    result: str,
-    revision: str,
-    working_tree: str,
-    elf: Path,
-    components: dict[str, str],
-    commands: list[dict[str, Any]],
-    artifacts: list[tuple[Path, str]],
-    measurements: dict[str, Any],
-    observations: list[str],
-    limitations: list[str],
-) -> Path:
-    entry = catalog_entry()
-    month_dir = RUNS_DIR / f"{completed:%Y}" / f"{completed:%m}"
-    month_dir.mkdir(parents=True, exist_ok=True)
-    stamp = completed.strftime("%Y%m%dT%H%M%SZ")
-    sequence = 1
-    while (month_dir / f"{stamp}__{TEST_ID}__{board.target}__{sequence:02d}.json").exists():
-        sequence += 1
-    run_id = f"{stamp}__{TEST_ID}__{board.target}__{sequence:02d}"
-    record = {
-        "schema_version": 2,
-        "run_id": run_id,
-        "test_id": TEST_ID,
-        "started_at_utc": iso(started),
-        "completed_at_utc": iso(completed),
-        "target": board.target,
-        "tier": entry["tier"],
-        "result": result,
-        "definition": {
-            "catalog_sha256": sha256_file(CATALOG),
-            "procedure_path": entry["procedure"]["path"],
-            "procedure_heading": entry["procedure"]["heading"],
-            "procedure_sha256": sha256_file(REPO_ROOT / entry["procedure"]["path"]),
-        },
-        "execution": {"performed_by": "user", "user_confirmed": True},
-        "candidate": {
-            "revision": revision,
-            "working_tree": working_tree,
-            "firmware_sha256": sha256_file(elf),
-            "features": list(board.features),
-            "target_triple": TARGET_TRIPLE,
-            "configuration": {"profile": "release", "firmware_sha256_of": "ELF"},
-        },
-        "components": [
-            {"id": name, "content_sha256": digest} for name, digest in components.items()
-        ],
-        "conditions": {
-            "propellers": "removed",
-            "actuator_power": "disconnected",
-            "equipment": ["SWD probe", "USB host power", "no logic analyzer"],
-            "environment": ["bench", "battery disconnected", "no RC link"],
-        },
-        "commands": commands,
-        "artifacts": [
-            {
-                "id": artifact_id(path),
-                "kind": kind,
-                "path": path.relative_to(REPO_ROOT).as_posix(),
-                "bytes": path.stat().st_size,
-                "sha256": sha256_file(path),
-            }
-            for path, kind in artifacts
-        ],
-        "measurements": measurements,
-        "observations": observations,
-        "limitations": limitations,
-        "stop_conditions_triggered": [],
-    }
-    path = month_dir / f"{run_id}.json"
-    path.write_text(json.dumps(record, indent=2) + "\n")
-    return path
-
-
 # --- The gate --------------------------------------------------------------------
 
 
@@ -498,13 +365,12 @@ def run_boot_idle(args: argparse.Namespace) -> int:
     if working_tree == "dirty" and not args.allow_dirty:
         print("GATE STOPPED: the checkout has uncommitted changes; commit them or pass --allow-dirty")
         return 1
-    revision = git("rev-parse", "HEAD")
     started = utc_now()
     capture_dir = BENCH_LOGS / f"{started:%Y%m%dT%H%M%SZ}-{board.target}-boot-idle"
     capture_dir.mkdir(parents=True, exist_ok=False)
     commands: list[dict[str, Any]] = []
     try:
-        before = content_ids()
+        before = reqtool_bridge.source_state()
         elf = build(board, capture_dir)
         commands.append({"command": "cargo build --release --locked", "exit_code": 0})
         confirm_bench_state()
@@ -547,16 +413,14 @@ def run_boot_idle(args: argparse.Namespace) -> int:
             raise GateStop("boot 2: " + "; ".join(problems))
         print(f"Boot 2: fresh boot, first DShot report at {cold.dshot_first_ms} ms, outputs at stop.")
         notes = operator_notes()
-        if content_ids() != before:
+        if reqtool_bridge.source_state() != before:
             raise GateStop("the source changed during the run")
     except GateStop as stop:
         print(f"\nGATE STOPPED: {stop}")
         print(f"Captures kept in {capture_dir.relative_to(REPO_ROOT)}")
         return 1
 
-    completed = utc_now()
     result = "pass" if not notes else "inconclusive"
-    names = run_components(board, reset.imu)
     observations = [
         f"Boot from SWD reset: system init, {reset.imu} ready, heartbeat; every DShot report "
         "[0, 0, 0, 0] with no expired commands, timeouts or faults; not armed.",
@@ -580,15 +444,14 @@ def run_boot_idle(args: argparse.Namespace) -> int:
         limitations.append("This board drives no status LED; the RTT heartbeat stands in.")
     if reset.storage_unavailable or cold.storage_unavailable:
         limitations.append("Storage was unavailable (no card or flash fitted); storage not exercised.")
-    record = write_record(
-        board=board,
-        started=started,
-        completed=completed,
-        result=result,
-        revision=revision,
-        working_tree=working_tree,
-        elf=elf,
-        components={name: before[name] for name in names},
+    run_details = reqtool_bridge.details(
+        firmware_sha256=sha256_file(elf),
+        features=list(board.features),
+        target_triple=TARGET_TRIPLE,
+        propellers="removed",
+        actuator_power="disconnected",
+        equipment=["SWD probe", "USB host power", "no logic analyzer"],
+        environment=["bench", "battery disconnected", "no RC link"],
         commands=commands,
         artifacts=[(elf, "firmware"), (reset_log, "log"), (cold_log, "log")],
         measurements={
@@ -600,7 +463,18 @@ def run_boot_idle(args: argparse.Namespace) -> int:
         observations=observations,
         limitations=limitations,
     )
-    print(f"\n{TEST_ID} {result.upper()}. Draft record: {record.relative_to(REPO_ROOT)}")
+    if result != "pass":
+        details_path = capture_dir / reqtool_bridge.DETAILS_FILE
+        details_path.write_text(json.dumps(run_details, indent=2) + "\n")
+        print(f"\n{GATE} INCONCLUSIVE on {board.target}: not recorded. After review, record it with:")
+        print("  " + " ".join(reqtool_bridge.command(PROCEDURE, board.target, "pass", details_path)))
+        return 1
+    try:
+        report = reqtool_bridge.record(PROCEDURE, board.target, "pass", run_details, capture_dir)
+    except reqtool_bridge.RecordError as error:
+        print(f"\n{GATE} PASSED on {board.target}, but reqtool did not record it: {error}")
+        return 1
+    print(f"\n{GATE} PASS on {board.target}. {report}")
     return 0 if result == "pass" else 1
 
 
@@ -624,7 +498,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
-        ("boot-idle", f"Run {TEST_ID} on the connected board."),
+        ("boot-idle", f"Run the {GATE.lower()} on the connected board."),
         ("check-boot-idle", "Judge existing captures."),
     ):
         command = commands.add_parser(name, help=help_text)

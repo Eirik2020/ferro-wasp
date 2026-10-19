@@ -1,0 +1,24 @@
+{
+  "schema_version": 3,
+  "run_id": "20261017T133035Z__build__host__01",
+  "recorded_at_utc": "2026-10-17T13:30:35Z",
+  "board": null,
+  "revision": "4fd603243b12d4b9d3a01de5768ac1419b81c9fb",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "BUILD-001",
+      "method": {
+        "procedure": "firmware/foxeer-f405-v2/README.md#Build"
+      },
+      "level": "analysis",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:7cba920b145d1f7c54210a54c033b282a05801d74a847ebe19b36892c230af4d",
+      "result": "pass"
+    }
+  ],
+  "note": "cargo build --release --locked in firmware/foxeer-f405-v2 exited 0; Cargo.lock resolves ferroforge 0.4.0 from crates.io with no [patch] in either manifest",
+  "supersedes": [],
+  "ruling": null
+}

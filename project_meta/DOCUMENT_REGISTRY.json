@@ -1,15 +1,5 @@
 {
   "schema_version": 1,
-  "test_catalog": "project_meta/testing/TEST_CATALOG.json",
-  "test_evidence": {
-    "records_root": "project_meta/testing/evidence/runs",
-    "template": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
-    "max_record_bytes": 8192,
-    "artifact_roots": [
-      "logs"
-    ],
-    "components": "project_meta/testing/COMPONENTS.json"
-  },
   "immutable_archives": [
     {
       "path": "tools/rtic-app-builder/docs/archive/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN_FULL_BASELINE_2026-07-24.md",
@@ -55,6 +45,13 @@
       "max_bytes": 6144
     },
     {
+      "path": "project_meta/requirements/design.md",
+      "role": "requirements-design",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 98304
+    },
+    {
       "path": "project_meta/tooling.md",
       "role": "repository-tooling",
       "lifecycle": "durable",
@@ -73,14 +70,14 @@
       "role": "internal-book-index",
       "lifecycle": "durable",
       "context": "targeted",
-      "max_bytes": 6144
+      "max_bytes": 8192
     },
     {
       "path": "project_meta/ARCHITECTURE_DECISIONS.md",
       "role": "architecture-decision-index",
       "lifecycle": "durable",
       "context": "targeted",
-      "max_bytes": 8192
+      "max_bytes": 65536
     },
     {
       "path": "project_meta/decisions/ADR-0001.md",
@@ -426,6 +423,83 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/decisions/ADR-0050.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0051.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0052.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0053.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0054.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0055.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0056.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0057.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0058.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0059.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0060.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
       "path": "project_meta/LOGGING_FORMAT.md",
       "role": "logging-format-requirements",
       "lifecycle": "durable",
@@ -478,7 +552,7 @@
   "context_budgets": [
     {
       "path": "AGENTS.md",
-      "max_bytes": 12288
+      "max_bytes": 16384
     },
     {
       "path": "tools/rtic-app-builder/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md",
@@ -487,18 +561,6 @@
     {
       "path": "project_meta/DOCUMENT_REGISTRY.json",
       "max_bytes": 16000
-    },
-    {
-      "path": "project_meta/testing/TEST_CATALOG.json",
-      "max_bytes": 32768
-    },
-    {
-      "path": "project_meta/testing/evidence/RUN_RECORD_TEMPLATE.json",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/testing/COMPONENTS.json",
-      "max_bytes": 8192
     }
   ]
 }

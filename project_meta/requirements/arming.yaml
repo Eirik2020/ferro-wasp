@@ -1,0 +1,70 @@
+schema_version: 1
+requirements:
+  - id: ARM-001
+    title: Arming waits for qualified idle on every motor
+    statement: >-
+      An arm request shall pass the arming guard (permission, valid
+      link, arm switch, low throttle), then the guarded DShot stop
+      dwell, then idle qualification on fresh, consecutive, in-range
+      eRPM from every output, before the armed transition; zero, stale
+      or overspeed eRPM shall abort.
+    rationale: >-
+      A motor that does not spin up as expected must be found on the
+      ground, before authority is handed to the control loop.
+    derived_from: [W1, W2]
+    allocated_to:
+      - ferrowasp_core::safety::validate_arming_guard
+      - ferrowasp_flight::esc_manager::EscIdleQualification
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::safety::tests::arming_guard_requires_permission_link_arm_switch_and_low_throttle
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::esc_manager::tests::idle_qualification_requires_fresh_consecutive_samples_from_every_output
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::esc_manager::tests::zero_erpm_never_qualifies_and_times_out
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::esc_manager::tests::idle_overspeed_fails_immediately_after_spinup_grace
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::esc_manager::tests::stale_output_sample_prevents_idle_qualification
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: ARM-002
+    title: Disarming stops every motor
+    statement: >-
+      On disarm, every motor shall receive its stop value and report
+      zero eRPM.
+    rationale: >-
+      Disarm is the pilot's last command; it must end all motor output.
+    derived_from: [W1, W2]
+    allocated_to:
+      - ferrowasp_stm32_tasks::actuator_output
+      - ferrowasp_stm32_tasks::safety_master
+    verification:
+      mode: direct
+      entries:
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate

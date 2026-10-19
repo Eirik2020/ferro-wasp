@@ -6,12 +6,10 @@ from tools.bench_rig import (
     BOARDS,
     BootEvidence,
     Leds,
-    artifact_id,
     led_failures,
     read_capture,
-    run_components,
 )
-from tools.test_evidence import ARTIFACT_ID
+from tools.reqtool_bridge import ARTIFACT_ID, artifact_id
 
 
 LUCID = BOARDS["tbs-lucid-h7"]
@@ -97,7 +95,6 @@ class BootJudgementTests(unittest.TestCase):
 
         self.assertEqual(evidence.imu, "ICM42688-P")
         self.assertEqual(evidence.failures(minimum_reports=5, from_reset=True), [])
-        self.assertIn("driver-icm42688p", run_components(BOARDS["foxeer-f405-v2"], evidence.imu))
 
     def test_log_lines_without_the_old_board_prefix_are_read(self) -> None:
         lines = [
@@ -130,15 +127,7 @@ class LedTests(unittest.TestCase):
 
 
 class RecordTests(unittest.TestCase):
-    def test_a_run_names_its_app_backend_and_the_imu_driver_it_loaded(self) -> None:
-        names = run_components(LUCID, "MPU-6000")
-
-        self.assertIn("app-tbs-lucid-h7", names)
-        self.assertIn("stm32h7", names)
-        self.assertIn("driver-mpu6000", names)
-        self.assertNotIn("driver-icm42688p", names)
-
-    def test_artifact_ids_satisfy_the_evidence_validator(self) -> None:
+    def test_artifact_ids_satisfy_reqtool(self) -> None:
         for name in ("FerroWaspTbsLucidH7.elf", "boot-1-swd-reset.log", "boot-2-usb-power-cycle.log"):
             self.assertRegex(artifact_id(Path(name)), ARTIFACT_ID)
 

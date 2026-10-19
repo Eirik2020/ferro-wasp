@@ -166,6 +166,118 @@ mod tests {
         assert_eq!(from_sbus, from_crsf);
     }
 
+    // Contract tests for the external SBUS parser (sbus-rs), at the interface
+    // where its output enters FerroWasp: requirement INPUT-004.
+
+    const SBUS_FRAME_LOST: u8 = 1 << 2;
+    const SBUS_FAILSAFE: u8 = 1 << 3;
+
+    fn sbus_frame(channels: &[u16; 16], flags: u8) -> [u8; 25] {
+        let mut frame = [0_u8; 25];
+        frame[0] = 0x0F;
+        sbus_rs::pack_channels(&mut frame, channels);
+        frame[23] = flags;
+        frame
+    }
+
+    fn sbus_frames(
+        receiver: &mut RcReceiver,
+        bytes: &[u8],
+    ) -> heapless::Vec<Result<RcFrame, RcParseError>, 8> {
+        let mut results = heapless::Vec::new();
+        for byte in bytes {
+            if let Some(result) = receiver.push_byte(*byte) {
+                results.push(result).unwrap();
+            }
+        }
+        results
+    }
+
+    #[test]
+    fn sbus_failsafe_and_frame_lost_flags_reach_the_frame() {
+        let channels = [992_u16; 16];
+        for (flags, failsafe, frame_lost) in [
+            (0, false, false),
+            (SBUS_FRAME_LOST, false, true),
+            (SBUS_FAILSAFE, true, false),
+            (SBUS_FAILSAFE | SBUS_FRAME_LOST, true, true),
+        ] {
+            let mut sbus = RcReceiver::sbus();
+            let frame = feed(&mut sbus, &sbus_frame(&channels, flags))
+                .unwrap()
+                .unwrap();
+            assert_eq!(frame.failsafe, failsafe, "flags {flags:#04x}");
+            assert_eq!(frame.frame_lost, frame_lost, "flags {flags:#04x}");
+            assert_eq!(frame.channels, channels);
+        }
+    }
+
+    #[test]
+    fn sbus_out_of_range_channels_pass_through_unclamped() {
+        // Bounding is the stick mapping's job (INPUT-009); the parser must
+        // deliver what the receiver sent, not a silently corrected value.
+        let mut channels = [992_u16; 16];
+        channels[0] = 0;
+        channels[1] = 2047;
+        let mut sbus = RcReceiver::sbus();
+        let frame = feed(&mut sbus, &sbus_frame(&channels, 0)).unwrap().unwrap();
+        assert_eq!(frame.channels, channels);
+    }
+
+    #[test]
+    fn sbus_bad_footer_is_an_error_and_no_wrong_frame_follows() {
+        let mut channels = [992_u16; 16];
+        channels[3] = 1500;
+        let good = sbus_frame(&channels, 0);
+        let mut bad = good;
+        bad[24] = 0x55;
+
+        let mut stream: heapless::Vec<u8, 100> = heapless::Vec::new();
+        stream.extend_from_slice(&bad).unwrap();
+        stream.extend_from_slice(&good).unwrap();
+        stream.extend_from_slice(&good).unwrap();
+
+        let mut sbus = RcReceiver::sbus();
+        let results = sbus_frames(&mut sbus, &stream);
+        assert_eq!(results[0], Err(RcParseError::Sbus));
+        let delivered: heapless::Vec<RcFrame, 8> = results.iter().filter_map(|r| r.ok()).collect();
+        assert!(!delivered.is_empty(), "the stream resynchronises");
+        assert!(
+            delivered
+                .iter()
+                .all(|frame| frame.channels == channels && !frame.failsafe && !frame.frame_lost)
+        );
+    }
+
+    #[test]
+    fn sbus_partial_frame_is_dropped_on_reset() {
+        let channels = [992_u16; 16];
+        let frame = sbus_frame(&channels, 0);
+        let mut sbus = RcReceiver::sbus();
+        assert!(feed(&mut sbus, &frame[..12]).is_none());
+        sbus.reset();
+        assert!(
+            sbus_frames(&mut sbus, &frame[12..])
+                .iter()
+                .all(|r| r.is_err()),
+            "no frame spans the gap"
+        );
+        sbus.reset();
+        assert_eq!(feed(&mut sbus, &frame).unwrap().unwrap().channels, channels);
+    }
+
+    #[test]
+    fn sbus_skips_leading_noise_before_a_header() {
+        let channels = [992_u16; 16];
+        let mut stream: heapless::Vec<u8, 40> = heapless::Vec::new();
+        stream.extend_from_slice(&[0x00, 0xFF, 0x55, 0xAA]).unwrap();
+        stream.extend_from_slice(&sbus_frame(&channels, 0)).unwrap();
+        let mut sbus = RcReceiver::sbus();
+        let results = sbus_frames(&mut sbus, &stream);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].as_ref().unwrap().channels, channels);
+    }
+
     #[test]
     fn crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers() {
         let channels = crsf::pack_channels(&[992; 16]);

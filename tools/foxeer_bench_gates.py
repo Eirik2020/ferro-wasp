@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Run and check the Foxeer's USB configuration gate.
 
-`usb-config` runs BENCH-FOX-USB-001 on the connected board: the operator
-confirms the safety state once and performs each power cycle when asked, and
-everything else is driven and judged here. Every capture lands in a new
-directory under `logs/bench/`, and a draft schema 2 run record is written for
-review; nothing is committed.
+`usb-config` runs the Foxeer USB RC configuration gate on the connected
+board: the operator confirms the safety state once and performs each power
+cycle when asked, and everything else is driven and judged here. Every
+capture lands in a new directory under `logs/bench/`, and a passing run is
+recorded with reqtool against the gate's requirements (CONFIG-001..003), for
+review; nothing is committed. An inconclusive run is not recorded; its
+details are kept beside the captures with the command that would record them.
 
 `check-usb-config` applies the same judgement to snapshots that already exist.
-BENCH-COMMON-001, the boot and idle gate, is `tools/bench_rig.py boot-idle`.
+The boot and idle gate is `tools/bench_rig.py boot-idle`.
 """
 
 from __future__ import annotations
@@ -27,16 +29,17 @@ from pathlib import Path
 from typing import Any
 
 if __package__:
-    from . import components as component_ids
+    from . import reqtool_bridge
 else:
-    import components as component_ids
+    import reqtool_bridge
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CATALOG = REPO_ROOT / "project_meta/testing/TEST_CATALOG.json"
-RUNS_DIR = REPO_ROOT / "project_meta/testing/evidence/runs"
+PROCEDURE = "project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate"
+BOARD = "foxeer-f405-v2"
+TARGET_TRIPLE = "thumbv7em-none-eabihf"
+DEFAULT_ELF = REPO_ROOT / "firmware/foxeer-f405-v2/target" / TARGET_TRIPLE / "release/FerroWaspFoxeerF405V2"
 BENCH_LOGS = REPO_ROOT / "logs/bench"
 CONFIGURATOR = REPO_ROOT / "tools/ferro-configurator/target/release/ferro-configurator"
-COMPONENTS = REPO_ROOT / "project_meta/testing/COMPONENTS.json"
 
 USB_VID = 0x16C0
 USB_PID = 0x27DD
@@ -275,14 +278,6 @@ class Configurator:
 # --- Records -------------------------------------------------------------------
 
 
-def artifact_id(path: Path) -> str:
-    """A record artifact ID: lowercase words joined by hyphens, led by a letter."""
-    words = re.sub(r"[^a-z0-9]+", "-", path.stem.lower()).strip("-")
-    if not words[:1].isalpha():
-        words = f"capture-{words}"
-    return words[:64].rstrip("-")
-
-
 def repository_relative(argument: str) -> str:
     """Records name paths relative to the repository, never a home directory."""
     root = f"{REPO_ROOT}/"
@@ -297,161 +292,27 @@ def utc_now() -> datetime:
     return datetime.now(UTC).replace(microsecond=0)
 
 
-def iso(moment: datetime) -> str:
-    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 def new_capture_dir(label: str, started: datetime) -> Path:
     directory = BENCH_LOGS / f"{started.strftime('%Y%m%dT%H%M%SZ')}-{label}"
     directory.mkdir(parents=True, exist_ok=False)
     return directory
 
 
-def load_build_record(path: Path) -> dict[str, Any]:
-    record = json.loads(path.read_text())
-    if record.get("test_id") != "BUILD-FOX-001" or record.get("result") != "pass":
-        raise GateStop(f"{path} is not a passing BUILD-FOX-001 record")
-    return record
-
-
-# What a USB configuration round trip exercises on the Foxeer: the app and its
-# backend, the shared tasks, the USB command link and status, and the stored
-# configuration in SPI NOR.
-USB_CONFIG_COMPONENTS = (
-    "app-foxeer-f405-v2",
-    "stm32f4",
-    "stm32",
-    "stm32-tasks",
-    "core",
-    "flight",
-    "flight-links",
-    "flight-storage",
-    "drivers",
-    "driver-spi-nor",
-    "io-core",
-)
-
-
-def candidate_components(build_record: dict[str, Any]) -> list[dict[str, str]]:
-    """The run's components at the candidate's content.
-
-    Content IDs are read from the checkout, so it must be the candidate's own
-    revision, clean; otherwise they would describe other code than the board
-    runs.
-    """
-
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True, check=True
-        ).stdout.strip()
-
-    revision = build_record["candidate"]["revision"]
-    if git("rev-parse", "HEAD") != git("rev-parse", revision) or git("status", "--porcelain"):
-        raise GateStop(f"check out the candidate's revision {revision[:12]} with a clean tree first")
-    data = json.loads(COMPONENTS.read_text(encoding="utf-8"))
-    current, uncovered = component_ids.current_content_ids(REPO_ROOT, data)
-    if uncovered:
-        raise GateStop(f"source files belong to no component: {', '.join(uncovered)}")
-    return [{"id": name, "content_sha256": current[name]} for name in USB_CONFIG_COMPONENTS]
-
-
-def catalog_entry(test_id: str) -> dict[str, Any]:
-    catalog = json.loads(CATALOG.read_text())
-    tests = catalog["tests"] if isinstance(catalog, dict) else catalog
-    for entry in tests:
-        if entry["id"] == test_id:
-            return entry
-    raise GateStop(f"{test_id} is not in the test catalog")
-
-
-def write_record(
-    *,
-    test_id: str,
-    started: datetime,
-    completed: datetime,
-    result: str,
-    build_record: dict[str, Any],
-    commands: list[dict[str, Any]],
-    artifacts: list[tuple[Path, str]],
-    measurements: dict[str, Any],
-    observations: list[str],
-    limitations: list[str],
-    components: list[dict[str, str]],
-    configuration: dict[str, Any] | None = None,
-) -> Path:
-    entry = catalog_entry(test_id)
-    procedure = REPO_ROOT / entry["procedure"]["path"]
-    candidate = build_record["candidate"]
-    month_dir = RUNS_DIR / f"{completed:%Y}" / f"{completed:%m}"
-    month_dir.mkdir(parents=True, exist_ok=True)
-    stamp = completed.strftime("%Y%m%dT%H%M%SZ")
-    sequence = 1
-    while (month_dir / f"{stamp}__{test_id}__foxeer-f405-v2__{sequence:02d}.json").exists():
-        sequence += 1
-    run_id = f"{stamp}__{test_id}__foxeer-f405-v2__{sequence:02d}"
-    record = {
-        "schema_version": 2,
-        "run_id": run_id,
-        "test_id": test_id,
-        "started_at_utc": iso(started),
-        "completed_at_utc": iso(completed),
-        "target": "foxeer-f405-v2",
-        "tier": entry["tier"],
-        "result": result,
-        "definition": {
-            "catalog_sha256": sha256_file(CATALOG),
-            "procedure_path": entry["procedure"]["path"],
-            "procedure_heading": entry["procedure"]["heading"],
-            "procedure_sha256": sha256_file(procedure),
-        },
-        "execution": {"performed_by": "user", "user_confirmed": True},
-        "candidate": {
-            "revision": candidate["revision"],
-            "working_tree": candidate["working_tree"],
-            "firmware_sha256": candidate["firmware_sha256"],
-            "features": candidate["features"],
-            "target_triple": candidate["target_triple"],
-            "configuration": configuration or {},
-        },
-        "components": components,
-        "conditions": {
-            "propellers": "removed",
-            "actuator_power": "disconnected",
-            "equipment": ["SWD probe", "USB host power", "no oscilloscope or logic analyzer"],
-            "environment": ["bench", "battery disconnected", "no RC link"],
-        },
-        "commands": commands,
-        "artifacts": [
-            {
-                "id": artifact_id(path),
-                "kind": kind,
-                "path": path.relative_to(REPO_ROOT).as_posix(),
-                "bytes": path.stat().st_size,
-                "sha256": sha256_file(path),
-            }
-            for path, kind in artifacts
-        ],
-        "measurements": measurements,
-        "observations": observations,
-        "limitations": limitations,
-        "stop_conditions_triggered": [],
-    }
-    path = month_dir / f"{run_id}.json"
-    path.write_text(json.dumps(record, indent=2) + "\n")
-    return path
-
-
 # --- The gates -----------------------------------------------------------------
 
 
 def run_usb_config(args: argparse.Namespace) -> int:
-    build_record = load_build_record(args.build_record)
+    if not args.elf.is_file():
+        raise GateStop(f"no candidate ELF at {args.elf}; build the Foxeer release image first")
+    before = reqtool_bridge.source_state()
+    if before[1] and not args.allow_dirty:
+        raise GateStop("the checkout has uncommitted changes; commit them or pass --allow-dirty")
+    firmware_sha256 = sha256_file(args.elf)
     if not CONFIGURATOR.is_file():
         raise GateStop(f"build the configurator first: {CONFIGURATOR.relative_to(REPO_ROOT)}")
     port = find_port()
     if port is None:
         raise GateStop("no Foxeer on USB; plug it in and wait for it to enumerate")
-    components = candidate_components(build_record)
     confirm_bench_state()
     if not ask_yes_no("Has the board been flashed with this candidate since it was built?"):
         raise GateStop(
@@ -492,11 +353,12 @@ def run_usb_config(args: argparse.Namespace) -> int:
         if tool.status().get("armed"):
             raise GateStop("the controller reports armed")
         notes = operator_notes()
+        if reqtool_bridge.source_state() != before:
+            raise GateStop("the source changed during the run")
     except GateStop as stop:
         print(f"\nGATE STOPPED: {stop}")
         print(f"Captures kept in {capture.relative_to(REPO_ROOT)}; restore from its baseline export.")
         return 1
-    completed = utc_now()
     result = "pass" if not notes else "inconclusive"
     initial = load_usb_snapshots(capture)["initial"][1]
     observations = [
@@ -513,12 +375,14 @@ def run_usb_config(args: argparse.Namespace) -> int:
         observations.append(f"Operator note: {notes}")
     artifacts = [(capture / BASELINE_EXPORT, "configuration"), (capture / "3-reject-stderr.txt", "log")]
     artifacts += [(capture / name, "configuration") for name in USB_SNAPSHOTS.values()]
-    record = write_record(
-        test_id="BENCH-FOX-USB-001",
-        started=started,
-        completed=completed,
-        result=result,
-        build_record=build_record,
+    run_details = reqtool_bridge.details(
+        firmware_sha256=firmware_sha256,
+        features=args.features,
+        target_triple=TARGET_TRIPLE,
+        propellers="removed",
+        actuator_power="disconnected",
+        equipment=["SWD probe", "USB host power", "no oscilloscope or logic analyzer"],
+        environment=["bench", "battery disconnected", "no RC link"],
         commands=log.commands,
         artifacts=artifacts,
         measurements={"cold_boots": 2, "control_loop_hz": status.get("control_loop_hz")},
@@ -527,10 +391,20 @@ def run_usb_config(args: argparse.Namespace) -> int:
             "The image on the board is taken from the operator's confirmation; USB does not report it.",
             "Cold boots were USB power cycles with actuator power disconnected; no brownout was induced.",
         ],
-        components=components,
         configuration={"log_rate_divisor": int(initial["log_rate_divisor"])},
     )
-    print(f"\nBENCH-FOX-USB-001 {result.upper()}. Draft record: {record.relative_to(REPO_ROOT)}")
+    if result != "pass":
+        details_path = capture / reqtool_bridge.DETAILS_FILE
+        details_path.write_text(json.dumps(run_details, indent=2) + "\n")
+        print("\nUSB configuration gate INCONCLUSIVE: not recorded. After review, record it with:")
+        print("  " + " ".join(reqtool_bridge.command(PROCEDURE, BOARD, "pass", details_path)))
+        return 1
+    try:
+        report = reqtool_bridge.record(PROCEDURE, BOARD, "pass", run_details, capture)
+    except reqtool_bridge.RecordError as error:
+        print(f"\nUSB configuration gate PASSED, but reqtool did not record it: {error}")
+        return 1
+    print(f"\nUSB configuration gate PASS. {report}")
     return 0 if result == "pass" else 1
 
 
@@ -546,9 +420,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
-    build_help = "The candidate's BUILD-FOX-001 record."
-    usb = commands.add_parser("usb-config", help="Run BENCH-FOX-USB-001 on the connected Foxeer.")
-    usb.add_argument("--build-record", type=Path, required=True, help=build_help)
+    usb = commands.add_parser("usb-config", help="Run the USB configuration gate on the connected Foxeer.")
+    usb.add_argument("--elf", type=Path, default=DEFAULT_ELF, help="The candidate image, as flashed.")
+    usb.add_argument(
+        "--features",
+        nargs="*",
+        default=["board-foxeer-f405-v2"],
+        help="The candidate's cargo features.",
+    )
+    usb.add_argument("--allow-dirty", action="store_true", help="Run from a checkout with uncommitted changes.")
     usb.set_defaults(handler=run_usb_config)
 
     check_usb = commands.add_parser("check-usb-config", help="Judge an existing snapshot directory.")

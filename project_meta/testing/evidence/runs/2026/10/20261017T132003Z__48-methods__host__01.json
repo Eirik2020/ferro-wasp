@@ -1,0 +1,299 @@
+{
+  "schema_version": 3,
+  "run_id": "20261017T132003Z__48-methods__host__01",
+  "recorded_at_utc": "2026-10-17T13:20:03Z",
+  "board": null,
+  "revision": "24dc80ef1308d1fbeb95ee1ac35449ab60501b98",
+  "working_tree": "clean",
+  "results": [
+    {
+      "requirement": "MOTOR-001",
+      "method": {
+        "test": "ferrowasp_board_foxeer_f405_v2::profiles::tests::foxeer_motor_order_uses_the_standard_betaflight_quad_x_numbering"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:ae693d6e3de4b0e8e6945e95bf416ea05f0e81216b0dfb6a0e41f7fd983aac30",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "test": "ferrowasp_board_foxeer_f405_v2::profiles::tests::imu_frame_profile_matches_the_measured_foxeer_orientation"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:94880fb36feb5f8e4594f5178e7026af21720effc601c527b2df71cb1c0ff9f6",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "test": "ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_down_rate_maps_positive_for_the_golden_controller"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:94a87ef7d611e4f9ae52cecb309ed3a7e9388d0368eb6945c36d737e2bec02c6",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "test": "ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_up_rate_maps_negative_for_the_golden_controller"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:d9b5e1e09ba939a58791731495d7f49b8ceb18e61e1c9b5d5ea9436e046161e7",
+      "result": "pass"
+    },
+    {
+      "requirement": "MOTOR-001",
+      "method": {
+        "test": "ferrowasp_core::actuator::tests::motor_map_accepts_only_permutations"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:18409e698dd4b9e4f8d439be87aa54757bd34006454f99311160f585f73406be",
+      "result": "pass"
+    },
+    {
+      "requirement": "CONFIG-001",
+      "method": {
+        "test": "ferrowasp_core::config::tests::scalar_ranges_match_the_public_usb_contract"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:d8ff1a193c96631fe8b3beb0ef5214b97d75bebdf0d9ca446f6c2009ffe85080",
+      "result": "pass"
+    },
+    {
+      "requirement": "ARM-001",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::arming_guard_requires_permission_link_arm_switch_and_low_throttle"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:3ea71267df76bb8cda7e00bc958759207a667f635713e13219785555362cf40e",
+      "result": "pass"
+    },
+    {
+      "requirement": "CONFIG-002",
+      "method": {
+        "test": "ferrowasp_flight::config_save::tests::a_cancelled_save_stops_and_the_active_slot_still_boots"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:ce649568165f5dcbc6a0933ce14c5a612c07fd28ae4aa7e09a85ae753c141b81",
+      "result": "pass"
+    },
+    {
+      "requirement": "CONFIG-002",
+      "method": {
+        "test": "ferrowasp_flight::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:f28ee760f7a6564a7fba5c22ec8a2e963befe33704307d8921fdd242f4c9b4b1",
+      "result": "pass"
+    },
+    {
+      "requirement": "CONFIG-002",
+      "method": {
+        "test": "ferrowasp_flight::config_save::tests::every_failure_leaves_the_booting_configuration_untouched"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:ef5e400b296fd63d23e19a3b16447857e88a6f8d0a36dfb7593a546fdf2f2311",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:cc66fea202bebecef518b5b013c81f7358e5a88cda1ec0f8f60e1a4e9c5501c7",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:ef47eb9b980bf7a2e48de52b495173068ef68c95cab81db8bbd0a4e3f17bf49b",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-003",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:aed6b2d868f3426a9a0fdfff8d3be6da63e7f784a99b95fbd26215d3699423b0",
+      "result": "pass"
+    },
+    {
+      "requirement": "MOTOR-001",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::motor_output_map_matches_measured_bench_order"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:8c88b2893bfc86ceba0c14152d0c0abd10413af605e611502f3c1c36b8b0893e",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-002",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:dc7e1556edd27d73743abcb8e2b25a1fe3cdcce7216483a3407583457df3e268",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-001",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:e9fb5e133d5a2f83ff944bce77d07c657a98828dc9fd7351f84d92b2b1ef5e36",
+      "result": "pass"
+    },
+    {
+      "requirement": "CTRL-001",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:6a3c88a8eae9a7709e6fd1ea2a4b1ee07c112572b2e53fe19cc03a78fd3cfe02",
+      "result": "pass"
+    },
+    {
+      "requirement": "ARM-001",
+      "method": {
+        "test": "ferrowasp_flight::esc_manager::tests::idle_overspeed_fails_immediately_after_spinup_grace"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:75ea496296f880be1bfdd1505a089890d06d47ddeb73c98f21b11b71f0c3c47e",
+      "result": "pass"
+    },
+    {
+      "requirement": "ARM-001",
+      "method": {
+        "test": "ferrowasp_flight::esc_manager::tests::idle_qualification_requires_fresh_consecutive_samples_from_every_output"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:4b05c6a1d8e3f2cf44e370f1d1ad67dd16b7d6fd8de30973d2f1a436db4e9d8e",
+      "result": "pass"
+    },
+    {
+      "requirement": "ARM-001",
+      "method": {
+        "test": "ferrowasp_flight::esc_manager::tests::stale_output_sample_prevents_idle_qualification"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:10b39a2a37a9da637088dcae17387cd3336e1a010bc786b3f0e4cdbe610097ec",
+      "result": "pass"
+    },
+    {
+      "requirement": "ARM-001",
+      "method": {
+        "test": "ferrowasp_flight::esc_manager::tests::zero_erpm_never_qualifies_and_times_out"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:bd704fd4cac871467ea56d409c796b1d181d2426a3df1b936ddede260b1d1969",
+      "result": "pass"
+    },
+    {
+      "requirement": "LOG-001",
+      "method": {
+        "test": "ferrowasp_flight::flash_storage::tests::a_flight_is_unfinished_until_its_last_page_is_written"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:6e6737bfbbcc078f48e4692bb2ef3f6c65a417ad32ab062d62b69046900a925d",
+      "result": "pass"
+    },
+    {
+      "requirement": "LOG-001",
+      "method": {
+        "test": "ferrowasp_flight::flash_storage::tests::a_torn_page_ends_its_flight_and_logging_carries_on_after_it"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:2430780d3342e06d6354a4a9062f35d9775963647c9c9cedf84e32b7066cc7fa",
+      "result": "pass"
+    },
+    {
+      "requirement": "CONFIG-001",
+      "method": {
+        "test": "ferrowasp_flight::flash_storage::tests::stored_config_round_trips_and_rejects_unsafe_values"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:fded620f852ea1c454480f7724cd6f425bce99dd943bff12072d11fab9230b0a",
+      "result": "pass"
+    },
+    {
+      "requirement": "LOG-001",
+      "method": {
+        "test": "ferrowasp_flight::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:72962565e720dd66b88d802b581e712ca60d567df1c81605efecbd56f56a6d63",
+      "result": "pass"
+    },
+    {
+      "requirement": "REBOOT-002",
+      "method": {
+        "test": "ferrowasp_stm32::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "fingerprint": "sha256:228b48ba04d6023bee04c8a9e2acd8f5495de1b2472df1ad19d8031a437ea3ae",
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

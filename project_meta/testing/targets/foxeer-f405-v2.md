@@ -4,8 +4,9 @@ The operator procedure for the Foxeer F405 V2 flight app. Historical evidence,
 located through `../EVIDENCE_INDEX.md`, never substitutes for running the
 gates below on the proposed image.
 
-An `active` catalog entry means that its definition may be selected. It does
-not mean the test has passed or that the aircraft is cleared to fly. Who may
+A procedure here being current means it may be run. It does not mean it has
+passed or that the aircraft is cleared to fly; `reqtool check` and `reqtool
+gate` say what is verified. Who may
 operate the hardware is set by the Operating Rules in the root `AGENTS.md`;
 every powered and flight gate below is the user's. Stop conditions override
 completion and evidence collection.
@@ -74,14 +75,15 @@ those electrical measurements remain open.
 
 ## Foxeer USB RC Configuration Gate
 
-Catalog ID: `BENCH-FOX-USB-001`.
+Verifies: CONFIG-001, CONFIG-002, CONFIG-003. Former catalog ID
+`BENCH-FOX-USB-001`.
 
-`python3 tools/foxeer_bench_gates.py usb-config --build-record <BUILD-FOX-001
-record>` runs and checks these steps on a connected Foxeer. The operator
+`python3 tools/foxeer_bench_gates.py usb-config --elf <candidate ELF>` runs and
+checks these steps on a connected Foxeer. The operator
 confirms propellers removed and actuator power disconnected and performs each
 USB power cycle when prompted; the tool drives the rest, stops at the first
-failed check, keeps every capture in a new `logs/bench/` directory, and drafts
-a schema 2 run record for review, never committing it. `check-usb-config`
+failed check, keeps every capture in a new `logs/bench/` directory, and
+records a pass with reqtool for review, never committing it. `check-usb-config`
 judges an existing capture directory to the same standard.
 
 Keep the aircraft disarmed, stationary during boot gyro calibration, and with
@@ -151,7 +153,8 @@ and operator observations.
 
 ## Foxeer USB Reboot And DFU Flash Gate
 
-Catalog ID: `BENCH-FOX-DFU-001`.
+Verifies: REBOOT-001, REBOOT-002, REBOOT-003. Former catalog ID
+`BENCH-FOX-DFU-001`.
 
 Shows that a disarmed Foxeer running FerroWasp restarts, and restarts into the
 STM32 ROM bootloader, on command, that FerroConfigurator flashes it without the
@@ -194,9 +197,10 @@ observations.
 
 ## Foxeer Powered Props-Off Exact-Image Gate
 
-Catalog ID: `BENCH-FOX-001`.
+Verifies: ARM-001, ARM-002, MOTOR-001, CTRL-001, CTRL-002, INPUT-008,
+INPUT-009, INPUT-010, LOG-001. Former catalog ID `BENCH-FOX-001`.
 
-Run only after `BENCH-FOX-USB-001` passes. The user must confirm that all
+Run only when `reqtool gate bench-session --board foxeer-f405-v2` is open. The user must confirm that all
 propellers are removed before actuator power is connected. Secure the
 airframe, keep clear of the motors, use a bounded power source where
 available, and keep an immediate disarm/power-removal path.
@@ -258,16 +262,17 @@ DShot/telemetry counters, and onboard flight/log identity.
 
 ## Foxeer Final Preflight Gate
 
-Catalog ID: `PREFLIGHT-FOX-001`.
+A gate, not a verification: `reqtool gate preflight --board foxeer-f405-v2`
+must be open first. Former catalog ID `PREFLIGHT-FOX-001`.
 
 This gate is for the same candidate exercised by the powered props-off gate.
 Any firmware, feature, persisted configuration, motor/ESC, receiver, wiring,
 propeller, or airframe change invalidates the affected evidence and requires
 the relevant lower gate again.
 
-1. Confirm current software and exact embedded-build checks passed for the
-   recorded commit/working tree and feature set.
-2. Confirm `BENCH-FOX-001` passed on the exact image and that its evidence is
+1. Confirm the preflight gate is open for the recorded commit/working tree
+   and feature set: host evidence, build, mcu and bench evidence current.
+2. Confirm the props-off gate's evidence is for the exact image and is
    available. A prior historical pass is not enough.
 3. Verify the persisted P-only and RC-rate baseline in this file. I and D must
    remain zero. Make no gain or rate change during this preflight.
@@ -304,7 +309,7 @@ confirmation.
 
 ## Foxeer Conservative Logged-Hop Flight Test
 
-Catalog ID: `FLIGHT-FOX-001`.
+Verifies: CTRL-003, LOG-001. Former catalog ID `FLIGHT-FOX-001`.
 
 Run only after the final preflight gate passes on the still-current candidate.
 This is one conservative characterization hop, not aggressive FPV flight or a

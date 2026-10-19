@@ -1,0 +1,37 @@
+schema_version: 1
+requirements:
+  - id: MOTOR-001
+    title: Motor identity is Betaflight Quad X
+    statement: >-
+      Logical motors shall map to Betaflight Quad X: M1 rear-right CW,
+      M2 front-right CCW, M3 rear-left CCW, M4 front-left CW, through
+      the board's default motor order and any stored motor map.
+    rationale: >-
+      A wrong motor order flips the craft on takeoff.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_core::actuator::MotorOutputMap
+      - ferrowasp_board_foxeer_f405_v2::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::foxeer_motor_order_uses_the_standard_betaflight_quad_x_numbering
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::motor_output_map_matches_measured_bench_order
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_core::actuator::tests::motor_map_accepts_only_permutations
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate

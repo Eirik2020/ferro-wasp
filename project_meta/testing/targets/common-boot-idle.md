@@ -1,10 +1,10 @@
 # Target Verification
 
 This bounded entry point owns the common unpowered boot and idle gate. Use
-`project_meta/testing/README.md` and `project_meta/testing/TEST_CATALOG.json`
-to select every other software, target, bench, preflight, or flight test.
+`project_meta/testing/README.md` to select every other software, target,
+bench, preflight, or flight test.
 
-An active test definition is not evidence that a candidate passed and does not
+A current procedure is not evidence that a candidate passed and does not
 clear an aircraft for flight. The user operates target hardware.
 
 ## Boot and Idle State
@@ -15,12 +15,17 @@ actuator power.
 `python3 tools/bench_rig.py boot-idle --board <target>` runs this gate on any
 flight board over SWD: it builds and flashes the image, captures a boot from
 SWD reset, checks the LED pins where the board has LEDs, and captures a boot
-after the one USB power cycle the operator performs, then drafts a schema 2
-record. `check-boot-idle` judges existing captures to the same standard.
+after the one USB power cycle the operator performs, then records a pass with
+reqtool for review. `check-boot-idle` judges existing captures to the same
+standard.
+
+Verifies: BOOT-001, BOOT-002. Former catalog ID `BENCH-COMMON-001`, kept by
+its earlier run records.
 
 Prerequisite:
 
-- complete `SW-COMMON-001` from the test catalog;
+- `reqtool gate mcu-session` is open: the host evidence is current and the
+  image builds;
 - identify the exact board, firmware image hash, and enabled feature set;
 - remove propellers and disconnect actuator power;
 - arrange observation of boot, panic, health, and arming state.
@@ -41,16 +46,16 @@ Stop immediately on:
 - uncertainty about the exact target or feature set.
 
 Retain the board identity, firmware image hash, exact feature set, power and
-propeller state, boot/idle log, and the components exercised: the board's
-app and the drivers it loaded.
+propeller state, and boot/idle log; the record's fingerprint covers the code
+that ran.
 
 ## Target Procedures
 
 - Foxeer F405 V2: `project_meta/testing/targets/foxeer-f405-v2.md`
 - TBS Lucid H7: this common gate only; the board cannot arm yet.
 
-Start with the catalog so prerequisites and validation tiers remain ordered.
-A pass stands until one of its components changes; then rerun the gate.
+The gates in `project_meta/requirements/gates.yaml` keep the steps in order.
+A pass stands until the code it covered changes; then rerun the gate.
 
 ## Historical Evidence
 

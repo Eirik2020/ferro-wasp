@@ -1,7 +1,7 @@
 # Remaining Work
 
-What is left to build, grouped by area. Evidence owed for changed components is
-not listed here: `python tools/components.py due` reports it. What the blackbox
+What is left to build, grouped by area. Evidence owed for changed code is not
+listed here: `reqtool check` and `reqtool gate` report it. What the blackbox
 must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Safety and Flight

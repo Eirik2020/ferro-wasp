@@ -1,0 +1,71 @@
+schema_version: 1
+requirements:
+  - id: REBOOT-001
+    title: A reboot is refused while armed or with a flight log open
+    statement: >-
+      A reboot or DFU request shall be honoured only while disarmed and
+      with no flight log being written; otherwise it shall be refused
+      with a reason and the board shall keep running.
+    rationale: >-
+      The configurator has no authority over a flying craft, and an open
+      flight log is evidence that must not be cut off.
+    derived_from: [W1, W7]
+    allocated_to:
+      - ferrowasp_stm32_tasks::flash_manager_task
+    verification:
+      mode: direct
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+
+  - id: REBOOT-002
+    title: The ROM bootloader is entered only on request
+    statement: >-
+      The firmware shall start the ROM bootloader only after a software
+      reset that carries the request word; after any other reset the
+      word shall be cleared unread.
+    rationale: >-
+      An unexpected jump to the bootloader would end the flight
+      firmware.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_stm32::system_reset
+      - ferrowasp_stm32f4::system_bootloader
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+
+  - id: REBOOT-003
+    title: Flashing through DFU returns the same board unchanged
+    statement: >-
+      Flashing from running FerroWasp through the ROM bootloader shall
+      need no BOOT button, shall write exactly the image's load
+      segments, and shall return the board as FerroWasp with the same
+      USB serial number and an identical exported configuration.
+    rationale: >-
+      Flashing must never cost the pilot their configuration or leave a
+      half-written image.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_stm32f4::system_bootloader
+    verification:
+      mode: direct
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
