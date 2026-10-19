@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a0e0ba77.js";
+            window.path_to_searchindex_js = "searchindex-286929ee.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -355,6 +355,10 @@ connected, select the intended COM port explicitly:</p>
 <p>Require a ready Winbond-compatible external flash, a ready IMU, and plausible
 status. Close RTT readers, serial terminals, and other programs holding the
 same COM port.</p>
+<p><code>device info</code> also shows what the firmware was built from: its commit, whether
+the build had uncommitted changes, and any bench or diagnostic features. Check
+it after every flash. It also shows each physical ESC output’s latest UART
+telemetry eRPM and, with bidirectional DShot, the reply eRPM and reply counts.</p>
 <h2 id="back-up-and-inspect-configuration"><a class="header" href="#back-up-and-inspect-configuration">Back up and inspect configuration</a></h2>
 <p>Keep the aircraft disarmed. The firmware rejects configuration writes while
 armed.</p>
@@ -1411,6 +1415,24 @@ back resets it.</p>
 motor peripheral or safety state: a UART, parser, queue, or timeout fault can
 only withhold the samples arming needs, which fails closed. Once armed,
 telemetry is observational; losing it does not by itself disarm.</p>
+<h2 id="bidirectional-dshot"><a class="header" href="#bidirectional-dshot">Bidirectional DShot</a></h2>
+<p>In bidirectional mode each ESC answers every frame on its own motor wire,
+which gives per-motor eRPM at the frame rate. The command waveform is
+inverted, idling high, and its checksum is inverted, which is what tells
+the ESC to answer. About 30 us after a frame ends the ESC sends a 21-bit
+GCR reply at 750 kbit/s.</p>
+<p>Once all four lanes have transmitted, each lane’s DMA stream is rebuilt to
+read its pin’s GPIO input register, paced by its own timer channel at three
+samples per reply bit. The timer outputs are released for the window, about
+71 us, so each pad’s pull-up holds its line, and then driven again, parked
+high. The DShot service decodes the samples before the next frame: GCR
+symbols, checksum, and the eRPM period. A missing or bad reply is counted,
+never a fault; a lane that cannot turn around faults the bank as any DMA
+fault does. Decoding is host-tested in <code>ferrowasp-waveform::dshot_reply</code>.</p>
+<p>On the Foxeer every lane samples its pin, including motor 4 on TIM1’s
+complementary output, which a timer cannot input-capture. Bidirectional mode
+is fixed when the bank is built, and for now only the props-off bench feature
+below selects it. The TBS Lucid H7 sends plain DShot only.</p>
 <h2 id="bench-images"><a class="header" href="#bench-images">Bench Images</a></h2>
 <p>Bench features build images for props-off work and never ship as the flight
 image. Every motor bench feature needs the explicit props-off gate
@@ -1424,6 +1446,23 @@ and actuator validation.</li>
 <li><code>bench_logical_motorN_only</code>, added to it, spins only logical motor N, to
 confirm the logical-to-physical map and each motor’s direction. Selecting
 two is a compile error.</li>
+<li><code>bench_bidirectional_dshot</code> (Foxeer) builds the bank bidirectional and adds
+each lane’s latest reply eRPM and its valid and invalid reply counts to the
+periodic DShot log, beside the legacy UART telemetry, which still qualifies
+arming. It needs the props-off gate and a capped motor feature, and prints
+<code>BENCH: bidirectional DShot active</code> at startup.</li>
+</ul>
+<p>Over USB, the <code>esc</code> command reports each physical output’s UART eRPM and its
+age, the reply eRPM, and the reply counts, and <code>build</code> reports the commit,
+dirty tree, and features the image was built with. <code>ferro-configurator bench esc --seconds 60 --csv run.csv</code> samples <code>esc</code> ten times a second and reports,
+per output, how far the reply eRPM is from fresh UART eRPM and what share of
+replies were lost; the CSV reads straight into MATLAB’s <code>readtable</code>. It only
+reads. The controller does not arm with USB connected, so a motor is spun for
+the comparison with the props-off motor test: <code>ferro-configurator motor spin --motor N --seconds 10 --props-off --csv idle.csv</code> idles one logical motor
+under the same short lease as the GUI’s motor test, samples <code>esc</code> between
+renewals, and stops the motor at the end. Stopping the program stops the
+motor within the lease.</p>
+<ul>
 <li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
 1 at the qualification input only, to prove that a missing motor aborts
 arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
@@ -1435,7 +1474,8 @@ with propellers fitted.</p>
 <h2 id="not-yet-measured"><a class="header" href="#not-yet-measured">Not Yet Measured</a></h2>
 <p>Pulse width, jitter, polarity margin, lane-to-lane phase, and physical stop
 latency have not been measured with a logic analyzer; flights so far do not
-establish them. Bidirectional DShot telemetry is not implemented.</p>
+establish them. Bidirectional DShot has not run on target: the turnaround, the
+reply window, and reply loss under DMA load are unmeasured.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="priority-and-scheduling"><a class="header" href="#priority-and-scheduling">Priority and Scheduling</a></h1>
 <div class="table-wrapper">

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-a0e0ba77.js";
+            window.path_to_searchindex_js = "../searchindex-286929ee.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5109988b.js"></script>
@@ -278,6 +278,10 @@ connected, select the intended COM port explicitly:</p>
 <p>Require a ready Winbond-compatible external flash, a ready IMU, and plausible
 status. Close RTT readers, serial terminals, and other programs holding the
 same COM port.</p>
+<p><code>device info</code> also shows what the firmware was built from: its commit, whether
+the build had uncommitted changes, and any bench or diagnostic features. Check
+it after every flash. It also shows each physical ESC output’s latest UART
+telemetry eRPM and, with bidirectional DShot, the reply eRPM and reply counts.</p>
 <h2 id="back-up-and-inspect-configuration"><a class="header" href="#back-up-and-inspect-configuration">Back up and inspect configuration</a></h2>
 <p>Keep the aircraft disarmed. The firmware rejects configuration writes while
 armed.</p>
