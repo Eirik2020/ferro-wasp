@@ -125,9 +125,11 @@ keeps its own hardware list and never ingests imported targets.
   an inhibit lease each link holds through the coordinator or to a
   safety-critical VBUS sense; decided during the redesign.
 - **Discontinuity handling in the RC group.** The RC group observes
-  ADR-0011's out-of-band handle and calls the parser's `reset` (`rc_input`);
-  its fault decisions move into host-tested functions on the
-  `rc-input-fault-decisions` branch, which INPUT-006 links once merged.
+  ADR-0011's out-of-band handle and calls the parser's `reset` (`rc_input`).
+  Its fault decisions are host-tested functions
+  (`ferrowasp_core::safety::rc_fault_response`, `neutralize_rc_outputs`),
+  which INPUT-006 is allocated to; where the handle and the reset live in the
+  new RC group is settled in the redesign.
 - **Feature-gated tests.** `reqtool test` runs each package with its default
   features, so a test behind an opt-in feature cannot be evidence yet.
 - **Datasheet rates.** The MPU-6000 and ICM-42688-P output rates above are

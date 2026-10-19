@@ -44,9 +44,20 @@ artifact is stable, airworthy, or production-ready.
   button, and `device reboot [--dfu]` gives both directly. The GUI gains a
   Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
   the TBS Lucid H7's entry is not yet tested.
-- Test evidence tied to source components rather than whole firmware images,
-  with `tools/components.py` listing which tests each board owes, and
-  `tools/bench_rig.py` running the boot and idle gate on any board over SWD.
+- Requirement-based test evidence: each result verifies named requirements
+  and carries a fingerprint derived from the code they cover, so it stands
+  while that code is unchanged, on any board. `tools/reqtool` reports what is
+  verified, stale or owed, and `tools/bench_rig.py` runs the boot and idle
+  gate on any board over SWD.
+- Bidirectional DShot on the Foxeer, in the props-off
+  `bench_bidirectional_dshot` image only: each lane reads its ESC's reply
+  after every frame, giving per-motor eRPM and reply counts. UART telemetry
+  still qualifies arming.
+- `esc` and `build` on the USB command line, and `device info` showing both:
+  each output's UART and reply eRPM, and the commit, dirty tree and features
+  the image was built from. FerroConfigurator's `bench esc` samples `esc` to
+  CSV, and `motor spin --props-off` idles one motor under the motor-test
+  lease while sampling it.
 
 ### Changed
 
@@ -74,6 +85,10 @@ artifact is stable, airworthy, or production-ready.
 - ESC telemetry resumes after a timeout once the line has been quiet while
   disarmed, backing off to a 4 s window, instead of staying off until reboot.
 - One isolated stale IMU tick is tolerated; two in a row still disarm.
+- DShot frames follow the control loop: each accepted motor command sends
+  one frame set, so commands reach the ESCs at the 2 kHz loop rate instead of
+  one in four. A fallback keeps frames going at no less than 500 Hz while
+  disarmed, in guarded idle, or if the loop stops.
 - The documentation is two books: this public one, and an unpublished
   internal one for maintainers.
 

@@ -75,8 +75,8 @@ loss of confidence.
 
 The user operates powered hardware and decides when to advance between gates.
 A result applies to the recorded hardware, configuration, and airframe, and to
-the source components the run exercised: it carries forward while those
-components are unchanged and is repeated when one of them changes.
+the code covered by the requirements it verifies: it carries forward while
+that code is unchanged and is repeated when it changes.
 
 ## Foxeer User Workflow
 

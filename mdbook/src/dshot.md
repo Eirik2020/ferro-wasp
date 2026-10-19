@@ -169,7 +169,6 @@ image. Every motor bench feature needs the explicit props-off gate
 cargo build --release --locked --features "bench_actuator_validation bench_equal_motors"
 ```
 
-
 - `bench_equal_motors` sends the same requested throttle to all four lanes,
   capped at 250 PWM-style counts, with normal RC, arming, freshness, lease,
   and actuator validation.
@@ -181,6 +180,10 @@ cargo build --release --locked --features "bench_actuator_validation bench_equal
   periodic DShot log, beside the legacy UART telemetry, which still qualifies
   arming. It needs the props-off gate and a capped motor feature, and prints
   `BENCH: bidirectional DShot active` at startup.
+- `bench_dshot_idle_output1_not_running` reports zero eRPM for physical output
+  1 at the qualification input only, to prove that a missing motor aborts
+  arming. It prints `FAULT INJECTION ACTIVE` at startup and must never be used
+  with propellers fitted.
 
 Over USB, the `esc` command reports each physical output's UART eRPM and its
 age, the reply eRPM, and the reply counts, and `build` reports the commit,
@@ -194,10 +197,6 @@ the comparison with the props-off motor test: `ferro-configurator motor spin
 under the same short lease as the GUI's motor test, samples `esc` between
 renewals, and stops the motor at the end. Stopping the program stops the
 motor within the lease.
-- `bench_dshot_idle_output1_not_running` reports zero eRPM for physical output
-  1 at the qualification input only, to prove that a missing motor aborts
-  arming. It prints `FAULT INJECTION ACTIVE` at startup and must never be used
-  with propellers fitted.
 
 The idle command used for arming changes only in small reviewed steps, each
 followed by repeated cold starts and the full props-off check; never tune it
@@ -207,5 +206,7 @@ with propellers fitted.
 
 Pulse width, jitter, polarity margin, lane-to-lane phase, and physical stop
 latency have not been measured with a logic analyzer; flights so far do not
-establish them. Bidirectional DShot has not run on target: the turnaround, the
-reply window, and reply loss under DMA load are unmeasured.
+establish them. Bidirectional DShot has run props-off on one Foxeer bench,
+stopped and at idle, where three of its four outputs answered; the fourth
+had a failed ESC. The turnaround and the reply window are unmeasured, and so
+is reply loss under flight DMA load.

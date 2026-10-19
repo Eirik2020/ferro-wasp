@@ -55,9 +55,27 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Self-level mode.** A bounded attitude outer loop over the rate loop, after
   the rate-command and controller-reset changes are flight-verified, keeping
   the safety and actuator boundary.
+- **ADC after a DMA error.** `dma_adc1` logs a DMA fault and returns without
+  restarting the transfer, so battery voltage freezes at its last value with
+  no fault raised. It was seen frozen on the Foxeer's bidirectional DShot
+  bench image. The fix (restart, or a stale-voltage fault) is a user decision.
 - **Battery current** reads a constant 0.1 A on Foxeer. The firmware matches
   Betaflight's FOXEERF405V2 target (PC1, scale 70, offset 0), so the sense
   wiring is next; current is not a safety input until calibrated.
+
+## Requirements and Architecture
+
+- **Safety-critical architecture** (ADR-0054 to ADR-0060): critical and
+  non-critical crates, SPSC links, the observer and its ledger, the
+  coordinator, message contracts, the gyro-synced loop, `ferrowasp-config` and
+  the new crate map. Not built. The redesign comes before the next hardware
+  gate run; its order, scope and open items are in the
+  [requirements design](requirements/design.md#17-order-of-work).
+- **The `app!` parser** in `ferroforge-contracts`, and a FerroForge release, so
+  board requirements fingerprint the tasks they name instead of the whole app
+  closure.
+- **`reqtool`**: the analysis-level checks, and running tests behind opt-in
+  features, so they can be evidence.
 
 ## Logging and Analysis
 
