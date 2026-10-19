@@ -94,7 +94,11 @@ obstacle. The two tracks are kept apart in the work that follows (section 17).
    out.
 4. The architecture redesign, as its own stack of changes on `main`. It
    changes the flight image and re-gates the Foxeer, and it is kept apart from
-   the requirements tooling.
+   the requirements tooling. Its working rules live in
+   [architecture.md](architecture.md), not in `AGENTS.md`, which gains only a
+   pointer to sections 8 to 11; `tools/check_rtic_boundaries.py` enforces the
+   direction rule and the single ways in and out. Each change updates the
+   chapters it implements in the same change.
 
 Then goal 2 (the Command Input requirement and its tests) and goal 3 (the
 Foxeer F405 V2 bring-up matrix and the first test of shared-driver
