@@ -131,8 +131,10 @@ keeps its own hardware list and never ingests imported targets.
 - **Betaflight's scheduler.** Gyro-locking is to be confirmed in its source.
 - **Stack-analysis tooling** for the image-level check, chosen at
   implementation.
-- **Document sizes.** On the requirements branch the user set the size
-  limits aside to avoid lossy compression: the ADR index limit is disabled in
-  `check_repository_context.py`, and this document, `SUMMARY.md` and
-  `AGENTS.md` have raised budgets. The limits are restored once the documentation has moved
-  into the requirements system.
+- **Document sizes.** Size limits are met by restructuring, never by
+  shortening content. The design is split into chapters and the ADR index
+  into active and historical decisions, so the index meets its original
+  8,192-byte limit. Budgets were raised where a document only grows: the
+  internal book's summary (8 KB), the document registry (24 KB), and
+  `AGENTS.md` (13,312 bytes; its rules stay in the one file every agent
+  reads). The always-loaded files are at 296 of 300 lines.

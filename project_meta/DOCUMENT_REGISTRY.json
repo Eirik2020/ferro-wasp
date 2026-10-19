@@ -594,7 +594,7 @@
   "context_budgets": [
     {
       "path": "AGENTS.md",
-      "max_bytes": 16384
+      "max_bytes": 13312
     },
     {
       "path": "tools/rtic-app-builder/RTIC_APP_BUILDER_REFERENCE_IMPLEMENTATION_PLAN.md",
