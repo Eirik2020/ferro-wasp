@@ -10,3 +10,10 @@ path = "src/lib.rs"
 
 [dependencies]
 embedded-hal = { workspace = true }
+ferrowasp-config = { path = "../ferrowasp-config" }
+heapless = { workspace = true }
+
+[features]
+default = []
+# The in-memory NOR flash other crates' host tests run storage against.
+test-support = []

@@ -266,9 +266,9 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-flight/src/usb_debug.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/command_link.rs"),
+            PurePosixPath("crates/ferrowasp-cli/src/usb_debug.rs"),
+            PurePosixPath("crates/ferrowasp-cli/src/commands.rs"),
+            PurePosixPath("crates/ferrowasp-cli/src/command_link.rs"),
         ),
     ),
     "storage": TopicRoute(
@@ -283,9 +283,9 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-storage/src/nor_storage.rs"),
             PurePosixPath("crates/ferrowasp-storage/src/spi_nor.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/log_sync.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/sync_ledger.rs"),
+            PurePosixPath("crates/ferrowasp-blackbox/src/records.rs"),
+            PurePosixPath("crates/ferrowasp-cli/src/log_sync.rs"),
+            PurePosixPath("crates/ferrowasp-blackbox/src/sync_ledger.rs"),
         ),
     ),
     "logging": TopicRoute(
@@ -297,7 +297,7 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-protocol/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
+            PurePosixPath("crates/ferrowasp-blackbox/src/records.rs"),
         ),
     ),
 }

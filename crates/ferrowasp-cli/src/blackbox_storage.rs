@@ -1,6 +1,5 @@
 //! Reusable blackbox catalogue and download operations.
 
-use crate::flash_storage as flash_task;
 use ferrowasp_mspv2 as mspv2;
 
 pub trait FlashRead {
@@ -18,20 +17,20 @@ where
 
 pub fn blackbox_flight_id_at(
     flash: &mut impl FlashRead,
-    layout: flash_task::StorageLayout,
+    layout: ferrowasp_storage::layout::StorageLayout,
     page_index: u32,
 ) -> Result<u32, ()> {
     let address = layout.log_page_address(page_index).ok_or(())?;
-    let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+    let mut page = [0xff; ferrowasp_protocol::blackbox::FLASH_PAGE_LEN];
     flash.read(address, &mut page).map_err(|_| ())?;
-    ferrowasp_core::blackbox::decode_page(&page)
+    ferrowasp_protocol::blackbox::decode_page(&page)
         .map(|metadata| metadata.flight_id)
         .map_err(|_| ())
 }
 
 pub fn blackbox_bounds(
     flash: &mut impl FlashRead,
-    layout: flash_task::StorageLayout,
+    layout: ferrowasp_storage::layout::StorageLayout,
     used_pages: u32,
     id: mspv2::rpc::BlackboxId,
 ) -> Result<Option<(u32, u32)>, ()> {
@@ -63,7 +62,7 @@ pub fn blackbox_bounds(
 
 pub fn blackbox_info(
     flash: &mut impl FlashRead,
-    layout: flash_task::StorageLayout,
+    layout: ferrowasp_storage::layout::StorageLayout,
     used_pages: u32,
     id: mspv2::rpc::BlackboxId,
     active_id: Option<u32>,
@@ -73,7 +72,7 @@ pub fn blackbox_info(
     };
     Ok(Some(mspv2::rpc::BlackboxInfo {
         id,
-        size_bytes: (end - start) * ferrowasp_core::blackbox::FLASH_PAGE_LEN as u32,
+        size_bytes: (end - start) * ferrowasp_protocol::blackbox::FLASH_PAGE_LEN as u32,
         state: if active_id == Some(id.0) {
             mspv2::rpc::BlackboxState::Active
         } else {
@@ -86,7 +85,7 @@ pub fn blackbox_info(
 
 pub fn list_blackboxes(
     flash: &mut impl FlashRead,
-    layout: flash_task::StorageLayout,
+    layout: ferrowasp_storage::layout::StorageLayout,
     used_pages: u32,
     active_id: Option<u32>,
 ) -> Result<mspv2::rpc::BlackboxList, ()> {
@@ -105,7 +104,7 @@ pub fn list_blackboxes(
         };
         let info = mspv2::rpc::BlackboxInfo {
             id,
-            size_bytes: (end - start) * ferrowasp_core::blackbox::FLASH_PAGE_LEN as u32,
+            size_bytes: (end - start) * ferrowasp_protocol::blackbox::FLASH_PAGE_LEN as u32,
             state: if active_id == Some(id.0) {
                 mspv2::rpc::BlackboxState::Active
             } else {
@@ -127,7 +126,7 @@ pub fn list_blackboxes(
 
 pub fn read_blackbox_chunk(
     flash: &mut impl FlashRead,
-    layout: flash_task::StorageLayout,
+    layout: ferrowasp_storage::layout::StorageLayout,
     used_pages: u32,
     id: mspv2::rpc::BlackboxId,
     offset: u32,
@@ -136,7 +135,7 @@ pub fn read_blackbox_chunk(
     let (start, end) = blackbox_bounds(flash, layout, used_pages, id)
         .map_err(|_| mspv2::rpc::DeviceError::ReadFailure)?
         .ok_or(mspv2::rpc::DeviceError::BlackboxNotFound)?;
-    let size = (end - start) * ferrowasp_core::blackbox::FLASH_PAGE_LEN as u32;
+    let size = (end - start) * ferrowasp_protocol::blackbox::FLASH_PAGE_LEN as u32;
     if offset > size || requested_length == 0 {
         return Err(mspv2::rpc::DeviceError::InvalidOffset);
     }
@@ -145,28 +144,28 @@ pub fn read_blackbox_chunk(
     let mut data = heapless::Vec::<u8, { mspv2::rpc::MAX_BLACKBOX_CHUNK }>::new();
     let mut position = offset as usize;
     while data.len() < actual {
-        let relative_page = position / ferrowasp_core::blackbox::FLASH_PAGE_LEN;
-        let page_offset = position % ferrowasp_core::blackbox::FLASH_PAGE_LEN;
+        let relative_page = position / ferrowasp_protocol::blackbox::FLASH_PAGE_LEN;
+        let page_offset = position % ferrowasp_protocol::blackbox::FLASH_PAGE_LEN;
         let page_index = start + relative_page as u32;
         let address = layout
             .log_page_address(page_index)
             .ok_or(mspv2::rpc::DeviceError::ReadFailure)?;
-        let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+        let mut page = [0xff; ferrowasp_protocol::blackbox::FLASH_PAGE_LEN];
         flash
             .read(address, &mut page)
             .map_err(|_| mspv2::rpc::DeviceError::ReadFailure)?;
-        let metadata = ferrowasp_core::blackbox::decode_page(&page)
+        let metadata = ferrowasp_protocol::blackbox::decode_page(&page)
             .map_err(|_| mspv2::rpc::DeviceError::ChecksumMismatch)?;
         if metadata.flight_id != id.0 || page_index >= end {
             return Err(mspv2::rpc::DeviceError::ReadFailure);
         }
         let copy_len =
-            (ferrowasp_core::blackbox::FLASH_PAGE_LEN - page_offset).min(actual - data.len());
+            (ferrowasp_protocol::blackbox::FLASH_PAGE_LEN - page_offset).min(actual - data.len());
         data.extend_from_slice(&page[page_offset..page_offset + copy_len])
             .map_err(|_| mspv2::rpc::DeviceError::Internal)?;
         position += copy_len;
     }
-    let chunk_crc32 = ferrowasp_core::blackbox::crc32(data.as_slice());
+    let chunk_crc32 = ferrowasp_protocol::blackbox::crc32(data.as_slice());
     Ok(mspv2::rpc::BlackboxChunk {
         id,
         offset,

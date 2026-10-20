@@ -6,10 +6,12 @@
 //! owns where the log ends, which flight is next, and the one page waiting to
 //! be written; the owner reports what each call says happened.
 
-use ferrowasp_core::blackbox::FLASH_PAGE_LEN;
-use ferrowasp_drivers::nor_storage::NorStorage;
+use ferrowasp_protocol::blackbox::FLASH_PAGE_LEN;
+use ferrowasp_storage::nor_storage::NorStorage;
 
-use crate::flash_storage::{PageAssembler, RecordConsumer, StorageLayout};
+use crate::records::PageAssembler;
+use crate::records::RecordConsumer;
+use ferrowasp_storage::layout::StorageLayout;
 
 /// Records taken from the queue in one pass.
 ///
@@ -234,11 +236,11 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::flash_storage::RecordQueue;
-    use crate::test_nor::MemoryNor;
-    use ferrowasp_core::blackbox::{
+    use crate::records::RecordQueue;
+    use ferrowasp_protocol::blackbox::{
         FLIGHT_RECORD_FLAG_BOOT_SESSION_START, FlightRecord, decode_page, record_from_page,
     };
+    use ferrowasp_storage::test_nor::MemoryNor;
     use std::boxed::Box;
     use std::vec::Vec;
 
@@ -259,7 +261,7 @@ mod tests {
     struct Rig {
         log: LogWriter,
         nor: MemoryNor,
-        input: crate::flash_storage::RecordProducer,
+        input: crate::records::RecordProducer,
         output: RecordConsumer,
     }
 

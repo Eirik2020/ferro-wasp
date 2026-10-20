@@ -8,7 +8,8 @@
 //! (see [`StorageLayout::log_erase_sector_address`]); flight identifiers then
 //! restart at 1.
 
-use crate::flash_storage::{CONFIG_SECTOR_SIZE, StorageLayout};
+use ferrowasp_storage::layout::CONFIG_SECTOR_SIZE;
+use ferrowasp_storage::layout::StorageLayout;
 
 pub const SYNC_LEDGER_MAGIC: [u8; 8] = *b"FWSYNC01";
 pub const SYNC_LEDGER_BITMAP_OFFSET: u32 = SYNC_LEDGER_MAGIC.len() as u32;

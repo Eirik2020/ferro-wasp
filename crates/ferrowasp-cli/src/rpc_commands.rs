@@ -6,14 +6,16 @@
 //! commit or reset starts a [`ConfigSave`] and answers when it completes,
 //! through [`ConfigRpcCompletion`].
 
-use ferrowasp_drivers::nor_storage::NorStorage;
 use ferrowasp_mspv2::rpc;
+use ferrowasp_storage::nor_storage::NorStorage;
 
 use crate::blackbox_storage as blackbox_task;
-use crate::config_save::{ConfigRpcCompletion, ConfigSave};
-use crate::flash_storage::{StorageLayout, StoredConfig, StoredConfigRpc};
-use crate::log_writer::LogWriter;
-use crate::storage_maintenance::Maintenance;
+use crate::commands::StoredConfigRpc;
+use ferrowasp_blackbox::log_writer::LogWriter;
+use ferrowasp_blackbox::storage_maintenance::Maintenance;
+use ferrowasp_config::stored::StoredConfig;
+use ferrowasp_storage::config_save::{ConfigRpcCompletion, ConfigSave};
+use ferrowasp_storage::layout::StorageLayout;
 
 use ferrowasp_mspv2 as mspv2;
 
@@ -291,7 +293,7 @@ pub fn handle<F: NorStorage>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_nor::MemoryNor;
+    use ferrowasp_storage::test_nor::MemoryNor;
 
     const CAPACITY: u32 = 64 * 1024;
 

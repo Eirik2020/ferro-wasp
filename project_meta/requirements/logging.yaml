@@ -11,8 +11,8 @@ requirements:
       log proves nothing.
     derived_from: [W7]
     allocated_to:
-      - ferrowasp_flight::log_writer
-      - ferrowasp_flight::flash_storage
+      - ferrowasp_blackbox::log_writer
+      - ferrowasp_blackbox::records
     verification:
       mode: direct
       entries:
@@ -20,17 +20,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
+            test: ferrowasp_blackbox::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::flash_storage::tests::a_flight_is_unfinished_until_its_last_page_is_written
+            test: ferrowasp_blackbox::records::tests::a_flight_is_unfinished_until_its_last_page_is_written
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::flash_storage::tests::a_torn_page_ends_its_flight_and_logging_carries_on_after_it
+            test: ferrowasp_blackbox::records::tests::a_torn_page_ends_its_flight_and_logging_carries_on_after_it
         - level: bench
           target: fcu
           setup: props-off

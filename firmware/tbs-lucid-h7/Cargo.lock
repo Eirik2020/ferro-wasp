@@ -267,6 +267,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-blackbox"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-config",
+ "ferrowasp-protocol",
+ "ferrowasp-storage",
+ "heapless 0.9.2",
+]
+
+[[package]]
 name = "ferrowasp-blheli-telemetry"
 version = "0.1.0"
 
@@ -278,6 +288,20 @@ dependencies = [
  "ferrowasp-flight",
  "ferrowasp-io-core",
  "ferrowasp-stm32",
+]
+
+[[package]]
+name = "ferrowasp-cli"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-blackbox",
+ "ferrowasp-config",
+ "ferrowasp-mspv2",
+ "ferrowasp-protocol",
+ "ferrowasp-safety",
+ "ferrowasp-serial",
+ "ferrowasp-storage",
+ "heapless 0.9.2",
 ]
 
 [[package]]
@@ -337,6 +361,8 @@ name = "ferrowasp-flight"
 version = "0.1.0"
 dependencies = [
  "defmt",
+ "ferrowasp-blackbox",
+ "ferrowasp-cli",
  "ferrowasp-config",
  "ferrowasp-control",
  "ferrowasp-core",
@@ -350,6 +376,7 @@ dependencies = [
  "ferrowasp-osd",
  "ferrowasp-protocol",
  "ferrowasp-safety",
+ "ferrowasp-storage",
  "heapless 0.9.2",
  "libm",
 ]
@@ -600,6 +627,8 @@ name = "ferrowasp-storage"
 version = "0.1.0"
 dependencies = [
  "embedded-hal 1.0.0",
+ "ferrowasp-config",
+ "heapless 0.9.2",
 ]
 
 [[package]]

@@ -10,10 +10,11 @@
 //! Each step runs one flash operation, so the storage owner interleaves its
 //! other work and can stop a save between steps.
 
-use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, decode_config_page, encode_config_page};
-use ferrowasp_drivers::nor_storage::NorStorage;
+use crate::nor_storage::NorStorage;
+use ferrowasp_config::page::{FLASH_PAGE_LEN, decode_config_page, encode_config_page};
 
-use crate::flash_storage::{StorageLayout, StoredConfig};
+use crate::layout::StorageLayout;
+use ferrowasp_config::stored::StoredConfig;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Phase {
@@ -169,9 +170,9 @@ impl ConfigSave {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flash_storage::load_config;
+    use crate::layout::load_config;
     use crate::test_nor::MemoryNor;
-    use ferrowasp_core::config::ConfigKey;
+    use ferrowasp_config::keys::ConfigKey;
 
     const CAPACITY: u32 = 64 * 1024;
 

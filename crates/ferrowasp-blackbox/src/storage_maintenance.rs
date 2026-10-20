@@ -4,11 +4,13 @@
 //! start another, or a configuration save, while one is running, and stops it
 //! between steps if the craft arms.
 
-use ferrowasp_core::blackbox::FLASH_PAGE_LEN;
-use ferrowasp_drivers::nor_storage::NorStorage;
+use ferrowasp_protocol::blackbox::FLASH_PAGE_LEN;
+use ferrowasp_storage::nor_storage::NorStorage;
 
-use crate::flash_storage::{SCRATCH_SECTOR_ADDRESS, StorageLayout, scratch_test_page};
+use crate::records::scratch_test_page;
 use crate::sync_ledger::{self, MarkStep};
+use ferrowasp_storage::layout::SCRATCH_SECTOR_ADDRESS;
+use ferrowasp_storage::layout::StorageLayout;
 
 /// Ledger operations one acknowledgement may take: erase, header and bit.
 pub const MAX_SYNC_MARK_STEPS: u8 = 3;
@@ -193,8 +195,8 @@ fn start_mark_step<F: NorStorage>(flash: &mut F, step: MarkStep) -> Result<(), F
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flash_storage::CONFIG_SECTOR_SIZE;
-    use crate::test_nor::MemoryNor;
+    use ferrowasp_storage::layout::CONFIG_SECTOR_SIZE;
+    use ferrowasp_storage::test_nor::MemoryNor;
 
     const CAPACITY: u32 = 64 * 1024;
 

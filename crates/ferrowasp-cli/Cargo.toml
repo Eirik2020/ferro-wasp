@@ -1,0 +1,27 @@
+[package]
+name = "ferrowasp-cli"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-blackbox = { path = "../ferrowasp-blackbox" }
+ferrowasp-config = { path = "../ferrowasp-config" }
+ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
+ferrowasp-protocol = { path = "../ferrowasp-protocol" }
+ferrowasp-safety = { path = "../ferrowasp-safety" }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+ferrowasp-storage = { path = "../ferrowasp-storage" }
+heapless = { workspace = true }
+
+[features]
+default = []
+mspv2_configurator = ["dep:ferrowasp-mspv2"]
+
+[dev-dependencies]
+critical-section = { workspace = true, features = ["std"] }
+ferrowasp-storage = { path = "../ferrowasp-storage", features = ["test-support"] }

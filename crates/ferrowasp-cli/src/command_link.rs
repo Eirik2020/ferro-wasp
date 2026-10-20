@@ -6,7 +6,10 @@
 //! link it came from. A flash operation that finishes later, an erase or a
 //! save, answers the link that started it.
 
-use crate::flash_storage::{CommandConsumer, ResponseFrame, ResponseProducer, StorageCommand};
+use crate::commands::CommandConsumer;
+use crate::commands::ResponseFrame;
+use crate::commands::ResponseProducer;
+use crate::commands::StorageCommand;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommandLink {
@@ -150,7 +153,9 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::flash_storage::{CommandQueue, ResponseConsumer, ResponseQueue};
+    use crate::commands::CommandQueue;
+    use crate::commands::ResponseConsumer;
+    use crate::commands::ResponseQueue;
     use std::boxed::Box;
 
     fn line(text: &str) -> ResponseFrame {
@@ -233,7 +238,7 @@ mod tests {
 
     #[test]
     fn motors_and_unconditional_erase_stay_on_usb() {
-        use ferrowasp_core::safety::BenchMotorRequest;
+        use ferrowasp_safety::BenchMotorRequest;
 
         assert!(StorageCommand::Motor(BenchMotorRequest::Stop).usb_only());
         assert!(StorageCommand::LogsEraseConfirmed.usb_only());

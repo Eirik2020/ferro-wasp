@@ -1,0 +1,18 @@
+[package]
+name = "ferrowasp-blackbox"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-config = { path = "../ferrowasp-config" }
+ferrowasp-protocol = { path = "../ferrowasp-protocol" }
+ferrowasp-storage = { path = "../ferrowasp-storage" }
+heapless = { workspace = true }
+
+[dev-dependencies]
+ferrowasp-storage = { path = "../ferrowasp-storage", features = ["test-support"] }

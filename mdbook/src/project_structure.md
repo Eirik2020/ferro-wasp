@@ -17,10 +17,12 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-core` | Re-exports of the moved modules under their former paths |
 | `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
-| `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |
+| `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait, the storage layout and boot slot selection, and configuration saving |
+| `ferrowasp-blackbox` | The onboard flight log: the record queue and page assembly, the log writer, the sync ledger, and log maintenance |
+| `ferrowasp-cli` | The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC |
 | `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight-control` | How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter's wiring |
-| `ferrowasp-flight` | Portable flight logic: blackbox and configuration storage, log sync, the command link and its commands, and re-exports of the moved modules under their former paths |
+| `ferrowasp-flight` | Re-exports of the moved modules under their former paths |
 | `ferrowasp-feedback` | Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for |
 | `ferrowasp-imu` | The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through |
 | `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map |

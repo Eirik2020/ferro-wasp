@@ -4,13 +4,15 @@
 //! The log holds flights back to back, each a run of pages carrying its
 //! flight identifier, in increasing order. This module finds flights by
 //! binary search over those identifiers and asks the sync ledger
-//! ([`crate::sync_ledger`]) which ones a host has acknowledged. The command
+//! ([`ferrowasp_blackbox::sync_ledger`]) which ones a host has acknowledged. The command
 //! line answers with the lines formatted here, each within one response
 //! frame.
 
-use crate::flash_storage::{StorageLayout, USB_RESPONSE_CAPACITY, page_flight_id};
-use crate::sync_ledger::{self, LedgerError};
+use crate::commands::USB_RESPONSE_CAPACITY;
 use core::fmt::Write as _;
+use ferrowasp_blackbox::records::page_flight_id;
+use ferrowasp_blackbox::sync_ledger::{self, LedgerError};
+use ferrowasp_storage::layout::StorageLayout;
 use heapless::{String, Vec};
 
 /// Flights one `logs unsynced` answer lists; the host acknowledges them and
@@ -290,8 +292,10 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::sync_ledger::{MarkStep, SYNC_LEDGER_MAGIC, next_mark_step};
-    use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, FlightRecord, RECORDS_PER_PAGE, encode_page};
+    use ferrowasp_blackbox::sync_ledger::{MarkStep, SYNC_LEDGER_MAGIC, next_mark_step};
+    use ferrowasp_protocol::blackbox::{
+        FLASH_PAGE_LEN, FlightRecord, RECORDS_PER_PAGE, encode_page,
+    };
     use std::vec::Vec as StdVec;
 
     const CAPACITY: u32 = 64 * 1024;
