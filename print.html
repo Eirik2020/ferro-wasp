@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0fcc653f.js";
+            window.path_to_searchindex_js = "searchindex-9d219a76.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -2151,13 +2151,13 @@ chips’ features in one build. Firmware is composed with
 <tr><th>Crate</th><th>Owns</th></tr>
 </thead>
 <tbody>
-<tr><td><code>ferrowasp-core</code></td><td>Safety state and the safety master’s rules, actuator command types, blackbox records, stored configuration, reference frames</td></tr>
+<tr><td><code>ferrowasp-control</code></td><td>General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration</td></tr>
+<tr><td><code>ferrowasp-core</code></td><td>Safety state and the safety master’s rules, actuator command types, blackbox records, stored configuration</td></tr>
 <tr><td><code>ferrowasp-drivers</code></td><td>Device and protocol drivers: IMUs (ICM-42688-P, MPU-6000, MPU-6500), CRSF, BLHeli telemetry, SPI NOR flash, and the <code>NorStorage</code> trait</td></tr>
 <tr><td><code>ferrowasp-flight</code></td><td>Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link</td></tr>
 <tr><td><code>ferrowasp-io-core</code></td><td>Bounded serial and SPI contracts, I/O health, statistics, and time types</td></tr>
 <tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
 <tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
-<tr><td><code>ferrowasp-pid</code></td><td>The PID rate-control primitive</td></tr>
 <tr><td><code>ferrowasp-waveform</code></td><td>DShot packet encoding and compare sequences</td></tr>
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
 <tr><td><code>ferrowasp-stm32</code></td><td>STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types</td></tr>
@@ -2170,6 +2170,8 @@ chips’ features in one build. Firmware is composed with
 <p>Only <code>ferrowasp-stm32f4</code> and <code>ferrowasp-stm32h7</code> name a chip HAL, and only
 they hold unsafe code: their DMA endpoint declarations and their jump into the
 chip’s ROM bootloader.</p>
+<p>A safety-critical crate declares <code>[package.metadata.ferrowasp] critical = true</code> and never depends on a crate that does not; its external dependencies
+are pinned to one version.</p>
 <h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
 <p>Under <code>firmware/</code>, each its own Cargo workspace:</p>
 <div class="table-wrapper">
