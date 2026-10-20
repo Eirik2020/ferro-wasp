@@ -198,7 +198,8 @@ observations.
 ## Foxeer Powered Props-Off Exact-Image Gate
 
 Verifies: ARM-001, ARM-002, MOTOR-001, CTRL-001, CTRL-002, INPUT-008,
-INPUT-009, INPUT-010, LOG-001. Former catalog ID `BENCH-FOX-001`.
+INPUT-009, INPUT-010, LOG-001, HW-UART-001, HW-SPI-001, HW-DSHOT-001. Former
+catalog ID `BENCH-FOX-001`.
 
 Run only when `reqtool gate bench-session --board foxeer-f405-v2` is open. The user must confirm that all
 propellers are removed before actuator power is connected. Secure the

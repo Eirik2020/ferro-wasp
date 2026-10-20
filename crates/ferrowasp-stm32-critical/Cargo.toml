@@ -1,0 +1,33 @@
+[package]
+name = "ferrowasp-stm32-critical"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# The safety-critical STM32 mechanisms that do not depend on a chip family's
+# HAL: the UART and SPI DMA state machines, the DShot bank, timing, routing,
+# reset and the shared DMA memory. Host-testable.
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+bench_spi_timeout_recovery = []
+dshot = ["dep:ferrowasp-output"]
+
+[dependencies]
+defmt = "=1.0.1"
+embedded-hal = { workspace = true }
+ferrowasp-imu = { path = "../ferrowasp-imu" }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-output = { path = "../ferrowasp-output", optional = true }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+heapless = { workspace = true }
+
+[dev-dependencies]
+ferrowasp-output = { path = "../ferrowasp-output" }
+
+[package.metadata.ferrowasp]
+critical = true

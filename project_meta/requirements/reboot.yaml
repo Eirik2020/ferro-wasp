@@ -32,8 +32,9 @@ requirements:
       firmware.
     derived_from: [W2]
     allocated_to:
-      - ferrowasp_stm32::system_reset
-      - ferrowasp_stm32f4::system_bootloader
+      - ferrowasp_stm32_critical::system_reset
+      - ferrowasp_stm32f4_critical::system_bootloader
+      - ferrowasp_stm32h7_critical::system_bootloader
     verification:
       mode: direct
       entries:
@@ -41,7 +42,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_stm32::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
+            test: ferrowasp_stm32_critical::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
         - level: mcu
           target: fcu
           setup: none
@@ -60,7 +61,7 @@ requirements:
       half-written image.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_stm32f4::system_bootloader
+      - ferrowasp_stm32f4_critical::system_bootloader
     verification:
       mode: direct
       entries:

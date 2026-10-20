@@ -14,30 +14,29 @@
 
 #[cfg(all(target_arch = "arm", feature = "stm32h743"))]
 pub mod adc;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod clocks;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-#[allow(unsafe_code)]
-pub mod dma_endpoints;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod dshot;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod eh1;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod exti;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod hal_prelude;
 pub mod sd_storage;
 #[cfg(all(target_arch = "arm", feature = "stm32h743"))]
 pub mod signature;
 #[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod spi_dma;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-#[allow(unsafe_code)]
-pub mod system_bootloader;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod timers;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
-pub mod uart_dma;
-#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
 pub mod usb_serial;
+
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::clocks;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::dma_endpoints;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::dshot;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::eh1;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::exti;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::hal_prelude;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::spi_dma;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::system_bootloader;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::timers;
+#[cfg(all(target_arch = "arm", feature = "stm32h743"))]
+pub use ferrowasp_stm32h7_critical::uart_dma;

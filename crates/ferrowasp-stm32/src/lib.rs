@@ -9,27 +9,28 @@
 #![no_std]
 
 pub mod adc;
-pub mod app_config;
-pub mod app_storage;
-pub mod board_manifest;
-pub mod board_routes;
-#[cfg(any(test, feature = "dshot"))]
-pub mod dshot_bank;
-#[cfg(any(test, feature = "dshot"))]
-pub mod dshot_lanes;
-pub mod memory;
 pub mod pwm_config;
-pub mod scheduler;
-pub mod serial;
-pub mod spi;
-pub mod spi1_imu;
-pub mod spi_common;
 pub mod status_led;
-pub mod system_reset;
-pub mod timebase;
-pub mod timer_dma;
-pub mod timer_tick;
-pub mod uart_common;
-pub mod uart_port;
 pub mod usb_serial;
-pub mod watchdog;
+
+pub use ferrowasp_stm32_critical::app_config;
+pub use ferrowasp_stm32_critical::app_storage;
+pub use ferrowasp_stm32_critical::board_manifest;
+pub use ferrowasp_stm32_critical::board_routes;
+#[cfg(feature = "dshot")]
+pub use ferrowasp_stm32_critical::dshot_bank;
+#[cfg(feature = "dshot")]
+pub use ferrowasp_stm32_critical::dshot_lanes;
+pub use ferrowasp_stm32_critical::memory;
+pub use ferrowasp_stm32_critical::scheduler;
+pub use ferrowasp_stm32_critical::serial;
+pub use ferrowasp_stm32_critical::spi;
+pub use ferrowasp_stm32_critical::spi_common;
+pub use ferrowasp_stm32_critical::spi1_imu;
+pub use ferrowasp_stm32_critical::system_reset;
+pub use ferrowasp_stm32_critical::timebase;
+pub use ferrowasp_stm32_critical::timer_dma;
+pub use ferrowasp_stm32_critical::timer_tick;
+pub use ferrowasp_stm32_critical::uart_common;
+pub use ferrowasp_stm32_critical::uart_port;
+pub use ferrowasp_stm32_critical::watchdog;

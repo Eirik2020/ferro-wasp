@@ -95,8 +95,8 @@ No control, RC, USB, OSD, configurator, or experimental task owns a motor
 timer, pin, or DShot DMA stream.
 
 Each app is `#![deny(unsafe_code)]`. The unsafe code under DShot is limited to
-the DMA endpoint declarations of each chip backend: `ferrowasp-stm32f4::dshot`
-and `ferrowasp-stm32h7::dma_endpoints`. Each proves that an endpoint addresses
+the DMA endpoint declarations of each chip backend's safety-critical half:
+`ferrowasp-stm32f4-critical::dshot` and `ferrowasp-stm32h7-critical::dma_endpoints`. Each proves that an endpoint addresses
 the compare register of a timer the bank owns exclusively, with the right
 transfer width and a valid stream mapping. HAL transfers own the active
 buffers; there is no project `static mut` and no aliasing of a buffer that DMA

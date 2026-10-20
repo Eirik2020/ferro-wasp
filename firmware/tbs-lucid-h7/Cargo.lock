@@ -486,10 +486,22 @@ version = "0.1.0"
 dependencies = [
  "defmt",
  "embedded-hal 1.0.0",
- "ferrowasp-io-core",
- "ferrowasp-waveform",
+ "ferrowasp-stm32-critical",
  "heapless 0.9.2",
  "rc-pwm",
+]
+
+[[package]]
+name = "ferrowasp-stm32-critical"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "embedded-hal 1.0.0",
+ "ferrowasp-imu",
+ "ferrowasp-io-contracts",
+ "ferrowasp-output",
+ "ferrowasp-serial",
+ "heapless 0.9.2",
 ]
 
 [[package]]
@@ -526,10 +538,23 @@ dependencies = [
  "defmt",
  "ferrowasp-io-core",
  "ferrowasp-stm32",
- "ferrowasp-waveform",
+ "ferrowasp-stm32f4-critical",
  "rc-pwm",
  "usb-device",
  "usbd-serial",
+]
+
+[[package]]
+name = "ferrowasp-stm32f4-critical"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "defmt",
+ "ferrowasp-imu",
+ "ferrowasp-io-contracts",
+ "ferrowasp-output",
+ "ferrowasp-serial",
+ "ferrowasp-stm32-critical",
 ]
 
 [[package]]
@@ -543,13 +568,31 @@ dependencies = [
  "ferrowasp-drivers",
  "ferrowasp-io-core",
  "ferrowasp-stm32",
- "ferrowasp-waveform",
+ "ferrowasp-stm32h7-critical",
  "heapless 0.9.2",
  "nb 1.1.0",
  "sdio-host",
  "stm32h7xx-hal",
  "usb-device",
  "usbd-serial",
+]
+
+[[package]]
+name = "ferrowasp-stm32h7-critical"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "defmt",
+ "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
+ "ferrowasp-imu",
+ "ferrowasp-io-contracts",
+ "ferrowasp-output",
+ "ferrowasp-serial",
+ "ferrowasp-stm32-critical",
+ "heapless 0.9.2",
+ "nb 1.1.0",
+ "stm32h7xx-hal",
 ]
 
 [[package]]

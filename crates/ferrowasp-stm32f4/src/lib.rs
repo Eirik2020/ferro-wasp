@@ -7,31 +7,30 @@
 #[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
 pub mod adc;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod board_routes;
-pub mod clocks;
-#[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
-#[allow(unsafe_code)]
-pub mod dshot;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
-pub mod exti;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod hal_prelude;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod scheduler;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod signature;
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod spi_dma;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-#[allow(unsafe_code)]
-pub mod system_bootloader;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod timebase;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod timer_tick;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod uart_dma;
-#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
 pub mod usb_serial;
+
 #[cfg(all(target_arch = "arm", feature = "stm32f405"))]
-pub mod watchdog;
+pub use ferrowasp_stm32f4_critical::board_routes;
+pub use ferrowasp_stm32f4_critical::clocks;
+#[cfg(all(target_arch = "arm", feature = "stm32f405", feature = "dshot"))]
+pub use ferrowasp_stm32f4_critical::dshot;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f401", feature = "stm32f405")))]
+pub use ferrowasp_stm32f4_critical::exti;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::hal_prelude;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::scheduler;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::spi_dma;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::system_bootloader;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::timebase;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::timer_tick;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::uart_dma;
+#[cfg(all(target_arch = "arm", feature = "stm32f405"))]
+pub use ferrowasp_stm32f4_critical::watchdog;

@@ -19,7 +19,7 @@ after the one USB power cycle the operator performs, then records a pass with
 reqtool for review. `check-boot-idle` judges existing captures to the same
 standard.
 
-Verifies: BOOT-001, BOOT-002. Former catalog ID `BENCH-COMMON-001`, kept by
+Verifies: BOOT-001, BOOT-002, HW-DSHOT-001, HW-TIME-001. Former catalog ID `BENCH-COMMON-001`, kept by
 its earlier run records.
 
 Prerequisite:

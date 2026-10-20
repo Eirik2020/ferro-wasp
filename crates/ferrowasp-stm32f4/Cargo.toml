@@ -10,22 +10,23 @@ path = "src/lib.rs"
 
 [features]
 default = []
-bench_spi_timeout_recovery = ["ferrowasp-stm32/bench_spi_timeout_recovery"]
-dshot = ["dep:ferrowasp-waveform", "ferrowasp-stm32/dshot"]
+bench_spi_timeout_recovery = ["ferrowasp-stm32/bench_spi_timeout_recovery", "ferrowasp-stm32f4-critical/bench_spi_timeout_recovery"]
+dshot = ["ferrowasp-stm32/dshot", "ferrowasp-stm32f4-critical/dshot"]
 # Each chip feature selects the STM32F4 HAL; without one nothing builds.
-stm32f401 = ["dep:stm32f4xx-hal", "stm32f4xx-hal/stm32f401"]
+stm32f401 = ["dep:stm32f4xx-hal", "stm32f4xx-hal/stm32f401", "ferrowasp-stm32f4-critical/stm32f401"]
 stm32f405 = [
     "dep:stm32f4xx-hal",
     "stm32f4xx-hal/stm32f405",
     "stm32f4xx-hal/uart4",
     "stm32f4xx-hal/usb_fs",
+    "ferrowasp-stm32f4-critical/stm32f405",
 ]
 
 [dependencies]
 defmt = "1.0.1"
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
-ferrowasp-waveform = { path = "../ferrowasp-waveform", optional = true }
+ferrowasp-stm32f4-critical = { path = "../ferrowasp-stm32f4-critical" }
 rc-pwm = { path = "../rc-pwm" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]

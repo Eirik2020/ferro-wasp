@@ -35,14 +35,17 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-output` | Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding |
 | `ferrowasp-waveform` | Re-exports of `ferrowasp-output` under its former paths |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
-| `ferrowasp-stm32` | STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types |
-| `ferrowasp-stm32f4` | The STM32F4 backend over `stm32f4xx-hal` |
-| `ferrowasp-stm32h7` | The STM32H743 backend over `stm32h7xx-hal` |
+| `ferrowasp-stm32-critical` | The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory |
+| `ferrowasp-stm32` | The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate |
+| `ferrowasp-stm32f4-critical` | The STM32F4 backend's safety-critical half over `stm32f4xx-hal`: DShot, SPI and UART DMA, clocks and timing, routing, the ROM bootloader entry |
+| `ferrowasp-stm32f4` | The STM32F4 backend's non-critical half: ADC, USB serial, the device ID; and re-exports of the critical half |
+| `ferrowasp-stm32h7-critical` | The STM32H743 backend's safety-critical half over `stm32h7xx-hal`: DShot and its DMA endpoints, SPI and UART DMA, clocks and timers, the ROM bootloader entry |
+| `ferrowasp-stm32h7` | The STM32H743 backend's non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half |
 | `ferrowasp-stm32-tasks` | The RTIC task definitions every STM32 flight board shares, including the flash manager |
 
-Only `ferrowasp-stm32f4` and `ferrowasp-stm32h7` name a chip HAL, and only
-they hold unsafe code: their DMA endpoint declarations and their jump into the
-chip's ROM bootloader.
+Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
+safety-critical halves hold unsafe code: their DMA endpoint declarations and
+their jump into the chip's ROM bootloader.
 
 A safety-critical crate declares `[package.metadata.ferrowasp] critical =
 true` and never depends on a crate that does not; its external dependencies
