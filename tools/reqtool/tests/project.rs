@@ -80,8 +80,10 @@ fn the_fixture_is_valid_and_everything_starts_unverified() {
 #[test]
 fn the_real_repository_is_valid() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let (_, problems) = Project::load(&repository).unwrap();
+    let (project, problems) = Project::load(&repository).unwrap();
     assert!(problems.is_empty(), "{problems:#?}");
+    let unlinked = project.unlinked_critical_items();
+    assert!(unlinked.is_empty(), "{unlinked:#?}");
 }
 
 #[test]
@@ -279,4 +281,40 @@ fn a_procedure_never_points_into_an_archive() {
             "procedure: archive/old.md#Gate",
         );
     assert_problem(&archived, "is archived");
+}
+
+#[test]
+fn every_public_item_of_a_critical_crate_needs_a_requirement() {
+    let (project, problems) = Project::load(&fixture()).unwrap();
+    assert!(problems.is_empty(), "{problems:?}");
+    // The fixture's requirements reach every item, two of them only through
+    // re-exports (`alpha::Renamed`, `alpha::renamed_module::reexported`).
+    assert_eq!(project.unlinked_critical_items(), Vec::new());
+
+    let copy = with_requirements("schema_version: 1\nrequirements: []\n");
+    let (project, _) = Project::load(copy.path()).unwrap();
+    let unlinked: Vec<String> = project
+        .unlinked_critical_items()
+        .into_iter()
+        .map(|problem| problem.location)
+        .collect();
+    assert_eq!(
+        unlinked,
+        [
+            "alpha::input::nested::deep",
+            "alpha::input::validate",
+            "alpha::input::Frame",
+            "alpha::input::Kind",
+            "alpha::input::inline::inner",
+            "alpha::input::inline::from_parent",
+            "alpha::hidden::reexported",
+            "alpha::hidden::Original",
+        ]
+    );
+    // Test modules and the non-critical crate are not checked.
+    assert!(
+        !unlinked
+            .iter()
+            .any(|item| item.contains("tests") || item.starts_with("beta"))
+    );
 }

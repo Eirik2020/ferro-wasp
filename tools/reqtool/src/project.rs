@@ -143,6 +143,57 @@ impl Project {
             .collect()
     }
 
+    /// Mandatory linking (ADR-0054): every `pub` item of a safety-critical
+    /// crate has a requirement allocated to it or to a module or type
+    /// enclosing it. Allocations are compared where the items are defined, so
+    /// a requirement may name an item by a re-export.
+    pub fn unlinked_critical_items(&self) -> Vec<Problem> {
+        let resolver = Resolver::new(&self.workspace.crates);
+        let allocated: Vec<String> = self
+            .requirements
+            .values()
+            .flat_map(|requirement| &requirement.allocated_to)
+            .filter_map(|path| resolver.resolve(path).ok())
+            .map(|resolved| resolved.canonical)
+            .collect();
+        let mut problems = Vec::new();
+        for found in self
+            .workspace
+            .crates
+            .values()
+            .filter(|found| found.critical)
+        {
+            let items = match resolver.public_items(&found.name) {
+                Ok(items) => items,
+                Err(message) => {
+                    problems.push(Problem {
+                        location: found.package.clone(),
+                        message,
+                    });
+                    continue;
+                }
+            };
+            for item in items {
+                let covered = allocated.iter().any(|path| {
+                    item == *path
+                        || item
+                            .strip_prefix(path.as_str())
+                            .is_some_and(|rest| rest.starts_with("::"))
+                });
+                if !covered {
+                    problems.push(Problem {
+                        location: item,
+                        message: format!(
+                            "{} is safety-critical, and no requirement is allocated to this item or one enclosing it",
+                            found.package
+                        ),
+                    });
+                }
+            }
+        }
+        problems
+    }
+
     fn location(&self, id: &str) -> String {
         format!("{}: {id}", self.sources.get(id).map_or("?", String::as_str))
     }

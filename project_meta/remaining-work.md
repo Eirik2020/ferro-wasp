@@ -72,8 +72,24 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   failsafe, the independent watchdog, Actuator Output's arming confirmation
   and arm-state cross-check, the OSD and telemetry warning on a stalled
   ledger, message contracts, the gyro-synced loop, `ferrowasp-config` and the
-  new crate map. Not built. The redesign comes before the next hardware
-  gate run; its order, scope and open items are in the
+  new crate map. The redesign comes before the next hardware gate run, one
+  change at a time against `main`, moves before behaviour:
+  1. the crates of the new map, moved without behaviour change and marked
+     `critical = true` as each is created: `ferrowasp-control`,
+     `ferrowasp-config`, `ferrowasp-protocol` and `ferrowasp-blackbox` (with
+     FerroConfigurator moving to `ferrowasp-protocol` in the same change),
+     `ferrowasp-io-contracts`, the CRSF, BLHeli-telemetry and per-sensor IMU
+     crates, the subsystem crates with their tasks behind a `tasks` feature,
+     then the `-critical` backend splits;
+  2. behaviour, one mechanism at a time: the observer and ledger in place of
+     `snapshots.rs`; SPSC links and typed flags; the coordinator, then reboot,
+     config transactions and accelerometer calibration through it; the boot
+     fallback; `MotorCommand` and the output group's freshness check;
+     `ActuatorFeedback` with its boot-selected source; the Health Manager and
+     the border heartbeats; the fault classes and the failsafe stages; the
+     independent watchdog; the gyro-synced loop.
+
+  Its scope and open items are in the
   [requirements design](requirements/design.md#17-order-of-work).
 - **The `app!` parser** in `ferroforge-contracts`, and a FerroForge release, so
   board requirements fingerprint the tasks they name instead of the whole app

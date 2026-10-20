@@ -25,7 +25,11 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
 
 - `validate` exits nonzero on any problem: schema, IDs, references, items
   that do not resolve, tests that are not `#[test]`, missing procedure
-  headings, and verification modes without their reason or relations.
+  headings, and verification modes without their reason or relations. It
+  also enforces mandatory linking (ADR-0054): every `pub` item of a
+  `critical = true` crate, outside `#[cfg(test)]` modules, needs a
+  requirement allocated to it or to a module or type enclosing it, compared
+  where the item is defined, so a re-exported name counts.
 - `check` with no target summarizes every requirement. With an ID it shows
   that requirement; with `W1`-`W7` the requirements derived from it; with an
   item path every requirement allocated to that item, inside it, or around

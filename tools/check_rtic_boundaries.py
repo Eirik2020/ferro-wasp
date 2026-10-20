@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import re
 import sys
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 
@@ -368,6 +369,95 @@ def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
                 )
 
 
+CRATE_MANIFEST_GLOBS = ("crates/*/Cargo.toml", "firmware/*/Cargo.toml", "firmware/*/board/Cargo.toml")
+DEPENDENCY_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+
+
+def _read_manifest(path: Path, root: Path, errors: list[str]) -> dict | None:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"{_relative(path, root)}: {error}")
+        return None
+
+
+def _is_critical(manifest: dict) -> object:
+    package = manifest.get("package", {})
+    return package.get("metadata", {}).get("ferrowasp", {}).get("critical", False)
+
+
+def _dependency_tables(manifest: dict) -> list[tuple[str, dict]]:
+    tables = [(name, manifest.get(name, {})) for name in DEPENDENCY_TABLES]
+    for target, body in manifest.get("target", {}).items():
+        tables.extend((f"target.{target}.{name}", body.get(name, {})) for name in DEPENDENCY_TABLES)
+    return tables
+
+
+def _validate_critical_crates(root: Path, errors: list[str]) -> None:
+    """ADR-0054's direction rule: a safety-critical crate never depends on a
+    non-critical one. Criticality is `[package.metadata.ferrowasp] critical =
+    true`; a `-critical` name must agree with it. A safety-critical crate's
+    external dependencies are pinned to one version (`=x.y.z`, or a git
+    `rev`). Development and build dependencies count: they enter the crate's
+    unit evidence."""
+    workspace_manifest = _read_manifest(root / "Cargo.toml", root, errors) if (root / "Cargo.toml").is_file() else {}
+    workspace_dependencies = (workspace_manifest or {}).get("workspace", {}).get("dependencies", {})
+
+    manifests: dict[Path, dict] = {}
+    for pattern in CRATE_MANIFEST_GLOBS:
+        for path in sorted(root.glob(pattern)):
+            manifest = _read_manifest(path, root, errors)
+            if manifest is not None and "package" in manifest:
+                manifests[path.resolve()] = manifest
+
+    for path, manifest in manifests.items():
+        package = manifest["package"]["name"]
+        location = _relative(path, root)
+        critical = _is_critical(manifest)
+        if not isinstance(critical, bool):
+            errors.append(f"{location}: [package.metadata.ferrowasp] critical must be true or false")
+            continue
+        if package.endswith("-critical") and not critical:
+            errors.append(
+                f"{location}: {package} is named -critical but is not marked "
+                "[package.metadata.ferrowasp] critical = true"
+            )
+        if not critical:
+            continue
+        for table, dependencies in _dependency_tables(manifest):
+            for name, spec in dependencies.items():
+                if isinstance(spec, dict) and spec.get("workspace") is True:
+                    spec = workspace_dependencies.get(name, {})
+                    base = root
+                else:
+                    base = path.parent
+                if isinstance(spec, str):
+                    spec = {"version": spec}
+                if "path" in spec:
+                    target_path = (base / spec["path"] / "Cargo.toml").resolve()
+                    target = manifests.get(target_path) or (
+                        _read_manifest(target_path, root, errors) if target_path.is_file() else None
+                    )
+                    if target is None:
+                        errors.append(f"{location}: [{table}] {name}: no manifest at {spec['path']}")
+                    elif _is_critical(target) is not True:
+                        errors.append(
+                            f"{location}: {package} is safety-critical and must not depend on "
+                            f"{target['package']['name']}, which is not ([{table}])"
+                        )
+                elif "git" in spec:
+                    if "rev" not in spec:
+                        errors.append(
+                            f"{location}: [{table}] {name}: a safety-critical crate pins a git "
+                            "dependency with rev"
+                        )
+                elif not str(spec.get("version", "")).startswith("="):
+                    errors.append(
+                        f"{location}: [{table}] {name}: a safety-critical crate pins external "
+                        f"dependencies to one version (=x.y.z), not {spec.get('version')!r}"
+                    )
+
+
 def validate_rtic_boundaries(root: Path) -> list[str]:
     root = root.resolve()
     errors: list[str] = []
@@ -378,6 +468,7 @@ def validate_rtic_boundaries(root: Path) -> list[str]:
     _validate_foxeer_required_usb(root, errors)
     _validate_flight_app_contracts(root, errors)
     _validate_shared_snapshots(root, errors)
+    _validate_critical_crates(root, errors)
     return errors
 
 
