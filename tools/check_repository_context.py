@@ -40,6 +40,10 @@ AGENT_DISCOVERY_IGNORED_DIRS = {
 }
 SHA256_HEX = re.compile(r"^[0-9A-Fa-f]{64}$")
 ADR_INDEX_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS.md")
+# Retired and superseded decisions are indexed here, so the active index
+# stays bounded as decisions accumulate.
+ADR_HISTORY_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS_HISTORY.md")
+ADR_HISTORICAL_STATUS = re.compile(r"^(retired|superseded by)\b")
 ADR_DIRECTORY = PurePosixPath("project_meta/decisions")
 ADR_FILENAME = re.compile(r"^(ADR-\d{4})\.md$")
 ADR_H1 = re.compile(r"^# (.+?)\s*$", re.MULTILINE)
@@ -51,9 +55,7 @@ ADR_INDEX_ROW = re.compile(
 )
 ADR_REFERENCE = re.compile(r"\bADR-\d{4}\b")
 ADR_SUPERSESSION = re.compile(r"\bsuperseded by (ADR-\d{4})\b", re.IGNORECASE)
-# Disabled on the requirements-system branch until the documentation moves into
-# the requirements system; restore 8192 before merging.
-ADR_INDEX_MAX_BYTES: int | None = None
+ADR_INDEX_MAX_BYTES = 8192
 ADR_RECORD_MAX_BYTES = 4096
 
 
@@ -321,17 +323,36 @@ def validate_architecture_decisions(root: Path) -> list[str]:
         errors.append(f"cannot read {ADR_INDEX_PATH.as_posix()}: {error}")
         return errors
 
+    history_path = root.joinpath(*ADR_HISTORY_PATH.parts)
+    history_text = ""
+    if history_path.is_file():
+        try:
+            history_text = history_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            errors.append(f"cannot read {ADR_HISTORY_PATH.as_posix()}: {error}")
+
     index_records: dict[str, tuple[str, str]] = {}
-    for adr_id, filename, title, status in ADR_INDEX_ROW.findall(index_text):
-        if adr_id in index_records:
-            errors.append(f"duplicate ADR index entry: {adr_id}")
-            continue
-        expected_filename = f"{adr_id}.md"
-        if filename != expected_filename:
-            errors.append(
-                f"{adr_id}: index link {filename} does not match {expected_filename}"
-            )
-        index_records[adr_id] = (title.strip(), status.strip())
+    for text_source, in_history in ((index_text, False), (history_text, True)):
+        for adr_id, filename, title, status in ADR_INDEX_ROW.findall(text_source):
+            if adr_id in index_records:
+                errors.append(f"duplicate ADR index entry: {adr_id}")
+                continue
+            expected_filename = f"{adr_id}.md"
+            if filename != expected_filename:
+                errors.append(
+                    f"{adr_id}: index link {filename} does not match {expected_filename}"
+                )
+            historical = ADR_HISTORICAL_STATUS.match(status.strip()) is not None
+            if historical and not in_history:
+                errors.append(
+                    f"{adr_id} is {status.strip().split(';')[0]}; its row belongs in "
+                    f"{ADR_HISTORY_PATH.as_posix()}"
+                )
+            elif in_history and not historical:
+                errors.append(
+                    f"{adr_id} is active; its row belongs in {ADR_INDEX_PATH.as_posix()}"
+                )
+            index_records[adr_id] = (title.strip(), status.strip())
 
     record_ids = set(records)
     index_ids = set(index_records)
@@ -430,7 +451,7 @@ def validate_repository(root: Path) -> list[str]:
                 errors.append(f"{raw_path}: role must be 'architecture-decision-index'")
             if lifecycle != "durable" or context != "targeted":
                 errors.append(f"{raw_path}: ADR index must be durable and targeted")
-            if ADR_INDEX_MAX_BYTES is not None and entry.get("max_bytes") != ADR_INDEX_MAX_BYTES:
+            if entry.get("max_bytes") != ADR_INDEX_MAX_BYTES:
                 errors.append(
                     f"{raw_path}: max_bytes must be {ADR_INDEX_MAX_BYTES}"
                 )
