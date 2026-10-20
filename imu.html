@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9d219a76.js";
+            window.path_to_searchindex_js = "searchindex-f5e0467b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -194,8 +194,10 @@ SPI1.</p>
 read-back failure leaves sampling disabled. The heartbeat and unrelated
 bring-up services continue, while the runtime IMU health gate rejects arming.</p>
 <h2 id="driver-behavior"><a class="header" href="#driver-behavior">Driver Behavior</a></h2>
-<p>All three drivers are allocation-free modules in <code>ferrowasp-drivers</code> and use
-<code>embedded-hal</code> 1.0 traits for blocking boot configuration.</p>
+<p>Each driver is its own allocation-free, safety-critical crate
+(<code>ferrowasp-icm42688p</code>, <code>ferrowasp-mpu6000</code>, <code>ferrowasp-mpu6500</code>) and uses
+<code>embedded-hal</code> 1.0 traits for blocking boot configuration, so a driver proven
+on one board stays proven on every board while it is unchanged.</p>
 <p>MPU6500 support includes:</p>
 <ul>
 <li>device and signal-path reset</li>
