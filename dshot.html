@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-10683998.js";
+            window.path_to_searchindex_js = "searchindex-01f68a1c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -198,7 +198,7 @@ flight-app ESC fallback. How arming uses DShot idle and ESC telemetry is in
 <p>The checksum is <code>(payload ^ (payload &gt;&gt; 4) ^ (payload &gt;&gt; 8)) &amp; 0x0f</code>. At
 DShot600 a bit lasts 1.667 us: a <code>0</code> is high for 3/8 of it and a <code>1</code> for 3/4.
 A packet takes about 27 us. Packet encoding, throttle mapping, and the
-compare-value sequence are host-tested in <code>ferrowasp-waveform::dshot</code>.</p>
+compare-value sequence are host-tested in <code>ferrowasp-output::dshot</code>.</p>
 <p>Normal output carries only stop or mapped throttle. Special commands, such as
 FerroConfigurator’s spin-direction change and save, are queued for one motor
 and refused unless every motor is stopped and no command lease is active.</p>
@@ -310,7 +310,7 @@ samples per reply bit. The timer outputs are released for the window, about
 high. The DShot service decodes the samples before the next frame: GCR
 symbols, checksum, and the eRPM period. A missing or bad reply is counted,
 never a fault; a lane that cannot turn around faults the bank as any DMA
-fault does. Decoding is host-tested in <code>ferrowasp-waveform::dshot_reply</code>.</p>
+fault does. Decoding is host-tested in <code>ferrowasp-output::dshot_reply</code>.</p>
 <p>On the Foxeer every lane samples its pin, including motor 4 on TIM1’s
 complementary output, which a timer cannot input-capture. Bidirectional mode
 is fixed when the bank is built, and for now only the props-off bench feature

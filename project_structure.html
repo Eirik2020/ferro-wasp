@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-10683998.js";
+            window.path_to_searchindex_js = "searchindex-01f68a1c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -200,7 +200,8 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-io-core</code></td><td>The SPI mailbox and async device, I/O health and statistics, the <code>serial</code> command’s reply, and re-exports of the serial crates under their former paths</td></tr>
 <tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
 <tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
-<tr><td><code>ferrowasp-waveform</code></td><td>DShot packet encoding and compare sequences</td></tr>
+<tr><td><code>ferrowasp-output</code></td><td>Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding</td></tr>
+<tr><td><code>ferrowasp-waveform</code></td><td>Re-exports of <code>ferrowasp-output</code> under its former paths</td></tr>
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
 <tr><td><code>ferrowasp-stm32</code></td><td>STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types</td></tr>
 <tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend over <code>stm32f4xx-hal</code></td></tr>

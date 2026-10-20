@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-10683998.js";
+            window.path_to_searchindex_js = "searchindex-01f68a1c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1318,7 +1318,7 @@ flight-app ESC fallback. How arming uses DShot idle and ESC telemetry is in
 <p>The checksum is <code>(payload ^ (payload &gt;&gt; 4) ^ (payload &gt;&gt; 8)) &amp; 0x0f</code>. At
 DShot600 a bit lasts 1.667 us: a <code>0</code> is high for 3/8 of it and a <code>1</code> for 3/4.
 A packet takes about 27 us. Packet encoding, throttle mapping, and the
-compare-value sequence are host-tested in <code>ferrowasp-waveform::dshot</code>.</p>
+compare-value sequence are host-tested in <code>ferrowasp-output::dshot</code>.</p>
 <p>Normal output carries only stop or mapped throttle. Special commands, such as
 FerroConfigurator’s spin-direction change and save, are queued for one motor
 and refused unless every motor is stopped and no command lease is active.</p>
@@ -1430,7 +1430,7 @@ samples per reply bit. The timer outputs are released for the window, about
 high. The DShot service decodes the samples before the next frame: GCR
 symbols, checksum, and the eRPM period. A missing or bad reply is counted,
 never a fault; a lane that cannot turn around faults the bank as any DMA
-fault does. Decoding is host-tested in <code>ferrowasp-waveform::dshot_reply</code>.</p>
+fault does. Decoding is host-tested in <code>ferrowasp-output::dshot_reply</code>.</p>
 <p>On the Foxeer every lane samples its pin, including motor 4 on TIM1’s
 complementary output, which a timer cannot input-capture. Bidirectional mode
 is fixed when the bank is built, and for now only the props-off bench feature
@@ -2165,7 +2165,8 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-io-core</code></td><td>The SPI mailbox and async device, I/O health and statistics, the <code>serial</code> command’s reply, and re-exports of the serial crates under their former paths</td></tr>
 <tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
 <tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
-<tr><td><code>ferrowasp-waveform</code></td><td>DShot packet encoding and compare sequences</td></tr>
+<tr><td><code>ferrowasp-output</code></td><td>Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding</td></tr>
+<tr><td><code>ferrowasp-waveform</code></td><td>Re-exports of <code>ferrowasp-output</code> under its former paths</td></tr>
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
 <tr><td><code>ferrowasp-stm32</code></td><td>STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types</td></tr>
 <tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend over <code>stm32f4xx-hal</code></td></tr>
