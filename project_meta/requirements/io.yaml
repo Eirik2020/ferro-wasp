@@ -1,0 +1,80 @@
+schema_version: 1
+requirements:
+  - id: IO-001
+    title: A serial chunk carries its bytes and their continuity
+    statement: >-
+      A received serial chunk shall carry its bytes in order, their
+      arrival time, the port generation and whether a UART error was
+      seen, and a constructed chunk shall never claim lost bytes before
+      it, which only the reader marks; an empty or oversized chunk, in
+      either direction, shall be refused; and every serial fault shall
+      map to an embedded-io error kind.
+    rationale: >-
+      This is the contract every serial consumer reads (ADR-0011,
+      ADR-0057): without the arrival time a consumer cannot judge a
+      frame's age, and without the generation and the discontinuity mark
+      it would join bytes across a gap.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_io_contracts::serial
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::serial::tests::a_received_chunk_keeps_its_bytes_arrival_and_continuity
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::serial::tests::an_empty_or_oversized_chunk_is_refused
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::serial::tests::a_transmitted_chunk_round_trips
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::serial::tests::the_stream_generation_advances_and_wraps
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::serial::tests::serial_faults_map_to_embedded_io_kinds
+
+  - id: IO-002
+    title: Timestamps extend monotonically and deadlines expire on time
+    statement: >-
+      A wrapping hardware counter shall extend into a monotonic 64-bit
+      count across its wrap, and a deadline shall expire exactly at its
+      start plus its timeout, saturating rather than wrapping at the end
+      of the range.
+    rationale: >-
+      Every message carries a timestamp, and every staleness decision
+      compares against one; a wrap read backwards would make stale data
+      look fresh.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_io_contracts::time
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::time::tests::wrapping_counter_extends_monotonic_ticks
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::time::tests::wrapping_counter_tracks_large_32_bit_period
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::time::tests::a_deadline_expires_at_its_timeout_and_saturates
