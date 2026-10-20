@@ -56,7 +56,7 @@ controller: 420 000 baud, 8N1, not inverted, both ways. Setting
 settings at the next boot. CRSF needs a port that can transmit, so a
 receive-only port refuses the binding and RC stays unbound.
 
-The decoder in `ferrowasp-drivers` validates each frame's CRC-8/DVB-S2 and
+The decoder in `ferrowasp-crsf` validates each frame's CRC-8/DVB-S2 and
 reads the sixteen packed 11-bit RC channels, which use the same 172-1811 scale
 as SBUS, so the RC task treats both protocols alike.
 

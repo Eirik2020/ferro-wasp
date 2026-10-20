@@ -13,6 +13,9 @@
 //! sending channels when its link drops, so the consumer's frame timeout is the
 //! primary loss detector; link statistics add an explicit zero-quality signal.
 
+#![no_std]
+#![forbid(unsafe_code)]
+
 /// Longest frame on the wire: address, length, and up to 62 counted bytes.
 pub const MAX_FRAME_LEN: usize = 64;
 /// Channels carried by one RC channels frame.

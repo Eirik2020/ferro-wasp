@@ -9,9 +9,13 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-embedded-hal = { workspace = true }
-defmt = { version = "1.0.1", optional = true }
+ferrowasp-blheli-telemetry = { path = "../ferrowasp-blheli-telemetry" }
+ferrowasp-crsf = { path = "../ferrowasp-crsf" }
+ferrowasp-icm42688p = { path = "../ferrowasp-icm42688p" }
+ferrowasp-mpu6000 = { path = "../ferrowasp-mpu6000" }
+ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500" }
+ferrowasp-storage = { path = "../ferrowasp-storage" }
 
 [features]
 default = []
-defmt = ["dep:defmt"]
+defmt = ["ferrowasp-mpu6500/defmt"]

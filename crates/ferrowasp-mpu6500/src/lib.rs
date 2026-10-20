@@ -1,3 +1,5 @@
+#![no_std]
+#![forbid(unsafe_code)]
 #![allow(dead_code)]
 
 #[cfg(all(target_arch = "arm", feature = "defmt"))]

@@ -128,7 +128,7 @@ requirements:
       must not leave the parser stuck.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_drivers::crsf
+      - ferrowasp_crsf
       - ferrowasp_flight::rc_receiver::RcReceiver::push_byte
     verification:
       mode: direct
@@ -142,22 +142,22 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_drivers::crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
+            test: ferrowasp_crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_drivers::crsf::tests::impossible_length_is_rejected_without_buffering
+            test: ferrowasp_crsf::tests::impossible_length_is_rejected_without_buffering
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_drivers::crsf::tests::short_rc_payload_is_an_error_not_a_frame
+            test: ferrowasp_crsf::tests::short_rc_payload_is_an_error_not_a_frame
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_drivers::crsf::tests::rc_frame_decodes_after_leading_noise
+            test: ferrowasp_crsf::tests::rc_frame_decodes_after_leading_noise
 
   - id: INPUT-006
     title: Every RC fault neutralizes the outputs and invalidates the link
@@ -323,3 +323,57 @@ requirements:
           setup: props-off
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: INPUT-011
+    title: CRSF frames decode as the protocol defines
+    statement: >-
+      The CRSF decoder shall check each frame with CRC-8/DVB-S2, unpack
+      sixteen 11-bit channels least-significant bit first, expose link
+      statistics, pass unknown frame types through as other, and encode
+      battery telemetry big-endian, saturating each field at what CRSF
+      carries.
+    rationale: >-
+      CRSF carries the pilot's commands from ExpressLRS and Crossfire
+      receivers; a channel unpacked at the wrong bit offset commands the
+      wrong stick.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_crsf
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::crc_matches_the_dvb_s2_check_value
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::channels_round_trip_through_the_packed_payload
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::first_channel_occupies_the_low_bits_of_the_first_byte
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::link_statistics_expose_uplink_quality
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::unknown_types_pass_through_as_other
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::a_battery_frame_is_big_endian_and_round_trips_through_the_parser
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_crsf::tests::battery_fields_saturate_at_what_crsf_carries

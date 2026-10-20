@@ -11,6 +11,9 @@
 //! 15-byte burst takes about 120 us: 24% of a 2 kHz period, 48% at 4 kHz, and
 //! too long for 8 kHz.
 
+#![no_std]
+#![forbid(unsafe_code)]
+
 use embedded_hal::{delay::DelayNs, digital::OutputPin, spi::SpiBus};
 
 pub const WHO_AM_I_EXPECTED: u8 = 0x68;
