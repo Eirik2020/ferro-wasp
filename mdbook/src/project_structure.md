@@ -12,8 +12,9 @@ Under `crates/`, all members of the root workspace and host-tested there:
 
 | Crate | Owns |
 |---|---|
+| `ferrowasp-config` | Stored configuration, safety-critical: the configuration keys and their ranges, the configuration slot page, and the stored schema with its migration |
 | `ferrowasp-control` | General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration |
-| `ferrowasp-core` | Safety state and the safety master's rules, actuator command types, blackbox records, stored configuration |
+| `ferrowasp-core` | Safety state and the safety master's rules, blackbox records, and re-exports of the moved modules under their former paths |
 | `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |

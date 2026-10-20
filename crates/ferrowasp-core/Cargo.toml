@@ -9,6 +9,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 critical-section = { workspace = true }

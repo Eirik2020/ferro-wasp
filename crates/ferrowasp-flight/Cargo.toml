@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 defmt = { version = "1.0.1", optional = true }
+ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }

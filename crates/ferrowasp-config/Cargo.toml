@@ -1,0 +1,18 @@
+[package]
+name = "ferrowasp-config"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-control = { path = "../ferrowasp-control" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
+ferrowasp-input = { path = "../ferrowasp-input" }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+
+[package.metadata.ferrowasp]
+critical = true

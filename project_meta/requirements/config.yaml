@@ -11,8 +11,8 @@ requirements:
       never be stored or applied.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_core::config
-      - ferrowasp_flight::flash_storage::StoredConfig
+      - ferrowasp_config::keys
+      - ferrowasp_config::stored::StoredConfig
     verification:
       mode: direct
       entries:
@@ -20,12 +20,12 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::config::tests::scalar_ranges_match_the_public_usb_contract
+            test: ferrowasp_config::keys::tests::scalar_ranges_match_the_public_usb_contract
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::flash_storage::tests::stored_config_round_trips_and_rejects_unsafe_values
+            test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
         - level: mcu
           target: fcu
           setup: none
@@ -45,7 +45,7 @@ requirements:
     derived_from: [W6]
     allocated_to:
       - ferrowasp_flight::config_save
-      - ferrowasp_flight::flash_storage::StoredConfig
+      - ferrowasp_config::stored::StoredConfig
     verification:
       mode: direct
       entries:
@@ -81,7 +81,7 @@ requirements:
       experiment.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_flight::flash_storage::StoredConfig
+      - ferrowasp_config::stored::StoredConfig
     verification:
       mode: direct
       entries:
@@ -90,3 +90,96 @@ requirements:
           setup: none
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-004
+    title: A configuration slot decodes only when it is whole
+    statement: >-
+      A configuration slot shall hold its payload in one flash page with
+      a magic, a version, the payload length, a sequence and a CRC-32
+      over the page; it shall refuse a payload too large to fit, and
+      decode only a page whose magic, version, length and CRC all check,
+      so a slot cut short by power loss never decodes.
+    rationale: >-
+      Storage is untrusted input (ADR-0059); a torn slot read as valid
+      would fly whatever bytes it held.
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_config::page
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::page::tests::config_slots_round_trip_and_reject_corruption
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::page::tests::crc_matches_standard_check_value
+
+  - id: CONFIG-005
+    title: Every older stored configuration migrates to the same meaning
+    statement: >-
+      The stored configuration shall round-trip and refuse unsafe
+      values, and every older payload shall decode with its meaning
+      kept: a version 1 or 2 smoothing factor as the same filter corner,
+      a payload before bindings with the board's default bindings, one
+      before the channel map with AETR, the arm switch on channel 9 and
+      SBUS, one before the motor order with the board's wiring, and one
+      before the accelerometer level uncorrected.
+    rationale: >-
+      A firmware update must never move a pilot's arm switch, motor
+      order or filter (W6).
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_config::stored
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::a_version_two_coefficient_survives_as_the_same_filter
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::a_stored_corner_holds_its_meaning_across_loop_rates
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::serial_bindings_round_trip_and_older_payloads_use_board_defaults
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::a_version_four_config_keeps_its_bindings_the_channel_nine_arm_switch_and_sbus
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::rc_map_and_protocol_are_configured_saved_and_validated
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::motor_order_is_saved_and_older_payloads_keep_the_board_wiring
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::accelerometer_level_is_saved_and_older_payloads_are_uncorrected
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::legacy_stored_config_migrates_with_current_rc_defaults

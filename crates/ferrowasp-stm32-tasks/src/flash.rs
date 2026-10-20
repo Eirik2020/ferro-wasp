@@ -10,6 +10,8 @@ use ferrowasp_drivers::nor_storage::NorStorage;
 use ferrowasp_flight::accel_level::{AccelLevelCalibration, CalibrationError};
 use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
 use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_flight::flash_storage::StoredConfigRpc;
 use ferrowasp_flight::log_writer::{LogWriter, PageWrite};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_flight::rpc_commands::{self, RpcContext};

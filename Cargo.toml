@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/ferrowasp-config",
     "crates/ferrowasp-control",
     "crates/ferrowasp-core",
     "firmware/foxeer-f405-v2/board",

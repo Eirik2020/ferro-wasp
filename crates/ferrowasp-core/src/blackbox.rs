@@ -5,12 +5,13 @@
 //! page with CRC-32, so a partially programmed page is rejected after a power
 //! loss.
 
-pub const FLASH_PAGE_LEN: usize = 256;
+pub use ferrowasp_config::page::{
+    CONFIG_PAYLOAD_MAX, ConfigError, FLASH_PAGE_LEN, crc32, decode_config_page, encode_config_page,
+};
 pub const RECORD_LEN: usize = 48;
 pub const RECORDS_PER_PAGE: usize = 5;
 pub const PAGE_DATA_LEN: usize = RECORD_LEN * RECORDS_PER_PAGE;
 pub const PAGE_TRAILER_LEN: usize = FLASH_PAGE_LEN - PAGE_DATA_LEN;
-pub const CONFIG_PAYLOAD_MAX: usize = 224;
 /// Marks the first stored record of the first recorded flight after MCU boot.
 ///
 /// Bits 0 and 1 retain their BB2 armed and fresh-IMU meanings. This additional
@@ -19,8 +20,6 @@ pub const FLIGHT_RECORD_FLAG_BOOT_SESSION_START: u16 = 1 << 2;
 
 const PAGE_MAGIC: [u8; 2] = *b"FB";
 const PAGE_VERSION: u8 = 1;
-const CONFIG_MAGIC: [u8; 4] = *b"FWCF";
-const CONFIG_VERSION: u8 = 1;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct FlightRecord {
@@ -174,64 +173,6 @@ pub fn record_from_page(
     Ok(FlightRecord::decode(encoded))
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ConfigError {
-    PayloadTooLarge,
-    InvalidMagic,
-    UnsupportedVersion,
-    InvalidLength,
-    CrcMismatch,
-}
-
-pub fn encode_config_page(
-    sequence: u32,
-    payload: &[u8],
-) -> Result<[u8; FLASH_PAGE_LEN], ConfigError> {
-    if payload.len() > CONFIG_PAYLOAD_MAX {
-        return Err(ConfigError::PayloadTooLarge);
-    }
-    let mut page = [0xff; FLASH_PAGE_LEN];
-    page[..4].copy_from_slice(&CONFIG_MAGIC);
-    page[4] = CONFIG_VERSION;
-    page[6..8].copy_from_slice(&(payload.len() as u16).to_le_bytes());
-    page[8..12].copy_from_slice(&sequence.to_le_bytes());
-    page[16..16 + payload.len()].copy_from_slice(payload);
-    let crc = crc32(&page[..FLASH_PAGE_LEN - 4]);
-    page[FLASH_PAGE_LEN - 4..].copy_from_slice(&crc.to_le_bytes());
-    Ok(page)
-}
-
-pub fn decode_config_page(page: &[u8; FLASH_PAGE_LEN]) -> Result<(u32, &[u8]), ConfigError> {
-    if page[..4] != CONFIG_MAGIC {
-        return Err(ConfigError::InvalidMagic);
-    }
-    if page[4] != CONFIG_VERSION {
-        return Err(ConfigError::UnsupportedVersion);
-    }
-    let payload_len = u16::from_le_bytes(page[6..8].try_into().unwrap()) as usize;
-    if payload_len > CONFIG_PAYLOAD_MAX {
-        return Err(ConfigError::InvalidLength);
-    }
-    let expected = u32::from_le_bytes(page[FLASH_PAGE_LEN - 4..].try_into().unwrap());
-    if crc32(&page[..FLASH_PAGE_LEN - 4]) != expected {
-        return Err(ConfigError::CrcMismatch);
-    }
-    let sequence = u32::from_le_bytes(page[8..12].try_into().unwrap());
-    Ok((sequence, &page[16..16 + payload_len]))
-}
-
-pub fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in bytes {
-        crc ^= *byte as u32;
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
-}
-
 fn put_u32(output: &mut [u8], cursor: &mut usize, value: u32) {
     output[*cursor..*cursor + 4].copy_from_slice(&value.to_le_bytes());
     *cursor += 4;
@@ -313,20 +254,5 @@ mod tests {
         let mut page = encode_page(1, 0, &[record(1)]).unwrap();
         page[17] ^= 0x80;
         assert_eq!(decode_page(&page), Err(PageError::CrcMismatch));
-    }
-
-    #[test]
-    fn config_slots_round_trip_and_reject_corruption() {
-        let mut page = encode_config_page(14, b"pitch_p=0.30").unwrap();
-        let (sequence, payload) = decode_config_page(&page).unwrap();
-        assert_eq!(sequence, 14);
-        assert_eq!(payload, b"pitch_p=0.30");
-        page[16] ^= 1;
-        assert_eq!(decode_config_page(&page), Err(ConfigError::CrcMismatch));
-    }
-
-    #[test]
-    fn crc_matches_standard_check_value() {
-        assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
     }
 }
