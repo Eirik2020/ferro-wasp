@@ -224,7 +224,7 @@ TOPIC_ROUTES = {
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/rc_receiver.rs"),
+            PurePosixPath("crates/ferrowasp-input/src/rc_receiver.rs"),
             PurePosixPath("crates/ferrowasp-crsf/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/uart_port.rs"),

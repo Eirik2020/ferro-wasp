@@ -15,7 +15,7 @@ pub mod flash_storage;
 pub mod log_sync;
 pub mod log_writer;
 pub mod osd;
-pub mod rc_receiver;
+pub use ferrowasp_input::rc_receiver;
 #[cfg(feature = "mspv2_configurator")]
 pub mod rpc_commands;
 pub mod rpm_filter;

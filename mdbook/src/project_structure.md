@@ -19,6 +19,7 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |
 | `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight` | Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link |
+| `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape |
 | `ferrowasp-io-contracts` | The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines |
 | `ferrowasp-serial` | The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer |
 | `ferrowasp-io-core` | The SPI mailbox and async device, I/O health and statistics, the `serial` command's reply, and re-exports of the serial crates under their former paths |

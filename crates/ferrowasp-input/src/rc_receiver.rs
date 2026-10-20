@@ -5,7 +5,7 @@
 //! wired. The firmware chooses the protocol when it builds the receiver, to
 //! match the UART configuration it selected for the receiver port.
 
-use ferrowasp_drivers::crsf;
+use ferrowasp_crsf as crsf;
 use sbus_rs::StreamingParser as SbusParser;
 
 /// A raw SBUS or CRSF channel value (172..=1811) as a pulse width in

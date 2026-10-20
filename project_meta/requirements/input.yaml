@@ -55,7 +55,7 @@ requirements:
     derived_from: [INPUT-001]
     allocated_to:
       - ferrowasp_core::safety::classify_rc_frame_flags
-      - ferrowasp_flight::rc_receiver::RcReceiver
+      - ferrowasp_input::rc_receiver::RcReceiver
     verification:
       mode: direct
       entries:
@@ -68,7 +68,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers
+            test: ferrowasp_input::rc_receiver::tests::crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers
 
   - id: INPUT-004
     title: The external SBUS parser is contract-tested
@@ -82,7 +82,7 @@ requirements:
       where its output enters FerroWasp is where it is proven.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_flight::rc_receiver::RcReceiver::sbus
+      - ferrowasp_input::rc_receiver::RcReceiver::sbus
     verification:
       mode: direct
       entries:
@@ -90,32 +90,32 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels
+            test: ferrowasp_input::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::sbus_failsafe_and_frame_lost_flags_reach_the_frame
+            test: ferrowasp_input::rc_receiver::tests::sbus_failsafe_and_frame_lost_flags_reach_the_frame
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::sbus_out_of_range_channels_pass_through_unclamped
+            test: ferrowasp_input::rc_receiver::tests::sbus_out_of_range_channels_pass_through_unclamped
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows
+            test: ferrowasp_input::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::sbus_partial_frame_is_dropped_on_reset
+            test: ferrowasp_input::rc_receiver::tests::sbus_partial_frame_is_dropped_on_reset
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::sbus_skips_leading_noise_before_a_header
+            test: ferrowasp_input::rc_receiver::tests::sbus_skips_leading_noise_before_a_header
 
   - id: INPUT-005
     title: Corrupt input is rejected without losing sync
@@ -129,7 +129,7 @@ requirements:
     derived_from: [INPUT-001]
     allocated_to:
       - ferrowasp_crsf
-      - ferrowasp_flight::rc_receiver::RcReceiver::push_byte
+      - ferrowasp_input::rc_receiver::RcReceiver::push_byte
     verification:
       mode: direct
       entries:
@@ -137,7 +137,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rc_receiver::tests::crsf_crc_error_is_a_parse_error
+            test: ferrowasp_input::rc_receiver::tests::crsf_crc_error_is_a_parse_error
         - level: unit
           target: host
           setup: none
@@ -377,3 +377,37 @@ requirements:
           setup: none
           method:
             test: ferrowasp_crsf::tests::battery_fields_saturate_at_what_crsf_carries
+
+  - id: INPUT-012
+    title: The RC receiver gives one frame shape whatever the protocol
+    statement: >-
+      The RC receiver shall turn SBUS and CRSF alike into one frame of
+      sixteen channels on the 172 to 1811 scale with the failsafe and
+      frame-lost flags, convert a channel to the microseconds radios
+      show (172 as 988, 992 as 1500, 1811 as 2012), and report a
+      malformed frame as a parse error, never as a frame.
+    rationale: >-
+      The RC task reads one frame shape and never needs to know which
+      protocol the board wired; a conversion or protocol difference that
+      leaked through would command the wrong stick.
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_input::rc_receiver
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::rc_receiver::tests::channels_convert_to_the_microseconds_radios_show
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::rc_receiver::tests::crsf_crc_error_is_a_parse_error
