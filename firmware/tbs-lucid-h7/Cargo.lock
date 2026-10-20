@@ -347,6 +347,7 @@ dependencies = [
  "ferrowasp-io-core",
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
+ "ferrowasp-osd",
  "ferrowasp-protocol",
  "ferrowasp-safety",
  "heapless 0.9.2",
@@ -436,6 +437,15 @@ dependencies = [
  "heapless 0.9.2",
  "postcard",
  "serde",
+]
+
+[[package]]
+name = "ferrowasp-osd"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-flight-control",
+ "ferrowasp-mspv1",
+ "heapless 0.9.2",
 ]
 
 [[package]]

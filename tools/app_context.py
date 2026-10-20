@@ -242,7 +242,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-flight/src/osd.rs"),
+            PurePosixPath("crates/ferrowasp-osd/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-mspv1/src/lib.rs"),
         ),
     ),
@@ -251,7 +251,7 @@ TOPIC_ROUTES = {
         common_symbols=("dma_adc1", "adc1_polling"),
         companions=(
             PurePosixPath("crates/ferrowasp-stm32f4/src/adc.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/osd.rs"),
+            PurePosixPath("crates/ferrowasp-osd/src/lib.rs"),
         ),
     ),
     "usb": TopicRoute(

@@ -1,4 +1,11 @@
-use crate::drone_toolbox::TuningProfile;
+//! The MSP OSD, non-critical (ADR-0060): what the DJI goggles show, encoded
+//! from snapshots of the craft's state. It reads the craft's state and never
+//! writes it.
+
+#![forbid(unsafe_code)]
+#![no_std]
+
+use ferrowasp_flight_control::drone_toolbox::TuningProfile;
 use ferrowasp_mspv1::{MspOsdTelemetry, MspParser, MspResponder, OSD_TX_BUFFER_LEN};
 use heapless::spsc::Queue;
 

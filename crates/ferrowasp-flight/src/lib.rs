@@ -14,8 +14,8 @@ pub use ferrowasp_flight_control::dynamic_idle;
 pub mod flash_storage;
 pub mod log_sync;
 pub mod log_writer;
-pub mod osd;
 pub use ferrowasp_input::rc_receiver;
+pub use ferrowasp_osd as osd;
 #[cfg(feature = "mspv2_configurator")]
 pub mod rpc_commands;
 pub use ferrowasp_flight_control::rpm_filter;

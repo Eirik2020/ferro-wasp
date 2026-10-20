@@ -20,7 +20,7 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |
 | `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight-control` | How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter's wiring |
-| `ferrowasp-flight` | Portable flight logic: blackbox and configuration storage, log sync, the command link, and re-exports of the moved modules under their former paths |
+| `ferrowasp-flight` | Portable flight logic: blackbox and configuration storage, log sync, the command link and its commands, and re-exports of the moved modules under their former paths |
 | `ferrowasp-feedback` | Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for |
 | `ferrowasp-imu` | The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through |
 | `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map |
@@ -31,6 +31,7 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-io-core` | I/O health and statistics, the `serial` command's reply, and re-exports of the serial and SPI crates under their former paths |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
 | `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
+| `ferrowasp-osd` | The MSP OSD the DJI goggles show, encoded from snapshots of the craft's state |
 | `ferrowasp-output` | Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding |
 | `ferrowasp-waveform` | Re-exports of `ferrowasp-output` under its former paths |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |

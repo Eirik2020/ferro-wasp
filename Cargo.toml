@@ -21,6 +21,7 @@ members = [
     "crates/ferrowasp-mpu6500",
     "crates/ferrowasp-mspv1",
     "crates/ferrowasp-mspv2",
+    "crates/ferrowasp-osd",
     "crates/ferrowasp-output",
     "crates/ferrowasp-protocol",
     "crates/ferrowasp-safety",
