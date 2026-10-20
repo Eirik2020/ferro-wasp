@@ -71,10 +71,11 @@ unmarked crates are the default. Three conventions were weighed:
 | B. suffix on every critical crate | `ferrowasp-safety-critical`; long names |
 | C. the name as the only source | renaming a crate would silently reclassify it |
 
-**The priority rule.** The observer and every non-critical task run below the
-lowest safety-critical task, checked by the parser. Moving `esc_manager_task`
-(4) above `usb_fs` (5) is a priority change, which states a timing rationale
-and is revalidated.
+**The priority rule.** Every non-critical task runs below the border roles
+(the coordinator, the observer and the Health Manager), which run below the
+control path and the safety master (section 19, ADR-0061); the parser checks
+it. Moving `esc_manager_task` (4) above `usb_fs` (5) is a priority change,
+which states a timing rationale and is revalidated.
 
 **Global critical sections.** `interrupt::free` and `critical_section` in
 non-critical code block safety-critical tasks whatever the priorities. A lint
@@ -181,15 +182,15 @@ critical tasks ──SPSC──▶ critical tasks
 Why it fits the evidence model: safety-critical tasks never share a resource
 with a non-critical task, only the producer end of a queue. The ledger's lock
 ceiling is set only by the observer and its readers, which all run below
-every safety-critical task, so no non-critical task can block a
-safety-critical one, and path fingerprints can omit non-critical tasks by
-construction.
+the core tasks, so no reader can block the control path or the safety
+master, and path fingerprints can omit non-critical tasks by construction.
 
-- **The producer side is the safety-critical part.** A safety-critical push
-  never blocks, and drops and counts on a full queue. With that guaranteed, the
-  observer itself is non-critical: a buggy or slow observer makes
+- **The producer side never blocks.** A safety-critical push never blocks,
+  and drops and counts on a full queue, so a buggy or slow observer makes
   safety-critical tasks drop data, never stall. The policy is a contract
-  requirement on the channel type.
+  requirement on the channel type. On that ground the observer was first
+  non-critical; it became safety-critical when the Health Manager came to read
+  the ledger (section 19, ADR-0061).
 - **Two contracts.** The SPSC message types (what critical tasks send) change
   the critical producers; ledger topics (what the observer publishes) change
   only the observer and its readers. The observer translates, so a new

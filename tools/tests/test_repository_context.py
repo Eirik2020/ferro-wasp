@@ -48,12 +48,22 @@ class RepositoryContextTests(unittest.TestCase):
             all(entry["max_bytes"] == 4096 for entry in adr_entries.values())
         )
 
-    def test_retired_and_active_decisions_sit_in_their_own_index(self) -> None:
+    def test_retired_planned_and_active_decisions_sit_in_their_own_index(self) -> None:
         errors = validate_architecture_decisions(FIXTURES / "adr_history")
 
         self.assertTrue(any("ADR-0002 is retired" in e and "HISTORY" in e for e in errors), errors)
-        self.assertTrue(any("ADR-0004 is active" in e for e in errors), errors)
-        self.assertFalse(any("ADR-0001" in e or "ADR-0003" in e for e in errors), errors)
+        self.assertTrue(
+            any("ADR-0004 is accepted" in e and e.endswith("ARCHITECTURE_DECISIONS.md") for e in errors),
+            errors,
+        )
+        self.assertTrue(any("ADR-0006 is accepted, not yet implemented" in e and "PLANNED" in e for e in errors), errors)
+        self.assertTrue(
+            any("ADR-0007 is accepted" in e and e.endswith("ARCHITECTURE_DECISIONS.md") for e in errors),
+            errors,
+        )
+        self.assertFalse(
+            any(e.startswith(("ADR-0001", "ADR-0003", "ADR-0005")) for e in errors), errors
+        )
         self.assertFalse(any("orphan" in e or "does not resolve" in e for e in errors), errors)
 
     def test_architecture_decision_guard_rejects_drift(self) -> None:

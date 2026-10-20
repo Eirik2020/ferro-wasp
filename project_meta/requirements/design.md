@@ -36,6 +36,7 @@ The design is split into chapters; section numbers run across all of them.
 16. [Crate layout](configuration-and-crates.md#16-crate-layout)
 17. [Order of work](#17-order-of-work)
 18. [Open items](#18-open-items)
+19. [Fault handling and the border roles](fault-handling.md#19-fault-handling-and-the-border-roles)
 
 ---
 
@@ -135,6 +136,16 @@ keeps its own hardware list and never ingests imported targets.
 - **Datasheet rates.** The MPU-6000 and ICM-42688-P output rates above are
   recalled, not checked.
 - **Betaflight's scheduler.** Gyro-locking is to be confirmed in its source.
+- **Betaflight's failsafe** (ADR-0062): its stage timings, stage 1 channel
+  values and recovery rules, from its source.
+- **The IWDG** (ADR-0063), from RM0090 and RM0433 and the datasheets: that a
+  system reset stops a software-started IWDG, the LSI frequency range behind
+  the timeout bounds, and each family's debugger freeze bit.
+- **BLHeli_32's signal-loss timeout**, on which a disarm by forced-low lines
+  relies (ADR-0064).
+- **Health Manager escalation rules as controlled configuration.** Each rule
+  is a requirement with its own evidence (ADR-0061); whether the rules are
+  also W6 controlled configuration was proposed and not decided.
 - **Stack-analysis tooling** for the image-level check, chosen at
   implementation.
 - **Document sizes.** Size limits are met by restructuring, never by

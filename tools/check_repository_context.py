@@ -44,6 +44,8 @@ ADR_INDEX_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS.md")
 # stays bounded as decisions accumulate.
 ADR_HISTORY_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS_HISTORY.md")
 ADR_HISTORICAL_STATUS = re.compile(r"^(retired|superseded by)\b")
+ADR_PLANNED_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS_PLANNED.md")
+ADR_PLANNED_STATUS = re.compile(r"^accepted, not yet implemented\b")
 ADR_DIRECTORY = PurePosixPath("project_meta/decisions")
 ADR_FILENAME = re.compile(r"^(ADR-\d{4})\.md$")
 ADR_H1 = re.compile(r"^# (.+?)\s*$", re.MULTILINE)
@@ -323,16 +325,30 @@ def validate_architecture_decisions(root: Path) -> list[str]:
         errors.append(f"cannot read {ADR_INDEX_PATH.as_posix()}: {error}")
         return errors
 
-    history_path = root.joinpath(*ADR_HISTORY_PATH.parts)
-    history_text = ""
-    if history_path.is_file():
-        try:
-            history_text = history_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            errors.append(f"cannot read {ADR_HISTORY_PATH.as_posix()}: {error}")
+    other_texts: dict[PurePosixPath, str] = {}
+    for other_path in (ADR_HISTORY_PATH, ADR_PLANNED_PATH):
+        other_texts[other_path] = ""
+        resolved = root.joinpath(*other_path.parts)
+        if resolved.is_file():
+            try:
+                other_texts[other_path] = resolved.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as error:
+                errors.append(f"cannot read {other_path.as_posix()}: {error}")
+
+    def owning_index(status: str) -> PurePosixPath:
+        if ADR_HISTORICAL_STATUS.match(status) is not None:
+            return ADR_HISTORY_PATH
+        if ADR_PLANNED_STATUS.match(status) is not None:
+            return ADR_PLANNED_PATH
+        return ADR_INDEX_PATH
 
     index_records: dict[str, tuple[str, str]] = {}
-    for text_source, in_history in ((index_text, False), (history_text, True)):
+    sources = (
+        (index_text, ADR_INDEX_PATH),
+        (other_texts[ADR_HISTORY_PATH], ADR_HISTORY_PATH),
+        (other_texts[ADR_PLANNED_PATH], ADR_PLANNED_PATH),
+    )
+    for text_source, source_path in sources:
         for adr_id, filename, title, status in ADR_INDEX_ROW.findall(text_source):
             if adr_id in index_records:
                 errors.append(f"duplicate ADR index entry: {adr_id}")
@@ -342,15 +358,11 @@ def validate_architecture_decisions(root: Path) -> list[str]:
                 errors.append(
                     f"{adr_id}: index link {filename} does not match {expected_filename}"
                 )
-            historical = ADR_HISTORICAL_STATUS.match(status.strip()) is not None
-            if historical and not in_history:
+            owner = owning_index(status.strip())
+            if owner != source_path:
                 errors.append(
                     f"{adr_id} is {status.strip().split(';')[0]}; its row belongs in "
-                    f"{ADR_HISTORY_PATH.as_posix()}"
-                )
-            elif in_history and not historical:
-                errors.append(
-                    f"{adr_id} is active; its row belongs in {ADR_INDEX_PATH.as_posix()}"
+                    f"{owner.as_posix()}"
                 )
             index_records[adr_id] = (title.strip(), status.strip())
 

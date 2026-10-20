@@ -22,8 +22,9 @@ Its immutable size and SHA-256 are enforced through
 
 ## Decision Index
 
-Active decisions. Retired and superseded ones are indexed in
-[the decision history](ARCHITECTURE_DECISIONS_HISTORY.md).
+Decisions in force. Decisions accepted but not yet implemented are indexed in
+[the planned decisions](ARCHITECTURE_DECISIONS_PLANNED.md), and retired and
+superseded ones in [the decision history](ARCHITECTURE_DECISIONS_HISTORY.md).
 
 | ID | Decision | Status |
 |---|---|---|
@@ -53,28 +54,20 @@ Active decisions. Retired and superseded ones are indexed in
 | [ADR-0044](decisions/ADR-0044.md) | Accelerometer Level Is Calibrated On Command And Stored Per Craft | accepted; calibration owner amended by ADR-0059 |
 | [ADR-0045](decisions/ADR-0045.md) | Bidirectional DShot Replies Return On Each Lane's Own Pin And Stream | accepted, implemented on the Foxeer behind a props-off bench feature, pending target validation |
 | [ADR-0046](decisions/ADR-0046.md) | DShot Frames Follow The Control Loop | accepted, pending target validation; amends the cadence in ADR-0039 |
-| [ADR-0047](decisions/ADR-0047.md) | The RPM Filter Follows Betaflight | accepted, not yet implemented |
-| [ADR-0048](decisions/ADR-0048.md) | Bidirectional eRPM Supersedes UART Telemetry For Arming | accepted, not yet implemented; supersedes ADR-0040's eRPM source where bidirectional DShot runs; code placement set by ADR-0057 |
-| [ADR-0049](decisions/ADR-0049.md) | Dynamic Idle Raises The Motor Floor From The Slowest Motor's eRPM | accepted, not yet implemented |
 | [ADR-0050](decisions/ADR-0050.md) | Requirement Status Is Computed From Evidence, Never Recorded | accepted; implemented in tools/reqtool |
-| [ADR-0051](decisions/ADR-0051.md) | Verification Levels Are One Enum And Only Gates Block | accepted, not yet implemented |
-| [ADR-0052](decisions/ADR-0052.md) | Fingerprints Are Derived, And Parents And Children Verify Each Other | accepted, not yet implemented |
+| [ADR-0051](decisions/ADR-0051.md) | Verification Levels Are One Enum And Only Gates Block | accepted; implemented in tools/reqtool except the analysis-level checks |
+| [ADR-0052](decisions/ADR-0052.md) | Fingerprints Are Derived, And Parents And Children Verify Each Other | accepted; implemented in tools/reqtool except variants and the path and hardware-conformance scopes, which wait on the app! parser and the -critical crates |
 | [ADR-0053](decisions/ADR-0053.md) | Requirements Are YAML Data Rooted In W1-W7 And Checked By reqtool | accepted; implemented in tools/reqtool except the app! parser and the analysis-level checks |
-| [ADR-0054](decisions/ADR-0054.md) | Safety-Critical Code Is Separated By Crate And Never Depends On Non-Critical Code | accepted, not yet implemented |
-| [ADR-0055](decisions/ADR-0055.md) | Tasks Communicate Over Declared SPSC Links And Single-Writer Flags | accepted, not yet implemented; generalizes ADR-0015, amends ADR-0010 |
-| [ADR-0056](decisions/ADR-0056.md) | The Observer Is The Only Way Out And The Coordinator The Only Way In | accepted, not yet implemented; amends ADR-0041, ADR-0042, ADR-0043 |
-| [ADR-0057](decisions/ADR-0057.md) | Hardware Meets The Core Through Message Contracts | accepted, not yet implemented; amends ADR-0011 and ADR-0015, places ADR-0048 |
-| [ADR-0058](decisions/ADR-0058.md) | The Control Loop Is Gyro-Synced | accepted, not yet implemented; supersedes ADR-0008's control scheduler, its TIM2 I/O timebase stands |
-| [ADR-0059](decisions/ADR-0059.md) | Stored Configuration Passes One Safety-Critical Gate | accepted, not yet implemented; amends ADR-0044's calibration owner |
-| [ADR-0060](decisions/ADR-0060.md) | Crates Follow The Safety-Critical Split And Own Their Tasks | accepted, not yet implemented |
 
 ## Adding Or Changing A Decision
 
 1. Add the next sequential `project_meta/decisions/ADR-NNNN.md` record with one
    matching H1 heading and one non-empty `Status:` line.
 2. Add the matching index row and document-registry entry.
-   When a decision is retired or superseded, move its row to
-   [the decision history](ARCHITECTURE_DECISIONS_HISTORY.md).
+   A decision not yet implemented is indexed in
+   [the planned decisions](ARCHITECTURE_DECISIONS_PLANNED.md); when it is
+   implemented, move its row here. When a decision is retired or superseded,
+   move its row to [the decision history](ARCHITECTURE_DECISIONS_HISTORY.md).
 3. Record supersession explicitly in the affected status or decision body;
    never delete the earlier record.
 4. Run `python tools/check_repository_context.py` and the repository-context

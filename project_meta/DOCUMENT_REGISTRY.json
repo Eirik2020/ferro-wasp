@@ -87,6 +87,13 @@
       "max_bytes": 32768
     },
     {
+      "path": "project_meta/requirements/fault-handling.md",
+      "role": "requirements-design",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 32768
+    },
+    {
       "path": "project_meta/tooling.md",
       "role": "repository-tooling",
       "lifecycle": "durable",
@@ -117,6 +124,13 @@
     {
       "path": "project_meta/ARCHITECTURE_DECISIONS_HISTORY.md",
       "role": "architecture-decision-history",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 8192
+    },
+    {
+      "path": "project_meta/ARCHITECTURE_DECISIONS_PLANNED.md",
+      "role": "architecture-decision-planned",
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 8192
@@ -536,6 +550,34 @@
     },
     {
       "path": "project_meta/decisions/ADR-0060.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0061.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0062.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0063.md",
+      "role": "architecture-decision",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 4096
+    },
+    {
+      "path": "project_meta/decisions/ADR-0064.md",
       "role": "architecture-decision",
       "lifecycle": "durable",
       "context": "targeted",
