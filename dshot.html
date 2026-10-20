@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-286929ee.js";
+            window.path_to_searchindex_js = "searchindex-0fcc653f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -333,6 +333,10 @@ each lane’s latest reply eRPM and its valid and invalid reply counts to the
 periodic DShot log, beside the legacy UART telemetry, which still qualifies
 arming. It needs the props-off gate and a capped motor feature, and prints
 <code>BENCH: bidirectional DShot active</code> at startup.</li>
+<li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
+1 at the qualification input only, to prove that a missing motor aborts
+arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
+with propellers fitted.</li>
 </ul>
 <p>Over USB, the <code>esc</code> command reports each physical output’s UART eRPM and its
 age, the reply eRPM, and the reply counts, and <code>build</code> reports the commit,
@@ -344,20 +348,16 @@ the comparison with the props-off motor test: <code>ferro-configurator motor spi
 under the same short lease as the GUI’s motor test, samples <code>esc</code> between
 renewals, and stops the motor at the end. Stopping the program stops the
 motor within the lease.</p>
-<ul>
-<li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
-1 at the qualification input only, to prove that a missing motor aborts
-arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
-with propellers fitted.</li>
-</ul>
 <p>The idle command used for arming changes only in small reviewed steps, each
 followed by repeated cold starts and the full props-off check; never tune it
 with propellers fitted.</p>
 <h2 id="not-yet-measured"><a class="header" href="#not-yet-measured">Not Yet Measured</a></h2>
 <p>Pulse width, jitter, polarity margin, lane-to-lane phase, and physical stop
 latency have not been measured with a logic analyzer; flights so far do not
-establish them. Bidirectional DShot has not run on target: the turnaround, the
-reply window, and reply loss under DMA load are unmeasured.</p>
+establish them. Bidirectional DShot has run props-off on one Foxeer bench,
+stopped and at idle, where three of its four outputs answered; the fourth
+had a failed ESC. The turnaround and the reply window are unmeasured, and so
+is reply loss under flight DMA load.</p>
 
                     </main>
 

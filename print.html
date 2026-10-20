@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-286929ee.js";
+            window.path_to_searchindex_js = "searchindex-0fcc653f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1451,6 +1451,10 @@ each lane’s latest reply eRPM and its valid and invalid reply counts to the
 periodic DShot log, beside the legacy UART telemetry, which still qualifies
 arming. It needs the props-off gate and a capped motor feature, and prints
 <code>BENCH: bidirectional DShot active</code> at startup.</li>
+<li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
+1 at the qualification input only, to prove that a missing motor aborts
+arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
+with propellers fitted.</li>
 </ul>
 <p>Over USB, the <code>esc</code> command reports each physical output’s UART eRPM and its
 age, the reply eRPM, and the reply counts, and <code>build</code> reports the commit,
@@ -1462,20 +1466,16 @@ the comparison with the props-off motor test: <code>ferro-configurator motor spi
 under the same short lease as the GUI’s motor test, samples <code>esc</code> between
 renewals, and stops the motor at the end. Stopping the program stops the
 motor within the lease.</p>
-<ul>
-<li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
-1 at the qualification input only, to prove that a missing motor aborts
-arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
-with propellers fitted.</li>
-</ul>
 <p>The idle command used for arming changes only in small reviewed steps, each
 followed by repeated cold starts and the full props-off check; never tune it
 with propellers fitted.</p>
 <h2 id="not-yet-measured"><a class="header" href="#not-yet-measured">Not Yet Measured</a></h2>
 <p>Pulse width, jitter, polarity margin, lane-to-lane phase, and physical stop
 latency have not been measured with a logic analyzer; flights so far do not
-establish them. Bidirectional DShot has not run on target: the turnaround, the
-reply window, and reply loss under DMA load are unmeasured.</p>
+establish them. Bidirectional DShot has run props-off on one Foxeer bench,
+stopped and at idle, where three of its four outputs answered; the fourth
+had a failed ESC. The turnaround and the reply window are unmeasured, and so
+is reply loss under flight DMA load.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="priority-and-scheduling"><a class="header" href="#priority-and-scheduling">Priority and Scheduling</a></h1>
 <div class="table-wrapper">
@@ -2321,8 +2321,8 @@ unexpected motor response, oscillation, heat, smoke, loss of RC or video, or
 loss of confidence.</p>
 <p>The user operates powered hardware and decides when to advance between gates.
 A result applies to the recorded hardware, configuration, and airframe, and to
-the source components the run exercised: it carries forward while those
-components are unchanged and is repeated when one of them changes.</p>
+the code covered by the requirements it verifies: it carries forward while
+that code is unchanged and is repeated when it changes.</p>
 <h2 id="foxeer-user-workflow"><a class="header" href="#foxeer-user-workflow">Foxeer User Workflow</a></h2>
 <p>The <a href="#foxeer-f405-v2-usb-quick-start">Foxeer F405 V2 guide</a> covers release-image
 validation, USB DFU flashing, disarmed configuration changes, blackbox
@@ -2630,9 +2630,20 @@ second restarts the board into the STM32 ROM bootloader. FerroConfigurator’s
 button, and <code>device reboot [--dfu]</code> gives both directly. The GUI gains a
 Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
 the TBS Lucid H7’s entry is not yet tested.</li>
-<li>Test evidence tied to source components rather than whole firmware images,
-with <code>tools/components.py</code> listing which tests each board owes, and
-<code>tools/bench_rig.py</code> running the boot and idle gate on any board over SWD.</li>
+<li>Requirement-based test evidence: each result verifies named requirements
+and carries a fingerprint derived from the code they cover, so it stands
+while that code is unchanged, on any board. <code>tools/reqtool</code> reports what is
+verified, stale or owed, and <code>tools/bench_rig.py</code> runs the boot and idle
+gate on any board over SWD.</li>
+<li>Bidirectional DShot on the Foxeer, in the props-off
+<code>bench_bidirectional_dshot</code> image only: each lane reads its ESC’s reply
+after every frame, giving per-motor eRPM and reply counts. UART telemetry
+still qualifies arming.</li>
+<li><code>esc</code> and <code>build</code> on the USB command line, and <code>device info</code> showing both:
+each output’s UART and reply eRPM, and the commit, dirty tree and features
+the image was built from. FerroConfigurator’s <code>bench esc</code> samples <code>esc</code> to
+CSV, and <code>motor spin --props-off</code> idles one motor under the motor-test
+lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
@@ -2673,6 +2684,12 @@ disarmed, backing off to a 4 s window, instead of staying off until reboot.</p>
 </li>
 <li>
 <p>One isolated stale IMU tick is tolerated; two in a row still disarm.</p>
+</li>
+<li>
+<p>DShot frames follow the control loop: each accepted motor command sends
+one frame set, so commands reach the ESCs at the 2 kHz loop rate instead of
+one in four. A fallback keeps frames going at no less than 500 Hz while
+disarmed, in guarded idle, or if the loop stops.</p>
 </li>
 <li>
 <p>The documentation is two books: this public one, and an unpublished

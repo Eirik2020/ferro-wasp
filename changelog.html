@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-286929ee.js";
+            window.path_to_searchindex_js = "searchindex-0fcc653f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -216,9 +216,20 @@ second restarts the board into the STM32 ROM bootloader. FerroConfigurator’s
 button, and <code>device reboot [--dfu]</code> gives both directly. The GUI gains a
 Firmware tab and a Reboot button. Bench-tested on the Foxeer from the CLI;
 the TBS Lucid H7’s entry is not yet tested.</li>
-<li>Test evidence tied to source components rather than whole firmware images,
-with <code>tools/components.py</code> listing which tests each board owes, and
-<code>tools/bench_rig.py</code> running the boot and idle gate on any board over SWD.</li>
+<li>Requirement-based test evidence: each result verifies named requirements
+and carries a fingerprint derived from the code they cover, so it stands
+while that code is unchanged, on any board. <code>tools/reqtool</code> reports what is
+verified, stale or owed, and <code>tools/bench_rig.py</code> runs the boot and idle
+gate on any board over SWD.</li>
+<li>Bidirectional DShot on the Foxeer, in the props-off
+<code>bench_bidirectional_dshot</code> image only: each lane reads its ESC’s reply
+after every frame, giving per-motor eRPM and reply counts. UART telemetry
+still qualifies arming.</li>
+<li><code>esc</code> and <code>build</code> on the USB command line, and <code>device info</code> showing both:
+each output’s UART and reply eRPM, and the commit, dirty tree and features
+the image was built from. FerroConfigurator’s <code>bench esc</code> samples <code>esc</code> to
+CSV, and <code>motor spin --props-off</code> idles one motor under the motor-test
+lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
@@ -259,6 +270,12 @@ disarmed, backing off to a 4 s window, instead of staying off until reboot.</p>
 </li>
 <li>
 <p>One isolated stale IMU tick is tolerated; two in a row still disarm.</p>
+</li>
+<li>
+<p>DShot frames follow the control loop: each accepted motor command sends
+one frame set, so commands reach the ESCs at the 2 kHz loop rate instead of
+one in four. A fallback keeps frames going at no less than 500 Hz while
+disarmed, in guarded idle, or if the loop stops.</p>
 </li>
 <li>
 <p>The documentation is two books: this public one, and an unpublished
