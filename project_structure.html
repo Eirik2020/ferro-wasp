@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5f7c9771.js";
+            window.path_to_searchindex_js = "searchindex-7e7ffc39.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -193,10 +193,12 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-core</code></td><td>Re-exports of the moved modules under their former paths</td></tr>
 <tr><td><code>ferrowasp-crsf</code>, <code>ferrowasp-blheli-telemetry</code></td><td>The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each</td></tr>
 <tr><td><code>ferrowasp-icm42688p</code>, <code>ferrowasp-mpu6000</code>, <code>ferrowasp-mpu6500</code></td><td>The IMU drivers over <code>embedded-hal</code>, safety-critical, one crate per sensor</td></tr>
-<tr><td><code>ferrowasp-storage</code></td><td>The SPI NOR flash driver and the <code>NorStorage</code> trait</td></tr>
+<tr><td><code>ferrowasp-storage</code></td><td>The SPI NOR flash driver and the <code>NorStorage</code> trait, the storage layout and boot slot selection, and configuration saving</td></tr>
+<tr><td><code>ferrowasp-blackbox</code></td><td>The onboard flight log: the record queue and page assembly, the log writer, the sync ledger, and log maintenance</td></tr>
+<tr><td><code>ferrowasp-cli</code></td><td>The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC</td></tr>
 <tr><td><code>ferrowasp-drivers</code></td><td>Re-exports of the driver crates under their former paths</td></tr>
 <tr><td><code>ferrowasp-flight-control</code></td><td>How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter’s wiring</td></tr>
-<tr><td><code>ferrowasp-flight</code></td><td>Portable flight logic: blackbox and configuration storage, log sync, the command link and its commands, and re-exports of the moved modules under their former paths</td></tr>
+<tr><td><code>ferrowasp-flight</code></td><td>Re-exports of the moved modules under their former paths</td></tr>
 <tr><td><code>ferrowasp-feedback</code></td><td>Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for</td></tr>
 <tr><td><code>ferrowasp-imu</code></td><td>The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through</td></tr>
 <tr><td><code>ferrowasp-input</code></td><td>Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map</td></tr>
