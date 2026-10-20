@@ -24,7 +24,6 @@ stm32f405 = [
 
 [dependencies]
 defmt = "1.0.1"
-ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
 ferrowasp-stm32f4-critical = { path = "../ferrowasp-stm32f4-critical" }
 rc-pwm = { path = "../rc-pwm" }

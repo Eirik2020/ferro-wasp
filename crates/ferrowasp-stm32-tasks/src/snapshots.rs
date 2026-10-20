@@ -58,15 +58,15 @@ pub static ACCEL_LEVEL_X_MG: AtomicI16 = AtomicI16::new(0);
 pub static ACCEL_LEVEL_Y_MG: AtomicI16 = AtomicI16::new(0);
 pub static ACCEL_LEVEL_Z_MG: AtomicI16 = AtomicI16::new(0);
 
-pub fn publish_accel_level(level: ferrowasp_flight::accel_level::AccelLevel) {
+pub fn publish_accel_level(level: ferrowasp_control::calibration::accel_level::AccelLevel) {
     ACCEL_LEVEL_X_MG.store(level.offset_mg[0], Ordering::Relaxed);
     ACCEL_LEVEL_Y_MG.store(level.offset_mg[1], Ordering::Relaxed);
     ACCEL_LEVEL_Z_MG.store(level.offset_mg[2], Ordering::Relaxed);
 }
 
 /// The level last published; zero, no correction, until storage has loaded.
-pub fn accel_level() -> ferrowasp_flight::accel_level::AccelLevel {
-    ferrowasp_flight::accel_level::AccelLevel {
+pub fn accel_level() -> ferrowasp_control::calibration::accel_level::AccelLevel {
+    ferrowasp_control::calibration::accel_level::AccelLevel {
         offset_mg: [
             ACCEL_LEVEL_X_MG.load(Ordering::Relaxed),
             ACCEL_LEVEL_Y_MG.load(Ordering::Relaxed),
@@ -120,9 +120,9 @@ pub static DSHOT_REPLIES_VALID: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4
 pub static DSHOT_REPLIES_INVALID: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 
 /// What the `esc` command reports, on whichever link asked.
-pub fn esc_snapshot(now_ms: u32) -> [ferrowasp_flight::usb_debug::EscLaneSnapshot; 4] {
+pub fn esc_snapshot(now_ms: u32) -> [ferrowasp_cli::usb_debug::EscLaneSnapshot; 4] {
     let known = |value: u32| (value != u32::MAX).then_some(value);
-    core::array::from_fn(|index| ferrowasp_flight::usb_debug::EscLaneSnapshot {
+    core::array::from_fn(|index| ferrowasp_cli::usb_debug::EscLaneSnapshot {
         uart_erpm_div100: known(ESC_UART_ERPM_DIV100[index].load(Ordering::Relaxed))
             .map(|erpm| erpm as u16),
         uart_age_ms: now_ms.wrapping_sub(ESC_UART_SEEN_MS[index].load(Ordering::Relaxed)),
@@ -133,8 +133,8 @@ pub fn esc_snapshot(now_ms: u32) -> [ferrowasp_flight::usb_debug::EscLaneSnapsho
 }
 
 /// What the `live` command reports, on whichever link asked.
-pub fn live_snapshot() -> ferrowasp_flight::usb_debug::LiveSnapshot {
-    ferrowasp_flight::usb_debug::LiveSnapshot {
+pub fn live_snapshot() -> ferrowasp_cli::usb_debug::LiveSnapshot {
+    ferrowasp_cli::usb_debug::LiveSnapshot {
         armed: SAFETY_ARMED.load(Ordering::Relaxed),
         arm_switch: RC_ARM_HIGH.load(Ordering::Relaxed),
         attitude_deg10: [

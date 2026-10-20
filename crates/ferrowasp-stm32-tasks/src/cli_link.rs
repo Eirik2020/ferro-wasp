@@ -108,24 +108,22 @@ pub async fn configurator_link(cx: configurator_link::Context) {
                 last_command_ms = Some(Mono::now().duration_since_epoch().to_millis());
                 match parsed {
                     Ok(flash_task::StorageCommand::Live) => {
-                        let line = ferrowasp_flight::usb_debug::format_live(live_snapshot());
+                        let line = ferrowasp_cli::usb_debug::format_live(live_snapshot());
                         outbox.push(&mut writer, line.as_bytes()).await;
                     }
                     Ok(flash_task::StorageCommand::Rc) => {
-                        for line in ferrowasp_flight::usb_debug::format_rc(rc_channels_us()) {
+                        for line in ferrowasp_cli::usb_debug::format_rc(rc_channels_us()) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
                     Ok(flash_task::StorageCommand::Esc) => {
                         let now_ms = Mono::now().duration_since_epoch().to_millis() as u32;
-                        for line in ferrowasp_flight::usb_debug::format_esc(esc_snapshot(now_ms)) {
+                        for line in ferrowasp_cli::usb_debug::format_esc(esc_snapshot(now_ms)) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
                     Ok(flash_task::StorageCommand::Build) => {
-                        for line in
-                            ferrowasp_flight::usb_debug::format_build(CONFIG::BUILD_IDENTITY)
-                        {
+                        for line in ferrowasp_cli::usb_debug::format_build(CONFIG::BUILD_IDENTITY) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }

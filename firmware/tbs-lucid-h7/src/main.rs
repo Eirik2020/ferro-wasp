@@ -847,7 +847,7 @@ ferroforge::app! {
             default_stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             default_serial_bindings: SerialBindings = board::serial::DEFAULT_SERIAL_BINDINGS,
             serial_routes: &'static [SerialRoute] = board::serial::SERIAL_ROUTES,
-            imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile =
+            imu_control_axis_profile: ferrowasp_control::frames::ImuControlAxisProfile =
                 IMU_CONTROL_AXIS_PROFILE,
             imu_gyro_counts_per_dps: f32 = IMU_GYRO_COUNTS_PER_DPS,
             logical_to_physical_motor_output: [usize; 4] =

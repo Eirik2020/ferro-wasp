@@ -128,7 +128,7 @@ keeps its own hardware list and never ingests imported targets.
 - **Discontinuity handling in the RC group.** The RC group observes
   ADR-0011's out-of-band handle and calls the parser's `reset` (`rc_input`).
   Its fault decisions are host-tested functions
-  (`ferrowasp_core::safety::rc_fault_response`, `neutralize_rc_outputs`),
+  (`ferrowasp_safety::rc_fault_response`, `neutralize_rc_outputs`),
   which INPUT-006 is allocated to; where the handle and the reset live in the
   new RC group is settled in the redesign.
 - **Feature-gated tests.** `reqtool test` runs each package with its default

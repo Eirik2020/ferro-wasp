@@ -14,15 +14,12 @@ Under `crates/`, all members of the root workspace and host-tested there:
 |---|---|
 | `ferrowasp-config` | Stored configuration, safety-critical: the configuration keys and their ranges, the configuration slot page, and the stored schema with its migration |
 | `ferrowasp-control` | General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration |
-| `ferrowasp-core` | Re-exports of the moved modules under their former paths |
 | `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait, the storage layout and boot slot selection, and configuration saving |
 | `ferrowasp-blackbox` | The onboard flight log: the record queue and page assembly, the log writer, the sync ledger, and log maintenance |
 | `ferrowasp-cli` | The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC |
-| `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight-control` | How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter's wiring |
-| `ferrowasp-flight` | Re-exports of the moved modules under their former paths |
 | `ferrowasp-feedback` | Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for |
 | `ferrowasp-imu` | The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through |
 | `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map |
@@ -30,12 +27,10 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-protocol` | The formats shared with host tools: the onboard flight log's records and pages, and the compact rate record |
 | `ferrowasp-safety` | The safety master's rules, safety-critical: arming and its guard, the RC link and its fault responses, the motor command boundary, bench motor requests, and the single-writer signals tasks share |
 | `ferrowasp-serial` | The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer |
-| `ferrowasp-io-core` | I/O health and statistics, the `serial` command's reply, and re-exports of the serial and SPI crates under their former paths |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
 | `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
 | `ferrowasp-osd` | The MSP OSD the DJI goggles show, encoded from snapshots of the craft's state |
 | `ferrowasp-output` | Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding |
-| `ferrowasp-waveform` | Re-exports of `ferrowasp-output` under its former paths |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
 | `ferrowasp-stm32-critical` | The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory |
 | `ferrowasp-stm32` | The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate |

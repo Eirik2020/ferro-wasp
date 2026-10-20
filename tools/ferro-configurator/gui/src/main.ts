@@ -807,7 +807,7 @@ async function calibrateAccelerometer(): Promise<void> {
 
 /** Every gain the PID tab edits, by input id. */
 const GAIN_IDS = ["roll", "pitch", "yaw"].flatMap((axis) => ["p", "i", "d"].map((term) => `${axis}-${term}`));
-/** The firmware's accepted range for every gain (`ferrowasp-core` `value_spec`). */
+/** The firmware's accepted range for every gain (`ferrowasp-config` `value_spec`). */
 const GAIN_MIN = 0;
 const GAIN_MAX = 20;
 /** The gains when the master slider was grabbed; null when it is at rest. */

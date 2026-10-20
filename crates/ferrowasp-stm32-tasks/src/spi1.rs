@@ -191,31 +191,31 @@ pub async fn spi1_poll(cx: spi1_poll::Context, observed_at_us: u64) {
 
     match result {
         Ok(()) => {}
-        Err(ferrowasp_io_core::spi::SpiDeviceError::Busy) => {
+        Err(ferrowasp_imu::spi::SpiDeviceError::Busy) => {
             info!("SPI1 TX DMA busy");
         }
-        Err(ferrowasp_io_core::spi::SpiDeviceError::TooManyOperations)
-        | Err(ferrowasp_io_core::spi::SpiDeviceError::TxCapacityExceeded)
-        | Err(ferrowasp_io_core::spi::SpiDeviceError::RxCapacityExceeded)
-        | Err(ferrowasp_io_core::spi::SpiDeviceError::CopybackShapeMismatch) => {
+        Err(ferrowasp_imu::spi::SpiDeviceError::TooManyOperations)
+        | Err(ferrowasp_imu::spi::SpiDeviceError::TxCapacityExceeded)
+        | Err(ferrowasp_imu::spi::SpiDeviceError::RxCapacityExceeded)
+        | Err(ferrowasp_imu::spi::SpiDeviceError::CopybackShapeMismatch) => {
             warn!("SPI1 transaction packing failed");
         }
-        Err(ferrowasp_io_core::spi::SpiDeviceError::Unavailable) => {
+        Err(ferrowasp_imu::spi::SpiDeviceError::Unavailable) => {
             if !*cx.local.unavailable_logged {
                 warn!("SPI1 owner unavailable after recovery failure");
                 *cx.local.unavailable_logged = true;
             }
         }
-        Err(ferrowasp_io_core::spi::SpiDeviceError::Timeout) => {}
-        Err(ferrowasp_io_core::spi::SpiDeviceError::Cancelled) => {
+        Err(ferrowasp_imu::spi::SpiDeviceError::Timeout) => {}
+        Err(ferrowasp_imu::spi::SpiDeviceError::Cancelled) => {
             info!("SPI1 transaction cancelled");
         }
-        Err(ferrowasp_io_core::spi::SpiDeviceError::DmaTransfer) => {
+        Err(ferrowasp_imu::spi::SpiDeviceError::DmaTransfer) => {
             warn!("SPI1 DMA transaction failed");
         }
-        Err(ferrowasp_io_core::spi::SpiDeviceError::InvalidState)
-        | Err(ferrowasp_io_core::spi::SpiDeviceError::StaleTransaction)
-        | Err(ferrowasp_io_core::spi::SpiDeviceError::Backend) => {
+        Err(ferrowasp_imu::spi::SpiDeviceError::InvalidState)
+        | Err(ferrowasp_imu::spi::SpiDeviceError::StaleTransaction)
+        | Err(ferrowasp_imu::spi::SpiDeviceError::Backend) => {
             warn!("SPI1 transaction backend error");
         }
     }

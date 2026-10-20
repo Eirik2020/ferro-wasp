@@ -106,7 +106,7 @@ USART3 RX DMA/IDLE IRQ -> owned RxChunk -> configurator_link -> command queue
 
 USB and the configurator port each have their own command and response queue
 into the flash manager, which answers every command on the link it came from
-(`crates/ferrowasp-flight/src/command_link.rs`). Motor commands and the
+(`crates/ferrowasp-cli/src/command_link.rs`). Motor commands and the
 unconditional log erase stay on USB.
 
 On the TBS Lucid H7, USART1 (`uart1`, PA10, receive only) takes RC input from

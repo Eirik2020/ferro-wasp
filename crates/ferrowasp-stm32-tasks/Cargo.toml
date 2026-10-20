@@ -8,8 +8,8 @@ publish = false
 # RTIC task definitions for STM32 flight boards, as FerroForge definitions.
 # Each flight firmware selects them with its own resources, priorities and
 # interrupts through `ferroforge::app!`, so one definition serves every board
-# instead of each app carrying its own copy. The logic they call stays in
-# ferrowasp-flight and the mechanisms in ferrowasp-stm32 and its family backends.
+# instead of each app carrying its own copy. The logic they call stays in the
+# HAL-free crates, and the mechanisms in ferrowasp-stm32 and its family backends.
 
 [lib]
 path = "src/lib.rs"
@@ -27,22 +27,22 @@ imu_transport_rtt = []
 imu_orientation_rtt = ["imu_transport_rtt"]
 # Bench and fault-injection images, forwarded from the firmware feature of
 # the same name. Never in a flight image.
-bench_motor1_only = ["ferrowasp-core/bench_motor1_only"]
-bench_motor2_only = ["ferrowasp-core/bench_motor2_only"]
-bench_motor3_only = ["ferrowasp-core/bench_motor3_only"]
-bench_motor4_only = ["ferrowasp-core/bench_motor4_only"]
-bench_logical_motor1_only = ["ferrowasp-core/bench_logical_motor1_only"]
-bench_logical_motor2_only = ["ferrowasp-core/bench_logical_motor2_only"]
-bench_logical_motor3_only = ["ferrowasp-core/bench_logical_motor3_only"]
-bench_logical_motor4_only = ["ferrowasp-core/bench_logical_motor4_only"]
+bench_motor1_only = ["ferrowasp-safety/bench_motor1_only"]
+bench_motor2_only = ["ferrowasp-safety/bench_motor2_only"]
+bench_motor3_only = ["ferrowasp-safety/bench_motor3_only"]
+bench_motor4_only = ["ferrowasp-safety/bench_motor4_only"]
+bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only"]
+bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only"]
+bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only"]
+bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only"]
 bench_blackbox = []
 bench_dshot_idle_output1_not_running = []
 bench_equal_motors = []
 bench_motor_cmd_stale_rejection = []
-blackbox_defmt = ["ferrowasp-flight/blackbox_defmt"]
+blackbox_defmt = ["ferrowasp-protocol/blackbox_defmt"]
 # The MSPv2 configurator path in the flash manager, forwarded from the
 # firmware feature of the same name.
-mspv2_configurator = ["ferrowasp-flight/mspv2_configurator", "dep:ferrowasp-mspv2"]
+mspv2_configurator = ["ferrowasp-cli/mspv2_configurator", "dep:ferrowasp-mspv2"]
 
 [dependencies]
 critical-section = { workspace = true }
@@ -50,16 +50,30 @@ defmt = "1.0.1"
 embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io-async = { workspace = true }
-ferrowasp-core = { path = "../ferrowasp-core" }
-ferrowasp-drivers = { path = "../ferrowasp-drivers" }
-ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+ferrowasp-blackbox = { path = "../ferrowasp-blackbox" }
+ferrowasp-cli = { path = "../ferrowasp-cli" }
+ferrowasp-config = { path = "../ferrowasp-config" }
+ferrowasp-control = { path = "../ferrowasp-control" }
+ferrowasp-crsf = { path = "../ferrowasp-crsf" }
+ferrowasp-feedback = { path = "../ferrowasp-feedback" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
+ferrowasp-icm42688p = { path = "../ferrowasp-icm42688p" }
+ferrowasp-imu = { path = "../ferrowasp-imu" }
+ferrowasp-input = { path = "../ferrowasp-input" }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-mpu6000 = { path = "../ferrowasp-mpu6000" }
+ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500" }
+ferrowasp-osd = { path = "../ferrowasp-osd" }
+ferrowasp-protocol = { path = "../ferrowasp-protocol" }
+ferrowasp-safety = { path = "../ferrowasp-safety" }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+ferrowasp-storage = { path = "../ferrowasp-storage" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 heapless = { workspace = true }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
 ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4", optional = true }
 ferrowasp-stm32h7 = { path = "../ferrowasp-stm32h7", optional = true }
-ferrowasp-flight = { path = "../ferrowasp-flight" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }

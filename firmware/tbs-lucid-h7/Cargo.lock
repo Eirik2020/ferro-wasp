@@ -249,16 +249,20 @@ dependencies = [
  "embedded-io-async",
  "ferroforge",
  "ferrowasp-board-tbs-lucid-h7",
- "ferrowasp-core",
- "ferrowasp-drivers",
- "ferrowasp-flight",
- "ferrowasp-io-core",
+ "ferrowasp-cli",
+ "ferrowasp-control",
+ "ferrowasp-icm42688p",
+ "ferrowasp-mpu6000",
+ "ferrowasp-mpu6500",
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
+ "ferrowasp-protocol",
+ "ferrowasp-safety",
+ "ferrowasp-serial",
  "ferrowasp-stm32",
  "ferrowasp-stm32-tasks",
  "ferrowasp-stm32h7",
- "ferrowasp-waveform",
+ "ferrowasp-storage",
  "heapless 0.9.2",
  "nb 1.1.0",
  "panic-probe",
@@ -284,9 +288,10 @@ version = "0.1.0"
 name = "ferrowasp-board-tbs-lucid-h7"
 version = "0.1.0"
 dependencies = [
- "ferrowasp-core",
- "ferrowasp-flight",
- "ferrowasp-io-core",
+ "ferrowasp-config",
+ "ferrowasp-control",
+ "ferrowasp-flight-control",
+ "ferrowasp-serial",
  "ferrowasp-stm32",
 ]
 
@@ -322,31 +327,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrowasp-core"
-version = "0.1.0"
-dependencies = [
- "ferrowasp-config",
- "ferrowasp-control",
- "ferrowasp-flight-control",
- "ferrowasp-protocol",
- "ferrowasp-safety",
-]
-
-[[package]]
 name = "ferrowasp-crsf"
 version = "0.1.0"
-
-[[package]]
-name = "ferrowasp-drivers"
-version = "0.1.0"
-dependencies = [
- "ferrowasp-blheli-telemetry",
- "ferrowasp-crsf",
- "ferrowasp-icm42688p",
- "ferrowasp-mpu6000",
- "ferrowasp-mpu6500",
- "ferrowasp-storage",
-]
 
 [[package]]
 name = "ferrowasp-feedback"
@@ -354,31 +336,6 @@ version = "0.1.0"
 dependencies = [
  "ferrowasp-blheli-telemetry",
  "heapless 0.9.2",
-]
-
-[[package]]
-name = "ferrowasp-flight"
-version = "0.1.0"
-dependencies = [
- "defmt",
- "ferrowasp-blackbox",
- "ferrowasp-cli",
- "ferrowasp-config",
- "ferrowasp-control",
- "ferrowasp-core",
- "ferrowasp-drivers",
- "ferrowasp-feedback",
- "ferrowasp-flight-control",
- "ferrowasp-input",
- "ferrowasp-io-core",
- "ferrowasp-mspv1",
- "ferrowasp-mspv2",
- "ferrowasp-osd",
- "ferrowasp-protocol",
- "ferrowasp-safety",
- "ferrowasp-storage",
- "heapless 0.9.2",
- "libm",
 ]
 
 [[package]]
@@ -422,21 +379,6 @@ name = "ferrowasp-io-contracts"
 version = "0.1.0"
 dependencies = [
  "embedded-io 0.7.1",
-]
-
-[[package]]
-name = "ferrowasp-io-core"
-version = "0.1.0"
-dependencies = [
- "critical-section",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-io 0.7.1",
- "embedded-io-async",
- "ferrowasp-imu",
- "ferrowasp-io-contracts",
- "ferrowasp-serial",
- "heapless 0.9.2",
 ]
 
 [[package]]
@@ -542,15 +484,29 @@ dependencies = [
  "embedded-hal-async",
  "embedded-io-async",
  "ferroforge",
- "ferrowasp-core",
- "ferrowasp-drivers",
- "ferrowasp-flight",
- "ferrowasp-io-core",
+ "ferrowasp-blackbox",
+ "ferrowasp-cli",
+ "ferrowasp-config",
+ "ferrowasp-control",
+ "ferrowasp-crsf",
+ "ferrowasp-feedback",
+ "ferrowasp-flight-control",
+ "ferrowasp-icm42688p",
+ "ferrowasp-imu",
+ "ferrowasp-input",
+ "ferrowasp-io-contracts",
+ "ferrowasp-mpu6000",
+ "ferrowasp-mpu6500",
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
+ "ferrowasp-osd",
+ "ferrowasp-protocol",
+ "ferrowasp-safety",
+ "ferrowasp-serial",
  "ferrowasp-stm32",
  "ferrowasp-stm32f4",
  "ferrowasp-stm32h7",
+ "ferrowasp-storage",
  "fugit",
  "heapless 0.9.2",
  "rtic",
@@ -563,7 +519,6 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "defmt",
- "ferrowasp-io-core",
  "ferrowasp-stm32",
  "ferrowasp-stm32f4-critical",
  "rc-pwm",
@@ -592,10 +547,9 @@ dependencies = [
  "defmt",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
- "ferrowasp-drivers",
- "ferrowasp-io-core",
  "ferrowasp-stm32",
  "ferrowasp-stm32h7-critical",
+ "ferrowasp-storage",
  "heapless 0.9.2",
  "nb 1.1.0",
  "sdio-host",
@@ -629,13 +583,6 @@ dependencies = [
  "embedded-hal 1.0.0",
  "ferrowasp-config",
  "heapless 0.9.2",
-]
-
-[[package]]
-name = "ferrowasp-waveform"
-version = "0.1.0"
-dependencies = [
- "ferrowasp-output",
 ]
 
 [[package]]

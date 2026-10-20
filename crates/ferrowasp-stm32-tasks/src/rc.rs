@@ -172,7 +172,7 @@ pub async fn rc_input(mut cx: rc_input::Context) {
             }
             for (snapshot, raw) in crate::snapshots::RC_CHANNELS_US.iter().zip(frame.channels) {
                 snapshot.store(
-                    ferrowasp_flight::rc_receiver::channel_us(raw),
+                    ferrowasp_input::rc_receiver::channel_us(raw),
                     Ordering::Relaxed,
                 );
             }
@@ -243,7 +243,7 @@ const RC_TELEMETRY_PERIOD_MS: u64 = 200;
 )]
 pub async fn rc_telemetry(cx: rc_telemetry::Context) {
     use embedded_io_async::Write;
-    use ferrowasp_drivers::crsf;
+    use ferrowasp_crsf as crsf;
 
     let Some(writer) = cx.local.rc_telemetry_writer.as_mut() else {
         return;

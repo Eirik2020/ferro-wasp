@@ -6,23 +6,23 @@
 use crate::prelude::*;
 use crate::snapshots::*;
 use core::fmt::Write as _;
-use ferrowasp_drivers::nor_storage::NorStorage;
-use ferrowasp_flight::accel_level::{AccelLevelCalibration, CalibrationError};
-use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
-use ferrowasp_flight::config_save::{ConfigSave, SaveFailure, SaveStep};
-#[cfg(feature = "mspv2_configurator")]
-use ferrowasp_flight::flash_storage::StoredConfigRpc;
-use ferrowasp_flight::log_writer::{LogWriter, PageWrite};
-#[cfg(feature = "mspv2_configurator")]
-use ferrowasp_flight::rpc_commands::{self, RpcContext};
-use ferrowasp_flight::storage_commands::{self, CommandAction, CommandContext};
-use ferrowasp_flight::storage_maintenance::{
+use ferrowasp_blackbox::log_writer::{LogWriter, PageWrite};
+use ferrowasp_blackbox::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
-use ferrowasp_io_core::serial::{SerialBindings, SerialRoute};
+use ferrowasp_cli::command_link::{CommandLink, CommandSources, ResponseRouter};
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_cli::commands::StoredConfigRpc;
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_cli::rpc_commands::{self, RpcContext};
+use ferrowasp_cli::storage_commands::{self, CommandAction, CommandContext};
+use ferrowasp_control::calibration::accel_level::{AccelLevelCalibration, CalibrationError};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
+use ferrowasp_serial::{SerialBindings, SerialRoute};
 use ferrowasp_stm32::system_reset::RebootTarget;
+use ferrowasp_storage::config_save::{ConfigSave, SaveFailure, SaveStep};
+use ferrowasp_storage::nor_storage::NorStorage;
 
 /// How long a reboot waits for the store to finish its last program, in
 /// milliseconds. With maintenance refused, that is one page program, a few
@@ -33,7 +33,7 @@ pub const REBOOT_STORAGE_SETTLE_MS: u32 = 500;
 /// before the port goes away.
 pub const REBOOT_ANSWER_MS: u64 = 100;
 
-pub use ferrowasp_flight::config_save::ConfigRpcCompletion;
+pub use ferrowasp_storage::config_save::ConfigRpcCompletion;
 
 #[cfg(feature = "mspv2_configurator")]
 pub type FlashRpcCommandConsumer = flash_task::RpcCommandConsumer;
@@ -159,7 +159,7 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         default_stored_config: flash_task::StoredConfig,
         default_serial_bindings: SerialBindings,
         serial_routes: &'static [SerialRoute],
-        imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile,
+        imu_control_axis_profile: ferrowasp_control::frames::ImuControlAxisProfile,
     ],
     monotonic = Mono,
 )]

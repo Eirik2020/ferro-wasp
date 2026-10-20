@@ -17,7 +17,8 @@ workspace = "../../.."
 path = "src/lib.rs"
 
 [dependencies]
-ferrowasp-core = { path = "../../../crates/ferrowasp-core" }
-ferrowasp-flight = { path = "../../../crates/ferrowasp-flight" }
-ferrowasp-io-core = { path = "../../../crates/ferrowasp-io-core" }
+ferrowasp-config = { path = "../../../crates/ferrowasp-config" }
+ferrowasp-control = { path = "../../../crates/ferrowasp-control" }
+ferrowasp-flight-control = { path = "../../../crates/ferrowasp-flight-control" }
+ferrowasp-serial = { path = "../../../crates/ferrowasp-serial" }
 ferrowasp-stm32 = { path = "../../../crates/ferrowasp-stm32" }

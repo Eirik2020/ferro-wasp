@@ -13,7 +13,7 @@ use crate::prelude::backend::usb_serial::{BufferedUsbCdcSerial, UsbCdcDevice, Us
 use crate::prelude::*;
 use crate::snapshots::*;
 #[cfg(not(feature = "mspv2_configurator"))]
-use ferrowasp_flight::usb_debug;
+use ferrowasp_cli::usb_debug;
 
 /// Serve the USB port on each OTG interrupt. The header line, whether this
 /// firmware can drive motors, the control-loop rate the status line reports,

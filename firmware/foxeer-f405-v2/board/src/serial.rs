@@ -1,6 +1,6 @@
 #[cfg(test)]
-use ferrowasp_io_core::serial::SerialRouteError;
-use ferrowasp_io_core::serial::{
+use ferrowasp_serial::SerialRouteError;
+use ferrowasp_serial::{
     LogicalSerialPort, SerialBindings, SerialCapabilities, SerialFunction, SerialProfile,
     SerialRoute,
 };
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn default_bindings_resolve_cleanly_and_uart4_can_take_esc_telemetry() {
-        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
+        use ferrowasp_serial::{RcProtocol, resolve_bindings};
 
         let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Sbus);
         assert_eq!(defaults.issues(), &[]);
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn crsf_rc_input_needs_a_port_that_transmits() {
-        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
+        use ferrowasp_serial::{RcProtocol, resolve_bindings};
 
         let crsf = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Crsf);
         assert_eq!(crsf.issues(), &[]);
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn the_configurator_defaults_to_uart3_and_needs_a_port_that_transmits() {
-        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
+        use ferrowasp_serial::{RcProtocol, resolve_bindings};
 
         let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Sbus);
         assert_eq!(

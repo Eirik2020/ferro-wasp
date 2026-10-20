@@ -12,8 +12,8 @@
 //! DMA stream, which UART3 and UART6 have.
 
 #[cfg(test)]
-use ferrowasp_io_core::serial::SerialRouteError;
-use ferrowasp_io_core::serial::{
+use ferrowasp_serial::SerialRouteError;
+use ferrowasp_serial::{
     LogicalSerialPort, SerialBindings, SerialCapabilities, SerialFunction, SerialProfile,
     SerialRoute,
 };
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn bindings_follow_each_ports_capabilities() {
-        use ferrowasp_io_core::serial::{RcProtocol, resolve_bindings};
+        use ferrowasp_serial::{RcProtocol, resolve_bindings};
 
         let defaults = resolve_bindings(DEFAULT_SERIAL_BINDINGS, SERIAL_ROUTES, RcProtocol::Sbus);
         assert_eq!(defaults.issues(), &[]);
