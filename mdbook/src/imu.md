@@ -17,8 +17,10 @@ bring-up services continue, while the runtime IMU health gate rejects arming.
 
 ## Driver Behavior
 
-All three drivers are allocation-free modules in `ferrowasp-drivers` and use
-`embedded-hal` 1.0 traits for blocking boot configuration.
+Each driver is its own allocation-free, safety-critical crate
+(`ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500`) and uses
+`embedded-hal` 1.0 traits for blocking boot configuration, so a driver proven
+on one board stays proven on every board while it is unchanged.
 
 MPU6500 support includes:
 

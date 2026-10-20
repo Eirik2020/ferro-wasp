@@ -4,6 +4,9 @@
 //! identifier, so the caller must associate a validated frame with the DShot
 //! lane whose telemetry bit was most recently requested.
 
+#![no_std]
+#![forbid(unsafe_code)]
+
 pub const FRAME_LEN: usize = 10;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

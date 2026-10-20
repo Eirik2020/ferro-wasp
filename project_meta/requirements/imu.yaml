@@ -1,0 +1,203 @@
+schema_version: 1
+requirements:
+  - id: IMU-001
+    title: The MPU-6000 driver configures, verifies and decodes the sensor
+    statement: >-
+      The MPU-6000 driver shall configure a 2000 dps gyro, a 16 g
+      accelerometer and a 2 kHz data-ready output, with every output
+      rate dividing the internal rate exactly; shall reset the part over
+      SPI, space each initialization transaction from the one before,
+      reject another InvenSense part and report a register that did not
+      take; and shall read the sample burst from ACCEL_XOUT_H, decoding
+      it big-endian and rejecting a short or implausible frame.
+    rationale: >-
+      A sensor misidentified, misconfigured or misread feeds the rate
+      loop wrong rates; the driver is proven once and stays proven on
+      every board while unchanged (requirements design section 12).
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_mpu6000
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::default_config_is_2khz_with_the_dlpf_bypassed
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::every_output_rate_divides_its_internal_rate_exactly
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::init_resets_over_spi_then_configures_and_verifies
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::init_spaces_every_transaction_from_the_one_before
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::init_rejects_another_invensense_part
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::init_reports_a_register_that_did_not_take
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::read_reg_sets_read_bit_and_toggles_chip_select
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::burst_decodes_accel_temp_gyro_big_endian
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::burst_rejects_short_or_implausible_frames
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6000::tests::read_sample_bursts_from_accel_xout_h
+
+  - id: IMU-002
+    title: The MPU-6500 driver reads and decodes the sensor
+    statement: >-
+      The MPU-6500 driver shall read registers with the read bit set
+      inside one chip-select frame and change only the requested bits,
+      set the sample-rate divider for the configured rate, decode gyro
+      and accelerometer bursts big-endian while rejecting short or
+      implausible frames, and count a sample as fresh only when its
+      sequence changes.
+    rationale: >-
+      A sensor misread feeds the rate loop wrong rates, and a repeated
+      sample counted as fresh hides a stalled IMU.
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_mpu6500
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::bit_helpers_only_modify_requested_mask
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::read_reg_sets_read_bit_and_toggles_chip_select
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::read_gyro_raw_decodes_big_endian_signed_axes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::decode_accel_temp_gyro_burst_decodes_big_endian_axes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::decode_accel_temp_gyro_burst_rejects_short_or_implausible_frames
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::decode_gyro_burst_allows_zero_rate_but_rejects_bad_frames
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::sample_freshness_only_depends_on_sequence_change
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_mpu6500::tests::gyro_sample_rate_writes_expected_divider_for_dlpf_rate
+
+  - id: IMU-003
+    title: The ICM-42688-P driver configures, verifies and decodes the sensor
+    statement: >-
+      The ICM-42688-P driver shall configure 2 kHz output, a 16 g
+      accelerometer, a 2000 dps gyro and big-endian data; shall reset
+      the part, verify its identity, its reset completion, its
+      configuration and its data-ready interrupt by readback, and wait
+      for gyro startup; and shall read samples from the temperature
+      register in the part's register order, convert them at the
+      selected full scales, reject short and stuck-bus frames, and
+      release chip select even when SPI fails.
+    rationale: >-
+      A sensor misidentified, misconfigured or misread feeds the rate
+      loop wrong rates; a chip select left asserted after a failure
+      blocks the bus.
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_icm42688p
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::default_configuration_matches_ferrowasp_control_contract
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::init_resets_verifies_configures_and_waits_for_gyro_startup
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::init_rejects_wrong_identity_and_missing_reset_completion
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::init_rejects_configuration_that_does_not_read_back
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::init_rejects_data_ready_interrupt_configuration_that_does_not_read_back
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::decode_uses_icm_temperature_accel_gyro_register_order
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::sample_conversions_match_selected_full_scales
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::decode_rejects_short_and_stuck_bus_frames
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::read_sample_uses_temp_data_start_register
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_icm42688p::tests::spi_failure_still_deasserts_chip_select

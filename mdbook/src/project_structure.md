@@ -14,7 +14,10 @@ Under `crates/`, all members of the root workspace and host-tested there:
 |---|---|
 | `ferrowasp-control` | General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration |
 | `ferrowasp-core` | Safety state and the safety master's rules, actuator command types, blackbox records, stored configuration |
-| `ferrowasp-drivers` | Device and protocol drivers: IMUs (ICM-42688-P, MPU-6000, MPU-6500), CRSF, BLHeli telemetry, SPI NOR flash, and the `NorStorage` trait |
+| `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
+| `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
+| `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |
+| `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight` | Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link |
 | `ferrowasp-io-core` | Bounded serial and SPI contracts, I/O health, statistics, and time types |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |

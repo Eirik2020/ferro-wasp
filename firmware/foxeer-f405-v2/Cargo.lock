@@ -325,6 +325,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-blheli-telemetry"
+version = "0.1.0"
+
+[[package]]
 name = "ferrowasp-board-foxeer-f405-v2"
 version = "0.1.0"
 dependencies = [
@@ -351,10 +355,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-crsf"
+version = "0.1.0"
+
+[[package]]
 name = "ferrowasp-drivers"
 version = "0.1.0"
 dependencies = [
- "embedded-hal 1.0.0",
+ "ferrowasp-blheli-telemetry",
+ "ferrowasp-crsf",
+ "ferrowasp-icm42688p",
+ "ferrowasp-mpu6000",
+ "ferrowasp-mpu6500",
+ "ferrowasp-storage",
 ]
 
 [[package]]
@@ -374,6 +387,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-icm42688p"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "ferrowasp-io-core"
 version = "0.1.0"
 dependencies = [
@@ -383,6 +403,20 @@ dependencies = [
  "embedded-io 0.7.1",
  "embedded-io-async",
  "heapless 0.9.2",
+]
+
+[[package]]
+name = "ferrowasp-mpu6000"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "ferrowasp-mpu6500"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
 ]
 
 [[package]]
@@ -448,6 +482,13 @@ dependencies = [
  "stm32f4xx-hal",
  "usb-device",
  "usbd-serial",
+]
+
+[[package]]
+name = "ferrowasp-storage"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
 ]
 
 [[package]]

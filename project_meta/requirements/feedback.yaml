@@ -1,0 +1,38 @@
+schema_version: 1
+requirements:
+  - id: FEEDBACK-001
+    title: BLHeli telemetry decodes only valid frames
+    statement: >-
+      A BLHeli telemetry frame shall decode its big-endian fields in
+      their wire units only when its CRC is valid; the stream parser
+      shall resynchronize after a noise byte, and a reset shall discard
+      a partial frame.
+    rationale: >-
+      Telemetry eRPM qualifies arming (ARM-001); a corrupt or misaligned
+      frame must never read as a motor that is spinning.
+    derived_from: [ARM-001]
+    allocated_to:
+      - ferrowasp_blheli_telemetry
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blheli_telemetry::tests::decodes_big_endian_wire_units
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blheli_telemetry::tests::rejects_bad_crc
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blheli_telemetry::tests::stream_parser_recovers_after_one_noise_byte
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blheli_telemetry::tests::reset_discards_partial_frame

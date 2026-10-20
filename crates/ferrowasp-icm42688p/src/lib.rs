@@ -5,6 +5,9 @@
 //! big-endian sensor data. The 14-byte temperature/accelerometer/gyroscope
 //! payload fits the existing 15-byte full-duplex SPI DMA frame.
 
+#![no_std]
+#![forbid(unsafe_code)]
+
 use embedded_hal::{delay::DelayNs, digital::OutputPin, spi::SpiBus};
 
 pub const WHO_AM_I_EXPECTED: u8 = 0x47;
