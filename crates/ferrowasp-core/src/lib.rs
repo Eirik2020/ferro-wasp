@@ -4,5 +4,5 @@
 pub mod actuator;
 pub mod blackbox;
 pub mod config;
-pub mod frames;
+pub use ferrowasp_control::frames;
 pub mod safety;

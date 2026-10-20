@@ -75,12 +75,16 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   new crate map. The redesign comes before the next hardware gate run, one
   change at a time against `main`, moves before behaviour:
   1. the crates of the new map, moved without behaviour change and marked
-     `critical = true` as each is created: `ferrowasp-control`,
-     `ferrowasp-config`, `ferrowasp-protocol` and `ferrowasp-blackbox` (with
-     FerroConfigurator moving to `ferrowasp-protocol` in the same change),
-     `ferrowasp-io-contracts`, the CRSF, BLHeli-telemetry and per-sensor IMU
-     crates, the subsystem crates with their tasks behind a `tasks` feature,
-     then the `-critical` backend splits;
+     `critical = true` as each is created, bottom-up by dependency so that
+     each move is a pure move (a safety-critical crate cannot depend on a
+     crate not yet moved): `ferrowasp-control`; the CRSF, BLHeli-telemetry
+     and per-sensor IMU crates and `ferrowasp-io-contracts`; the subsystem
+     crates `ferrowasp-input`, `-feedback`, `-output` and `-serial`, with
+     their tasks behind a `tasks` feature; `ferrowasp-flight-control`;
+     `ferrowasp-config`, whose stored types those crates own, with
+     `ferrowasp-protocol` and `ferrowasp-blackbox` (FerroConfigurator moving
+     to `ferrowasp-protocol` in the same change); `ferrowasp-safety`; then
+     the `-critical` backend splits;
   2. behaviour, one mechanism at a time: the observer and ledger in place of
      `snapshots.rs`; SPSC links and typed flags; the coordinator, then reboot,
      config transactions and accelerometer calibration through it; the boot

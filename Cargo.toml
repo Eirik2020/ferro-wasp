@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/ferrowasp-control",
     "crates/ferrowasp-core",
     "firmware/foxeer-f405-v2/board",
     "firmware/tbs-lucid-h7/board",
@@ -9,7 +10,6 @@ members = [
     "crates/ferrowasp-io-core",
     "crates/ferrowasp-mspv1",
     "crates/ferrowasp-mspv2",
-    "crates/ferrowasp-pid",
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-tasks",
     "crates/ferrowasp-stm32f4",

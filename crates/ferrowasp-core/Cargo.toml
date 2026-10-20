@@ -9,6 +9,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+ferrowasp-control = { path = "../ferrowasp-control" }
 critical-section = { workspace = true }
 heapless = { workspace = true }
 

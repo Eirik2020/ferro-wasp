@@ -237,10 +237,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-control"
+version = "0.1.0"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "ferrowasp-core"
 version = "0.1.0"
 dependencies = [
  "critical-section",
+ "ferrowasp-control",
  "heapless",
 ]
 
@@ -334,6 +342,12 @@ name = "libc"
 version = "0.2.185"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
+
+[[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "linux-raw-sys"

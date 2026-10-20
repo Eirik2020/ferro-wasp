@@ -109,3 +109,277 @@ requirements:
           setup: none
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test
+
+  - id: CTRL-004
+    title: The PID bounds its terms and output and does not wind up
+    statement: >-
+      The PID controller shall bound each term and its total output to
+      their configured limits, keep a non-finite input or gain from
+      reaching its output, stop growing the integral while the output
+      saturates or while the setpoint changes faster than the relax
+      rate, and take the derivative from the measurement, not the
+      setpoint.
+    rationale: >-
+      An unbounded or non-finite controller output reaches the motors;
+      integral windup and derivative kick are classic sources of a flip
+      after a saturation or a stick step.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_control::pid
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::proportional_output_tracks_error
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::total_output_is_clamped_symmetrically
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::integral_accumulates_and_respects_limit
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::integral_scales_with_dt_seconds
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::anti_windup_freezes_integral_when_output_is_saturated
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::anti_windup_allows_integral_to_unwind
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::derivative_is_zero_until_previous_error_exists
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::derivative_uses_measurement_not_setpoint
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::feedforward_tracks_setpoint_rate
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::i_term_relax_freezes_growth_during_fast_setpoint_changes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::derivative_filter_smooths_d_term
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::reset_clears_derivative_history
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::pid::tests::non_finite_values_do_not_escape_to_output
+
+  - id: CTRL-005
+    title: Frame rotations are exact signed permutations
+    statement: >-
+      A frame rotation shall map each axis to exactly one axis with a
+      sign of plus or minus one and compose in the order applied, and
+      the conversion between the physical body frame and the rate
+      controller's convention shall invert physical pitch rate only.
+    rationale: >-
+      IMU orientation and signs are controlled configuration; a sign
+      hidden in a rotation turns stabilization into a runaway
+      (ADR-0025).
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_control::frames
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::frames::tests::identity_preserves_axes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::frames::tests::signed_axis_permutation_maps_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::frames::tests::composition_applies_second_rotation_after_first
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::frames::tests::body_frame_names_the_control_convention
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::frames::tests::controller_compatibility_only_inverts_physical_pitch_rate
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::frames::tests::imu_profile_composes_board_and_controller_frames
+
+  - id: CTRL-006
+    title: The gyro low-pass and the notch have their configured response
+    statement: >-
+      The one-pole low-pass shall start at its first sample and then
+      move toward each input by its smoothing factor, on each axis
+      independently; the smoothing factor computed for a corner
+      frequency shall reproduce that corner at the given sample rate,
+      and a non-finite or non-positive corner or rate shall give no
+      filtering rather than an invalid coefficient; a notch shall
+      attenuate its centre frequency and pass frequencies away from it.
+    rationale: >-
+      The gyro filter is controlled configuration stored as a corner
+      frequency, so it must mean the same filter at every loop rate; a
+      filter that lets a non-finite coefficient through corrupts every
+      later sample.
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_control::filter
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::filter::tests::low_pass_filter_initializes_to_first_sample_then_smooths
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::filter::tests::imu_rate_filter_tracks_axes_independently
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::filter::tests::a_non_finite_or_non_positive_corner_or_rate_gives_no_filtering
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::drone_toolbox::tests::the_default_corner_survives_the_current_loop_rate
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rpm_filter::tests::each_harmonic_of_the_motor_is_notched
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight::rpm_filter::tests::stick_frequencies_pass_through
+
+  - id: CTRL-007
+    title: The attitude estimate integrates rates and corrects toward gravity
+    statement: >-
+      The attitude estimator shall integrate the body rates over each
+      sample interval and, on roll and pitch, blend the result toward
+      the angles gravity gives by the complementary weight; level
+      gravity shall read zero roll and pitch, and gravity along the
+      right axis ninety degrees of roll.
+    rationale: >-
+      The estimate drives the OSD horizon and the blackbox now and the
+      stabilized mode next (requirements design section 15).
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_control::attitude
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::attitude::tests::gyro_integrator_accumulates_rates_and_uses_accel_correction
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::attitude::tests::accelerometer_roll_pitch_have_expected_static_orientations
+
+  - id: CTRL-008
+    title: In rate mode, an estimator fault does not affect motor output
+    statement: >-
+      In rate mode, a fault in the attitude estimator, including a non-
+      finite estimate, shall not change motor output.
+    rationale: >-
+      The estimator is classified safety-critical because stabilized
+      mode is next, but in rate mode it feeds only the OSD horizon and
+      the blackbox; this is the one estimator requirement until angle
+      mode is built (requirements design section 15).
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_control::attitude
+      - ferrowasp_flight::drone_toolbox::FlightController
+    verification:
+      mode: direct
+      entries: []
+
+  - id: CTRL-009
+    title: Calibrations accept only a still craft
+    statement: >-
+      Gyro bias calibration shall average only fresh samples taken while
+      disarmed, restart its window on motion, and then subtract the
+      bias; accelerometer level calibration shall refuse a craft that
+      moves, leans more than 10 degrees, or reads gravity at the wrong
+      magnitude, and shall bound the offsets it stores.
+    rationale: >-
+      A bias learned while moving, or a level learned on a tilt, is a
+      guessed state that biases every later rate or attitude (ADR-0044).
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_control::calibration
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::calibration::tests::gyro_bias_calibrator_resets_on_motion_and_subtracts_bias
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::calibration::tests::stale_samples_do_not_advance_gyro_bias_calibration
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::calibration::accel_level::tests::a_still_board_mounted_slightly_off_is_corrected_to_level
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::calibration::accel_level::tests::movement_tilt_and_a_wrong_scale_are_refused
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_control::calibration::accel_level::tests::stored_offsets_are_bounded

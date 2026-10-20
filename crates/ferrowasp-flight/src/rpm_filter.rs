@@ -13,6 +13,8 @@
 
 use core::f32::consts::PI;
 
+use ferrowasp_control::filter::Notch;
+
 /// Motors on a quad.
 pub const MOTORS: usize = 4;
 
@@ -137,54 +139,6 @@ impl MotorFrequencies {
     /// The slowest motor's frequency, which dynamic idle regulates.
     pub fn min_hz(&self) -> f32 {
         self.hz.iter().copied().fold(f32::INFINITY, f32::min)
-    }
-}
-
-/// One state-variable notch on three axes, as Betaflight's `rpmNotch_t`:
-/// the output is the input minus `weight / Q` times the band-pass.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Notch {
-    f: f32,
-    a1: f32,
-    a2: f32,
-    weighted_q_inv: f32,
-    ic1: [f32; 3],
-    ic2: [f32; 3],
-}
-
-impl Notch {
-    fn new(hz: f32, dt_s: f32, q: f32) -> Self {
-        let mut notch = Self {
-            f: 0.0,
-            a1: 0.0,
-            a2: 0.0,
-            weighted_q_inv: 0.0,
-            ic1: [0.0; 3],
-            ic2: [0.0; 3],
-        };
-        notch.set(hz, dt_s, q, 0.0);
-        notch
-    }
-
-    fn set(&mut self, hz: f32, dt_s: f32, q: f32, weight: f32) {
-        let f = libm::tanf(PI * hz * dt_s);
-        let q_inv = 1.0 / q;
-        let a1 = 1.0 / (1.0 + f * (f + q_inv));
-        self.f = f;
-        self.a1 = a1;
-        self.a2 = f * a1;
-        self.weighted_q_inv = q_inv * weight;
-    }
-
-    fn apply(&mut self, axes: &mut [f32; 3]) {
-        for (axis, value) in axes.iter_mut().enumerate() {
-            let v3 = *value - self.ic2[axis];
-            let v1 = self.a1 * self.ic1[axis] + self.a2 * v3;
-            let v2 = self.ic2[axis] + self.f * v1;
-            self.ic1[axis] = 2.0 * v1 - self.ic1[axis];
-            self.ic2[axis] = 2.0 * v2 - self.ic2[axis];
-            *value -= self.weighted_q_inv * v1;
-        }
     }
 }
 
@@ -472,7 +426,7 @@ mod tests {
             filter.apply(&motors, [0.0; 3]);
         }
         let expected = libm::tanf(PI * 960.0 / LOOP_HZ as f32);
-        assert!((filter.notches[0][2].f - expected).abs() < 1e-6);
+        assert!((filter.notches[0][2].coefficient() - expected).abs() < 1e-6);
     }
 
     #[test]
@@ -485,7 +439,11 @@ mod tests {
         filter.apply(&[300.0; MOTORS], [0.0; 3]);
         for (motor, (after, before)) in filter.notches.iter().zip(&before).enumerate() {
             for (harmonic, (after, before)) in after.iter().zip(before).enumerate() {
-                assert_ne!(after.f, before.f, "motor {motor} harmonic {harmonic}");
+                assert_ne!(
+                    after.coefficient(),
+                    before.coefficient(),
+                    "motor {motor} harmonic {harmonic}"
+                );
             }
         }
     }
@@ -500,7 +458,7 @@ mod tests {
             filter.apply(&[300.0; MOTORS], [0.0; 3]);
         }
         for (after, before) in filter.notches.iter().zip(&before) {
-            assert_eq!(after[1].f, before[1].f);
+            assert_eq!(after[1].coefficient(), before[1].coefficient());
         }
         // Its harmonic, 600 Hz, passes.
         let mut filter = RpmFilter::new(&config, LOOP_HZ).unwrap();
