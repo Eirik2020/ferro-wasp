@@ -9,4 +9,4 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-ferrowasp-io-core = { path = "../ferrowasp-io-core" }
+ferrowasp-output = { path = "../ferrowasp-output" }

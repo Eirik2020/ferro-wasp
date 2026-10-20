@@ -384,6 +384,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-output"
+version = "0.1.0"
+
+[[package]]
 name = "ferrowasp-serial"
 version = "0.1.0"
 dependencies = [
@@ -477,7 +481,7 @@ dependencies = [
 name = "ferrowasp-waveform"
 version = "0.1.0"
 dependencies = [
- "ferrowasp-io-core",
+ "ferrowasp-output",
 ]
 
 [[package]]
