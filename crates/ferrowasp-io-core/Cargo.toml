@@ -14,6 +14,7 @@ embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io = { workspace = true }
 embedded-io-async = { workspace = true }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 heapless = { workspace = true }
 
 [dev-dependencies]

@@ -78,4 +78,14 @@ mod tests {
         assert_eq!(extender.observe(u32::MAX - 2), u64::from(u32::MAX - 2));
         assert_eq!(extender.observe(1), u64::from(u32::MAX) + 1);
     }
+
+    #[test]
+    fn a_deadline_expires_at_its_timeout_and_saturates() {
+        let deadline = Deadline::new(TimestampMicros(1_000), 500);
+        assert!(!deadline.is_expired_at(TimestampMicros(1_499)));
+        assert!(deadline.is_expired_at(TimestampMicros(1_500)));
+
+        let late = Deadline::new(TimestampMicros(u64::MAX - 1), 500);
+        assert_eq!(late.expires_at(), TimestampMicros(u64::MAX));
+    }
 }

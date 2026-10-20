@@ -8,5 +8,5 @@ pub mod health;
 pub mod serial;
 pub mod spi;
 pub mod stats;
-pub mod time;
+pub use ferrowasp_io_contracts::time;
 pub mod waveform;
