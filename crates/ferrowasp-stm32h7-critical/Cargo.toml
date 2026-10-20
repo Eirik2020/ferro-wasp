@@ -1,0 +1,37 @@
+[package]
+name = "ferrowasp-stm32h7-critical"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+stm32h743 = [
+    "dep:stm32h7xx-hal",
+    "stm32h7xx-hal/stm32h743v",
+    "stm32h7xx-hal/rt",
+]
+
+[dependencies]
+defmt = "=1.0.1"
+embedded-hal = { workspace = true }
+ferrowasp-imu = { path = "../ferrowasp-imu" }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-output = { path = "../ferrowasp-output" }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", features = ["dshot"] }
+heapless = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "=0.7.7", features = ["critical-section-single-core"] }
+# The HAL's own traits are embedded-hal 0.2; the drivers take 1.0.
+embedded-hal-02 = { package = "embedded-hal", version = "=0.2.7" }
+nb = "=1.1.0"
+stm32h7xx-hal = { version = "=0.16.0", optional = true }
+
+[package.metadata.ferrowasp]
+critical = true

@@ -16,16 +16,13 @@ path = "src/lib.rs"
 
 [features]
 default = []
-bench_spi_timeout_recovery = []
-dshot = ["dep:ferrowasp-waveform"]
+bench_spi_timeout_recovery = ["ferrowasp-stm32-critical/bench_spi_timeout_recovery"]
+dshot = ["ferrowasp-stm32-critical/dshot"]
 
 [dependencies]
 defmt = "1.0.1"
 embedded-hal = { workspace = true }
-ferrowasp-io-core = { path = "../ferrowasp-io-core" }
-ferrowasp-waveform = { path = "../ferrowasp-waveform", optional = true }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical" }
 heapless = { workspace = true }
 rc-pwm = { path = "../rc-pwm" }
 
-[dev-dependencies]
-ferrowasp-waveform = { path = "../ferrowasp-waveform" }

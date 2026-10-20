@@ -151,8 +151,8 @@ TOPIC_ROUTES = {
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-safety/src/lib.rs"),
-            PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
-            PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-critical/src/dshot_bank.rs"),
+            PurePosixPath("crates/ferrowasp-stm32f4-critical/src/dshot.rs"),
             PurePosixPath("crates/ferrowasp-output/src/dshot.rs"),
         ),
     ),
@@ -170,8 +170,8 @@ TOPIC_ROUTES = {
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
             PurePosixPath("crates/ferrowasp-feedback/src/esc_manager.rs"),
-            PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
-            PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-critical/src/dshot_bank.rs"),
+            PurePosixPath("crates/ferrowasp-stm32f4-critical/src/dshot.rs"),
             PurePosixPath("crates/ferrowasp-output/src/dshot.rs"),
         ),
     ),
@@ -205,8 +205,8 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-mpu6500/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-mpu6000/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-icm42688p/src/lib.rs"),
-            PurePosixPath("crates/ferrowasp-stm32/src/spi_common.rs"),
-            PurePosixPath("crates/ferrowasp-stm32f4/src/spi_dma.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-critical/src/spi_common.rs"),
+            PurePosixPath("crates/ferrowasp-stm32f4-critical/src/spi_dma.rs"),
         ),
     ),
     "rc": TopicRoute(
@@ -227,8 +227,8 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-input/src/rc_receiver.rs"),
             PurePosixPath("crates/ferrowasp-crsf/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
-            PurePosixPath("crates/ferrowasp-stm32/src/uart_port.rs"),
-            PurePosixPath("crates/ferrowasp-stm32f4/src/uart_dma.rs"),
+            PurePosixPath("crates/ferrowasp-stm32-critical/src/uart_port.rs"),
+            PurePosixPath("crates/ferrowasp-stm32f4-critical/src/uart_dma.rs"),
         ),
     ),
     "osd": TopicRoute(

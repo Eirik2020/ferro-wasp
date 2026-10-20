@@ -1,0 +1,412 @@
+schema_version: 1
+requirements:
+  - id: HW-UART-001
+    title: A UART hands the core every received byte once, and marks every gap
+    statement: >-
+      UART reception shall detach a full buffer and an idle-terminated
+      partial one as chunks of the bytes received, deliver a full buffer
+      before an idle seen with it, clamp an idle length to the buffer,
+      and advance the stream generation on a full buffer, a DMA error or
+      an abort so that a late interrupt from an older generation is
+      suppressed; UART transmission shall give each transfer one
+      terminal completion, refuse an overlapping transfer, let a
+      transfer error pre-empt completion and treat a FIFO error as
+      recoverable; and on target, the RC receiver shall run over it.
+    rationale: >-
+      This is the serial RX and TX contract (ADR-0011, ADR-0057) every
+      chip family implements; a chunk joined across a gap or delivered
+      twice reads as a valid frame that never arrived.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_stm32_critical::uart_common
+      - ferrowasp_stm32_critical::uart_port
+      - ferrowasp_stm32_critical::serial
+      - ferrowasp_stm32_critical::app_storage
+      - ferrowasp_stm32f4_critical::uart_dma
+      - ferrowasp_stm32h7_critical::uart_dma
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::rx_state::tests::full_buffer_detaches_and_advances_generation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::rx_state::tests::idle_detaches_partial_buffer_and_suppresses_late_full_irq
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::rx_state::tests::full_irq_suppresses_late_idle_for_old_generation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::rx_state::tests::empty_idle_does_not_advance_generation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::rx_state::tests::abort_generation_suppresses_late_events_without_flipping_active_buffer
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::rx_state::tests::partial_idle_len_is_clamped_to_capacity
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::irq_plan::tests::no_flags_produce_no_action
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::irq_plan::tests::dma_full_is_delivered_before_idle_when_both_flags_are_seen
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::irq_plan::tests::idle_partial_delivery_records_received_length
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::irq_plan::tests::dma_error_advances_generation_and_reports_fault
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::tx_state::tests::one_transfer_has_one_terminal_completion
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::tx_state::tests::overlapping_transfer_is_rejected
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::tx_state::tests::stale_error_is_ignored_and_does_not_poison_next_transfer
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::tx_state::tests::fifo_error_is_recoverable_and_does_not_finish_transfer
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::tx_state::tests::fifo_flag_does_not_hide_simultaneous_completion
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::serial::tx_state::tests::transfer_error_preempts_completion
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: HW-SPI-001
+    title: An SPI transfer completes once, and a DMA error is a fault
+    statement: >-
+      An SPI DMA completion shall deliver its data and advance the
+      transaction, a DMA error shall report a fault without advancing
+      it, and no flag shall mean no action; the DMA buffers shall fit
+      the static storage budget; and on target, the IMU shall be read
+      through it with a healthy calibration at boot.
+    rationale: >-
+      The rate loop flies on IMU samples that cross this transport
+      (ADR-0010); a completion credited twice or a silent DMA error
+      feeds it a sample that is not current.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_stm32_critical::spi
+      - ferrowasp_stm32_critical::spi_common
+      - ferrowasp_stm32_critical::spi1_imu
+      - ferrowasp_stm32_critical::memory
+      - ferrowasp_stm32f4_critical::spi_dma
+      - ferrowasp_stm32f4_critical::exti
+      - ferrowasp_stm32h7_critical::spi_dma
+      - ferrowasp_stm32h7_critical::eh1
+      - ferrowasp_stm32h7_critical::exti
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::spi::tests::no_flags_have_no_action
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::spi::tests::transfer_complete_delivers_and_advances_transaction
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::spi::tests::dma_error_reports_fault_without_advancing_transaction
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::memory::tests::static_storage_budget_matches_current_firmware_buffers
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: HW-DSHOT-001
+    title: The DShot bank sends every lane together, and a lane fault stops the bank
+    statement: >-
+      The DShot bank shall configure each timer for its lanes and start
+      them together, refuse a lane on a channel already used, on a timer
+      it was not given or on timers with different clocks; for
+      bidirectional DShot it shall need every lane to receive, invert
+      every checksum, complete a frame set only after its receive
+      window, decode each reply once, count a missing reply without
+      faulting, and fault the bank when a lane cannot turn around or
+      back or a window never closes; special-command runs shall be
+      refused while a motor runs or a lease holds and cancelled by a
+      throttle demand; the fallback shall keep frames going when no
+      command arrives; and on target, the outputs shall stay stopped
+      through boot and carry the arming sequence props-off.
+    rationale: >-
+      This is the motor output path (W1); a lane that misbehaves must
+      stop the bank, never leave a motor on a guessed command (W2), and
+      DShot timing is controlled configuration (W6).
+    derived_from: [W1, W2, W6]
+    allocated_to:
+      - ferrowasp_stm32_critical::dshot_bank
+      - ferrowasp_stm32_critical::dshot_lanes
+      - ferrowasp_stm32_critical::timer_dma
+      - ferrowasp_stm32f4_critical::dshot
+      - ferrowasp_stm32h7_critical::dshot
+      - ferrowasp_stm32h7_critical::dma_endpoints
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::bidirectional_needs_lanes_that_receive
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::bidirectional_frames_invert_every_checksum
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_bidirectional_frame_set_completes_only_after_its_receive_window
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::replies_are_decoded_at_the_next_service_and_taken_once
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::missing_replies_are_counted_never_a_fault
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_lane_that_cannot_turn_around_faults_the_bank
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_lane_that_cannot_turn_back_faults_the_bank
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_receive_window_that_never_closes_times_out_as_a_frame
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_unidirectional_bank_never_receives
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_direction_run_sends_each_command_ten_times_on_its_lane_with_telemetry
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_command_run_is_refused_while_any_motor_runs_or_a_lease_holds
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_throttle_demand_cancels_a_command_run
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_telemetry_request_waits_for_the_command_run
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::the_fallback_waits_out_one_service_period_after_any_release
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::commands_at_the_control_rate_hold_the_fallback_off
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::the_fallback_survives_the_millisecond_counter_wrap
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_bank::tests::a_withdrawn_telemetry_request_is_never_sent
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::configures_each_timer_for_its_lane_channels_and_wires_the_trigger
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::a_frame_stages_every_used_timer_and_starts_all_but_the_triggered_one
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::software_start_starts_every_used_timer
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::refuses_two_lanes_on_one_channel
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::refuses_lane_timers_on_different_clocks
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::refuses_a_lane_on_a_timer_the_bank_was_not_given
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::bidirectional_needs_every_lane_to_receive
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::bidirectional_lanes_are_configured_inverted
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::dshot_lanes::tests::the_turnaround_closes_requests_before_streams_switch_and_opens_them_after
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::timer_dma::tests::default_timer_dma_state_remains_static_pwm
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::timer_dma::tests::dshot_feature_reports_the_four_motor_bench_state
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: HW-TIME-001
+    title: The board's clocks and control tick run the loop at its rate
+    statement: >-
+      Each chip family shall configure its clocks, timebase and control
+      tick so that the scheduler runs and the control loop runs at the
+      board's configured rate, as the boot and idle check observes.
+    rationale: >-
+      Every freshness and staleness decision reads this timebase, and
+      the loop rate is controlled configuration (W6); these modules have
+      no host tests yet, so the boot check is their evidence until the
+      conformance suite exists.
+    derived_from: [W2, W6]
+    allocated_to:
+      - ferrowasp_stm32_critical::timebase
+      - ferrowasp_stm32_critical::timer_tick
+      - ferrowasp_stm32_critical::scheduler
+      - ferrowasp_stm32_critical::watchdog
+      - ferrowasp_stm32f4_critical::clocks
+      - ferrowasp_stm32f4_critical::timebase
+      - ferrowasp_stm32f4_critical::timer_tick
+      - ferrowasp_stm32f4_critical::scheduler
+      - ferrowasp_stm32f4_critical::watchdog
+      - ferrowasp_stm32h7_critical::clocks
+      - ferrowasp_stm32h7_critical::timers
+    verification:
+      mode: direct
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
+
+  - id: HW-ROUTE-001
+    title: Each DMA route matches the board's manifest
+    statement: >-
+      Each board's DMA routes shall match the claims in its manifest,
+      and a channel-zero route shall accept a legacy claim without a
+      channel suffix.
+    rationale: >-
+      Pin maps, DMA streams and timer assignments are controlled
+      configuration (W6); a route that does not match its claim drives
+      the wrong peripheral.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_stm32_critical::board_routes
+      - ferrowasp_stm32_critical::board_manifest
+      - ferrowasp_stm32_critical::app_config
+      - ferrowasp_stm32f4_critical::board_routes
+      - ferrowasp_stm32f4_critical::hal_prelude
+      - ferrowasp_stm32h7_critical::hal_prelude
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::board_routes::tests::dma_route_matches_full_manifest_claim
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::board_routes::tests::channel_zero_route_accepts_legacy_claim_without_channel_suffix

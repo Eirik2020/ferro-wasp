@@ -1,0 +1,37 @@
+[package]
+name = "ferrowasp-stm32f4-critical"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+bench_spi_timeout_recovery = ["ferrowasp-stm32-critical/bench_spi_timeout_recovery"]
+dshot = ["dep:ferrowasp-output", "ferrowasp-stm32-critical/dshot"]
+# Each chip feature selects the STM32F4 HAL; without one nothing builds.
+stm32f401 = ["dep:stm32f4xx-hal", "stm32f4xx-hal/stm32f401"]
+stm32f405 = [
+    "dep:stm32f4xx-hal",
+    "stm32f4xx-hal/stm32f405",
+    "stm32f4xx-hal/uart4",
+    "stm32f4xx-hal/usb_fs",
+]
+
+[dependencies]
+defmt = "=1.0.1"
+ferrowasp-imu = { path = "../ferrowasp-imu" }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-output = { path = "../ferrowasp-output", optional = true }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical" }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "=0.7.7", features = ["critical-section-single-core"] }
+stm32f4xx-hal = { git = "https://github.com/stm32-rs/stm32f4xx-hal.git", rev = "78d79609137d5c380320f7bf1a9120967babc61d", features = ["rtic2", "defmt"], optional = true }
+
+[package.metadata.ferrowasp]
+critical = true
