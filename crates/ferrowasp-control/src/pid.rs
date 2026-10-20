@@ -1,6 +1,3 @@
-#![no_std]
-#![forbid(unsafe_code)]
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ControlOutput {
     pub output: f32,

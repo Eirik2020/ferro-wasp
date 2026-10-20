@@ -1,6 +1,13 @@
 #![allow(dead_code)]
-pub use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation};
-pub use ferrowasp_pid::{ControlOutput, Pid};
+pub use ferrowasp_control::attitude::{
+    GyroAngleIntegrator, IMU_COMPLEMENTARY_GYRO_WEIGHT, accel_roll_pitch_degrees,
+};
+pub use ferrowasp_control::calibration::{GyroBiasCalibrator, GyroBiasUpdate};
+pub use ferrowasp_control::filter::{
+    ImuRateLowPassFilter, LowPassFilter, gyro_lpf_alpha, gyro_lpf_corner_hz,
+};
+pub use ferrowasp_control::frames::{DroneBodyFrame, FrameRotation};
+pub use ferrowasp_control::pid::{ControlOutput, Pid};
 
 pub const RC_CHANNEL_MIN: u16 = 192;
 pub const RC_CHANNEL_CENTER: u16 = 992;
@@ -137,40 +144,6 @@ impl RcChannelMap {
 /// moves, and makes the number legible to whoever reads it.
 pub const IMU_GYRO_LPF_HZ: f32 = 50.8;
 
-/// The one-pole smoothing factor that places the corner at `corner_hz` when
-/// sampled at `sample_rate_hz`.
-///
-/// Saturates at 1.0 - no filtering - for a corner at or above Nyquist, rather
-/// than failing, because the rate loop must always come away with a usable
-/// coefficient.
-#[allow(
-    clippy::neg_cmp_op_on_partial_ord,
-    reason = "`!(x > 0.0)` is true for NaN, so a NaN corner or rate takes the \
-              no-filtering branch; `x <= 0.0` would let it into the coefficient"
-)]
-pub fn gyro_lpf_alpha(corner_hz: f32, sample_rate_hz: f32) -> f32 {
-    if !(corner_hz > 0.0) || !(sample_rate_hz > 0.0) {
-        return 1.0;
-    }
-    clamp_unit_interval(1.0 - libm::expf(-2.0 * core::f32::consts::PI * corner_hz / sample_rate_hz))
-}
-
-/// The corner a stored smoothing factor produces at `sample_rate_hz`.
-///
-/// Used to migrate configurations written before the corner was stored
-/// directly.
-#[allow(
-    clippy::neg_cmp_op_on_partial_ord,
-    reason = "`!(x > 0.0)` is true for NaN, so a NaN rate reports no corner"
-)]
-pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
-    let alpha = clamp_unit_interval(alpha);
-    if alpha <= 0.0 || alpha >= 1.0 || !(sample_rate_hz > 0.0) {
-        return 0.0;
-    }
-    -libm::logf(1.0 - alpha) * sample_rate_hz / (2.0 * core::f32::consts::PI)
-}
-
 /// Whether a scheduler tick divides exactly into a control rate.
 ///
 /// The scheduler divides down with integer division, so a pair that does not
@@ -183,11 +156,9 @@ pub fn gyro_lpf_corner_hz(alpha: f32, sample_rate_hz: f32) -> f32 {
 pub const fn scheduler_divides_exactly(tick_hz: u32, control_hz: u32) -> bool {
     control_hz > 0 && tick_hz >= control_hz && tick_hz.is_multiple_of(control_hz)
 }
-pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;
 pub const RATE_CONTROLLER_D_FILTER_ALPHA: f32 = 0.25;
 pub const RATE_CONTROLLER_I_RELAX_SETPOINT_RATE_DPS: f32 = 400.0;
 pub const RATE_CONTROLLER_OUTPUT_LIMIT: f32 = 2000.0;
-const RAD_TO_DEG: f32 = 57.295_78;
 
 pub type GyroAxisMap = FrameRotation;
 
@@ -267,107 +238,6 @@ pub const RC_RATE_PROFILE: RcRateProfile = RcRateProfile {
     yaw: ActualRateAxis::new(70.0, 200.0, 0.50),
     deadband: RC_RATE_DEADBAND as u16,
 };
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct GyroBiasUpdate {
-    pub corrected_raw: [i32; 3],
-    pub newly_calibrated: bool,
-    pub bias_raw: [i32; 3],
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct GyroBiasCalibrator {
-    sum: [i64; 3],
-    samples: u32,
-    bias_raw: [i32; 3],
-    ready: bool,
-    required_samples: u32,
-    max_motion_raw: i32,
-}
-
-impl GyroBiasCalibrator {
-    pub const fn new(required_samples: u32, max_motion_raw: i32) -> Self {
-        Self {
-            sum: [0; 3],
-            samples: 0,
-            bias_raw: [0; 3],
-            ready: false,
-            required_samples,
-            max_motion_raw,
-        }
-    }
-
-    pub const fn ready(self) -> bool {
-        self.ready
-    }
-
-    pub const fn bias_raw(self) -> [i32; 3] {
-        self.bias_raw
-    }
-
-    pub fn update(&mut self, armed: bool, raw: [i32; 3]) -> GyroBiasUpdate {
-        let mut newly_calibrated = false;
-
-        if !armed && !self.ready {
-            let calibrating_motion = raw.iter().any(|value| value.abs() > self.max_motion_raw);
-
-            if calibrating_motion {
-                self.sum = [0; 3];
-                self.samples = 0;
-            } else {
-                for (axis, value) in raw.iter().enumerate() {
-                    self.sum[axis] += *value as i64;
-                }
-
-                self.samples = self.samples.saturating_add(1);
-                if self.samples >= self.required_samples {
-                    for axis in 0..3 {
-                        self.bias_raw[axis] =
-                            (self.sum[axis] / self.required_samples as i64) as i32;
-                    }
-                    self.ready = true;
-                    newly_calibrated = true;
-                }
-            }
-        }
-
-        let mut corrected_raw = raw;
-        if self.ready {
-            for (axis, value) in corrected_raw.iter_mut().enumerate() {
-                *value -= self.bias_raw[axis];
-            }
-        }
-
-        GyroBiasUpdate {
-            corrected_raw,
-            newly_calibrated,
-            bias_raw: self.bias_raw,
-        }
-    }
-
-    /// Advances calibration only for a newly received IMU sample.
-    ///
-    /// Repeated samples may still be bias-corrected for observation, but they
-    /// must never count toward the stationary startup calibration window.
-    pub fn update_if_fresh(&mut self, armed: bool, fresh: bool, raw: [i32; 3]) -> GyroBiasUpdate {
-        if fresh {
-            return self.update(armed, raw);
-        }
-
-        let mut corrected_raw = raw;
-        if self.ready {
-            for (axis, value) in corrected_raw.iter_mut().enumerate() {
-                *value -= self.bias_raw[axis];
-            }
-        }
-
-        GyroBiasUpdate {
-            corrected_raw,
-            newly_calibrated: false,
-            bias_raw: self.bias_raw,
-        }
-    }
-}
 
 /// Maps logical mixer motors to physical actuator outputs.
 ///
@@ -508,174 +378,6 @@ pub fn dshot_unequal_bench_motor_outputs(requested_throttle: f32) -> [f32; 4] {
     }
 
     remap_motor_outputs(DSHOT_UNEQUAL_BENCH_LOGICAL_PATTERN)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LowPassFilter {
-    alpha: f32,
-    value: f32,
-    initialized: bool,
-}
-
-impl LowPassFilter {
-    pub const fn new(alpha: f32) -> Self {
-        Self {
-            alpha,
-            value: 0.0,
-            initialized: false,
-        }
-    }
-
-    pub fn update(&mut self, input: f32) -> f32 {
-        if !self.initialized {
-            self.value = input;
-            self.initialized = true;
-            return self.value;
-        }
-
-        self.value += self.alpha * (input - self.value);
-        self.value
-    }
-
-    pub fn set_alpha(&mut self, alpha: f32) {
-        self.alpha = clamp_unit_interval(alpha);
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ImuRateLowPassFilter {
-    roll: LowPassFilter,
-    pitch: LowPassFilter,
-    yaw: LowPassFilter,
-}
-
-impl ImuRateLowPassFilter {
-    pub const fn new(alpha: f32) -> Self {
-        Self {
-            roll: LowPassFilter::new(alpha),
-            pitch: LowPassFilter::new(alpha),
-            yaw: LowPassFilter::new(alpha),
-        }
-    }
-
-    pub fn update(&mut self, roll: f32, pitch: f32, yaw: f32) -> (f32, f32, f32) {
-        (
-            self.roll.update(roll),
-            self.pitch.update(pitch),
-            self.yaw.update(yaw),
-        )
-    }
-
-    pub fn set_alpha(&mut self, alpha: f32) {
-        self.roll.set_alpha(alpha);
-        self.pitch.set_alpha(alpha);
-        self.yaw.set_alpha(alpha);
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GyroAngleIntegrator {
-    roll: f32,
-    pitch: f32,
-    yaw: f32,
-}
-
-impl GyroAngleIntegrator {
-    pub const fn new() -> Self {
-        Self {
-            roll: 0.0,
-            pitch: 0.0,
-            yaw: 0.0,
-        }
-    }
-
-    pub fn update(
-        &mut self,
-        roll_rate: f32,
-        pitch_rate: f32,
-        yaw_rate: f32,
-        dt_seconds: f32,
-    ) -> [f32; 3] {
-        self.roll += roll_rate * dt_seconds;
-        self.pitch += pitch_rate * dt_seconds;
-        self.yaw += yaw_rate * dt_seconds;
-
-        [self.roll, self.pitch, self.yaw]
-    }
-
-    pub fn update_with_accel(
-        &mut self,
-        rates_dps: [f32; 3],
-        accel_g: [f32; 3],
-        dt_seconds: f32,
-    ) -> [f32; 3] {
-        let (acc_roll, acc_pitch) = accel_roll_pitch_degrees(accel_g[0], accel_g[1], accel_g[2]);
-
-        self.roll += rates_dps[0] * dt_seconds;
-        self.pitch += rates_dps[1] * dt_seconds;
-        self.yaw += rates_dps[2] * dt_seconds;
-
-        self.roll = self.roll * IMU_COMPLEMENTARY_GYRO_WEIGHT
-            + acc_roll * (1.0 - IMU_COMPLEMENTARY_GYRO_WEIGHT);
-        self.pitch = self.pitch * IMU_COMPLEMENTARY_GYRO_WEIGHT
-            + acc_pitch * (1.0 - IMU_COMPLEMENTARY_GYRO_WEIGHT);
-
-        [self.roll, self.pitch, self.yaw]
-    }
-}
-
-impl Default for GyroAngleIntegrator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub fn accel_roll_pitch_degrees(acc_x: f32, acc_y: f32, acc_z: f32) -> (f32, f32) {
-    let roll = fast_atan2(acc_y, acc_z) * RAD_TO_DEG;
-    let pitch = fast_atan2(-acc_x, fast_sqrt(acc_y * acc_y + acc_z * acc_z)) * RAD_TO_DEG;
-
-    (roll, pitch)
-}
-
-fn fast_sqrt(value: f32) -> f32 {
-    if value <= 0.0 {
-        return 0.0;
-    }
-
-    let mut x = value;
-    let mut i = 0;
-    while i < 5 {
-        x = 0.5 * (x + value / x);
-        i += 1;
-    }
-
-    x
-}
-
-fn fast_atan2(y: f32, x: f32) -> f32 {
-    const PI: f32 = core::f32::consts::PI;
-    const FRAC_PI_2: f32 = core::f32::consts::FRAC_PI_2;
-    const FRAC_PI_4: f32 = core::f32::consts::FRAC_PI_4;
-
-    if x == 0.0 {
-        if y > 0.0 {
-            return FRAC_PI_2;
-        }
-        if y < 0.0 {
-            return -FRAC_PI_2;
-        }
-        return 0.0;
-    }
-
-    let abs_y = if y < 0.0 { -y } else { y };
-    let (angle, r) = if x >= 0.0 {
-        (FRAC_PI_4, (x - abs_y) / (x + abs_y))
-    } else {
-        (3.0 * FRAC_PI_4, (x + abs_y) / (abs_y - x))
-    };
-    let angle = angle - FRAC_PI_4 * r;
-
-    if y < 0.0 { -angle } else { angle.min(PI) }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -906,14 +608,6 @@ fn clamp_gain(value: f32, min: f32, max: f32) -> f32 {
         min
     } else {
         value.clamp(min, max)
-    }
-}
-
-fn clamp_unit_interval(value: f32) -> f32 {
-    if !value.is_finite() {
-        0.0
-    } else {
-        value.clamp(0.0, 1.0)
     }
 }
 
@@ -1802,105 +1496,10 @@ mod tests {
     }
 
     #[test]
-    fn low_pass_filter_initializes_to_first_sample_then_smooths() {
-        let mut filter = LowPassFilter::new(0.5);
-
-        assert_close(filter.update(10.0), 10.0);
-        assert_close(filter.update(20.0), 15.0);
-        assert_close(filter.update(15.0), 15.0);
-    }
-
-    #[test]
-    fn imu_rate_filter_tracks_axes_independently() {
-        let mut filter = ImuRateLowPassFilter::new(0.25);
-
-        assert_eq!(filter.update(4.0, 8.0, 12.0), (4.0, 8.0, 12.0));
-        let (roll, pitch, yaw) = filter.update(8.0, 0.0, 20.0);
-
-        assert_close(roll, 5.0);
-        assert_close(pitch, 6.0);
-        assert_close(yaw, 14.0);
-    }
-
-    #[test]
-    fn gyro_integrator_accumulates_rates_and_uses_accel_correction() {
-        let mut integrator = GyroAngleIntegrator::new();
-
-        assert_eq!(
-            integrator.update(100.0, -50.0, 25.0, 0.01),
-            [1.0, -0.5, 0.25]
-        );
-
-        let corrected = integrator.update_with_accel([0.0; 3], [0.0, 1.0, 0.0], 0.01);
-
-        assert_close(corrected[0], 2.78);
-        assert_close(corrected[1], -0.49);
-        assert_close(corrected[2], 0.25);
-    }
-
-    #[test]
     fn gyro_axis_map_preserves_current_control_convention() {
         let map = GyroAxisMap::new([1, 0, 2], [1, -1, -1]);
 
         assert_eq!(map.map_raw([10, 20, -30]), [20, -10, 30]);
-    }
-
-    #[test]
-    fn gyro_bias_calibrator_resets_on_motion_and_subtracts_bias() {
-        let mut calibrator = GyroBiasCalibrator::new(3, 1000);
-
-        assert_eq!(
-            calibrator.update(false, [10, -20, 30]).corrected_raw,
-            [10, -20, 30]
-        );
-        calibrator.update(false, [2000, 0, 0]);
-        assert!(!calibrator.ready());
-
-        calibrator.update(false, [12, -18, 33]);
-        calibrator.update(false, [14, -16, 36]);
-        let update = calibrator.update(false, [16, -14, 39]);
-
-        assert!(update.newly_calibrated);
-        assert_eq!(update.bias_raw, [14, -16, 36]);
-        assert_eq!(update.corrected_raw, [2, 2, 3]);
-        assert_eq!(
-            calibrator.update(true, [20, -10, 40]).corrected_raw,
-            [6, 6, 4]
-        );
-    }
-
-    #[test]
-    fn stale_samples_do_not_advance_gyro_bias_calibration() {
-        let mut calibrator = GyroBiasCalibrator::new(2, 1000);
-
-        for _ in 0..10 {
-            let update = calibrator.update_if_fresh(false, false, [10, -20, 30]);
-            assert!(!update.newly_calibrated);
-        }
-        assert!(!calibrator.ready());
-
-        assert!(
-            !calibrator
-                .update_if_fresh(false, true, [10, -20, 30])
-                .newly_calibrated
-        );
-        assert!(
-            calibrator
-                .update_if_fresh(false, true, [12, -18, 32])
-                .newly_calibrated
-        );
-        assert_eq!(calibrator.bias_raw(), [11, -19, 31]);
-    }
-
-    #[test]
-    fn accelerometer_roll_pitch_have_expected_static_orientations() {
-        let (roll, pitch) = accel_roll_pitch_degrees(0.0, 0.0, 1.0);
-        assert_close(roll, 0.0);
-        assert_close(pitch, 0.0);
-
-        let (roll, pitch) = accel_roll_pitch_degrees(0.0, 1.0, 0.0);
-        assert_close(roll, 90.0);
-        assert_close(pitch, 0.0);
     }
 
     #[test]

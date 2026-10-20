@@ -56,7 +56,6 @@ ferrowasp-drivers = { path = "../../crates/ferrowasp-drivers" }
 ferrowasp-io-core = { path = "../../crates/ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../../crates/ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../../crates/ferrowasp-mspv2" }
-ferrowasp-pid = { path = "../../crates/ferrowasp-pid" }
 ferrowasp-stm32 = { path = "../../crates/ferrowasp-stm32" }
 ferrowasp-stm32-tasks = { path = "../../crates/ferrowasp-stm32-tasks" }
 ferrowasp-stm32h7 = { path = "../../crates/ferrowasp-stm32h7" }

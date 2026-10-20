@@ -12,13 +12,13 @@ Under `crates/`, all members of the root workspace and host-tested there:
 
 | Crate | Owns |
 |---|---|
-| `ferrowasp-core` | Safety state and the safety master's rules, actuator command types, blackbox records, stored configuration, reference frames |
+| `ferrowasp-control` | General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration |
+| `ferrowasp-core` | Safety state and the safety master's rules, actuator command types, blackbox records, stored configuration |
 | `ferrowasp-drivers` | Device and protocol drivers: IMUs (ICM-42688-P, MPU-6000, MPU-6500), CRSF, BLHeli telemetry, SPI NOR flash, and the `NorStorage` trait |
 | `ferrowasp-flight` | Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link |
 | `ferrowasp-io-core` | Bounded serial and SPI contracts, I/O health, statistics, and time types |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
 | `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
-| `ferrowasp-pid` | The PID rate-control primitive |
 | `ferrowasp-waveform` | DShot packet encoding and compare sequences |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
 | `ferrowasp-stm32` | STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types |
@@ -29,6 +29,10 @@ Under `crates/`, all members of the root workspace and host-tested there:
 Only `ferrowasp-stm32f4` and `ferrowasp-stm32h7` name a chip HAL, and only
 they hold unsafe code: their DMA endpoint declarations and their jump into the
 chip's ROM bootloader.
+
+A safety-critical crate declares `[package.metadata.ferrowasp] critical =
+true` and never depends on a crate that does not; its external dependencies
+are pinned to one version.
 
 ## Firmware Applications
 
