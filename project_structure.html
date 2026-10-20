@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-01f68a1c.js";
+            window.path_to_searchindex_js = "searchindex-ff4cdd72.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -195,9 +195,12 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-storage</code></td><td>The SPI NOR flash driver and the <code>NorStorage</code> trait</td></tr>
 <tr><td><code>ferrowasp-drivers</code></td><td>Re-exports of the driver crates under their former paths</td></tr>
 <tr><td><code>ferrowasp-flight</code></td><td>Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link</td></tr>
+<tr><td><code>ferrowasp-feedback</code></td><td>Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for</td></tr>
+<tr><td><code>ferrowasp-imu</code></td><td>The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through</td></tr>
+<tr><td><code>ferrowasp-input</code></td><td>Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape</td></tr>
 <tr><td><code>ferrowasp-io-contracts</code></td><td>The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines</td></tr>
 <tr><td><code>ferrowasp-serial</code></td><td>The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer</td></tr>
-<tr><td><code>ferrowasp-io-core</code></td><td>The SPI mailbox and async device, I/O health and statistics, the <code>serial</code> command’s reply, and re-exports of the serial crates under their former paths</td></tr>
+<tr><td><code>ferrowasp-io-core</code></td><td>I/O health and statistics, the <code>serial</code> command’s reply, and re-exports of the serial and SPI crates under their former paths</td></tr>
 <tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
 <tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
 <tr><td><code>ferrowasp-output</code></td><td>Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding</td></tr>
