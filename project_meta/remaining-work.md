@@ -19,12 +19,12 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   - the stored bidirectional-DShot setting, in place of the props-off
     `bench_bidirectional_dshot` feature, and FerroConfigurator's Motors tab
     for it and the motor pole count;
-  - `ferrowasp-flight::rpm_filter` in the control loop, with its stored
+  - `ferrowasp-flight-control::rpm_filter` in the control loop, with its stored
     configuration;
   - the qualification source moved to bidirectional eRPM;
   - extended telemetry: the enable command before guarded idle;
   - blackbox eRPM, reply-loss and extended-telemetry fields;
-  - `ferrowasp-flight::dynamic_idle` (ADR-0049) on a mixer output floor,
+  - `ferrowasp-flight-control::dynamic_idle` (ADR-0049) on a mixer output floor,
     enabled only after the RPM filter has target evidence. Its stale hold
     (provisionally 100 ms) and decay (500 ms) are set from logged reply-loss
     data.

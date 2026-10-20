@@ -17,7 +17,7 @@ foxeer-f405-2khz.ulg.sha256
     The SHA-256 of what `ferro-configurator convert foxeer-f405-2khz.fwbb`
     writes as ULog.
 
-Checked by crates/ferrowasp-core/tests/golden_blackbox.rs (decoding,
+Checked by crates/ferrowasp-protocol/tests/golden_blackbox.rs (decoding,
 re-encoding, records), FerroConfigurator's
 crates/ferro-configurator-core/tests/golden_blackbox.rs (CSV and ULog bytes),
 and tools/tests/test_blackbox_analyzer.py (reading the CSV).

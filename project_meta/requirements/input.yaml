@@ -175,7 +175,7 @@ requirements:
     allocated_to:
       - ferrowasp_core::safety::rc_fault_response
       - ferrowasp_core::safety::neutralize_rc_outputs
-      - ferrowasp_flight::drone_toolbox::RcChannelMap::replaced
+      - ferrowasp_input::channel_map::RcChannelMap::replaced
       - ferrowasp_stm32_tasks::rc_input
     verification:
       mode: direct
@@ -199,7 +199,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::a_channel_map_change_is_seen_once_and_the_first_map_is_not_one
+            test: ferrowasp_input::channel_map::tests::a_channel_map_change_is_seen_once_and_the_first_map_is_not_one
 
   - id: INPUT-007
     title: A changed channel map requires the arm switch seen low again
@@ -213,7 +213,7 @@ requirements:
     derived_from: [INPUT-001]
     allocated_to:
       - ferrowasp_core::safety::RcLinkState
-      - ferrowasp_flight::drone_toolbox::RcChannelMap
+      - ferrowasp_input::channel_map::RcChannelMap
     verification:
       mode: direct
       entries:
@@ -226,7 +226,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::channel_map_reads_taer_and_round_trips_its_config_values
+            test: ferrowasp_input::channel_map::tests::channel_map_reads_taer_and_round_trips_its_config_values
 
   - id: INPUT-008
     title: Arm requests are qualified and disarm follows the switch
@@ -275,8 +275,8 @@ requirements:
       A receiver or parser fault must not command more than full stick.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_flight::drone_toolbox::remap_rc_channels_with_profile
-      - ferrowasp_flight::drone_toolbox::remap_rc_throttle_channel
+      - ferrowasp_flight_control::drone_toolbox::remap_rc_channels_with_profile
+      - ferrowasp_flight_control::drone_toolbox::remap_rc_throttle_channel
     verification:
       mode: direct
       entries:
@@ -284,17 +284,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
+            test: ferrowasp_flight_control::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits
+            test: ferrowasp_flight_control::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
+            test: ferrowasp_flight_control::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
         - level: bench
           target: fcu
           setup: props-off
@@ -411,3 +411,41 @@ requirements:
           setup: none
           method:
             test: ferrowasp_input::rc_receiver::tests::crsf_crc_error_is_a_parse_error
+
+  - id: INPUT-013
+    title: The channel map names each stick and the arm switch once
+    statement: >-
+      The channel map shall read the stick order as one four-digit
+      number, a permutation of channels 1 to 4 for roll, pitch, throttle
+      and yaw, and the arm switch as one channel from 5 to 16, refusing
+      any other map; it shall read a frame through the map, and report a
+      change once, never the first map seen.
+    rationale: >-
+      A wrong channel puts a stick on the wrong axis or the arm switch
+      on a stick; RC mapping is controlled configuration (W6).
+    derived_from: [INPUT-001]
+    allocated_to:
+      - ferrowasp_input::channel_map
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::channel_map::tests::stock_edgetx_map_reads_aetr_with_the_arm_switch_on_channel_five
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::channel_map::tests::a_channel_map_change_is_seen_once_and_the_first_map_is_not_one
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::channel_map::tests::channel_map_reads_taer_and_round_trips_its_config_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::channel_map::tests::a_map_that_repeats_a_channel_or_misplaces_the_arm_switch_is_refused

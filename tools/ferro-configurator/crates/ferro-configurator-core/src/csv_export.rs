@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ferrowasp_core::blackbox::FlightRecord;
+use ferrowasp_protocol::blackbox::FlightRecord;
 use serde::Serialize;
 
 use crate::{
@@ -239,7 +239,7 @@ fn csv_row(record: &FlightRecord, time_s: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrowasp_core::blackbox::{RECORDS_PER_PAGE, encode_page};
+    use ferrowasp_protocol::blackbox::{RECORDS_PER_PAGE, encode_page};
     use tempfile::tempdir;
 
     /// A record every `step` ticks of a `rate_hz` loop, stamped to the

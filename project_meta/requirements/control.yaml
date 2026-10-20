@@ -11,7 +11,7 @@ requirements:
       configuration.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_flight::drone_toolbox::remap_rc_channels_with_profile
+      - ferrowasp_flight_control::drone_toolbox::remap_rc_channels_with_profile
     verification:
       mode: direct
       entries:
@@ -19,12 +19,12 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs
+            test: ferrowasp_flight_control::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
+            test: ferrowasp_flight_control::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
         - level: bench
           target: fcu
           setup: props-off
@@ -43,7 +43,7 @@ requirements:
       stabilization into a runaway.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_flight::drone_toolbox::FlightController
+      - ferrowasp_flight_control::drone_toolbox::FlightController
       - ferrowasp_board_foxeer_f405_v2::profiles
     verification:
       mode: direct
@@ -52,17 +52,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
+            test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
+            test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs
+            test: ferrowasp_flight_control::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs
         - level: unit
           target: host
           setup: none
@@ -95,7 +95,7 @@ requirements:
       evidence can.
     derived_from: [W6, W7]
     allocated_to:
-      - ferrowasp_flight::drone_toolbox::FlightController
+      - ferrowasp_flight_control::drone_toolbox::FlightController
     verification:
       mode: direct
       entries:
@@ -103,7 +103,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds
+            test: ferrowasp_flight_control::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds
         - level: flight
           target: fcu
           setup: none
@@ -283,17 +283,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::the_default_corner_survives_the_current_loop_rate
+            test: ferrowasp_flight_control::drone_toolbox::tests::the_default_corner_survives_the_current_loop_rate
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rpm_filter::tests::each_harmonic_of_the_motor_is_notched
+            test: ferrowasp_flight_control::rpm_filter::tests::each_harmonic_of_the_motor_is_notched
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::rpm_filter::tests::stick_frequencies_pass_through
+            test: ferrowasp_flight_control::rpm_filter::tests::stick_frequencies_pass_through
 
   - id: CTRL-007
     title: The attitude estimate integrates rates and corrects toward gravity
@@ -336,7 +336,7 @@ requirements:
     derived_from: [W2]
     allocated_to:
       - ferrowasp_control::attitude
-      - ferrowasp_flight::drone_toolbox::FlightController
+      - ferrowasp_flight_control::drone_toolbox::FlightController
     verification:
       mode: direct
       entries: []
@@ -383,3 +383,299 @@ requirements:
           setup: none
           method:
             test: ferrowasp_control::calibration::accel_level::tests::stored_offsets_are_bounded
+
+  - id: CTRL-010
+    title: The flight controller turns sticks and rates into bounded motor commands
+    statement: >-
+      The flight controller shall shape each stick by its rate profile
+      and deadband with centre sensitivity and maximum rate independent,
+      run one PID per axis on the measured rate with feedforward and
+      expose each axis's contributions, mix them to the motors so that
+      the correction opposes the motion and the actuator bounds hold,
+      map logical to physical motors in the measured bench order, clear
+      its state on a reset, and run only at a control rate its scheduler
+      tick divides exactly.
+    rationale: >-
+      This is the path from the pilot's sticks to motor output; its
+      signs, gains, rates and motor order are controlled configuration
+      (W6).
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight_control::drone_toolbox
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::the_divider_check_rejects_an_inexact_pair
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::the_default_corner_survives_the_current_loop_rate
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::reset_control_state_clears_pid_history_setpoints_and_outputs
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::gyro_axis_map_preserves_current_control_convention
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::first_hop_profile_disables_integral_during_p_only_tuning
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::pid_zero_error_keeps_all_motors_at_throttle
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::motor_output_map_matches_measured_bench_order
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::dshot_unequal_bench_pattern_is_bounded_remapped_and_triggered
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::pid_contributions_are_exposed_per_axis
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::feedforward_and_blackbox_sample_track_rate_setpoint_changes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds
+
+  - id: CTRL-011
+    title: Dynamic idle raises the motor floor as Betaflight does, and stale eRPM never raises it
+    statement: >-
+      Dynamic idle shall be off by default and refuse invalid settings;
+      when on, it shall raise the floor of all four motors together to
+      bring the slowest motor to its target speed, with Betaflight's
+      gains and its fast-rising, slow-falling I-term, never above the
+      configured maximum and, before throttle is raised, never above
+      static idle; and while any eRPM is stale it shall hold the
+      increase without integrating, then decay it to static idle, never
+      wind it up past static idle, and resume from where the decay left
+      off once eRPM is fresh (ADR-0049).
+    rationale: >-
+      Dynamic idle changes motor output from motor feedback; stale
+      feedback must never push the floor up.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_flight_control::dynamic_idle
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::off_by_default
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::gains_scale_as_betaflights
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::invalid_settings_are_refused
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::the_loop_brings_the_slowest_motor_to_its_target
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::before_throttle_is_raised_the_floor_stops_at_static_idle
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::after_throttle_is_raised_the_floor_stops_at_the_maximum
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::motors_above_target_need_no_increase
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::the_i_term_rises_fast_and_falls_slowly
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::a_falling_motor_speed_pushes_through_the_d_term
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::stale_erpm_holds_the_increase_without_integrating
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::stale_erpm_then_decays_the_increase_to_static_idle
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::stale_erpm_never_winds_the_floor_up_from_below_static_idle_past_it
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::fresh_erpm_resumes_from_where_the_decay_left_off
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::dynamic_idle::tests::reset_starts_over
+
+  - id: CTRL-012
+    title: The RPM filter notches each motor's harmonics as Betaflight does
+    statement: >-
+      The RPM filter shall default to Betaflight's settings and refuse
+      invalid ones; it shall turn eRPM into mechanical frequency through
+      the pole pairs, smoothed by a 150 Hz PT1 and held while eRPM is
+      held; it shall place one notch per motor and harmonic, pass the
+      gyro unchanged with no harmonics and pass stick frequencies, fade
+      notches out below the minimum frequency, stop them short of
+      Nyquist, refresh every notch within a millisecond, and neither
+      refresh nor apply a zero-weight harmonic (ADR-0047).
+    rationale: >-
+      The RPM filter shapes the gyro signal the rate loop flies on; a
+      notch misplaced on a stick frequency would cut the pilot's own
+      commands.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight_control::rpm_filter
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::defaults_are_betaflights_and_valid
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::invalid_settings_are_refused
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::erpm_becomes_mechanical_hertz_through_the_pole_pairs
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::motor_frequency_is_smoothed_by_a_150_hz_pt1
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::a_held_erpm_holds_the_frequency
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::with_no_harmonics_the_gyro_passes_unchanged
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::each_harmonic_of_the_motor_is_notched
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::stick_frequencies_pass_through
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::notches_below_the_minimum_fade_out
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::notches_are_half_deep_halfway_through_the_fade
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::notches_stop_short_of_nyquist
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::every_notch_is_refreshed_within_a_millisecond
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::a_zero_weight_harmonic_is_neither_refreshed_nor_applied
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::rpm_filter::tests::the_settled_motor_frequency_notches_its_own_noise

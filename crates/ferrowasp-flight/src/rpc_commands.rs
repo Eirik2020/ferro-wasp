@@ -11,7 +11,7 @@ use ferrowasp_mspv2::rpc;
 
 use crate::blackbox_storage as blackbox_task;
 use crate::config_save::{ConfigRpcCompletion, ConfigSave};
-use crate::flash_storage::{StorageLayout, StoredConfig};
+use crate::flash_storage::{StorageLayout, StoredConfig, StoredConfigRpc};
 use crate::log_writer::LogWriter;
 use crate::storage_maintenance::Maintenance;
 

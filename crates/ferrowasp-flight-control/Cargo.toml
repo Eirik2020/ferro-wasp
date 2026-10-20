@@ -1,0 +1,17 @@
+[package]
+name = "ferrowasp-flight-control"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-control = { path = "../ferrowasp-control" }
+ferrowasp-input = { path = "../ferrowasp-input" }
+libm = "=0.2.16"
+
+[package.metadata.ferrowasp]
+critical = true

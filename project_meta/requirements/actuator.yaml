@@ -10,7 +10,7 @@ requirements:
       A wrong motor order flips the craft on takeoff.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_core::actuator::MotorOutputMap
+      - ferrowasp_flight_control::actuator::MotorOutputMap
       - ferrowasp_board_foxeer_f405_v2::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT
     verification:
       mode: direct
@@ -24,14 +24,69 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::drone_toolbox::tests::motor_output_map_matches_measured_bench_order
+            test: ferrowasp_flight_control::drone_toolbox::tests::motor_output_map_matches_measured_bench_order
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_core::actuator::tests::motor_map_accepts_only_permutations
+            test: ferrowasp_flight_control::actuator::tests::motor_map_accepts_only_permutations
         - level: bench
           target: fcu
           setup: props-off
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: MOTOR-002
+    title: A motor map is a permutation, and throttle stays in range
+    statement: >-
+      A motor map shall be a permutation of the four outputs, one-based,
+      with the identity keeping the board's own order and a swap moving
+      board outputs between logical motors; a lookup outside the four
+      motors shall be refused; a packed map shall round-trip, zero
+      meaning none published; and throttle shall convert to the output
+      range saturating, with a non-finite value refused.
+    rationale: >-
+      The motor map decides which motor each output drives; a map that
+      is not a permutation drives one motor twice and another not at all
+      (W6).
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_flight_control::actuator
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::throttle_to_u16_saturates_and_rejects_non_finite_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::motor_outputs_follow_a_one_based_permutation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::motor_map_accepts_only_permutations
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::identity_order_keeps_the_board_map
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::a_swap_moves_board_outputs_between_logical_motors
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::logical_motor_lookup_rejects_out_of_range
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::packed_maps_round_trip_and_zero_is_unpublished

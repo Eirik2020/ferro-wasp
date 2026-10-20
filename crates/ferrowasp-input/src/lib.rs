@@ -5,4 +5,5 @@
 #![forbid(unsafe_code)]
 #![no_std]
 
+pub mod channel_map;
 pub mod rc_receiver;

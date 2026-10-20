@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ferrowasp_core::blackbox::{
+use ferrowasp_protocol::blackbox::{
     FLASH_PAGE_LEN, FLIGHT_RECORD_FLAG_BOOT_SESSION_START, decode_page, record_from_page,
 };
 use serde::Serialize;
@@ -515,7 +515,7 @@ fn file_error(operation: &'static str, path: &Path, error: std::io::Error) -> Fe
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrowasp_core::blackbox::{FlightRecord, encode_page};
+    use ferrowasp_protocol::blackbox::{FlightRecord, encode_page};
     use tempfile::tempdir;
 
     fn page(flight: u32, sequence: u32, boot: bool) -> [u8; FLASH_PAGE_LEN] {

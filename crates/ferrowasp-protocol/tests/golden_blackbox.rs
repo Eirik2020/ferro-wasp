@@ -4,7 +4,7 @@
 //!
 //! The fixture is described in `fixtures/blackbox/SOURCE.txt`.
 
-use ferrowasp_core::blackbox::{
+use ferrowasp_protocol::blackbox::{
     FLASH_PAGE_LEN, FlightRecord, decode_page, encode_page, record_from_page,
 };
 

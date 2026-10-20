@@ -130,8 +130,8 @@ Acquisition, validation, conversion, and analysis stay separate so conversion
 cannot make corrupt evidence look valid. Never overwrite inputs or retained
 logs. Software-only tests assume no network, probe, or hardware.
 
-- `tools/ferro-configurator/` is its own Cargo workspace and lockfile, depending
-  by path on `ferrowasp-core`; a protocol change lands on both sides in one
+- `tools/ferro-configurator/` is its own Cargo workspace and lockfile, with path
+  dependencies on firmware crates; a protocol change lands on both sides in one
   commit. Bench motor tests are requests the firmware may refuse. Writes are
   disarmed-only with full readback. Validate board identity, manifest, hashes,
   address ranges, page CRCs, and resume state before claiming success; `.fwbb`

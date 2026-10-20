@@ -130,7 +130,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
+            PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-control/src/pid.rs"),
             PurePosixPath("crates/ferrowasp-control/src/filter.rs"),
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
@@ -226,7 +226,7 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-input/src/rc_receiver.rs"),
             PurePosixPath("crates/ferrowasp-crsf/src/lib.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
+            PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/uart_port.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/uart_dma.rs"),
         ),
@@ -279,7 +279,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
+            PurePosixPath("crates/ferrowasp-protocol/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-storage/src/nor_storage.rs"),
             PurePosixPath("crates/ferrowasp-storage/src/spi_nor.rs"),
@@ -294,8 +294,8 @@ TOPIC_ROUTES = {
         foxeer_symbols=("flash_manager_task",),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
-            PurePosixPath("crates/ferrowasp-flight/src/drone_toolbox.rs"),
+            PurePosixPath("crates/ferrowasp-protocol/src/blackbox.rs"),
+            PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),
         ),
