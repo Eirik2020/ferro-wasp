@@ -248,8 +248,8 @@ name = "ferro-configurator-core"
 version = "0.1.0"
 dependencies = [
  "ferrowasp-config",
- "ferrowasp-core",
  "ferrowasp-protocol",
+ "ferrowasp-safety",
  "serde",
  "serde_json",
  "serialport",
@@ -274,18 +274,6 @@ name = "ferrowasp-control"
 version = "0.1.0"
 dependencies = [
  "libm",
-]
-
-[[package]]
-name = "ferrowasp-core"
-version = "0.1.0"
-dependencies = [
- "critical-section",
- "ferrowasp-config",
- "ferrowasp-control",
- "ferrowasp-flight-control",
- "ferrowasp-protocol",
- "heapless",
 ]
 
 [[package]]
@@ -323,6 +311,14 @@ version = "0.1.0"
 dependencies = [
  "ferrowasp-config",
  "ferrowasp-flight-control",
+]
+
+[[package]]
+name = "ferrowasp-safety"
+version = "0.1.0"
+dependencies = [
+ "critical-section",
+ "heapless",
 ]
 
 [[package]]

@@ -14,18 +14,19 @@ Under `crates/`, all members of the root workspace and host-tested there:
 |---|---|
 | `ferrowasp-config` | Stored configuration, safety-critical: the configuration keys and their ranges, the configuration slot page, and the stored schema with its migration |
 | `ferrowasp-control` | General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration |
-| `ferrowasp-core` | Safety state and the safety master's rules, and re-exports of the moved modules under their former paths |
+| `ferrowasp-core` | Re-exports of the moved modules under their former paths |
 | `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |
 | `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight-control` | How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter's wiring |
-| `ferrowasp-flight` | Portable flight logic: arming, blackbox and configuration storage, log sync, the command link, and re-exports of the moved modules under their former paths |
+| `ferrowasp-flight` | Portable flight logic: blackbox and configuration storage, log sync, the command link, and re-exports of the moved modules under their former paths |
 | `ferrowasp-feedback` | Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for |
 | `ferrowasp-imu` | The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through |
 | `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map |
 | `ferrowasp-io-contracts` | The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines |
 | `ferrowasp-protocol` | The formats shared with host tools: the onboard flight log's records and pages, and the compact rate record |
+| `ferrowasp-safety` | The safety master's rules, safety-critical: arming and its guard, the RC link and its fault responses, the motor command boundary, bench motor requests, and the single-writer signals tasks share |
 | `ferrowasp-serial` | The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer |
 | `ferrowasp-io-core` | I/O health and statistics, the `serial` command's reply, and re-exports of the serial and SPI crates under their former paths |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |

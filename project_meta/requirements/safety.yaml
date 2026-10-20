@@ -1,0 +1,192 @@
+schema_version: 1
+requirements:
+  - id: SAFETY-001
+    title: A motor command reaches the actuators only fresh and in range
+    statement: >-
+      A motor command shall carry its sequence and issue time and count
+      as stale once older than its maximum age, from the future, or past
+      a 32-bit millisecond wrap read wrongly; the actuator side shall
+      take only the newest fresh command, dropping stale ones and
+      reporting a missing or expired command; active motor outputs shall
+      be floored at the protocol's idle and clamped, a non-finite output
+      or an invalid idle configuration refused; and publishing shall
+      advance the sequence only for a queued command, reporting a full
+      queue and a refused wake.
+    rationale: >-
+      This is the boundary between control and actuator authority
+      (ADR-0015, W1); a stale or out-of-range command must never reach a
+      motor (W2).
+    derived_from: [W1, W2]
+    allocated_to:
+      - ferrowasp_safety::MotorCmd
+      - ferrowasp_safety::MotorCmdReadError
+      - ferrowasp_safety::MotorOutputValidationError
+      - ferrowasp_safety::validate_active_motor_outputs
+      - ferrowasp_safety::validate_active_motor_outputs_with_idle
+      - ferrowasp_safety::MOTOR_CMD_QUEUE_CAP
+      - ferrowasp_safety::MOTOR_CMD_MAX_AGE_MS
+      - ferrowasp_safety::ActuatorCmd
+      - ferrowasp_safety::ZERO_THROTTLE
+      - ferrowasp_safety::ARM_IDLE_THROTTLE
+      - ferrowasp_safety::ESC_LOW_THROTTLE
+      - ferrowasp_safety::ESC_IDLE_THROTTLE
+      - ferrowasp_safety::ESC_ARM_THROTTLE
+      - ferrowasp_safety::ESC_MAX_THROTTLE
+      - ferrowasp_safety::BLHELI_ARM_LOW_HOLD_MS
+      - ferrowasp_safety::BLHELI_ARM_IDLE_HOLD_MS
+      - ferrowasp_safety::ESC_LOW_HOLD_MS
+      - ferrowasp_safety::ESC_IDLE_HOLD_MS
+      - ferrowasp_safety::PWM_CAL_MAX_HOLD_MS
+      - ferrowasp_safety::PWM_CAL_LOW_HOLD_MS
+      - ferrowasp_safety::PWM_CAL_MOTOR
+      - ferrowasp_safety::actuator
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::motor_command_freshness_holds_past_the_old_u32_wrap
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::motor_command_from_the_future_is_stale
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::motor_command_reader_takes_latest_and_drops_stale_queue_entries
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::motor_command_reader_rejects_missing_and_expired_latest_commands
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::active_motor_output_validation_floors_and_clamps_finite_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::active_motor_output_validation_rejects_non_finite_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::active_motor_output_validation_accepts_a_protocol_specific_idle
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::active_motor_output_validation_rejects_invalid_idle_configuration
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::actuator::tests::a_published_command_carries_the_next_sequence_and_wakes_the_actuator
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::actuator::tests::a_full_queue_publishes_nothing_and_keeps_the_sequence
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::actuator::tests::a_rejected_wake_is_reported_after_the_command_is_queued
+
+  - id: SAFETY-002
+    title: A bench motor request runs only disarmed and never reaches an armed craft
+    statement: >-
+      A bench motor request shall be refused while the craft is armed or
+      arming; a spin or direction request shall also be refused while
+      the arm switch is high, the outputs are disabled or the motor is
+      not one of 1 to 4, while a stop is accepted whenever the craft is
+      disarmed and never reaches an armed one; and a recent bench
+      request shall block arming until its window expires.
+    rationale: >-
+      The motor test is a disarmed bench request under a firmware-held
+      lease (W1); nothing from the bench may act on a craft that can
+      fly.
+    derived_from: [W1]
+    allocated_to:
+      - ferrowasp_safety::BenchMotorRequest
+      - ferrowasp_safety::BenchMotorRefusal
+      - ferrowasp_safety::validate_bench_motor_request
+      - ferrowasp_safety::BENCH_MOTOR_LEASE_MS
+      - ferrowasp_safety::BENCH_ARMING_BLOCK_MS
+      - ferrowasp_safety::bench_blocks_arming
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::bench_motor_requests_are_refused_unless_disarmed_and_idle
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::bench_stop_never_reaches_an_armed_aircraft
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::a_recent_bench_request_blocks_arming_then_expires
+
+  - id: SAFETY-003
+    title: Arming needs a ready, calibrated and fresh IMU
+    statement: >-
+      Pre-arm health shall refuse arming while the IMU is not ready, its
+      gyro bias is not calibrated or its data is not fresh, and the
+      control loop shall tolerate one isolated stale IMU tick but not
+      two in a row.
+    rationale: >-
+      Arming on a stale or uncalibrated IMU flies on a guessed state
+      (W2).
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_safety::PreArmHealth
+      - ferrowasp_safety::validate_prearm_health
+      - ferrowasp_safety::IMU_STALE_TICKS_TOLERATED
+      - ferrowasp_safety::imu_stale_beyond_tolerance
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::prearm_health_requires_ready_calibrated_fresh_imu
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::one_stale_tick_is_tolerated_and_two_in_a_row_are_not
+
+  - id: SAFETY-004
+    title: Each shared signal has one writer, and its readers see what it wrote
+    statement: >-
+      Each shared signal shall be split once into one writer and its
+      readers, and a reader shall see what the writer last wrote;
+      revoking the arm permit shall report whether one was held.
+    rationale: >-
+      One writer per flag is enforced by the type system (ADR-0055), so
+      two tasks can never both decide armed.
+    derived_from: [W1]
+    allocated_to:
+      - ferrowasp_safety::signals
+      - ferrowasp_safety::RcRates
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers

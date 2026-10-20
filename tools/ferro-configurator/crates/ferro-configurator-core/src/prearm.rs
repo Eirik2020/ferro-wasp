@@ -8,7 +8,7 @@
 //! calibration, ESC idle eRPM qualification) are reported as `Unknown` rather
 //! than guessed, so a fully green list never claims more than was observed.
 
-use ferrowasp_core::safety::ARMING_MAX_THROTTLE;
+use ferrowasp_safety::ARMING_MAX_THROTTLE;
 use serde::Serialize;
 
 use crate::client::StatusSnapshot;

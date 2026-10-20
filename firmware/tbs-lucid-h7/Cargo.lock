@@ -301,12 +301,11 @@ dependencies = [
 name = "ferrowasp-core"
 version = "0.1.0"
 dependencies = [
- "critical-section",
  "ferrowasp-config",
  "ferrowasp-control",
  "ferrowasp-flight-control",
  "ferrowasp-protocol",
- "heapless 0.9.2",
+ "ferrowasp-safety",
 ]
 
 [[package]]
@@ -349,6 +348,7 @@ dependencies = [
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
  "ferrowasp-protocol",
+ "ferrowasp-safety",
  "heapless 0.9.2",
  "libm",
 ]
@@ -449,6 +449,14 @@ dependencies = [
  "defmt",
  "ferrowasp-config",
  "ferrowasp-flight-control",
+]
+
+[[package]]
+name = "ferrowasp-safety"
+version = "0.1.0"
+dependencies = [
+ "critical-section",
+ "heapless 0.9.2",
 ]
 
 [[package]]

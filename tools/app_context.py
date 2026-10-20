@@ -119,7 +119,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
+            PurePosixPath("crates/ferrowasp-safety/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-feedback/src/esc_manager.rs"),
         ),
     ),
@@ -133,7 +133,7 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-control/src/pid.rs"),
             PurePosixPath("crates/ferrowasp-control/src/filter.rs"),
-            PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
+            PurePosixPath("crates/ferrowasp-safety/src/lib.rs"),
         ),
     ),
     "actuator": TopicRoute(
@@ -150,7 +150,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
+            PurePosixPath("crates/ferrowasp-safety/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
             PurePosixPath("crates/ferrowasp-output/src/dshot.rs"),
@@ -223,7 +223,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
+            PurePosixPath("crates/ferrowasp-safety/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-input/src/rc_receiver.rs"),
             PurePosixPath("crates/ferrowasp-crsf/src/lib.rs"),
             PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),

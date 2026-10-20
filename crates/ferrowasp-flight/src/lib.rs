@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 
 pub use ferrowasp_control::calibration::accel_level;
-pub mod actuator;
-pub mod arming;
+pub use ferrowasp_safety::actuator;
+pub use ferrowasp_safety::arming;
 #[cfg(feature = "mspv2_configurator")]
 pub mod blackbox_storage;
 pub mod command_link;
