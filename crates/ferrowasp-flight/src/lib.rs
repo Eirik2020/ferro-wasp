@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 
 pub use ferrowasp_control::calibration::accel_level;
-pub mod actuator;
-pub mod arming;
+pub use ferrowasp_safety::actuator;
+pub use ferrowasp_safety::arming;
 #[cfg(feature = "mspv2_configurator")]
 pub mod blackbox_storage;
 pub mod command_link;
@@ -14,8 +14,8 @@ pub use ferrowasp_flight_control::dynamic_idle;
 pub mod flash_storage;
 pub mod log_sync;
 pub mod log_writer;
-pub mod osd;
 pub use ferrowasp_input::rc_receiver;
+pub use ferrowasp_osd as osd;
 #[cfg(feature = "mspv2_configurator")]
 pub mod rpc_commands;
 pub use ferrowasp_flight_control::rpm_filter;

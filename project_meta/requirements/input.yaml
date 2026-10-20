@@ -28,7 +28,11 @@ requirements:
     rationale: Stale input must never be acted on as a live command.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_core::safety::RcLinkState
+      - ferrowasp_safety::RcLinkState
+      - ferrowasp_safety::RcLinkInvalidation
+      - ferrowasp_safety::RcLinkStatus
+      - ferrowasp_safety::RC_LINK_TIMEOUT_US
+      - ferrowasp_safety::RC_LINK_RECOVERY_FRAMES
     verification:
       mode: direct
       entries:
@@ -36,12 +40,12 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
+            test: ferrowasp_safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::rc_link_requires_healthy_recovery_and_arm_switch_low
+            test: ferrowasp_safety::tests::rc_link_requires_healthy_recovery_and_arm_switch_low
 
   - id: INPUT-003
     title: Receiver-flagged loss invalidates the link
@@ -54,7 +58,7 @@ requirements:
       has gone.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_core::safety::classify_rc_frame_flags
+      - ferrowasp_safety::classify_rc_frame_flags
       - ferrowasp_input::rc_receiver::RcReceiver
     verification:
       mode: direct
@@ -63,7 +67,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::rc_frame_flags_reject_failsafe_and_lost_frames
+            test: ferrowasp_safety::tests::rc_frame_flags_reject_failsafe_and_lost_frames
         - level: unit
           target: host
           setup: none
@@ -173,10 +177,12 @@ requirements:
       rc_input task body only wires them, as AGENTS.md requires.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_core::safety::rc_fault_response
-      - ferrowasp_core::safety::neutralize_rc_outputs
+      - ferrowasp_safety::rc_fault_response
+      - ferrowasp_safety::neutralize_rc_outputs
       - ferrowasp_input::channel_map::RcChannelMap::replaced
       - ferrowasp_stm32_tasks::rc_input
+      - ferrowasp_safety::RcInputFault
+      - ferrowasp_safety::RcFaultResponse
     verification:
       mode: direct
       entries:
@@ -184,17 +190,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::every_rc_fault_invalidates_with_its_own_reason
+            test: ferrowasp_safety::tests::every_rc_fault_invalidates_with_its_own_reason
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::only_lost_bytes_reset_the_parser_and_only_a_stopped_stream_stops
+            test: ferrowasp_safety::tests::only_lost_bytes_reset_the_parser_and_only_a_stopped_stream_stops
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::neutralizing_centres_the_sticks_drops_the_switch_and_cancels_an_arm_hold
+            test: ferrowasp_safety::tests::neutralizing_centres_the_sticks_drops_the_switch_and_cancels_an_arm_hold
         - level: unit
           target: host
           setup: none
@@ -212,7 +218,7 @@ requirements:
       which would otherwise look like the pilot arming.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_core::safety::RcLinkState
+      - ferrowasp_safety::RcLinkState
       - ferrowasp_input::channel_map::RcChannelMap
     verification:
       mode: direct
@@ -221,7 +227,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation
+            test: ferrowasp_safety::tests::rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation
         - level: unit
           target: host
           setup: none
@@ -239,8 +245,10 @@ requirements:
     rationale: A glitch or a switch already high at connect must never arm.
     derived_from: [INPUT-001]
     allocated_to:
-      - ferrowasp_core::safety::ArmQualifier
-      - ferrowasp_core::safety::RcLinkState
+      - ferrowasp_safety::ArmQualifier
+      - ferrowasp_safety::RcLinkState
+      - ferrowasp_safety::ARM_THRESHOLD
+      - ferrowasp_safety::ARM_HOLD_US
     verification:
       mode: direct
       entries:
@@ -248,17 +256,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge
+            test: ferrowasp_safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::an_arm_hold_straddling_the_old_u32_wrap_still_arms
+            test: ferrowasp_safety::tests::an_arm_hold_straddling_the_old_u32_wrap_still_arms
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes
+            test: ferrowasp_safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes
         - level: bench
           target: fcu
           setup: props-off

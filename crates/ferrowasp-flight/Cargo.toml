@@ -19,7 +19,9 @@ ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 ferrowasp-input = { path = "../ferrowasp-input" }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
+ferrowasp-osd = { path = "../ferrowasp-osd" }
 ferrowasp-protocol = { path = "../ferrowasp-protocol" }
+ferrowasp-safety = { path = "../ferrowasp-safety" }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 heapless = "0.9.2"
 libm = "0.2.11"

@@ -32,7 +32,7 @@ requirements:
       the craft in a guessed state.
     derived_from: [W2]
     allocated_to:
-      - ferrowasp_core::safety::RcLinkState
+      - ferrowasp_safety::RcLinkState
       - ferrowasp_stm32_tasks::heartbeat
     verification:
       mode: direct

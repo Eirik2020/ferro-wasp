@@ -1,4 +1,15 @@
+//! The safety master's rules, safety-critical (ADR-0060): arming and its
+//! guard, the RC link and its fault responses, the motor command boundary,
+//! bench motor requests, and the typed signals tasks share. The safety
+//! master and actuator tasks join it later; making it domain-agnostic is
+//! deferred (ADR-0061).
+
+#![forbid(unsafe_code)]
+#![no_std]
 #![allow(dead_code)]
+
+pub mod actuator;
+pub mod arming;
 
 pub const ARM_HOLD_US: u64 = 200_000;
 pub const ARM_THRESHOLD: u16 = 1500;
@@ -772,29 +783,6 @@ pub mod signals {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct EdgeDetector {
-    prev: bool,
-}
-
-impl EdgeDetector {
-    pub fn new() -> Self {
-        Self { prev: false }
-    }
-
-    pub fn update(&mut self, current: bool) -> bool {
-        let rising = !self.prev && current;
-        self.prev = current;
-        rising
-    }
-}
-
-impl Default for EdgeDetector {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Default)]
 pub struct ArmQualifier {
     was_high: bool,
@@ -1363,5 +1351,37 @@ mod tests {
             bench_blocks_arming(Some(past_u32), past_u32 + 1_999),
             "past the old u32 wrap"
         );
+    }
+
+    #[test]
+    fn each_flag_writer_is_seen_by_its_readers() {
+        use core::sync::atomic::{AtomicBool, AtomicU32};
+        static ARMED: AtomicBool = AtomicBool::new(false);
+        static PERMIT: AtomicBool = AtomicBool::new(false);
+        static DONE: AtomicBool = AtomicBool::new(false);
+        static THROTTLE: AtomicU32 = AtomicU32::new(0);
+
+        let (armed, armed_reader) = signals::split_safety_arm(&ARMED);
+        armed.arm();
+        assert!(armed_reader.read() && armed.is_armed());
+        armed.disarm();
+        assert!(!armed_reader.read());
+
+        let (permit, permit_reader) = signals::split_actuator_arm_permit(&PERMIT);
+        permit.allow();
+        assert!(permit_reader.read());
+        assert!(permit.revoke(), "revoke reports that a permit was held");
+        assert!(!permit.revoke(), "and that none is left");
+        assert!(!permit_reader.read());
+
+        let (done, done_reader) = signals::split_actuator_arm_done(&DONE);
+        done.set_done();
+        assert!(done_reader.read());
+        done.clear();
+        assert!(!done_reader.read());
+
+        let (throttle, throttle_reader) = signals::split_rc_throttle(&THROTTLE);
+        throttle.write(1_200);
+        assert_eq!(throttle_reader.read(), 1_200);
     }
 }

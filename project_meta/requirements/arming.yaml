@@ -13,8 +13,13 @@ requirements:
       ground, before authority is handed to the control loop.
     derived_from: [W1, W2]
     allocated_to:
-      - ferrowasp_core::safety::validate_arming_guard
+      - ferrowasp_safety::validate_arming_guard
       - ferrowasp_feedback::esc_manager::EscIdleQualification
+      - ferrowasp_safety::SafetyEvent
+      - ferrowasp_safety::ArmingState
+      - ferrowasp_safety::ArmingAbortReason
+      - ferrowasp_safety::ARMING_MAX_THROTTLE
+      - ferrowasp_safety::arming
     verification:
       mode: direct
       entries:
@@ -22,7 +27,22 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_core::safety::tests::arming_guard_requires_permission_link_arm_switch_and_low_throttle
+            test: ferrowasp_safety::arming::tests::the_guard_is_checked_through_the_whole_hold_and_once_at_its_end
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::arming::tests::a_guard_that_fails_during_the_hold_ends_it_at_once
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::arming::tests::a_zero_poll_interval_still_makes_progress
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::arming_guard_requires_permission_link_arm_switch_and_low_throttle
         - level: unit
           target: host
           setup: none

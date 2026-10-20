@@ -1,3 +1,6 @@
+//! The former shared core, now re-exporting the crates its modules moved to
+//! under their former paths until it dissolves.
+
 #![forbid(unsafe_code)]
 #![no_std]
 
@@ -13,4 +16,4 @@ pub mod blackbox {
 }
 pub use ferrowasp_config::keys as config;
 pub use ferrowasp_control::frames;
-pub mod safety;
+pub use ferrowasp_safety as safety;
