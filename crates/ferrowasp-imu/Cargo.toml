@@ -1,0 +1,22 @@
+[package]
+name = "ferrowasp-imu"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+critical-section = { workspace = true }
+embedded-hal = { workspace = true }
+embedded-hal-async = { workspace = true }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+heapless = { workspace = true }
+
+[dev-dependencies]
+critical-section = { workspace = true, features = ["std"] }
+
+[package.metadata.ferrowasp]
+critical = true

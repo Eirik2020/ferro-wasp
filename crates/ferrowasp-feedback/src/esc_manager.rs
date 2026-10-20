@@ -1,6 +1,4 @@
-use ferrowasp_drivers::blheli_telemetry::{
-    EscTelemetry, ParserStats as WireParserStats, StreamParser,
-};
+use ferrowasp_blheli_telemetry::{EscTelemetry, ParserStats as WireParserStats, StreamParser};
 use heapless::spsc::{Consumer, Producer, Queue};
 
 pub const ESC_REQUEST_QUEUE_CAPACITY: usize = 4;
@@ -600,7 +598,7 @@ impl EscIdleQualification {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrowasp_drivers::blheli_telemetry::{FRAME_LEN, crc8};
+    use ferrowasp_blheli_telemetry::{FRAME_LEN, crc8};
 
     fn frame() -> [u8; FRAME_LEN] {
         let mut frame = [42, 0x06, 0x7c, 0x00, 0xfa, 0x01, 0x2c, 0x04, 0xd2, 0];
