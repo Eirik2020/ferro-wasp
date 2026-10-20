@@ -1,0 +1,227 @@
+schema_version: 1
+requirements:
+  - id: SERIAL-001
+    title: Port bindings resolve once, and a conflict drops the binding
+    statement: >-
+      Bindings shall resolve once at boot: RC input shall take the
+      configured protocol, and CRSF and the command line a port that
+      also transmits; a binding the port cannot carry shall be dropped
+      and reported while the rest apply; a function bound to two ports
+      shall be on neither; and stored bindings shall round-trip,
+      rejecting an unknown function.
+    rationale: >-
+      Serial bindings are stored configuration (W6); a function bound
+      twice or to a port that cannot carry it must fail visibly, never
+      leave RC on a guessed port.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_serial::binding
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::rc_input_takes_the_configured_protocol_and_crsf_needs_a_transmit_path
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::the_configurator_needs_a_port_that_carries_the_command_line_and_transmits
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::valid_bindings_resolve_to_their_profiles
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::a_port_that_cannot_carry_the_protocol_is_dropped
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::a_function_on_two_ports_is_on_neither
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::bindings_round_trip_and_reject_unknown_functions
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::names_parse_back
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::binding::tests::slots_take_one_endpoint_per_function
+
+  - id: SERIAL-002
+    title: Each protocol has its line settings, and a port carries only what it is wired for
+    statement: >-
+      Each protocol shall use its line settings: SBUS 100 000 baud with
+      8 data bits, even parity and two stop bits; CRSF 420 000 baud 8N1;
+      MSP, the command line and ESC telemetry 115 200 baud 8N1. A
+      protocol that answers shall need a transmit path, and a port shall
+      refuse a protocol its wiring cannot carry.
+    rationale: >-
+      Line settings are a public wire format (W6); wrong settings read
+      as garbage, which the parsers must then reject.
+    derived_from: [W6]
+    allocated_to:
+      - ferrowasp_serial::profile
+      - ferrowasp_serial::routing
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::routing::tests::each_protocol_uses_its_line_settings
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::routing::tests::a_port_refuses_what_its_wiring_cannot_carry
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::routing::tests::only_protocols_that_answer_need_a_transmit_path
+
+  - id: SERIAL-003
+    title: The serial reader delivers bytes in order and never hides a gap
+    statement: >-
+      The serial reader shall deliver received bytes in order, split one
+      chunk across reads without losing bytes and never join adjacent
+      chunks into one read; on an overflow it shall record a
+      discontinuity, mark the next chunk and wake a waiting reader even
+      with no data; a dropped pending read shall consume nothing; and a
+      disabled empty stream shall return a structured error.
+    rationale: >-
+      A consumer that cannot see lost bytes joins halves of two frames
+      into one valid-looking frame (ADR-0011).
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_serial::reader
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::owned_chunk_validates_and_copies_input
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::reads_split_one_owned_chunk_without_losing_bytes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::one_read_does_not_treat_adjacent_chunks_as_one_frame
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::overflow_records_discontinuity_and_marks_next_chunk
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::dropping_pending_read_does_not_consume_future_data
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::disabled_empty_stream_returns_structured_error
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::discontinuity_wakes_a_waiting_reader_with_no_data
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::try_read_returns_queued_bytes_and_zero_when_empty
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::serial_reader_implements_workspace_async_read
+
+  - id: SERIAL-004
+    title: The serial writer is bounded and ordered, and a fault clears it
+    statement: >-
+      The serial writer shall split writes into ordered, bounded chunks,
+      wait for owner capacity rather than drop bytes, report a flush
+      only after the queue and the hardware complete, enqueue nothing
+      for a dropped write, and on an owner fault wake a pending flush
+      and clear the queued chunks.
+    rationale: >-
+      The OSD and telemetry share a transport that may also carry RC; an
+      unbounded or stuck writer must not hold that port.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_serial::writer
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::write_copies_at_most_one_owned_chunk
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::write_all_splits_bytes_into_ordered_bounded_chunks
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::full_queue_write_waits_for_owner_capacity
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::flush_waits_for_queue_and_hardware_completion
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::irq_completion_wakes_owner_waiting_for_hardware
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::dropping_pending_write_does_not_enqueue_its_bytes
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::owner_fault_wakes_flush_and_clears_queued_chunks
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::owner_waiter_is_woken_when_writer_enqueues
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::empty_write_is_immediately_successful
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::writer::tests::serial_writer_implements_workspace_async_write

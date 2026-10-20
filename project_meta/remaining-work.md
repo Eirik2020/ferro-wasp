@@ -78,13 +78,15 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
      `critical = true` as each is created, bottom-up by dependency so that
      each move is a pure move (a safety-critical crate cannot depend on a
      crate not yet moved): `ferrowasp-control`; the CRSF, BLHeli-telemetry
-     and per-sensor IMU crates and `ferrowasp-io-contracts`; the subsystem
-     crates `ferrowasp-input`, `-feedback`, `-output` and `-serial`, with
-     their tasks behind a `tasks` feature; `ferrowasp-flight-control`;
-     `ferrowasp-config`, whose stored types those crates own, with
-     `ferrowasp-protocol` and `ferrowasp-blackbox` (FerroConfigurator moving
-     to `ferrowasp-protocol` in the same change); `ferrowasp-safety`; then
-     the `-critical` backend splits;
+     and per-sensor IMU crates and `ferrowasp-io-contracts`; the HAL-free
+     logic of the subsystem crates `ferrowasp-serial`, `-output`, `-input`,
+     `-feedback` and `-imu`; `ferrowasp-flight-control`; `ferrowasp-config`,
+     whose stored types those crates own, with `ferrowasp-protocol` and
+     `ferrowasp-blackbox` (FerroConfigurator moving to `ferrowasp-protocol`
+     in the same change); `ferrowasp-safety`; the `-critical` backend
+     splits, which need the serial, SPI and DShot code already critical;
+     and last the tasks, into their subsystem crates behind a `tasks`
+     feature, since they build on the backends;
   2. behaviour, one mechanism at a time: the observer and ledger in place of
      `snapshots.rs`; SPSC links and typed flags; the coordinator, then reboot,
      config transactions and accelerometer calibration through it; the boot
