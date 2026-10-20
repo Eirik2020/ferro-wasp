@@ -286,7 +286,7 @@ impl<E> SerialFunctionSlots<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serial::SerialCapabilities;
+    use crate::SerialCapabilities;
 
     const RX_ONLY: SerialCapabilities = SerialCapabilities {
         sbus: false,

@@ -42,7 +42,7 @@ whatever it serves. Saved configuration holds a function for each of
 telemetry, configurator) is chosen at boot from that table:
 
 - Init reads the saved bindings once, checks each against the port's
-  capabilities (`resolve_bindings` in `ferrowasp-io-core`), starts every bound
+  capabilities (`resolve_bindings` in `ferrowasp-serial`), starts every bound
   port with its function's line settings, and moves the port's stream into the
   function's task. A port with nothing bound is never enabled.
 - A binding the port cannot carry, or a function bound to two ports, is

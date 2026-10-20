@@ -10,7 +10,7 @@ use embedded_io_async::Read;
 use heapless::Deque;
 
 use super::{Discontinuity, DiscontinuityRecord, RxChunk, SerialFault, StreamGeneration};
-use crate::time::TimestampMicros;
+use ferrowasp_io_contracts::time::TimestampMicros;
 
 struct SerialRxMailbox<const N: usize, const DEPTH: usize> {
     chunks: Deque<RxChunk<N>, DEPTH>,
@@ -330,7 +330,7 @@ mod tests {
     use std::{boxed::Box, sync::Arc, task::Wake};
 
     use super::*;
-    use crate::serial::{RxChunkError, RxCompletion};
+    use crate::{RxChunkError, RxCompletion};
 
     struct CountWake(AtomicUsize);
 

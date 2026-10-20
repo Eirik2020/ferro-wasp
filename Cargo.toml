@@ -16,6 +16,7 @@ members = [
     "crates/ferrowasp-mpu6500",
     "crates/ferrowasp-mspv1",
     "crates/ferrowasp-mspv2",
+    "crates/ferrowasp-serial",
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-tasks",
     "crates/ferrowasp-stm32f4",

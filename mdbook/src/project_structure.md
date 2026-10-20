@@ -20,7 +20,8 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
 | `ferrowasp-flight` | Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link |
 | `ferrowasp-io-contracts` | The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines |
-| `ferrowasp-io-core` | The bounded serial reader and writer, port bindings, the SPI mailbox and async device, I/O health and statistics |
+| `ferrowasp-serial` | The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer |
+| `ferrowasp-io-core` | The SPI mailbox and async device, I/O health and statistics, the `serial` command's reply, and re-exports of the serial crates under their former paths |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
 | `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
 | `ferrowasp-waveform` | DShot packet encoding and compare sequences |
