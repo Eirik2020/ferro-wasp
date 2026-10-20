@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a7b57704.js";
+            window.path_to_searchindex_js = "searchindex-5f7c9771.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1382,8 +1382,8 @@ stop frames.</p>
 <p>No control, RC, USB, OSD, configurator, or experimental task owns a motor
 timer, pin, or DShot DMA stream.</p>
 <p>Each app is <code>#![deny(unsafe_code)]</code>. The unsafe code under DShot is limited to
-the DMA endpoint declarations of each chip backend: <code>ferrowasp-stm32f4::dshot</code>
-and <code>ferrowasp-stm32h7::dma_endpoints</code>. Each proves that an endpoint addresses
+the DMA endpoint declarations of each chip backend’s safety-critical half:
+<code>ferrowasp-stm32f4-critical::dshot</code> and <code>ferrowasp-stm32h7-critical::dma_endpoints</code>. Each proves that an endpoint addresses
 the compare register of a timer the bank owns exclusively, with the right
 transfer width and a valid stream mapping. HAL transfers own the active
 buffers; there is no project <code>static mut</code> and no aliasing of a buffer that DMA
@@ -2176,16 +2176,19 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-output</code></td><td>Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding</td></tr>
 <tr><td><code>ferrowasp-waveform</code></td><td>Re-exports of <code>ferrowasp-output</code> under its former paths</td></tr>
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
-<tr><td><code>ferrowasp-stm32</code></td><td>STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types</td></tr>
-<tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend over <code>stm32f4xx-hal</code></td></tr>
-<tr><td><code>ferrowasp-stm32h7</code></td><td>The STM32H743 backend over <code>stm32h7xx-hal</code></td></tr>
+<tr><td><code>ferrowasp-stm32-critical</code></td><td>The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory</td></tr>
+<tr><td><code>ferrowasp-stm32</code></td><td>The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate</td></tr>
+<tr><td><code>ferrowasp-stm32f4-critical</code></td><td>The STM32F4 backend’s safety-critical half over <code>stm32f4xx-hal</code>: DShot, SPI and UART DMA, clocks and timing, routing, the ROM bootloader entry</td></tr>
+<tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend’s non-critical half: ADC, USB serial, the device ID; and re-exports of the critical half</td></tr>
+<tr><td><code>ferrowasp-stm32h7-critical</code></td><td>The STM32H743 backend’s safety-critical half over <code>stm32h7xx-hal</code>: DShot and its DMA endpoints, SPI and UART DMA, clocks and timers, the ROM bootloader entry</td></tr>
+<tr><td><code>ferrowasp-stm32h7</code></td><td>The STM32H743 backend’s non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half</td></tr>
 <tr><td><code>ferrowasp-stm32-tasks</code></td><td>The RTIC task definitions every STM32 flight board shares, including the flash manager</td></tr>
 </tbody>
 </table>
 </div>
-<p>Only <code>ferrowasp-stm32f4</code> and <code>ferrowasp-stm32h7</code> name a chip HAL, and only
-they hold unsafe code: their DMA endpoint declarations and their jump into the
-chip’s ROM bootloader.</p>
+<p>Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
+safety-critical halves hold unsafe code: their DMA endpoint declarations and
+their jump into the chip’s ROM bootloader.</p>
 <p>A safety-critical crate declares <code>[package.metadata.ferrowasp] critical = true</code> and never depends on a crate that does not; its external dependencies
 are pinned to one version.</p>
 <h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>

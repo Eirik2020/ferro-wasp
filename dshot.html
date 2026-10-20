@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a7b57704.js";
+            window.path_to_searchindex_js = "searchindex-5f7c9771.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -262,8 +262,8 @@ stop frames.</p>
 <p>No control, RC, USB, OSD, configurator, or experimental task owns a motor
 timer, pin, or DShot DMA stream.</p>
 <p>Each app is <code>#![deny(unsafe_code)]</code>. The unsafe code under DShot is limited to
-the DMA endpoint declarations of each chip backend: <code>ferrowasp-stm32f4::dshot</code>
-and <code>ferrowasp-stm32h7::dma_endpoints</code>. Each proves that an endpoint addresses
+the DMA endpoint declarations of each chip backend’s safety-critical half:
+<code>ferrowasp-stm32f4-critical::dshot</code> and <code>ferrowasp-stm32h7-critical::dma_endpoints</code>. Each proves that an endpoint addresses
 the compare register of a timer the bank owns exclusively, with the right
 transfer width and a valid stream mapping. HAL transfers own the active
 buffers; there is no project <code>static mut</code> and no aliasing of a buffer that DMA
