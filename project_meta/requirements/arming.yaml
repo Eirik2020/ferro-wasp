@@ -14,7 +14,7 @@ requirements:
     derived_from: [W1, W2]
     allocated_to:
       - ferrowasp_core::safety::validate_arming_guard
-      - ferrowasp_flight::esc_manager::EscIdleQualification
+      - ferrowasp_feedback::esc_manager::EscIdleQualification
     verification:
       mode: direct
       entries:
@@ -27,22 +27,22 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::esc_manager::tests::idle_qualification_requires_fresh_consecutive_samples_from_every_output
+            test: ferrowasp_feedback::esc_manager::tests::idle_qualification_requires_fresh_consecutive_samples_from_every_output
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::esc_manager::tests::zero_erpm_never_qualifies_and_times_out
+            test: ferrowasp_feedback::esc_manager::tests::zero_erpm_never_qualifies_and_times_out
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::esc_manager::tests::idle_overspeed_fails_immediately_after_spinup_grace
+            test: ferrowasp_feedback::esc_manager::tests::idle_overspeed_fails_immediately_after_spinup_grace
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::esc_manager::tests::stale_output_sample_prevents_idle_qualification
+            test: ferrowasp_feedback::esc_manager::tests::stale_output_sample_prevents_idle_qualification
         - level: bench
           target: fcu
           setup: props-off

@@ -355,6 +355,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-feedback"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-blheli-telemetry",
+ "heapless 0.9.2",
+]
+
+[[package]]
 name = "ferrowasp-flight"
 version = "0.1.0"
 dependencies = [
@@ -363,6 +371,7 @@ dependencies = [
  "ferrowasp-control",
  "ferrowasp-core",
  "ferrowasp-drivers",
+ "ferrowasp-feedback",
  "ferrowasp-input",
  "ferrowasp-io-core",
  "ferrowasp-mspv1",

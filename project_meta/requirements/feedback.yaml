@@ -36,3 +36,71 @@ requirements:
           setup: none
           method:
             test: ferrowasp_blheli_telemetry::tests::reset_discards_partial_frame
+
+  - id: FEEDBACK-002
+    title: A telemetry sample is credited only to the output that was asked
+    statement: >-
+      The ESC telemetry manager shall wait for the ESCs to boot and
+      never overlap two requests; a frame shall be credited only to the
+      output whose request the actuator acknowledged, a mismatched or
+      stale acknowledgement shall never relabel a response, and a frame
+      seen while a request was pre-empted shall wait for its matching
+      acknowledgement; an acknowledgement or response timeout shall stop
+      telemetry, which shall resume only while disarmed, after a quiet
+      window with no old sample in it, backing off while no frame comes
+      back and resetting on one.
+    rationale: >-
+      A BLHeli frame carries no motor identity, so a sample credited to
+      the wrong output could qualify a motor that is not spinning
+      (ARM-001).
+    derived_from: [ARM-001]
+    allocated_to:
+      - ferrowasp_feedback::esc_manager
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::waits_for_boot_and_never_overlaps_requests
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::actuator_ack_then_frame_associates_sample_with_requested_output
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::actuator_ack_timeout_stops_telemetry
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::telemetry_response_timeout_stops_telemetry
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::telemetry_resumes_only_disarmed_after_a_quiet_window_with_no_old_sample
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::retries_back_off_while_no_frame_comes_back_and_reset_on_one
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::an_old_acknowledgement_keeps_the_quiet_window_open
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::mismatched_ack_cannot_relabel_a_response
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::frame_seen_during_preemption_waits_for_matching_ack

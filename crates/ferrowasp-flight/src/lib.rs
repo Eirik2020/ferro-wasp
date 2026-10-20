@@ -10,7 +10,7 @@ pub mod command_link;
 pub mod config_save;
 pub mod drone_toolbox;
 pub mod dynamic_idle;
-pub mod esc_manager;
+pub use ferrowasp_feedback::esc_manager;
 pub mod flash_storage;
 pub mod log_sync;
 pub mod log_writer;

@@ -13,6 +13,7 @@ defmt = { version = "1.0.1", optional = true }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }
+ferrowasp-feedback = { path = "../ferrowasp-feedback" }
 ferrowasp-input = { path = "../ferrowasp-input" }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }

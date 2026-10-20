@@ -8,6 +8,7 @@ members = [
     "crates/ferrowasp-blheli-telemetry",
     "crates/ferrowasp-crsf",
     "crates/ferrowasp-drivers",
+    "crates/ferrowasp-feedback",
     "crates/ferrowasp-flight",
     "crates/ferrowasp-icm42688p",
     "crates/ferrowasp-input",
