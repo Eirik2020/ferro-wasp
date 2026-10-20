@@ -247,7 +247,9 @@ dependencies = [
 name = "ferro-configurator-core"
 version = "0.1.0"
 dependencies = [
+ "ferrowasp-config",
  "ferrowasp-core",
+ "ferrowasp-protocol",
  "serde",
  "serde_json",
  "serialport",
@@ -282,6 +284,7 @@ dependencies = [
  "ferrowasp-config",
  "ferrowasp-control",
  "ferrowasp-flight-control",
+ "ferrowasp-protocol",
  "heapless",
 ]
 
@@ -312,6 +315,14 @@ name = "ferrowasp-io-contracts"
 version = "0.1.0"
 dependencies = [
  "embedded-io 0.7.1",
+]
+
+[[package]]
+name = "ferrowasp-protocol"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-config",
+ "ferrowasp-flight-control",
 ]
 
 [[package]]

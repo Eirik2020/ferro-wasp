@@ -305,6 +305,7 @@ dependencies = [
  "ferrowasp-config",
  "ferrowasp-control",
  "ferrowasp-flight-control",
+ "ferrowasp-protocol",
  "heapless 0.9.2",
 ]
 
@@ -347,6 +348,7 @@ dependencies = [
  "ferrowasp-io-core",
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
+ "ferrowasp-protocol",
  "heapless 0.9.2",
  "libm",
 ]
@@ -439,6 +441,15 @@ dependencies = [
 [[package]]
 name = "ferrowasp-output"
 version = "0.1.0"
+
+[[package]]
+name = "ferrowasp-protocol"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "ferrowasp-config",
+ "ferrowasp-flight-control",
+]
 
 [[package]]
 name = "ferrowasp-serial"

@@ -279,7 +279,7 @@ TOPIC_ROUTES = {
         ),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
+            PurePosixPath("crates/ferrowasp-protocol/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-storage/src/nor_storage.rs"),
             PurePosixPath("crates/ferrowasp-storage/src/spi_nor.rs"),
@@ -294,7 +294,7 @@ TOPIC_ROUTES = {
         foxeer_symbols=("flash_manager_task",),
         companions=(
             PurePosixPath("project_meta/remaining-work.md"),
-            PurePosixPath("crates/ferrowasp-core/src/blackbox.rs"),
+            PurePosixPath("crates/ferrowasp-protocol/src/blackbox.rs"),
             PurePosixPath("crates/ferrowasp-flight-control/src/drone_toolbox.rs"),
             PurePosixPath("crates/ferrowasp-stm32-tasks/src/flash.rs"),
             PurePosixPath("crates/ferrowasp-flight/src/flash_storage.rs"),

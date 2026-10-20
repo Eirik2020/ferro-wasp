@@ -12,6 +12,7 @@ path = "src/lib.rs"
 ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
+ferrowasp-protocol = { path = "../ferrowasp-protocol" }
 critical-section = { workspace = true }
 heapless = { workspace = true }
 

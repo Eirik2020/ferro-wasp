@@ -1,6 +1,6 @@
 use std::{fmt, fs, path::Path};
 
-pub use ferrowasp_core::config::ConfigKey;
+pub use ferrowasp_config::keys::ConfigKey;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{FerroError, Result};

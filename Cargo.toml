@@ -22,6 +22,7 @@ members = [
     "crates/ferrowasp-mspv1",
     "crates/ferrowasp-mspv2",
     "crates/ferrowasp-output",
+    "crates/ferrowasp-protocol",
     "crates/ferrowasp-serial",
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-tasks",

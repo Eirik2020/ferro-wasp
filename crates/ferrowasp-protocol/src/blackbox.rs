@@ -5,9 +5,7 @@
 //! page with CRC-32, so a partially programmed page is rejected after a power
 //! loss.
 
-pub use ferrowasp_config::page::{
-    CONFIG_PAYLOAD_MAX, ConfigError, FLASH_PAGE_LEN, crc32, decode_config_page, encode_config_page,
-};
+pub use ferrowasp_config::page::{FLASH_PAGE_LEN, crc32};
 pub const RECORD_LEN: usize = 48;
 pub const RECORDS_PER_PAGE: usize = 5;
 pub const PAGE_DATA_LEN: usize = RECORD_LEN * RECORDS_PER_PAGE;

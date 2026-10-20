@@ -8,7 +8,10 @@ rust-version.workspace = true
 description = "Reusable host-side configuration library for FerroWasp"
 
 [dependencies]
+ferrowasp-config = { path = "../../../../crates/ferrowasp-config" }
+# Only for ARMING_MAX_THROTTLE, until the safety master's crate exists.
 ferrowasp-core = { path = "../../../../crates/ferrowasp-core", features = ["std"] }
+ferrowasp-protocol = { path = "../../../../crates/ferrowasp-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

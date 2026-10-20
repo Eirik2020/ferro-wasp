@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ferrowasp_core::blackbox::{FLASH_PAGE_LEN, FlightRecord, decode_page, record_from_page};
+use ferrowasp_protocol::blackbox::{FLASH_PAGE_LEN, FlightRecord, decode_page, record_from_page};
 use serde::Serialize;
 
 use crate::{
@@ -119,7 +119,12 @@ pub(crate) fn flight_records(
 
 fn read_and_validate_pages(
     path: &Path,
-) -> Result<Vec<(ferrowasp_core::blackbox::PageMetadata, [u8; FLASH_PAGE_LEN])>> {
+) -> Result<
+    Vec<(
+        ferrowasp_protocol::blackbox::PageMetadata,
+        [u8; FLASH_PAGE_LEN],
+    )>,
+> {
     let size = fs::metadata(path)
         .map_err(|error| file_error("inspect", path, error))?
         .len();
@@ -382,7 +387,7 @@ pub(crate) fn file_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrowasp_core::blackbox::encode_page;
+    use ferrowasp_protocol::blackbox::encode_page;
     use tempfile::tempdir;
 
     fn record(sequence: u32, timestamp_us: u32) -> FlightRecord {
@@ -458,7 +463,7 @@ mod tests {
             .unwrap()
             .to_vec();
         for (page, chunk) in records
-            .chunks(ferrowasp_core::blackbox::RECORDS_PER_PAGE)
+            .chunks(ferrowasp_protocol::blackbox::RECORDS_PER_PAGE)
             .enumerate()
         {
             bytes.extend_from_slice(&encode_page(flight_id, page as u32, chunk).unwrap());
