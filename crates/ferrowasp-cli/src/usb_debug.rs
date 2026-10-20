@@ -102,9 +102,7 @@ pub struct LiveSnapshot {
 }
 
 /// The `live` answer, one response frame long at any value.
-pub fn format_live(
-    snapshot: LiveSnapshot,
-) -> String<{ crate::flash_storage::USB_RESPONSE_CAPACITY }> {
+pub fn format_live(snapshot: LiveSnapshot) -> String<{ crate::commands::USB_RESPONSE_CAPACITY }> {
     let mut line = String::new();
     let [roll, pitch, yaw] = snapshot.attitude_deg10;
     // At most 59 bytes, so the write cannot fail.
@@ -146,7 +144,7 @@ pub struct EscLaneSnapshot {
 /// invalid reply counts. A value never received is `-`.
 pub fn format_esc(
     lanes: [EscLaneSnapshot; 4],
-) -> [String<{ crate::flash_storage::USB_RESPONSE_CAPACITY }>; 4] {
+) -> [String<{ crate::commands::USB_RESPONSE_CAPACITY }>; 4] {
     core::array::from_fn(|index| {
         let lane = lanes[index];
         let mut line = String::new();
@@ -193,10 +191,8 @@ pub const BUILD_FEATURE_LINES: usize = 8;
 /// ```
 pub fn format_build(
     identity: BuildIdentity,
-) -> heapless::Vec<
-    String<{ crate::flash_storage::USB_RESPONSE_CAPACITY }>,
-    { BUILD_FEATURE_LINES + 1 },
-> {
+) -> heapless::Vec<String<{ crate::commands::USB_RESPONSE_CAPACITY }>, { BUILD_FEATURE_LINES + 1 }>
+{
     let features = || identity.features.split(',').filter(|name| !name.is_empty());
     let listed = features().count().min(BUILD_FEATURE_LINES);
     let mut lines = heapless::Vec::new();
@@ -212,7 +208,7 @@ pub fn format_build(
         let mut line = String::new();
         // A name too long for one frame is cut, never dropped, so the count
         // still matches.
-        let room = crate::flash_storage::USB_RESPONSE_CAPACITY - "OK feature \r\n".len();
+        let room = crate::commands::USB_RESPONSE_CAPACITY - "OK feature \r\n".len();
         let _ = write!(line, "OK feature {}\r\n", name.get(..room).unwrap_or(name));
         let _ = lines.push(line);
     }
@@ -226,9 +222,7 @@ pub fn format_build(
 /// OK rc1 1500,1500,988,1500,988,988,988,988
 /// OK rc2 988,988,988,988,988,988,988,988
 /// ```
-pub fn format_rc(
-    channels: [u16; 16],
-) -> [String<{ crate::flash_storage::USB_RESPONSE_CAPACITY }>; 2] {
+pub fn format_rc(channels: [u16; 16]) -> [String<{ crate::commands::USB_RESPONSE_CAPACITY }>; 2] {
     core::array::from_fn(|half| {
         let mut line = String::new();
         // At most 59 bytes, so the writes cannot fail.

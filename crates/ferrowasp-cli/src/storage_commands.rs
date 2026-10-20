@@ -8,15 +8,18 @@
 
 use core::fmt::Write as _;
 
-use ferrowasp_drivers::nor_storage::NorStorage;
-use ferrowasp_io_core::serial::{SerialBindings, SerialRoute, write_serial_bindings};
+use crate::serial_reply::write_serial_bindings;
+use ferrowasp_serial::{SerialBindings, SerialRoute};
+use ferrowasp_storage::nor_storage::NorStorage;
 
 use crate::command_link::{CommandLink, ResponseRouter, reboot_refusal};
-use crate::config_save::ConfigSave;
-use crate::flash_storage::{self as flash_task, StorageCommand, StorageLayout, StoredConfig};
+use crate::commands::StorageCommand;
 use crate::log_sync;
-use crate::log_writer::LogWriter;
-use crate::storage_maintenance::Maintenance;
+use ferrowasp_blackbox::log_writer::LogWriter;
+use ferrowasp_blackbox::storage_maintenance::Maintenance;
+use ferrowasp_config::stored::StoredConfig;
+use ferrowasp_storage::config_save::ConfigSave;
+use ferrowasp_storage::layout::StorageLayout;
 
 /// What the owner does after [`handle`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,16 +57,16 @@ pub struct CommandContext<'a, F: NorStorage> {
 
 /// Queue one answer line; `false` when the link's queue is full.
 pub fn answer(responses: &mut ResponseRouter, text: &str) -> bool {
-    flash_task::ResponseFrame::from_text(text).is_some_and(|frame| responses.send(frame))
+    crate::commands::ResponseFrame::from_text(text).is_some_and(|frame| responses.send(frame))
 }
 
 /// A log page as hex lines.
 fn page_hex(
     responses: &mut ResponseRouter,
     page_index: u32,
-    page: &[u8; ferrowasp_core::blackbox::FLASH_PAGE_LEN],
+    page: &[u8; ferrowasp_protocol::blackbox::FLASH_PAGE_LEN],
 ) -> bool {
-    flash_task::emit_page_hex_lines(page_index, page, |line| answer(responses, line))
+    crate::commands::emit_page_hex_lines(page_index, page, |line| answer(responses, line))
 }
 
 /// Starts saving `config`, answering the link that asked when it completes.
@@ -87,7 +90,7 @@ pub fn handle<F: NorStorage>(
     command: StorageCommand,
     ctx: &mut CommandContext<'_, F>,
 ) -> CommandAction {
-    let mut response = heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
+    let mut response = heapless::String::<{ crate::commands::USB_RESPONSE_CAPACITY }>::new();
     let maintenance_busy =
         ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating;
     let unfinished_flight = ctx.log.unfinished_flight();
@@ -97,7 +100,7 @@ pub fn handle<F: NorStorage>(
         command if ctx.link == CommandLink::Serial && command.usb_only() => {
             answer(ctx.responses, "ERR USB only for this command\r\n");
         }
-        flash_task::StorageCommand::Help => {
+        crate::commands::StorageCommand::Help => {
             answer(
                 ctx.responses,
                 "OK flash info | flash test CONFIRM | logs list\r\n",
@@ -126,12 +129,12 @@ pub fn handle<F: NorStorage>(
             answer(ctx.responses, "OK imu calibrate | imu level\r\n");
         }
         // Answered by the USB task; never queued here.
-        flash_task::StorageCommand::Live
-        | flash_task::StorageCommand::Rc
-        | flash_task::StorageCommand::Esc
-        | flash_task::StorageCommand::Build
-        | flash_task::StorageCommand::Motor(_) => {}
-        flash_task::StorageCommand::SerialShow => {
+        crate::commands::StorageCommand::Live
+        | crate::commands::StorageCommand::Rc
+        | crate::commands::StorageCommand::Esc
+        | crate::commands::StorageCommand::Build
+        | crate::commands::StorageCommand::Motor(_) => {}
+        crate::commands::StorageCommand::SerialShow => {
             write_serial_bindings(
                 ctx.stored_config.serial_bindings,
                 ctx.default_serial_bindings,
@@ -141,7 +144,7 @@ pub fn handle<F: NorStorage>(
                 },
             );
         }
-        flash_task::StorageCommand::SerialSet(port, function) => {
+        crate::commands::StorageCommand::SerialSet(port, function) => {
             if ctx.armed {
                 answer(ctx.responses, "ERR config changes disabled while armed\r\n");
             } else {
@@ -154,7 +157,7 @@ pub fn handle<F: NorStorage>(
                 answer(ctx.responses, "OK staged; use config save, then reboot\r\n");
             }
         }
-        flash_task::StorageCommand::FlashInfo => {
+        crate::commands::StorageCommand::FlashInfo => {
             let _ = write!(
                 response,
                 "OK jedec={:02x}:{:02x}:{:02x} bytes={} ready=1\r\n",
@@ -162,7 +165,7 @@ pub fn handle<F: NorStorage>(
             );
             answer(ctx.responses, response.as_str());
         }
-        flash_task::StorageCommand::FlashTestConfirmed => {
+        crate::commands::StorageCommand::FlashTestConfirmed => {
             if ctx.armed {
                 answer(ctx.responses, "ERR flash test disabled while armed\r\n");
             } else if ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating
@@ -174,8 +177,8 @@ pub fn handle<F: NorStorage>(
                 answer(ctx.responses, "OK flash scratch test started\r\n");
             }
         }
-        flash_task::StorageCommand::LogsList => {
-            if let Some(response) = flash_task::format_log_info_response(
+        crate::commands::StorageCommand::LogsList => {
+            if let Some(response) = crate::commands::format_log_info_response(
                 ctx.log.next_page(),
                 ctx.log.next_flight(),
                 ctx.layout.log_page_count,
@@ -186,13 +189,13 @@ pub fn handle<F: NorStorage>(
                 answer(ctx.responses, "ERR log summary formatting failed\r\n");
             }
         }
-        flash_task::StorageCommand::LogsReadPage(page_index) => {
+        crate::commands::StorageCommand::LogsReadPage(page_index) => {
             if ctx.armed {
                 answer(ctx.responses, "ERR log reads disabled while armed\r\n");
             } else if page_index >= ctx.log.next_page() {
                 answer(ctx.responses, "ERR log page is not present\r\n");
             } else if let Some(address) = ctx.layout.log_page_address(page_index) {
-                let mut page = [0xff; ferrowasp_core::blackbox::FLASH_PAGE_LEN];
+                let mut page = [0xff; ferrowasp_protocol::blackbox::FLASH_PAGE_LEN];
                 if ctx.flash.read(address, &mut page).is_err()
                     || !page_hex(ctx.responses, page_index, &page)
                 {
@@ -200,7 +203,7 @@ pub fn handle<F: NorStorage>(
                 }
             }
         }
-        flash_task::StorageCommand::LogsEraseConfirmed => {
+        crate::commands::StorageCommand::LogsEraseConfirmed => {
             if ctx.armed {
                 answer(ctx.responses, "ERR log erase disabled while armed\r\n");
             } else if ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating
@@ -212,7 +215,7 @@ pub fn handle<F: NorStorage>(
                 answer(ctx.responses, "OK log erase started\r\n");
             }
         }
-        flash_task::StorageCommand::LogsUnsynced => {
+        crate::commands::StorageCommand::LogsUnsynced => {
             if ctx.armed {
                 answer(ctx.responses, "ERR log reads disabled while armed\r\n");
             } else {
@@ -234,7 +237,7 @@ pub fn handle<F: NorStorage>(
                 }
             }
         }
-        flash_task::StorageCommand::LogsAck { flight, pages } => {
+        crate::commands::StorageCommand::LogsAck { flight, pages } => {
             if ctx.armed {
                 answer(ctx.responses, "ERR log sync disabled while armed\r\n");
             } else if maintenance_busy {
@@ -262,7 +265,7 @@ pub fn handle<F: NorStorage>(
                 }
             }
         }
-        flash_task::StorageCommand::LogsEraseSyncedConfirmed => {
+        crate::commands::StorageCommand::LogsEraseSyncedConfirmed => {
             if ctx.armed {
                 answer(ctx.responses, "ERR log erase disabled while armed\r\n");
             } else if !ctx.log.writable() && ctx.log.next_page() < ctx.layout.log_page_count {
@@ -296,7 +299,7 @@ pub fn handle<F: NorStorage>(
                 }
             }
         }
-        flash_task::StorageCommand::ConfigGet(key) => {
+        crate::commands::StorageCommand::ConfigGet(key) => {
             let _ = write!(
                 response,
                 "OK {}={:.4}\r\n",
@@ -305,7 +308,7 @@ pub fn handle<F: NorStorage>(
             );
             answer(ctx.responses, response.as_str());
         }
-        flash_task::StorageCommand::ConfigSet(key, value) => {
+        crate::commands::StorageCommand::ConfigSet(key, value) => {
             if ctx.armed {
                 answer(ctx.responses, "ERR config changes disabled while armed\r\n");
             } else if ctx.stored_config.set(key, value) {
@@ -314,7 +317,7 @@ pub fn handle<F: NorStorage>(
                 answer(ctx.responses, "ERR value outside allowed range\r\n");
             }
         }
-        flash_task::StorageCommand::ConfigSave => {
+        crate::commands::StorageCommand::ConfigSave => {
             if ctx.armed {
                 answer(ctx.responses, "ERR config save disabled while armed\r\n");
             } else if ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating
@@ -334,12 +337,12 @@ pub fn handle<F: NorStorage>(
                 answer(ctx.responses, reply);
             }
         }
-        flash_task::StorageCommand::ImuLevel => {
+        crate::commands::StorageCommand::ImuLevel => {
             let [x, y, z] = ctx.stored_config.accel_level.offset_mg;
             let _ = write!(response, "OK imu level x={x} y={y} z={z} mg\r\n");
             answer(ctx.responses, &response);
         }
-        flash_task::StorageCommand::ImuCalibrate => {
+        crate::commands::StorageCommand::ImuCalibrate => {
             if ctx.armed {
                 answer(
                     ctx.responses,
@@ -354,7 +357,7 @@ pub fn handle<F: NorStorage>(
         // Restarting cuts the store off: only once disarmed, with no
         // ctx.maintenance or flight log open. The owner then settles
         // the store and resets.
-        flash_task::StorageCommand::Reboot { rom_bootloader } => {
+        crate::commands::StorageCommand::Reboot { rom_bootloader } => {
             if let Some(refusal) =
                 reboot_refusal(ctx.armed, maintenance_busy, unfinished_flight.is_some())
             {
@@ -372,12 +375,12 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::config_save::SaveStep;
-    use crate::flash_storage::{ResponseConsumer, ResponseQueue, parse_command};
-    use crate::test_nor::MemoryNor;
-    use ferrowasp_io_core::serial::{
-        LogicalSerialPort, SerialCapabilities, SerialFunction, SerialProfile,
-    };
+    use crate::commands::ResponseConsumer;
+    use crate::commands::ResponseQueue;
+    use crate::commands::parse_command;
+    use ferrowasp_serial::{LogicalSerialPort, SerialCapabilities, SerialFunction, SerialProfile};
+    use ferrowasp_storage::config_save::SaveStep;
+    use ferrowasp_storage::test_nor::MemoryNor;
     use std::{boxed::Box, string::String, vec::Vec};
 
     const CAPACITY: u32 = 64 * 1024;

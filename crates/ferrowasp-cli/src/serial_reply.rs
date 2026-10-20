@@ -2,7 +2,7 @@
 
 use core::fmt::Write as _;
 
-use super::{SerialBindings, SerialRoute};
+use ferrowasp_serial::{SerialBindings, SerialRoute};
 
 /// The longest `serial` reply line, inside a USB response frame.
 pub const SERIAL_REPLY_LINE_CAPACITY: usize = 64;
@@ -45,7 +45,7 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use crate::serial::{LogicalSerialPort, SerialCapabilities, SerialFunction, SerialProfile};
+    use ferrowasp_serial::{LogicalSerialPort, SerialCapabilities, SerialFunction, SerialProfile};
     use std::{string::String, vec::Vec};
 
     const fn route(logical: LogicalSerialPort) -> SerialRoute {

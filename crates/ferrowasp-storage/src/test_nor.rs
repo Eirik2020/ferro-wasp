@@ -1,34 +1,34 @@
-//! An in-memory store with SPI NOR semantics, for this crate's tests:
-//! programming only clears bits, erasing sets a 4 KiB sector to `0xFF`, and
-//! each operation can be made to fail.
+//! An in-memory store with SPI NOR semantics, for host tests of the storage,
+//! blackbox and command-line crates: programming only clears bits, erasing
+//! sets a 4 KiB sector to `0xFF`, and each operation can be made to fail.
 
 extern crate std;
 
 use std::{vec, vec::Vec};
 
-use ferrowasp_drivers::nor_storage::NorStorage;
+use crate::nor_storage::NorStorage;
 
-use crate::flash_storage::CONFIG_SECTOR_SIZE;
+use crate::layout::CONFIG_SECTOR_SIZE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Fault;
+pub struct Fault;
 
-pub(crate) struct MemoryNor {
-    pub(crate) bytes: Vec<u8>,
-    pub(crate) fail_erase: bool,
-    pub(crate) fail_program: bool,
+pub struct MemoryNor {
+    pub bytes: Vec<u8>,
+    pub fail_erase: bool,
+    pub fail_program: bool,
     /// Programs this byte value over the first byte of each page program, as
     /// a cell that will not take the bit pattern asked for.
-    pub(crate) stuck_first_byte: Option<u8>,
+    pub stuck_first_byte: Option<u8>,
     /// Holds programmed pages in RAM until `flush`, as an SD card's
     /// write-back window does.
-    pub(crate) write_back: bool,
-    pub(crate) held: bool,
-    pub(crate) flushes: u32,
+    pub write_back: bool,
+    pub held: bool,
+    pub flushes: u32,
 }
 
 impl MemoryNor {
-    pub(crate) fn erased(capacity: u32) -> Self {
+    pub fn erased(capacity: u32) -> Self {
         Self {
             bytes: vec![0xff; capacity as usize],
             fail_erase: false,

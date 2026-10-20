@@ -44,7 +44,7 @@ requirements:
       now and after the next power-up.
     derived_from: [W6]
     allocated_to:
-      - ferrowasp_flight::config_save
+      - ferrowasp_storage::config_save
       - ferrowasp_config::stored::StoredConfig
     verification:
       mode: direct
@@ -53,17 +53,17 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
+            test: ferrowasp_storage::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::config_save::tests::every_failure_leaves_the_booting_configuration_untouched
+            test: ferrowasp_storage::config_save::tests::every_failure_leaves_the_booting_configuration_untouched
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_flight::config_save::tests::a_cancelled_save_stops_and_the_active_slot_still_boots
+            test: ferrowasp_storage::config_save::tests::a_cancelled_save_stops_and_the_active_slot_still_boots
         - level: mcu
           target: fcu
           setup: none

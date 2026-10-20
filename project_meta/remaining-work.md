@@ -145,7 +145,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Board data from existing targets.** Generate a board's data crate from its
   ArduPilot or Betaflight target definition.
 - **Host-testable flash manager.** The configuration save
-  (`ferrowasp-flight::config_save`), the log erase, sync-ledger mark and
+  (`ferrowasp-storage::config_save`), the log erase, sync-ledger mark and
   scratch test (`storage_maintenance`), the flight log writer (`log_writer`),
   the storage command line (`storage_commands`) and the MSPv2 handler
   (`rpc_commands`) are host-tested; the task keeps startup recovery and the
