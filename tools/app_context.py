@@ -153,7 +153,7 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-core/src/safety.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
-            PurePosixPath("crates/ferrowasp-waveform/src/dshot.rs"),
+            PurePosixPath("crates/ferrowasp-output/src/dshot.rs"),
         ),
     ),
     "dshot": TopicRoute(
@@ -172,7 +172,7 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-flight/src/esc_manager.rs"),
             PurePosixPath("crates/ferrowasp-stm32/src/dshot_bank.rs"),
             PurePosixPath("crates/ferrowasp-stm32f4/src/dshot.rs"),
-            PurePosixPath("crates/ferrowasp-waveform/src/dshot.rs"),
+            PurePosixPath("crates/ferrowasp-output/src/dshot.rs"),
         ),
     ),
     "telemetry": TopicRoute(

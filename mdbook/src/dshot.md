@@ -22,7 +22,7 @@ A DShot packet is 16 bits, sent most significant bit first:
 The checksum is `(payload ^ (payload >> 4) ^ (payload >> 8)) & 0x0f`. At
 DShot600 a bit lasts 1.667 us: a `0` is high for 3/8 of it and a `1` for 3/4.
 A packet takes about 27 us. Packet encoding, throttle mapping, and the
-compare-value sequence are host-tested in `ferrowasp-waveform::dshot`.
+compare-value sequence are host-tested in `ferrowasp-output::dshot`.
 
 Normal output carries only stop or mapped throttle. Special commands, such as
 FerroConfigurator's spin-direction change and save, are queued for one motor
@@ -152,7 +152,7 @@ samples per reply bit. The timer outputs are released for the window, about
 high. The DShot service decodes the samples before the next frame: GCR
 symbols, checksum, and the eRPM period. A missing or bad reply is counted,
 never a fault; a lane that cannot turn around faults the bank as any DMA
-fault does. Decoding is host-tested in `ferrowasp-waveform::dshot_reply`.
+fault does. Decoding is host-tested in `ferrowasp-output::dshot_reply`.
 
 On the Foxeer every lane samples its pin, including motor 4 on TIM1's
 complementary output, which a timer cannot input-capture. Bidirectional mode

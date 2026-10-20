@@ -24,7 +24,8 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-io-core` | The SPI mailbox and async device, I/O health and statistics, the `serial` command's reply, and re-exports of the serial crates under their former paths |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
 | `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
-| `ferrowasp-waveform` | DShot packet encoding and compare sequences |
+| `ferrowasp-output` | Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding |
+| `ferrowasp-waveform` | Re-exports of `ferrowasp-output` under its former paths |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
 | `ferrowasp-stm32` | STM32 mechanisms that need no chip-family HAL: UART, SPI, ADC, the DShot motor bank, board-description types |
 | `ferrowasp-stm32f4` | The STM32F4 backend over `stm32f4xx-hal` |
