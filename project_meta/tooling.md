@@ -36,7 +36,12 @@ statement of which tests apply or passed.
 - `tools/check_rtic_boundaries.py` enforces the thin-app rules mechanically:
   RTIC imports only through the app facade, only RTIC declarations in
   `main.rs`, shared board data models, no timer-register sequencing in board
-  support, and no source copied verbatim between boards.
+  support, and no source copied verbatim between boards. It also enforces
+  ADR-0054's direction rule from the manifests: a crate marked
+  `[package.metadata.ferrowasp] critical = true` depends, including for tests
+  and builds, only on other safety-critical crates and on external crates
+  pinned to one version (`=x.y.z`, or a git `rev`), and a `-critical` name
+  carries the marker.
 - `tools/release/check_release.py` checks the release metadata, and
   `check_public_history.py` rejects oversized or prohibited files reachable from
   Git refs.

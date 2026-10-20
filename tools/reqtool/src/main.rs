@@ -23,7 +23,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Check every requirement file against the schema, the roots, each other
-    /// and the code. Exits nonzero on any problem.
+    /// and the code, and that every `pub` item of a safety-critical crate has
+    /// a requirement. Exits nonzero on any problem.
     Validate,
     /// Show status: of everything, of one requirement by ID, of a governing
     /// requirement, or of the requirements allocated to an item path such as
@@ -125,10 +126,23 @@ fn main() -> ExitCode {
         return test(&project, requirements, *dry_run);
     }
     let result = match cli.command {
-        Command::Validate => Ok(format!(
-            "{} requirements valid\n",
-            project.requirements.len()
-        )),
+        Command::Validate => {
+            let unlinked = project.unlinked_critical_items();
+            if unlinked.is_empty() {
+                Ok(format!(
+                    "{} requirements valid\n",
+                    project.requirements.len()
+                ))
+            } else {
+                for problem in &unlinked {
+                    eprintln!("{problem}");
+                }
+                Err(format!(
+                    "{} safety-critical item(s) without a requirement",
+                    unlinked.len()
+                ))
+            }
+        }
         Command::Check { target } => recorded(&project).and_then(|evidence| match target {
             None => Ok(report::summary(&project, &evidence)),
             Some(target) => report::check(&project, &target, &evidence),

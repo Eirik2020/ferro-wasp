@@ -101,6 +101,8 @@ test chain is routing, not a pass.
   that motor authority did not move, and any unsafe-code or timing effects.
 - A task definition wires resources, locks, and spawns; each decision it makes
   is a host-tested function in a HAL-free crate (`mdbook/src/testing.md`).
+- Before touching a `critical = true` crate, a link, a border role, or the
+  safety master, read `project_meta/requirements/` sections 8-11 and 19.
 - Use typed units for time, rates, voltages, and actuator commands. Prefer an
   explicit safety state machine over a clever abstraction.
 - Before changing a secondary app, compare with Foxeer: arming preparation and

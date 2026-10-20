@@ -45,6 +45,9 @@ pub struct Resolved {
     pub crate_name: String,
     pub kind: Kind,
     pub file: PathBuf,
+    /// Where the item is defined, `crate::module::Item`, after following
+    /// re-exports.
+    pub canonical: String,
 }
 
 /// A module: its crate, path from the crate root, the file holding its items,
@@ -67,6 +70,8 @@ enum Found {
         /// The type or trait name, for a following variant or method.
         name: String,
         items: Rc<Vec<Item>>,
+        /// The defining path inside the crate, ending in `name`.
+        canonical: Vec<String>,
     },
 }
 
@@ -96,6 +101,7 @@ impl<'a> Resolver<'a> {
             .map_err(|e| format!("{path}: {e}"))?;
         Ok(match found {
             Found::Module(module) => Resolved {
+                canonical: qualified(&module.crate_name, &module.path),
                 crate_name: module.crate_name,
                 kind: Kind::Module,
                 file: module.file,
@@ -104,13 +110,54 @@ impl<'a> Resolver<'a> {
                 kind,
                 file,
                 crate_name,
+                canonical,
                 ..
             } => Resolved {
+                canonical: qualified(&crate_name, &canonical),
                 crate_name,
                 kind,
                 file,
             },
         })
+    }
+
+    /// Every `pub` item a crate defines, by its defining path: functions,
+    /// types, traits, constants and statics, in every module except
+    /// `#[cfg(test)]` ones. Tests are not items.
+    pub fn public_items(&self, crate_name: &str) -> Result<Vec<String>, String> {
+        let root = self
+            .crate_root(crate_name)
+            .ok_or_else(|| format!("no crate {crate_name} with a readable library"))?;
+        let mut out = Vec::new();
+        self.collect_public(&root, &mut out)?;
+        Ok(out)
+    }
+
+    fn collect_public(&self, module: &Module, out: &mut Vec<String>) -> Result<(), String> {
+        for item in module.items.iter() {
+            if let Item::Mod(child) = item {
+                if !is_cfg_test(&child.attrs) {
+                    let child = self.child(module, child)?;
+                    self.collect_public(&child, out)?;
+                }
+                continue;
+            }
+            let name = match item {
+                Item::Fn(f) if is_pub(&f.vis) && !is_test(&f.attrs) => f.sig.ident.to_string(),
+                Item::Struct(i) if is_pub(&i.vis) => i.ident.to_string(),
+                Item::Enum(i) if is_pub(&i.vis) => i.ident.to_string(),
+                Item::Union(i) if is_pub(&i.vis) => i.ident.to_string(),
+                Item::Type(i) if is_pub(&i.vis) => i.ident.to_string(),
+                Item::Trait(i) if is_pub(&i.vis) => i.ident.to_string(),
+                Item::Const(i) if is_pub(&i.vis) => i.ident.to_string(),
+                Item::Static(i) if is_pub(&i.vis) => i.ident.to_string(),
+                _ => continue,
+            };
+            let mut path = module.path.clone();
+            path.push(name);
+            out.push(qualified(&module.crate_name, &path));
+        }
+        Ok(())
     }
 
     fn crate_root(&self, name: &str) -> Option<Module> {
@@ -149,18 +196,21 @@ impl<'a> Resolver<'a> {
                     items,
                     file,
                     crate_name,
+                    mut canonical,
                 } => {
                     if index + 1 != segments.len() {
                         return Err(format!("{segment}: nothing can follow a member of {name}"));
                     }
                     let member = member(&items, kind, &name, segment)
                         .ok_or_else(|| format!("{name} has no variant or method {segment}"))?;
+                    canonical.push(segment.clone());
                     Found::Leaf {
                         kind: member,
                         name: segment.clone(),
                         items,
                         file,
                         crate_name,
+                        canonical,
                     }
                 }
             };
@@ -213,12 +263,15 @@ impl<'a> Resolver<'a> {
 
     fn declared(&self, module: &Module, item: &Item, name: &str) -> Result<Option<Found>, String> {
         let leaf = |kind| {
+            let mut canonical = module.path.clone();
+            canonical.push(name.to_owned());
             Some(Found::Leaf {
                 kind,
                 file: module.file.clone(),
                 crate_name: module.crate_name.clone(),
                 name: name.to_owned(),
                 items: Rc::clone(&module.items),
+                canonical,
             })
         };
         Ok(match item {
@@ -329,6 +382,28 @@ impl<'a> Resolver<'a> {
             Found::Leaf { .. } => Err("super:: is not a module".to_owned()),
         }
     }
+}
+
+fn qualified(crate_name: &str, path: &[String]) -> String {
+    if path.is_empty() {
+        crate_name.to_owned()
+    } else {
+        format!("{crate_name}::{}", path.join("::"))
+    }
+}
+
+const fn is_pub(visibility: &syn::Visibility) -> bool {
+    matches!(visibility, syn::Visibility::Public(_))
+}
+
+/// `#[cfg(test)]` exactly; other `cfg` predicates may compile the module.
+fn is_cfg_test(attributes: &[syn::Attribute]) -> bool {
+    attributes.iter().any(|attribute| {
+        attribute.path().is_ident("cfg")
+            && attribute
+                .parse_args::<syn::Ident>()
+                .is_ok_and(|ident| ident == "test")
+    })
 }
 
 fn declares(item: &Item, name: &str) -> bool {

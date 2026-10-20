@@ -220,3 +220,72 @@ fn init_usb() {
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+CRITICAL = '[package.metadata.ferrowasp]\ncritical = true\n'
+
+
+class CriticalCrateTests(unittest.TestCase):
+    def errors_for(self, crates: dict[str, str], workspace_dependencies: str = "") -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write(
+                root / "Cargo.toml",
+                '[workspace]\nmembers = []\n\n[workspace.dependencies]\n' + workspace_dependencies,
+            )
+            for name, body in crates.items():
+                _write(
+                    root / "crates" / name / "Cargo.toml",
+                    f'[package]\nname = "{name}"\nversion = "0.1.0"\n\n{body}',
+                )
+            return validate_rtic_boundaries(root)
+
+    def test_critical_crates_depend_only_on_critical_crates_and_pinned_externals(self) -> None:
+        errors = self.errors_for(
+            {
+                "core-a": CRITICAL
+                + '[dependencies]\ncore-b = { path = "../core-b" }\n'
+                + 'heapless = { workspace = true }\nlibm = "=0.2.11"\n'
+                + 'shared = { workspace = true }\n',
+                "core-b": CRITICAL,
+                "shared": CRITICAL,
+                "plain": '[dependencies]\ncore-a = { path = "../core-a" }\nnb = "1.1"\n',
+            },
+            'heapless = "=0.9.2"\nshared = { path = "crates/shared" }\n',
+        )
+        self.assertEqual(errors, [])
+
+    def test_rejects_a_critical_crate_reaching_a_non_critical_one(self) -> None:
+        errors = self.errors_for(
+            {
+                "core-a": CRITICAL
+                + '[dev-dependencies]\nplain = { path = "../plain" }\n'
+                + '[target.\'cfg(target_os = "none")\'.dependencies]\nhal = { workspace = true }\n',
+                "plain": "",
+                "hal": "",
+            },
+            'hal = { path = "crates/hal" }\n',
+        )
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(any("must not depend on plain" in e and "dev-dependencies" in e for e in errors))
+        self.assertTrue(any("must not depend on hal" in e for e in errors))
+
+    def test_rejects_unpinned_externals_and_a_critical_name_without_the_marker(self) -> None:
+        errors = self.errors_for(
+            {
+                "core-a": CRITICAL
+                + '[dependencies]\nheapless = "0.9.2"\nlibm = { version = "0.2" }\n'
+                + 'sbus = { git = "https://example.invalid/sbus" }\n',
+                "stm32-critical": "",
+            }
+        )
+        self.assertEqual(len(errors), 4, errors)
+        self.assertTrue(any("heapless" in e and "=x.y.z" in e for e in errors))
+        self.assertTrue(any("libm" in e for e in errors))
+        self.assertTrue(any("sbus" in e and "rev" in e for e in errors))
+        self.assertTrue(any("stm32-critical is named -critical" in e for e in errors))
