@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![no_std]
 
-pub mod actuator;
+pub use ferrowasp_flight_control::actuator;
 pub mod blackbox;
 pub mod config;
 pub use ferrowasp_control::frames;

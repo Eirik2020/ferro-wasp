@@ -293,6 +293,7 @@ version = "0.1.0"
 dependencies = [
  "critical-section",
  "ferrowasp-control",
+ "ferrowasp-flight-control",
  "heapless 0.9.2",
 ]
 
@@ -329,11 +330,21 @@ dependencies = [
  "ferrowasp-core",
  "ferrowasp-drivers",
  "ferrowasp-feedback",
+ "ferrowasp-flight-control",
  "ferrowasp-input",
  "ferrowasp-io-core",
  "ferrowasp-mspv1",
  "ferrowasp-mspv2",
  "heapless 0.9.2",
+ "libm",
+]
+
+[[package]]
+name = "ferrowasp-flight-control"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-control",
+ "ferrowasp-input",
  "libm",
 ]
 

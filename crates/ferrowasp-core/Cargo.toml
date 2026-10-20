@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 ferrowasp-control = { path = "../ferrowasp-control" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 critical-section = { workspace = true }
 heapless = { workspace = true }
 

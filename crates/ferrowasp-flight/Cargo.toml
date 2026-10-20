@@ -14,6 +14,7 @@ ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-core = { path = "../ferrowasp-core" }
 ferrowasp-drivers = { path = "../ferrowasp-drivers" }
 ferrowasp-feedback = { path = "../ferrowasp-feedback" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 ferrowasp-input = { path = "../ferrowasp-input" }
 ferrowasp-io-core = { path = "../ferrowasp-io-core" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }

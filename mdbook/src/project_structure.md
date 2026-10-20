@@ -18,10 +18,11 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait |
 | `ferrowasp-drivers` | Re-exports of the driver crates under their former paths |
-| `ferrowasp-flight` | Portable flight logic: arming, control, the ESC manager, blackbox and configuration storage, log sync, the command link |
+| `ferrowasp-flight-control` | How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter's wiring |
+| `ferrowasp-flight` | Portable flight logic: arming, blackbox and configuration storage, log sync, the command link, and re-exports of the moved modules under their former paths |
 | `ferrowasp-feedback` | Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for |
 | `ferrowasp-imu` | The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through |
-| `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape |
+| `ferrowasp-input` | Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map |
 | `ferrowasp-io-contracts` | The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines |
 | `ferrowasp-serial` | The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer |
 | `ferrowasp-io-core` | I/O health and statistics, the `serial` command's reply, and re-exports of the serial and SPI crates under their former paths |

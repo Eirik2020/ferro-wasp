@@ -10,6 +10,7 @@ members = [
     "crates/ferrowasp-drivers",
     "crates/ferrowasp-feedback",
     "crates/ferrowasp-flight",
+    "crates/ferrowasp-flight-control",
     "crates/ferrowasp-icm42688p",
     "crates/ferrowasp-imu",
     "crates/ferrowasp-input",

@@ -46,7 +46,8 @@ mdbook build mdbook
   target runs them. A task in `ferrowasp-stm32-tasks` wires resources, locks,
   spawns and queues; each decision it makes, a refusal rule, a state machine, a
   unit conversion, is a function in a HAL-free crate with tests, such as
-  `reboot_refusal` and `AccelLevelCalibration` in `ferrowasp-flight`.
+  `reboot_refusal` in `ferrowasp-flight` and `AccelLevelCalibration` in
+  `ferrowasp-control`.
 - Chip backends hold the peripheral and DMA code that only the target can run;
   keep logic out of them, so that target verification covers what is left.
 - A test that needs a Cargo feature the workspace does not turn on, or that a
