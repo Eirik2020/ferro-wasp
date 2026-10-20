@@ -169,7 +169,7 @@ the expensive bench-evidence boundaries, giving three crates:
 | Crate | Holds | Class |
 |---|---|---|
 | `ferrowasp-io-contracts` | hardware message types | safety-critical, minimal: a change costs bench runs on every chip |
-| `ferrowasp-boundary-contracts` | `Request`, results, messages to the observer | safety-critical |
+| `ferrowasp-boundary-contracts` | `Request`, results, messages to the observer, the ledger's topic types | safety-critical |
 | `ferrowasp-protocol` | wire protocol, blackbox format | non-critical, W6; the configurator depends on this, not the core |
 
 Combining the two safety-critical contract crates was the alternative; a new
@@ -207,7 +207,8 @@ Safety-critical (`critical = true`):
 | `ferrowasp-io-contracts` | `RxChunk`, `ImuSample`, `ActuatorFeedback`, `MotorCommand`, `DshotCommand` | parts of `core`, `io-core` |
 | `ferrowasp-boundary-contracts` | `Request`, results, outbound messages | new |
 | `ferrowasp-config` | schema, `validate()`, page format, migration, motor map | `core::config`, part of `core::blackbox`, `flight::flash_storage` |
-| `ferrowasp-safety` | safety master, coordinator, arming, actuator authority | `core::safety`, `flight::arming`, `flight::actuator` |
+| `ferrowasp-safety` | safety master, arming, actuator authority | `core::safety`, `flight::arming`, `flight::actuator` |
+| `ferrowasp-border` | the border roles, one module each: coordinator, observer and its ledger, Health Manager (section 19, ADR-0061) | new; the observer replaces `stm32-tasks::snapshots` |
 | `ferrowasp-control` | general control (above) | `pid`, parts of `flight::drone_toolbox`, `accel_level`, `rpm_filter`, `core::frames` |
 | `ferrowasp-flight-control` | flight-controller-specific (above) | the rest of `drone_toolbox`, `dynamic_idle`, `core::actuator` |
 | `ferrowasp-input` | Command Input, RC protocol trait, RC group | `flight::rc_receiver` |
@@ -225,8 +226,7 @@ boot from `serial_bindings`, so the transport code is safety-critical for
 every port, and the observer separates the consumers (the OSD encoder feeds a
 TX queue and never touches the transport).
 
-Non-critical: `ferrowasp-observer` (observer, ledger topics; replaces
-`stm32-tasks::snapshots`), `ferrowasp-protocol`, `ferrowasp-blackbox` (log
+Non-critical: `ferrowasp-protocol`, `ferrowasp-blackbox` (log
 writer, blackbox storage, sync ledger, storage maintenance),
 `ferrowasp-storage` (flash manager, config save, NOR storage, SPI NOR),
 `ferrowasp-cli` (command link, RPC, storage commands, USB debug),

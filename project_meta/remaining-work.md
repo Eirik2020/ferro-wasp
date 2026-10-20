@@ -65,10 +65,14 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Requirements and Architecture
 
-- **Safety-critical architecture** (ADR-0054 to ADR-0060): critical and
-  non-critical crates, SPSC links, the observer and its ledger, the
-  coordinator, message contracts, the gyro-synced loop, `ferrowasp-config` and
-  the new crate map. Not built. The redesign comes before the next hardware
+- **Safety-critical architecture** (ADR-0054 to ADR-0064): critical and
+  non-critical crates, SPSC links, the border roles in `ferrowasp-border` (the
+  coordinator, the observer and its ledger, the Health Manager) with their
+  heartbeats, the fault classes and the hard-fault latch, the Betaflight-style
+  failsafe, the independent watchdog, Actuator Output's arming confirmation
+  and arm-state cross-check, the OSD and telemetry warning on a stalled
+  ledger, message contracts, the gyro-synced loop, `ferrowasp-config` and the
+  new crate map. Not built. The redesign comes before the next hardware
   gate run; its order, scope and open items are in the
   [requirements design](requirements/design.md#17-order-of-work).
 - **The `app!` parser** in `ferroforge-contracts`, and a FerroForge release, so
