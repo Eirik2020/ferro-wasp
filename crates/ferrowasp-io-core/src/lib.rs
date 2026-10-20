@@ -6,7 +6,7 @@ extern crate std;
 
 pub mod health;
 pub mod serial;
-pub mod spi;
+pub use ferrowasp_imu::spi;
 pub mod stats;
 pub use ferrowasp_io_contracts::time;
 pub mod waveform;

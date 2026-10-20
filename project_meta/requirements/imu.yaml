@@ -201,3 +201,142 @@ requirements:
           setup: none
           method:
             test: ferrowasp_icm42688p::tests::spi_failure_still_deasserts_chip_select
+
+  - id: IMU-004
+    title: An SPI transaction completes once, for the job that started it
+    statement: >-
+      The IMU bus shall hold one job per slot and refuse a second while
+      it is occupied; a job shall pack its operations without keeping
+      their borrows, check its capacity and operation limit before
+      replacing the previous job, and copy results back only to its read
+      operations, refusing a mismatched shape before any write; a
+      timeout shall request the owner's cancellation and reject a late
+      interrupt; a dropped waiter shall cancel its job; and a completion
+      from an older generation shall never complete a newer job, nor a
+      DMA error copy data back.
+    rationale: >-
+      The IMU samples the rate loop flies on arrive over this mailbox; a
+      completion credited to the wrong job, or late data copied into a
+      new one, would feed the loop a sample from another time
+      (ADR-0010).
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_imu::spi
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::async_device::tests::standard_mixed_transaction_copies_only_rx_results_back
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::async_device::tests::operation_limit_is_rejected_before_executor_submission
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::async_device::tests::dropping_pending_transaction_requests_generation_scoped_cancel
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::async_device::tests::terminal_dma_error_does_not_copy_rx_or_request_cancel
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::async_device::tests::critical_section_executor_pends_on_submit_and_cancel
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::job::tests::packs_mixed_operations_without_retaining_borrows
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::job::tests::copies_only_read_results_back_to_matching_operations
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::job::tests::capacity_error_does_not_replace_previous_job
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::job::tests::operation_limit_is_checked_before_replacing_job
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::job::tests::copyback_shape_mismatch_is_rejected_before_any_write
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::successful_job_moves_through_owner_states_and_recycles
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::occupied_slot_rejects_a_second_job
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::timeout_requests_owner_cancellation_and_rejects_late_irq
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::deadline_probe_does_not_change_owner_state
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::owner_activation_rebases_wire_deadline_after_pending_latency
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::explicit_pending_cancel_never_needs_hardware_completion
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::old_generation_cannot_complete_a_new_job
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::owner_start_fault_is_terminal_and_invalidates_generation
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::successful_completion_wakes_and_retains_rx_until_copyback
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::dropped_waiter_cancels_and_late_generation_cannot_complete_reused_slot
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::timeout_is_delivered_to_existing_waiter_and_recycles_on_poll
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::owner_activation_rebases_mailbox_wire_deadline
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::packing_failure_leaves_slot_reusable

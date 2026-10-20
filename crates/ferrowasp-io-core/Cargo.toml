@@ -14,6 +14,7 @@ embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io = { workspace = true }
 embedded-io-async = { workspace = true }
+ferrowasp-imu = { path = "../ferrowasp-imu" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 ferrowasp-serial = { path = "../ferrowasp-serial" }
 heapless = { workspace = true }

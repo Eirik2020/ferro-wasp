@@ -11,6 +11,7 @@ members = [
     "crates/ferrowasp-feedback",
     "crates/ferrowasp-flight",
     "crates/ferrowasp-icm42688p",
+    "crates/ferrowasp-imu",
     "crates/ferrowasp-input",
     "crates/ferrowasp-io-contracts",
     "crates/ferrowasp-io-core",
