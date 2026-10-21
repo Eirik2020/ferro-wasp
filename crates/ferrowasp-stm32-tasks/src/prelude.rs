@@ -11,7 +11,7 @@ pub use ferrowasp_stm32h7 as backend;
 
 pub use crate::dt;
 pub use crate::flash_task;
-pub use backend::hal_prelude::{ExtiPin, pac};
+pub use backend::hal_prelude::pac;
 pub use core::sync::atomic::Ordering;
 pub use defmt::{info, warn};
 pub use embedded_hal::spi::Operation;

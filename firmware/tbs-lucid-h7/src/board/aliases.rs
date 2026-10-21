@@ -5,7 +5,8 @@ use ferrowasp_stm32::uart_port;
 use ferrowasp_stm32h7::hal_prelude::*;
 use ferrowasp_stm32h7::{adc, dshot, sd_storage, spi_dma, timers, uart_dma};
 
-pub type ImuDataReadyPin = PB2<Input>;
+/// The IMU data-ready line, PB2, as an interrupt input.
+pub type ImuDataReadyPin = ferrowasp_stm32h7::exti::ExtiInput<PB2<Input>>;
 
 /// The IMU chip select, PC15.
 pub type Spi1ImuCs = ferrowasp_stm32h7::eh1::OutputPin<'C', 15>;

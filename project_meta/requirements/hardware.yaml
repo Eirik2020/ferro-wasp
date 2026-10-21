@@ -132,6 +132,7 @@ requirements:
       - ferrowasp_stm32_critical::spi1_imu
       - ferrowasp_stm32_critical::memory
       - ferrowasp_stm32f4_critical::spi_dma
+      - ferrowasp_stm32_critical::exti
       - ferrowasp_stm32f4_critical::exti
       - ferrowasp_stm32h7_critical::spi_dma
       - ferrowasp_stm32h7_critical::eh1

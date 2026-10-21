@@ -606,6 +606,7 @@ dependencies = [
  "ferrowasp-safety",
  "ferrowasp-serial",
  "ferrowasp-stm32",
+ "ferrowasp-stm32-critical",
  "ferrowasp-stm32f4",
  "ferrowasp-storage",
  "fugit",

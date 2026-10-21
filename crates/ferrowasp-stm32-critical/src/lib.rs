@@ -14,6 +14,7 @@ pub mod board_routes;
 pub mod dshot_bank;
 #[cfg(any(test, feature = "dshot"))]
 pub mod dshot_lanes;
+pub mod exti;
 pub mod memory;
 pub mod scheduler;
 pub mod serial;

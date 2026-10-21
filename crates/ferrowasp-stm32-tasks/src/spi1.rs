@@ -145,7 +145,10 @@ pub fn spi1_rx_dma(mut cx: spi1_rx_dma::Context) {
 /// The IMU's data-ready interrupt: timestamp it and start a poll, counting
 /// ones that arrive before the last poll was taken.
 #[ferroforge::task(
-    bounds = [imu_data_ready: ExtiPin, io_timebase: stm32_timebase::Timebase],
+    bounds = [
+        imu_data_ready: ferrowasp_stm32_critical::exti::InterruptInput,
+        io_timebase: stm32_timebase::Timebase,
+    ],
     local = [
         imu_data_ready,
         // Whether the IMU configured at boot: a fact of init.
