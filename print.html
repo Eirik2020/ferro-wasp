@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9a506e5a.js";
+            window.path_to_searchindex_js = "searchindex-a1f7d380.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -2153,6 +2153,8 @@ chips’ features in one build. Firmware is composed with
 <tr><th>Crate</th><th>Owns</th></tr>
 </thead>
 <tbody>
+<tr><td><code>ferrowasp-border</code></td><td>The border roles, safety-critical, running below the flight path and above everything else: the observer, which publishes the craft’s state on a read-only ledger</td></tr>
+<tr><td><code>ferrowasp-boundary-contracts</code></td><td>What the safety-critical side exchanges with the rest, safety-critical: the messages tasks send the observer and the ledger’s topics</td></tr>
 <tr><td><code>ferrowasp-config</code></td><td>Stored configuration, safety-critical: the configuration keys and their ranges, the configuration slot page, and the stored schema with its migration</td></tr>
 <tr><td><code>ferrowasp-control</code></td><td>General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration</td></tr>
 <tr><td><code>ferrowasp-crsf</code>, <code>ferrowasp-blheli-telemetry</code></td><td>The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each</td></tr>
@@ -2164,7 +2166,7 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-feedback</code></td><td>Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for</td></tr>
 <tr><td><code>ferrowasp-imu</code></td><td>The IMU group, safety-critical: the SPI request mailbox and async device the IMU is read through</td></tr>
 <tr><td><code>ferrowasp-input</code></td><td>Command Input, safety-critical: the RC receiver that turns SBUS or CRSF into one frame shape, and the channel map</td></tr>
-<tr><td><code>ferrowasp-io-contracts</code></td><td>The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines</td></tr>
+<tr><td><code>ferrowasp-io-contracts</code></td><td>The message types hardware exchanges with the safety-critical core, safety-critical: serial chunks with their continuity metadata, serial faults, timestamps and deadlines, and the queue every link between tasks is</td></tr>
 <tr><td><code>ferrowasp-protocol</code></td><td>The formats shared with host tools: the onboard flight log’s records and pages, and the compact rate record</td></tr>
 <tr><td><code>ferrowasp-safety</code></td><td>The safety master’s rules, safety-critical: arming and its guard, the RC link and its fault responses, the motor command boundary, bench motor requests, and the single-writer signals tasks share</td></tr>
 <tr><td><code>ferrowasp-serial</code></td><td>The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer</td></tr>
