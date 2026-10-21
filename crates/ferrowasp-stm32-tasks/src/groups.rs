@@ -24,19 +24,19 @@ pub mod spi1_imu {
 #[ferroforge::group]
 pub mod flight {
     pub use crate::actuator_output;
-    pub use crate::adc1_polling;
-    pub use crate::dma_adc1;
     pub use crate::dshot_fallback;
     pub use crate::dshot_service;
     pub use crate::esc_manager_task;
     pub use crate::flash_manager_task;
     pub use crate::heartbeat;
-    pub use crate::osd_refresh;
     pub use crate::rc_input;
-    pub use crate::rc_telemetry;
     pub use crate::usb_fs;
     pub use ferrowasp_border::tasks::observer_task;
     pub use ferrowasp_flight_control::tasks::control_loop;
+    pub use ferrowasp_osd::tasks::osd_refresh;
+    pub use ferrowasp_osd::tasks::rc_telemetry;
     pub use ferrowasp_safety::tasks::actuator_idle_notify;
     pub use ferrowasp_safety::tasks::safety_master;
+    pub use ferrowasp_stm32::tasks::adc::adc1_polling;
+    pub use ferrowasp_stm32::tasks::adc::dma_adc1;
 }

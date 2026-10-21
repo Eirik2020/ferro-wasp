@@ -504,11 +504,22 @@ dependencies = [
 name = "ferrowasp-osd"
 version = "0.1.0"
 dependencies = [
+ "defmt 1.0.1",
+ "embedded-io-async",
+ "ferroforge",
+ "ferrowasp-border",
  "ferrowasp-boundary-contracts",
+ "ferrowasp-crsf",
  "ferrowasp-flight-control",
  "ferrowasp-io-contracts",
  "ferrowasp-mspv1",
+ "ferrowasp-safety",
+ "ferrowasp-serial",
+ "ferrowasp-stm32-critical",
+ "fugit",
  "heapless 0.9.2",
+ "rtic",
+ "rtic-monotonics",
 ]
 
 [[package]]
@@ -555,9 +566,17 @@ version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
  "embedded-hal 1.0.0",
+ "ferroforge",
+ "ferrowasp-boundary-contracts",
+ "ferrowasp-io-contracts",
+ "ferrowasp-osd",
+ "ferrowasp-safety",
  "ferrowasp-stm32-critical",
+ "fugit",
  "heapless 0.9.2",
  "rc-pwm",
+ "rtic",
+ "rtic-monotonics",
 ]
 
 [[package]]

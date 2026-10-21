@@ -8,9 +8,39 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+# The OSD and RC telemetry RTIC task definitions, target-only (ADR-0065).
+tasks = [
+    "dep:defmt",
+    "dep:embedded-io-async",
+    "dep:ferrowasp-border",
+    "dep:ferrowasp-crsf",
+    "dep:ferrowasp-safety",
+    "dep:ferrowasp-serial",
+    "dep:ferrowasp-stm32-critical",
+    "dep:ferroforge",
+    "dep:fugit",
+    "dep:rtic",
+    "dep:rtic-monotonics",
+]
+
 [dependencies]
+embedded-io-async = { workspace = true, optional = true }
+ferrowasp-border = { path = "../ferrowasp-border", optional = true }
+ferrowasp-crsf = { path = "../ferrowasp-crsf", optional = true }
+ferrowasp-safety = { path = "../ferrowasp-safety", optional = true }
+ferrowasp-serial = { path = "../ferrowasp-serial", optional = true }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", optional = true }
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 heapless = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+defmt = { version = "=1.0.1", optional = true }
+ferroforge = { version = "=0.4.0", optional = true }
+fugit = { version = "=0.3.9", optional = true }
+rtic = { version = "=2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "=2.1.0", default-features = false, optional = true }

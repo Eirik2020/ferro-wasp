@@ -5,7 +5,14 @@
 //! different DMA streams; the calibration is the board's, so it is
 //! configuration.
 
-use crate::prelude::*;
+use crate::adc as stm32_adc;
+use crate::adc::Adc1ObservationDma as _;
+use defmt::{info, warn};
+use ferrowasp_boundary_contracts::messages as observed;
+use ferrowasp_io_contracts::link::LinkProducer;
+use ferrowasp_io_contracts::time::TimestampMicros;
+use ferrowasp_osd as osd;
+use fugit::ExtU64 as _;
 
 /// Start an ADC1 conversion every 100 ms.
 #[ferroforge::task(

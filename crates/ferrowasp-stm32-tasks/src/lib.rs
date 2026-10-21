@@ -43,8 +43,6 @@ const _: () = assert!(
 ))]
 mod actuator;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod adc;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod channels;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod cli_link;
@@ -62,14 +60,10 @@ mod esc;
 mod flash;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod groups;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod osd;
 // A convenience for task bodies; which names a body uses depends on the
 // firmware's features, so an unused one is not a mistake.
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod app;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod leds;
 #[allow(unused_imports)]
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod prelude;
@@ -89,8 +83,6 @@ pub use actuator::{
     ActuatorHardware, ArmingGuard, actuator_output, current_live_arming_guard,
     inject_idle_qualification_fault, take_fresh_motor_outputs, wait_live_arming_hold,
 };
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use channels::{
     CommandLinkChannels, EscChannels, ImuChannels, ObserverChannels, StorageChannels,
@@ -115,8 +107,14 @@ pub use ferrowasp_cli::usb_debug::BuildIdentity;
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_flight_control::tasks::{control_loop, motor_command_timestamp};
 #[cfg(target_arch = "arm")]
+pub use ferrowasp_osd::tasks::{osd_refresh, rc_telemetry};
+#[cfg(target_arch = "arm")]
 pub use ferrowasp_safety::tasks::{actuator_idle_notify, safety_master, warn_arming_abort};
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_stm32::tasks::adc::{adc1_polling, dma_adc1};
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_stm32::tasks::leds::status_leds;
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_stm32_critical::tasks::spi1::{
     ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox, imu_data_ready,
@@ -138,10 +136,6 @@ pub use flash::{
     RpcDeviceInfoFn, flash_manager_task, load_flash_config, scan_flash_log,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use leds::status_leds;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use osd::osd_refresh;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use rc::{rc_input, rc_telemetry};
+pub use rc::rc_input;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use usb::usb_fs;

@@ -5,6 +5,9 @@
 #![forbid(unsafe_code)]
 #![no_std]
 
+#[cfg(all(feature = "tasks", target_arch = "arm"))]
+pub mod tasks;
+
 use ferrowasp_boundary_contracts::messages::{BatteryStatus, ControlTick};
 use ferrowasp_boundary_contracts::topics::{ObserverStatus, TopicWatch};
 use ferrowasp_flight_control::drone_toolbox::TuningProfile;

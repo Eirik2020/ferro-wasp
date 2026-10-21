@@ -64,7 +64,7 @@ ferrowasp-input = { path = "../ferrowasp-input" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 ferrowasp-mpu6000 = { path = "../ferrowasp-mpu6000" }
 ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500" }
-ferrowasp-osd = { path = "../ferrowasp-osd" }
+ferrowasp-osd = { path = "../ferrowasp-osd", features = ["tasks"] }
 ferrowasp-protocol = { path = "../ferrowasp-protocol" }
 ferrowasp-safety = { path = "../ferrowasp-safety", features = ["tasks"] }
 ferrowasp-serial = { path = "../ferrowasp-serial" }
@@ -72,7 +72,7 @@ ferrowasp-storage = { path = "../ferrowasp-storage" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 heapless = { workspace = true }
-ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32", features = ["tasks"] }
 ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", features = ["tasks"] }
 ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4", optional = true }
 ferrowasp-stm32h7 = { path = "../ferrowasp-stm32h7", optional = true }

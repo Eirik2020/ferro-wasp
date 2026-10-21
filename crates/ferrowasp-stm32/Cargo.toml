@@ -18,11 +18,32 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = ["ferrowasp-stm32-critical/bench_spi_timeout_recovery"]
 dshot = ["ferrowasp-stm32-critical/dshot"]
+# The ADC and status-LED RTIC task definitions, target-only (ADR-0065).
+tasks = [
+    "dep:ferrowasp-boundary-contracts",
+    "dep:ferrowasp-io-contracts",
+    "dep:ferrowasp-osd",
+    "dep:ferrowasp-safety",
+    "dep:ferroforge",
+    "dep:fugit",
+    "dep:rtic",
+    "dep:rtic-monotonics",
+]
 
 [dependencies]
 defmt = "1.0.1"
 embedded-hal = { workspace = true }
+ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts", optional = true }
+ferrowasp-osd = { path = "../ferrowasp-osd", optional = true }
+ferrowasp-safety = { path = "../ferrowasp-safety", optional = true }
 ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical" }
 heapless = { workspace = true }
 rc-pwm = { path = "../rc-pwm" }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+ferroforge = { version = "0.4.0", optional = true }
+fugit = { version = "0.3.9", optional = true }
+rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "2.1.0", default-features = false, optional = true }
 
