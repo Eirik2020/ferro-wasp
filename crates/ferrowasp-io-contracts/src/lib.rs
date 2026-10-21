@@ -7,6 +7,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod imu;
 pub mod link;
 pub mod serial;
 pub mod time;

@@ -1,18 +1,73 @@
 //! The MSP OSD, non-critical (ADR-0060): what the DJI goggles show, encoded
-//! from snapshots of the craft's state. It reads the craft's state and never
-//! writes it.
+//! from the observer's ledger. It reads the craft's state and never writes
+//! it, and says so when what it shows has stopped updating (section 19).
 
 #![forbid(unsafe_code)]
 #![no_std]
 
+use ferrowasp_boundary_contracts::messages::{BatteryStatus, ControlTick};
+use ferrowasp_boundary_contracts::topics::{ObserverStatus, TopicWatch};
 use ferrowasp_flight_control::drone_toolbox::TuningProfile;
+use ferrowasp_io_contracts::link::Stamped;
+use ferrowasp_io_contracts::time::TimestampMicros;
 use ferrowasp_mspv1::{MspOsdTelemetry, MspParser, MspResponder, OSD_TX_BUFFER_LEN};
 use heapless::spsc::Queue;
 
 pub const OSD_TX_QUEUE_CAP: usize = 16;
+/// DisplayPort's blink attribute bit.
+const BLINK_ATTRIBUTE: u8 = 1 << 6;
 const MENU_ITEMS: u8 = 10;
 const MENU_STICK_THRESHOLD_DPS: i16 = 600;
 const MENU_THROTTLE_MAX: u32 = 300;
+
+/// How long the observer's own topic and the control loop's may hold still
+/// before the OSD warns: both advance at least every millisecond.
+pub const DATA_STALL_LIMIT_US: u32 = 250_000;
+/// How long the battery's topic may hold still: twice its 10 Hz period.
+pub const BATTERY_STALL_LIMIT_US: u32 = 500_000;
+
+/// Which of the OSD's sources have stopped advancing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Staleness {
+    pub data: bool,
+    pub battery: bool,
+}
+
+/// The OSD's watch on the ledger topics it shows, by its own clock.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StallWatch {
+    observer: TopicWatch,
+    control: TopicWatch,
+    battery: TopicWatch,
+}
+
+impl StallWatch {
+    pub const fn new() -> Self {
+        Self {
+            observer: TopicWatch::new(),
+            control: TopicWatch::new(),
+            battery: TopicWatch::new(),
+        }
+    }
+
+    /// The data is stale when the observer's topic or the control loop's
+    /// has held for [`DATA_STALL_LIMIT_US`]; the battery when its topic has
+    /// held for [`BATTERY_STALL_LIMIT_US`].
+    pub fn observe(
+        &mut self,
+        observer: &Stamped<ObserverStatus>,
+        control: &Stamped<ControlTick>,
+        battery: &Stamped<BatteryStatus>,
+        now: TimestampMicros,
+    ) -> Staleness {
+        let observer_advancing = self.observer.advancing(observer, now, DATA_STALL_LIMIT_US);
+        let control_advancing = self.control.advancing(control, now, DATA_STALL_LIMIT_US);
+        Staleness {
+            data: !(observer_advancing && control_advancing),
+            battery: !self.battery.advancing(battery, now, BATTERY_STALL_LIMIT_US),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OsdStickRates {
@@ -111,25 +166,37 @@ impl OsdTask {
             4 => {
                 let mut text = [b' '; 18];
                 copy_text(&mut text, b"VBAT ");
-                write_vbat(&mut text[5..], telemetry.battery_voltage_v10);
+                if telemetry.battery_stale {
+                    copy_text(&mut text[5..], b"--.-");
+                } else {
+                    write_vbat(&mut text[5..], telemetry.battery_voltage_v10);
+                }
                 self.responder
                     .write_string(4, 2, 0, trim_end(&text), output)
             }
             5 => {
                 let mut text = [b' '; 18];
                 copy_text(&mut text, b"CELL ");
-                write_cell_voltage(
-                    &mut text[5..],
-                    telemetry.battery_cell_count,
-                    telemetry.battery_cell_voltage_v100,
-                );
+                if telemetry.battery_stale {
+                    copy_text(&mut text[5..], b"---");
+                } else {
+                    write_cell_voltage(
+                        &mut text[5..],
+                        telemetry.battery_cell_count,
+                        telemetry.battery_cell_voltage_v100,
+                    );
+                }
                 self.responder
                     .write_string(5, 2, 0, trim_end(&text), output)
             }
             6 => {
                 let mut text = [b' '; 18];
                 copy_text(&mut text, b"CUR ");
-                write_current(&mut text[4..], telemetry.amperage_ca);
+                if telemetry.battery_stale {
+                    copy_text(&mut text[4..], b"---");
+                } else {
+                    write_current(&mut text[4..], telemetry.amperage_ca);
+                }
                 self.responder
                     .write_string(6, 2, 0, trim_end(&text), output)
             }
@@ -139,6 +206,12 @@ impl OsdTask {
                 write_u16(&mut text[4..], telemetry.osd_throttle);
                 self.responder
                     .write_string(7, 2, 0, trim_end(&text), output)
+            }
+            // Blinking, as a sensor-invalid warning, and cleared to spaces
+            // once the data advances again.
+            8 if telemetry.data_stale => {
+                self.responder
+                    .write_string(8, 2, BLINK_ATTRIBUTE, b"DATA STALE", output)
             }
             8..=13 => self.write_blank_debug_row(self.overlay_step, output),
             14 => self.responder.draw_screen(output),
@@ -643,6 +716,122 @@ mod tests {
         assert_eq!(auto_detect_cell_count(4_300, 4_300, 8), 1);
         assert_eq!(auto_detect_cell_count(36_000, 4_300, 8), 8);
         assert_eq!(auto_detect_cell_count(25_200, 0, 8), 0);
+    }
+
+    fn stamped<T: Default>(seq: u32) -> Stamped<T> {
+        Stamped {
+            seq,
+            at: TimestampMicros(0),
+            value: T::default(),
+        }
+    }
+
+    #[test]
+    fn data_stalls_when_the_observer_or_the_control_topic_holds() {
+        let mut watch = StallWatch::new();
+        let fresh = |watch: &mut StallWatch, seq, now| {
+            watch.observe(
+                &stamped(seq),
+                &stamped(seq),
+                &stamped(seq),
+                TimestampMicros(now),
+            )
+        };
+
+        assert_eq!(fresh(&mut watch, 1, 0), Staleness::default());
+        assert_eq!(fresh(&mut watch, 2, 200_000), Staleness::default());
+
+        // The control topic holds while the observer still runs.
+        let held_control = watch.observe(
+            &stamped(3),
+            &stamped(2),
+            &stamped(3),
+            TimestampMicros(450_000),
+        );
+        assert!(held_control.data);
+        assert!(!held_control.battery);
+
+        // The observer itself holds.
+        let mut watch = StallWatch::new();
+        watch.observe(&stamped(1), &stamped(1), &stamped(1), TimestampMicros(0));
+        let held_observer = watch.observe(
+            &stamped(1),
+            &stamped(2),
+            &stamped(2),
+            TimestampMicros(DATA_STALL_LIMIT_US as u64),
+        );
+        assert!(held_observer.data);
+    }
+
+    #[test]
+    fn the_battery_stalls_on_its_own_longer_limit() {
+        let mut watch = StallWatch::new();
+        watch.observe(&stamped(1), &stamped(1), &stamped(1), TimestampMicros(0));
+
+        let at_400_ms = watch.observe(
+            &stamped(2),
+            &stamped(2),
+            &stamped(1),
+            TimestampMicros(400_000),
+        );
+        let at_limit = watch.observe(
+            &stamped(3),
+            &stamped(3),
+            &stamped(1),
+            TimestampMicros(BATTERY_STALL_LIMIT_US as u64),
+        );
+
+        assert_eq!(at_400_ms, Staleness::default());
+        assert_eq!(
+            at_limit,
+            Staleness {
+                data: false,
+                battery: true
+            }
+        );
+    }
+
+    fn overlay_text(telemetry: &MspOsdTelemetry, step: u8) -> [u8; OSD_TX_BUFFER_LEN] {
+        let mut task = OsdTask::new();
+        let mut output = [0; OSD_TX_BUFFER_LEN];
+        for _ in 0..step {
+            task.next_overlay_frame(telemetry, &mut output);
+        }
+        output = [0; OSD_TX_BUFFER_LEN];
+        task.next_overlay_frame(telemetry, &mut output);
+        output
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+    }
+
+    #[test]
+    fn stale_data_blinks_a_warning_row_and_stale_battery_shows_dashes() {
+        let stale = MspOsdTelemetry {
+            battery_voltage_v10: 168,
+            battery_cell_count: 4,
+            battery_cell_voltage_v100: 420,
+            amperage_ca: 1_230,
+            data_stale: true,
+            battery_stale: true,
+            ..MspOsdTelemetry::default()
+        };
+        let fresh = MspOsdTelemetry {
+            data_stale: false,
+            battery_stale: false,
+            ..stale
+        };
+
+        assert!(contains(&overlay_text(&stale, 8), b"DATA STALE"));
+        assert!(!contains(&overlay_text(&fresh, 8), b"DATA STALE"));
+        assert!(contains(&overlay_text(&stale, 4), b"VBAT --.-"));
+        assert!(contains(&overlay_text(&fresh, 4), b"VBAT 16.8"));
+        assert!(contains(&overlay_text(&stale, 5), b"CELL ---"));
+        assert!(contains(&overlay_text(&stale, 6), b"CUR ---"));
+        assert!(contains(&overlay_text(&fresh, 6), b"CUR 12.3A"));
     }
 
     #[test]

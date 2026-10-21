@@ -7,11 +7,18 @@
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
-use crate::snapshots::MOTOR_OUTPUT_MAP_SNAPSHOT;
 
 /// A live arming guard: permit, RC link armable, arm switch high, throttle.
 /// Which pre-arm health it also requires is the board's safety policy.
-pub type ArmingGuard = fn(bool, bool, bool, u32) -> Result<(), safety::ArmingAbortReason>;
+/// The board's live arming guard: the arm permit, RC link, arm switch and
+/// throttle, then the control loop's IMU status (`None` once too old).
+pub type ArmingGuard = fn(
+    bool,
+    bool,
+    bool,
+    u32,
+    Option<safety::prearm::ImuPreArmStatus>,
+) -> Result<(), safety::ArmingAbortReason>;
 
 pub struct ActuatorHardware<'a, SharedDshot>
 where
@@ -78,6 +85,7 @@ pub fn current_live_arming_guard(
     rc_link: &signals::RcLinkReader,
     arm_high: &signals::RcArmHighReader,
     throttle: &signals::RcThrottleReader,
+    imu: &mut safety::prearm::ImuPreArmReader<'static>,
     now_us: u64,
 ) -> Result<(), safety::ArmingAbortReason> {
     guard(
@@ -85,11 +93,12 @@ pub fn current_live_arming_guard(
         rc_link.is_armable(now_us),
         arm_high.read(),
         throttle.read(),
+        imu.current(TimestampMicros(now_us)),
     )
 }
 
-// Eight arguments: the seven it had in the app, plus the board's guard it
-// used to name directly.
+// Nine arguments: the seven it had in the app, the board's guard it used to
+// name directly, and the control loop's IMU status.
 #[allow(clippy::too_many_arguments)]
 pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
     guard: ArmingGuard,
@@ -97,6 +106,7 @@ pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
     rc_link: &signals::RcLinkReader,
     arm_high: &signals::RcArmHighReader,
     throttle: &signals::RcThrottleReader,
+    imu: &mut safety::prearm::ImuPreArmReader<'static>,
     hold_ms: u32,
     mut now_us: Now,
     delay_ms: Delay,
@@ -109,7 +119,7 @@ where
     ferrowasp_safety::arming::wait_hold(
         hold_ms,
         ARMING_GUARD_POLL_MS,
-        || current_live_arming_guard(guard, permit, rc_link, arm_high, throttle, now_us()),
+        || current_live_arming_guard(guard, permit, rc_link, arm_high, throttle, imu, now_us()),
         delay_ms,
     )
     .await
@@ -121,6 +131,7 @@ where
 pub fn apply_bench_motor_request<SharedDshot>(
     dshot: &mut SharedDshot,
     request: safety::BenchMotorRequest,
+    motor_map: &signals::MotorMapReader,
     idle_command: f32,
     now_ms: u64,
 ) where
@@ -128,13 +139,11 @@ pub fn apply_bench_motor_request<SharedDshot>(
     SharedDshot::T: DshotMotors,
 {
     let lane = |logical_motor: u8| {
-        ferrowasp_flight_control::actuator::unpack_motor_map(
-            MOTOR_OUTPUT_MAP_SNAPSHOT.load(Ordering::Acquire),
-        )
-        .and_then(|map| {
-            ferrowasp_flight_control::actuator::physical_output_for_logical(map, logical_motor)
-        })
-        .map(|output| output - 1)
+        ferrowasp_flight_control::actuator::unpack_motor_map(motor_map.read())
+            .and_then(|map| {
+                ferrowasp_flight_control::actuator::physical_output_for_logical(map, logical_motor)
+            })
+            .map(|output| output - 1)
     };
     match request {
         safety::BenchMotorRequest::Stop => {
@@ -230,6 +239,8 @@ pub const fn inject_idle_qualification_fault(
         actuator_rc_arm_high_reader: signals::RcArmHighReader,
         actuator_rc_throttle_reader: signals::RcThrottleReader,
         actuator_rc_link_reader: signals::RcLinkReader,
+        actuator_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+        actuator_motor_map_reader: signals::MotorMapReader,
         actuator_arm_done_writer: signals::ActuatorArmDoneWriter,
         motor_cmd_reader: signals::MotorCmdReader,
         esc_telemetry_update_consumer: esc::EscTelemetryUpdateConsumer,
@@ -281,6 +292,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                 cx.local.actuator_rc_link_reader,
                 cx.local.actuator_rc_arm_high_reader,
                 cx.local.actuator_rc_throttle_reader,
+                cx.local.actuator_imu_prearm,
                 Mono::now().duration_since_epoch().to_micros(),
             ) {
                 cx.local.actuator_arm_done_writer.clear();
@@ -308,6 +320,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                     cx.local.actuator_rc_link_reader,
                     cx.local.actuator_rc_arm_high_reader,
                     cx.local.actuator_rc_throttle_reader,
+                    cx.local.actuator_imu_prearm,
                     DSHOT_PREARM_STOP_HOLD_MS,
                     || Mono::now().duration_since_epoch().to_micros(),
                     |delay_ms| Mono::delay(u64::from(delay_ms).millis()),
@@ -349,6 +362,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                         cx.local.actuator_rc_link_reader,
                         cx.local.actuator_rc_arm_high_reader,
                         cx.local.actuator_rc_throttle_reader,
+                        cx.local.actuator_imu_prearm,
                         Mono::now().duration_since_epoch().to_micros(),
                     ) {
                         actuator.abort_arming(
@@ -515,6 +529,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
             apply_bench_motor_request(
                 &mut cx.shared.dshot_motors,
                 request,
+                cx.local.actuator_motor_map_reader,
                 CONFIG::DSHOT_IDLE_COMMAND,
                 Mono::now().duration_since_epoch().to_millis(),
             );

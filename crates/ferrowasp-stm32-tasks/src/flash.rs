@@ -3,8 +3,8 @@
 //! for every board, over any store with NOR semantics; a board supplies its
 //! store and its defaults.
 
+use crate::inbound::publish_accel_level;
 use crate::prelude::*;
-use crate::snapshots::*;
 use core::fmt::Write as _;
 use ferrowasp_blackbox::log_writer::{LogWriter, PageWrite};
 use ferrowasp_blackbox::storage_maintenance::{
@@ -45,7 +45,8 @@ pub type FlashRpcResponseProducer = flash_task::RpcResponseProducer;
 pub type FlashRpcResponseProducer = ();
 /// The board's MSPv2 hello: its identity, built by the firmware.
 #[cfg(feature = "mspv2_configurator")]
-pub type RpcDeviceInfoFn = fn() -> mspv2::rpc::DeviceInfo;
+/// The board's answer to the configurator's `Hello`, given the arm state.
+pub type RpcDeviceInfoFn = fn(bool) -> mspv2::rpc::DeviceInfo;
 #[cfg(not(feature = "mspv2_configurator"))]
 pub type RpcDeviceInfoFn = ();
 
@@ -121,6 +122,15 @@ fn calibration_failure(error: CalibrationError) -> &'static str {
     }
 }
 
+/// What init found on the storage bus: whether the store is supported, its
+/// JEDEC manufacturer, memory type and capacity code, and its capacity.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FlashProbe {
+    pub ready: bool,
+    pub jedec: [u8; 3],
+    pub capacity_bytes: u32,
+}
+
 /// How long a calibration may wait for its IMU samples, in milliseconds.
 pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
 
@@ -135,6 +145,14 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         flash_record_consumer: flash_task::RecordConsumer,
         blackbox_stream: LinkConsumer<'static, observed::ControlTick>,
         storage_status_link: LinkProducer<'static, observed::StorageStatus>,
+        // A gate: storage writes only while this reads disarmed.
+        flash_safety_arm_reader: signals::SafetyArmReader,
+        // What init found on the bus; `ready` drops when storage fails.
+        flash_probe: FlashProbe,
+        log_rate_divisor: u32 = 1,
+        pages_written: u32 = 0,
+        write_faults: u32 = 0,
+        records_dropped: u32 = 0,
         flash_commands: CommandSources,
         flash_responses: ResponseRouter,
         flash_rpc_command_consumer: FlashRpcCommandConsumer,
@@ -172,6 +190,12 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let flash_record_consumer = cx.local.flash_record_consumer;
     let blackbox_stream = cx.local.blackbox_stream;
     let storage_status_link = cx.local.storage_status_link;
+    let flash_safety_arm_reader = cx.local.flash_safety_arm_reader;
+    let flash_probe = cx.local.flash_probe;
+    let log_rate_divisor = cx.local.log_rate_divisor;
+    let pages_written = cx.local.pages_written;
+    let write_faults = cx.local.write_faults;
+    let records_dropped = cx.local.records_dropped;
     let flash_commands = cx.local.flash_commands;
     let flash_responses = cx.local.flash_responses;
     let flash_rpc_command_consumer = cx.local.flash_rpc_command_consumer;
@@ -205,20 +229,18 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             let Some(tick) = blackbox_stream.oldest() else {
                 break;
             };
-            if let Some(record) =
-                flash_task::record_for_tick(&tick, FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed))
-            {
+            if let Some(record) = flash_task::record_for_tick(&tick, *log_rate_divisor) {
                 let _ = flash_record_producer.enqueue(record);
             }
         }
         storage_status_link.push(
             TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
             observed::StorageStatus {
-                ready: FLASH_READY.load(Ordering::Relaxed),
-                pages_written: FLASH_PAGES_WRITTEN.load(Ordering::Relaxed),
-                write_faults: FLASH_WRITE_FAULTS.load(Ordering::Relaxed),
-                records_dropped: FLASH_RECORDS_DROPPED.load(Ordering::Relaxed),
-                log_rate_divisor: FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed) as u8,
+                ready: flash_probe.ready,
+                pages_written: *pages_written,
+                write_faults: *write_faults,
+                records_dropped: *records_dropped,
+                log_rate_divisor: *log_rate_divisor as u8,
             },
         );
 
@@ -227,12 +249,12 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
         // enough, or when no flight is recording (`LogWriter`).
         let now_ms = Mono::now().duration_since_epoch().to_millis();
         if log.flush_write_back(flash_device, now_ms).is_err() {
-            FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-            FLASH_READY.store(false, Ordering::Release);
+            *write_faults = write_faults.wrapping_add(1);
+            flash_probe.ready = false;
             warn!("Storage flush failed; recording stopped");
         }
         {
-            if !FLASH_READY.load(Ordering::Acquire) {
+            if !flash_probe.ready {
                 #[cfg(feature = "mspv2_configurator")]
                 if let Some(request) = flash_rpc_command_consumer.dequeue() {
                     let _ = queue_rpc_response(
@@ -248,9 +270,9 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     let response = flash_task::storage_unavailable_response(
                         &command,
                         [
-                            FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
-                            FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
-                            FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                            flash_probe.jedec[0],
+                            flash_probe.jedec[1],
+                            flash_probe.jedec[2],
                         ],
                     );
                     queue_storage_response(flash_responses, response.as_str());
@@ -258,10 +280,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 Mono::delay(100u64.millis()).await;
                 continue;
             }
-            let Some(layout) =
-                flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
-            else {
-                FLASH_READY.store(false, Ordering::Release);
+            let Some(layout) = flash_task::StorageLayout::new(flash_probe.capacity_bytes) else {
+                flash_probe.ready = false;
                 #[cfg(feature = "mspv2_configurator")]
                 if let Some(request) = flash_rpc_command_consumer.dequeue() {
                     let _ = queue_rpc_response(
@@ -277,14 +297,14 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
 
             if !*initialized {
                 let Ok((page, flight, writable)) = scan_flash_log(flash_device, layout) else {
-                    FLASH_READY.store(false, Ordering::Release);
+                    flash_probe.ready = false;
                     warn!("Storage log recovery failed; storage disabled");
                     continue;
                 };
                 let Ok((config, sequence, slot)) =
                     load_flash_config(flash_device, layout, CONFIG::DEFAULT_STORED_CONFIG)
                 else {
-                    FLASH_READY.store(false, Ordering::Release);
+                    flash_probe.ready = false;
                     warn!("Storage configuration read failed; storage disabled");
                     continue;
                 };
@@ -293,7 +313,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 *config_sequence = sequence;
                 *config_active_slot = slot;
                 publish_accel_level(config.accel_level);
-                FLASH_LOG_RATE_DIVISOR.store(u32::from(config.log_rate_divisor), Ordering::Relaxed);
+                *log_rate_divisor = u32::from(config.log_rate_divisor);
                 cx.shared
                     .tuning_profile
                     .lock(|profile| *profile = config.tuning);
@@ -310,8 +330,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             let busy = match flash_device.busy() {
                 Ok(busy) => busy,
                 Err(_) => {
-                    FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                    FLASH_READY.store(false, Ordering::Release);
+                    *write_faults = write_faults.wrapping_add(1);
+                    flash_probe.ready = false;
                     warn!("Storage status read failed; storage disabled");
                     #[cfg(feature = "mspv2_configurator")]
                     let _ = finish_config_rpc_error(
@@ -331,7 +351,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             // started it; a new command below switches to its own link.
             flash_responses.answer_maintenance();
 
-            if SAFETY_ARMED.load(Ordering::Acquire)
+            if flash_safety_arm_reader.read()
                 && (maintenance.is_active() || config_save.is_active())
             {
                 // An erase stopped part-way has cleared the top of the log
@@ -344,7 +364,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             log.recover(page, flight, writable);
                         }
                         Err(_) => {
-                            FLASH_READY.store(false, Ordering::Release);
+                            flash_probe.ready = false;
                             warn!(
                                 "Storage log rescan after aborted erase failed; storage disabled"
                             );
@@ -394,7 +414,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         }
                         MaintenanceStep::Failed(failure) => {
                             if failure.is_write_fault() {
-                                FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                                *write_faults = write_faults.wrapping_add(1);
                             }
                             queue_storage_response(
                                 flash_responses,
@@ -431,7 +451,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 SaveStep::Idle => {}
                 SaveStep::Running => continue,
                 SaveStep::Failed(failure) => {
-                    FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
+                    *write_faults = write_faults.wrapping_add(1);
                     #[cfg(feature = "mspv2_configurator")]
                     let rpc_notified = finish_config_rpc_error(
                         flash_rpc_response_producer,
@@ -466,8 +486,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     *config_active_slot = slot;
                     *config_sequence = sequence;
                     publish_accel_level(stored_config.accel_level);
-                    FLASH_LOG_RATE_DIVISOR
-                        .store(u32::from(stored_config.log_rate_divisor), Ordering::Relaxed);
+                    *log_rate_divisor = u32::from(stored_config.log_rate_divisor);
                     cx.shared
                         .tuning_profile
                         .lock(|profile| *profile = stored_config.tuning);
@@ -517,7 +536,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         layout,
                         responses: &mut *flash_responses,
                         link,
-                        armed: SAFETY_ARMED.load(Ordering::Acquire),
+                        armed: flash_safety_arm_reader.read(),
                         log: &*log,
                         maintenance: &mut *maintenance,
                         config_save: &mut *config_save,
@@ -526,9 +545,9 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         config_active_slot: *config_active_slot,
                         calibrating: accel_calibration.is_some(),
                         jedec: [
-                            FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
-                            FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
-                            FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
+                            flash_probe.jedec[0],
+                            flash_probe.jedec[1],
+                            flash_probe.jedec[2],
                         ],
                         default_serial_bindings: CONFIG::DEFAULT_SERIAL_BINDINGS,
                         serial_routes: CONFIG::SERIAL_ROUTES,
@@ -581,7 +600,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             // Let the USB task send the answer before the
                             // port goes away.
                             Mono::delay(REBOOT_ANSWER_MS.millis()).await;
-                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                            if flash_safety_arm_reader.read() {
                                 queue_storage_response(
                                     flash_responses,
                                     "ERR reboot cancelled; system armed\r\n",
@@ -606,7 +625,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     &mut RpcContext {
                         flash: &mut *flash_device,
                         layout,
-                        armed: SAFETY_ARMED.load(Ordering::Acquire),
+                        armed: flash_safety_arm_reader.read(),
                         log: &*log,
                         maintenance: &*maintenance,
                         config_save: &mut *config_save,
@@ -629,7 +648,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             if let Some(calibration) = accel_calibration.as_mut() {
                 let imu = cx.shared.ledger.lock(|ledger| ledger.imu().value);
                 let sequence = imu.sample_seq;
-                let outcome = if SAFETY_ARMED.load(Ordering::Acquire) {
+                let outcome = if flash_safety_arm_reader.read() {
                     Some(Err("ERR imu calibration aborted; the system armed\r\n"))
                 } else if Mono::now().duration_since_epoch().to_millis()
                     > *accel_calibration_deadline_ms
@@ -683,19 +702,19 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             match log.write_pending(flash_device, layout) {
                 PageWrite::Nothing => {}
                 PageWrite::Written => {
-                    FLASH_PAGES_WRITTEN.fetch_add(1, Ordering::Relaxed);
+                    *pages_written = pages_written.wrapping_add(1);
                     // Fall through to the record drain rather than yielding
                     // here: a pass that either wrote a page or consumed
                     // records, never both, halved the store's throughput.
                 }
                 PageWrite::RegionFull => {
-                    FLASH_READY.store(false, Ordering::Release);
+                    flash_probe.ready = false;
                     warn!("Storage blackbox region full; recording stopped");
                     continue;
                 }
                 PageWrite::ProgramFailed => {
-                    FLASH_WRITE_FAULTS.fetch_add(1, Ordering::Relaxed);
-                    FLASH_READY.store(false, Ordering::Release);
+                    *write_faults = write_faults.wrapping_add(1);
+                    flash_probe.ready = false;
                     warn!("Storage page program failed; recording stopped");
                     continue;
                 }
@@ -704,14 +723,14 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 flash_device,
                 layout,
                 flash_record_consumer,
-                SAFETY_ARMED.load(Ordering::Acquire),
+                flash_safety_arm_reader.read(),
                 // Bench-only: record while disarmed, so the flash write path
                 // can be exercised without flying.
                 cfg!(feature = "bench_blackbox"),
             );
-            FLASH_PAGES_WRITTEN.fetch_add(drained.pages_written, Ordering::Relaxed);
-            FLASH_RECORDS_DROPPED.fetch_add(drained.records_dropped, Ordering::Relaxed);
-            FLASH_WRITE_FAULTS.fetch_add(drained.write_faults, Ordering::Relaxed);
+            *pages_written = pages_written.wrapping_add(drained.pages_written);
+            *records_dropped = records_dropped.wrapping_add(drained.records_dropped);
+            *write_faults = write_faults.wrapping_add(drained.write_faults);
         }
 
         Mono::delay(1u64.millis()).await;

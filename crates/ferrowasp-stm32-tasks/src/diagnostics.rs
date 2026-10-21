@@ -3,7 +3,7 @@
 //! the observer's ledger.
 
 use crate::prelude::*;
-use crate::snapshots::USB_DEBUG_DUE;
+use crate::usb::STATUS_LINE_DUE;
 
 /// Wake the USB task for its status line, report the isolated stale IMU
 /// ticks the control loop tolerated, then log storage health and blackbox
@@ -29,7 +29,7 @@ pub async fn heartbeat(mut cx: heartbeat::Context) {
     info!("Running heartbeat!");
 
     loop {
-        USB_DEBUG_DUE.store(true, Ordering::Release);
+        STATUS_LINE_DUE.store(true, Ordering::Release);
         cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
 
         let (identity, observer, control, imu, drdy, storage) = cx.shared.ledger.lock(|ledger| {

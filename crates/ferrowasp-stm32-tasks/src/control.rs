@@ -3,8 +3,8 @@
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
 
+use crate::inbound::accel_level;
 use crate::prelude::*;
-use crate::snapshots::*;
 
 /// The time a motor command is stamped with: now, except in the
 /// `bench_motor_cmd_stale_rejection` fault-injection image, where the first
@@ -19,18 +19,32 @@ pub fn motor_command_timestamp(now_ms: u64, sequence: u32) -> u64 {
     now_ms
 }
 
-/// The control tick in progress, sent to the observer when the loop returns
-/// by whichever path; the body fills it as the tick learns each value. The
-/// link never blocks: a full one refuses the tick and counts it.
+/// The control tick in progress, sent when the loop returns by whichever
+/// path: to the observer, and its IMU status to both pre-arm checks. The
+/// body fills it as the tick learns each value. No link blocks: a full one
+/// refuses and counts.
 struct TickReport<'a> {
     link: &'a mut LinkProducer<'static, observed::ControlTick>,
+    prearm_links: [&'a mut LinkProducer<'static, safety::prearm::ImuPreArmStatus>; 2],
     at: TimestampMicros,
     tick: observed::ControlTick,
+    imu_transport_ready: bool,
+    imu_kind: u8,
 }
 
 impl Drop for TickReport<'_> {
     fn drop(&mut self) {
         self.link.push(self.at, self.tick);
+        let status = safety::prearm::ImuPreArmStatus {
+            transport_ready: self.imu_transport_ready,
+            kind: self.imu_kind,
+            sample_seen: self.tick.imu_seq != 0,
+            bias_calibrated: self.tick.bias_calibrated,
+            stale: self.tick.imu_stale,
+        };
+        for link in &mut self.prearm_links {
+            link.push(self.at, status);
+        }
     }
 }
 
@@ -64,7 +78,26 @@ impl Drop for TickReport<'_> {
         control_arm_permit_reader: signals::ActuatorArmPermitReader,
         motor_cmd_writer: signals::MotorCmdWriter,
         motor_cmd_seq: u32,
+        motor_map_writer: signals::MotorMapWriter,
         control_tick_link: LinkProducer<'static, observed::ControlTick>,
+        imu_sample_consumer: LinkConsumer<'static, ferrowasp_io_contracts::imu::ImuSample>,
+        // The last IMU sample taken, which a stale tick reuses.
+        last_imu_sample: Stamped<ferrowasp_io_contracts::imu::ImuSample> = Stamped {
+            seq: 0,
+            at: TimestampMicros(0),
+            value: ferrowasp_io_contracts::imu::ImuSample {
+                gyro_raw: [0; 3],
+                accel_g: [0.0; 3],
+                gyro_dps: [0.0; 3],
+                temperature_c: 0.0,
+            },
+        },
+        safety_prearm_link: LinkProducer<'static, safety::prearm::ImuPreArmStatus>,
+        actuator_prearm_link: LinkProducer<'static, safety::prearm::ImuPreArmStatus>,
+        // Facts of init: whether the IMU configured, and which it is.
+        control_imu_ready: bool,
+        control_imu_kind: u8,
+        bias_calibrated: bool = false,
         // The latest attitude estimate, reported on every tick, including
         // those that return before the estimator runs.
         attitude_deg: [f32; 3] = [0.0; 3],
@@ -78,7 +111,6 @@ impl Drop for TickReport<'_> {
             ferrowasp_flight_control::actuator::MotorOutputMap::IDENTITY,
     ],
     shared = [
-        imu_data: imu::ImuData,
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
     ],
@@ -144,19 +176,22 @@ pub fn control_loop(mut cx: control_loop::Context) {
     *cx.local.control_isr_seq = cx.local.control_isr_seq.wrapping_add(1);
 
     let tick_at = TimestampMicros(Mono::now().duration_since_epoch().to_micros());
-    if !IMU_TRANSPORT_READY.load(Ordering::Relaxed) {
+    if !*cx.local.control_imu_ready {
         *cnt = 0;
-        IMU_STALE.store(true, Ordering::Release);
-        cx.local.control_tick_link.push(
-            tick_at,
-            observed::ControlTick {
+        let _report = TickReport {
+            link: cx.local.control_tick_link,
+            prearm_links: [cx.local.safety_prearm_link, cx.local.actuator_prearm_link],
+            at: tick_at,
+            tick: observed::ControlTick {
                 isr_seq: *cx.local.control_isr_seq,
                 imu_stale: true,
                 armed: cx.local.control_safety_arm_reader.read(),
                 attitude_deg: *cx.local.attitude_deg,
                 ..observed::ControlTick::default()
             },
-        );
+            imu_transport_ready: false,
+            imu_kind: *cx.local.control_imu_kind,
+        };
         return;
     }
 
@@ -166,24 +201,29 @@ pub fn control_loop(mut cx: control_loop::Context) {
         *cnt = 0; // Reset sampling counter
         let mut report = TickReport {
             link: cx.local.control_tick_link,
+            prearm_links: [cx.local.safety_prearm_link, cx.local.actuator_prearm_link],
             at: tick_at,
             tick: observed::ControlTick {
                 isr_seq: *cx.local.control_isr_seq,
                 tolerated_stale_ticks: *cx.local.tolerated_stale_ticks,
                 attitude_deg: *cx.local.attitude_deg,
+                bias_calibrated: *cx.local.bias_calibrated,
                 ..observed::ControlTick::default()
             },
+            imu_transport_ready: true,
+            imu_kind: *cx.local.control_imu_kind,
         };
 
-        let sensor_accel = cx.shared.imu_data.lock(|imu| imu.acc);
+        // The newest sample, gyro and accelerometer from one burst; with
+        // nothing new, the last one again, and its sequence says stale.
+        if let Some(sample) = cx.local.imu_sample_consumer.newest() {
+            *cx.local.last_imu_sample = sample;
+        }
+        let imu_sample = cx.local.last_imu_sample.value;
         let drone_gravity =
-            CONFIG::IMU_CONTROL_AXIS_PROFILE.sensor_accel_to_drone_gravity(sensor_accel);
-        let gyro_raw = [
-            IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed) as i16,
-            IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed) as i16,
-            IMU_LATEST_YAW_RAW.load(Ordering::Relaxed) as i16,
-        ];
-        let imu_sequence = IMU_LATEST_SEQ.load(Ordering::Relaxed);
+            CONFIG::IMU_CONTROL_AXIS_PROFILE.sensor_accel_to_drone_gravity(imu_sample.accel_g);
+        let gyro_raw = imu_sample.gyro_raw;
+        let imu_sequence = cx.local.last_imu_sample.seq;
 
         let imu_fresh = imu::classify_sample_freshness(*cx.local.imu_last_sequence, imu_sequence)
             == imu::SampleFreshness::Fresh;
@@ -196,7 +236,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
         // Stale for pre-arm, the OSD and USB status means stale beyond the
         // tolerance, the same rule that disarms below.
         let imu_stale = safety::imu_stale_beyond_tolerance(*cx.local.imu_stale_ticks);
-        IMU_STALE.store(imu_stale, Ordering::Release);
 
         let control_armed = cx.local.control_safety_arm_reader.read();
         report.tick.imu_seq = imu_sequence;
@@ -209,7 +248,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
             cx.local.gyro_axis_map.map_raw(gyro_raw),
         );
         if gyro_bias_update.newly_calibrated {
-            IMU_BIAS_CALIBRATED.store(true, Ordering::Release);
+            *cx.local.bias_calibrated = true;
             info!(
                 "Gyro bias calibrated raw [{}, {}, {}]",
                 gyro_bias_update.bias_raw[0],
@@ -217,7 +256,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 gyro_bias_update.bias_raw[2]
             );
         }
-        report.tick.bias_calibrated = IMU_BIAS_CALIBRATED.load(Ordering::Relaxed);
+        report.tick.bias_calibrated = *cx.local.bias_calibrated;
         let control_gyro_raw = gyro_bias_update.corrected_raw;
         report.tick.gyro_raw = control_gyro_raw;
         let imu_roll_raw = control_gyro_raw[0] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
@@ -308,10 +347,11 @@ pub fn control_loop(mut cx: control_loop::Context) {
             .local
             .motor_order
             .compose(CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT);
-        MOTOR_OUTPUT_MAP_SNAPSHOT.store(
-            ferrowasp_flight_control::actuator::pack_motor_map(motor_output_map),
-            Ordering::Release,
-        );
+        cx.local
+            .motor_map_writer
+            .write(ferrowasp_flight_control::actuator::pack_motor_map(
+                motor_output_map,
+            ));
 
         if !imu_fresh {
             // A tolerated tick skips this update; the motors hold the

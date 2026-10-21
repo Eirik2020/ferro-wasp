@@ -149,7 +149,11 @@ without taking the OSD with it.
 Only the silent stall leaves the OSD running, and the ledger's per-topic
 sequence already shows it. So the OSD and telemetry show a warning when the
 topics they read stop advancing. That also catches an observer that still
-beats but stopped publishing. A pilot-alert flag written by the safety master
+beats but stopped publishing. The user chose the OSD's form: a blinking
+"DATA STALE" row while the observer's own topic or the control loop's has
+held for 250 ms, and dashes for the battery values while the battery's topic
+has held for 500 ms, twice its period, rather than one warning row alone or
+a blanked overlay (OSD-001). The radio's warning over CRSF waits. A pilot-alert flag written by the safety master
 and read by the OSD directly, bypassing the observer, was proposed and dropped
 as unnecessary; land immediately from a hung coordinator or Health Manager
 reaches the pilot through the observer.

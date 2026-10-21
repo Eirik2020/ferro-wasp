@@ -29,6 +29,9 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         safety::ArmingAbortReason::ImuStale => {
             warn!("Arming aborted: IMU sample is stale")
         }
+        safety::ArmingAbortReason::ControlStatusStale => {
+            warn!("Arming aborted: no recent IMU status from the control loop")
+        }
         safety::ArmingAbortReason::HostConnected => {
             warn!("Arming refused: USB or the configurator link is connected; unplug to arm")
         }
@@ -81,13 +84,14 @@ fn report_arm_state(
         // since boot; arming is refused for a short while after it.
         last_bench_request_ms: Option<u64> = None,
         safety_status_link: LinkProducer<'static, observed::SafetyStatus>,
+        safety_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
         actuator_output_enabled: bool,
         actuator_inhibit_reason: &'static str,
         bench_actuator_validation_enabled: bool,
-        validate_live_arming_guard: fn(bool, bool, bool, u32) -> Result<(), safety::ArmingAbortReason>,
+        validate_live_arming_guard: crate::ArmingGuard,
     ],
     monotonic = Mono,
 )]
@@ -124,6 +128,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 rc_link.is_armable(now_us),
                 rc_arm_high.read(),
                 rc_throttle.read(),
+                cx.local.safety_imu_prearm.current(TimestampMicros(now_us)),
             );
             if guard.is_ok() {
                 arm_permit.allow();
@@ -150,6 +155,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                     rc_link.is_armable(now_us),
                     rc_arm_high.read(),
                     rc_throttle.read(),
+                    cx.local.safety_imu_prearm.current(TimestampMicros(now_us)),
                 )
                 .is_ok()
                 && actuator_done.read()

@@ -74,6 +74,7 @@ mod osd;
 // firmware's features, so an unused one is not a mistake.
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod app;
+pub mod inbound;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod leds;
 #[allow(unused_imports)]
@@ -81,7 +82,6 @@ mod leds;
 mod prelude;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod rc;
-pub mod snapshots;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod spi1;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
@@ -106,8 +106,8 @@ pub use adc::{adc1_polling, dma_adc1};
 pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use channels::{
-    CommandLinkChannels, EscChannels, ObserverChannels, StorageChannels, command_link_channels,
-    esc_channels, observer_channels, storage_channels,
+    CommandLinkChannels, EscChannels, ImuChannels, ObserverChannels, StorageChannels,
+    command_link_channels, esc_channels, imu_channels, observer_channels, storage_channels,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use cli_link::configurator_link;
@@ -128,8 +128,8 @@ pub use ferrowasp_cli::usb_debug::BuildIdentity;
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use flash::{
-    ConfigRpcCompletion, FlashRpcCommandConsumer, FlashRpcResponseProducer, RpcDeviceInfoFn,
-    flash_manager_task, load_flash_config, scan_flash_log,
+    ConfigRpcCompletion, FlashProbe, FlashRpcCommandConsumer, FlashRpcResponseProducer,
+    RpcDeviceInfoFn, flash_manager_task, load_flash_config, scan_flash_log,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use leds::status_leds;

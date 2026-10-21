@@ -126,3 +126,21 @@ requirements:
           setup: none
           method:
             test: ferrowasp_io_contracts::link::tests::the_sequence_skips_zero_when_it_wraps
+
+  - id: IO-004
+    title: An IMU sample is one burst in one message
+    statement: >-
+      An IMU sample handed to the control loop shall carry the raw gyro
+      counts, the acceleration, the rates and the temperature decoded from
+      one burst, as one message over a `state` link, so its consumer never
+      combines values from two samples.
+    rationale: >-
+      The control loop read its gyro as three atomics the parser wrote at a
+      lower priority, and its accelerometer through a separate lock, so a
+      tick could mix two samples (section 9, ADR-0057).
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_io_contracts::imu
+    verification:
+      mode: direct
+      entries: []

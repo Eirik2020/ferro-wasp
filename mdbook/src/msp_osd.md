@@ -28,18 +28,28 @@ The current implementation responds to the O4 unit's MSP polling and periodicall
 
 The DJI O4 OSD is driven as a character grid, not as pixels. Each text item is written at a row and column. Row `0`, column `0` is the upper-left corner of the visible canvas.
 
-The first proven FerroWasp layout is:
+The current FerroWasp layout is:
 
 ```text
 row 1, col 2: FERROWASP
 row 2, col 2: DISARMED / ARMED
-row 3, col 2: VBAT 0.0
-row 4, col 2: CELL ---
-row 5, col 2: CUR 0.0A
-row 6, col 2: THR 1000
+row 3, col 2: IMU OK / IMU STALE
+row 4, col 2: VBAT 0.0
+row 5, col 2: CELL ---
+row 6, col 2: CUR 0.0A
+row 7, col 2: THR 1000
+row 8, col 2: DATA STALE (blinking, only while it applies)
 ```
 
 This currently appears in the upper-left corner of the goggles.
+
+`DATA STALE` means the values on screen have stopped updating: the
+firmware's published state, or the control loop's part of it, has not
+changed for a quarter of a second. Treat everything shown as old and land.
+While the battery reading alone has stopped for half a second, the three
+battery rows show dashes (`VBAT --.-`, `CELL ---`, `CUR ---`) instead of
+the last value. The goggles' own battery element, fed by the MSP battery
+replies, still shows the last value.
 
 ## Display Update Sequence
 
@@ -59,10 +69,11 @@ heartbeat
 clear_screen
 write_string(row=1, col=2, attr=0, "FERROWASP")
 write_string(row=2, col=2, attr=0, "DISARMED")
-write_string(row=3, col=2, attr=0, "VBAT 0.0")
-write_string(row=4, col=2, attr=0, "CELL ---")
-write_string(row=5, col=2, attr=0, "CUR 0.0A")
-write_string(row=6, col=2, attr=0, "THR 1000")
+write_string(row=3, col=2, attr=0, "IMU OK")
+write_string(row=4, col=2, attr=0, "VBAT 0.0")
+write_string(row=5, col=2, attr=0, "CELL ---")
+write_string(row=6, col=2, attr=0, "CUR 0.0A")
+write_string(row=7, col=2, attr=0, "THR 1000")
 draw_screen
 ```
 
@@ -122,6 +133,7 @@ Current examples:
 | Field | Example | Source |
 |---|---|---|
 | Armed state | `ARMED` / `DISARMED` | Safety arm reader |
+| Stale data | `DATA STALE`, blinking | The published state has stopped updating |
 | Battery voltage | `VBAT 16.4` | ADC-derived pack voltage from `ADC_VBAT` on PC0 |
 | Cell voltage | `CELL 4.10` | Pack voltage divided by the configured battery cell count |
 | Current | `CUR 12.3A` | ADC-derived current sensor voltage from `ADC_CURR` on PC1 using the Foxeer/Betaflight scale value |

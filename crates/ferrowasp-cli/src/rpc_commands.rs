@@ -36,8 +36,8 @@ pub struct RpcContext<'a, F: NorStorage> {
     pub completion: &'a mut Option<ConfigRpcCompletion>,
     pub config_sequence: u32,
     pub config_active_slot: u8,
-    /// The board's hello.
-    pub device_info: fn() -> rpc::DeviceInfo,
+    /// The board's hello, given the arm state.
+    pub device_info: fn(bool) -> rpc::DeviceInfo,
     pub default_config: StoredConfig,
 }
 
@@ -89,7 +89,7 @@ pub fn handle<F: NorStorage>(
     match request.operation {
         mspv2::rpc::Request::Hello => Some(mspv2::rpc::ok(
             request_id,
-            mspv2::rpc::Response::Hello((ctx.device_info)()),
+            mspv2::rpc::Response::Hello((ctx.device_info)(ctx.armed)),
         )),
         mspv2::rpc::Request::GetConfig => {
             let crc = ctx.stored_config.crc32();
@@ -297,7 +297,7 @@ mod tests {
 
     const CAPACITY: u32 = 64 * 1024;
 
-    fn hello() -> rpc::DeviceInfo {
+    fn hello(_armed: bool) -> rpc::DeviceInfo {
         unreachable!("no test says hello")
     }
 

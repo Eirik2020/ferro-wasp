@@ -4,7 +4,6 @@
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
-use crate::snapshots::DSHOT_LAST_RELEASE_MS;
 
 /// How often the service reports the bank's state to the log.
 const DSHOT_REPORT_PERIOD_MS: u64 = 2_000;
@@ -61,6 +60,7 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
         esc_actuator_request_submitted: bool = false,
         esc_actuator_request_taken_ms: u64 = 0,
         output_status_link: LinkProducer<'static, observed::OutputStatus>,
+        dshot_release_writer: signals::DshotReleaseWriter,
     ],
     spawn = [safety_master(event: safety::SafetyEvent)],
     config = [dshot_motor_for_output: fn(esc::EscOutput) -> dshot::DshotMotor],
@@ -118,7 +118,7 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
             // Wrapping milliseconds: the fallback compares differences only.
             // A release that found the bank busy started nothing, so it does
             // not hold the fallback off.
-            DSHOT_LAST_RELEASE_MS.store(now_ms as u32, Ordering::Relaxed);
+            cx.local.dshot_release_writer.write(now_ms as u32);
         }
         let telemetry_sent = dshot.take_telemetry_request_sent();
         let active =
@@ -250,6 +250,7 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
 /// started in that time, so the ESCs always see frames and an unrenewed lease
 /// is always found. Absolute deadlines keep its own cadence from drifting.
 #[ferroforge::task(
+    local = [dshot_release_reader: signals::DshotReleaseReader],
     spawn = [dshot_service()],
     monotonic = Mono,
 )]
@@ -257,7 +258,7 @@ pub async fn dshot_fallback(mut cx: dshot_fallback::Context) {
     let mut next_check = Mono::now();
     loop {
         let now_ms = next_check.duration_since_epoch().to_millis() as u32;
-        if dshot::fallback_release_due(now_ms, DSHOT_LAST_RELEASE_MS.load(Ordering::Relaxed)) {
+        if dshot::fallback_release_due(now_ms, cx.local.dshot_release_reader.read()) {
             // Already pending or running: that run is the release.
             let _ = cx.spawn.dshot_service();
         }

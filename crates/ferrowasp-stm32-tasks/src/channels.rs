@@ -49,6 +49,51 @@ const CONTROL_TICK_LINK_DEPTH: usize = 17;
 /// producer's 2 kHz.
 const STATE_LINK_DEPTH: usize = 5;
 
+/// The links between the IMU, the control loop and the pre-arm checks
+/// (section 9), each a `state` link of four: the parser's sample to the
+/// control loop, and the control loop's IMU status to the safety master and
+/// to actuator output, one link each, since a link has one consumer.
+pub struct ImuChannels {
+    pub imu_sample_link: LinkProducer<'static, ferrowasp_io_contracts::imu::ImuSample>,
+    pub imu_sample_consumer: LinkConsumer<'static, ferrowasp_io_contracts::imu::ImuSample>,
+    pub safety_prearm_link: LinkProducer<'static, safety::prearm::ImuPreArmStatus>,
+    pub safety_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+    pub actuator_prearm_link: LinkProducer<'static, safety::prearm::ImuPreArmStatus>,
+    pub actuator_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+}
+
+/// Create the IMU and pre-arm links. Call once.
+pub fn imu_channels() -> ImuChannels {
+    use ferrowasp_io_contracts::imu::ImuSample;
+    use ferrowasp_io_contracts::link::link;
+    use heapless::spsc::Queue;
+    use safety::prearm::{ImuPreArmReader, ImuPreArmStatus};
+
+    let (imu_sample_link, imu_sample_consumer) = link(
+        cortex_m::singleton!(: Queue<Stamped<ImuSample>, STATE_LINK_DEPTH> = Queue::new()).unwrap(),
+    );
+    let (safety_prearm_link, safety) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<ImuPreArmStatus>, STATE_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    let (actuator_prearm_link, actuator) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<ImuPreArmStatus>, STATE_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    ImuChannels {
+        imu_sample_link,
+        imu_sample_consumer,
+        safety_prearm_link,
+        safety_imu_prearm: ImuPreArmReader::new(safety),
+        actuator_prearm_link,
+        actuator_imu_prearm: ImuPreArmReader::new(actuator),
+    }
+}
+
 /// The observer and the producing end of every link into it (section 10):
 /// each producer's end is a local resource of that task alone. The
 /// blackbox stream's consuming end is the flash manager's.
