@@ -88,6 +88,8 @@ mod spi1;
 mod uart_port;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod usb;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod views;
 
 #[cfg(all(
     target_arch = "arm",

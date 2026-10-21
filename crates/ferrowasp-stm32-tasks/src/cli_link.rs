@@ -7,7 +7,7 @@
 //! USB: a Bluetooth module can be paired by anyone in range.
 
 use crate::prelude::*;
-use crate::snapshots::*;
+use crate::snapshots::CONFIGURATOR_LINK_ACTIVE;
 
 /// Answers leave in whole transmit chunks. The last chunk of a burst is
 /// padded with NUL bytes, which a host skips.
@@ -61,10 +61,11 @@ impl Outbox {
         configurator_commands: Option<flash_task::CommandProducer>,
         configurator_responses: Option<flash_task::ResponseConsumer>,
     ],
+    shared = [ledger: Ledger],
     config = [build_identity: crate::BuildIdentity],
     monotonic = Mono,
 )]
-pub async fn configurator_link(cx: configurator_link::Context) {
+pub async fn configurator_link(mut cx: configurator_link::Context) {
     let (Some(port), Some(commands), Some(responses)) = (
         cx.local.configurator_port.as_mut(),
         cx.local.configurator_commands.as_mut(),
@@ -108,17 +109,26 @@ pub async fn configurator_link(cx: configurator_link::Context) {
                 last_command_ms = Some(Mono::now().duration_since_epoch().to_millis());
                 match parsed {
                     Ok(flash_task::StorageCommand::Live) => {
-                        let line = ferrowasp_cli::usb_debug::format_live(live_snapshot());
+                        let live = cx.shared.ledger.lock(|ledger| crate::views::live(ledger));
+                        let line = ferrowasp_cli::usb_debug::format_live(live);
                         outbox.push(&mut writer, line.as_bytes()).await;
                     }
                     Ok(flash_task::StorageCommand::Rc) => {
-                        for line in ferrowasp_cli::usb_debug::format_rc(rc_channels_us()) {
+                        let channels = cx
+                            .shared
+                            .ledger
+                            .lock(|ledger| crate::views::rc_channels(ledger));
+                        for line in ferrowasp_cli::usb_debug::format_rc(channels) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
                     Ok(flash_task::StorageCommand::Esc) => {
                         let now_ms = Mono::now().duration_since_epoch().to_millis() as u32;
-                        for line in ferrowasp_cli::usb_debug::format_esc(esc_snapshot(now_ms)) {
+                        let esc = cx
+                            .shared
+                            .ledger
+                            .lock(|ledger| crate::views::esc(ledger, now_ms));
+                        for line in ferrowasp_cli::usb_debug::format_esc(esc) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }

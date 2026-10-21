@@ -147,7 +147,15 @@ pub fn spi1_rx_dma(mut cx: spi1_rx_dma::Context) {
 /// ones that arrive before the last poll was taken.
 #[ferroforge::task(
     bounds = [imu_data_ready: ExtiPin, io_timebase: stm32_timebase::Timebase],
-    local = [imu_data_ready, drdy_status_link: LinkProducer<'static, observed::DrdyStatus>],
+    local = [
+        imu_data_ready,
+        drdy_status_link: LinkProducer<'static, observed::DrdyStatus>,
+        drdy_status: observed::DrdyStatus = observed::DrdyStatus {
+            interrupts: 0,
+            rejected: 0,
+            last_us: 0,
+        },
+    ],
     shared = [io_timebase],
     spawn = [spi1_poll(observed_at_us: u64)],
     monotonic = Mono,
@@ -159,19 +167,16 @@ pub fn imu_data_ready(mut cx: imu_data_ready::Context) {
     cx.local.imu_data_ready.clear_interrupt_pending_bit();
 
     let observed_at = cx.shared.io_timebase.lock(|timebase| timebase.now());
-    IMU_DRDY_IRQ_COUNT.fetch_add(1, Ordering::Relaxed);
-    IMU_DRDY_LAST_US.store(observed_at.0 as u32, Ordering::Relaxed);
+    let status = cx.local.drdy_status;
+    status.interrupts = status.interrupts.wrapping_add(1);
+    status.last_us = observed_at.0 as u32;
 
     if IMU_TRANSPORT_READY.load(Ordering::Relaxed) && cx.spawn.spi1_poll(observed_at.0).is_err() {
-        IMU_DRDY_REJECTED_COUNT.fetch_add(1, Ordering::Relaxed);
+        status.rejected = status.rejected.wrapping_add(1);
     }
     cx.local.drdy_status_link.push(
         TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
-        observed::DrdyStatus {
-            interrupts: IMU_DRDY_IRQ_COUNT.load(Ordering::Relaxed),
-            rejected: IMU_DRDY_REJECTED_COUNT.load(Ordering::Relaxed),
-            last_us: observed_at.0 as u32,
-        },
+        *status,
     );
 }
 
@@ -304,24 +309,6 @@ pub async fn spi1_parser(cx: spi1_parser::Context) {
 
         match parsed {
             Some(sample) => {
-                #[cfg(feature = "imu_orientation_rtt")]
-                {
-                    IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::AcqRel);
-                    IMU_LATEST_ACCEL_X_MG
-                        .store((sample.acc[0] * 1_000.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_ACCEL_Y_MG
-                        .store((sample.acc[1] * 1_000.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_ACCEL_Z_MG
-                        .store((sample.acc[2] * 1_000.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_GYRO_X_DPS10
-                        .store((sample.gyro[0] * 10.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_GYRO_Y_DPS10
-                        .store((sample.gyro[1] * 10.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_GYRO_Z_DPS10
-                        .store((sample.gyro[2] * 10.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_TEMP_C10.store((sample.temp * 10.0) as i32, Ordering::Relaxed);
-                    IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::Release);
-                }
                 IMU_LATEST_ROLL_RAW.store(sample.gyro_raw[0] as i32, Ordering::Relaxed);
                 IMU_LATEST_PITCH_RAW.store(sample.gyro_raw[1] as i32, Ordering::Relaxed);
                 IMU_LATEST_YAW_RAW.store(sample.gyro_raw[2] as i32, Ordering::Relaxed);

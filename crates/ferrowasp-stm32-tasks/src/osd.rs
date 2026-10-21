@@ -2,7 +2,6 @@
 //! and its writer.
 
 use crate::prelude::*;
-use crate::snapshots::*;
 
 /// Write one frame to the OSD, or nothing once a write has failed: the link
 /// stays down rather than retrying into a faulted DMA stream.
@@ -36,8 +35,9 @@ pub async fn osd_write(
 }
 
 /// Answer the OSD's requests and push the overlay or tuning menu, every
-/// 10 ms. Reads RC, arming, battery and attitude state; never writes any of
-/// it except the tuning profile, through the menu. With no port bound the
+/// 10 ms. Reads RC, battery, IMU and control state from the ledger; never
+/// writes any of it except the tuning profile, through the menu, which it
+/// opens only while the arm-state flag reads disarmed. With no port bound the
 /// task ends at once.
 #[ferroforge::task(
     local = [
@@ -47,17 +47,9 @@ pub async fn osd_write(
         osd_tx_buffer: [u8; mspv1::OSD_TX_BUFFER_LEN],
         osd_refresh_tick: u8,
         osd_safety_arm_reader: signals::SafetyArmReader,
-        osd_rc_throttle_reader: signals::RcThrottleReader,
-        osd_rc_rates_reader: signals::RcRatesReader,
     ],
     shared = [
-        battery_voltage_v10: u8,
-        battery_cell_count: u8,
-        battery_cell_voltage_v100: u16,
-        battery_current_ca: i16,
-        imu_angles: [f32; 3],
-        imu_rates: [f32; 3],
-        imu_data: imu::ImuData,
+        ledger: Ledger,
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
     ],
@@ -68,27 +60,31 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
         return;
     };
     loop {
-        let rates = cx.local.osd_rc_rates_reader.read();
-        let throttle = cx.local.osd_rc_throttle_reader.read();
+        let (control, imu, rc, battery) = cx.shared.ledger.lock(|ledger| {
+            (
+                ledger.control().value,
+                ledger.imu().value,
+                ledger.rc().value,
+                ledger.battery().value,
+            )
+        });
+        let rates = safety::RcRates {
+            roll: rc.rates_dps[0],
+            pitch: rc.rates_dps[1],
+            yaw: rc.rates_dps[2],
+        };
+        let throttle = rc.throttle;
+        // A gate, so the flag rather than the ledger: a stalled observer must
+        // never open the tuning menu while armed.
         let armed = cx.local.osd_safety_arm_reader.read();
-        let battery_voltage_v10 = cx.shared.battery_voltage_v10.lock(|value| *value);
-        let battery_cell_count = cx.shared.battery_cell_count.lock(|value| *value);
-        let battery_cell_voltage_v100 = cx.shared.battery_cell_voltage_v100.lock(|value| *value);
-        let amperage_ca = cx.shared.battery_current_ca.lock(|value| *value);
-        let angles = cx.shared.imu_angles.lock(|angles| *angles);
-        let imu_rates = cx.shared.imu_rates.lock(|rates| *rates);
-        let imu_sequence = IMU_LATEST_SEQ.load(Ordering::Relaxed);
-        let imu_raw = [
-            IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed) as i16,
-            IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed) as i16,
-            IMU_LATEST_YAW_RAW.load(Ordering::Relaxed) as i16,
-        ];
+        let angles = control.attitude_deg;
+        let imu_rates = control.body_rates_dps;
         let telemetry = mspv1::MspOsdTelemetry {
             armed,
-            battery_voltage_v10,
-            battery_cell_count,
-            battery_cell_voltage_v100,
-            amperage_ca,
+            battery_voltage_v10: battery.voltage_dv.min(u16::from(u8::MAX)) as u8,
+            battery_cell_count: battery.cell_count,
+            battery_cell_voltage_v100: battery.cell_voltage_cv,
+            amperage_ca: battery.current_ca,
             rc_roll: osd::map_rate_to_msp_rc(rates.roll),
             rc_pitch: osd::map_rate_to_msp_rc(rates.pitch),
             rc_yaw: osd::map_rate_to_msp_rc(rates.yaw),
@@ -103,21 +99,15 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
             imu_roll_dps10: (imu_rates[0] * 10.0) as i16,
             imu_pitch_dps10: (imu_rates[1] * 10.0) as i16,
             imu_yaw_dps10: (imu_rates[2] * 10.0) as i16,
-            imu_raw,
-            imu_sequence,
-            imu_stale: IMU_STALE.load(Ordering::Relaxed),
-            control_isr_sequence: CONTROL_ISR_SEQ.load(Ordering::Relaxed),
-            control_sequence: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-            control_raw: [
-                CONTROL_ROLL_RAW.load(Ordering::Relaxed) as i16,
-                CONTROL_PITCH_RAW.load(Ordering::Relaxed) as i16,
-                CONTROL_YAW_RAW.load(Ordering::Relaxed) as i16,
-            ],
-            control_dps10: [
-                CONTROL_ROLL_DPS10.load(Ordering::Relaxed) as i16,
-                CONTROL_PITCH_DPS10.load(Ordering::Relaxed) as i16,
-                CONTROL_YAW_DPS10.load(Ordering::Relaxed) as i16,
-            ],
+            imu_raw: imu.gyro_raw,
+            imu_sequence: imu.sample_seq,
+            imu_stale: control.imu_stale,
+            control_isr_sequence: control.isr_seq,
+            control_sequence: control.control_seq,
+            control_raw: control.gyro_raw.map(|raw| raw as i16),
+            control_dps10: control
+                .filtered_gyro_dps
+                .map(|rate| (rate * 10.0) as i32 as i16),
             ..mspv1::MspOsdTelemetry::default()
         };
 

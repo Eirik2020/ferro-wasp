@@ -214,12 +214,6 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 );
                 continue;
             }
-            for (snapshot, raw) in crate::snapshots::RC_CHANNELS_US.iter().zip(frame.channels) {
-                snapshot.store(
-                    ferrowasp_input::rc_receiver::channel_us(raw),
-                    Ordering::Relaxed,
-                );
-            }
             observed.status.channels_us =
                 frame.channels.map(ferrowasp_input::rc_receiver::channel_us);
             let sticks = rc_map.sticks(&frame.channels);
@@ -288,16 +282,17 @@ const RC_TELEMETRY_PERIOD_MS: u64 = 200;
 
 /// Send battery telemetry back through the RC receiver, for the radio to
 /// show. It owns the RC port's writer, so RC input never waits on a
-/// transmit; it runs at a low priority and only reads snapshots.
+/// transmit; it runs at a low priority and only reads the ledger.
 ///
 /// Ends at once when the RC port has no transmit path: SBUS, or a port
 /// without transmit DMA. Stops, with a warning, if the transmit path faults,
 /// which leaves RC input untouched.
 #[ferroforge::task(
     local = [rc_telemetry_writer: Option<stm32_memory::UartOwnedWriter<'static>>],
+    shared = [ledger: Ledger],
     monotonic = Mono,
 )]
-pub async fn rc_telemetry(cx: rc_telemetry::Context) {
+pub async fn rc_telemetry(mut cx: rc_telemetry::Context) {
     use embedded_io_async::Write;
     use ferrowasp_crsf as crsf;
 
@@ -305,11 +300,10 @@ pub async fn rc_telemetry(cx: rc_telemetry::Context) {
         return;
     };
     loop {
-        let voltage_dv = crate::snapshots::BATTERY_VOLTAGE_V10_SNAPSHOT.load(Ordering::Relaxed);
-        let current_ca = crate::snapshots::BATTERY_CURRENT_CA_SNAPSHOT.load(Ordering::Relaxed);
+        let battery = cx.shared.ledger.lock(|ledger| ledger.battery().value);
         let frame = crsf::encode_battery(crsf::BatteryTelemetry {
-            voltage_dv: u16::try_from(voltage_dv).unwrap_or(u16::MAX),
-            current_da: u16::try_from(current_ca.max(0) / 10).unwrap_or(u16::MAX),
+            voltage_dv: battery.voltage_dv,
+            current_da: u16::try_from(battery.current_ca.max(0) / 10).unwrap_or(u16::MAX),
             used_mah: 0,
             remaining_percent: 0,
         });

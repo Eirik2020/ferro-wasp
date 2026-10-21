@@ -156,7 +156,7 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
     shared = [
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
-        imu_data: imu::ImuData,
+        ledger: Ledger,
     ],
     config = [
         default_stored_config: flash_task::StoredConfig,
@@ -539,7 +539,10 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     CommandAction::StartCalibration => {
                         *accel_calibration = Some(AccelLevelCalibration::new());
                         flash_responses.start_maintenance();
-                        *accel_calibration_seq = IMU_LATEST_SEQ.load(Ordering::Acquire);
+                        *accel_calibration_seq = cx
+                            .shared
+                            .ledger
+                            .lock(|ledger| ledger.imu().value.sample_seq);
                         *accel_calibration_deadline_ms =
                             Mono::now().duration_since_epoch().to_millis()
                                 + IMU_CALIBRATION_DEADLINE_MS;
@@ -624,7 +627,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             // One IMU sample a pass into a level calibration, answered on the
             // link that asked; a success is saved like `config save`.
             if let Some(calibration) = accel_calibration.as_mut() {
-                let sequence = IMU_LATEST_SEQ.load(Ordering::Acquire);
+                let imu = cx.shared.ledger.lock(|ledger| ledger.imu().value);
+                let sequence = imu.sample_seq;
                 let outcome = if SAFETY_ARMED.load(Ordering::Acquire) {
                     Some(Err("ERR imu calibration aborted; the system armed\r\n"))
                 } else if Mono::now().duration_since_epoch().to_millis()
@@ -633,10 +637,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     Some(Err("ERR imu calibration timed out; no IMU samples\r\n"))
                 } else if sequence != *accel_calibration_seq {
                     *accel_calibration_seq = sequence;
-                    // One sample, both sensors: the parser stores them in g and
-                    // degrees per second.
-                    let (sensor_accel, gyro_dps) =
-                        cx.shared.imu_data.lock(|imu| (imu.acc, imu.gyro));
+                    // One sample, both sensors, in g and degrees per second.
+                    let (sensor_accel, gyro_dps) = (imu.accel_g, imu.gyro_dps);
                     let gravity = CONFIG::IMU_CONTROL_AXIS_PROFILE
                         .sensor_accel_to_drone_gravity(sensor_accel);
                     calibration

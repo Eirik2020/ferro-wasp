@@ -152,7 +152,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
     }
 }
 
-/// Records a UART sample for the `esc` command, by physical output.
+/// Records a UART sample for the observer, by physical output.
 fn publish_uart_sample(
     update: &esc::EscTelemetryUpdate,
     now_ms: u64,
@@ -162,10 +162,4 @@ fn publish_uart_sample(
     status.erpm_div100[index] = Some(u32::from(update.observation.sample.erpm_div100));
     // Wrapping milliseconds: readers report a difference only.
     status.seen_ms[index] = now_ms as u32;
-    crate::snapshots::ESC_UART_ERPM_DIV100[index].store(
-        u32::from(update.observation.sample.erpm_div100),
-        Ordering::Relaxed,
-    );
-    // Wrapping milliseconds: the snapshot reports a difference only.
-    crate::snapshots::ESC_UART_SEEN_MS[index].store(now_ms as u32, Ordering::Relaxed);
 }

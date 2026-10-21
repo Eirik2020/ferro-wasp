@@ -38,17 +38,11 @@ ferroforge::app! {
 
         // IMU
         imu_data: imu::ImuData,
-        imu_angles: [f32; 3],
-        imu_rates: [f32; 3],
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
 
         // ADC
         adc1_transfer: AdcTransfer,
-        battery_voltage_v10: u8,
-        battery_cell_count: u8,
-        battery_cell_voltage_v100: u16,
-        battery_current_ca: i16,
 
         // SPI1
         spi1_owner: board::aliases::Spi1ImuOwner,
@@ -159,9 +153,6 @@ ferroforge::app! {
         actuator_rc_throttle_reader: signals::RcThrottleReader,
         actuator_rc_link_reader: signals::RcLinkReader,
         osd_safety_arm_reader: signals::SafetyArmReader,
-        osd_rc_throttle_reader: signals::RcThrottleReader,
-        osd_rc_rates_reader: RcRatesReader,
-        usb_rc_link_reader: signals::RcLinkReader,
         actuator_arm_done_writer: signals::ActuatorArmDoneWriter,
         actuator_arm_done_reader: signals::ActuatorArmDoneReader,
         actuator_arm_permit_writer: ActuatorArmPermitWriter,
@@ -704,17 +695,11 @@ ferroforge::app! {
 
                 // IMU
                 imu_data: imu::ImuData::default(), // all values are zero
-                imu_angles: [0.0; 3],
-                imu_rates: [0.0; 3],
                 tuning_profile,
                 tuning_request_seq: 0,
 
                 // ADC
                 adc1_transfer: adc1_battery.transfer,
-                battery_voltage_v10: 0,
-                battery_cell_count: 0,
-                battery_cell_voltage_v100: 0,
-                battery_current_ca: 0,
                 // SAFETY
             },
             Local {
@@ -823,9 +808,6 @@ ferroforge::app! {
                 actuator_rc_throttle_reader: rc_throttle_reader,
                 actuator_rc_link_reader: rc_link_reader,
                 osd_safety_arm_reader: safety_arm_reader,
-                osd_rc_throttle_reader: rc_throttle_reader,
-                osd_rc_rates_reader: rc_rates_reader,
-                usb_rc_link_reader: rc_link_reader,
                 actuator_arm_done_writer,
                 actuator_arm_done_reader,
                 actuator_arm_permit_writer,
@@ -872,8 +854,6 @@ ferroforge::app! {
             // usb_fs
             usb_dev, usb_serial, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
-            // heartbeat
-            usb_rc_link_reader,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
             storage_status_link, flash_commands, flash_responses,
@@ -901,7 +881,7 @@ ferroforge::app! {
             rc_telemetry_writer,
             // osd_refresh
             osd_port, osd_tx_healthy, osd_task, osd_tx_buffer, osd_refresh_tick,
-            osd_safety_arm_reader, osd_rc_throttle_reader, osd_rc_rates_reader,
+            osd_safety_arm_reader,
             // dma_adc1
             adc1_buffer, battery_status_link,
             battery_cell_detector: osd::BatteryCellDetector = osd::BatteryCellDetector::new(
@@ -916,14 +896,8 @@ ferroforge::app! {
             tuning_profile,
             tuning_request_seq,
             imu_data,
-            imu_angles,
-            imu_rates,
             dshot_motors,
             ledger,
-            battery_voltage_v10,
-            battery_cell_count,
-            battery_cell_voltage_v100,
-            battery_current_ca,
             adc1_transfer
         ],
         config = [
@@ -1157,6 +1131,7 @@ ferroforge::app! {
         from = flight_tasks::configurator_link,
         priority = 3,
         local = [configurator_port, configurator_commands, configurator_responses],
+        shared = [ledger],
         config = [build_identity: flight_tasks::BuildIdentity = BUILD_IDENTITY]
     )]
     async fn configurator_link(cx: configurator_link::Context);
