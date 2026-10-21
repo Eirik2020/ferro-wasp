@@ -77,25 +77,27 @@ pub fn queue_storage_response(responses: &mut ResponseRouter, text: &str) -> boo
     }
     // The configurator link polls its queue; USB is woken.
     if responses.replying_to() == CommandLink::Usb {
-        cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+        responses.wake_usb();
     }
     true
 }
 
 #[cfg(feature = "mspv2_configurator")]
 pub fn queue_rpc_response(
+    wake_usb: fn(),
     producer: &mut flash_task::RpcResponseProducer,
     response: mspv2::rpc::RpcResponse,
 ) -> bool {
     if producer.enqueue(response).is_err() {
         return false;
     }
-    cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+    wake_usb();
     true
 }
 
 #[cfg(feature = "mspv2_configurator")]
 pub fn finish_config_rpc_error(
+    wake_usb: fn(),
     producer: &mut flash_task::RpcResponseProducer,
     completion: &mut Option<ConfigRpcCompletion>,
     error: mspv2::rpc::DeviceError,
@@ -106,7 +108,7 @@ pub fn finish_config_rpc_error(
     let request_id = match completion {
         ConfigRpcCompletion::Commit(id) | ConfigRpcCompletion::Defaults(id) => id,
     };
-    queue_rpc_response(producer, mspv2::rpc::error(request_id, error))
+    queue_rpc_response(wake_usb, producer, mspv2::rpc::error(request_id, error))
 }
 
 /// The answer line for a calibration that produced nothing.
@@ -177,6 +179,8 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         ledger: Ledger,
     ],
     config = [
+        wake_usb: fn(),
+        reboot: fn(RebootTarget) -> !,
         default_stored_config: flash_task::StoredConfig,
         default_serial_bindings: SerialBindings,
         serial_routes: &'static [SerialRoute],
@@ -258,6 +262,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 #[cfg(feature = "mspv2_configurator")]
                 if let Some(request) = flash_rpc_command_consumer.dequeue() {
                     let _ = queue_rpc_response(
+                        CONFIG::WAKE_USB,
                         flash_rpc_response_producer,
                         mspv2::rpc::error(
                             request.request_id,
@@ -285,6 +290,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 #[cfg(feature = "mspv2_configurator")]
                 if let Some(request) = flash_rpc_command_consumer.dequeue() {
                     let _ = queue_rpc_response(
+                        CONFIG::WAKE_USB,
                         flash_rpc_response_producer,
                         mspv2::rpc::error(
                             request.request_id,
@@ -335,6 +341,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     warn!("Storage status read failed; storage disabled");
                     #[cfg(feature = "mspv2_configurator")]
                     let _ = finish_config_rpc_error(
+                        CONFIG::WAKE_USB,
                         flash_rpc_response_producer,
                         config_rpc_completion,
                         mspv2::rpc::DeviceError::StorageUnavailable,
@@ -375,6 +382,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 config_save.cancel();
                 #[cfg(feature = "mspv2_configurator")]
                 let rpc_notified = finish_config_rpc_error(
+                    CONFIG::WAKE_USB,
                     flash_rpc_response_producer,
                     config_rpc_completion,
                     mspv2::rpc::DeviceError::Armed,
@@ -454,6 +462,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     *write_faults = write_faults.wrapping_add(1);
                     #[cfg(feature = "mspv2_configurator")]
                     let rpc_notified = finish_config_rpc_error(
+                        CONFIG::WAKE_USB,
                         flash_rpc_response_producer,
                         config_rpc_completion,
                         match failure {
@@ -513,6 +522,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             ),
                         };
                         queue_rpc_response(
+                            CONFIG::WAKE_USB,
                             flash_rpc_response_producer,
                             mspv2::rpc::ok(request_id, response),
                         )
@@ -607,7 +617,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 );
                             } else {
                                 warn!("Rebooting on request, ROM bootloader: {}", rom_bootloader);
-                                backend::system_bootloader::reboot(if rom_bootloader {
+                                (CONFIG::REBOOT)(if rom_bootloader {
                                     RebootTarget::RomBootloader
                                 } else {
                                     RebootTarget::Firmware
@@ -640,7 +650,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     },
                 );
                 if let Some(response) = response {
-                    let _ = queue_rpc_response(flash_rpc_response_producer, response);
+                    let _ =
+                        queue_rpc_response(CONFIG::WAKE_USB, flash_rpc_response_producer, response);
                 }
             }
             // One IMU sample a pass into a level calibration, answered on the

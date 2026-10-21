@@ -7,10 +7,10 @@ use crate::app::{
 };
 #[cfg(feature = "mspv2_configurator")]
 use crate::app::{handle_msp_packet, stage_rpc_response};
-use crate::prelude::backend::usb_serial::{BufferedUsbCdcSerial, UsbCdcDevice, UsbDeviceState};
 use crate::prelude::*;
 use core::sync::atomic::AtomicBool;
 use ferrowasp_border::inbound::USB_HOST_CONNECTED;
+use ferrowasp_stm32::usb_serial::UsbCdcPort;
 
 /// The heartbeat sets it every two seconds, and the USB task writes a status
 /// line and clears it; both are non-critical.
@@ -23,9 +23,9 @@ use ferrowasp_cli::usb_debug;
 /// and the board's MSPv2 identity are configuration.
 #[allow(clippy::needless_return)]
 #[ferroforge::task(
+    bounds = [usb_cdc: UsbCdcPort],
     local = [
-        usb_dev: UsbCdcDevice,
-        usb_serial: BufferedUsbCdcSerial,
+        usb_cdc,
         usb_header_sent: bool,
         flash_command_producer: flash_task::CommandProducer,
         flash_response_consumer: flash_task::ResponseConsumer,
@@ -44,14 +44,14 @@ use ferrowasp_cli::usb_debug;
         msp_common_info: MspCommonInfoFn,
         rpc_device_info: crate::RpcDeviceInfoFn,
         build_identity: crate::BuildIdentity,
+        wake_usb: fn(),
     ],
     monotonic = Mono,
 )]
 pub fn usb_fs(mut cx: usb_fs::Context) {
-    let usb_dev = cx.local.usb_dev;
-    let serial = cx.local.usb_serial;
+    let serial = cx.local.usb_cdc;
 
-    let _ = usb_dev.poll(&mut [serial]);
+    serial.poll();
 
     let mut rx_buf = [0u8; 64];
     let read_len = serial.read(&mut rx_buf).unwrap_or(0);
@@ -157,11 +157,8 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
     }
 
     // Arming is refused while a computer has the board configured.
-    USB_HOST_CONNECTED.store(
-        usb_dev.state() == UsbDeviceState::Configured,
-        Ordering::Release,
-    );
-    if usb_dev.state() != UsbDeviceState::Configured {
+    USB_HOST_CONNECTED.store(serial.configured(), Ordering::Release);
+    if !serial.configured() {
         *cx.local.usb_header_sent = false;
         #[cfg(not(feature = "mspv2_configurator"))]
         cx.local.flash_command_parser.clear();
@@ -214,7 +211,7 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
                 Ok(written) if written == response.as_bytes().len()
             ) {
                 *cx.local.flash_pending_response = None;
-                cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+                (CONFIG::WAKE_USB)();
             }
             return;
         }

@@ -4,7 +4,7 @@
 
 pub use ferrowasp_stm32::usb_serial::{
     FERROWASP_USB_PID, FERROWASP_USB_VID, USB_CDC_RX_BUFFER_BYTES, USB_CDC_TX_BUFFER_BYTES,
-    USB_ENDPOINT_MEMORY_WORDS, UsbCdcIdentity,
+    USB_ENDPOINT_MEMORY_WORDS, UsbCdc, UsbCdcIdentity, UsbCdcPort,
 };
 use stm32h7xx_hal::{
     gpio::{PA11, PA12},
@@ -25,6 +25,9 @@ pub type BufferedUsbCdcSerial = usbd_serial::SerialPort<
     [u8; USB_CDC_RX_BUFFER_BYTES],
     [u8; USB_CDC_TX_BUFFER_BYTES],
 >;
+
+/// The board's USB CDC port, as the USB task's [`UsbCdcPort`] bound sees it.
+pub type UsbCdcLink = ferrowasp_stm32::usb_serial::UsbCdc<UsbBus<USB2>>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UsbCdcInitError {
@@ -48,7 +51,7 @@ pub fn init_usb_cdc_serial(
     resources: UsbResources,
     clocks: &CoreClocks,
     identity: UsbCdcIdentity,
-) -> Result<(UsbCdcDevice, BufferedUsbCdcSerial), UsbCdcInitError> {
+) -> Result<UsbCdcLink, UsbCdcInitError> {
     let endpoint_memory =
         cortex_m::singleton!(: [u32; USB_ENDPOINT_MEMORY_WORDS] = [0; USB_ENDPOINT_MEMORY_WORDS])
             .ok_or(UsbCdcInitError::EndpointMemoryAlreadyTaken)?;
@@ -84,5 +87,5 @@ pub fn init_usb_cdc_serial(
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
-    Ok((device, serial))
+    Ok(UsbCdc::new(device, serial))
 }

@@ -197,8 +197,7 @@ ferroforge::app! {
         storage_status_link: ObserverLink<observed::StorageStatus>,
 
         // USB CDC serial
-        usb_dev: UsbDebugDevice,
-        usb_serial: UsbDebugSerial,
+        usb_cdc: UsbCdcLink,
         usb_header_sent: bool,
         configurator_usb: ConfiguratorUsbState,
     }
@@ -296,7 +295,7 @@ ferroforge::app! {
         let io_watchdog =
             board::init::init_io_watchdog(dp.TIM6, rec.TIM6, &clocks);
 
-        let (usb_dev, usb_serial) = stm32_usb::init_usb_cdc_serial(
+        let usb_cdc = stm32_usb::init_usb_cdc_serial(
             stm32_usb::UsbResources {
                 global: dp.OTG2_HS_GLOBAL,
                 device: dp.OTG2_HS_DEVICE,
@@ -720,7 +719,7 @@ ferroforge::app! {
                 blackbox_stream,
                 flash_command_producer,
                 flash_commands: CommandSources::new(flash_command_consumer, None),
-                flash_responses: ResponseRouter::new(flash_response_producer, None),
+                flash_responses: ResponseRouter::new(flash_response_producer, None, wake_usb),
                 flash_response_consumer,
                 flash_rpc_command_producer,
                 flash_rpc_command_consumer,
@@ -841,8 +840,7 @@ ferroforge::app! {
                 storage_status_link,
 
                 // USB CDC serial
-                usb_dev,
-                usb_serial,
+                usb_cdc,
                 usb_header_sent: false,
                 configurator_usb: ConfiguratorUsbState::new(),
             },
@@ -860,7 +858,7 @@ ferroforge::app! {
             safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
             actuator_arm_done_reader, safety_status_link, safety_imu_prearm,
             // usb_fs
-            usb_dev, usb_serial, usb_header_sent, flash_command_producer, flash_response_consumer,
+            usb_cdc, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
@@ -919,6 +917,8 @@ ferroforge::app! {
             bench_actuator_validation_enabled: bool = BENCH_ACTUATOR_VALIDATION_ENABLED,
             validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
             usb_debug_header: &'static [u8] = USB_DEBUG_HEADER,
+            wake_usb: fn() = wake_usb,
+            reboot: fn(RebootTarget) -> ! = stm32_bootloader::reboot,
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,

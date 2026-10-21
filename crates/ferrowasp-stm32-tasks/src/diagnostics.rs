@@ -22,6 +22,7 @@ use crate::usb::STATUS_LINE_DUE;
     config = [
         physical_imu_to_drone_rotation: dt::FrameRotation,
         control_imu_to_rate_controller_map: dt::FrameRotation,
+        wake_usb: fn(),
     ],
     monotonic = Mono,
 )]
@@ -30,7 +31,7 @@ pub async fn heartbeat(mut cx: heartbeat::Context) {
 
     loop {
         STATUS_LINE_DUE.store(true, Ordering::Release);
-        cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+        (CONFIG::WAKE_USB)();
 
         let (identity, observer, control, imu, drdy, storage) = cx.shared.ledger.lock(|ledger| {
             (

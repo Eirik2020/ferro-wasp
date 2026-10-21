@@ -85,12 +85,12 @@ pub mod prelude {
     pub type UartOwnedWriter = stm32_memory::UartOwnedWriter<'static>;
     pub type UartOwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
     pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
-    pub type UsbDebugDevice = crate::prelude::backend::usb_serial::UsbCdcDevice;
-    pub type UsbDebugSerial = crate::prelude::backend::usb_serial::BufferedUsbCdcSerial;
+    pub type UsbCdcLink = crate::prelude::backend::usb_serial::UsbCdcLink;
     pub use ferrowasp_border::observer::Ledger;
     pub use ferrowasp_boundary_contracts::messages as observed;
     pub use ferrowasp_boundary_contracts::topics::Identity;
     pub use ferrowasp_io_contracts::link::Stamped;
+    pub use ferrowasp_stm32::system_reset::RebootTarget;
     /// The producing end of one task's link into the observer.
     pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
     pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
@@ -434,6 +434,10 @@ macro_rules! flight_app_facade {
             Mutex::new(RefCell::new(safety::RcLinkState::new()));
         pub static ACTUATOR_ARM_DONE: AtomicBool = AtomicBool::new(false);
         pub static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
+        /// Wake the USB task, which serves its queues on its interrupt.
+        pub fn wake_usb() {
+            cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+        }
         pub static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
         pub static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
         pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);

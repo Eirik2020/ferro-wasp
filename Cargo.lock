@@ -561,6 +561,8 @@ dependencies = [
  "rc-pwm",
  "rtic",
  "rtic-monotonics",
+ "usb-device",
+ "usbd-serial",
 ]
 
 [[package]]
