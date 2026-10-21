@@ -30,6 +30,12 @@ pub struct MspOsdTelemetry {
     pub control_sequence: u32,
     pub control_raw: [i16; 3],
     pub control_dps10: [i16; 3],
+    /// What the OSD shows has stopped updating: the observer or the control
+    /// loop's topic has held still past its limit.
+    pub data_stale: bool,
+    /// The battery's topic has held still past its limit, so the battery
+    /// values above are the last ones seen, not current.
+    pub battery_stale: bool,
 }
 
 impl Default for MspOsdTelemetry {
@@ -63,6 +69,8 @@ impl Default for MspOsdTelemetry {
             control_sequence: 0,
             control_raw: [0; 3],
             control_dps10: [0; 3],
+            data_stale: false,
+            battery_stale: false,
         }
     }
 }

@@ -75,8 +75,8 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   new crate map. The redesign comes before the next hardware gate run, one
   change at a time against `main`, one mechanism at a time:
   1. the rest of the observer and ledger in place of
-     `ferrowasp-stm32-tasks::snapshots`: the OSD and telemetry warning on a
-     stalled topic; the values between core tasks as links, flags and init
+     `ferrowasp-stm32-tasks::snapshots`: the radio's stalled-topic warning
+     over CRSF telemetry (the OSD has its own); the values between core tasks as links, flags and init
      values (the IMU sample with its accelerometer, the pre-arm status, the
      motor map, the DShot release time, IMU readiness and kind); the gates'
      arm-state reads through reader handles; the MSPv2 status replies from

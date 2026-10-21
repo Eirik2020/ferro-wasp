@@ -47,6 +47,7 @@ pub async fn osd_write(
         osd_tx_buffer: [u8; mspv1::OSD_TX_BUFFER_LEN],
         osd_refresh_tick: u8,
         osd_safety_arm_reader: signals::SafetyArmReader,
+        osd_stall_watch: osd::StallWatch = osd::StallWatch::new(),
     ],
     shared = [
         ledger: Ledger,
@@ -60,14 +61,22 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
         return;
     };
     loop {
-        let (control, imu, rc, battery) = cx.shared.ledger.lock(|ledger| {
+        let (observer, control, imu, rc, battery) = cx.shared.ledger.lock(|ledger| {
             (
-                ledger.control().value,
+                ledger.observer(),
+                ledger.control(),
                 ledger.imu().value,
                 ledger.rc().value,
-                ledger.battery().value,
+                ledger.battery(),
             )
         });
+        let stale = cx.local.osd_stall_watch.observe(
+            &observer,
+            &control,
+            &battery,
+            TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+        );
+        let (control, battery) = (control.value, battery.value);
         let rates = safety::RcRates {
             roll: rc.rates_dps[0],
             pitch: rc.rates_dps[1],
@@ -108,6 +117,8 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
             control_dps10: control
                 .filtered_gyro_dps
                 .map(|rate| (rate * 10.0) as i32 as i16),
+            data_stale: stale.data,
+            battery_stale: stale.battery,
             ..mspv1::MspOsdTelemetry::default()
         };
 

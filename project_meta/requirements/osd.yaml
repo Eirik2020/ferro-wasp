@@ -1,0 +1,38 @@
+schema_version: 1
+requirements:
+  - id: OSD-001
+    title: The OSD says when what it shows has stopped updating
+    statement: >-
+      The OSD shall show a blinking "DATA STALE" warning on its own row
+      while the observer's topic or the control loop's has held its
+      sequence for 250 ms by the OSD's clock, and clear it once both
+      advance; and shall show dashes in place of the battery voltage, cell
+      voltage and current while the battery's topic has held for 500 ms.
+    rationale: >-
+      A silently stalled observer leaves the OSD running with frozen values
+      (section 19, ADR-0061); the pilot must not read them as current. The
+      battery topic has its own, longer limit, twice its 10 Hz period, and
+      also shows a battery reading that stopped, such as the ADC's after a
+      DMA error.
+    derived_from: [BORDER-003]
+    allocated_to:
+      - ferrowasp_osd::StallWatch
+      - ferrowasp_osd::OsdTask
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_osd::tests::data_stalls_when_the_observer_or_the_control_topic_holds
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_osd::tests::the_battery_stalls_on_its_own_longer_limit
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_osd::tests::stale_data_blinks_a_warning_row_and_stale_battery_shows_dashes

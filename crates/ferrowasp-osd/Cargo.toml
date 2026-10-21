@@ -9,6 +9,8 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 heapless = { workspace = true }
