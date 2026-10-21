@@ -78,6 +78,7 @@ impl Drop for TickReport<'_> {
         control_arm_permit_reader: signals::ActuatorArmPermitReader,
         motor_cmd_writer: signals::MotorCmdWriter,
         motor_cmd_seq: u32,
+        motor_map_writer: signals::MotorMapWriter,
         control_tick_link: LinkProducer<'static, observed::ControlTick>,
         imu_sample_consumer: LinkConsumer<'static, ferrowasp_io_contracts::imu::ImuSample>,
         // The last IMU sample taken, which a stale tick reuses.
@@ -346,10 +347,11 @@ pub fn control_loop(mut cx: control_loop::Context) {
             .local
             .motor_order
             .compose(CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT);
-        MOTOR_OUTPUT_MAP_SNAPSHOT.store(
-            ferrowasp_flight_control::actuator::pack_motor_map(motor_output_map),
-            Ordering::Release,
-        );
+        cx.local
+            .motor_map_writer
+            .write(ferrowasp_flight_control::actuator::pack_motor_map(
+                motor_output_map,
+            ));
 
         if !imu_fresh {
             // A tolerated tick skips this update; the motors hold the

@@ -135,6 +135,8 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         flash_record_consumer: flash_task::RecordConsumer,
         blackbox_stream: LinkConsumer<'static, observed::ControlTick>,
         storage_status_link: LinkProducer<'static, observed::StorageStatus>,
+        // A gate: storage writes only while this reads disarmed.
+        flash_safety_arm_reader: signals::SafetyArmReader,
         flash_commands: CommandSources,
         flash_responses: ResponseRouter,
         flash_rpc_command_consumer: FlashRpcCommandConsumer,
@@ -172,6 +174,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let flash_record_consumer = cx.local.flash_record_consumer;
     let blackbox_stream = cx.local.blackbox_stream;
     let storage_status_link = cx.local.storage_status_link;
+    let flash_safety_arm_reader = cx.local.flash_safety_arm_reader;
     let flash_commands = cx.local.flash_commands;
     let flash_responses = cx.local.flash_responses;
     let flash_rpc_command_consumer = cx.local.flash_rpc_command_consumer;
@@ -331,7 +334,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             // started it; a new command below switches to its own link.
             flash_responses.answer_maintenance();
 
-            if SAFETY_ARMED.load(Ordering::Acquire)
+            if flash_safety_arm_reader.read()
                 && (maintenance.is_active() || config_save.is_active())
             {
                 // An erase stopped part-way has cleared the top of the log
@@ -517,7 +520,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         layout,
                         responses: &mut *flash_responses,
                         link,
-                        armed: SAFETY_ARMED.load(Ordering::Acquire),
+                        armed: flash_safety_arm_reader.read(),
                         log: &*log,
                         maintenance: &mut *maintenance,
                         config_save: &mut *config_save,
@@ -581,7 +584,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             // Let the USB task send the answer before the
                             // port goes away.
                             Mono::delay(REBOOT_ANSWER_MS.millis()).await;
-                            if SAFETY_ARMED.load(Ordering::Acquire) {
+                            if flash_safety_arm_reader.read() {
                                 queue_storage_response(
                                     flash_responses,
                                     "ERR reboot cancelled; system armed\r\n",
@@ -606,7 +609,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     &mut RpcContext {
                         flash: &mut *flash_device,
                         layout,
-                        armed: SAFETY_ARMED.load(Ordering::Acquire),
+                        armed: flash_safety_arm_reader.read(),
                         log: &*log,
                         maintenance: &*maintenance,
                         config_save: &mut *config_save,
@@ -629,7 +632,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             if let Some(calibration) = accel_calibration.as_mut() {
                 let imu = cx.shared.ledger.lock(|ledger| ledger.imu().value);
                 let sequence = imu.sample_seq;
-                let outcome = if SAFETY_ARMED.load(Ordering::Acquire) {
+                let outcome = if flash_safety_arm_reader.read() {
                     Some(Err("ERR imu calibration aborted; the system armed\r\n"))
                 } else if Mono::now().duration_since_epoch().to_millis()
                     > *accel_calibration_deadline_ms
@@ -704,7 +707,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 flash_device,
                 layout,
                 flash_record_consumer,
-                SAFETY_ARMED.load(Ordering::Acquire),
+                flash_safety_arm_reader.read(),
                 // Bench-only: record while disarmed, so the flash write path
                 // can be exercised without flying.
                 cfg!(feature = "bench_blackbox"),

@@ -519,7 +519,7 @@ pub mod signals {
         RcLinkStatus, RcRates,
     };
     use core::cell::RefCell;
-    use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
     use critical_section::Mutex;
     use heapless::spsc::{Consumer, Producer, Queue};
 
@@ -535,6 +535,12 @@ pub mod signals {
     pub struct RcRatesWriter(&'static Mutex<RefCell<RcRates>>);
     pub struct RcLinkFrameWriter(&'static Mutex<RefCell<RcLinkState>>);
     pub struct RcLinkInvalidator(&'static Mutex<RefCell<RcLinkState>>);
+    /// The mixer's logical-to-physical motor map, packed as four digits; `0`
+    /// until the control loop first writes it.
+    pub struct MotorMapWriter(&'static AtomicU16);
+    /// When the DShot service last started a frame set, in wrapping
+    /// milliseconds.
+    pub struct DshotReleaseWriter(&'static AtomicU32);
 
     pub struct MotorCmdWriter(MotorCmdProducer);
     pub struct MotorCmdReader(MotorCmdConsumer);
@@ -553,6 +559,44 @@ pub mod signals {
     pub struct RcRatesReader(&'static Mutex<RefCell<RcRates>>);
     #[derive(Clone, Copy)]
     pub struct RcLinkReader(&'static Mutex<RefCell<RcLinkState>>);
+    #[derive(Clone, Copy)]
+    pub struct MotorMapReader(&'static AtomicU16);
+    #[derive(Clone, Copy)]
+    pub struct DshotReleaseReader(&'static AtomicU32);
+
+    pub fn split_motor_map(value: &'static AtomicU16) -> (MotorMapWriter, MotorMapReader) {
+        (MotorMapWriter(value), MotorMapReader(value))
+    }
+
+    pub fn split_dshot_release(
+        value: &'static AtomicU32,
+    ) -> (DshotReleaseWriter, DshotReleaseReader) {
+        (DshotReleaseWriter(value), DshotReleaseReader(value))
+    }
+
+    impl MotorMapWriter {
+        pub fn write(&self, packed: u16) {
+            self.0.store(packed, Ordering::Release);
+        }
+    }
+
+    impl MotorMapReader {
+        pub fn read(&self) -> u16 {
+            self.0.load(Ordering::Acquire)
+        }
+    }
+
+    impl DshotReleaseWriter {
+        pub fn write(&self, at_ms: u32) {
+            self.0.store(at_ms, Ordering::Relaxed);
+        }
+    }
+
+    impl DshotReleaseReader {
+        pub fn read(&self) -> u32 {
+            self.0.load(Ordering::Relaxed)
+        }
+    }
 
     pub fn split_rc_arm_high(value: &'static AtomicBool) -> (RcArmHighWriter, RcArmHighReader) {
         (RcArmHighWriter(value), RcArmHighReader(value))
@@ -1387,5 +1431,16 @@ mod tests {
         let (throttle, throttle_reader) = signals::split_rc_throttle(&THROTTLE);
         throttle.write(1_200);
         assert_eq!(throttle_reader.read(), 1_200);
+
+        static MOTOR_MAP: core::sync::atomic::AtomicU16 = core::sync::atomic::AtomicU16::new(0);
+        let (map, map_reader) = signals::split_motor_map(&MOTOR_MAP);
+        assert_eq!(map_reader.read(), 0);
+        map.write(1_234);
+        assert_eq!(map_reader.read(), 1_234);
+
+        static RELEASE: AtomicU32 = AtomicU32::new(0);
+        let (release, release_reader) = signals::split_dshot_release(&RELEASE);
+        release.write(u32::MAX);
+        assert_eq!(release_reader.read(), u32::MAX);
     }
 }

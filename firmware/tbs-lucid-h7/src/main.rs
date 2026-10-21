@@ -143,6 +143,12 @@ ferroforge::app! {
         actuator_rc_throttle_reader: signals::RcThrottleReader,
         actuator_rc_link_reader: signals::RcLinkReader,
         osd_safety_arm_reader: signals::SafetyArmReader,
+        esc_safety_arm_reader: signals::SafetyArmReader,
+        flash_safety_arm_reader: signals::SafetyArmReader,
+        motor_map_writer: signals::MotorMapWriter,
+        actuator_motor_map_reader: signals::MotorMapReader,
+        dshot_release_writer: signals::DshotReleaseWriter,
+        dshot_release_reader: signals::DshotReleaseReader,
         led_safety_arm_reader: signals::SafetyArmReader,
 
         // ----  STATUS LEDS  ----
@@ -576,6 +582,9 @@ ferroforge::app! {
         let (rc_arm_high_writer, rc_arm_high_reader) = signals::split_rc_arm_high(&RC_ARM_HIGH);
         let (rc_throttle_writer, rc_throttle_reader) = signals::split_rc_throttle(&RC_THROTTLE);
         let (safety_arm_writer, safety_arm_reader) = signals::split_safety_arm(&SAFETY_ARMED);
+        let (motor_map_writer, motor_map_reader) = signals::split_motor_map(&MOTOR_OUTPUT_MAP);
+        let (dshot_release_writer, dshot_release_reader) =
+            signals::split_dshot_release(&DSHOT_LAST_RELEASE);
         let (rc_rates_writer, rc_rates_reader) = signals::split_rc_rates(&RC_RATES);
         let (rc_link_frame_writer, rc_link_invalidator, rc_link_reader) =
             signals::split_rc_link(&RC_LINK);
@@ -791,6 +800,12 @@ ferroforge::app! {
                 actuator_rc_throttle_reader: rc_throttle_reader,
                 actuator_rc_link_reader: rc_link_reader,
                 osd_safety_arm_reader: safety_arm_reader,
+                esc_safety_arm_reader: safety_arm_reader,
+                flash_safety_arm_reader: safety_arm_reader,
+                motor_map_writer,
+                actuator_motor_map_reader: motor_map_reader,
+                dshot_release_writer,
+                dshot_release_reader,
                 led_safety_arm_reader: safety_arm_reader,
                 heartbeat_led: leds.heartbeat,
                 armed_led: leds.armed,
@@ -855,7 +870,7 @@ ferroforge::app! {
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
-            storage_status_link, flash_commands, flash_responses,
+            storage_status_link, flash_safety_arm_reader, flash_commands, flash_responses,
             flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
             stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             // control_loop
@@ -865,16 +880,19 @@ ferroforge::app! {
             control_throttle_reader, control_safety_arm_reader, control_rc_link_reader,
             control_arm_permit_reader, motor_cmd_writer, motor_cmd_seq, control_tick_link,
             imu_sample_consumer, safety_prearm_link, actuator_prearm_link, control_imu_ready,
-            control_imu_kind,
+            control_imu_kind, motor_map_writer,
             // dshot_service
-            esc_request_consumer, esc_ack_producer, output_status_link,
+            esc_request_consumer, esc_ack_producer, output_status_link, dshot_release_writer,
+            // dshot_fallback
+            dshot_release_reader,
             // esc_manager_task
             esc_telemetry_port, esc_manager_state, esc_request_producer, esc_ack_consumer,
-            esc_telemetry_update_producer, esc_status_link,
+            esc_telemetry_update_producer, esc_status_link, esc_safety_arm_reader,
             // actuator_output
             actuator_safety_arm_reader, actuator_arm_permit_reader, actuator_rc_arm_high_reader,
             actuator_rc_throttle_reader, actuator_rc_link_reader, actuator_arm_done_writer,
             motor_cmd_reader, esc_telemetry_update_consumer, actuator_imu_prearm,
+            actuator_motor_map_reader,
             // rc_input
             rc_port, rc_receiver, arm_qualifier, rc_rates_writer, rc_throttle_writer,
             rc_arm_high_writer, rc_link_frame_writer, rc_status_link,

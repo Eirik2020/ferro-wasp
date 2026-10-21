@@ -18,7 +18,7 @@ pub mod prelude {
     pub use core::cell::RefCell;
     pub use core::fmt::Write as CoreFmtWrite;
     pub use core::sync::atomic::Ordering;
-    pub use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32};
+    pub use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU16, AtomicU32};
     pub use critical_section::Mutex;
     pub use defmt::{info, warn};
     pub use embedded_hal::spi::Operation;
@@ -73,8 +73,8 @@ pub mod prelude {
     pub use crate::snapshots::{
         ACTIVE_IMU_KIND, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE, FLASH_JEDEC_MANUFACTURER,
         FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN, FLASH_READY,
-        FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_TRANSPORT_READY, RC_ARM_HIGH, RC_THROTTLE,
-        SAFETY_ARMED, USB_DEBUG_DUE, USB_HOST_CONNECTED, host_connected,
+        FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_TRANSPORT_READY, USB_DEBUG_DUE,
+        USB_HOST_CONNECTED, host_connected,
     };
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 
@@ -449,6 +449,11 @@ macro_rules! flight_app_facade {
             Mutex::new(RefCell::new(safety::RcLinkState::new()));
         pub static ACTUATOR_ARM_DONE: AtomicBool = AtomicBool::new(false);
         pub static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
+        pub static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
+        pub static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
+        pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
+        pub static MOTOR_OUTPUT_MAP: AtomicU16 = AtomicU16::new(0);
+        pub static DSHOT_LAST_RELEASE: AtomicU32 = AtomicU32::new(0);
         pub const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
         pub const ADC_CURRENT_BETAFLIGHT_SCALE: u32 =
             ADC_OBSERVATION_PROFILE.current_betaflight_scale;

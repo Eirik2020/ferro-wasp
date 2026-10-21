@@ -2,7 +2,6 @@
 //! line config binds to it, and publishes what comes back.
 
 use crate::prelude::*;
-use crate::snapshots::SAFETY_ARMED;
 
 /// Every `ESC_MANAGER_PERIOD_MS`: drain actuator acknowledgements and wire
 /// bytes into the manager, request the next ESC's telemetry, and log a
@@ -20,6 +19,7 @@ use crate::snapshots::SAFETY_ARMED;
         esc_telemetry_update_producer: esc::EscTelemetryUpdateProducer,
         report_ticks: u16 = 0,
         esc_status_link: LinkProducer<'static, observed::EscStatus>,
+        esc_safety_arm_reader: signals::SafetyArmReader,
         esc_status: observed::EscStatus = observed::EscStatus {
             erpm_div100: [None; 4],
             seen_ms: [0; 4],
@@ -89,7 +89,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
         }
         cx.local
             .esc_manager_state
-            .try_recover(now_ms, SAFETY_ARMED.load(Ordering::Acquire));
+            .try_recover(now_ms, cx.local.esc_safety_arm_reader.read());
         if let Some(retries) = cx.local.esc_manager_state.take_back_after_retries() {
             info!(
                 "ESC telemetry back after {} retries; old samples were dropped",

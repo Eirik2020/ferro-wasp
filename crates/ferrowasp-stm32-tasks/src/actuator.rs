@@ -7,7 +7,6 @@
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
 use crate::prelude::*;
-use crate::snapshots::MOTOR_OUTPUT_MAP_SNAPSHOT;
 
 /// A live arming guard: permit, RC link armable, arm switch high, throttle.
 /// Which pre-arm health it also requires is the board's safety policy.
@@ -132,6 +131,7 @@ where
 pub fn apply_bench_motor_request<SharedDshot>(
     dshot: &mut SharedDshot,
     request: safety::BenchMotorRequest,
+    motor_map: &signals::MotorMapReader,
     idle_command: f32,
     now_ms: u64,
 ) where
@@ -139,13 +139,11 @@ pub fn apply_bench_motor_request<SharedDshot>(
     SharedDshot::T: DshotMotors,
 {
     let lane = |logical_motor: u8| {
-        ferrowasp_flight_control::actuator::unpack_motor_map(
-            MOTOR_OUTPUT_MAP_SNAPSHOT.load(Ordering::Acquire),
-        )
-        .and_then(|map| {
-            ferrowasp_flight_control::actuator::physical_output_for_logical(map, logical_motor)
-        })
-        .map(|output| output - 1)
+        ferrowasp_flight_control::actuator::unpack_motor_map(motor_map.read())
+            .and_then(|map| {
+                ferrowasp_flight_control::actuator::physical_output_for_logical(map, logical_motor)
+            })
+            .map(|output| output - 1)
     };
     match request {
         safety::BenchMotorRequest::Stop => {
@@ -242,6 +240,7 @@ pub const fn inject_idle_qualification_fault(
         actuator_rc_throttle_reader: signals::RcThrottleReader,
         actuator_rc_link_reader: signals::RcLinkReader,
         actuator_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+        actuator_motor_map_reader: signals::MotorMapReader,
         actuator_arm_done_writer: signals::ActuatorArmDoneWriter,
         motor_cmd_reader: signals::MotorCmdReader,
         esc_telemetry_update_consumer: esc::EscTelemetryUpdateConsumer,
@@ -530,6 +529,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
             apply_bench_motor_request(
                 &mut cx.shared.dshot_motors,
                 request,
+                cx.local.actuator_motor_map_reader,
                 CONFIG::DSHOT_IDLE_COMMAND,
                 Mono::now().duration_since_epoch().to_millis(),
             );
