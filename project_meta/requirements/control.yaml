@@ -679,3 +679,23 @@ requirements:
           setup: none
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::the_settled_motor_frequency_notches_its_own_noise
+
+  - id: CTRL-013
+    title: The control loop takes the newest sample, holds or disarms on stale, and reports every tick
+    statement: >-
+      On each control tick the control loop shall take the newest IMU sample
+      from its link, reuse the last one when nothing new arrived, ride out
+      one isolated stale tick holding the previous motor command, request a
+      disarm on a stale tick beyond that tolerance while armed, publish motor
+      commands only while armed, and report the tick to the observer and its
+      IMU status to both pre-arm checks on every exit path.
+    rationale: >-
+      This is the task that wires the host-tested rate controller, stale-IMU
+      rule (SAFETY-003) and pre-arm status (SAFETY-005) together; its
+      evidence is on the board, not yet recorded.
+    derived_from: [W1, W2]
+    allocated_to:
+      - ferrowasp_flight_control::tasks
+    verification:
+      mode: direct
+      entries: []

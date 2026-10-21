@@ -25,7 +25,6 @@ pub mod spi1_imu {
 pub mod flight {
     pub use crate::actuator_output;
     pub use crate::adc1_polling;
-    pub use crate::control_loop;
     pub use crate::dma_adc1;
     pub use crate::dshot_fallback;
     pub use crate::dshot_service;
@@ -37,6 +36,7 @@ pub mod flight {
     pub use crate::rc_telemetry;
     pub use crate::usb_fs;
     pub use ferrowasp_border::tasks::observer_task;
+    pub use ferrowasp_flight_control::tasks::control_loop;
     pub use ferrowasp_safety::tasks::actuator_idle_notify;
     pub use ferrowasp_safety::tasks::safety_master;
 }

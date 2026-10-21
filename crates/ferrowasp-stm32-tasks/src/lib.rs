@@ -49,8 +49,6 @@ mod channels;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod cli_link;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod control;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod diagnostics;
 #[cfg(all(
     target_arch = "arm",
@@ -105,8 +103,6 @@ pub use channels::{
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use cli_link::configurator_link;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use control::{control_loop, motor_command_timestamp};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use diagnostics::heartbeat;
 #[cfg(all(
     target_arch = "arm",
@@ -120,6 +116,8 @@ pub use esc::esc_manager_task;
 pub use ferrowasp_border::tasks::observer_task;
 /// What a firmware was built from, for the `build` command.
 pub use ferrowasp_cli::usb_debug::BuildIdentity;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_flight_control::tasks::{control_loop, motor_command_timestamp};
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_safety::tasks::{actuator_idle_notify, safety_master, warn_arming_abort};
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;

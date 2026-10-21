@@ -364,9 +364,20 @@ dependencies = [
 name = "ferrowasp-flight-control"
 version = "0.1.0"
 dependencies = [
+ "defmt",
+ "ferroforge",
+ "ferrowasp-border",
+ "ferrowasp-boundary-contracts",
  "ferrowasp-control",
  "ferrowasp-input",
+ "ferrowasp-io-contracts",
+ "ferrowasp-mpu6500",
+ "ferrowasp-safety",
+ "ferrowasp-stm32-critical",
+ "fugit",
  "libm",
+ "rtic",
+ "rtic-monotonics",
 ]
 
 [[package]]

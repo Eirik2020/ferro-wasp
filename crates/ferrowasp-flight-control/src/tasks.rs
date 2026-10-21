@@ -1,10 +1,35 @@
-//! The control loop: the rate controller, run from the control scheduler's
+//! The flight controller's tasks (ADR-0060), target-only. The control loop:
+//! the rate controller, run from the control scheduler's
 //! timer interrupt. It turns the latest IMU sample and RC rates into motor
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
 
-use crate::prelude::*;
+// The equal-motor and physical-motor bench images mix nothing.
+#[allow(unused_imports)]
+use crate::actuator::remap_motor_outputs;
+use crate::drone_toolbox as dt;
+use defmt::{info, warn};
 use ferrowasp_border::inbound::accel_level;
+use ferrowasp_boundary_contracts::messages as observed;
+use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
+use ferrowasp_io_contracts::time::TimestampMicros;
+use ferrowasp_mpu6500 as imu;
+use ferrowasp_safety as safety;
+use ferrowasp_safety::actuator as actuator_task;
+use ferrowasp_safety::signals;
+#[cfg(any(
+    feature = "bench_equal_motors",
+    feature = "bench_motor1_only",
+    feature = "bench_motor2_only",
+    feature = "bench_motor3_only",
+    feature = "bench_motor4_only",
+    feature = "bench_logical_motor1_only",
+    feature = "bench_logical_motor2_only",
+    feature = "bench_logical_motor3_only",
+    feature = "bench_logical_motor4_only"
+))]
+use ferrowasp_stm32_critical::app_config::BENCH_EQUAL_MOTOR_MAX_THROTTLE;
+use ferrowasp_stm32_critical::scheduler as stm32_scheduler;
 
 /// The time a motor command is stamped with: now, except in the
 /// `bench_motor_cmd_stale_rejection` fault-injection image, where the first
@@ -107,8 +132,8 @@ impl Drop for TickReport<'_> {
         control_rate_seq: u32 = 0,
         tolerated_stale_ticks: u32 = 0,
         rc_link_was_valid: bool = false,
-        motor_order: ferrowasp_flight_control::actuator::MotorOutputMap =
-            ferrowasp_flight_control::actuator::MotorOutputMap::IDENTITY,
+        motor_order: crate::actuator::MotorOutputMap =
+            crate::actuator::MotorOutputMap::IDENTITY,
     ],
     shared = [
         tuning_profile: dt::TuningProfile,
@@ -332,9 +357,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
             .compose(CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT);
         cx.local
             .motor_map_writer
-            .write(ferrowasp_flight_control::actuator::pack_motor_map(
-                motor_output_map,
-            ));
+            .write(crate::actuator::pack_motor_map(motor_output_map));
 
         if !imu_fresh {
             // A tolerated tick skips this update; the motors hold the

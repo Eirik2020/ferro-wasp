@@ -27,18 +27,18 @@ imu_transport_rtt = []
 imu_orientation_rtt = ["imu_transport_rtt"]
 # Bench and fault-injection images, forwarded from the firmware feature of
 # the same name. Never in a flight image.
-bench_motor1_only = ["ferrowasp-safety/bench_motor1_only"]
-bench_motor2_only = ["ferrowasp-safety/bench_motor2_only"]
-bench_motor3_only = ["ferrowasp-safety/bench_motor3_only"]
-bench_motor4_only = ["ferrowasp-safety/bench_motor4_only"]
-bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only"]
-bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only"]
-bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only"]
-bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only"]
-bench_blackbox = []
+bench_motor1_only = ["ferrowasp-safety/bench_motor1_only", "ferrowasp-flight-control/bench_motor1_only"]
+bench_motor2_only = ["ferrowasp-safety/bench_motor2_only", "ferrowasp-flight-control/bench_motor2_only"]
+bench_motor3_only = ["ferrowasp-safety/bench_motor3_only", "ferrowasp-flight-control/bench_motor3_only"]
+bench_motor4_only = ["ferrowasp-safety/bench_motor4_only", "ferrowasp-flight-control/bench_motor4_only"]
+bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only", "ferrowasp-flight-control/bench_logical_motor1_only"]
+bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only", "ferrowasp-flight-control/bench_logical_motor2_only"]
+bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only", "ferrowasp-flight-control/bench_logical_motor3_only"]
+bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only", "ferrowasp-flight-control/bench_logical_motor4_only"]
+bench_blackbox = ["ferrowasp-flight-control/bench_blackbox"]
 bench_dshot_idle_output1_not_running = []
-bench_equal_motors = []
-bench_motor_cmd_stale_rejection = []
+bench_equal_motors = ["ferrowasp-flight-control/bench_equal_motors"]
+bench_motor_cmd_stale_rejection = ["ferrowasp-flight-control/bench_motor_cmd_stale_rejection"]
 # The MSPv2 configurator path in the flash manager, forwarded from the
 # firmware feature of the same name.
 mspv2_configurator = ["ferrowasp-cli/mspv2_configurator", "dep:ferrowasp-mspv2"]
@@ -57,7 +57,7 @@ ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-crsf = { path = "../ferrowasp-crsf" }
 ferrowasp-feedback = { path = "../ferrowasp-feedback" }
-ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control", features = ["tasks"] }
 ferrowasp-icm42688p = { path = "../ferrowasp-icm42688p" }
 ferrowasp-imu = { path = "../ferrowasp-imu" }
 ferrowasp-input = { path = "../ferrowasp-input" }
