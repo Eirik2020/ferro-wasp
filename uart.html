@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7e7ffc39.js";
+            window.path_to_searchindex_js = "searchindex-9a506e5a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -265,7 +265,7 @@ configurator command line for log sync over a Bluetooth serial module:</p>
 </code></pre>
 <p>USB and the configurator port each have their own command and response queue
 into the flash manager, which answers every command on the link it came from
-(<code>crates/ferrowasp-flight/src/command_link.rs</code>). Motor commands and the
+(<code>crates/ferrowasp-cli/src/command_link.rs</code>). Motor commands and the
 unconditional log erase stay on USB.</p>
 <p>On the TBS Lucid H7, USART1 (<code>uart1</code>, PA10, receive only) takes RC input from
 the digital VTX connector’s SBUS pin, inverted in the UART; USART3 (<code>uart3</code>)

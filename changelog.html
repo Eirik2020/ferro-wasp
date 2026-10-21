@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7e7ffc39.js";
+            window.path_to_searchindex_js = "searchindex-9a506e5a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -244,6 +244,16 @@ duplicate Python tools <code>tools/ferrowasp_storage.py</code> and
 <p>Arming is refused while a computer is connected: a USB host has the board
 configured, or the configurator link was used in the last 2 seconds. The
 configurator’s pre-arm checklist shows it as “USB unplugged”.</p>
+</li>
+<li>
+<p>Crate layout, again: every shared crate is now either safety-critical or not,
+and a safety-critical crate never depends on one that is not; the check runs
+in CI. <code>ferrowasp-core</code>, <code>-flight</code>, <code>-drivers</code>, <code>-pid</code>, <code>-waveform</code> and
+<code>-io-core</code> are gone: their code lives in crates named for what they hold
+(control, flight control, configuration, safety, input, feedback, output,
+serial, IMU and one crate per sensor and protocol, with the storage,
+blackbox, command-line, OSD and protocol crates on the non-critical side),
+and each STM32 backend has a safety-critical half. No behaviour changed.</p>
 </li>
 <li>
 <p>Crate layout. <code>ferrowasp-tasks</code> is now <code>ferrowasp-flight</code> (portable flight
