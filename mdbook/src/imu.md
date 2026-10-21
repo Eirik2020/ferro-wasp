@@ -131,9 +131,9 @@ Those checks were made with the ICM42688-P, so a Foxeer that detects an
 MPU-6000 samples and reports it but fails the pre-arm IMU check until its axes
 and signs are verified on a board that carries one.
 
-The optional BB2 `gyro10` values use the same measured-rate convention passed
-to the rate PID. Host viewers should display those roll, pitch, and yaw fields
-directly.
+The blackbox's filtered gyro values use the same measured-rate convention
+passed to the rate PID. Host viewers should display those roll, pitch, and yaw
+fields directly.
 
 See [Bench and Analysis Tools](./rtt_debug_tools.md) for the terminal logger and live
 IMU viewer.

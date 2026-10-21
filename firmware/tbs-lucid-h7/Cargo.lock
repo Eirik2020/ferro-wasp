@@ -450,7 +450,6 @@ version = "0.1.0"
 name = "ferrowasp-protocol"
 version = "0.1.0"
 dependencies = [
- "defmt",
  "ferrowasp-config",
  "ferrowasp-flight-control",
 ]

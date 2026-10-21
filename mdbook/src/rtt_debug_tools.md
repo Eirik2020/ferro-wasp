@@ -64,42 +64,14 @@ dropped, write faults, and the log-rate divisor. The `imu_transport_rtt`
 feature adds raw gyro and data-ready interrupt counts, and
 `imu_orientation_rtt` an orientation snapshot; [IMU](imu.md) describes them.
 
-## Blackbox Frames over RTT
-
-The `blackbox_defmt` feature emits one compact `BB2` frame per control tick
-over the same RTT stream, which `defmt-rtt` owns:
-
-```powershell
-python tools\terminal_embed.py --release --locked --features blackbox_defmt
-```
-
-```text
-BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
-```
-
-| Field | Meaning |
-|---|---|
-| `seq` | Control-tick sequence |
-| `imu` | IMU sample sequence used by this tick |
-| `flags` | Bit 0 armed, bit 1 IMU fresh |
-| `raw10` | Unfiltered roll, pitch, yaw rates in 0.1 deg/s |
-| `gyro10` | Filtered roll, pitch, yaw rates in 0.1 deg/s, as the PID sees them |
-| `cmd10` | Commanded roll, pitch, yaw rates in 0.1 deg/s |
-| `pid` | Total PID output per axis |
-| `thr` | Throttle setpoint in PWM-style command units |
-| `motors` | Mixed motor commands in PWM-style command units |
-
-Disarmed, PID and motor fields are zero. With `bench_equal_motors`, PID is zero
-and every motor carries the capped throttle. A gap in `seq` is RTT transport
-loss, reported separately from IMU progress.
-
 ## Blackbox Analyzer
 
-With no argument, the analyzer reads the newest RTT log and measures the
-control rate from it:
+The analyzer reads one onboard flight exported by FerroConfigurator's
+`convert FLIGHT.fwbb --csv`, or an RTT capture carrying `BB1` or `BB2` frames
+from firmware that sent them, and measures the control rate from the log:
 
 ```powershell
-python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
+python tools\blackbox_analyzer.py --mode rest flight.csv
 ```
 
 `--mode auto`, the default, classifies large low-frequency movement as motion,
@@ -119,12 +91,13 @@ Pass a log path to analyze a specific capture.
 python tools\imu_live_view.py
 ```
 
-The viewer runs `terminal_embed.py` and plots what it reads. From `BB2` frames
-it shows measured against commanded rates, PID output, throttle, and motors. It
-does not echo every RTT line, which would make the plot lag; `--echo-rtt`
-turns echo on, and `--ui-hz 15` lowers the redraw rate on a slow PC.
+The viewer runs `terminal_embed.py` and plots what it reads. The firmware no
+longer sends `BB2` rate frames, so the measured-against-commanded plots stay
+empty; the onboard blackbox and its CSV export carry those values. It does not
+echo every RTT line, which would make the plot lag; `--echo-rtt` turns echo
+on, and `--ui-hz 15` lowers the redraw rate on a slow PC.
 
-From heartbeat IMU lines it can also draw an attitude estimate. `--attitude
+From heartbeat IMU lines it draws an attitude estimate. `--attitude
 gyro`, the default, seeds roll and pitch from gravity once and then integrates
 gyro rates; `--attitude accel` keeps pulling roll and pitch back toward
 gravity. Yaw is gyro-only in both and drifts. `accel_live_plot.py` is an older

@@ -107,63 +107,6 @@ impl CompactRateBlackboxSample {
     }
 }
 
-#[cfg(feature = "blackbox_defmt")]
-pub fn emit_compact_blackbox(
-    seq: u32,
-    imu_seq: u32,
-    armed: bool,
-    imu_fresh: bool,
-    raw_gyro_dps: [f32; 3],
-    filtered_gyro_dps: [f32; 3],
-    command_dps: [f32; 3],
-    pid: [f32; 3],
-    throttle: f32,
-    motors: [f32; 4],
-) {
-    emit_rate_blackbox(CompactRateBlackboxSample::from_fields(
-        CompactRateBlackboxFields {
-            seq,
-            imu_seq,
-            armed,
-            imu_fresh,
-            raw_gyro_dps,
-            filtered_gyro_dps,
-            command_dps,
-            pid,
-            throttle,
-            motors,
-        },
-    ));
-}
-
-#[cfg(feature = "blackbox_defmt")]
-pub fn emit_rate_blackbox(sample: CompactRateBlackboxSample) {
-    defmt::info!(
-        "BB{} seq {} imu {} flags {} raw10 [{}, {}, {}] gyro10 [{}, {}, {}] cmd10 [{}, {}, {}] pid [{}, {}, {}] thr {} motors [{}, {}, {}, {}]",
-        RATE_BLACKBOX_SCHEMA_VERSION,
-        sample.seq,
-        sample.imu_seq,
-        sample.flags,
-        sample.raw_gyro_dps10[0],
-        sample.raw_gyro_dps10[1],
-        sample.raw_gyro_dps10[2],
-        sample.gyro_dps10[0],
-        sample.gyro_dps10[1],
-        sample.gyro_dps10[2],
-        sample.command_dps10[0],
-        sample.command_dps10[1],
-        sample.command_dps10[2],
-        sample.pid[0],
-        sample.pid[1],
-        sample.pid[2],
-        sample.throttle,
-        sample.motors[0],
-        sample.motors[1],
-        sample.motors[2],
-        sample.motors[3]
-    );
-}
-
 fn f32_to_i16_scaled(value: f32, scale: f32) -> i16 {
     let scaled = value * scale;
     if scaled >= i16::MAX as f32 {

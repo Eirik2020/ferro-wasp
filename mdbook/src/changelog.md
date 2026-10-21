@@ -117,6 +117,10 @@ artifact is stable, airworthy, or production-ready.
 
 ### Removed
 
+- The `blackbox_defmt` bench feature and its per-tick `BB2` RTT frames. The
+  onboard blackbox and FerroConfigurator's `convert --csv` export carry the
+  same values; `blackbox_analyzer.py` still reads `BB1` and `BB2` captures
+  made before.
 - The FerroWasp FCU3 app (`firmware/stm32f405-flight`), obsolete since
   2026-09-22. It is no longer built; its retained evidence stays in the
   project archive.

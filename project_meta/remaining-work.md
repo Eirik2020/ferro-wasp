@@ -77,8 +77,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own); then each task moves into its subsystem crate behind a `tasks`
      feature, and the tasks crate's `dt` and `flash_task` aliases go with the
-     last of them; the control task's `blackbox_defmt` output goes with it,
-     since the record format is non-critical;
+     last of them;
   2. the remaining SPSC links and typed flags; the coordinator, taking the
      values in `ferrowasp-stm32-tasks::inbound` (the host-connected flags and
      the accelerometer level) and the OSD's `tuning_profile`, then reboot,

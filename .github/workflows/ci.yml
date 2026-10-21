@@ -80,13 +80,13 @@ jobs:
         working-directory: firmware/foxeer-f405-v2
         run: >
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "blackbox_defmt bench_spi_timeout_recovery"
+          --features "bench_spi_timeout_recovery"
 
       - name: Check Foxeer equal-motor bench path
         working-directory: firmware/foxeer-f405-v2
         run: >
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
+          --features "bench_actuator_validation bench_equal_motors"
 
       - name: Check Foxeer bidirectional DShot bench image
         working-directory: firmware/foxeer-f405-v2
@@ -121,8 +121,8 @@ jobs:
       - name: Check TBS Lucid H7 diagnostic and bench features
         working-directory: firmware/tbs-lucid-h7
         run: |
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "blackbox_defmt bench_spi_timeout_recovery"
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_spi_timeout_recovery"
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_actuator_validation bench_equal_motors"
 
       - name: Build TBS Lucid H7 release firmware
         working-directory: firmware/tbs-lucid-h7
