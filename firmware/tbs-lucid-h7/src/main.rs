@@ -891,7 +891,10 @@ ferroforge::app! {
         #[task(priority = 13)]
         async fn dshot_fallback;
         // BLHeli legacy ESC telemetry, on the port bound to `esc_telemetry`.
-        #[task(priority = 4)]
+        // Actuator Feedback, so core: above USB, the OSD and the border roles
+        // (6-7), below the I/O watchdog. Each 2 ms run is bounded by the bytes
+        // one period brings.
+        #[task(priority = 8)]
         async fn esc_manager_task;
         #[task(priority = 15)]
         async fn actuator_output;
