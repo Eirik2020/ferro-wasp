@@ -71,6 +71,7 @@
   - [ADR-0062: Faults Have Classes, Hard Faults Latch, And The Failsafe Follows Betaflight](decisions/ADR-0062.md)
   - [ADR-0063: An Independent Watchdog Backs Up The Safety Master](decisions/ADR-0063.md)
   - [ADR-0064: Actuator Output Confirms Arming And Cross-Checks Disarming](decisions/ADR-0064.md)
+  - [ADR-0065: Hardware Transports Live In The Backend, Application Glue In One Crate](decisions/ADR-0065.md)
 - [Testing](testing/README.md)
   - [Run Evidence](testing/evidence/README.md)
   - [Evidence Index](testing/EVIDENCE_INDEX.md)
