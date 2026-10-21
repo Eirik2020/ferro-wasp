@@ -27,11 +27,11 @@ pub mod flight {
     pub use crate::dshot_fallback;
     pub use crate::dshot_service;
     pub use crate::esc_manager_task;
-    pub use crate::flash_manager_task;
-    pub use crate::heartbeat;
     pub use crate::rc_input;
-    pub use crate::usb_fs;
     pub use ferrowasp_border::tasks::observer_task;
+    pub use ferrowasp_cli::tasks::flash::flash_manager_task;
+    pub use ferrowasp_cli::tasks::heartbeat::heartbeat;
+    pub use ferrowasp_cli::tasks::usb::usb_fs;
     pub use ferrowasp_flight_control::tasks::control_loop;
     pub use ferrowasp_osd::tasks::osd_refresh;
     pub use ferrowasp_osd::tasks::rc_telemetry;

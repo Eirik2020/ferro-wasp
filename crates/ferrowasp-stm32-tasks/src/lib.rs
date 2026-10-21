@@ -44,10 +44,6 @@ const _: () = assert!(
 mod actuator;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod channels;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod cli_link;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod diagnostics;
 #[cfg(all(
     target_arch = "arm",
     any(feature = "stm32f405", feature = "stm32h743"),
@@ -56,8 +52,6 @@ mod diagnostics;
 mod dshot;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod esc;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod flash;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod groups;
 // A convenience for task bodies; which names a body uses depends on the
@@ -69,10 +63,6 @@ pub mod app;
 mod prelude;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod rc;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod usb;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod views;
 
 #[cfg(all(
     target_arch = "arm",
@@ -88,10 +78,6 @@ pub use channels::{
     CommandLinkChannels, EscChannels, ImuChannels, ObserverChannels, StorageChannels,
     command_link_channels, esc_channels, imu_channels, observer_channels, storage_channels,
 };
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use cli_link::configurator_link;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use diagnostics::heartbeat;
 #[cfg(all(
     target_arch = "arm",
     any(feature = "stm32f405", feature = "stm32h743"),
@@ -102,6 +88,17 @@ pub use dshot::{dshot_dma_complete, dshot_fallback, dshot_service, service_dshot
 pub use esc::esc_manager_task;
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_border::tasks::observer_task;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_cli::tasks::flash::{
+    ConfigRpcCompletion, FlashProbe, FlashRpcCommandConsumer, FlashRpcResponseProducer,
+    RpcDeviceInfoFn, flash_manager_task, load_flash_config, scan_flash_log,
+};
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_cli::tasks::heartbeat::heartbeat;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_cli::tasks::link::configurator_link;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_cli::tasks::usb::usb_fs;
 /// What a firmware was built from, for the `build` command.
 pub use ferrowasp_cli::usb_debug::BuildIdentity;
 #[cfg(target_arch = "arm")]
@@ -131,11 +128,4 @@ pub use ferrowasp_stm32_critical::tasks::uart_port::{
     uart8_tx_dma_complete, uart8_tx_worker,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use flash::{
-    ConfigRpcCompletion, FlashProbe, FlashRpcCommandConsumer, FlashRpcResponseProducer,
-    RpcDeviceInfoFn, flash_manager_task, load_flash_config, scan_flash_log,
-};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use rc::rc_input;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use usb::usb_fs;

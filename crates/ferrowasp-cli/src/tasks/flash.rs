@@ -3,24 +3,24 @@
 //! for every board, over any store with NOR semantics; a board supplies its
 //! store and its defaults.
 
-use crate::prelude::*;
+use super::prelude::*;
+use crate::command_link::{CommandLink, CommandSources, ResponseRouter};
+#[cfg(feature = "mspv2_configurator")]
+use crate::commands::StoredConfigRpc;
+#[cfg(feature = "mspv2_configurator")]
+use crate::rpc_commands::{self, RpcContext};
+use crate::storage_commands::{self, CommandAction, CommandContext};
 use core::fmt::Write as _;
 use ferrowasp_blackbox::log_writer::{LogWriter, PageWrite};
 use ferrowasp_blackbox::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
 use ferrowasp_border::inbound::publish_accel_level;
-use ferrowasp_cli::command_link::{CommandLink, CommandSources, ResponseRouter};
-#[cfg(feature = "mspv2_configurator")]
-use ferrowasp_cli::commands::StoredConfigRpc;
-#[cfg(feature = "mspv2_configurator")]
-use ferrowasp_cli::rpc_commands::{self, RpcContext};
-use ferrowasp_cli::storage_commands::{self, CommandAction, CommandContext};
 use ferrowasp_control::calibration::accel_level::{AccelLevelCalibration, CalibrationError};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
 use ferrowasp_serial::{SerialBindings, SerialRoute};
-use ferrowasp_stm32::system_reset::RebootTarget;
+use ferrowasp_stm32_critical::system_reset::RebootTarget;
 use ferrowasp_storage::config_save::{ConfigSave, SaveFailure, SaveStep};
 use ferrowasp_storage::nor_storage::NorStorage;
 

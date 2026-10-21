@@ -379,14 +379,30 @@ dependencies = [
 name = "ferrowasp-cli"
 version = "0.1.0"
 dependencies = [
+ "cortex-m",
+ "defmt 1.0.1",
+ "embedded-io-async",
+ "ferroforge",
  "ferrowasp-blackbox",
+ "ferrowasp-border",
+ "ferrowasp-boundary-contracts",
  "ferrowasp-config",
+ "ferrowasp-control",
+ "ferrowasp-feedback",
+ "ferrowasp-flight-control",
+ "ferrowasp-io-contracts",
+ "ferrowasp-mpu6500",
  "ferrowasp-mspv2",
  "ferrowasp-protocol",
  "ferrowasp-safety",
  "ferrowasp-serial",
+ "ferrowasp-stm32",
+ "ferrowasp-stm32-critical",
  "ferrowasp-storage",
+ "fugit",
  "heapless 0.9.2",
+ "rtic",
+ "rtic-monotonics",
 ]
 
 [[package]]

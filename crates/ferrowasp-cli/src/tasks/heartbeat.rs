@@ -2,8 +2,8 @@
 //! the storage and optional IMU diagnostics logged beside it, all read from
 //! the observer's ledger.
 
-use crate::prelude::*;
-use crate::usb::STATUS_LINE_DUE;
+use super::prelude::*;
+use crate::tasks::usb::STATUS_LINE_DUE;
 
 /// Wake the USB task for its status line, report the isolated stale IMU
 /// ticks the control loop tolerated, then log storage health and blackbox

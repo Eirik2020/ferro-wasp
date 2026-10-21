@@ -2,21 +2,177 @@
 //! the MSPv2 configurator, its RPC), bench motor requests passed to the
 //! safety master, and the periodic `FWDBG1` status line.
 
-use crate::app::{
-    ConfiguratorUsbState, FlashRpcCommandProducer, FlashRpcResponseConsumer, MspCommonInfoFn,
-};
-#[cfg(feature = "mspv2_configurator")]
-use crate::app::{handle_msp_packet, stage_rpc_response};
-use crate::prelude::*;
+use super::prelude::*;
 use core::sync::atomic::AtomicBool;
 use ferrowasp_border::inbound::USB_HOST_CONNECTED;
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_mspv2 as mspv2;
 use ferrowasp_stm32::usb_serial::UsbCdcPort;
+
+#[cfg(feature = "mspv2_configurator")]
+pub type FlashRpcCommandProducer = flash_task::RpcCommandProducer;
+#[cfg(not(feature = "mspv2_configurator"))]
+pub type FlashRpcCommandProducer = ();
+#[cfg(feature = "mspv2_configurator")]
+pub type FlashRpcResponseConsumer = flash_task::RpcResponseConsumer;
+#[cfg(not(feature = "mspv2_configurator"))]
+pub type FlashRpcResponseConsumer = ();
+
+/// The board's MSPv2 identity for the common commands, configuration
+/// supplied to the USB task; `()` without the MSPv2 configurator.
+#[cfg(feature = "mspv2_configurator")]
+pub type MspCommonInfoFn = fn(bool, bool) -> mspv2::commands::CommonInfo<'static>;
+#[cfg(not(feature = "mspv2_configurator"))]
+pub type MspCommonInfoFn = ();
+
+/// The USB configurator's parser and pending reply.
+#[cfg(feature = "mspv2_configurator")]
+pub struct ConfiguratorUsbState {
+    pub parser: mspv2::MspParser,
+    pub pending_tx: mspv2::EncodedFrame,
+    pub rpc_payload: [u8; mspv2::MAX_PAYLOAD_LEN],
+}
+
+#[cfg(feature = "mspv2_configurator")]
+impl ConfiguratorUsbState {
+    pub const fn new() -> Self {
+        Self {
+            parser: mspv2::MspParser::new(),
+            pending_tx: mspv2::EncodedFrame::new(),
+            rpc_payload: [0; mspv2::MAX_PAYLOAD_LEN],
+        }
+    }
+}
+
+#[cfg(not(feature = "mspv2_configurator"))]
+pub struct ConfiguratorUsbState;
+
+#[cfg(not(feature = "mspv2_configurator"))]
+impl ConfiguratorUsbState {
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ConfiguratorUsbState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// `value`, cut or zero-padded to `N` bytes.
+#[cfg(feature = "mspv2_configurator")]
+pub fn fixed_bytes<const N: usize>(value: &[u8]) -> [u8; N] {
+    let mut output = [0u8; N];
+    let len = value.len().min(N);
+    output[..len].copy_from_slice(&value[..len]);
+    output
+}
+
+#[cfg(feature = "mspv2_configurator")]
+pub fn stage_rpc_response(
+    state: &mut ConfiguratorUsbState,
+    response: &mspv2::rpc::RpcResponse,
+) -> bool {
+    let ConfiguratorUsbState {
+        pending_tx,
+        rpc_payload,
+        ..
+    } = state;
+    let Ok(payload) = mspv2::rpc::encode_response(response, rpc_payload) else {
+        return false;
+    };
+    pending_tx
+        .set(
+            mspv2::MspDirection::FromFlightController,
+            0,
+            mspv2::rpc::MSP2_FWSP_RPC,
+            payload,
+        )
+        .is_ok()
+}
+
+/// Answer one MSPv2 packet from the USB host: the common commands from the
+/// board's identity, `Hello` from its device information, both with the arm
+/// state and IMU readiness the ledger shows, and every other RPC request
+/// handed to the flash manager.
+#[cfg(feature = "mspv2_configurator")]
+pub fn handle_msp_packet(
+    packet: mspv2::MspPacket,
+    state: &mut ConfiguratorUsbState,
+    rpc_commands: &mut flash_task::RpcCommandProducer,
+    common_info: MspCommonInfoFn,
+    device_info: crate::tasks::flash::RpcDeviceInfoFn,
+    armed: bool,
+    imu_ready: bool,
+) {
+    if packet.direction != mspv2::MspDirection::ToFlightController || state.pending_tx.is_pending()
+    {
+        return;
+    }
+
+    let mut common_payload = [0u8; 96];
+    if let Some(len) = mspv2::commands::encode_common_payload(
+        &packet,
+        &common_info(armed, imu_ready),
+        &mut common_payload,
+    ) {
+        let _ = state.pending_tx.set(
+            mspv2::MspDirection::FromFlightController,
+            packet.flags,
+            packet.function,
+            &common_payload[..len],
+        );
+        return;
+    }
+
+    if packet.function != mspv2::rpc::MSP2_FWSP_RPC {
+        let _ = state.pending_tx.set(
+            mspv2::MspDirection::Error,
+            packet.flags,
+            packet.function,
+            &[],
+        );
+        return;
+    }
+
+    let Ok(request) = mspv2::rpc::decode_request(packet.payload()) else {
+        let _ = state.pending_tx.set(
+            mspv2::MspDirection::Error,
+            packet.flags,
+            packet.function,
+            &[],
+        );
+        return;
+    };
+    if request.protocol_version != mspv2::rpc::FWSP_RPC_VERSION {
+        let response = mspv2::rpc::error(
+            request.request_id,
+            mspv2::rpc::DeviceError::UnsupportedProtocolVersion,
+        );
+        let _ = stage_rpc_response(state, &response);
+        return;
+    }
+    if request.operation == mspv2::rpc::Request::Hello {
+        let response = mspv2::rpc::ok(
+            request.request_id,
+            mspv2::rpc::Response::Hello(device_info(armed)),
+        );
+        let _ = stage_rpc_response(state, &response);
+        return;
+    }
+    let request_id = request.request_id;
+    if rpc_commands.enqueue(request).is_err() {
+        let response = mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy);
+        let _ = stage_rpc_response(state, &response);
+    }
+}
 
 /// The heartbeat sets it every two seconds, and the USB task writes a status
 /// line and clears it; both are non-critical.
 pub(crate) static STATUS_LINE_DUE: AtomicBool = AtomicBool::new(false);
 #[cfg(not(feature = "mspv2_configurator"))]
-use ferrowasp_cli::usb_debug;
+use crate::usb_debug;
 
 /// Serve the USB port on each OTG interrupt. The header line, whether this
 /// firmware can drive motors, the control-loop rate the status line reports,
@@ -42,8 +198,8 @@ use ferrowasp_cli::usb_debug;
         actuator_output_enabled: bool,
         control_loop_hz: u32,
         msp_common_info: MspCommonInfoFn,
-        rpc_device_info: crate::RpcDeviceInfoFn,
-        build_identity: crate::BuildIdentity,
+        rpc_device_info: crate::tasks::flash::RpcDeviceInfoFn,
+        build_identity: crate::usb_debug::BuildIdentity,
         wake_usb: fn(),
     ],
     monotonic = Mono,
@@ -63,7 +219,10 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
         };
         match parsed {
             Ok(flash_task::StorageCommand::Live) => {
-                let live = cx.shared.ledger.lock(|ledger| crate::views::live(ledger));
+                let live = cx
+                    .shared
+                    .ledger
+                    .lock(|ledger| crate::tasks::views::live(ledger));
                 let line = usb_debug::format_live(live);
                 let _ = serial.write(line.as_bytes());
             }
@@ -71,7 +230,7 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
                 let channels = cx
                     .shared
                     .ledger
-                    .lock(|ledger| crate::views::rc_channels(ledger));
+                    .lock(|ledger| crate::tasks::views::rc_channels(ledger));
                 for line in usb_debug::format_rc(channels) {
                     let _ = serial.write(line.as_bytes());
                 }
@@ -81,7 +240,7 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
                 let esc = cx
                     .shared
                     .ledger
-                    .lock(|ledger| crate::views::esc(ledger, now_ms));
+                    .lock(|ledger| crate::tasks::views::esc(ledger, now_ms));
                 for line in usb_debug::format_esc(esc) {
                     let _ = serial.write(line.as_bytes());
                 }
@@ -226,7 +385,7 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
     let snapshot = {
         let now = Mono::now().duration_since_epoch();
         cx.shared.ledger.lock(|ledger| {
-            crate::views::status(
+            crate::tasks::views::status(
                 ledger,
                 // The status format carries 32-bit milliseconds, 49.7 days.
                 now.to_millis() as u32,

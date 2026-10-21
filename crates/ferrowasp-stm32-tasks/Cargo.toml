@@ -23,8 +23,8 @@ stm32h743 = ["dep:ferrowasp-stm32h7", "ferrowasp-stm32h7/stm32h743"]
 dshot = ["ferrowasp-stm32/dshot", "ferrowasp-stm32f4?/dshot"]
 # Diagnostics a firmware opts into; forwarded from its own features of the
 # same name.
-imu_transport_rtt = []
-imu_orientation_rtt = ["imu_transport_rtt"]
+imu_transport_rtt = ["ferrowasp-cli/imu_transport_rtt"]
+imu_orientation_rtt = ["imu_transport_rtt", "ferrowasp-cli/imu_orientation_rtt"]
 # Bench and fault-injection images, forwarded from the firmware feature of
 # the same name. Never in a flight image.
 bench_motor1_only = ["ferrowasp-safety/bench_motor1_only", "ferrowasp-flight-control/bench_motor1_only"]
@@ -35,7 +35,7 @@ bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only", "ferr
 bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only", "ferrowasp-flight-control/bench_logical_motor2_only"]
 bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only", "ferrowasp-flight-control/bench_logical_motor3_only"]
 bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only", "ferrowasp-flight-control/bench_logical_motor4_only"]
-bench_blackbox = ["ferrowasp-flight-control/bench_blackbox"]
+bench_blackbox = ["ferrowasp-flight-control/bench_blackbox", "ferrowasp-cli/bench_blackbox"]
 bench_dshot_idle_output1_not_running = []
 bench_equal_motors = ["ferrowasp-flight-control/bench_equal_motors"]
 bench_motor_cmd_stale_rejection = ["ferrowasp-flight-control/bench_motor_cmd_stale_rejection"]
@@ -52,7 +52,7 @@ embedded-io-async = { workspace = true }
 ferrowasp-blackbox = { path = "../ferrowasp-blackbox" }
 ferrowasp-border = { path = "../ferrowasp-border", features = ["tasks"] }
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
-ferrowasp-cli = { path = "../ferrowasp-cli" }
+ferrowasp-cli = { path = "../ferrowasp-cli", features = ["tasks"] }
 ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-crsf = { path = "../ferrowasp-crsf" }

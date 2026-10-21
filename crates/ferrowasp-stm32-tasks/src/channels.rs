@@ -2,9 +2,9 @@
 //! constructor makes its queues static and returns their split ends, so a
 //! board's init names what it receives and nothing else.
 
-use crate::app::{FlashRpcCommandProducer, FlashRpcResponseConsumer};
 use crate::prelude::*;
 use crate::{FlashRpcCommandConsumer, FlashRpcResponseProducer};
+use ferrowasp_cli::tasks::usb::{FlashRpcCommandProducer, FlashRpcResponseConsumer};
 
 /// The ESC manager and its three queues: telemetry requests to the DShot
 /// service, its frame-start acknowledgements back, and observations for the

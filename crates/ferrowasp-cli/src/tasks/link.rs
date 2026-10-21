@@ -6,7 +6,7 @@
 //! other's replies. Motor commands and the unconditional log erase stay on
 //! USB: a Bluetooth module can be paired by anyone in range.
 
-use crate::prelude::*;
+use super::prelude::*;
 use ferrowasp_border::inbound::CONFIGURATOR_LINK_ACTIVE;
 
 /// Answers leave in whole transmit chunks. The last chunk of a burst is
@@ -57,12 +57,12 @@ impl Outbox {
 /// With no port bound the task ends at once.
 #[ferroforge::task(
     local = [
-        configurator_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
+        configurator_port: Option<ferrowasp_stm32_critical::uart_port::SerialPortEndpoint>,
         configurator_commands: Option<flash_task::CommandProducer>,
         configurator_responses: Option<flash_task::ResponseConsumer>,
     ],
     shared = [ledger: Ledger],
-    config = [build_identity: crate::BuildIdentity],
+    config = [build_identity: crate::usb_debug::BuildIdentity],
     monotonic = Mono,
 )]
 pub async fn configurator_link(mut cx: configurator_link::Context) {
@@ -109,16 +109,19 @@ pub async fn configurator_link(mut cx: configurator_link::Context) {
                 last_command_ms = Some(Mono::now().duration_since_epoch().to_millis());
                 match parsed {
                     Ok(flash_task::StorageCommand::Live) => {
-                        let live = cx.shared.ledger.lock(|ledger| crate::views::live(ledger));
-                        let line = ferrowasp_cli::usb_debug::format_live(live);
+                        let live = cx
+                            .shared
+                            .ledger
+                            .lock(|ledger| crate::tasks::views::live(ledger));
+                        let line = crate::usb_debug::format_live(live);
                         outbox.push(&mut writer, line.as_bytes()).await;
                     }
                     Ok(flash_task::StorageCommand::Rc) => {
                         let channels = cx
                             .shared
                             .ledger
-                            .lock(|ledger| crate::views::rc_channels(ledger));
-                        for line in ferrowasp_cli::usb_debug::format_rc(channels) {
+                            .lock(|ledger| crate::tasks::views::rc_channels(ledger));
+                        for line in crate::usb_debug::format_rc(channels) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
@@ -127,13 +130,13 @@ pub async fn configurator_link(mut cx: configurator_link::Context) {
                         let esc = cx
                             .shared
                             .ledger
-                            .lock(|ledger| crate::views::esc(ledger, now_ms));
-                        for line in ferrowasp_cli::usb_debug::format_esc(esc) {
+                            .lock(|ledger| crate::tasks::views::esc(ledger, now_ms));
+                        for line in crate::usb_debug::format_esc(esc) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
                     Ok(flash_task::StorageCommand::Build) => {
-                        for line in ferrowasp_cli::usb_debug::format_build(CONFIG::BUILD_IDENTITY) {
+                        for line in crate::usb_debug::format_build(CONFIG::BUILD_IDENTITY) {
                             outbox.push(&mut writer, line.as_bytes()).await;
                         }
                     }
