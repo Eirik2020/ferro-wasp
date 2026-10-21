@@ -73,7 +73,7 @@ def suites() -> list[Suite]:
             "nothing in the workspace turns on mspv2_configurator's RPC test",
             [
                 Step([*host_test, "-p", "ferrowasp-stm32"]),
-                Step([*host_test, "-p", "ferrowasp-flight", "--features", "mspv2_configurator"]),
+                Step([*host_test, "-p", "ferrowasp-cli", "--features", "mspv2_configurator"]),
             ],
         ),
         Suite(

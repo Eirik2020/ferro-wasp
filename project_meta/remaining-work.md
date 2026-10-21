@@ -73,27 +73,20 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   and arm-state cross-check, the OSD and telemetry warning on a stalled
   ledger, message contracts, the gyro-synced loop, `ferrowasp-config` and the
   new crate map. The redesign comes before the next hardware gate run, one
-  change at a time against `main`, moves before behaviour:
-  1. the crates of the new map, moved without behaviour change and marked
-     `critical = true` as each is created, bottom-up by dependency so that
-     each move is a pure move (a safety-critical crate cannot depend on a
-     crate not yet moved): `ferrowasp-control`; the CRSF, BLHeli-telemetry
-     and per-sensor IMU crates and `ferrowasp-io-contracts`; the HAL-free
-     logic of the subsystem crates `ferrowasp-serial`, `-output`, `-input`,
-     `-feedback` and `-imu`; `ferrowasp-flight-control`; `ferrowasp-config`,
-     whose stored types those crates own, with `ferrowasp-protocol` and
-     `ferrowasp-blackbox` (FerroConfigurator moving to `ferrowasp-protocol`
-     in the same change); `ferrowasp-safety`; the `-critical` backend
-     splits, which need the serial, SPI and DShot code already critical;
-     and last the tasks, into their subsystem crates behind a `tasks`
-     feature, since they build on the backends;
-  2. behaviour, one mechanism at a time: the observer and ledger in place of
-     `snapshots.rs`; SPSC links and typed flags; the coordinator, then reboot,
-     config transactions and accelerometer calibration through it; the boot
+  change at a time against `main`, one mechanism at a time:
+  1. the observer and ledger in place of `ferrowasp-stm32-tasks::snapshots`;
+     as each task stops writing it, the task moves into its subsystem crate
+     behind a `tasks` feature, and the tasks crate's `dt` and `flash_task`
+     aliases go with the last of them (the control task also stops building
+     the compact log record, which the observer's stream takes over);
+  2. SPSC links and typed flags; the coordinator, then reboot, config
+     transactions and accelerometer calibration through it; the boot
      fallback; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source; the Health Manager and
      the border heartbeats; the fault classes and the failsafe stages; the
-     independent watchdog; the gyro-synced loop.
+     independent watchdog; the gyro-synced loop;
+  3. the per-family conformance suites behind HW-UART-001 to HW-ROUTE-001,
+     which today have host tests only for the HAL-neutral half.
 
   Its scope and open items are in the
   [requirements design](requirements/design.md#17-order-of-work).

@@ -1,4 +1,4 @@
-//! Resolving crate-qualified paths, such as `ferrowasp_flight::rc_receiver`,
+//! Resolving crate-qualified paths, such as `ferrowasp_input::rc_receiver`,
 //! to the items they name, by parsing source with `syn`.
 //!
 //! Resolution follows what Rust code can name: modules in their own files or

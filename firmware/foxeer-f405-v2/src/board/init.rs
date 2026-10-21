@@ -2,8 +2,10 @@ use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxT
 use super::manifest::Spi1ImuKind;
 use backend::dshot::channel::{Ch1, Ch3, Ch3N, Ch4};
 use backend::dshot::{GpioA, GpioB, GpioC, ReplyPin};
-use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
-use ferrowasp_io_core::serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
+use ferrowasp_icm42688p as icm42688p;
+use ferrowasp_mpu6000 as mpu6000;
+use ferrowasp_mpu6500 as mpu6500;
+use ferrowasp_serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
@@ -89,7 +91,7 @@ pub fn init_spi2_flash(
         10_000_000.Hz(),
         clocks,
     );
-    ferrowasp_drivers::spi_nor::SpiNor::new(bus, cs)
+    ferrowasp_storage::spi_nor::SpiNor::new(bus, cs)
 }
 
 pub fn init_imu_data_ready(

@@ -1,11 +1,14 @@
-use ferrowasp_core::actuator::MotorOutputMap;
-use ferrowasp_core::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
-use ferrowasp_flight::accel_level::AccelLevel;
-use ferrowasp_flight::drone_toolbox::{
-    IMU_GYRO_LPF_HZ, PidGains, RC_RATE_PROFILE, RateControllerGains, RcChannelMap, TuningProfile,
-};
-use ferrowasp_flight::flash_storage::StoredConfig;
-use ferrowasp_io_core::serial::RcProtocol;
+use ferrowasp_config::stored::StoredConfig;
+use ferrowasp_control::calibration::accel_level::AccelLevel;
+use ferrowasp_control::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
+use ferrowasp_flight_control::actuator::MotorOutputMap;
+use ferrowasp_flight_control::drone_toolbox::IMU_GYRO_LPF_HZ;
+use ferrowasp_flight_control::drone_toolbox::PidGains;
+use ferrowasp_flight_control::drone_toolbox::RC_RATE_PROFILE;
+use ferrowasp_flight_control::drone_toolbox::RateControllerGains;
+use ferrowasp_flight_control::drone_toolbox::RcChannelMap;
+use ferrowasp_flight_control::drone_toolbox::TuningProfile;
+use ferrowasp_serial::RcProtocol;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AdcObservationProfile {
@@ -47,10 +50,12 @@ pub const SCHEDULER_TICK_RATE_HZ: u32 = 2_000;
 
 // The scheduler divides down with integer division, so a pair that does not
 // divide exactly would run a rate this board does not claim.
-const _: () = assert!(ferrowasp_flight::drone_toolbox::scheduler_divides_exactly(
-    SCHEDULER_TICK_RATE_HZ,
-    CONTROL_LOOP_RATE_HZ
-));
+const _: () = assert!(
+    ferrowasp_flight_control::drone_toolbox::scheduler_divides_exactly(
+        SCHEDULER_TICK_RATE_HZ,
+        CONTROL_LOOP_RATE_HZ
+    )
+);
 
 /// Derived, not measured. Betaflight's TBS_LUCID_H7 target aligns GYRO_1 as
 /// `CW90_DEG_FLIP`, which maps sensor `[x, y, z]` to Betaflight's

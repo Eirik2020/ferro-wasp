@@ -13,6 +13,8 @@ use ferrowasp_mspv2 as mspv2;
 
 /// The names a flight application's `main.rs` uses, whatever its board.
 pub mod prelude {
+    pub use crate::dt;
+    pub use crate::flash_task;
     pub use core::cell::RefCell;
     pub use core::fmt::Write as CoreFmtWrite;
     pub use core::sync::atomic::Ordering;
@@ -22,41 +24,37 @@ pub mod prelude {
     pub use embedded_hal::spi::Operation;
     pub use embedded_hal_async::spi::SpiDevice;
     pub use embedded_io_async::Read as AsyncRead;
-    pub use ferrowasp_core::actuator::{remap_motor_outputs, throttle_to_u16};
-    pub use ferrowasp_core::safety;
-    pub use ferrowasp_core::safety::signals::{
-        self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
-    };
-    pub use ferrowasp_drivers::{icm42688p as icm, mpu6500 as imu};
-    pub use ferrowasp_flight::actuator as actuator_task;
+    pub use ferrowasp_blackbox::sync_ledger;
     #[cfg(feature = "mspv2_configurator")]
-    pub use ferrowasp_flight::blackbox_storage as blackbox_task;
-    pub use ferrowasp_flight::command_link::{CommandLink, CommandSources, ResponseRouter};
-    pub use ferrowasp_flight::drone_toolbox as dt;
-    pub use ferrowasp_flight::esc_manager as esc;
-    pub use ferrowasp_flight::esc_manager::{
+    pub use ferrowasp_cli::blackbox_storage as blackbox_task;
+    pub use ferrowasp_cli::command_link::{CommandLink, CommandSources, ResponseRouter};
+    pub use ferrowasp_cli::log_sync;
+    #[cfg(not(feature = "mspv2_configurator"))]
+    pub use ferrowasp_cli::usb_debug;
+    pub use ferrowasp_feedback::esc_manager as esc;
+    pub use ferrowasp_feedback::esc_manager::{
         DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_IDLE_THROTTLE_COMMAND, DSHOT_PREARM_STOP_HOLD_MS,
     };
-    pub use ferrowasp_flight::flash_storage as flash_task;
-    pub use ferrowasp_flight::osd;
-    pub use ferrowasp_flight::rc_receiver::RcReceiver;
-    #[cfg(not(feature = "mspv2_configurator"))]
-    pub use ferrowasp_flight::usb_debug;
-    pub use ferrowasp_flight::{log_sync, sync_ledger};
-    pub use ferrowasp_io_core::serial::{
-        RcProtocol, ResolvedBindings, SerialBindings, SerialRoute,
-    };
-    pub use ferrowasp_io_core::spi::{
+    pub use ferrowasp_flight_control::actuator::{remap_motor_outputs, throttle_to_u16};
+    pub use ferrowasp_icm42688p as icm;
+    pub use ferrowasp_imu::spi::{
         AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiDeadlineUs,
         SpiRequestMailbox,
     };
-    pub use ferrowasp_io_core::{
-        serial::{Discontinuity, RxChunk, SerialFault},
-        time::TimestampMicros,
-    };
+    pub use ferrowasp_input::rc_receiver::RcReceiver;
+    pub use ferrowasp_io_contracts::time::TimestampMicros;
+    pub use ferrowasp_mpu6500 as imu;
     pub use ferrowasp_mspv1 as mspv1;
     #[cfg(feature = "mspv2_configurator")]
     pub use ferrowasp_mspv2 as mspv2;
+    pub use ferrowasp_osd as osd;
+    pub use ferrowasp_safety as safety;
+    pub use ferrowasp_safety::actuator as actuator_task;
+    pub use ferrowasp_safety::signals::{
+        self, ActuatorArmPermitReader, ActuatorArmPermitWriter, RcRatesReader, RcRatesWriter,
+    };
+    pub use ferrowasp_serial::{Discontinuity, RxChunk, SerialFault};
+    pub use ferrowasp_serial::{RcProtocol, ResolvedBindings, SerialBindings, SerialRoute};
     pub use ferrowasp_stm32::app_config::{
         ARMING_GUARD_POLL_MS, BENCH_EQUAL_MOTOR_MAX_THROTTLE, DELAY_TIMER_HZ, ESC_MANAGER_PERIOD_MS,
     };
@@ -171,8 +169,8 @@ impl Default for ConfiguratorUsbState {
 
 /// The detected IMU, as the USB status line names it.
 #[cfg(not(feature = "mspv2_configurator"))]
-pub fn active_usb_debug_imu_kind() -> ferrowasp_flight::usb_debug::ImuKind {
-    use ferrowasp_flight::usb_debug::ImuKind;
+pub fn active_usb_debug_imu_kind() -> ferrowasp_cli::usb_debug::ImuKind {
+    use ferrowasp_cli::usb_debug::ImuKind;
     use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
     match Spi1ImuKind::from_discriminant(crate::snapshots::ACTIVE_IMU_KIND.load(Ordering::Relaxed))
     {

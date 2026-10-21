@@ -106,7 +106,7 @@ where
     Delay: FnMut(u32) -> DelayFuture,
     DelayFuture: core::future::Future<Output = ()>,
 {
-    ferrowasp_flight::arming::wait_hold(
+    ferrowasp_safety::arming::wait_hold(
         hold_ms,
         ARMING_GUARD_POLL_MS,
         || current_live_arming_guard(guard, permit, rc_link, arm_high, throttle, now_us()),
@@ -128,10 +128,12 @@ pub fn apply_bench_motor_request<SharedDshot>(
     SharedDshot::T: DshotMotors,
 {
     let lane = |logical_motor: u8| {
-        ferrowasp_core::actuator::unpack_motor_map(
+        ferrowasp_flight_control::actuator::unpack_motor_map(
             MOTOR_OUTPUT_MAP_SNAPSHOT.load(Ordering::Acquire),
         )
-        .and_then(|map| ferrowasp_core::actuator::physical_output_for_logical(map, logical_motor))
+        .and_then(|map| {
+            ferrowasp_flight_control::actuator::physical_output_for_logical(map, logical_motor)
+        })
         .map(|output| output - 1)
     };
     match request {

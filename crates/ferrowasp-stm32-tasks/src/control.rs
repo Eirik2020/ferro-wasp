@@ -60,8 +60,8 @@ fn deg10(angle_deg: f32) -> i16 {
         motor_cmd_seq: u32,
         flash_record_producer: flash_task::RecordProducer,
         rc_link_was_valid: bool = false,
-        motor_order: ferrowasp_core::actuator::MotorOutputMap =
-            ferrowasp_core::actuator::MotorOutputMap::IDENTITY,
+        motor_order: ferrowasp_flight_control::actuator::MotorOutputMap =
+            ferrowasp_flight_control::actuator::MotorOutputMap::IDENTITY,
     ],
     shared = [
         imu_data: imu::ImuData,
@@ -79,7 +79,7 @@ fn deg10(angle_deg: f32) -> i16 {
     // ICM42688P at 2 kHz and one with an MPU6500 at 1 kHz cannot share a rate
     // without one of them running on samples it has already seen.
     config = [
-        imu_control_axis_profile: ferrowasp_core::frames::ImuControlAxisProfile,
+        imu_control_axis_profile: ferrowasp_control::frames::ImuControlAxisProfile,
         imu_gyro_counts_per_dps: f32,
         logical_to_physical_motor_output: [usize; 4],
         control_loop_rate_hz: u32,
@@ -221,7 +221,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
         // The rate controller retains FCU3's historical nose-down-positive
         // pitch convention. Translate its filtered rates back to physical
         // body rates for attitude estimation and external reporting.
-        let body_rates = ferrowasp_core::frames::RATE_CONTROLLER_TO_BODY_MAP.map_f32([
+        let body_rates = ferrowasp_control::frames::RATE_CONTROLLER_TO_BODY_MAP.map_f32([
             imu_roll_filtered,
             imu_pitch_filtered,
             imu_yaw_filtered,
@@ -314,7 +314,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
             .motor_order
             .compose(CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT);
         MOTOR_OUTPUT_MAP_SNAPSHOT.store(
-            ferrowasp_core::actuator::pack_motor_map(motor_output_map),
+            ferrowasp_flight_control::actuator::pack_motor_map(motor_output_map),
             Ordering::Release,
         );
 

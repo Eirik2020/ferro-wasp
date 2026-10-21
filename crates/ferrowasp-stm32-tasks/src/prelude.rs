@@ -9,33 +9,33 @@ pub use ferrowasp_stm32f4 as backend;
 #[cfg(feature = "stm32h743")]
 pub use ferrowasp_stm32h7 as backend;
 
+pub use crate::dt;
+pub use crate::flash_task;
 pub use backend::hal_prelude::{ExtiPin, pac};
 pub use core::sync::atomic::Ordering;
 pub use defmt::{info, warn};
 pub use embedded_hal::spi::Operation;
 pub use embedded_hal_async::spi::SpiDevice as _;
 pub use embedded_io_async::Read as _;
-pub use ferrowasp_core::actuator::{remap_motor_outputs, throttle_to_u16};
-pub use ferrowasp_core::safety;
-pub use ferrowasp_core::safety::signals;
-pub use ferrowasp_drivers::icm42688p as icm;
-pub use ferrowasp_drivers::mpu6000;
-pub use ferrowasp_drivers::mpu6500 as imu;
-pub use ferrowasp_flight::actuator as actuator_task;
-pub use ferrowasp_flight::drone_toolbox as dt;
-pub use ferrowasp_flight::esc_manager as esc;
-pub use ferrowasp_flight::esc_manager::{
+pub use ferrowasp_feedback::esc_manager as esc;
+pub use ferrowasp_feedback::esc_manager::{
     DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_PREARM_STOP_HOLD_MS,
 };
-pub use ferrowasp_flight::flash_storage as flash_task;
-pub use ferrowasp_flight::osd;
-pub use ferrowasp_flight::rc_receiver::RcReceiver;
-pub use ferrowasp_io_core::serial::{Discontinuity, RxChunk, SerialFault};
-pub use ferrowasp_io_core::spi::{
+pub use ferrowasp_flight_control::actuator::{remap_motor_outputs, throttle_to_u16};
+pub use ferrowasp_icm42688p as icm;
+pub use ferrowasp_imu::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiRequestMailbox,
 };
-pub use ferrowasp_io_core::time::TimestampMicros;
+pub use ferrowasp_input::rc_receiver::RcReceiver;
+pub use ferrowasp_io_contracts::time::TimestampMicros;
+pub use ferrowasp_mpu6000 as mpu6000;
+pub use ferrowasp_mpu6500 as imu;
 pub use ferrowasp_mspv1 as mspv1;
+pub use ferrowasp_osd as osd;
+pub use ferrowasp_safety as safety;
+pub use ferrowasp_safety::actuator as actuator_task;
+pub use ferrowasp_safety::signals;
+pub use ferrowasp_serial::{Discontinuity, RxChunk, SerialFault};
 pub use ferrowasp_stm32::adc as stm32_adc;
 pub use ferrowasp_stm32::adc::Adc1ObservationDma as _;
 pub use ferrowasp_stm32::app_config::{

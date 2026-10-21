@@ -4,8 +4,10 @@
 use super::aliases::{SdFlash, Spi1ImuOwner};
 use super::manifest::Spi1ImuKind;
 use embedded_hal::delay::DelayNs;
-use ferrowasp_drivers::{icm42688p, mpu6000, mpu6500};
-use ferrowasp_io_core::serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
+use ferrowasp_icm42688p as icm42688p;
+use ferrowasp_mpu6000 as mpu6000;
+use ferrowasp_mpu6500 as mpu6500;
+use ferrowasp_serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
 use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::status_led::{LedPolarity, StatusLed};
 use ferrowasp_stm32::uart_port::{
@@ -192,7 +194,7 @@ pub fn init_sd_flash(resources: SdCardResources, clocks: &CoreClocks) -> SdFlash
     };
     backend::sd_storage::SdNor::with_write_back_from(
         slot,
-        ferrowasp_flight::flash_storage::LOG_START_ADDRESS,
+        ferrowasp_storage::layout::LOG_START_ADDRESS,
     )
 }
 

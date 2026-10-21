@@ -8,6 +8,24 @@
 #![deny(unsafe_code)]
 #![no_std]
 
+/// The flight controller's toolbox and the compact rate record it logs, under
+/// the one name the task bodies use; it goes when the tasks move into their
+/// subsystem crates.
+pub mod dt {
+    pub use ferrowasp_flight_control::drone_toolbox::*;
+    pub use ferrowasp_protocol::rate_record::*;
+}
+
+/// The storage layout, flight records, command vocabulary and stored
+/// configuration, under the one name the task bodies use; it goes when the
+/// tasks move into their subsystem crates.
+pub mod flash_task {
+    pub use ferrowasp_blackbox::records::*;
+    pub use ferrowasp_cli::commands::*;
+    pub use ferrowasp_config::stored::*;
+    pub use ferrowasp_storage::layout::*;
+}
+
 #[cfg(all(feature = "stm32f405", feature = "stm32h743"))]
 compile_error!("select one chip family: `stm32f405` or `stm32h743`");
 
@@ -15,7 +33,7 @@ compile_error!("select one chip family: `stm32f405` or `stm32h743`");
 // hold the longest one.
 const _: () = assert!(
     ferrowasp_stm32::usb_serial::USB_CDC_TX_BUFFER_BYTES
-        >= ferrowasp_flight::usb_debug::STATUS_LINE_CAPACITY
+        >= ferrowasp_cli::usb_debug::STATUS_LINE_CAPACITY
 );
 
 #[cfg(all(
@@ -102,7 +120,7 @@ pub use dshot::{dshot_dma_complete, dshot_fallback, dshot_service, service_dshot
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use esc::esc_manager_task;
 /// What a firmware was built from, for the `build` command.
-pub use ferrowasp_flight::usb_debug::BuildIdentity;
+pub use ferrowasp_cli::usb_debug::BuildIdentity;
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use flash::{

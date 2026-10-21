@@ -20,7 +20,7 @@ Run from anywhere inside the repository, or pass `--repository`:
 cargo run --release -- validate
 cargo run --release -- check
 cargo run --release -- check INPUT-001
-cargo run --release -- check ferrowasp_flight::rc_receiver
+cargo run --release -- check ferrowasp_input::rc_receiver
 ```
 
 - `validate` exits nonzero on any problem: schema, IDs, references, items
@@ -58,7 +58,7 @@ cargo run --release -- check ferrowasp_flight::rc_receiver
   them installed; and no pass may include a triggered stop condition.
 
 ```text
-cargo run --release -- record --test ferrowasp_flight::rc_receiver::tests::name --result pass
+cargo run --release -- record --test ferrowasp_input::rc_receiver::tests::name --result pass
 cargo run --release -- record --procedure "project_meta/testing/targets/foxeer-f405-v2.md#Heading" --board foxeer-f405-v2 --result pass
 ```
 
@@ -97,7 +97,7 @@ requirements:
     rationale: Stale input must never be acted on as a live command.
     derived_from: [W2]            # W1-W7 or parent requirement IDs
     allocated_to:                 # crate-qualified paths
-      - ferrowasp_flight::rc_receiver
+      - ferrowasp_input::rc_receiver
     verification:
       mode: direct                # direct | via_children | covered_by_parent | either
       entries:
@@ -105,7 +105,7 @@ requirements:
           target: host            # host | fcu | devboard
           setup: none             # none | sim | props-off
           method:
-            test: ferrowasp_flight::rc_receiver::tests::name
+            test: ferrowasp_input::rc_receiver::tests::name
         - level: bench
           target: fcu
           setup: props-off

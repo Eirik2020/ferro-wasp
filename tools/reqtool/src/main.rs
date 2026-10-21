@@ -28,7 +28,7 @@ enum Command {
     Validate,
     /// Show status: of everything, of one requirement by ID, of a governing
     /// requirement, or of the requirements allocated to an item path such as
-    /// `ferrowasp_flight::rc_receiver`.
+    /// `ferrowasp_input::rc_receiver`.
     Check { target: Option<String> },
     /// Record one run of a test or procedure: a result, at the current
     /// fingerprint, for every requirement entry that names it.

@@ -12,7 +12,7 @@ use serde::Deserialize;
 /// A package in the repository.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Crate {
-    /// The name Rust code uses, such as `ferrowasp_flight`.
+    /// The name Rust code uses, such as `ferrowasp_input`.
     pub name: String,
     pub package: String,
     /// The directory holding its `Cargo.toml`.

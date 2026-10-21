@@ -71,6 +71,14 @@ artifact is stable, airworthy, or production-ready.
   configured, or the configurator link was used in the last 2 seconds. The
   configurator's pre-arm checklist shows it as "USB unplugged".
 
+- Crate layout, again: every shared crate is now either safety-critical or not,
+  and a safety-critical crate never depends on one that is not; the check runs
+  in CI. `ferrowasp-core`, `-flight`, `-drivers`, `-pid`, `-waveform` and
+  `-io-core` are gone: their code lives in crates named for what they hold
+  (control, flight control, configuration, safety, input, feedback, output,
+  serial, IMU and one crate per sensor and protocol, with the storage,
+  blackbox, command-line, OSD and protocol crates on the non-critical side),
+  and each STM32 backend has a safety-critical half. No behaviour changed.
 - Crate layout. `ferrowasp-tasks` is now `ferrowasp-flight` (portable flight
   logic) and `ferrowasp-stm32f4-tasks` is `ferrowasp-stm32-tasks` (RTIC task
   bodies for every STM32 board). The HAL-neutral half of `ferrowasp-stm32f4`

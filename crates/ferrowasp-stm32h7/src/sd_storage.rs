@@ -430,7 +430,7 @@ where
 /// The flash manager's view: never busy, since every operation completes
 /// before it returns, and log programs held in the write-back window until
 /// a flush.
-impl<D> ferrowasp_drivers::nor_storage::NorStorage for SdNor<D>
+impl<D> ferrowasp_storage::nor_storage::NorStorage for SdNor<D>
 where
     D: BlockDevice,
 {
