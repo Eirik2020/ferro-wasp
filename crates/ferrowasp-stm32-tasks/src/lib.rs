@@ -67,6 +67,8 @@ mod flash;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod groups;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+mod observer;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod osd;
 // A convenience for task bodies; which names a body uses depends on the
 // firmware's features, so an unused one is not a mistake.
@@ -102,8 +104,8 @@ pub use adc::{adc1_polling, dma_adc1};
 pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use channels::{
-    CommandLinkChannels, EscChannels, StorageChannels, command_link_channels, esc_channels,
-    storage_channels,
+    CommandLinkChannels, EscChannels, ObserverChannels, StorageChannels, command_link_channels,
+    esc_channels, observer_channels, storage_channels,
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use cli_link::configurator_link;
@@ -129,6 +131,8 @@ pub use flash::{
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use leds::status_leds;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use observer::observer_task;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]

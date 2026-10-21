@@ -7,8 +7,9 @@ requirements:
       publish on the ledger the newest message of every `state` link and
       the last control tick, each with its producer's sequence and
       timestamp, keeping a topic's previous value when its link brought
-      nothing; forward every control tick it takes to the blackbox stream
-      in order, with its original stamp; and publish, stamped with its
+      nothing; forward every control tick marked for the log to the
+      blackbox stream in order, with its original stamp; and publish,
+      stamped with its
       run count, the control ticks missing from the sequence it read and
       the ticks the stream refused.
     rationale: >-
@@ -39,7 +40,12 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_border::observer::tests::every_control_tick_reaches_the_stream_in_order_and_the_last_is_published
+            test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::a_tick_not_marked_for_the_log_is_published_but_not_streamed
         - level: unit
           target: host
           setup: none
@@ -64,10 +70,11 @@ requirements:
   - id: BORDER-002
     title: Messages to the observer carry what their readers need
     statement: >-
-      The messages to the observer shall carry, for the control tick, the
-      loop's sequences, IMU freshness and staleness, tolerated stale
-      ticks, gyro calibration, arm state, raw and filtered rates,
-      commanded rates, PID terms, throttle, motor commands and attitude;
+      The messages to the observer shall carry, for the control tick,
+      whether the blackbox records it, the loop's sequences, IMU freshness
+      and staleness, tolerated stale ticks, gyro calibration, arm state,
+      raw, filtered and body-axis rates, commanded rates, PID terms,
+      throttle, motor commands and attitude;
       and, from their own producers, the IMU sample, the data-ready
       counts, Command Input's channels and link state, the safety
       master's arm state, the DShot lanes and replies, UART ESC
@@ -92,7 +99,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_border::observer::tests::every_control_tick_reaches_the_stream_in_order_and_the_last_is_published
+            test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
 
   - id: BORDER-003
     title: A reader sees a topic stop advancing

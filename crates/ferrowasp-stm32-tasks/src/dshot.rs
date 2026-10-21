@@ -63,6 +63,7 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
         esc_actuator_request: Option<esc::EscActuatorRequest> = None,
         esc_actuator_request_submitted: bool = false,
         esc_actuator_request_taken_ms: u64 = 0,
+        output_status_link: LinkProducer<'static, observed::OutputStatus>,
     ],
     spawn = [safety_master(event: safety::SafetyEvent)],
     config = [dshot_motor_for_output: fn(esc::EscOutput) -> dshot::DshotMotor],
@@ -82,7 +83,7 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
         && now_ms.saturating_sub(*cx.local.esc_actuator_request_taken_ms)
             >= u64::from(esc::ESC_REQUEST_EXPIRY_MS);
 
-    let (event, telemetry_sent) = cx.shared.dshot_motors.lock(|dshot| {
+    let (event, telemetry_sent, output_status) = cx.shared.dshot_motors.lock(|dshot| {
         if expired {
             if *cx.local.esc_actuator_request_submitted {
                 dshot.cancel_telemetry_request();
@@ -149,8 +150,25 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
                     }
                 });
         DSHOT_ACTIVE_LANES.store(active, Ordering::Relaxed);
-        (event, telemetry_sent)
+        // By physical ESC output, as the `esc` command reports it.
+        let stats = dshot.reply_stats();
+        let mut output_status = observed::OutputStatus {
+            active_lanes: active,
+            ..observed::OutputStatus::default()
+        };
+        for output in esc::EscOutput::ALL {
+            let lane = CONFIG::DSHOT_MOTOR_FOR_OUTPUT(output).index();
+            let slot = output.index();
+            output_status.reply_erpm_div100[slot] = cx.local.reply_erpm_div100[lane];
+            output_status.replies_valid[slot] = stats.valid[lane];
+            output_status.replies_invalid[slot] = stats.invalid[lane];
+        }
+        (event, telemetry_sent, output_status)
     });
+    cx.local.output_status_link.push(
+        TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+        output_status,
+    );
     if let (Some(request), Some(sent_motor)) = (*cx.local.esc_actuator_request, telemetry_sent) {
         if sent_motor == CONFIG::DSHOT_MOTOR_FOR_OUTPUT(request.output) {
             let ack = esc::EscActuatorAck {

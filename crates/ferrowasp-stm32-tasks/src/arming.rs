@@ -47,6 +47,15 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
     }
 }
 
+/// Tell the observer the arm state, after every change to it.
+fn report_arm_state(
+    link: &mut LinkProducer<'static, observed::SafetyStatus>,
+    now_us: u64,
+    armed: bool,
+) {
+    link.push(TimestampMicros(now_us), observed::SafetyStatus { armed });
+}
+
 /// Handle one safety event. Priority is the firmware's, and is the highest
 /// software priority in the flight apps, so no other task preempts a
 /// decision.
@@ -71,6 +80,7 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         // When a bench motor request was last accepted, in milliseconds
         // since boot; arming is refused for a short while after it.
         last_bench_request_ms: Option<u64> = None,
+        safety_status_link: LinkProducer<'static, observed::SafetyStatus>,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
@@ -89,11 +99,13 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
     let link_invalidator = cx.local.rc_link_invalidator;
     let arm_permit = cx.local.actuator_arm_permit_writer;
     let actuator_done = cx.local.actuator_arm_done_reader;
+    let status_link = cx.local.safety_status_link;
     let now_us = Mono::now().duration_since_epoch().to_micros();
 
     match event {
         safety::SafetyEvent::ArmRequested => {
             system_arm.disarm();
+            report_arm_state(status_link, now_us, system_arm.is_armed());
 
             if safety::bench_blocks_arming(*cx.local.last_bench_request_ms, now_us / 1_000) {
                 arm_permit.revoke();
@@ -144,6 +156,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
             {
                 arm_permit.revoke();
                 system_arm.arm();
+                report_arm_state(status_link, now_us, system_arm.is_armed());
                 if CONFIG::BENCH_ACTUATOR_VALIDATION_ENABLED {
                     warn!("SYSTEM ARMED FOR CAPPED ACTUATOR VALIDATION");
                 } else {
@@ -152,6 +165,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
             } else {
                 arm_permit.revoke();
                 system_arm.disarm();
+                report_arm_state(status_link, now_us, system_arm.is_armed());
 
                 let _ = cx.spawn.actuator_output(safety::ActuatorCmd::Disarm);
                 warn!("ARM FAILED after actuator idle");
@@ -168,12 +182,14 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 return;
             }
             system_arm.disarm();
+            report_arm_state(status_link, now_us, system_arm.is_armed());
             warn_arming_abort(reason);
         }
 
         safety::SafetyEvent::DisarmRequested => {
             let arming_active = arm_permit.revoke();
             system_arm.disarm();
+            report_arm_state(status_link, now_us, system_arm.is_armed());
             info!("SYSTEM DISARMED");
 
             if cx
@@ -219,6 +235,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
             }
             let arming_active = arm_permit.revoke();
             system_arm.disarm();
+            report_arm_state(status_link, now_us, system_arm.is_armed());
 
             if cx
                 .spawn

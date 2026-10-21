@@ -43,9 +43,95 @@ pub fn esc_channels() -> EscChannels {
     }
 }
 
-/// The flash manager's queues: records from the control loop, the USB
-/// command line's commands and responses, and the MSPv2 RPC queues (`()`
-/// without the MSPv2 configurator).
+/// The control tick link holds 8 ms of ticks at 2 kHz, eight observer runs.
+const CONTROL_TICK_LINK_DEPTH: usize = 17;
+/// Every `state` link holds four messages, two observer runs at the fastest
+/// producer's 2 kHz.
+const STATE_LINK_DEPTH: usize = 5;
+
+/// The observer and the producing end of every link into it (section 10):
+/// each producer's end is a local resource of that task alone. The
+/// blackbox stream's consuming end is the flash manager's.
+pub struct ObserverChannels {
+    pub observer: ferrowasp_border::observer::Observer<'static>,
+    pub control_tick_link: LinkProducer<'static, observed::ControlTick>,
+    pub imu_status_link: LinkProducer<'static, observed::ImuStatus>,
+    pub drdy_status_link: LinkProducer<'static, observed::DrdyStatus>,
+    pub rc_status_link: LinkProducer<'static, observed::RcStatus>,
+    pub safety_status_link: LinkProducer<'static, observed::SafetyStatus>,
+    pub output_status_link: LinkProducer<'static, observed::OutputStatus>,
+    pub esc_status_link: LinkProducer<'static, observed::EscStatus>,
+    pub battery_status_link: LinkProducer<'static, observed::BatteryStatus>,
+    pub storage_status_link: LinkProducer<'static, observed::StorageStatus>,
+    pub blackbox_stream: LinkConsumer<'static, observed::ControlTick>,
+}
+
+/// Create the observer's links around `stream`, the blackbox stream, which
+/// the board sizes to ride out its storage's longest write stall. Call once.
+pub fn observer_channels<const N: usize>(
+    stream: &'static mut heapless::spsc::Queue<Stamped<observed::ControlTick>, N>,
+) -> ObserverChannels {
+    use ferrowasp_io_contracts::link::link;
+    use heapless::spsc::Queue;
+
+    macro_rules! state_link {
+        ($message:ty) => {
+            link(
+                cortex_m::singleton!(
+                    : Queue<Stamped<$message>, STATE_LINK_DEPTH> = Queue::new()
+                )
+                .unwrap(),
+            )
+        };
+    }
+
+    let (control_tick_link, control) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<observed::ControlTick>, CONTROL_TICK_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    let (imu_status_link, imu) = state_link!(observed::ImuStatus);
+    let (drdy_status_link, drdy) = state_link!(observed::DrdyStatus);
+    let (rc_status_link, rc) = state_link!(observed::RcStatus);
+    let (safety_status_link, safety) = state_link!(observed::SafetyStatus);
+    let (output_status_link, output) = state_link!(observed::OutputStatus);
+    let (esc_status_link, esc) = state_link!(observed::EscStatus);
+    let (battery_status_link, battery) = state_link!(observed::BatteryStatus);
+    let (storage_status_link, storage) = state_link!(observed::StorageStatus);
+    let (stream_producer, blackbox_stream) = link(stream);
+    ObserverChannels {
+        observer: ferrowasp_border::observer::Observer::new(
+            ferrowasp_border::observer::ObserverLinks {
+                control,
+                imu,
+                drdy,
+                rc,
+                safety,
+                output,
+                esc,
+                battery,
+                storage,
+            },
+            stream_producer,
+        ),
+        control_tick_link,
+        imu_status_link,
+        drdy_status_link,
+        rc_status_link,
+        safety_status_link,
+        output_status_link,
+        esc_status_link,
+        battery_status_link,
+        storage_status_link,
+        blackbox_stream,
+    }
+}
+
+/// The flash manager's queues: its own staging of flight records between
+/// the blackbox stream and the log writer, the USB command line's commands
+/// and responses, and the MSPv2 RPC queues (`()` without the MSPv2
+/// configurator).
 pub struct StorageChannels {
     pub flash_record_producer: flash_task::RecordProducer,
     pub flash_record_consumer: flash_task::RecordConsumer,
@@ -59,11 +145,10 @@ pub struct StorageChannels {
     pub flash_rpc_response_consumer: FlashRpcResponseConsumer,
 }
 
-/// Create the flash manager's queues around `records`, which the board
-/// sizes to ride out its storage's longest write stall. Call once.
-pub fn storage_channels<const N: usize>(
-    records: &'static mut flash_task::RecordQueue<N>,
-) -> StorageChannels {
+/// Create the flash manager's queues. Call once.
+pub fn storage_channels() -> StorageChannels {
+    let records =
+        cortex_m::singleton!(: flash_task::RecordQueue = flash_task::RecordQueue::new()).unwrap();
     let (flash_record_producer, flash_record_consumer) = records.split();
     let commands =
         cortex_m::singleton!(: flash_task::CommandQueue = flash_task::CommandQueue::new()).unwrap();

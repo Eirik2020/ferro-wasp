@@ -6,9 +6,22 @@
 
 use crate::prelude::*;
 
+/// What RC input last reported to the observer, and its link there.
+struct RcReport<'a> {
+    link: &'a mut LinkProducer<'static, observed::RcStatus>,
+    status: &'a mut observed::RcStatus,
+}
+
+impl RcReport<'_> {
+    fn send(&mut self, at: TimestampMicros) {
+        self.link.push(at, *self.status);
+    }
+}
+
 /// Carries out a fault's response (`safety::rc_fault_response`): report the
 /// invalidation to the safety master, drop any partial frame if bytes were
-/// lost, and neutralize the outputs.
+/// lost, and neutralize the outputs; the observer sees the link invalid and
+/// the outputs neutral, with the last frame's channels.
 #[allow(clippy::too_many_arguments)]
 fn respond_to_fault(
     fault: safety::RcInputFault,
@@ -18,6 +31,8 @@ fn respond_to_fault(
     throttle: &signals::RcThrottleWriter,
     arm_high: &signals::RcArmHighWriter,
     reported_valid: &mut bool,
+    observed: &mut RcReport<'_>,
+    at: TimestampMicros,
     report: impl FnOnce(safety::SafetyEvent),
 ) -> safety::RcFaultResponse {
     let response = safety::rc_fault_response(fault);
@@ -27,6 +42,11 @@ fn respond_to_fault(
     }
     safety::neutralize_rc_outputs(arm_qualifier, rates, throttle, arm_high);
     *reported_valid = false;
+    *observed.status = observed::RcStatus {
+        channels_us: observed.status.channels_us,
+        ..observed::RcStatus::default()
+    };
+    observed.send(at);
     response
 }
 
@@ -59,6 +79,15 @@ fn respond_to_fault(
         rc_link_frame_writer: signals::RcLinkFrameWriter,
         rc_link_reported_valid: bool = false,
         rc_link_reported_invalidation_seq: u32 = 0,
+        rc_status_link: LinkProducer<'static, observed::RcStatus>,
+        rc_status: observed::RcStatus = observed::RcStatus {
+            channels_us: [0; 16],
+            valid: false,
+            armable: false,
+            arm_high: false,
+            throttle: 0,
+            rates_dps: [0; 3],
+        },
     ],
     shared = [tuning_profile: dt::TuningProfile],
     spawn = [safety_master(event: safety::SafetyEvent)],
@@ -69,6 +98,11 @@ pub async fn rc_input(mut cx: rc_input::Context) {
         warn!("RC input has no serial port bound; the RC link stays invalid");
         return;
     };
+    let mut observed = RcReport {
+        link: cx.local.rc_status_link,
+        status: cx.local.rc_status,
+    };
+    let now = || TimestampMicros(Mono::now().duration_since_epoch().to_micros());
     loop {
         let mut bytes = [0; stm32_uart::UART_RX_BUFFER_SIZE];
         let read_len = match port.reader.read(&mut bytes).await {
@@ -82,6 +116,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     cx.local.rc_throttle_writer,
                     cx.local.rc_arm_high_writer,
                     cx.local.rc_link_reported_valid,
+                    &mut observed,
+                    now(),
                     |event| {
                         let _ = cx.spawn.safety_master(event);
                     },
@@ -105,6 +141,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 cx.local.rc_throttle_writer,
                 cx.local.rc_arm_high_writer,
                 cx.local.rc_link_reported_valid,
+                &mut observed,
+                now(),
                 |event| {
                     let _ = cx.spawn.safety_master(event);
                 },
@@ -127,6 +165,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                         cx.local.rc_throttle_writer,
                         cx.local.rc_arm_high_writer,
                         cx.local.rc_link_reported_valid,
+                        &mut observed,
+                        now(),
                         |event| {
                             let _ = cx.spawn.safety_master(event);
                         },
@@ -144,6 +184,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     cx.local.rc_throttle_writer,
                     cx.local.rc_arm_high_writer,
                     cx.local.rc_link_reported_valid,
+                    &mut observed,
+                    now(),
                     |event| {
                         let _ = cx.spawn.safety_master(event);
                     },
@@ -164,6 +206,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     cx.local.rc_throttle_writer,
                     cx.local.rc_arm_high_writer,
                     cx.local.rc_link_reported_valid,
+                    &mut observed,
+                    now(),
                     |event| {
                         let _ = cx.spawn.safety_master(event);
                     },
@@ -176,6 +220,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     Ordering::Relaxed,
                 );
             }
+            observed.status.channels_us =
+                frame.channels.map(ferrowasp_input::rc_receiver::channel_us);
             let sticks = rc_map.sticks(&frame.channels);
             let rc_cmd = dt::remap_rc_channels_with_profile(
                 sticks.roll,
@@ -205,6 +251,16 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 *cx.local.rc_link_reported_valid = true;
                 info!("RC link valid after healthy-frame qualification");
             }
+            observed.status.valid = link.valid;
+            observed.status.armable = link.armable;
+            observed.status.arm_high = arm_high;
+            observed.status.throttle = rc_cmd.throttle;
+            observed.status.rates_dps = [
+                rc_cmd.roll_dps as i16,
+                rc_cmd.pitch_dps as i16,
+                rc_cmd.yaw_dps as i16,
+            ];
+            observed.send(TimestampMicros(now_us));
 
             if !link.valid || (arm_high && !link.armable) {
                 cx.local.arm_qualifier.reset();

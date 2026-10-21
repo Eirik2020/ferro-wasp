@@ -37,7 +37,7 @@ pub type IoWatchdog = board::aliases::IoWatchdog;
 /// Foxeer's unchanged.
 pub type FlashDevice = board::aliases::SdFlash;
 
-/// Blackbox records queued between the control loop and the SD card: half a
+/// Logged control ticks queued between the observer and the SD card: half a
 /// second at 2 kHz. A card may hold a write busy for up to 250 ms; the 64
-/// records that suit SPI NOR lost a quarter of a full-rate log here.
-pub const BLACKBOX_RECORD_QUEUE_CAPACITY: usize = 1024;
+/// that suit SPI NOR lost a quarter of a full-rate log here.
+pub const BLACKBOX_STREAM_CAPACITY: usize = 1024;

@@ -41,12 +41,14 @@ pub async fn adc1_polling(mut cx: adc1_polling::Context) {
         adc1_planner: stm32_adc::AdcDmaIrqPlanner = stm32_adc::AdcDmaIrqPlanner::new(),
         battery_cell_detector: osd::BatteryCellDetector,
         battery_voltage_init_logged: bool = false,
+        battery_status_link: LinkProducer<'static, observed::BatteryStatus>,
     ],
     config = [
         adc_vbat_divider_ratio: f32,
         adc_current_betaflight_scale: u32,
         adc_current_offset_ma: i32,
     ],
+    monotonic = Mono,
 )]
 pub fn dma_adc1(mut cx: dma_adc1::Context) {
     let sample = match cx.shared.adc1_transfer.lock(|transfer| {
@@ -101,6 +103,17 @@ pub fn dma_adc1(mut cx: dma_adc1::Context) {
     cx.shared
         .battery_current_ca
         .lock(|battery_current_ca| *battery_current_ca = current_ca);
+    cx.local.battery_status_link.push(
+        TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+        observed::BatteryStatus {
+            voltage_dv: u16::from(battery_voltage_v10),
+            cell_count,
+            cell_voltage_cv: cell_voltage_v100,
+            current_ca,
+            voltage_pin_mv: sample.voltage_mv as u32,
+            current_pin_mv: sample.current_mv as u32,
+        },
+    );
 
     if !*cx.local.battery_voltage_init_logged {
         let pack_v10 = (pack_mv + 50) / 100;

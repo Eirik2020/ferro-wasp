@@ -19,6 +19,11 @@ use crate::snapshots::SAFETY_ARMED;
         esc_ack_consumer: esc::EscAckConsumer,
         esc_telemetry_update_producer: esc::EscTelemetryUpdateProducer,
         report_ticks: u16 = 0,
+        esc_status_link: LinkProducer<'static, observed::EscStatus>,
+        esc_status: observed::EscStatus = observed::EscStatus {
+            erpm_div100: [None; 4],
+            seen_ms: [0; 4],
+        },
     ],
     config = [esc_output_to_logical_motor: [u8; 4]],
     monotonic = Mono,
@@ -39,7 +44,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
             if let esc::EscAckOutcome::Sample(update) =
                 cx.local.esc_manager_state.on_actuator_ack(ack)
             {
-                publish_uart_sample(&update, now_ms);
+                publish_uart_sample(&update, now_ms, cx.local.esc_status);
                 let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
             }
         }
@@ -54,7 +59,7 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
             }
             for byte in &bytes[..read_len] {
                 if let Some(update) = cx.local.esc_manager_state.push_wire_byte(*byte, now_ms) {
-                    publish_uart_sample(&update, now_ms);
+                    publish_uart_sample(&update, now_ms, cx.local.esc_status);
                     let _ = cx.local.esc_telemetry_update_producer.enqueue(update);
                 }
             }
@@ -91,6 +96,11 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
                 retries
             );
         }
+
+        cx.local.esc_status_link.push(
+            TimestampMicros(release.duration_since_epoch().to_micros()),
+            *cx.local.esc_status,
+        );
 
         if let Some(request) = cx.local.esc_manager_state.next_request(now_ms)
             && cx.local.esc_request_producer.enqueue(request).is_ok()
@@ -143,8 +153,15 @@ pub async fn esc_manager_task(cx: esc_manager_task::Context) {
 }
 
 /// Records a UART sample for the `esc` command, by physical output.
-fn publish_uart_sample(update: &esc::EscTelemetryUpdate, now_ms: u64) {
+fn publish_uart_sample(
+    update: &esc::EscTelemetryUpdate,
+    now_ms: u64,
+    status: &mut observed::EscStatus,
+) {
     let index = update.output.index();
+    status.erpm_div100[index] = Some(u32::from(update.observation.sample.erpm_div100));
+    // Wrapping milliseconds: readers report a difference only.
+    status.seen_ms[index] = now_ms as u32;
     crate::snapshots::ESC_UART_ERPM_DIV100[index].store(
         u32::from(update.observation.sample.erpm_div100),
         Ordering::Relaxed,

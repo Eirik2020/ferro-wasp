@@ -107,6 +107,20 @@ pub mod prelude {
     pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
     pub type UsbDebugDevice = crate::prelude::backend::usb_serial::UsbCdcDevice;
     pub type UsbDebugSerial = crate::prelude::backend::usb_serial::BufferedUsbCdcSerial;
+    pub use ferrowasp_border::observer::Ledger;
+    pub use ferrowasp_boundary_contracts::messages as observed;
+    pub use ferrowasp_boundary_contracts::topics::Identity;
+    pub use ferrowasp_io_contracts::link::Stamped;
+    /// The producing end of one task's link into the observer.
+    pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
+    pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
+    /// The blackbox stream's consuming end, the flash manager's.
+    pub type BlackboxStream =
+        ferrowasp_io_contracts::link::LinkConsumer<'static, observed::ControlTick>;
+    /// The blackbox stream's queue, which a board sizes to ride out its
+    /// storage's longest write stall.
+    pub type BlackboxStreamQueue<const N: usize> =
+        heapless::spsc::Queue<Stamped<observed::ControlTick>, N>;
     pub type FlashRecordProducer = flash_task::RecordProducer;
     pub type FlashRecordConsumer = flash_task::RecordConsumer;
     pub type FlashCommandProducer = flash_task::CommandProducer;

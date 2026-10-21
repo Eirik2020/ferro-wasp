@@ -17,6 +17,8 @@ pub use defmt::{info, warn};
 pub use embedded_hal::spi::Operation;
 pub use embedded_hal_async::spi::SpiDevice as _;
 pub use embedded_io_async::Read as _;
+pub use ferrowasp_border::observer::Ledger;
+pub use ferrowasp_boundary_contracts::messages as observed;
 pub use ferrowasp_feedback::esc_manager as esc;
 pub use ferrowasp_feedback::esc_manager::{
     DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_PREARM_STOP_HOLD_MS,
@@ -27,6 +29,7 @@ pub use ferrowasp_imu::spi::{
     AsyncSpiDevice, CriticalSectionSpiExecutor, SharedSpiRequestMailbox, SpiRequestMailbox,
 };
 pub use ferrowasp_input::rc_receiver::RcReceiver;
+pub use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
 pub use ferrowasp_io_contracts::time::TimestampMicros;
 pub use ferrowasp_mpu6000 as mpu6000;
 pub use ferrowasp_mpu6500 as imu;

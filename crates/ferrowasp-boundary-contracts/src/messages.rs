@@ -4,12 +4,15 @@
 //! link, so a change here changes that producer.
 //!
 //! The control tick travels over an `event` link, because the blackbox logs
-//! every tick; every other message over a `state` link, whose newest message
-//! is all the observer keeps.
+//! every tick marked for it; every other message over a `state` link, whose
+//! newest message is all the observer keeps.
 
 /// One control-loop tick: what the loop measured, commanded and decided.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ControlTick {
+    /// The blackbox records this tick: an armed tick that reached the
+    /// mixer, or any tick of a bench image that logs while disarmed.
+    pub logged: bool,
     /// The rate loop's tick count, the blackbox's control sequence.
     pub control_seq: u32,
     /// Control-timer interrupts since boot, whether or not the loop ran.
@@ -29,6 +32,8 @@ pub struct ControlTick {
     /// per second.
     pub raw_gyro_dps: [f32; 3],
     pub filtered_gyro_dps: [f32; 3],
+    /// The filtered rates in the body's axes, degrees per second.
+    pub body_rates_dps: [f32; 3],
     /// The commanded rates, degrees per second.
     pub command_dps: [f32; 3],
     pub pid: [f32; 3],

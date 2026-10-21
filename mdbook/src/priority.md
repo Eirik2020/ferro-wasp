@@ -20,6 +20,7 @@ can delay flight work.
 | 10 | `rc_input` | SW | Decodes the receiver and qualifies the RC link. |
 | 9 | `io_watchdog` | HW (timer) | Recovers a stalled SPI transfer. |
 | 8 | `esc_manager_task` | SW | Polls ESC telemetry over its return line. |
+| 7 | `observer_task` | SW | Publishes the craft's state on the read-only ledger the tasks below read, and streams logged control ticks to the blackbox. |
 | 5 | `usb_fs` | HW | The USB command line and status. |
 | 3 | `osd_refresh`, `configurator_link` | SW | The MSP OSD; the command line on a UART. |
 | 1 | `flash_manager_task`, `heartbeat`, `rc_telemetry`, ADC | SW, HW | Storage and the blackbox, diagnostics, receiver telemetry, battery sensing. |
