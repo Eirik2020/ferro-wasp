@@ -69,8 +69,8 @@ pub mod prelude {
     };
     #[cfg(feature = "mspv2_configurator")]
     pub use crate::app::{fixed_bytes, handle_msp_packet, stage_rpc_response};
-    pub use crate::inbound::host_connected;
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
+    pub use ferrowasp_border::inbound::host_connected;
 
     pub type SerialPortEndpoint = stm32_port::SerialPortEndpoint;
     pub type EscManagerState = esc::EscManager;

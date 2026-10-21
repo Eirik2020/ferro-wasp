@@ -33,10 +33,10 @@ pub mod flight {
     pub use crate::esc_manager_task;
     pub use crate::flash_manager_task;
     pub use crate::heartbeat;
-    pub use crate::observer_task;
     pub use crate::osd_refresh;
     pub use crate::rc_input;
     pub use crate::rc_telemetry;
     pub use crate::safety_master;
     pub use crate::usb_fs;
+    pub use ferrowasp_border::tasks::observer_task;
 }

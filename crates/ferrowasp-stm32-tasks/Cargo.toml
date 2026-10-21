@@ -51,7 +51,7 @@ embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io-async = { workspace = true }
 ferrowasp-blackbox = { path = "../ferrowasp-blackbox" }
-ferrowasp-border = { path = "../ferrowasp-border" }
+ferrowasp-border = { path = "../ferrowasp-border", features = ["tasks"] }
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
 ferrowasp-cli = { path = "../ferrowasp-cli" }
 ferrowasp-config = { path = "../ferrowasp-config" }

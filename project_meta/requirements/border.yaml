@@ -140,3 +140,45 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count
+
+  - id: BORDER-004
+    title: The inbound values read back as they were written
+    statement: >-
+      Until the coordinator takes them in, the stored accelerometer level
+      shall read back as last published, and a computer shall count as
+      connected while either the USB host flag or the configurator-link
+      flag is set.
+    rationale: >-
+      These are the values non-critical tasks hand the safety-critical side
+      without the coordinator (ADR-0065); the arming guard refuses while a
+      computer is connected (ADR-0042), and the attitude estimate subtracts
+      the level. Kept beside the coordinator so the control loop reads them
+      from a safety-critical crate.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_border::inbound
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
+
+  - id: BORDER-005
+    title: The observer runs every millisecond below the core
+    statement: >-
+      The observer task shall run the observer once a millisecond on
+      absolute deadlines, so its cadence does not drift, and shall hold the
+      ledger's lock only for the run, at the firmware's border priority.
+    rationale: >-
+      Readers' stall limits and every link's depth assume a 1 ms observer
+      (section 10); a run longer than that, or a priority above the core,
+      would break both. Its evidence is on the board, not yet recorded.
+    derived_from: [BORDER-001]
+    allocated_to:
+      - ferrowasp_border::tasks
+    verification:
+      mode: direct
+      entries: []

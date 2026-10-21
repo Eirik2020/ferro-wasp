@@ -359,8 +359,13 @@ dependencies = [
 name = "ferrowasp-border"
 version = "0.1.0"
 dependencies = [
+ "ferroforge",
  "ferrowasp-boundary-contracts",
+ "ferrowasp-control",
  "ferrowasp-io-contracts",
+ "fugit",
+ "rtic",
+ "rtic-monotonics",
 ]
 
 [[package]]

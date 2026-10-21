@@ -6,8 +6,8 @@
 //! other's replies. Motor commands and the unconditional log erase stay on
 //! USB: a Bluetooth module can be paired by anyone in range.
 
-use crate::inbound::CONFIGURATOR_LINK_ACTIVE;
 use crate::prelude::*;
+use ferrowasp_border::inbound::CONFIGURATOR_LINK_ACTIVE;
 
 /// Answers leave in whole transmit chunks. The last chunk of a burst is
 /// padded with NUL bytes, which a host skips.

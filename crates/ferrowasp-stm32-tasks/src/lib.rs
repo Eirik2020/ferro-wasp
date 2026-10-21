@@ -67,14 +67,11 @@ mod flash;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod groups;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod observer;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod osd;
 // A convenience for task bodies; which names a body uses depends on the
 // firmware's features, so an unused one is not a mistake.
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod app;
-pub mod inbound;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod leds;
 #[allow(unused_imports)]
@@ -123,6 +120,8 @@ pub use diagnostics::heartbeat;
 pub use dshot::{dshot_dma_complete, dshot_fallback, dshot_service, service_dshot_dma_irq};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use esc::esc_manager_task;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_border::tasks::observer_task;
 /// What a firmware was built from, for the `build` command.
 pub use ferrowasp_cli::usb_debug::BuildIdentity;
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
@@ -133,8 +132,6 @@ pub use flash::{
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use leds::status_leds;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use observer::observer_task;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]

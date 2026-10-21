@@ -7,10 +7,10 @@ use crate::app::{
 };
 #[cfg(feature = "mspv2_configurator")]
 use crate::app::{handle_msp_packet, stage_rpc_response};
-use crate::inbound::USB_HOST_CONNECTED;
 use crate::prelude::backend::usb_serial::{BufferedUsbCdcSerial, UsbCdcDevice, UsbDeviceState};
 use crate::prelude::*;
 use core::sync::atomic::AtomicBool;
+use ferrowasp_border::inbound::USB_HOST_CONNECTED;
 
 /// The heartbeat sets it every two seconds, and the USB task writes a status
 /// line and clears it; both are non-critical.

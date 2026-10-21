@@ -3,13 +3,13 @@
 //! for every board, over any store with NOR semantics; a board supplies its
 //! store and its defaults.
 
-use crate::inbound::publish_accel_level;
 use crate::prelude::*;
 use core::fmt::Write as _;
 use ferrowasp_blackbox::log_writer::{LogWriter, PageWrite};
 use ferrowasp_blackbox::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
+use ferrowasp_border::inbound::publish_accel_level;
 use ferrowasp_cli::command_link::{CommandLink, CommandSources, ResponseRouter};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_cli::commands::StoredConfigRpc;
