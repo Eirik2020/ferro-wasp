@@ -73,9 +73,8 @@ pub mod prelude {
     pub use crate::snapshots::{
         ACTIVE_IMU_KIND, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE, FLASH_JEDEC_MANUFACTURER,
         FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN, FLASH_READY,
-        FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_BIAS_CALIBRATED, IMU_LATEST_PITCH_RAW,
-        IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY,
-        RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED, USB_DEBUG_DUE, USB_HOST_CONNECTED, host_connected,
+        FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_TRANSPORT_READY, RC_ARM_HIGH, RC_THROTTLE,
+        SAFETY_ARMED, USB_DEBUG_DUE, USB_HOST_CONNECTED, host_connected,
     };
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 
@@ -101,6 +100,9 @@ pub mod prelude {
     /// The producing end of one task's link into the observer.
     pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
     pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
+    pub use ferrowasp_io_contracts::imu::ImuSample;
+    /// The control loop's end of the IMU sample link.
+    pub type ImuSampleConsumer = ferrowasp_io_contracts::link::LinkConsumer<'static, ImuSample>;
     /// The blackbox stream's consuming end, the flash manager's.
     pub type BlackboxStream =
         ferrowasp_io_contracts::link::LinkConsumer<'static, observed::ControlTick>;
@@ -565,18 +567,15 @@ macro_rules! flight_app_facade {
             rc_link_armable: bool,
             arm_high: bool,
             throttle: u32,
+            imu: Option<safety::prearm::ImuPreArmStatus>,
         ) -> Result<(), safety::ArmingAbortReason> {
             safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
-            safety::validate_prearm_health(safety::PreArmHealth {
-                host_connected: host_connected(),
-                imu_ready: IMU_TRANSPORT_READY.load(Ordering::Acquire)
-                    && Spi1ImuKind::from_discriminant(ACTIVE_IMU_KIND.load(Ordering::Acquire))
-                        .is_some_and(imu_kind_flight_verified)
-                    && IMU_LATEST_SEQ.load(Ordering::Acquire) != 0,
-                imu_bias_calibrated: IMU_BIAS_CALIBRATED.load(Ordering::Acquire),
-                imu_fresh: !cfg!(feature = "bench_prearm_imu_stale")
-                    && !IMU_STALE.load(Ordering::Acquire),
-            })
+            safety::validate_prearm_health(safety::prearm::prearm_health(
+                imu,
+                host_connected(),
+                |kind| Spi1ImuKind::from_discriminant(kind).is_some_and(imu_kind_flight_verified),
+                cfg!(feature = "bench_prearm_imu_stale"),
+            )?)
         }
 
         pub const fn dshot_motor_for_output(output: esc::EscOutput) -> board::init::DshotMotor {

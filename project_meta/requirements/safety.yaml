@@ -190,3 +190,45 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
+
+  - id: SAFETY-005
+    title: The pre-arm checks use only a recent IMU status from the control loop
+    statement: >-
+      Each pre-arm check shall keep the newest IMU status from the control
+      loop's link to it and use it only while it is younger than 10 ms;
+      with none, arming shall be refused as the control loop's status being
+      stale. A status shall make the IMU unavailable unless its transport
+      configured, its kind may fly on the board and a sample has arrived;
+      uncalibrated while its gyro bias is not calibrated; and stale while
+      it is stale or the fault-injection image forces it.
+    rationale: >-
+      Nothing yet tells a pre-arm check that the control loop is still
+      running, so a flag it wrote could read as healthy after it stopped
+      (section 9); a status that stops arriving must read as none.
+    derived_from: [SAFETY-003]
+    allocated_to:
+      - ferrowasp_safety::prearm
+      - ferrowasp_safety::ArmingAbortReason::ControlStatusStale
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::prearm::tests::no_status_before_the_first_arrives
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::prearm::tests::the_newest_status_stands_until_it_is_too_old
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::prearm::tests::no_status_refuses_arming_and_a_status_gives_its_health
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::prearm::tests::each_status_field_maps_to_its_refusal

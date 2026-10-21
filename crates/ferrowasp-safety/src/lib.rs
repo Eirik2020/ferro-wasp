@@ -10,6 +10,7 @@
 
 pub mod actuator;
 pub mod arming;
+pub mod prearm;
 
 pub const ARM_HOLD_US: u64 = 200_000;
 pub const ARM_THRESHOLD: u16 = 1500;
@@ -211,6 +212,9 @@ pub enum ArmingAbortReason {
     ImuUnavailable,
     ImuBiasUncalibrated,
     ImuStale,
+    /// No IMU status from the control loop within its age limit: the loop
+    /// has not reported, or has stopped.
+    ControlStatusStale,
     /// A USB host or the configurator link is connected; the craft does not
     /// arm on the bench cable.
     HostConnected,

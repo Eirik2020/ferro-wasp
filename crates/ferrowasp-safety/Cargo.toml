@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 critical-section = { workspace = true }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 heapless = { workspace = true }
 
 [dev-dependencies]

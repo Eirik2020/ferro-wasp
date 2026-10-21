@@ -37,7 +37,6 @@ ferroforge::app! {
         uart4_tx_dma: Option<board::aliases::Uart4TxDmaSide>,
 
         // IMU
-        imu_data: imu::ImuData,
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
 
@@ -165,6 +164,21 @@ ferroforge::app! {
 
         rc_rates_writer: RcRatesWriter,
         rc_rates_reader: RcRatesReader,
+
+        // The IMU's sample to the control loop, and the control loop's IMU
+        // status to each pre-arm check; and the IMU's boot facts, copied to
+        // each task that needs them.
+        imu_sample_link: ObserverLink<ImuSample>,
+        imu_sample_consumer: ImuSampleConsumer,
+        safety_prearm_link: ObserverLink<safety::prearm::ImuPreArmStatus>,
+        actuator_prearm_link: ObserverLink<safety::prearm::ImuPreArmStatus>,
+        safety_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+        actuator_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+        imu_transport_ready: bool,
+        control_imu_ready: bool,
+        control_imu_kind: u8,
+        poll_imu_kind: u8,
+        parser_imu_kind: u8,
 
         // The observer and each producer's link into it; every end is a
         // local resource of its one task.
@@ -418,6 +432,16 @@ ferroforge::app! {
             )
             .unwrap(),
         );
+        let flight_tasks::ImuChannels {
+            imu_sample_link,
+            imu_sample_consumer,
+            safety_prearm_link,
+            safety_imu_prearm,
+            actuator_prearm_link,
+            actuator_imu_prearm,
+        } = flight_tasks::imu_channels();
+        let imu_ready = spi1_imu.bringup.is_ready();
+        let imu_kind = spi1_imu.bringup.kind().map_or(0, |kind| kind as u8);
         let identity = Identity {
             imu_ready: IMU_TRANSPORT_READY.load(Ordering::Relaxed),
             imu_kind: ACTIVE_IMU_KIND.load(Ordering::Relaxed),
@@ -694,7 +718,6 @@ ferroforge::app! {
                 ledger: Ledger::new(identity),
 
                 // IMU
-                imu_data: imu::ImuData::default(), // all values are zero
                 tuning_profile,
                 tuning_request_seq: 0,
 
@@ -820,6 +843,19 @@ ferroforge::app! {
                 rc_rates_writer,
                 rc_rates_reader,
 
+                // IMU links and boot facts
+                imu_sample_link,
+                imu_sample_consumer,
+                safety_prearm_link,
+                actuator_prearm_link,
+                safety_imu_prearm,
+                actuator_imu_prearm,
+                imu_transport_ready: imu_ready,
+                control_imu_ready: imu_ready,
+                control_imu_kind: imu_kind,
+                poll_imu_kind: imu_kind,
+                parser_imu_kind: imu_kind,
+
                 // Observer
                 observer,
                 control_tick_link,
@@ -850,7 +886,7 @@ ferroforge::app! {
             // safety_master
             safety_rc_arm_high_reader, safety_rc_throttle_reader, safety_rc_link_reader,
             safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
-            actuator_arm_done_reader, safety_status_link,
+            actuator_arm_done_reader, safety_status_link, safety_imu_prearm,
             // usb_fs
             usb_dev, usb_serial, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
@@ -865,6 +901,8 @@ ferroforge::app! {
             imu_last_sequence, imu_stale_ticks, applied_tuning_seq, rc_rates_reader,
             control_throttle_reader, control_safety_arm_reader, control_rc_link_reader,
             control_arm_permit_reader, motor_cmd_writer, motor_cmd_seq, control_tick_link,
+            imu_sample_consumer, safety_prearm_link, actuator_prearm_link, control_imu_ready,
+            control_imu_kind,
             // dshot_service
             esc_request_consumer, esc_ack_producer, output_status_link,
             // esc_manager_task
@@ -873,7 +911,7 @@ ferroforge::app! {
             // actuator_output
             actuator_safety_arm_reader, actuator_arm_permit_reader, actuator_rc_arm_high_reader,
             actuator_rc_throttle_reader, actuator_rc_link_reader, actuator_arm_done_writer,
-            motor_cmd_reader, esc_telemetry_update_consumer,
+            motor_cmd_reader, esc_telemetry_update_consumer, actuator_imu_prearm,
             // rc_input
             rc_port, rc_receiver, arm_qualifier, rc_rates_writer, rc_throttle_writer,
             rc_arm_high_writer, rc_link_frame_writer, rc_status_link,
@@ -895,7 +933,6 @@ ferroforge::app! {
         shared = [
             tuning_profile,
             tuning_request_seq,
-            imu_data,
             dshot_motors,
             ledger,
             adc1_transfer
@@ -1042,8 +1079,9 @@ ferroforge::app! {
     #[group(
         from = flight_tasks::groups::spi1_imu,
         local = [imu_data_ready, spi1_device, io_watchdog, spi1_parser,
-            imu_status_link, drdy_status_link],
-        shared = [io_timebase, spi1_owner, imu_data],
+            imu_status_link, drdy_status_link, imu_sample_link, imu_transport_ready,
+            poll_imu_kind, parser_imu_kind],
+        shared = [io_timebase, spi1_owner],
         config = [spi1_imu_burst_register: fn(u8) -> Option<u8> = spi1_imu_burst_register],
     )]
     mod spi1_imu {

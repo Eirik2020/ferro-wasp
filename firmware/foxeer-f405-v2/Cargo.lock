@@ -513,6 +513,7 @@ name = "ferrowasp-safety"
 version = "0.1.0"
 dependencies = [
  "critical-section",
+ "ferrowasp-io-contracts",
  "heapless 0.9.2",
 ]
 
