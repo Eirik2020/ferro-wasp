@@ -74,8 +74,10 @@ unmarked crates are the default. Three conventions were weighed:
 **The priority rule.** Every non-critical task runs below the border roles
 (the coordinator, the observer and the Health Manager), which run below the
 control path and the safety master (section 19, ADR-0061); the parser checks
-it. Moving `esc_manager_task` (4) above `usb_fs` (5) is a priority change,
-which states a timing rationale and is revalidated.
+it. `esc_manager_task` is core (Actuator Feedback) and ran at 4, below
+`usb_fs` (5); it runs at 8, above the border band (6 and 7) and below the
+I/O watchdog (9). Each of its 2 ms runs is bounded by the bytes one period
+brings, so it delays USB and the OSD by at most that run.
 
 **Global critical sections.** `interrupt::free` and `critical_section` in
 non-critical code block safety-critical tasks whatever the priorities. A lint

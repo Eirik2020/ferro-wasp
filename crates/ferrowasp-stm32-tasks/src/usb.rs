@@ -11,7 +11,9 @@ use crate::app::{
 use crate::app::{handle_msp_packet, stage_rpc_response};
 use crate::prelude::backend::usb_serial::{BufferedUsbCdcSerial, UsbCdcDevice, UsbDeviceState};
 use crate::prelude::*;
-use crate::snapshots::*;
+#[cfg(not(feature = "mspv2_configurator"))]
+use crate::snapshots::USB_DEBUG_DUE;
+use crate::snapshots::USB_HOST_CONNECTED;
 #[cfg(not(feature = "mspv2_configurator"))]
 use ferrowasp_cli::usb_debug;
 
@@ -32,6 +34,7 @@ use ferrowasp_cli::usb_debug;
         flash_pending_response: Option<flash_task::ResponseFrame> = None,
         configurator_usb: ConfiguratorUsbState,
     ],
+    shared = [ledger: Ledger],
     spawn = [safety_master(event: safety::SafetyEvent)],
     config = [
         usb_debug_header: &'static [u8],
@@ -59,17 +62,26 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
         };
         match parsed {
             Ok(flash_task::StorageCommand::Live) => {
-                let line = usb_debug::format_live(live_snapshot());
+                let live = cx.shared.ledger.lock(|ledger| crate::views::live(ledger));
+                let line = usb_debug::format_live(live);
                 let _ = serial.write(line.as_bytes());
             }
             Ok(flash_task::StorageCommand::Rc) => {
-                for line in usb_debug::format_rc(rc_channels_us()) {
+                let channels = cx
+                    .shared
+                    .ledger
+                    .lock(|ledger| crate::views::rc_channels(ledger));
+                for line in usb_debug::format_rc(channels) {
                     let _ = serial.write(line.as_bytes());
                 }
             }
             Ok(flash_task::StorageCommand::Esc) => {
                 let now_ms = Mono::now().duration_since_epoch().to_millis() as u32;
-                for line in usb_debug::format_esc(esc_snapshot(now_ms)) {
+                let esc = cx
+                    .shared
+                    .ledger
+                    .lock(|ledger| crate::views::esc(ledger, now_ms));
+                for line in usb_debug::format_esc(esc) {
                     let _ = serial.write(line.as_bytes());
                 }
             }
@@ -83,11 +95,15 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
             // check here only gives the host a reason; the safety master
             // and the actuator each re-check before a motor moves.
             Ok(flash_task::StorageCommand::Motor(request)) => {
+                let (armed, arm_high) = cx
+                    .shared
+                    .ledger
+                    .lock(|ledger| (ledger.safety().value.armed, ledger.rc().value.arm_high));
                 let precheck = safety::validate_bench_motor_request(
                     request,
-                    SAFETY_ARMED.load(Ordering::Acquire),
+                    armed,
                     false,
-                    RC_ARM_HIGH.load(Ordering::Acquire),
+                    arm_high,
                     CONFIG::ACTUATOR_OUTPUT_ENABLED,
                 );
                 let reply: &[u8] = match precheck {
@@ -203,30 +219,18 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
     }
 
     #[cfg(not(feature = "mspv2_configurator"))]
-    let snapshot = usb_debug::StatusSnapshot {
-        // The status format carries 32-bit milliseconds, 49.7 days.
-        uptime_ms: Mono::now().duration_since_epoch().to_millis() as u32,
-        imu_kind: active_usb_debug_imu_kind(),
-        imu_ready: IMU_TRANSPORT_READY.load(Ordering::Relaxed),
-        imu_sequence: IMU_LATEST_SEQ.load(Ordering::Relaxed),
-        gyro_raw: [
-            IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed),
-            IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed),
-            IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
-        ],
-        imu_stale: IMU_STALE.load(Ordering::Relaxed),
-        control_sequence: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-        control_loop_hz: CONFIG::CONTROL_LOOP_HZ,
-        rc_valid: USB_RC_VALID_SNAPSHOT.load(Ordering::Relaxed),
-        rc_armable: USB_RC_ARMABLE_SNAPSHOT.load(Ordering::Relaxed),
-        rc_throttle: RC_THROTTLE.load(Ordering::Relaxed),
-        rc_arm_high: RC_ARM_HIGH.load(Ordering::Relaxed),
-        system_armed: SAFETY_ARMED.load(Ordering::Relaxed),
-        battery_voltage_decivolts: BATTERY_VOLTAGE_V10_SNAPSHOT.load(Ordering::Relaxed),
-        battery_current_centiamps: BATTERY_CURRENT_CA_SNAPSHOT.load(Ordering::Relaxed),
-        adc_voltage_mv: ADC_VOLTAGE_MV_SNAPSHOT.load(Ordering::Relaxed),
-        adc_current_mv: ADC_CURRENT_MV_SNAPSHOT.load(Ordering::Relaxed),
-        rc_channels_us: rc_channels_us(),
+    let snapshot = {
+        let now = Mono::now().duration_since_epoch();
+        cx.shared.ledger.lock(|ledger| {
+            crate::views::status(
+                ledger,
+                // The status format carries 32-bit milliseconds, 49.7 days.
+                now.to_millis() as u32,
+                active_usb_debug_imu_kind(),
+                CONFIG::CONTROL_LOOP_HZ,
+                now.to_micros(),
+            )
+        })
     };
     #[cfg(not(feature = "mspv2_configurator"))]
     let Ok(line) = usb_debug::format_status(snapshot) else {

@@ -19,7 +19,7 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait, the storage layout and boot slot selection, and configuration saving |
-| `ferrowasp-blackbox` | The onboard flight log: the record queue and page assembly, the log writer, the sync ledger, and log maintenance |
+| `ferrowasp-blackbox` | The onboard flight log: records from the observer's stream of logged control ticks, page assembly, the log writer, the sync ledger, and log maintenance |
 | `ferrowasp-cli` | The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC |
 | `ferrowasp-flight-control` | How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter's wiring |
 | `ferrowasp-feedback` | Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for |

@@ -71,24 +71,11 @@ pub mod prelude {
     #[cfg(feature = "mspv2_configurator")]
     pub use crate::app::{fixed_bytes, handle_msp_packet, stage_rpc_response};
     pub use crate::snapshots::{
-        ACTIVE_IMU_KIND, ADC_CURRENT_MV_SNAPSHOT, ADC_VOLTAGE_MV_SNAPSHOT, ATTITUDE_PITCH_DEG10,
-        ATTITUDE_ROLL_DEG10, ATTITUDE_YAW_DEG10, BATTERY_CURRENT_CA_SNAPSHOT,
-        BATTERY_VOLTAGE_V10_SNAPSHOT, CONTROL_ISR_SEQ, CONTROL_PITCH_DPS10, CONTROL_PITCH_RAW,
-        CONTROL_RATE_SEQ, CONTROL_ROLL_DPS10, CONTROL_ROLL_RAW, CONTROL_YAW_DPS10, CONTROL_YAW_RAW,
-        DSHOT_ACTIVE_LANES, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE,
-        FLASH_JEDEC_MANUFACTURER, FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR,
-        FLASH_PAGES_WRITTEN, FLASH_READY, FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS,
-        IMU_BIAS_CALIBRATED, IMU_DRDY_IRQ_COUNT, IMU_DRDY_LAST_US, IMU_DRDY_REJECTED_COUNT,
-        IMU_LATEST_PITCH_RAW, IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE,
-        IMU_TRANSPORT_READY, RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED, USB_DEBUG_DUE,
-        USB_HOST_CONNECTED, USB_RC_ARMABLE_SNAPSHOT, USB_RC_VALID_SNAPSHOT, host_connected,
-        live_snapshot, rc_channels_us,
-    };
-    #[cfg(feature = "imu_orientation_rtt")]
-    pub use crate::snapshots::{
-        IMU_LATEST_ACCEL_X_MG, IMU_LATEST_ACCEL_Y_MG, IMU_LATEST_ACCEL_Z_MG,
-        IMU_LATEST_GYRO_X_DPS10, IMU_LATEST_GYRO_Y_DPS10, IMU_LATEST_GYRO_Z_DPS10,
-        IMU_LATEST_TEMP_C10, IMU_ORIENTATION_VERSION, imu_orientation_snapshot,
+        ACTIVE_IMU_KIND, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE, FLASH_JEDEC_MANUFACTURER,
+        FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN, FLASH_READY,
+        FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_BIAS_CALIBRATED, IMU_LATEST_PITCH_RAW,
+        IMU_LATEST_ROLL_RAW, IMU_LATEST_SEQ, IMU_LATEST_YAW_RAW, IMU_STALE, IMU_TRANSPORT_READY,
+        RC_ARM_HIGH, RC_THROTTLE, SAFETY_ARMED, USB_DEBUG_DUE, USB_HOST_CONNECTED, host_connected,
     };
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 
@@ -107,6 +94,20 @@ pub mod prelude {
     pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
     pub type UsbDebugDevice = crate::prelude::backend::usb_serial::UsbCdcDevice;
     pub type UsbDebugSerial = crate::prelude::backend::usb_serial::BufferedUsbCdcSerial;
+    pub use ferrowasp_border::observer::Ledger;
+    pub use ferrowasp_boundary_contracts::messages as observed;
+    pub use ferrowasp_boundary_contracts::topics::Identity;
+    pub use ferrowasp_io_contracts::link::Stamped;
+    /// The producing end of one task's link into the observer.
+    pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
+    pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
+    /// The blackbox stream's consuming end, the flash manager's.
+    pub type BlackboxStream =
+        ferrowasp_io_contracts::link::LinkConsumer<'static, observed::ControlTick>;
+    /// The blackbox stream's queue, which a board sizes to ride out its
+    /// storage's longest write stall.
+    pub type BlackboxStreamQueue<const N: usize> =
+        heapless::spsc::Queue<Stamped<observed::ControlTick>, N>;
     pub type FlashRecordProducer = flash_task::RecordProducer;
     pub type FlashRecordConsumer = flash_task::RecordConsumer;
     pub type FlashCommandProducer = flash_task::CommandProducer;

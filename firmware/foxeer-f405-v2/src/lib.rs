@@ -36,3 +36,7 @@ pub type ControlScheduler = board::aliases::ControlScheduler;
 pub type IoTimebase = stm32_timebase::MicrosecondTimebase<board::aliases::IoTimebaseTimer>;
 pub type IoWatchdog = board::aliases::IoWatchdog;
 pub type FlashDevice = board::aliases::Spi2Flash;
+
+/// Logged control ticks queued between the observer and the SPI NOR flash,
+/// whose page programs are quick and steady: 32 ms at 2 kHz.
+pub const BLACKBOX_STREAM_CAPACITY: usize = 64;

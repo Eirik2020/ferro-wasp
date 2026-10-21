@@ -2,46 +2,53 @@
 //! loop, page assembly, and finding the append point and each page's flight
 //! in an append-only log.
 
+use ferrowasp_boundary_contracts::messages::ControlTick;
+use ferrowasp_io_contracts::link::Stamped;
 use ferrowasp_protocol::blackbox::{
     FLASH_PAGE_LEN, FLIGHT_RECORD_FLAG_BOOT_SESSION_START, FlightRecord, RECORDS_PER_PAGE,
     decode_page, encode_page,
 };
+use ferrowasp_protocol::rate_record::{CompactRateBlackboxFields, CompactRateBlackboxSample};
 use ferrowasp_storage::layout::{StorageLayout, StorageReadError};
 use heapless::spsc::{Consumer, Producer, Queue};
 
-pub const RECORD_QUEUE_CAPACITY: usize = 64;
+pub const RECORD_QUEUE_CAPACITY: usize = 32;
 
-/// The control loop's records on their way to storage. A board sizes it to
-/// ride out its storage's longest write stall: `RECORD_QUEUE_CAPACITY` covers
-/// SPI NOR, whose page programs are quick and steady.
+/// Records on their way to the log writer: the flash manager's staging
+/// between the observer's blackbox stream, which a board sizes to ride out
+/// its storage's longest write stall, and the page assembler.
 pub type RecordQueue<const N: usize = RECORD_QUEUE_CAPACITY> = Queue<FlightRecord, N>;
 
 pub type RecordProducer = Producer<'static, FlightRecord>;
 
 pub type RecordConsumer = Consumer<'static, FlightRecord>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RecordEnqueueOutcome {
-    Skipped,
-    Enqueued,
-    Full,
-}
-
-pub fn enqueue_rate_record(
-    producer: &mut RecordProducer,
-    sample: ferrowasp_protocol::rate_record::CompactRateBlackboxSample,
-    timestamp_us: u64,
-    divisor: u32,
-) -> RecordEnqueueOutcome {
+/// The flight record for a control tick from the observer's blackbox
+/// stream, or `None` for a tick the log rate divisor skips: a tick is kept
+/// when its control sequence is a multiple of the divisor, clamped to 1-16.
+pub fn record_for_tick(tick: &Stamped<ControlTick>, divisor: u32) -> Option<FlightRecord> {
     let divisor = divisor.clamp(1, 16);
-    if !sample.seq.is_multiple_of(divisor) {
-        return RecordEnqueueOutcome::Skipped;
+    let control = &tick.value;
+    if !control.control_seq.is_multiple_of(divisor) {
+        return None;
     }
-    let record = FlightRecord {
+    let sample = CompactRateBlackboxSample::from_fields(CompactRateBlackboxFields {
+        seq: control.control_seq,
+        imu_seq: control.imu_seq,
+        armed: control.armed,
+        imu_fresh: control.imu_fresh,
+        raw_gyro_dps: control.raw_gyro_dps,
+        filtered_gyro_dps: control.filtered_gyro_dps,
+        command_dps: control.command_dps,
+        pid: control.pid,
+        throttle: control.throttle,
+        motors: control.motors,
+    });
+    Some(FlightRecord {
         // The log format keeps a 32-bit microsecond stamp, which wraps every
         // 71.6 minutes; the configurator's ULog conversion unwraps it from
-        // consecutive records.
-        timestamp_us: timestamp_us as u32,
+        // consecutive records. The stamp is the tick's own.
+        timestamp_us: tick.at.0 as u32,
         control_sequence: sample.seq,
         imu_sequence: sample.imu_seq,
         flags: u16::from(sample.flags),
@@ -51,12 +58,7 @@ pub fn enqueue_rate_record(
         pid: sample.pid,
         throttle: sample.throttle,
         motors: sample.motors,
-    };
-    if producer.enqueue(record).is_ok() {
-        RecordEnqueueOutcome::Enqueued
-    } else {
-        RecordEnqueueOutcome::Full
-    }
+    })
 }
 
 /// Finds the append point and next flight identifier in an append-only log.
@@ -275,6 +277,7 @@ pub fn scratch_test_page() -> [u8; FLASH_PAGE_LEN] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ferrowasp_io_contracts::time::TimestampMicros;
     use ferrowasp_protocol::blackbox::{decode_page, record_from_page};
     use ferrowasp_storage::layout::CONFIG_SECTOR_SIZE;
 
@@ -309,6 +312,66 @@ mod tests {
             Ok::<(), ()>(())
         })
         .unwrap()
+    }
+
+    fn tick(control_seq: u32) -> Stamped<ControlTick> {
+        Stamped {
+            seq: 7,
+            at: TimestampMicros((1 << 32) + 1_234),
+            value: ControlTick {
+                logged: true,
+                control_seq,
+                imu_seq: 40,
+                imu_fresh: true,
+                armed: true,
+                raw_gyro_dps: [1.0, 2.0, 3.0],
+                filtered_gyro_dps: [0.5, -0.5, 1.5],
+                command_dps: [10.0, -20.0, 30.0],
+                pid: [0.1, 0.2, 0.3],
+                throttle: 1_100.0,
+                motors: [1_000.0, 1_100.0, 1_200.0, 1_300.0],
+                ..ControlTick::default()
+            },
+        }
+    }
+
+    #[test]
+    fn a_streamed_tick_becomes_the_record_the_control_loop_built() {
+        let tick = tick(12);
+        let compact = CompactRateBlackboxSample::from_fields(CompactRateBlackboxFields {
+            seq: 12,
+            imu_seq: 40,
+            armed: true,
+            imu_fresh: true,
+            raw_gyro_dps: [1.0, 2.0, 3.0],
+            filtered_gyro_dps: [0.5, -0.5, 1.5],
+            command_dps: [10.0, -20.0, 30.0],
+            pid: [0.1, 0.2, 0.3],
+            throttle: 1_100.0,
+            motors: [1_000.0, 1_100.0, 1_200.0, 1_300.0],
+        });
+
+        let record = record_for_tick(&tick, 1).unwrap();
+
+        assert_eq!(record.timestamp_us, 1_234);
+        assert_eq!(record.control_sequence, 12);
+        assert_eq!(record.imu_sequence, 40);
+        assert_eq!(record.flags, u16::from(compact.flags));
+        assert_eq!(record.raw_gyro_dps10, compact.raw_gyro_dps10);
+        assert_eq!(record.filtered_gyro_dps10, compact.gyro_dps10);
+        assert_eq!(record.command_dps10, compact.command_dps10);
+        assert_eq!(record.pid, compact.pid);
+        assert_eq!(record.throttle, compact.throttle);
+        assert_eq!(record.motors, compact.motors);
+    }
+
+    #[test]
+    fn the_divisor_keeps_ticks_whose_sequence_it_divides() {
+        assert!(record_for_tick(&tick(10), 2).is_some());
+        assert!(record_for_tick(&tick(11), 2).is_none());
+        assert!(record_for_tick(&tick(11), 0).is_some());
+        assert!(record_for_tick(&tick(32), 99).is_some());
+        assert!(record_for_tick(&tick(40), 99).is_none());
     }
 
     #[test]

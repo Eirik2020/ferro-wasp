@@ -31,6 +31,16 @@ requirements:
           setup: none
           method:
             test: ferrowasp_blackbox::records::tests::a_torn_page_ends_its_flight_and_logging_carries_on_after_it
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blackbox::records::tests::a_streamed_tick_becomes_the_record_the_control_loop_built
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blackbox::records::tests::the_divisor_keeps_ticks_whose_sequence_it_divides
         - level: bench
           target: fcu
           setup: props-off

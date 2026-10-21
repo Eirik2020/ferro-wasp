@@ -19,12 +19,18 @@ pub fn motor_command_timestamp(now_ms: u64, sequence: u32) -> u64 {
     now_ms
 }
 
-/// Tenths of a degree, saturating; non-finite angles report as zero.
-fn deg10(angle_deg: f32) -> i16 {
-    if angle_deg.is_finite() {
-        (angle_deg * 10.0).clamp(i16::MIN as f32, i16::MAX as f32) as i16
-    } else {
-        0
+/// The control tick in progress, sent to the observer when the loop returns
+/// by whichever path; the body fills it as the tick learns each value. The
+/// link never blocks: a full one refuses the tick and counts it.
+struct TickReport<'a> {
+    link: &'a mut LinkProducer<'static, observed::ControlTick>,
+    at: TimestampMicros,
+    tick: observed::ControlTick,
+}
+
+impl Drop for TickReport<'_> {
+    fn drop(&mut self) {
+        self.link.push(self.at, self.tick);
     }
 }
 
@@ -58,15 +64,21 @@ fn deg10(angle_deg: f32) -> i16 {
         control_arm_permit_reader: signals::ActuatorArmPermitReader,
         motor_cmd_writer: signals::MotorCmdWriter,
         motor_cmd_seq: u32,
-        flash_record_producer: flash_task::RecordProducer,
+        control_tick_link: LinkProducer<'static, observed::ControlTick>,
+        // The latest attitude estimate, reported on every tick, including
+        // those that return before the estimator runs.
+        attitude_deg: [f32; 3] = [0.0; 3],
+        // Control-timer interrupts and rate-loop ticks since boot, and the
+        // isolated stale ticks the loop has ridden through.
+        control_isr_seq: u32 = 0,
+        control_rate_seq: u32 = 0,
+        tolerated_stale_ticks: u32 = 0,
         rc_link_was_valid: bool = false,
         motor_order: ferrowasp_flight_control::actuator::MotorOutputMap =
             ferrowasp_flight_control::actuator::MotorOutputMap::IDENTITY,
     ],
     shared = [
         imu_data: imu::ImuData,
-        imu_angles: [f32; 3],
-        imu_rates: [f32; 3],
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
     ],
@@ -127,40 +139,24 @@ pub fn control_loop(mut cx: control_loop::Context) {
             }
         }
     };
-    // Used by the flight log and the equal-motor bench image, both of which
-    // exist only without a single-motor selector, and by bench_blackbox.
-    #[cfg(any(
-        feature = "bench_blackbox",
-        not(any(
-            feature = "bench_motor1_only",
-            feature = "bench_motor2_only",
-            feature = "bench_motor3_only",
-            feature = "bench_motor4_only",
-            feature = "bench_logical_motor1_only",
-            feature = "bench_logical_motor2_only",
-            feature = "bench_logical_motor3_only",
-            feature = "bench_logical_motor4_only"
-        ))
-    ))]
-    let mut enqueue_flash_record = |sample| {
-        let outcome = flash_task::enqueue_rate_record(
-            cx.local.flash_record_producer,
-            sample,
-            Mono::now().duration_since_epoch().to_micros(),
-            FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed),
-        );
-        if outcome == flash_task::RecordEnqueueOutcome::Full {
-            FLASH_RECORDS_DROPPED.fetch_add(1, Ordering::Relaxed);
-        }
-    };
-
     // Incremet Counter
     *cnt += 1;
-    CONTROL_ISR_SEQ.fetch_add(1, Ordering::Relaxed);
+    *cx.local.control_isr_seq = cx.local.control_isr_seq.wrapping_add(1);
 
+    let tick_at = TimestampMicros(Mono::now().duration_since_epoch().to_micros());
     if !IMU_TRANSPORT_READY.load(Ordering::Relaxed) {
         *cnt = 0;
         IMU_STALE.store(true, Ordering::Release);
+        cx.local.control_tick_link.push(
+            tick_at,
+            observed::ControlTick {
+                isr_seq: *cx.local.control_isr_seq,
+                imu_stale: true,
+                armed: cx.local.control_safety_arm_reader.read(),
+                attitude_deg: *cx.local.attitude_deg,
+                ..observed::ControlTick::default()
+            },
+        );
         return;
     }
 
@@ -168,6 +164,16 @@ pub fn control_loop(mut cx: control_loop::Context) {
     // Check if required samples per control loop is reached
     if cnt >= samples_per_control_loop {
         *cnt = 0; // Reset sampling counter
+        let mut report = TickReport {
+            link: cx.local.control_tick_link,
+            at: tick_at,
+            tick: observed::ControlTick {
+                isr_seq: *cx.local.control_isr_seq,
+                tolerated_stale_ticks: *cx.local.tolerated_stale_ticks,
+                attitude_deg: *cx.local.attitude_deg,
+                ..observed::ControlTick::default()
+            },
+        };
 
         let sensor_accel = cx.shared.imu_data.lock(|imu| imu.acc);
         let drone_gravity =
@@ -193,6 +199,10 @@ pub fn control_loop(mut cx: control_loop::Context) {
         IMU_STALE.store(imu_stale, Ordering::Release);
 
         let control_armed = cx.local.control_safety_arm_reader.read();
+        report.tick.imu_seq = imu_sequence;
+        report.tick.imu_fresh = imu_fresh;
+        report.tick.imu_stale = imu_stale;
+        report.tick.armed = control_armed;
         let gyro_bias_update = cx.local.gyro_bias_calibrator.update_if_fresh(
             control_armed,
             imu_fresh,
@@ -207,13 +217,12 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 gyro_bias_update.bias_raw[2]
             );
         }
+        report.tick.bias_calibrated = IMU_BIAS_CALIBRATED.load(Ordering::Relaxed);
         let control_gyro_raw = gyro_bias_update.corrected_raw;
+        report.tick.gyro_raw = control_gyro_raw;
         let imu_roll_raw = control_gyro_raw[0] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
         let imu_pitch_raw = control_gyro_raw[1] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
         let imu_yaw_raw = control_gyro_raw[2] as f32 / CONFIG::IMU_GYRO_COUNTS_PER_DPS;
-        CONTROL_ROLL_RAW.store(control_gyro_raw[0], Ordering::Relaxed);
-        CONTROL_PITCH_RAW.store(control_gyro_raw[1], Ordering::Relaxed);
-        CONTROL_YAW_RAW.store(control_gyro_raw[2], Ordering::Relaxed);
         let (imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered) = cx
             .local
             .imu_rate_filter
@@ -226,6 +235,9 @@ pub fn control_loop(mut cx: control_loop::Context) {
             imu_pitch_filtered,
             imu_yaw_filtered,
         ]);
+        report.tick.raw_gyro_dps = [imu_roll_raw, imu_pitch_raw, imu_yaw_raw];
+        report.tick.filtered_gyro_dps = [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered];
+        report.tick.body_rates_dps = body_rates;
         // Bench-only: exercise the blackbox write path while disarmed.
         //
         // Every stored record is otherwise an armed record, so the flash write
@@ -243,31 +255,14 @@ pub fn control_loop(mut cx: control_loop::Context) {
         // completes, verifies empty, and the running firmware refills the
         // region before anyone can look. Flash a non-bench image first, then
         // erase. Download anything worth keeping before either.
+        // A disarmed tick's commands, PID terms and motors stay zero.
         #[cfg(feature = "bench_blackbox")]
         if !control_armed {
-            enqueue_flash_record(dt::CompactRateBlackboxSample::from_fields(
-                dt::CompactRateBlackboxFields {
-                    seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-                    imu_seq: imu_sequence,
-                    armed: false,
-                    imu_fresh,
-                    raw_gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    filtered_gyro_dps: [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    command_dps: [0.0; 3],
-                    pid: [0.0; 3],
-                    throttle: 0.0,
-                    motors: [0.0; 4],
-                },
-            ));
+            report.tick.logged = true;
         }
 
-        CONTROL_ROLL_DPS10.store((imu_roll_filtered * 10.0) as i32, Ordering::Relaxed);
-        CONTROL_PITCH_DPS10.store((imu_pitch_filtered * 10.0) as i32, Ordering::Relaxed);
-        CONTROL_YAW_DPS10.store((imu_yaw_filtered * 10.0) as i32, Ordering::Relaxed);
-        CONTROL_RATE_SEQ.fetch_add(1, Ordering::Relaxed);
-        cx.shared.imu_rates.lock(|rates| {
-            *rates = body_rates;
-        });
+        *cx.local.control_rate_seq = cx.local.control_rate_seq.wrapping_add(1);
+        report.tick.control_seq = *cx.local.control_rate_seq;
         if !control_armed {
             // Keep Foxeer aligned with the FCU3 golden app: no
             // PID/filter/setpoint/mixer state crosses an arming boundary.
@@ -294,7 +289,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
             {
                 let rc_raw = cx.local.rc_rates_reader.read();
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     false,
                     imu_fresh,
@@ -322,7 +317,8 @@ pub fn control_loop(mut cx: control_loop::Context) {
             // A tolerated tick skips this update; the motors hold the
             // previous command.
             if !imu_stale {
-                IMU_TOLERATED_STALE_TICKS.fetch_add(1, Ordering::Relaxed);
+                *cx.local.tolerated_stale_ticks = cx.local.tolerated_stale_ticks.wrapping_add(1);
+                report.tick.tolerated_stale_ticks = *cx.local.tolerated_stale_ticks;
                 return;
             }
 
@@ -371,12 +367,8 @@ pub fn control_loop(mut cx: control_loop::Context) {
             accel_level().apply(drone_gravity),
             1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32,
         );
-        cx.shared.imu_angles.lock(|angles| {
-            *angles = imu_angles;
-        });
-        ATTITUDE_ROLL_DEG10.store(deg10(imu_angles[0]), Ordering::Relaxed);
-        ATTITUDE_PITCH_DEG10.store(deg10(imu_angles[1]), Ordering::Relaxed);
-        ATTITUDE_YAW_DEG10.store(deg10(imu_angles[2]), Ordering::Relaxed);
+        *cx.local.attitude_deg = imu_angles;
+        report.tick.attitude_deg = imu_angles;
 
         if control_armed {
             // Read rc_inputs
@@ -405,7 +397,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -434,7 +426,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -463,7 +455,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -492,7 +484,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -522,7 +514,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -552,7 +544,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -582,7 +574,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -612,7 +604,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -653,7 +645,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
                 #[cfg(feature = "blackbox_defmt")]
                 dt::emit_compact_blackbox(
-                    CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    *cx.local.control_rate_seq,
                     imu_sequence,
                     control_armed,
                     imu_fresh,
@@ -664,24 +656,11 @@ pub fn control_loop(mut cx: control_loop::Context) {
                     bench_throttle,
                     motor_commands,
                 );
-                enqueue_flash_record(dt::CompactRateBlackboxSample::from_fields(
-                    dt::CompactRateBlackboxFields {
-                        seq: CONTROL_RATE_SEQ.load(Ordering::Relaxed),
-                        imu_seq: imu_sequence,
-                        armed: control_armed,
-                        imu_fresh,
-                        raw_gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                        filtered_gyro_dps: [
-                            imu_roll_filtered,
-                            imu_pitch_filtered,
-                            imu_yaw_filtered,
-                        ],
-                        command_dps: [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                        pid: [0.0; 3],
-                        throttle: bench_throttle,
-                        motors: motor_commands,
-                    },
-                ));
+                report.tick.logged = true;
+                report.tick.command_dps =
+                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32];
+                report.tick.throttle = bench_throttle;
+                report.tick.motors = motor_commands;
                 {
                     publish_motor_command(motor_commands, safety::ActuatorCmd::ApplyLatestThrottle);
                 }
@@ -717,17 +696,21 @@ pub fn control_loop(mut cx: control_loop::Context) {
                     let mut sample = fc.blackbox_sample();
                     sample.motors =
                         remap_motor_outputs(fc.get_logical_motor_commands(), motor_output_map);
-                    let compact = dt::CompactRateBlackboxSample::from_rate_sample(
-                        CONTROL_RATE_SEQ.load(Ordering::Relaxed),
+                    #[cfg(feature = "blackbox_defmt")]
+                    dt::emit_rate_blackbox(dt::CompactRateBlackboxSample::from_rate_sample(
+                        *cx.local.control_rate_seq,
                         imu_sequence,
                         control_armed,
                         imu_fresh,
                         [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
                         sample,
-                    );
-                    #[cfg(feature = "blackbox_defmt")]
-                    dt::emit_rate_blackbox(compact);
-                    enqueue_flash_record(compact);
+                    ));
+                    report.tick.logged = true;
+                    report.tick.filtered_gyro_dps = sample.measurement;
+                    report.tick.command_dps = sample.setpoint;
+                    report.tick.pid = sample.pid;
+                    report.tick.throttle = sample.throttle;
+                    report.tick.motors = sample.motors;
                 }
 
                 // Apply throttle

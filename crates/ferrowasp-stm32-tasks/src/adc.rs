@@ -6,7 +6,6 @@
 //! configuration.
 
 use crate::prelude::*;
-use crate::snapshots::*;
 
 /// Start an ADC1 conversion every 100 ms.
 #[ferroforge::task(
@@ -29,24 +28,20 @@ pub async fn adc1_polling(mut cx: adc1_polling::Context) {
 /// supplies it.
 #[ferroforge::task(
     bounds = [adc1_transfer: stm32_adc::Adc1ObservationDma],
-    shared = [
-        adc1_transfer,
-        battery_voltage_v10: u8,
-        battery_cell_count: u8,
-        battery_cell_voltage_v100: u16,
-        battery_current_ca: i16,
-    ],
+    shared = [adc1_transfer],
     local = [
         adc1_buffer: Option<stm32_adc::Adc1SampleBuffer>,
         adc1_planner: stm32_adc::AdcDmaIrqPlanner = stm32_adc::AdcDmaIrqPlanner::new(),
         battery_cell_detector: osd::BatteryCellDetector,
         battery_voltage_init_logged: bool = false,
+        battery_status_link: LinkProducer<'static, observed::BatteryStatus>,
     ],
     config = [
         adc_vbat_divider_ratio: f32,
         adc_current_betaflight_scale: u32,
         adc_current_offset_ma: i32,
     ],
+    monotonic = Mono,
 )]
 pub fn dma_adc1(mut cx: dma_adc1::Context) {
     let sample = match cx.shared.adc1_transfer.lock(|transfer| {
@@ -85,22 +80,17 @@ pub fn dma_adc1(mut cx: dma_adc1::Context) {
     };
 
     let battery_voltage_v10 = ((pack_mv + 50) / 100).min(u8::MAX as u32) as u8;
-    BATTERY_VOLTAGE_V10_SNAPSHOT.store(u32::from(battery_voltage_v10), Ordering::Relaxed);
-    BATTERY_CURRENT_CA_SNAPSHOT.store(i32::from(current_ca), Ordering::Relaxed);
-    ADC_VOLTAGE_MV_SNAPSHOT.store(sample.voltage_mv as u32, Ordering::Relaxed);
-    ADC_CURRENT_MV_SNAPSHOT.store(sample.current_mv as u32, Ordering::Relaxed);
-    cx.shared
-        .battery_voltage_v10
-        .lock(|value| *value = battery_voltage_v10);
-    cx.shared
-        .battery_cell_count
-        .lock(|battery_cell_count| *battery_cell_count = cell_count);
-    cx.shared
-        .battery_cell_voltage_v100
-        .lock(|battery_cell_voltage_v100| *battery_cell_voltage_v100 = cell_voltage_v100);
-    cx.shared
-        .battery_current_ca
-        .lock(|battery_current_ca| *battery_current_ca = current_ca);
+    cx.local.battery_status_link.push(
+        TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+        observed::BatteryStatus {
+            voltage_dv: u16::from(battery_voltage_v10),
+            cell_count,
+            cell_voltage_cv: cell_voltage_v100,
+            current_ca,
+            voltage_pin_mv: sample.voltage_mv as u32,
+            current_pin_mv: sample.current_mv as u32,
+        },
+    );
 
     if !*cx.local.battery_voltage_init_logged {
         let pack_v10 = (pack_mv + 50) / 100;

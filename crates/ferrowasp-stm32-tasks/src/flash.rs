@@ -131,7 +131,10 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
     bounds = [flash_device: NorStorage],
     local = [
         flash_device,
+        flash_record_producer: flash_task::RecordProducer,
         flash_record_consumer: flash_task::RecordConsumer,
+        blackbox_stream: LinkConsumer<'static, observed::ControlTick>,
+        storage_status_link: LinkProducer<'static, observed::StorageStatus>,
         flash_commands: CommandSources,
         flash_responses: ResponseRouter,
         flash_rpc_command_consumer: FlashRpcCommandConsumer,
@@ -153,7 +156,7 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
     shared = [
         tuning_profile: dt::TuningProfile,
         tuning_request_seq: u32,
-        imu_data: imu::ImuData,
+        ledger: Ledger,
     ],
     config = [
         default_stored_config: flash_task::StoredConfig,
@@ -165,7 +168,10 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
 )]
 pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let flash_device = cx.local.flash_device;
+    let flash_record_producer = cx.local.flash_record_producer;
     let flash_record_consumer = cx.local.flash_record_consumer;
+    let blackbox_stream = cx.local.blackbox_stream;
+    let storage_status_link = cx.local.storage_status_link;
     let flash_commands = cx.local.flash_commands;
     let flash_responses = cx.local.flash_responses;
     let flash_rpc_command_consumer = cx.local.flash_rpc_command_consumer;
@@ -192,6 +198,30 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
         config_rpc_completion,
     );
     loop {
+        // Logged control ticks from the observer's stream become records,
+        // as many as the staging queue takes, at the stored log rate; the
+        // rest wait in the stream, which rides out a storage stall.
+        while flash_record_producer.ready() {
+            let Some(tick) = blackbox_stream.oldest() else {
+                break;
+            };
+            if let Some(record) =
+                flash_task::record_for_tick(&tick, FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed))
+            {
+                let _ = flash_record_producer.enqueue(record);
+            }
+        }
+        storage_status_link.push(
+            TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+            observed::StorageStatus {
+                ready: FLASH_READY.load(Ordering::Relaxed),
+                pages_written: FLASH_PAGES_WRITTEN.load(Ordering::Relaxed),
+                write_faults: FLASH_WRITE_FAULTS.load(Ordering::Relaxed),
+                records_dropped: FLASH_RECORDS_DROPPED.load(Ordering::Relaxed),
+                log_rate_divisor: FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed) as u8,
+            },
+        );
+
         // Log pages a store holds back in RAM (an SD card's write-back
         // window) are written out at the top of every pass once they are old
         // enough, or when no flight is recording (`LogWriter`).
@@ -509,7 +539,10 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     CommandAction::StartCalibration => {
                         *accel_calibration = Some(AccelLevelCalibration::new());
                         flash_responses.start_maintenance();
-                        *accel_calibration_seq = IMU_LATEST_SEQ.load(Ordering::Acquire);
+                        *accel_calibration_seq = cx
+                            .shared
+                            .ledger
+                            .lock(|ledger| ledger.imu().value.sample_seq);
                         *accel_calibration_deadline_ms =
                             Mono::now().duration_since_epoch().to_millis()
                                 + IMU_CALIBRATION_DEADLINE_MS;
@@ -594,7 +627,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
             // One IMU sample a pass into a level calibration, answered on the
             // link that asked; a success is saved like `config save`.
             if let Some(calibration) = accel_calibration.as_mut() {
-                let sequence = IMU_LATEST_SEQ.load(Ordering::Acquire);
+                let imu = cx.shared.ledger.lock(|ledger| ledger.imu().value);
+                let sequence = imu.sample_seq;
                 let outcome = if SAFETY_ARMED.load(Ordering::Acquire) {
                     Some(Err("ERR imu calibration aborted; the system armed\r\n"))
                 } else if Mono::now().duration_since_epoch().to_millis()
@@ -603,10 +637,8 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     Some(Err("ERR imu calibration timed out; no IMU samples\r\n"))
                 } else if sequence != *accel_calibration_seq {
                     *accel_calibration_seq = sequence;
-                    // One sample, both sensors: the parser stores them in g and
-                    // degrees per second.
-                    let (sensor_accel, gyro_dps) =
-                        cx.shared.imu_data.lock(|imu| (imu.acc, imu.gyro));
+                    // One sample, both sensors, in g and degrees per second.
+                    let (sensor_accel, gyro_dps) = (imu.accel_g, imu.gyro_dps);
                     let gravity = CONFIG::IMU_CONTROL_AXIS_PROFILE
                         .sensor_accel_to_drone_gravity(sensor_accel);
                     calibration

@@ -74,15 +74,17 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   ledger, message contracts, the gyro-synced loop, `ferrowasp-config` and the
   new crate map. The redesign comes before the next hardware gate run, one
   change at a time against `main`, one mechanism at a time:
-  1. the observer and ledger in place of `ferrowasp-stm32-tasks::snapshots`
-     and the shared resources the OSD reads, wiring
-     `ferrowasp-border::observer`: the observer task and each producer's
-     link, the readers, the OSD and telemetry stall warning, the
-     blackbox stream through the flash manager, and `esc_manager_task` at
-     priority 8; then the values between core tasks as links, flags and
-     init values, and `snapshots.rs` deleted; then each task moves into its
+  1. the rest of the observer and ledger in place of
+     `ferrowasp-stm32-tasks::snapshots`: the OSD and telemetry warning on a
+     stalled topic; the values between core tasks as links, flags and init
+     values (the IMU sample with its accelerometer, the pre-arm status, the
+     motor map, the DShot release time, IMU readiness and kind); the gates'
+     arm-state reads through reader handles; the MSPv2 status replies from
+     the ledger; and `snapshots.rs` deleted. Then each task moves into its
      subsystem crate behind a `tasks` feature, and the tasks crate's `dt` and
-     `flash_task` aliases go with the last of them;
+     `flash_task` aliases go with the last of them; the control task's
+     `blackbox_defmt` output goes with it, since the record format is
+     non-critical;
   2. the remaining SPSC links and typed flags; the coordinator, then reboot, config
      transactions and accelerometer calibration through it; the boot
      fallback; `MotorCommand` and the output group's freshness check;

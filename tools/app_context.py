@@ -110,6 +110,16 @@ TOPIC_ROUTES = {
         common_symbols=("init", "heartbeat"),
         companions=(PurePosixPath("project_meta/governing-requirements.md"),),
     ),
+    "observer": TopicRoute(
+        summary="The observer, each task's link into it, and the ledger readers copy from.",
+        common_symbols=("observer_task",),
+        companions=(
+            PurePosixPath("project_meta/requirements/architecture.md"),
+            PurePosixPath("crates/ferrowasp-border/src/observer.rs"),
+            PurePosixPath("crates/ferrowasp-boundary-contracts/src/messages.rs"),
+            PurePosixPath("crates/ferrowasp-io-contracts/src/link.rs"),
+        ),
+    ),
     "arming": TopicRoute(
         summary="Safety events, live guards, guarded holds, and actuator handoff.",
         common_symbols=(

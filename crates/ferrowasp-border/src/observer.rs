@@ -1,7 +1,7 @@
 //! The observer (ADR-0056, ADR-0061): the one way data leaves the
 //! safety-critical tasks. Each run it takes what every link has brought,
-//! publishes it on the ledger, and passes every control tick on to the
-//! blackbox stream. A producer never waits for it: a link it falls behind on
+//! publishes it on the ledger, and passes every logged control tick on to
+//! the blackbox stream. A producer never waits for it: a link it falls behind on
 //! refuses and counts, and the refusals show as gaps in the sequence.
 //!
 //! The ledger is a shared resource the observer and its readers lock, all
@@ -117,8 +117,8 @@ pub struct Observer<'a> {
 }
 
 impl<'a> Observer<'a> {
-    /// `stream` is the blackbox's `event` link, which receives every control
-    /// tick with its original stamp.
+    /// `stream` is the blackbox's `event` link, which receives every logged
+    /// control tick with its original stamp.
     pub fn new(links: ObserverLinks<'a>, stream: LinkProducer<'a, ControlTick>) -> Self {
         Self {
             links,
@@ -132,7 +132,7 @@ impl<'a> Observer<'a> {
     /// One run at `now`: take at most each link's capacity, publish the
     /// newest of every `state` link and the last control tick, keep a
     /// topic's previous value when its link brought nothing, and forward
-    /// every control tick to the stream in order.
+    /// every logged control tick to the stream in order.
     pub fn run_once(&mut self, now: TimestampMicros, ledger: &mut Ledger) {
         for _ in 0..self.links.control.capacity() {
             let Some(tick) = self.links.control.oldest() else {
@@ -142,7 +142,9 @@ impl<'a> Observer<'a> {
                 .control_ticks_lost
                 .wrapping_add(messages_lost(self.last_control_seq, tick.seq));
             self.last_control_seq = tick.seq;
-            self.stream.forward(tick);
+            if tick.value.logged {
+                self.stream.forward(tick);
+            }
             ledger.control = tick;
         }
 
@@ -274,6 +276,7 @@ mod tests {
 
     fn tick(control_seq: u32) -> ControlTick {
         ControlTick {
+            logged: true,
             control_seq,
             armed: true,
             attitude_deg: [1.0, -2.0, 3.0],
@@ -342,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn every_control_tick_reaches_the_stream_in_order_and_the_last_is_published() {
+    fn every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, mut stream) = wire(&mut queues);
         let mut ledger = Ledger::new(Identity::default());
@@ -364,6 +367,26 @@ mod tests {
         assert_eq!((second.seq, second.value.control_seq), (2, 2));
         assert_eq!(stream.oldest(), None);
         assert_eq!(ledger.control(), second);
+    }
+
+    #[test]
+    fn a_tick_not_marked_for_the_log_is_published_but_not_streamed() {
+        let mut queues = Queues::new();
+        let (mut producers, mut observer, mut stream) = wire(&mut queues);
+        let mut ledger = Ledger::new(Identity::default());
+
+        let disarmed = ControlTick {
+            logged: false,
+            ..tick(1)
+        };
+        producers.control.push(TimestampMicros(500), disarmed);
+        producers.control.push(TimestampMicros(1_000), tick(2));
+        observer.run_once(TimestampMicros(1_000), &mut ledger);
+
+        assert_eq!(stream.oldest().map(|message| message.value), Some(tick(2)));
+        assert_eq!(stream.oldest(), None);
+        assert_eq!(ledger.control().value, tick(2));
+        assert_eq!(ledger.observer().value.stream_refused, 0);
     }
 
     #[test]

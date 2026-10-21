@@ -1,41 +1,53 @@
-//! The Foxeer-shaped heartbeat: USB RC-link snapshots every two seconds, and
-//! the storage and optional IMU diagnostics logged beside them.
+//! The Foxeer-shaped heartbeat: the USB status line's two-second wake, and
+//! the storage and optional IMU diagnostics logged beside it, all read from
+//! the observer's ledger.
 
 use crate::prelude::*;
-use crate::snapshots::*;
+use crate::snapshots::USB_DEBUG_DUE;
 
-/// Publish the USB RC-link status for the USB task and wake it, report the
-/// isolated stale IMU ticks the control loop tolerated, then log
-/// storage health - and, with `imu_transport_rtt` or `imu_orientation_rtt`,
-/// IMU transport and orientation - every two seconds.
+/// Wake the USB task for its status line, report the isolated stale IMU
+/// ticks the control loop tolerated, then log storage health and blackbox
+/// losses - and, with `imu_transport_rtt` or `imu_orientation_rtt`, IMU
+/// transport and orientation - every two seconds.
 ///
 /// The IMU's orientation is the board's, so it is configuration: the mapping
 /// from the physical IMU to the drone body, and to the rate controller.
 #[ferroforge::task(
     local = [
-        usb_rc_link_reader: signals::RcLinkReader,
         previous_drdy_count: u32 = 0,
         previous_drdy_rejected: u32 = 0,
         previous_tolerated_stale_ticks: u32 = 0,
     ],
+    shared = [ledger: Ledger],
     config = [
         physical_imu_to_drone_rotation: dt::FrameRotation,
         control_imu_to_rate_controller_map: dt::FrameRotation,
     ],
     monotonic = Mono,
 )]
-pub async fn heartbeat(cx: heartbeat::Context) {
+pub async fn heartbeat(mut cx: heartbeat::Context) {
     info!("Running heartbeat!");
 
     loop {
-        let now_us = Mono::now().duration_since_epoch().to_micros();
-        let rc_link = cx.local.usb_rc_link_reader.status(now_us);
-        USB_RC_VALID_SNAPSHOT.store(rc_link.valid, Ordering::Relaxed);
-        USB_RC_ARMABLE_SNAPSHOT.store(rc_link.armable, Ordering::Relaxed);
         USB_DEBUG_DUE.store(true, Ordering::Release);
         cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
 
-        let tolerated_stale_ticks = IMU_TOLERATED_STALE_TICKS.load(Ordering::Relaxed);
+        let (identity, observer, control, imu, drdy, storage) = cx.shared.ledger.lock(|ledger| {
+            (
+                ledger.identity(),
+                ledger.observer().value,
+                ledger.control().value,
+                ledger.imu().value,
+                ledger.drdy().value,
+                ledger.storage().value,
+            )
+        });
+        #[cfg(not(feature = "imu_transport_rtt"))]
+        let _ = drdy;
+        #[cfg(not(any(feature = "imu_transport_rtt", feature = "imu_orientation_rtt")))]
+        let _ = imu;
+
+        let tolerated_stale_ticks = control.tolerated_stale_ticks;
         if tolerated_stale_ticks != *cx.local.previous_tolerated_stale_ticks {
             info!(
                 "IMU: {} isolated stale ticks tolerated in 2 s, {} since boot",
@@ -48,13 +60,14 @@ pub async fn heartbeat(cx: heartbeat::Context) {
         #[cfg(feature = "imu_transport_rtt")]
         info!(
             "IMU raw gyro [{}, {}, {}], seq {}",
-            IMU_LATEST_ROLL_RAW.load(Ordering::Relaxed),
-            IMU_LATEST_PITCH_RAW.load(Ordering::Relaxed),
-            IMU_LATEST_YAW_RAW.load(Ordering::Relaxed),
-            IMU_LATEST_SEQ.load(Ordering::Relaxed)
+            imu.gyro_raw[0], imu.gyro_raw[1], imu.gyro_raw[2], imu.sample_seq
         );
         #[cfg(feature = "imu_orientation_rtt")]
-        if let Some((sequence, accel_mg, gyro_dps10, temp_c10)) = imu_orientation_snapshot() {
+        {
+            let sequence = imu.sample_seq;
+            let accel_mg = imu.accel_g.map(|accel| (accel * 1_000.0) as i32);
+            let gyro_dps10 = imu.gyro_dps.map(|rate| (rate * 10.0) as i32);
+            let temp_c10 = (imu.temperature_c * 10.0) as i32;
             let body_gyro_dps10 = CONFIG::PHYSICAL_IMU_TO_DRONE_ROTATION.map_i32(gyro_dps10);
             let control_gyro_dps10 = CONFIG::CONTROL_IMU_TO_RATE_CONTROLLER_MAP.map_i32(gyro_dps10);
             let body_specific_force_mg = CONFIG::PHYSICAL_IMU_TO_DRONE_ROTATION.map_i32(accel_mg);
@@ -91,33 +104,37 @@ pub async fn heartbeat(cx: heartbeat::Context) {
         }
         #[cfg(feature = "imu_transport_rtt")]
         {
-            let drdy_count = IMU_DRDY_IRQ_COUNT.load(Ordering::Relaxed);
-            let drdy_rejected = IMU_DRDY_REJECTED_COUNT.load(Ordering::Relaxed);
+            let drdy_count = drdy.interrupts;
+            let drdy_rejected = drdy.rejected;
             info!(
                 "IMU DRDY IRQ {}, delta {}, rejected {}, delta {}, last {} us",
                 drdy_count,
                 drdy_count.wrapping_sub(*cx.local.previous_drdy_count),
                 drdy_rejected,
                 drdy_rejected.wrapping_sub(*cx.local.previous_drdy_rejected),
-                IMU_DRDY_LAST_US.load(Ordering::Relaxed)
+                drdy.last_us
             );
             *cx.local.previous_drdy_count = drdy_count;
             *cx.local.previous_drdy_rejected = drdy_rejected;
         }
         info!(
             "Storage ready {}, JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes",
-            FLASH_READY.load(Ordering::Relaxed),
-            FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
-            FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
-            FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
-            FLASH_CAPACITY_BYTES.load(Ordering::Relaxed)
+            storage.ready,
+            identity.flash_jedec[0],
+            identity.flash_jedec[1],
+            identity.flash_jedec[2],
+            identity.flash_capacity_bytes
         );
         info!(
             "Blackbox pages {}, dropped records {}, write faults {}, divisor {}",
-            FLASH_PAGES_WRITTEN.load(Ordering::Relaxed),
-            FLASH_RECORDS_DROPPED.load(Ordering::Relaxed),
-            FLASH_WRITE_FAULTS.load(Ordering::Relaxed),
-            FLASH_LOG_RATE_DIVISOR.load(Ordering::Relaxed)
+            storage.pages_written,
+            storage.records_dropped,
+            storage.write_faults,
+            storage.log_rate_divisor
+        );
+        info!(
+            "Observer: control ticks lost {}, blackbox stream refused {}",
+            observer.control_ticks_lost, observer.stream_refused
         );
         Mono::delay(2000.millis()).await;
     }

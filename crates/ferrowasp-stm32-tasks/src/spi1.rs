@@ -147,9 +147,18 @@ pub fn spi1_rx_dma(mut cx: spi1_rx_dma::Context) {
 /// ones that arrive before the last poll was taken.
 #[ferroforge::task(
     bounds = [imu_data_ready: ExtiPin, io_timebase: stm32_timebase::Timebase],
-    local = [imu_data_ready],
+    local = [
+        imu_data_ready,
+        drdy_status_link: LinkProducer<'static, observed::DrdyStatus>,
+        drdy_status: observed::DrdyStatus = observed::DrdyStatus {
+            interrupts: 0,
+            rejected: 0,
+            last_us: 0,
+        },
+    ],
     shared = [io_timebase],
     spawn = [spi1_poll(observed_at_us: u64)],
+    monotonic = Mono,
 )]
 pub fn imu_data_ready(mut cx: imu_data_ready::Context) {
     if !cx.local.imu_data_ready.check_interrupt() {
@@ -158,12 +167,17 @@ pub fn imu_data_ready(mut cx: imu_data_ready::Context) {
     cx.local.imu_data_ready.clear_interrupt_pending_bit();
 
     let observed_at = cx.shared.io_timebase.lock(|timebase| timebase.now());
-    IMU_DRDY_IRQ_COUNT.fetch_add(1, Ordering::Relaxed);
-    IMU_DRDY_LAST_US.store(observed_at.0 as u32, Ordering::Relaxed);
+    let status = cx.local.drdy_status;
+    status.interrupts = status.interrupts.wrapping_add(1);
+    status.last_us = observed_at.0 as u32;
 
     if IMU_TRANSPORT_READY.load(Ordering::Relaxed) && cx.spawn.spi1_poll(observed_at.0).is_err() {
-        IMU_DRDY_REJECTED_COUNT.fetch_add(1, Ordering::Relaxed);
+        status.rejected = status.rejected.wrapping_add(1);
     }
+    cx.local.drdy_status_link.push(
+        TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+        *status,
+    );
 }
 
 /// Read one IMU sample burst over SPI1 DMA, from the register the detected
@@ -225,8 +239,13 @@ pub async fn spi1_poll(cx: spi1_poll::Context, observed_at_us: u64) {
 /// IMU, and publish it. A frame that is not the detected IMU's burst is
 /// dropped with a warning.
 #[ferroforge::task(
-    local = [spi1_parser: stm32_spi::SpiRxParserSide],
+    local = [
+        spi1_parser: stm32_spi::SpiRxParserSide,
+        imu_status_link: LinkProducer<'static, observed::ImuStatus>,
+        imu_sample_seq: u32 = 0,
+    ],
     shared = [imu_data: imu::ImuData],
+    monotonic = Mono,
 )]
 pub async fn spi1_parser(cx: spi1_parser::Context) {
     let mut imu_data = cx.shared.imu_data;
@@ -290,24 +309,6 @@ pub async fn spi1_parser(cx: spi1_parser::Context) {
 
         match parsed {
             Some(sample) => {
-                #[cfg(feature = "imu_orientation_rtt")]
-                {
-                    IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::AcqRel);
-                    IMU_LATEST_ACCEL_X_MG
-                        .store((sample.acc[0] * 1_000.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_ACCEL_Y_MG
-                        .store((sample.acc[1] * 1_000.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_ACCEL_Z_MG
-                        .store((sample.acc[2] * 1_000.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_GYRO_X_DPS10
-                        .store((sample.gyro[0] * 10.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_GYRO_Y_DPS10
-                        .store((sample.gyro[1] * 10.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_GYRO_Z_DPS10
-                        .store((sample.gyro[2] * 10.0) as i32, Ordering::Relaxed);
-                    IMU_LATEST_TEMP_C10.store((sample.temp * 10.0) as i32, Ordering::Relaxed);
-                    IMU_ORIENTATION_VERSION.fetch_add(1, Ordering::Release);
-                }
                 IMU_LATEST_ROLL_RAW.store(sample.gyro_raw[0] as i32, Ordering::Relaxed);
                 IMU_LATEST_PITCH_RAW.store(sample.gyro_raw[1] as i32, Ordering::Relaxed);
                 IMU_LATEST_YAW_RAW.store(sample.gyro_raw[2] as i32, Ordering::Relaxed);
@@ -320,6 +321,17 @@ pub async fn spi1_parser(cx: spi1_parser::Context) {
                     data.temp = sample.temp;
                     data.sequence = data.sequence.wrapping_add(1);
                 });
+                *cx.local.imu_sample_seq = cx.local.imu_sample_seq.wrapping_add(1);
+                cx.local.imu_status_link.push(
+                    TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+                    observed::ImuStatus {
+                        sample_seq: *cx.local.imu_sample_seq,
+                        gyro_raw: sample.gyro_raw,
+                        accel_g: sample.acc,
+                        gyro_dps: sample.gyro,
+                        temperature_c: sample.temp,
+                    },
+                );
             }
             None => match active_kind {
                 Some(Spi1ImuKind::Mpu6500) => {
