@@ -154,6 +154,7 @@ ferroforge::app! {
         osd_safety_arm_reader: signals::SafetyArmReader,
         esc_safety_arm_reader: signals::SafetyArmReader,
         flash_safety_arm_reader: signals::SafetyArmReader,
+        flash_probe: flight_tasks::FlashProbe,
         motor_map_writer: signals::MotorMapWriter,
         actuator_motor_map_reader: signals::MotorMapReader,
         dshot_release_writer: signals::DshotReleaseWriter,
@@ -373,11 +374,7 @@ ferroforge::app! {
                 let _ = spi1_imu::spi1_owner_service::spawn();
             },
         ));
-        if let Some(kind) = spi1_imu.bringup.kind() {
-            ACTIVE_IMU_KIND.store(kind as u8, Ordering::Relaxed);
-        }
-        IMU_TRANSPORT_READY.store(spi1_imu.bringup.is_ready(), Ordering::Relaxed);
-
+        let mut flash_probe = flight_tasks::FlashProbe::default();
         let mut flash_device = {
             let mut flash = board::init::init_spi2_flash(
                 board::init::Spi2FlashResources {
@@ -391,14 +388,14 @@ ferroforge::app! {
             );
             match flash.read_jedec_id() {
                 Ok(id) => {
-                    FLASH_JEDEC_MANUFACTURER.store(id.manufacturer, Ordering::Relaxed);
-                    FLASH_JEDEC_MEMORY_TYPE.store(id.memory_type, Ordering::Relaxed);
-                    FLASH_JEDEC_CAPACITY_CODE.store(id.capacity_code, Ordering::Relaxed);
                     let capacity = id.capacity_bytes().unwrap_or(0);
-                    FLASH_CAPACITY_BYTES.store(capacity, Ordering::Relaxed);
                     let supported =
                         id.plausible() && flash_task::StorageLayout::new(capacity).is_some();
-                    FLASH_READY.store(supported, Ordering::Release);
+                    flash_probe = flight_tasks::FlashProbe {
+                        ready: supported,
+                        jedec: [id.manufacturer, id.memory_type, id.capacity_code],
+                        capacity_bytes: capacity,
+                    };
                     info!(
                         "SPI2 flash JEDEC {:02x}:{:02x}:{:02x}, capacity {} bytes, supported {}",
                         id.manufacturer, id.memory_type, id.capacity_code, capacity, supported
@@ -449,14 +446,10 @@ ferroforge::app! {
         let imu_ready = spi1_imu.bringup.is_ready();
         let imu_kind = spi1_imu.bringup.kind().map_or(0, |kind| kind as u8);
         let identity = Identity {
-            imu_ready: IMU_TRANSPORT_READY.load(Ordering::Relaxed),
-            imu_kind: ACTIVE_IMU_KIND.load(Ordering::Relaxed),
-            flash_jedec: [
-                FLASH_JEDEC_MANUFACTURER.load(Ordering::Relaxed),
-                FLASH_JEDEC_MEMORY_TYPE.load(Ordering::Relaxed),
-                FLASH_JEDEC_CAPACITY_CODE.load(Ordering::Relaxed),
-            ],
-            flash_capacity_bytes: FLASH_CAPACITY_BYTES.load(Ordering::Relaxed),
+            imu_ready,
+            imu_kind,
+            flash_jedec: flash_probe.jedec,
+            flash_capacity_bytes: flash_probe.capacity_bytes,
         };
         let flight_tasks::CommandLinkChannels {
             configurator_command_producer,
@@ -470,7 +463,7 @@ ferroforge::app! {
         // port's function and line settings; it is read once, here, so a
         // changed binding applies after a reboot.
         board::aliases::assert_uart1_esc_telemetry_route_compile();
-        let serial_bindings = boot_serial_bindings(&mut flash_device);
+        let serial_bindings = boot_serial_bindings(&mut flash_device, &flash_probe);
         let board::init::UartPorts {
             uart1_rx,
             uart2_rx,
@@ -842,6 +835,7 @@ ferroforge::app! {
                 osd_safety_arm_reader: safety_arm_reader,
                 esc_safety_arm_reader: safety_arm_reader,
                 flash_safety_arm_reader: safety_arm_reader,
+                flash_probe,
                 motor_map_writer,
                 actuator_motor_map_reader: motor_map_reader,
                 dshot_release_writer,
@@ -907,7 +901,8 @@ ferroforge::app! {
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
-            storage_status_link, flash_safety_arm_reader, flash_commands, flash_responses,
+            storage_status_link, flash_safety_arm_reader, flash_probe, flash_commands,
+            flash_responses,
             flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
             stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             // control_loop
@@ -1030,7 +1025,7 @@ ferroforge::app! {
         #[task(priority = 10)]
         async fn rc_input;
         // Battery telemetry back through the RC receiver, when the RC protocol
-        // talks back. Lowest priority: it only reads snapshots.
+        // talks back. Lowest priority: it only reads the ledger.
         #[task(priority = 1)]
         async fn rc_telemetry;
         #[task(priority = 3)]

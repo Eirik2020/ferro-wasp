@@ -7,6 +7,7 @@
 //! crate: `cfg!(feature = ..)`, `board::` paths, and `env!` resolve where the
 //! macro expands.
 
+#[cfg(feature = "mspv2_configurator")]
 use crate::prelude::*;
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
@@ -63,19 +64,12 @@ pub mod prelude {
     pub use ferrowasp_stm32::uart_port as stm32_port;
 
     pub use crate as flight_tasks;
-    #[cfg(not(feature = "mspv2_configurator"))]
-    pub use crate::app::active_usb_debug_imu_kind;
     pub use crate::app::{
         ConfiguratorUsbState, FlashRpcCommandProducer, FlashRpcResponseConsumer, MspCommonInfoFn,
     };
     #[cfg(feature = "mspv2_configurator")]
     pub use crate::app::{fixed_bytes, handle_msp_packet, stage_rpc_response};
-    pub use crate::snapshots::{
-        ACTIVE_IMU_KIND, FLASH_CAPACITY_BYTES, FLASH_JEDEC_CAPACITY_CODE, FLASH_JEDEC_MANUFACTURER,
-        FLASH_JEDEC_MEMORY_TYPE, FLASH_LOG_RATE_DIVISOR, FLASH_PAGES_WRITTEN, FLASH_READY,
-        FLASH_RECORDS_DROPPED, FLASH_WRITE_FAULTS, IMU_TRANSPORT_READY, USB_DEBUG_DUE,
-        USB_HOST_CONNECTED, host_connected,
-    };
+    pub use crate::inbound::host_connected;
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
 
     pub type SerialPortEndpoint = stm32_port::SerialPortEndpoint;
@@ -131,7 +125,7 @@ pub type FlashRpcResponseConsumer = ();
 /// The board's MSPv2 identity for the common commands, configuration
 /// supplied to the USB task; `()` without the MSPv2 configurator.
 #[cfg(feature = "mspv2_configurator")]
-pub type MspCommonInfoFn = fn() -> mspv2::commands::CommonInfo<'static>;
+pub type MspCommonInfoFn = fn(bool, bool) -> mspv2::commands::CommonInfo<'static>;
 #[cfg(not(feature = "mspv2_configurator"))]
 pub type MspCommonInfoFn = ();
 
@@ -170,20 +164,6 @@ impl Default for ConfiguratorUsbState {
     }
 }
 
-/// The detected IMU, as the USB status line names it.
-#[cfg(not(feature = "mspv2_configurator"))]
-pub fn active_usb_debug_imu_kind() -> ferrowasp_cli::usb_debug::ImuKind {
-    use ferrowasp_cli::usb_debug::ImuKind;
-    use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
-    match Spi1ImuKind::from_discriminant(crate::snapshots::ACTIVE_IMU_KIND.load(Ordering::Relaxed))
-    {
-        Some(Spi1ImuKind::Mpu6500) => ImuKind::Mpu6500,
-        Some(Spi1ImuKind::Icm42688P) => ImuKind::Icm42688P,
-        Some(Spi1ImuKind::Mpu6000) => ImuKind::Mpu6000,
-        None => ImuKind::None,
-    }
-}
-
 /// `value`, cut or zero-padded to `N` bytes.
 #[cfg(feature = "mspv2_configurator")]
 pub fn fixed_bytes<const N: usize>(value: &[u8]) -> [u8; N] {
@@ -217,15 +197,18 @@ pub fn stage_rpc_response(
 }
 
 /// Answer one MSPv2 packet from the USB host: the common commands from the
-/// board's identity, `Hello` from its device information, and every other
-/// RPC request handed to the flash manager.
+/// board's identity, `Hello` from its device information, both with the arm
+/// state and IMU readiness the ledger shows, and every other RPC request
+/// handed to the flash manager.
 #[cfg(feature = "mspv2_configurator")]
 pub fn handle_msp_packet(
     packet: mspv2::MspPacket,
     state: &mut ConfiguratorUsbState,
     rpc_commands: &mut flash_task::RpcCommandProducer,
-    common_info: fn() -> mspv2::commands::CommonInfo<'static>,
-    device_info: fn() -> mspv2::rpc::DeviceInfo,
+    common_info: MspCommonInfoFn,
+    device_info: crate::RpcDeviceInfoFn,
+    armed: bool,
+    imu_ready: bool,
 ) {
     if packet.direction != mspv2::MspDirection::ToFlightController || state.pending_tx.is_pending()
     {
@@ -233,9 +216,11 @@ pub fn handle_msp_packet(
     }
 
     let mut common_payload = [0u8; 96];
-    if let Some(len) =
-        mspv2::commands::encode_common_payload(&packet, &common_info(), &mut common_payload)
-    {
+    if let Some(len) = mspv2::commands::encode_common_payload(
+        &packet,
+        &common_info(armed, imu_ready),
+        &mut common_payload,
+    ) {
         let _ = state.pending_tx.set(
             mspv2::MspDirection::FromFlightController,
             packet.flags,
@@ -275,7 +260,7 @@ pub fn handle_msp_packet(
     if request.operation == mspv2::rpc::Request::Hello {
         let response = mspv2::rpc::ok(
             request.request_id,
-            mspv2::rpc::Response::Hello(device_info()),
+            mspv2::rpc::Response::Hello(device_info(armed)),
         );
         let _ = stage_rpc_response(state, &response);
         return;
@@ -482,7 +467,7 @@ macro_rules! flight_app_facade {
 
         /// The board's MSPv2 identity for the common commands.
         #[cfg(feature = "mspv2_configurator")]
-        pub fn msp_common_info() -> mspv2::commands::CommonInfo<'static> {
+        pub fn msp_common_info(armed: bool, imu_ready: bool) -> mspv2::commands::CommonInfo<'static> {
             mspv2::commands::CommonInfo {
                 firmware_version: [0, 1, 0],
                 board_identifier: $msp_identifier,
@@ -493,14 +478,14 @@ macro_rules! flight_app_facade {
                 git_revision: fixed_bytes(env!("FWSP_GIT_REV").as_bytes()),
                 uid: device_uid(),
                 cycle_time_us: 2_500,
-                sensors: u16::from(IMU_TRANSPORT_READY.load(Ordering::Relaxed)),
-                armed: SAFETY_ARMED.load(Ordering::Acquire),
+                sensors: u16::from(imu_ready),
+                armed,
             }
         }
 
         /// The board's answer to the configurator's `Hello`.
         #[cfg(feature = "mspv2_configurator")]
-        pub fn rpc_device_info() -> mspv2::rpc::DeviceInfo {
+        pub fn rpc_device_info(armed: bool) -> mspv2::rpc::DeviceInfo {
             use mspv2::rpc::capabilities;
 
             let capabilities = capabilities::CONFIG_READ
@@ -519,7 +504,7 @@ macro_rules! flight_app_facade {
                 board_id_len: id.len() as u8,
                 mcu: $mcu,
                 device_serial: device_uid(),
-                armed: SAFETY_ARMED.load(Ordering::Acquire),
+                armed,
                 capabilities,
                 max_blackbox_chunk: mspv2::rpc::MAX_BLACKBOX_CHUNK as u16,
                 config_schema_version: mspv2::rpc::CONFIG_SCHEMA_VERSION,
@@ -540,9 +525,12 @@ macro_rules! flight_app_facade {
         /// the port bound to RC input: the saved values when storage holds a
         /// configuration, else the board's defaults. Read once in init, so a
         /// changed binding or protocol applies after a reboot.
-        pub fn boot_serial_bindings(flash: &mut FlashDevice) -> ResolvedBindings {
-            let saved = if FLASH_READY.load(Ordering::Acquire) {
-                flash_task::StorageLayout::new(FLASH_CAPACITY_BYTES.load(Ordering::Relaxed))
+        pub fn boot_serial_bindings(
+            flash: &mut FlashDevice,
+            probe: &flight_tasks::FlashProbe,
+        ) -> ResolvedBindings {
+            let saved = if probe.ready {
+                flash_task::StorageLayout::new(probe.capacity_bytes)
                     .and_then(|layout| {
                         flight_tasks::load_flash_config(flash, layout, DEFAULT_STORED_CONFIG).ok()
                     })
@@ -593,7 +581,7 @@ macro_rules! flight_app_facade {
         }
 
         /// The register the detected SPI1 IMU starts its DMA sample burst at,
-        /// from `ACTIVE_IMU_KIND`'s discriminant; `None` when no IMU was
+        /// from the detected kind's discriminant; `None` when no IMU was
         /// detected.
         pub const fn spi1_imu_burst_register(discriminant: u8) -> Option<u8> {
             match Spi1ImuKind::from_discriminant(discriminant) {

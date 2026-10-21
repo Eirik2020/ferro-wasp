@@ -74,19 +74,15 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   ledger, message contracts, the gyro-synced loop, `ferrowasp-config` and the
   new crate map. The redesign comes before the next hardware gate run, one
   change at a time against `main`, one mechanism at a time:
-  1. the rest of the observer and ledger in place of
-     `ferrowasp-stm32-tasks::snapshots`: the radio's stalled-topic warning
-     over CRSF telemetry (the OSD has its own); the values between core tasks as links, flags and init
-     values (the IMU sample with its accelerometer, the pre-arm status, the
-     motor map, the DShot release time, IMU readiness and kind); the gates'
-     arm-state reads through reader handles; the MSPv2 status replies from
-     the ledger; and `snapshots.rs` deleted. Then each task moves into its
-     subsystem crate behind a `tasks` feature, and the tasks crate's `dt` and
-     `flash_task` aliases go with the last of them; the control task's
-     `blackbox_defmt` output goes with it, since the record format is
-     non-critical;
-  2. the remaining SPSC links and typed flags; the coordinator, then reboot, config
-     transactions and accelerometer calibration through it; the boot
+  1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
+     own); then each task moves into its subsystem crate behind a `tasks`
+     feature, and the tasks crate's `dt` and `flash_task` aliases go with the
+     last of them; the control task's `blackbox_defmt` output goes with it,
+     since the record format is non-critical;
+  2. the remaining SPSC links and typed flags; the coordinator, taking the
+     values in `ferrowasp-stm32-tasks::inbound` (the host-connected flags and
+     the accelerometer level) and the OSD's `tuning_profile`, then reboot,
+     config transactions and accelerometer calibration through it; the boot
      fallback; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source; the Health Manager and
      the border heartbeats; the fault classes and the failsafe stages; the

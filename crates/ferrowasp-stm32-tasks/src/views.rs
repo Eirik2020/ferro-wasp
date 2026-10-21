@@ -57,12 +57,22 @@ pub fn rc_link(ledger: &Ledger, now_us: u64) -> (bool, bool) {
     (fresh && rc.value.valid, fresh && rc.value.armable)
 }
 
+/// The detected IMU, as the USB status line names it.
+#[cfg(not(feature = "mspv2_configurator"))]
+fn imu_kind(kind: u8) -> ImuKind {
+    match crate::Spi1ImuKind::from_discriminant(kind) {
+        Some(crate::Spi1ImuKind::Mpu6500) => ImuKind::Mpu6500,
+        Some(crate::Spi1ImuKind::Icm42688P) => ImuKind::Icm42688P,
+        Some(crate::Spi1ImuKind::Mpu6000) => ImuKind::Mpu6000,
+        None => ImuKind::None,
+    }
+}
+
 /// The USB status line.
 #[cfg(not(feature = "mspv2_configurator"))]
 pub fn status(
     ledger: &Ledger,
     uptime_ms: u32,
-    imu_kind: ImuKind,
     control_loop_hz: u32,
     now_us: u64,
 ) -> StatusSnapshot {
@@ -73,7 +83,7 @@ pub fn status(
     let (rc_valid, rc_armable) = rc_link(ledger, now_us);
     StatusSnapshot {
         uptime_ms,
-        imu_kind,
+        imu_kind: imu_kind(ledger.identity().imu_kind),
         imu_ready: ledger.identity().imu_ready,
         imu_sequence: imu.sample_seq,
         gyro_raw: imu.gyro_raw.map(i32::from),

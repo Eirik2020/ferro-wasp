@@ -3,8 +3,8 @@
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
 
+use crate::inbound::accel_level;
 use crate::prelude::*;
-use crate::snapshots::*;
 
 /// The time a motor command is stamped with: now, except in the
 /// `bench_motor_cmd_stale_rejection` fault-injection image, where the first

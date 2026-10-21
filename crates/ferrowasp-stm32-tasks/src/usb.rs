@@ -2,18 +2,19 @@
 //! the MSPv2 configurator, its RPC), bench motor requests passed to the
 //! safety master, and the periodic `FWDBG1` status line.
 
-#[cfg(not(feature = "mspv2_configurator"))]
-use crate::app::active_usb_debug_imu_kind;
 use crate::app::{
     ConfiguratorUsbState, FlashRpcCommandProducer, FlashRpcResponseConsumer, MspCommonInfoFn,
 };
 #[cfg(feature = "mspv2_configurator")]
 use crate::app::{handle_msp_packet, stage_rpc_response};
+use crate::inbound::USB_HOST_CONNECTED;
 use crate::prelude::backend::usb_serial::{BufferedUsbCdcSerial, UsbCdcDevice, UsbDeviceState};
 use crate::prelude::*;
-#[cfg(not(feature = "mspv2_configurator"))]
-use crate::snapshots::USB_DEBUG_DUE;
-use crate::snapshots::USB_HOST_CONNECTED;
+use core::sync::atomic::AtomicBool;
+
+/// The heartbeat sets it every two seconds, and the USB task writes a status
+/// line and clears it; both are non-critical.
+pub(crate) static STATUS_LINE_DUE: AtomicBool = AtomicBool::new(false);
 #[cfg(not(feature = "mspv2_configurator"))]
 use ferrowasp_cli::usb_debug;
 
@@ -139,12 +140,18 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
     #[cfg(feature = "mspv2_configurator")]
     for byte in &rx_buf[..read_len] {
         if let Ok(Some(packet)) = cx.local.configurator_usb.parser.parse(*byte) {
+            let (armed, imu_ready) = cx
+                .shared
+                .ledger
+                .lock(|ledger| (ledger.safety().value.armed, ledger.identity().imu_ready));
             handle_msp_packet(
                 packet,
                 cx.local.configurator_usb,
                 cx.local.flash_rpc_command_producer,
                 CONFIG::MSP_COMMON_INFO,
                 CONFIG::RPC_DEVICE_INFO,
+                armed,
+                imu_ready,
             );
         }
     }
@@ -214,7 +221,7 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
     }
 
     #[cfg(not(feature = "mspv2_configurator"))]
-    if !USB_DEBUG_DUE.swap(false, Ordering::AcqRel) {
+    if !STATUS_LINE_DUE.swap(false, Ordering::AcqRel) {
         return;
     }
 
@@ -226,7 +233,6 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
                 ledger,
                 // The status format carries 32-bit milliseconds, 49.7 days.
                 now.to_millis() as u32,
-                active_usb_debug_imu_kind(),
                 CONFIG::CONTROL_LOOP_HZ,
                 now.to_micros(),
             )
@@ -234,7 +240,7 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
     };
     #[cfg(not(feature = "mspv2_configurator"))]
     let Ok(line) = usb_debug::format_status(snapshot) else {
-        USB_DEBUG_DUE.store(true, Ordering::Release);
+        STATUS_LINE_DUE.store(true, Ordering::Release);
         return;
     };
 
@@ -243,6 +249,6 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
         serial.write(line.as_bytes()),
         Ok(written) if written == line.len()
     ) {
-        USB_DEBUG_DUE.store(true, Ordering::Release);
+        STATUS_LINE_DUE.store(true, Ordering::Release);
     }
 }

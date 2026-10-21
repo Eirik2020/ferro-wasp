@@ -1,13 +1,9 @@
-//! What is left of the latest-value snapshots once the observer's ledger
-//! carries everything a reader outside the core sees: values between core
-//! tasks, which become links, flags and init values; the inbound values the
-//! coordinator will take; and the flash manager's own state.
-//!
-//! One static per value for the whole firmware: a task that writes one and a
-//! task that reads it must name the same static, so a firmware re-exports
-//! these by name and never defines its own.
+//! The values non-critical tasks hand the safety-critical side today, kept
+//! together until the coordinator takes them in through its typed requests
+//! (ADR-0056, section 11): the host-connected flags the arming guard reads,
+//! and the stored accelerometer level the control loop subtracts.
 
-use core::sync::atomic::{AtomicBool, AtomicI16, AtomicU8, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicI16, Ordering};
 
 /// A USB host has the board configured, written by the USB task. The
 /// Foxeer has no VBUS sense pin, so a power-only USB supply does not count.
@@ -46,16 +42,3 @@ pub fn accel_level() -> ferrowasp_control::calibration::accel_level::AccelLevel 
 pub fn host_connected() -> bool {
     USB_HOST_CONNECTED.load(Ordering::Acquire) || CONFIGURATOR_LINK_ACTIVE.load(Ordering::Acquire)
 }
-pub static IMU_TRANSPORT_READY: AtomicBool = AtomicBool::new(false);
-pub static ACTIVE_IMU_KIND: AtomicU8 = AtomicU8::new(0);
-
-pub static USB_DEBUG_DUE: AtomicBool = AtomicBool::new(false);
-pub static FLASH_READY: AtomicBool = AtomicBool::new(false);
-pub static FLASH_JEDEC_MANUFACTURER: AtomicU8 = AtomicU8::new(0);
-pub static FLASH_JEDEC_MEMORY_TYPE: AtomicU8 = AtomicU8::new(0);
-pub static FLASH_JEDEC_CAPACITY_CODE: AtomicU8 = AtomicU8::new(0);
-pub static FLASH_CAPACITY_BYTES: AtomicU32 = AtomicU32::new(0);
-pub static FLASH_LOG_RATE_DIVISOR: AtomicU32 = AtomicU32::new(1);
-pub static FLASH_RECORDS_DROPPED: AtomicU32 = AtomicU32::new(0);
-pub static FLASH_PAGES_WRITTEN: AtomicU32 = AtomicU32::new(0);
-pub static FLASH_WRITE_FAULTS: AtomicU32 = AtomicU32::new(0);

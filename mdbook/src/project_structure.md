@@ -31,7 +31,7 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-serial` | The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer |
 | `ferrowasp-mspv1` | MSPv1 framing and the DJI O4 OSD responder |
 | `ferrowasp-mspv2` | MSPv2 framing and the opt-in configurator RPC |
-| `ferrowasp-osd` | The MSP OSD the DJI goggles show, encoded from snapshots of the craft's state |
+| `ferrowasp-osd` | The MSP OSD the DJI goggles show, encoded from the craft's published state, with a warning when it stops updating |
 | `ferrowasp-output` | Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
 | `ferrowasp-stm32-critical` | The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory |
