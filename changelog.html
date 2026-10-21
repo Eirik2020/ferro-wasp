@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
+            window.path_to_searchindex_js = "searchindex-e9849004.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -246,6 +246,13 @@ configured, or the configurator link was used in the last 2 seconds. The
 configurator’s pre-arm checklist shows it as “USB unplugged”.</p>
 </li>
 <li>
+<p>Task definitions live in their subsystem’s crate behind a target-only
+<code>tasks</code> feature, and <code>ferrowasp-stm32-tasks</code> is now <code>ferrowasp-stm32-app</code>,
+the application glue every STM32 board shares. The tasks hand each other
+state over bounded links and single-writer flags, and everything shown to
+the pilot or a host is read from one published ledger.</p>
+</li>
+<li>
 <p>Crate layout, again: every shared crate is now either safety-critical or not,
 and a safety-critical crate never depends on one that is not; the check runs
 in CI. <code>ferrowasp-core</code>, <code>-flight</code>, <code>-drivers</code>, <code>-pid</code>, <code>-waveform</code> and
@@ -309,6 +316,10 @@ the blackbox analyzer measures the control rate from the log.</li>
 </ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
+<li>The <code>blackbox_defmt</code> bench feature and its per-tick <code>BB2</code> RTT frames. The
+onboard blackbox and FerroConfigurator’s <code>convert --csv</code> export carry the
+same values; <code>blackbox_analyzer.py</code> still reads <code>BB1</code> and <code>BB2</code> captures
+made before.</li>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
 2026-09-22. It is no longer built; its retained evidence stays in the
 project archive.</li>

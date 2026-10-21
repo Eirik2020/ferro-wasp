@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
+            window.path_to_searchindex_js = "searchindex-e9849004.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -209,7 +209,7 @@ configuration belongs in a shared crate.</li>
 <li>Put every hardware fact in the new board data crate, with tests, and its
 own defaults.</li>
 <li>Keep <code>src/main.rs</code> to the <code>ferroforge::app!</code> declaration. It selects the
-shared task groups in <code>ferrowasp-stm32-tasks::groups</code>, <code>flight</code> and
+shared task groups in <code>ferrowasp-stm32-app::groups</code>, <code>flight</code> and
 <code>spi1_imu</code>, binding their resources once and giving each member its
 priority and interrupt, and declares only what differs by board: UART
 transports, DShot DMA completions, and status LEDs.</li>

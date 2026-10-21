@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
+            window.path_to_searchindex_js = "searchindex-e9849004.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1095,9 +1095,9 @@ orientation or the motor order withdraws that and requires the checks again.
 Those checks were made with the ICM42688-P, so a Foxeer that detects an
 MPU-6000 samples and reports it but fails the pre-arm IMU check until its axes
 and signs are verified on a board that carries one.</p>
-<p>The optional BB2 <code>gyro10</code> values use the same measured-rate convention passed
-to the rate PID. Host viewers should display those roll, pitch, and yaw fields
-directly.</p>
+<p>The blackbox’s filtered gyro values use the same measured-rate convention
+passed to the rate PID. Host viewers should display those roll, pitch, and yaw
+fields directly.</p>
 <p>See <a href="#bench-and-analysis-tools">Bench and Analysis Tools</a> for the terminal logger and live
 IMU viewer.</p>
 <h2 id="foxeer-bring-up-checklist"><a class="header" href="#foxeer-bring-up-checklist">Foxeer Bring-Up Checklist</a></h2>
@@ -1914,8 +1914,9 @@ verify the saved table by readback.</li>
 stream, and the function task decides what a fault means. Each family’s
 backend starts one port at a time (<code>start_rx_tx_port</code>, <code>start_rx_port</code>);
 a board’s <code>init_uart_ports</code>, in its <code>src/board/</code>, chooses which ports, pins,
-and DMA streams it has, and <code>crates/ferrowasp-stm32-tasks/src/uart_port.rs</code> defines the receive
-and transmit tasks of every logical port for a board to bind. All UART
+and DMA streams it has, and
+<code>crates/ferrowasp-stm32-critical/src/tasks/uart_port.rs</code> defines the
+receive and transmit tasks of every logical port for a board to bind. All UART
 transports run at priority 11, since any port may serve any function; the
 function tasks keep their own priorities.</li>
 </ul>
@@ -2199,13 +2200,20 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend’s non-critical half: ADC, USB serial, the device ID; and re-exports of the critical half</td></tr>
 <tr><td><code>ferrowasp-stm32h7-critical</code></td><td>The STM32H743 backend’s safety-critical half over <code>stm32h7xx-hal</code>: DShot and its DMA endpoints, SPI and UART DMA, clocks and timers, the ROM bootloader entry</td></tr>
 <tr><td><code>ferrowasp-stm32h7</code></td><td>The STM32H743 backend’s non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half</td></tr>
-<tr><td><code>ferrowasp-stm32-tasks</code></td><td>The RTIC task definitions every STM32 flight board shares, including the flash manager</td></tr>
+<tr><td><code>ferrowasp-stm32-app</code></td><td>What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks</td></tr>
 </tbody>
 </table>
 </div>
 <p>Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
 safety-critical halves hold unsafe code: their DMA endpoint declarations and
 their jump into the chip’s ROM bootloader.</p>
+<p>Task definitions live in their subsystem’s crate, behind a target-only
+<code>tasks</code> feature, so the logic beside them stays host-tested: the safety
+master in <code>ferrowasp-safety</code>, the control loop in <code>ferrowasp-flight-control</code>,
+the observer in <code>ferrowasp-border</code>, the SPI1 IMU and UART transports in
+<code>ferrowasp-stm32-critical</code>, the command line’s in <code>ferrowasp-cli</code>, the OSD’s
+and RC telemetry in <code>ferrowasp-osd</code>, and the ADC and status LEDs in
+<code>ferrowasp-stm32</code>.</p>
 <p>A safety-critical crate declares <code>[package.metadata.ferrowasp] critical = true</code> and never depends on a crate that does not; its external dependencies
 are pinned to one version.</p>
 <h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
@@ -2287,7 +2295,7 @@ configuration belongs in a shared crate.</li>
 <li>Put every hardware fact in the new board data crate, with tests, and its
 own defaults.</li>
 <li>Keep <code>src/main.rs</code> to the <code>ferroforge::app!</code> declaration. It selects the
-shared task groups in <code>ferrowasp-stm32-tasks::groups</code>, <code>flight</code> and
+shared task groups in <code>ferrowasp-stm32-app::groups</code>, <code>flight</code> and
 <code>spi1_imu</code>, binding their resources once and giving each member its
 priority and interrupt, and declares only what differs by board: UART
 transports, DShot DMA completions, and status LEDs.</li>
@@ -2330,8 +2338,8 @@ blackbox fixture, a real Foxeer log slice, is checked by the shared format
 code, by FerroConfigurator’s CSV and ULog exports byte for byte, and by the
 analyzer.</li>
 <li>Firmware decisions are tested on the host, so they cannot live where only the
-target runs them. A task in <code>ferrowasp-stm32-tasks</code> wires resources, locks,
-spawns and queues; each decision it makes, a refusal rule, a state machine, a
+target runs them. A task definition, in whichever crate holds it, wires
+resources, locks, spawns and queues; each decision it makes, a refusal rule, a state machine, a
 unit conversion, is a function in a HAL-free crate with tests, such as
 <code>reboot_refusal</code> in <code>ferrowasp-cli</code> and <code>AccelLevelCalibration</code> in
 <code>ferrowasp-control</code>.</li>
@@ -2418,38 +2426,11 @@ tolerated, storage identity and capacity, and blackbox pages written, records
 dropped, write faults, and the log-rate divisor. The <code>imu_transport_rtt</code>
 feature adds raw gyro and data-ready interrupt counts, and
 <code>imu_orientation_rtt</code> an orientation snapshot; <a href="#imu">IMU</a> describes them.</p>
-<h2 id="blackbox-frames-over-rtt"><a class="header" href="#blackbox-frames-over-rtt">Blackbox Frames over RTT</a></h2>
-<p>The <code>blackbox_defmt</code> feature emits one compact <code>BB2</code> frame per control tick
-over the same RTT stream, which <code>defmt-rtt</code> owns:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features blackbox_defmt
-</code></pre>
-<pre><code class="language-text">BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Field</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>seq</code></td><td>Control-tick sequence</td></tr>
-<tr><td><code>imu</code></td><td>IMU sample sequence used by this tick</td></tr>
-<tr><td><code>flags</code></td><td>Bit 0 armed, bit 1 IMU fresh</td></tr>
-<tr><td><code>raw10</code></td><td>Unfiltered roll, pitch, yaw rates in 0.1 deg/s</td></tr>
-<tr><td><code>gyro10</code></td><td>Filtered roll, pitch, yaw rates in 0.1 deg/s, as the PID sees them</td></tr>
-<tr><td><code>cmd10</code></td><td>Commanded roll, pitch, yaw rates in 0.1 deg/s</td></tr>
-<tr><td><code>pid</code></td><td>Total PID output per axis</td></tr>
-<tr><td><code>thr</code></td><td>Throttle setpoint in PWM-style command units</td></tr>
-<tr><td><code>motors</code></td><td>Mixed motor commands in PWM-style command units</td></tr>
-</tbody>
-</table>
-</div>
-<p>Disarmed, PID and motor fields are zero. With <code>bench_equal_motors</code>, PID is zero
-and every motor carries the capped throttle. A gap in <code>seq</code> is RTT transport
-loss, reported separately from IMU progress.</p>
 <h2 id="blackbox-analyzer"><a class="header" href="#blackbox-analyzer">Blackbox Analyzer</a></h2>
-<p>With no argument, the analyzer reads the newest RTT log and measures the
-control rate from it:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
+<p>The analyzer reads one onboard flight exported by FerroConfigurator’s
+<code>convert FLIGHT.fwbb --csv</code>, or an RTT capture carrying <code>BB1</code> or <code>BB2</code> frames
+from firmware that sent them, and measures the control rate from the log:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest flight.csv
 </code></pre>
 <p><code>--mode auto</code>, the default, classifies large low-frequency movement as motion,
 for hand-motion tests. <code>--mode rest</code> treats all filtered-gyro variation as
@@ -2461,11 +2442,12 @@ hand swing, trim the pickup and put-down:</p>
 <h2 id="imu-live-view"><a class="header" href="#imu-live-view">IMU Live View</a></h2>
 <pre><code class="language-powershell">python tools\imu_live_view.py
 </code></pre>
-<p>The viewer runs <code>terminal_embed.py</code> and plots what it reads. From <code>BB2</code> frames
-it shows measured against commanded rates, PID output, throttle, and motors. It
-does not echo every RTT line, which would make the plot lag; <code>--echo-rtt</code>
-turns echo on, and <code>--ui-hz 15</code> lowers the redraw rate on a slow PC.</p>
-<p>From heartbeat IMU lines it can also draw an attitude estimate. <code>--attitude gyro</code>, the default, seeds roll and pitch from gravity once and then integrates
+<p>The viewer runs <code>terminal_embed.py</code> and plots what it reads. The firmware no
+longer sends <code>BB2</code> rate frames, so the measured-against-commanded plots stay
+empty; the onboard blackbox and its CSV export carry those values. It does not
+echo every RTT line, which would make the plot lag; <code>--echo-rtt</code> turns echo
+on, and <code>--ui-hz 15</code> lowers the redraw rate on a slow PC.</p>
+<p>From heartbeat IMU lines it draws an attitude estimate. <code>--attitude gyro</code>, the default, seeds roll and pitch from gravity once and then integrates
 gyro rates; <code>--attitude accel</code> keeps pulling roll and pitch back toward
 gravity. Yaw is gyro-only in both and drifts. <code>accel_live_plot.py</code> is an older
 name for the same viewer.</p>
@@ -2699,6 +2681,13 @@ configured, or the configurator link was used in the last 2 seconds. The
 configurator’s pre-arm checklist shows it as “USB unplugged”.</p>
 </li>
 <li>
+<p>Task definitions live in their subsystem’s crate behind a target-only
+<code>tasks</code> feature, and <code>ferrowasp-stm32-tasks</code> is now <code>ferrowasp-stm32-app</code>,
+the application glue every STM32 board shares. The tasks hand each other
+state over bounded links and single-writer flags, and everything shown to
+the pilot or a host is read from one published ledger.</p>
+</li>
+<li>
 <p>Crate layout, again: every shared crate is now either safety-critical or not,
 and a safety-critical crate never depends on one that is not; the check runs
 in CI. <code>ferrowasp-core</code>, <code>-flight</code>, <code>-drivers</code>, <code>-pid</code>, <code>-waveform</code> and
@@ -2762,6 +2751,10 @@ the blackbox analyzer measures the control rate from the log.</li>
 </ul>
 <h3 id="removed"><a class="header" href="#removed">Removed</a></h3>
 <ul>
+<li>The <code>blackbox_defmt</code> bench feature and its per-tick <code>BB2</code> RTT frames. The
+onboard blackbox and FerroConfigurator’s <code>convert --csv</code> export carry the
+same values; <code>blackbox_analyzer.py</code> still reads <code>BB1</code> and <code>BB2</code> captures
+made before.</li>
 <li>The FerroWasp FCU3 app (<code>firmware/stm32f405-flight</code>), obsolete since
 2026-09-22. It is no longer built; its retained evidence stays in the
 project archive.</li>

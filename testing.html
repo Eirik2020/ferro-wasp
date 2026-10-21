@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
+            window.path_to_searchindex_js = "searchindex-e9849004.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -209,8 +209,8 @@ blackbox fixture, a real Foxeer log slice, is checked by the shared format
 code, by FerroConfigurator’s CSV and ULog exports byte for byte, and by the
 analyzer.</li>
 <li>Firmware decisions are tested on the host, so they cannot live where only the
-target runs them. A task in <code>ferrowasp-stm32-tasks</code> wires resources, locks,
-spawns and queues; each decision it makes, a refusal rule, a state machine, a
+target runs them. A task definition, in whichever crate holds it, wires
+resources, locks, spawns and queues; each decision it makes, a refusal rule, a state machine, a
 unit conversion, is a function in a HAL-free crate with tests, such as
 <code>reboot_refusal</code> in <code>ferrowasp-cli</code> and <code>AccelLevelCalibration</code> in
 <code>ferrowasp-control</code>.</li>

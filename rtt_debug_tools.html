@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
+            window.path_to_searchindex_js = "searchindex-e9849004.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -221,38 +221,11 @@ tolerated, storage identity and capacity, and blackbox pages written, records
 dropped, write faults, and the log-rate divisor. The <code>imu_transport_rtt</code>
 feature adds raw gyro and data-ready interrupt counts, and
 <code>imu_orientation_rtt</code> an orientation snapshot; <a href="imu.html">IMU</a> describes them.</p>
-<h2 id="blackbox-frames-over-rtt"><a class="header" href="#blackbox-frames-over-rtt">Blackbox Frames over RTT</a></h2>
-<p>The <code>blackbox_defmt</code> feature emits one compact <code>BB2</code> frame per control tick
-over the same RTT stream, which <code>defmt-rtt</code> owns:</p>
-<pre><code class="language-powershell">python tools\terminal_embed.py --release --locked --features blackbox_defmt
-</code></pre>
-<pre><code class="language-text">BB2 seq 1234 imu 5678 flags 3 raw10 [12, -21, 6] gyro10 [10, -20, 5] cmd10 [0, 0, 0] pid [1, -2, 0] thr 1175 motors [1175, 1176, 1174, 1175]
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Field</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>seq</code></td><td>Control-tick sequence</td></tr>
-<tr><td><code>imu</code></td><td>IMU sample sequence used by this tick</td></tr>
-<tr><td><code>flags</code></td><td>Bit 0 armed, bit 1 IMU fresh</td></tr>
-<tr><td><code>raw10</code></td><td>Unfiltered roll, pitch, yaw rates in 0.1 deg/s</td></tr>
-<tr><td><code>gyro10</code></td><td>Filtered roll, pitch, yaw rates in 0.1 deg/s, as the PID sees them</td></tr>
-<tr><td><code>cmd10</code></td><td>Commanded roll, pitch, yaw rates in 0.1 deg/s</td></tr>
-<tr><td><code>pid</code></td><td>Total PID output per axis</td></tr>
-<tr><td><code>thr</code></td><td>Throttle setpoint in PWM-style command units</td></tr>
-<tr><td><code>motors</code></td><td>Mixed motor commands in PWM-style command units</td></tr>
-</tbody>
-</table>
-</div>
-<p>Disarmed, PID and motor fields are zero. With <code>bench_equal_motors</code>, PID is zero
-and every motor carries the capped throttle. A gap in <code>seq</code> is RTT transport
-loss, reported separately from IMU progress.</p>
 <h2 id="blackbox-analyzer"><a class="header" href="#blackbox-analyzer">Blackbox Analyzer</a></h2>
-<p>With no argument, the analyzer reads the newest RTT log and measures the
-control rate from it:</p>
-<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest --csv logs\terminal_embed\latest_blackbox.csv
+<p>The analyzer reads one onboard flight exported by FerroConfigurator’s
+<code>convert FLIGHT.fwbb --csv</code>, or an RTT capture carrying <code>BB1</code> or <code>BB2</code> frames
+from firmware that sent them, and measures the control rate from the log:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py --mode rest flight.csv
 </code></pre>
 <p><code>--mode auto</code>, the default, classifies large low-frequency movement as motion,
 for hand-motion tests. <code>--mode rest</code> treats all filtered-gyro variation as
@@ -264,11 +237,12 @@ hand swing, trim the pickup and put-down:</p>
 <h2 id="imu-live-view"><a class="header" href="#imu-live-view">IMU Live View</a></h2>
 <pre><code class="language-powershell">python tools\imu_live_view.py
 </code></pre>
-<p>The viewer runs <code>terminal_embed.py</code> and plots what it reads. From <code>BB2</code> frames
-it shows measured against commanded rates, PID output, throttle, and motors. It
-does not echo every RTT line, which would make the plot lag; <code>--echo-rtt</code>
-turns echo on, and <code>--ui-hz 15</code> lowers the redraw rate on a slow PC.</p>
-<p>From heartbeat IMU lines it can also draw an attitude estimate. <code>--attitude gyro</code>, the default, seeds roll and pitch from gravity once and then integrates
+<p>The viewer runs <code>terminal_embed.py</code> and plots what it reads. The firmware no
+longer sends <code>BB2</code> rate frames, so the measured-against-commanded plots stay
+empty; the onboard blackbox and its CSV export carry those values. It does not
+echo every RTT line, which would make the plot lag; <code>--echo-rtt</code> turns echo
+on, and <code>--ui-hz 15</code> lowers the redraw rate on a slow PC.</p>
+<p>From heartbeat IMU lines it draws an attitude estimate. <code>--attitude gyro</code>, the default, seeds roll and pitch from gravity once and then integrates
 gyro rates; <code>--attitude accel</code> keeps pulling roll and pitch back toward
 gravity. Yaw is gyro-only in both and drifts. <code>accel_live_plot.py</code> is an older
 name for the same viewer.</p>
