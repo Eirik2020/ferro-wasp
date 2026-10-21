@@ -14,7 +14,8 @@ pub type Spi1CsPin = PA4<Input>;
 pub type Spi1SckPin = PA5<Input>;
 pub type Spi1MisoPin = PA6<Input>;
 pub type Spi1MosiPin = PA7<Input>;
-pub type ImuDataReadyPin = PC4<Input>;
+/// The IMU data-ready line, PC4, as an interrupt input.
+pub type ImuDataReadyPin = ferrowasp_stm32f4::exti::ExtiInput<PC4<Input>>;
 
 pub type Spi2FlashCsPin = PB12<Input>;
 pub type Spi2FlashSckPin = PB13<Input>;

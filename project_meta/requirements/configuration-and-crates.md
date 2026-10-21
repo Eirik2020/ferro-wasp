@@ -234,7 +234,8 @@ writer, blackbox storage, sync ledger, storage maintenance),
 non-critical `ferrowasp-stm32`, `-stm32f4`, `-stm32h7`.
 
 Dissolved: `ferrowasp-core`, `ferrowasp-io-core`, `ferrowasp-flight`,
-`ferrowasp-drivers`, `ferrowasp-pid`, `ferrowasp-waveform`,
-`ferrowasp-stm32-tasks`.
+`ferrowasp-drivers`, `ferrowasp-pid`, `ferrowasp-waveform`.
+`ferrowasp-stm32-tasks` became `ferrowasp-stm32-app`, the application glue,
+and the flash manager went to `ferrowasp-cli` (ADR-0065).
 
 Names are working names until each crate is created.

@@ -43,8 +43,8 @@ mdbook build mdbook
   code, by FerroConfigurator's CSV and ULog exports byte for byte, and by the
   analyzer.
 - Firmware decisions are tested on the host, so they cannot live where only the
-  target runs them. A task in `ferrowasp-stm32-tasks` wires resources, locks,
-  spawns and queues; each decision it makes, a refusal rule, a state machine, a
+  target runs them. A task definition, in whichever crate holds it, wires
+  resources, locks, spawns and queues; each decision it makes, a refusal rule, a state machine, a
   unit conversion, is a function in a HAL-free crate with tests, such as
   `reboot_refusal` in `ferrowasp-cli` and `AccelLevelCalibration` in
   `ferrowasp-control`.

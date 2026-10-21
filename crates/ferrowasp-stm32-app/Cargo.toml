@@ -1,5 +1,5 @@
 [package]
-name = "ferrowasp-stm32-tasks"
+name = "ferrowasp-stm32-app"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
@@ -23,23 +23,22 @@ stm32h743 = ["dep:ferrowasp-stm32h7", "ferrowasp-stm32h7/stm32h743"]
 dshot = ["ferrowasp-stm32/dshot", "ferrowasp-stm32f4?/dshot"]
 # Diagnostics a firmware opts into; forwarded from its own features of the
 # same name.
-imu_transport_rtt = []
-imu_orientation_rtt = ["imu_transport_rtt"]
+imu_transport_rtt = ["ferrowasp-cli/imu_transport_rtt"]
+imu_orientation_rtt = ["imu_transport_rtt", "ferrowasp-cli/imu_orientation_rtt"]
 # Bench and fault-injection images, forwarded from the firmware feature of
 # the same name. Never in a flight image.
-bench_motor1_only = ["ferrowasp-safety/bench_motor1_only"]
-bench_motor2_only = ["ferrowasp-safety/bench_motor2_only"]
-bench_motor3_only = ["ferrowasp-safety/bench_motor3_only"]
-bench_motor4_only = ["ferrowasp-safety/bench_motor4_only"]
-bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only"]
-bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only"]
-bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only"]
-bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only"]
-bench_blackbox = []
+bench_motor1_only = ["ferrowasp-safety/bench_motor1_only", "ferrowasp-flight-control/bench_motor1_only"]
+bench_motor2_only = ["ferrowasp-safety/bench_motor2_only", "ferrowasp-flight-control/bench_motor2_only"]
+bench_motor3_only = ["ferrowasp-safety/bench_motor3_only", "ferrowasp-flight-control/bench_motor3_only"]
+bench_motor4_only = ["ferrowasp-safety/bench_motor4_only", "ferrowasp-flight-control/bench_motor4_only"]
+bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only", "ferrowasp-flight-control/bench_logical_motor1_only"]
+bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only", "ferrowasp-flight-control/bench_logical_motor2_only"]
+bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only", "ferrowasp-flight-control/bench_logical_motor3_only"]
+bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only", "ferrowasp-flight-control/bench_logical_motor4_only"]
+bench_blackbox = ["ferrowasp-flight-control/bench_blackbox", "ferrowasp-cli/bench_blackbox"]
 bench_dshot_idle_output1_not_running = []
-bench_equal_motors = []
-bench_motor_cmd_stale_rejection = []
-blackbox_defmt = ["ferrowasp-protocol/blackbox_defmt"]
+bench_equal_motors = ["ferrowasp-flight-control/bench_equal_motors"]
+bench_motor_cmd_stale_rejection = ["ferrowasp-flight-control/bench_motor_cmd_stale_rejection"]
 # The MSPv2 configurator path in the flash manager, forwarded from the
 # firmware feature of the same name.
 mspv2_configurator = ["ferrowasp-cli/mspv2_configurator", "dep:ferrowasp-mspv2"]
@@ -51,29 +50,30 @@ embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io-async = { workspace = true }
 ferrowasp-blackbox = { path = "../ferrowasp-blackbox" }
-ferrowasp-border = { path = "../ferrowasp-border" }
+ferrowasp-border = { path = "../ferrowasp-border", features = ["tasks"] }
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
-ferrowasp-cli = { path = "../ferrowasp-cli" }
+ferrowasp-cli = { path = "../ferrowasp-cli", features = ["tasks"] }
 ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-crsf = { path = "../ferrowasp-crsf" }
 ferrowasp-feedback = { path = "../ferrowasp-feedback" }
-ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control", features = ["tasks"] }
 ferrowasp-icm42688p = { path = "../ferrowasp-icm42688p" }
 ferrowasp-imu = { path = "../ferrowasp-imu" }
 ferrowasp-input = { path = "../ferrowasp-input" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 ferrowasp-mpu6000 = { path = "../ferrowasp-mpu6000" }
 ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500" }
-ferrowasp-osd = { path = "../ferrowasp-osd" }
+ferrowasp-osd = { path = "../ferrowasp-osd", features = ["tasks"] }
 ferrowasp-protocol = { path = "../ferrowasp-protocol" }
-ferrowasp-safety = { path = "../ferrowasp-safety" }
+ferrowasp-safety = { path = "../ferrowasp-safety", features = ["tasks"] }
 ferrowasp-serial = { path = "../ferrowasp-serial" }
 ferrowasp-storage = { path = "../ferrowasp-storage" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 heapless = { workspace = true }
-ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32", features = ["tasks"] }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", features = ["tasks"] }
 ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4", optional = true }
 ferrowasp-stm32h7 = { path = "../ferrowasp-stm32h7", optional = true }
 

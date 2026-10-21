@@ -71,6 +71,11 @@ artifact is stable, airworthy, or production-ready.
   configured, or the configurator link was used in the last 2 seconds. The
   configurator's pre-arm checklist shows it as "USB unplugged".
 
+- Task definitions live in their subsystem's crate behind a target-only
+  `tasks` feature, and `ferrowasp-stm32-tasks` is now `ferrowasp-stm32-app`,
+  the application glue every STM32 board shares. The tasks hand each other
+  state over bounded links and single-writer flags, and everything shown to
+  the pilot or a host is read from one published ledger.
 - Crate layout, again: every shared crate is now either safety-critical or not,
   and a safety-critical crate never depends on one that is not; the check runs
   in CI. `ferrowasp-core`, `-flight`, `-drivers`, `-pid`, `-waveform` and
@@ -117,6 +122,10 @@ artifact is stable, airworthy, or production-ready.
 
 ### Removed
 
+- The `blackbox_defmt` bench feature and its per-tick `BB2` RTT frames. The
+  onboard blackbox and FerroConfigurator's `convert --csv` export carry the
+  same values; `blackbox_analyzer.py` still reads `BB1` and `BB2` captures
+  made before.
 - The FerroWasp FCU3 app (`firmware/stm32f405-flight`), obsolete since
   2026-09-22. It is no longer built; its retained evidence stays in the
   project archive.

@@ -1,8 +1,9 @@
 //! The board's status LEDs: a heartbeat that shows the scheduler is running,
 //! and the arm state.
 
-use crate::prelude::*;
-use ferrowasp_stm32::status_led::StatusLed;
+use crate::status_led::StatusLed;
+use ferrowasp_safety::signals;
+use fugit::ExtU64 as _;
 
 /// One LED update every 100 ms; the heartbeat spends five of them lit and
 /// five dark, a 1 Hz blink.

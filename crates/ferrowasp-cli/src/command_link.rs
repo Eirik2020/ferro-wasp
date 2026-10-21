@@ -95,23 +95,34 @@ impl CommandSources {
     }
 }
 
-/// The storage owner's response queues, and which link the next answer is
-/// for.
+/// The storage owner's response queues, which link the next answer is for,
+/// and how to wake the USB task, which serves its queue on its interrupt.
 pub struct ResponseRouter {
     usb: ResponseProducer,
     serial: Option<ResponseProducer>,
     reply_to: CommandLink,
     maintenance: CommandLink,
+    wake_usb: fn(),
 }
 
 impl ResponseRouter {
-    pub const fn new(usb: ResponseProducer, serial: Option<ResponseProducer>) -> Self {
+    pub const fn new(
+        usb: ResponseProducer,
+        serial: Option<ResponseProducer>,
+        wake_usb: fn(),
+    ) -> Self {
         Self {
             usb,
             serial,
             reply_to: CommandLink::Usb,
             maintenance: CommandLink::Usb,
+            wake_usb,
         }
+    }
+
+    /// Wake the USB task to send what is queued for it.
+    pub fn wake_usb(&self) {
+        (self.wake_usb)();
     }
 
     /// Answer the command that just came in on `link`.
@@ -165,7 +176,11 @@ mod tests {
     fn router() -> (ResponseRouter, ResponseConsumer, ResponseConsumer) {
         let (usb, usb_out) = Box::leak(Box::new(ResponseQueue::new())).split();
         let (serial, serial_out) = Box::leak(Box::new(ResponseQueue::new())).split();
-        (ResponseRouter::new(usb, Some(serial)), usb_out, serial_out)
+        (
+            ResponseRouter::new(usb, Some(serial), || {}),
+            usb_out,
+            serial_out,
+        )
     }
 
     #[test]
@@ -191,7 +206,7 @@ mod tests {
     #[test]
     fn a_board_without_a_serial_link_cannot_answer_one() {
         let (usb, _usb_out) = Box::leak(Box::new(ResponseQueue::new())).split();
-        let mut router = ResponseRouter::new(usb, None);
+        let mut router = ResponseRouter::new(usb, None, || {});
         router.answer(CommandLink::Serial);
         assert!(!router.send(line("OK\r\n")));
     }

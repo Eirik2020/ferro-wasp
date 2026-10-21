@@ -201,8 +201,7 @@ ferroforge::app! {
         storage_status_link: ObserverLink<observed::StorageStatus>,
 
         // USB CDC serial
-        usb_dev: UsbDebugDevice,
-        usb_serial: UsbDebugSerial,
+        usb_cdc: UsbCdcLink,
         usb_header_sent: bool,
         configurator_usb: ConfiguratorUsbState,
     }
@@ -302,7 +301,7 @@ ferroforge::app! {
         let io_timebase = stm32_timebase::MicrosecondTimebase::new(dp.TIM2, &mut clocks).unwrap();
         let io_watchdog = stm32_watchdog::init_io_watchdog(dp.TIM6, &mut clocks).unwrap();
 
-        let (usb_dev, usb_serial) = stm32_usb::init_usb_cdc_serial(
+        let usb_cdc = stm32_usb::init_usb_cdc_serial(
             (dp.OTG_FS_GLOBAL, dp.OTG_FS_DEVICE, dp.OTG_FS_PWRCLK),
             (gpioa.pa11, gpioa.pa12),
             &clocks.clocks,
@@ -589,6 +588,7 @@ ferroforge::app! {
         let flash_responses = ResponseRouter::new(
             flash_response_producer,
             configurator_bound.then_some(configurator_response_producer),
+            wake_usb,
         );
         let configurator_commands = configurator_bound.then_some(configurator_command_producer);
         let configurator_responses = configurator_bound.then_some(configurator_response_consumer);
@@ -878,8 +878,7 @@ ferroforge::app! {
                 storage_status_link,
 
                 // USB CDC serial
-                usb_dev,
-                usb_serial,
+                usb_cdc,
                 usb_header_sent: false,
                 configurator_usb: ConfiguratorUsbState::new(),
             },
@@ -888,7 +887,7 @@ ferroforge::app! {
 
     // The flight tasks every board runs the same way. Each member's own
     // resources and configuration are in its definition in
-    // ferrowasp-stm32-tasks; this selection binds them once.
+    // their crates (ADR-0065); this selection binds them once.
     #[group(
         from = flight_tasks::groups::flight,
         local = [
@@ -897,7 +896,7 @@ ferroforge::app! {
             safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
             actuator_arm_done_reader, safety_status_link, safety_imu_prearm,
             // usb_fs
-            usb_dev, usb_serial, usb_header_sent, flash_command_producer, flash_response_consumer,
+            usb_cdc, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
@@ -956,6 +955,8 @@ ferroforge::app! {
             bench_actuator_validation_enabled: bool = BENCH_ACTUATOR_VALIDATION_ENABLED,
             validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
             usb_debug_header: &'static [u8] = USB_DEBUG_HEADER,
+            wake_usb: fn() = wake_usb,
+            reboot: fn(RebootTarget) -> ! = stm32_bootloader::reboot,
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,

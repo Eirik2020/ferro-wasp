@@ -42,7 +42,7 @@ never copied to another board.
 2. Put every hardware fact in the new board data crate, with tests, and its
    own defaults.
 3. Keep `src/main.rs` to the `ferroforge::app!` declaration. It selects the
-   shared task groups in `ferrowasp-stm32-tasks::groups`, `flight` and
+   shared task groups in `ferrowasp-stm32-app::groups`, `flight` and
    `spi1_imu`, binding their resources once and giving each member its
    priority and interrupt, and declares only what differs by board: UART
    transports, DShot DMA completions, and status LEDs.

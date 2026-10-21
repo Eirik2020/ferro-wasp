@@ -28,7 +28,7 @@ members = [
     "crates/ferrowasp-serial",
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-critical",
-    "crates/ferrowasp-stm32-tasks",
+    "crates/ferrowasp-stm32-app",
     "crates/ferrowasp-stm32f4",
     "crates/ferrowasp-stm32f4-critical",
     "crates/ferrowasp-stm32h7",

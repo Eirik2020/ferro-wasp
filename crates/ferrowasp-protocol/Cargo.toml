@@ -9,10 +9,5 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-defmt = { version = "1.0.1", optional = true }
 ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
-
-[features]
-default = []
-blackbox_defmt = ["dep:defmt"]

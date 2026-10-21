@@ -1,10 +1,35 @@
-//! The control loop: the rate controller, run from the control scheduler's
+//! The flight controller's tasks (ADR-0060), target-only. The control loop:
+//! the rate controller, run from the control scheduler's
 //! timer interrupt. It turns the latest IMU sample and RC rates into motor
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
 
-use crate::inbound::accel_level;
-use crate::prelude::*;
+// The equal-motor and physical-motor bench images mix nothing.
+#[allow(unused_imports)]
+use crate::actuator::remap_motor_outputs;
+use crate::drone_toolbox as dt;
+use defmt::{info, warn};
+use ferrowasp_border::inbound::accel_level;
+use ferrowasp_boundary_contracts::messages as observed;
+use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
+use ferrowasp_io_contracts::time::TimestampMicros;
+use ferrowasp_mpu6500 as imu;
+use ferrowasp_safety as safety;
+use ferrowasp_safety::actuator as actuator_task;
+use ferrowasp_safety::signals;
+#[cfg(any(
+    feature = "bench_equal_motors",
+    feature = "bench_motor1_only",
+    feature = "bench_motor2_only",
+    feature = "bench_motor3_only",
+    feature = "bench_motor4_only",
+    feature = "bench_logical_motor1_only",
+    feature = "bench_logical_motor2_only",
+    feature = "bench_logical_motor3_only",
+    feature = "bench_logical_motor4_only"
+))]
+use ferrowasp_stm32_critical::app_config::BENCH_EQUAL_MOTOR_MAX_THROTTLE;
+use ferrowasp_stm32_critical::scheduler as stm32_scheduler;
 
 /// The time a motor command is stamped with: now, except in the
 /// `bench_motor_cmd_stale_rejection` fault-injection image, where the first
@@ -107,8 +132,8 @@ impl Drop for TickReport<'_> {
         control_rate_seq: u32 = 0,
         tolerated_stale_ticks: u32 = 0,
         rc_link_was_valid: bool = false,
-        motor_order: ferrowasp_flight_control::actuator::MotorOutputMap =
-            ferrowasp_flight_control::actuator::MotorOutputMap::IDENTITY,
+        motor_order: crate::actuator::MotorOutputMap =
+            crate::actuator::MotorOutputMap::IDENTITY,
     ],
     shared = [
         tuning_profile: dt::TuningProfile,
@@ -323,23 +348,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 *cx.local.applied_tuning_seq = pending_seq;
                 info!("Applied disarmed OSD tuning profile {}", pending_seq);
             }
-
-            #[cfg(feature = "blackbox_defmt")]
-            {
-                let rc_raw = cx.local.rc_rates_reader.read();
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    false,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    cx.local.control_throttle_reader.read() as f32,
-                    [0.0; 4],
-                );
-            }
         }
 
         // The mixer's map: the pilot's motor order over the board's wiring.
@@ -349,9 +357,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
             .compose(CONFIG::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT);
         cx.local
             .motor_map_writer
-            .write(ferrowasp_flight_control::actuator::pack_motor_map(
-                motor_output_map,
-            ));
+            .write(crate::actuator::pack_motor_map(motor_output_map));
 
         if !imu_fresh {
             // A tolerated tick skips this update; the motors hold the
@@ -413,19 +419,15 @@ pub fn control_loop(mut cx: control_loop::Context) {
         if control_armed {
             // Read rc_inputs
             let rc_raw = cx.local.rc_rates_reader.read();
-            #[cfg(all(
-                not(feature = "blackbox_defmt"),
-                any(
-                    feature = "bench_equal_motors",
-                    feature = "bench_motor1_only",
-                    feature = "bench_motor2_only",
-                    feature = "bench_motor3_only",
-                    feature = "bench_motor4_only",
-                    feature = "bench_logical_motor1_only",
-                    feature = "bench_logical_motor2_only",
-                    feature = "bench_logical_motor3_only",
-                    feature = "bench_logical_motor4_only"
-                )
+            #[cfg(any(
+                feature = "bench_motor1_only",
+                feature = "bench_motor2_only",
+                feature = "bench_motor3_only",
+                feature = "bench_motor4_only",
+                feature = "bench_logical_motor1_only",
+                feature = "bench_logical_motor2_only",
+                feature = "bench_logical_motor3_only",
+                feature = "bench_logical_motor4_only"
             ))]
             let _ = rc_raw;
 
@@ -435,19 +437,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
                 let motor_commands = [bench_throttle, 0.0, 0.0, 0.0];
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -464,19 +453,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
                 let motor_commands = [0.0, bench_throttle, 0.0, 0.0];
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -493,19 +469,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
                 let motor_commands = [0.0, 0.0, bench_throttle, 0.0];
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -522,19 +485,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
                 let motor_commands = [0.0, 0.0, 0.0, bench_throttle];
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -552,19 +502,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let motor_commands =
                     remap_motor_outputs([bench_throttle, 0.0, 0.0, 0.0], motor_output_map);
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -582,19 +519,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let motor_commands =
                     remap_motor_outputs([0.0, bench_throttle, 0.0, 0.0], motor_output_map);
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -612,19 +536,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let motor_commands =
                     remap_motor_outputs([0.0, 0.0, bench_throttle, 0.0], motor_output_map);
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -642,19 +553,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let motor_commands =
                     remap_motor_outputs([0.0, 0.0, 0.0, bench_throttle], motor_output_map);
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 {
                     publish_motor_command(
                         motor_commands,
@@ -683,19 +581,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                 let bench_throttle = requested_throttle.min(BENCH_EQUAL_MOTOR_MAX_THROTTLE);
                 let motor_commands = [bench_throttle; 4];
 
-                #[cfg(feature = "blackbox_defmt")]
-                dt::emit_compact_blackbox(
-                    *cx.local.control_rate_seq,
-                    imu_sequence,
-                    control_armed,
-                    imu_fresh,
-                    [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                    [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered],
-                    [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32],
-                    [0.0; 3],
-                    bench_throttle,
-                    motor_commands,
-                );
                 report.tick.logged = true;
                 report.tick.command_dps =
                     [rc_raw.roll as f32, rc_raw.pitch as f32, rc_raw.yaw as f32];
@@ -736,15 +621,6 @@ pub fn control_loop(mut cx: control_loop::Context) {
                     let mut sample = fc.blackbox_sample();
                     sample.motors =
                         remap_motor_outputs(fc.get_logical_motor_commands(), motor_output_map);
-                    #[cfg(feature = "blackbox_defmt")]
-                    dt::emit_rate_blackbox(dt::CompactRateBlackboxSample::from_rate_sample(
-                        *cx.local.control_rate_seq,
-                        imu_sequence,
-                        control_armed,
-                        imu_fresh,
-                        [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
-                        sample,
-                    ));
                     report.tick.logged = true;
                     report.tick.filtered_gyro_dps = sample.measurement;
                     report.tick.command_dps = sample.setpoint;

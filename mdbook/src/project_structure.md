@@ -40,11 +40,19 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-stm32f4` | The STM32F4 backend's non-critical half: ADC, USB serial, the device ID; and re-exports of the critical half |
 | `ferrowasp-stm32h7-critical` | The STM32H743 backend's safety-critical half over `stm32h7xx-hal`: DShot and its DMA endpoints, SPI and UART DMA, clocks and timers, the ROM bootloader entry |
 | `ferrowasp-stm32h7` | The STM32H743 backend's non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half |
-| `ferrowasp-stm32-tasks` | The RTIC task definitions every STM32 flight board shares, including the flash manager |
+| `ferrowasp-stm32-app` | What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks |
 
 Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
 safety-critical halves hold unsafe code: their DMA endpoint declarations and
 their jump into the chip's ROM bootloader.
+
+Task definitions live in their subsystem's crate, behind a target-only
+`tasks` feature, so the logic beside them stays host-tested: the safety
+master in `ferrowasp-safety`, the control loop in `ferrowasp-flight-control`,
+the observer in `ferrowasp-border`, the SPI1 IMU and UART transports in
+`ferrowasp-stm32-critical`, the command line's in `ferrowasp-cli`, the OSD's
+and RC telemetry in `ferrowasp-osd`, and the ADC and status LEDs in
+`ferrowasp-stm32`.
 
 A safety-critical crate declares `[package.metadata.ferrowasp] critical =
 true` and never depends on a crate that does not; its external dependencies

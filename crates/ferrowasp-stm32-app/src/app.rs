@@ -7,11 +7,6 @@
 //! crate: `cfg!(feature = ..)`, `board::` paths, and `env!` resolve where the
 //! macro expands.
 
-#[cfg(feature = "mspv2_configurator")]
-use crate::prelude::*;
-#[cfg(feature = "mspv2_configurator")]
-use ferrowasp_mspv2 as mspv2;
-
 /// The names a flight application's `main.rs` uses, whatever its board.
 pub mod prelude {
     pub use crate::dt;
@@ -64,13 +59,13 @@ pub mod prelude {
     pub use ferrowasp_stm32::uart_port as stm32_port;
 
     pub use crate as flight_tasks;
-    pub use crate::app::{
+    pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
+    pub use ferrowasp_border::inbound::host_connected;
+    pub use ferrowasp_cli::tasks::usb::{
         ConfiguratorUsbState, FlashRpcCommandProducer, FlashRpcResponseConsumer, MspCommonInfoFn,
     };
     #[cfg(feature = "mspv2_configurator")]
-    pub use crate::app::{fixed_bytes, handle_msp_packet, stage_rpc_response};
-    pub use crate::inbound::host_connected;
-    pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
+    pub use ferrowasp_cli::tasks::usb::{fixed_bytes, handle_msp_packet, stage_rpc_response};
 
     pub type SerialPortEndpoint = stm32_port::SerialPortEndpoint;
     pub type EscManagerState = esc::EscManager;
@@ -85,12 +80,12 @@ pub mod prelude {
     pub type UartOwnedWriter = stm32_memory::UartOwnedWriter<'static>;
     pub type UartOwnedTxOwner = stm32_memory::UartOwnedTxOwner<'static>;
     pub type UartOwnedTxCompletion = stm32_memory::UartOwnedTxCompletion<'static>;
-    pub type UsbDebugDevice = crate::prelude::backend::usb_serial::UsbCdcDevice;
-    pub type UsbDebugSerial = crate::prelude::backend::usb_serial::BufferedUsbCdcSerial;
+    pub type UsbCdcLink = crate::prelude::backend::usb_serial::UsbCdcLink;
     pub use ferrowasp_border::observer::Ledger;
     pub use ferrowasp_boundary_contracts::messages as observed;
     pub use ferrowasp_boundary_contracts::topics::Identity;
     pub use ferrowasp_io_contracts::link::Stamped;
+    pub use ferrowasp_stm32::system_reset::RebootTarget;
     /// The producing end of one task's link into the observer.
     pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
     pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
@@ -111,165 +106,6 @@ pub mod prelude {
     pub type FlashResponseProducer = flash_task::ResponseProducer;
     pub type FlashResponseConsumer = flash_task::ResponseConsumer;
     pub use crate::{FlashRpcCommandConsumer, FlashRpcResponseProducer};
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub type FlashRpcCommandProducer = flash_task::RpcCommandProducer;
-#[cfg(not(feature = "mspv2_configurator"))]
-pub type FlashRpcCommandProducer = ();
-#[cfg(feature = "mspv2_configurator")]
-pub type FlashRpcResponseConsumer = flash_task::RpcResponseConsumer;
-#[cfg(not(feature = "mspv2_configurator"))]
-pub type FlashRpcResponseConsumer = ();
-
-/// The board's MSPv2 identity for the common commands, configuration
-/// supplied to the USB task; `()` without the MSPv2 configurator.
-#[cfg(feature = "mspv2_configurator")]
-pub type MspCommonInfoFn = fn(bool, bool) -> mspv2::commands::CommonInfo<'static>;
-#[cfg(not(feature = "mspv2_configurator"))]
-pub type MspCommonInfoFn = ();
-
-/// The USB configurator's parser and pending reply.
-#[cfg(feature = "mspv2_configurator")]
-pub struct ConfiguratorUsbState {
-    pub parser: mspv2::MspParser,
-    pub pending_tx: mspv2::EncodedFrame,
-    pub rpc_payload: [u8; mspv2::MAX_PAYLOAD_LEN],
-}
-
-#[cfg(feature = "mspv2_configurator")]
-impl ConfiguratorUsbState {
-    pub const fn new() -> Self {
-        Self {
-            parser: mspv2::MspParser::new(),
-            pending_tx: mspv2::EncodedFrame::new(),
-            rpc_payload: [0; mspv2::MAX_PAYLOAD_LEN],
-        }
-    }
-}
-
-#[cfg(not(feature = "mspv2_configurator"))]
-pub struct ConfiguratorUsbState;
-
-#[cfg(not(feature = "mspv2_configurator"))]
-impl ConfiguratorUsbState {
-    pub const fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for ConfiguratorUsbState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// `value`, cut or zero-padded to `N` bytes.
-#[cfg(feature = "mspv2_configurator")]
-pub fn fixed_bytes<const N: usize>(value: &[u8]) -> [u8; N] {
-    let mut output = [0u8; N];
-    let len = value.len().min(N);
-    output[..len].copy_from_slice(&value[..len]);
-    output
-}
-
-#[cfg(feature = "mspv2_configurator")]
-pub fn stage_rpc_response(
-    state: &mut ConfiguratorUsbState,
-    response: &mspv2::rpc::RpcResponse,
-) -> bool {
-    let ConfiguratorUsbState {
-        pending_tx,
-        rpc_payload,
-        ..
-    } = state;
-    let Ok(payload) = mspv2::rpc::encode_response(response, rpc_payload) else {
-        return false;
-    };
-    pending_tx
-        .set(
-            mspv2::MspDirection::FromFlightController,
-            0,
-            mspv2::rpc::MSP2_FWSP_RPC,
-            payload,
-        )
-        .is_ok()
-}
-
-/// Answer one MSPv2 packet from the USB host: the common commands from the
-/// board's identity, `Hello` from its device information, both with the arm
-/// state and IMU readiness the ledger shows, and every other RPC request
-/// handed to the flash manager.
-#[cfg(feature = "mspv2_configurator")]
-pub fn handle_msp_packet(
-    packet: mspv2::MspPacket,
-    state: &mut ConfiguratorUsbState,
-    rpc_commands: &mut flash_task::RpcCommandProducer,
-    common_info: MspCommonInfoFn,
-    device_info: crate::RpcDeviceInfoFn,
-    armed: bool,
-    imu_ready: bool,
-) {
-    if packet.direction != mspv2::MspDirection::ToFlightController || state.pending_tx.is_pending()
-    {
-        return;
-    }
-
-    let mut common_payload = [0u8; 96];
-    if let Some(len) = mspv2::commands::encode_common_payload(
-        &packet,
-        &common_info(armed, imu_ready),
-        &mut common_payload,
-    ) {
-        let _ = state.pending_tx.set(
-            mspv2::MspDirection::FromFlightController,
-            packet.flags,
-            packet.function,
-            &common_payload[..len],
-        );
-        return;
-    }
-
-    if packet.function != mspv2::rpc::MSP2_FWSP_RPC {
-        let _ = state.pending_tx.set(
-            mspv2::MspDirection::Error,
-            packet.flags,
-            packet.function,
-            &[],
-        );
-        return;
-    }
-
-    let Ok(request) = mspv2::rpc::decode_request(packet.payload()) else {
-        let _ = state.pending_tx.set(
-            mspv2::MspDirection::Error,
-            packet.flags,
-            packet.function,
-            &[],
-        );
-        return;
-    };
-    if request.protocol_version != mspv2::rpc::FWSP_RPC_VERSION {
-        let response = mspv2::rpc::error(
-            request.request_id,
-            mspv2::rpc::DeviceError::UnsupportedProtocolVersion,
-        );
-        let _ = stage_rpc_response(state, &response);
-        return;
-    }
-    if request.operation == mspv2::rpc::Request::Hello {
-        let response = mspv2::rpc::ok(
-            request.request_id,
-            mspv2::rpc::Response::Hello(device_info(armed)),
-        );
-        let _ = stage_rpc_response(state, &response);
-        return;
-    }
-    let request_id = request.request_id;
-    if rpc_commands.enqueue(request).is_err() {
-        let response = mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy);
-        let _ = stage_rpc_response(state, &response);
-    }
 }
 
 /// Write a flight application's facade from its board's identity: the
@@ -434,6 +270,10 @@ macro_rules! flight_app_facade {
             Mutex::new(RefCell::new(safety::RcLinkState::new()));
         pub static ACTUATOR_ARM_DONE: AtomicBool = AtomicBool::new(false);
         pub static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
+        /// Wake the USB task, which serves its queues on its interrupt.
+        pub fn wake_usb() {
+            cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
+        }
         pub static RC_ARM_HIGH: AtomicBool = AtomicBool::new(false);
         pub static RC_THROTTLE: AtomicU32 = AtomicU32::new(0);
         pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);

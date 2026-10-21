@@ -20,6 +20,8 @@ requirements:
       - ferrowasp_safety::ArmingAbortReason
       - ferrowasp_safety::ARMING_MAX_THROTTLE
       - ferrowasp_safety::arming
+      - ferrowasp_safety::ArmingGuard
+      - ferrowasp_safety::tasks
     verification:
       mode: direct
       entries:
@@ -78,8 +80,8 @@ requirements:
       Disarm is the pilot's last command; it must end all motor output.
     derived_from: [W1, W2]
     allocated_to:
-      - ferrowasp_stm32_tasks::actuator_output
-      - ferrowasp_stm32_tasks::safety_master
+      - ferrowasp_stm32_app::actuator_output
+      - ferrowasp_safety::tasks::safety_master
     verification:
       mode: direct
       entries:

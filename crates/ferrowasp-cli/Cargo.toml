@@ -9,18 +9,60 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+embedded-io-async = { workspace = true, optional = true }
 ferrowasp-blackbox = { path = "../ferrowasp-blackbox" }
+ferrowasp-border = { path = "../ferrowasp-border", optional = true }
+ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
 ferrowasp-config = { path = "../ferrowasp-config" }
+ferrowasp-control = { path = "../ferrowasp-control", optional = true }
+ferrowasp-feedback = { path = "../ferrowasp-feedback", optional = true }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control", optional = true }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts", optional = true }
+ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500", optional = true }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 ferrowasp-protocol = { path = "../ferrowasp-protocol" }
 ferrowasp-safety = { path = "../ferrowasp-safety" }
 ferrowasp-serial = { path = "../ferrowasp-serial" }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32", optional = true }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", optional = true }
 ferrowasp-storage = { path = "../ferrowasp-storage" }
 heapless = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "0.7.7", optional = true }
+defmt = { version = "1.0.1", optional = true }
+ferroforge = { version = "0.4.0", optional = true }
+fugit = { version = "0.3.9", optional = true }
+rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "2.1.0", default-features = false, optional = true }
 
 [features]
 default = []
 mspv2_configurator = ["dep:ferrowasp-mspv2"]
+# The command line's RTIC task definitions, target-only (ADR-0065).
+tasks = [
+    "dep:embedded-io-async",
+    "dep:ferrowasp-border",
+    "dep:ferrowasp-boundary-contracts",
+    "dep:ferrowasp-control",
+    "dep:ferrowasp-feedback",
+    "dep:ferrowasp-flight-control",
+    "dep:ferrowasp-io-contracts",
+    "dep:ferrowasp-mpu6500",
+    "dep:ferrowasp-stm32",
+    "dep:ferrowasp-stm32-critical",
+    "dep:cortex-m",
+    "dep:defmt",
+    "dep:ferroforge",
+    "dep:fugit",
+    "dep:rtic",
+    "dep:rtic-monotonics",
+]
+# Diagnostics and bench images, forwarded from the firmware feature of the
+# same name.
+imu_transport_rtt = []
+imu_orientation_rtt = ["imu_transport_rtt"]
+bench_blackbox = []
 
 [dev-dependencies]
 critical-section = { workspace = true, features = ["std"] }

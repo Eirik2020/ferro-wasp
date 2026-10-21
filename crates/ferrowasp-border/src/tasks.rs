@@ -1,13 +1,16 @@
-//! The observer's task: one `ferrowasp_border::observer` run every
-//! millisecond, publishing on the ledger (ADR-0056, ADR-0061).
+//! The border roles' tasks (ADR-0060, ADR-0065), target-only: the
+//! observer's run every millisecond, publishing on the ledger (ADR-0056,
+//! ADR-0061).
 
-use crate::prelude::*;
+use crate::observer::{Ledger, Observer};
+use ferrowasp_io_contracts::time::TimestampMicros;
+use fugit::ExtU64 as _;
 
 /// Run the observer every millisecond, on absolute deadlines so its cadence
 /// does not drift. Priority is the firmware's: the border band, below the
 /// core and above every non-critical task.
 #[ferroforge::task(
-    local = [observer: ferrowasp_border::observer::Observer<'static>],
+    local = [observer: Observer<'static>],
     shared = [ledger: Ledger],
     monotonic = Mono,
 )]

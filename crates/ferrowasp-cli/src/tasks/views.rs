@@ -3,10 +3,10 @@
 //! copies what it needs out of the ledger under its lock and formats it
 //! outside.
 
-use crate::prelude::*;
-use ferrowasp_cli::usb_debug::{EscLaneSnapshot, LiveSnapshot};
+use super::prelude::*;
+use crate::usb_debug::{EscLaneSnapshot, LiveSnapshot};
 #[cfg(not(feature = "mspv2_configurator"))]
-use ferrowasp_cli::usb_debug::{ImuKind, StatusSnapshot};
+use crate::usb_debug::{ImuKind, StatusSnapshot};
 
 /// Tenths of a degree, saturating; non-finite angles report as zero.
 pub fn deg10(angle_deg: f32) -> i16 {
@@ -60,10 +60,10 @@ pub fn rc_link(ledger: &Ledger, now_us: u64) -> (bool, bool) {
 /// The detected IMU, as the USB status line names it.
 #[cfg(not(feature = "mspv2_configurator"))]
 fn imu_kind(kind: u8) -> ImuKind {
-    match crate::Spi1ImuKind::from_discriminant(kind) {
-        Some(crate::Spi1ImuKind::Mpu6500) => ImuKind::Mpu6500,
-        Some(crate::Spi1ImuKind::Icm42688P) => ImuKind::Icm42688P,
-        Some(crate::Spi1ImuKind::Mpu6000) => ImuKind::Mpu6000,
+    match ferrowasp_stm32_critical::spi1_imu::Spi1ImuKind::from_discriminant(kind) {
+        Some(ferrowasp_stm32_critical::spi1_imu::Spi1ImuKind::Mpu6500) => ImuKind::Mpu6500,
+        Some(ferrowasp_stm32_critical::spi1_imu::Spi1ImuKind::Icm42688P) => ImuKind::Icm42688P,
+        Some(ferrowasp_stm32_critical::spi1_imu::Spi1ImuKind::Mpu6000) => ImuKind::Mpu6000,
         None => ImuKind::None,
     }
 }

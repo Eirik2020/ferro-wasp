@@ -1,7 +1,7 @@
 #![deny(unsafe_code)]
 #![no_std]
 
-ferrowasp_stm32_tasks::flight_app_facade! {
+ferrowasp_stm32_app::flight_app_facade! {
     board_name: "TBS Lucid H7",
     msp_identifier: *b"LUH7",
     target_name: "tbs_lucid_h7",

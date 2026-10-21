@@ -10,3 +10,5 @@ pub mod actuator;
 pub mod drone_toolbox;
 pub mod dynamic_idle;
 pub mod rpm_filter;
+#[cfg(all(feature = "tasks", target_arch = "arm"))]
+pub mod tasks;

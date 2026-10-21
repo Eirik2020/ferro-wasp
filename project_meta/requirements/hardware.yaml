@@ -18,6 +18,7 @@ requirements:
       twice reads as a valid frame that never arrived.
     derived_from: [W2]
     allocated_to:
+      - ferrowasp_stm32_critical::tasks::uart_port
       - ferrowasp_stm32_critical::uart_common
       - ferrowasp_stm32_critical::uart_port
       - ferrowasp_stm32_critical::serial
@@ -132,6 +133,8 @@ requirements:
       - ferrowasp_stm32_critical::spi1_imu
       - ferrowasp_stm32_critical::memory
       - ferrowasp_stm32f4_critical::spi_dma
+      - ferrowasp_stm32_critical::exti
+      - ferrowasp_stm32_critical::tasks::spi1
       - ferrowasp_stm32f4_critical::exti
       - ferrowasp_stm32h7_critical::spi_dma
       - ferrowasp_stm32h7_critical::eh1

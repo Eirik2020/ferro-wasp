@@ -1,7 +1,19 @@
-//! The MSP DisplayPort OSD on the port config binds to it: the refresh task
-//! and its writer.
+//! The pilot-facing outputs' RTIC task definitions (ADR-0060, ADR-0065),
+//! target-only: the MSP DisplayPort OSD on the port config binds to it, its
+//! writer, and battery telemetry back through the RC receiver.
 
-use crate::prelude::*;
+use crate as osd;
+use defmt::warn;
+use ferrowasp_border::observer::Ledger;
+use ferrowasp_flight_control::drone_toolbox as dt;
+use ferrowasp_io_contracts::time::TimestampMicros;
+use ferrowasp_mspv1 as mspv1;
+use ferrowasp_safety as safety;
+use ferrowasp_safety::signals;
+use ferrowasp_serial::SerialFault;
+use ferrowasp_stm32_critical::memory as stm32_memory;
+use ferrowasp_stm32_critical::uart_common as stm32_uart;
+use fugit::ExtU64 as _;
 
 /// Write one frame to the OSD, or nothing once a write has failed: the link
 /// stays down rather than retrying into a faulted DMA stream.
@@ -41,7 +53,7 @@ pub async fn osd_write(
 /// task ends at once.
 #[ferroforge::task(
     local = [
-        osd_port: Option<ferrowasp_stm32::uart_port::SerialPortEndpoint>,
+        osd_port: Option<ferrowasp_stm32_critical::uart_port::SerialPortEndpoint>,
         osd_tx_healthy: bool,
         osd_task: osd::OsdTask,
         osd_tx_buffer: [u8; mspv1::OSD_TX_BUFFER_LEN],
@@ -220,5 +232,43 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
         }
 
         Mono::delay(10.millis()).await;
+    }
+}
+
+/// How often battery telemetry goes back to the receiver.
+const RC_TELEMETRY_PERIOD_MS: u64 = 200;
+
+/// Send battery telemetry back through the RC receiver, for the radio to
+/// show. It owns the RC port's writer, so RC input never waits on a
+/// transmit; it runs at a low priority and only reads the ledger.
+///
+/// Ends at once when the RC port has no transmit path: SBUS, or a port
+/// without transmit DMA. Stops, with a warning, if the transmit path faults,
+/// which leaves RC input untouched.
+#[ferroforge::task(
+    local = [rc_telemetry_writer: Option<stm32_memory::UartOwnedWriter<'static>>],
+    shared = [ledger: Ledger],
+    monotonic = Mono,
+)]
+pub async fn rc_telemetry(mut cx: rc_telemetry::Context) {
+    use embedded_io_async::Write;
+    use ferrowasp_crsf as crsf;
+
+    let Some(writer) = cx.local.rc_telemetry_writer.as_mut() else {
+        return;
+    };
+    loop {
+        let battery = cx.shared.ledger.lock(|ledger| ledger.battery().value);
+        let frame = crsf::encode_battery(crsf::BatteryTelemetry {
+            voltage_dv: battery.voltage_dv,
+            current_da: u16::try_from(battery.current_ca.max(0) / 10).unwrap_or(u16::MAX),
+            used_mah: 0,
+            remaining_percent: 0,
+        });
+        if writer.write_all(&frame).await.is_err() {
+            warn!("RC telemetry stopped: the RC port transmit path faulted");
+            return;
+        }
+        Mono::delay(RC_TELEMETRY_PERIOD_MS.millis()).await;
     }
 }

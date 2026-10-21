@@ -426,7 +426,7 @@ mod tests {
             log.recover(0, 1, true);
             Self {
                 nor: MemoryNor::erased(CAPACITY),
-                responses: ResponseRouter::new(usb, Some(serial)),
+                responses: ResponseRouter::new(usb, Some(serial), || {}),
                 usb_out,
                 serial_out,
                 log,

@@ -11,6 +11,8 @@
 pub mod adc;
 pub mod pwm_config;
 pub mod status_led;
+#[cfg(all(feature = "tasks", target_arch = "arm"))]
+pub mod tasks;
 pub mod usb_serial;
 
 pub use ferrowasp_stm32_critical::app_config;

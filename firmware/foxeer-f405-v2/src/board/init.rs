@@ -95,7 +95,7 @@ pub fn init_spi2_flash(
 }
 
 pub fn init_imu_data_ready(
-    pin: super::aliases::ImuDataReadyPin,
+    pin: hal::gpio::PC4<hal::gpio::Input>,
     syscfg: &mut hal::syscfg::SysCfg,
     exti: &mut pac::EXTI,
 ) -> super::aliases::ImuDataReadyPin {

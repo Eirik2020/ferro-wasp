@@ -13,6 +13,9 @@ pub type BufferedUsbCdcSerial = usbd_serial::SerialPort<
     [u8; USB_CDC_TX_BUFFER_BYTES],
 >;
 
+/// The board's USB CDC port, as the USB task's [`UsbCdcPort`] bound sees it.
+pub type UsbCdcLink = ferrowasp_stm32::usb_serial::UsbCdc<stm32f4xx_hal::otg_fs::UsbBusType>;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UsbCdcInitError {
     EndpointMemoryAlreadyTaken,
@@ -32,7 +35,7 @@ pub fn init_usb_cdc_serial(
     ),
     clocks: &stm32f4xx_hal::rcc::Clocks,
     identity: UsbCdcIdentity,
-) -> Result<(UsbCdcDevice, BufferedUsbCdcSerial), UsbCdcInitError> {
+) -> Result<UsbCdcLink, UsbCdcInitError> {
     use stm32f4xx_hal::otg_fs::{USB, UsbBusType};
     use usb_device::{
         bus::UsbBusAllocator,
@@ -69,5 +72,5 @@ pub fn init_usb_cdc_serial(
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
-    Ok((device, serial))
+    Ok(UsbCdc::new(device, serial))
 }

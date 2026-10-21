@@ -11,7 +11,7 @@ requirements:
       flight log is evidence that must not be cut off.
     derived_from: [W1, W7]
     allocated_to:
-      - ferrowasp_stm32_tasks::flash_manager_task
+      - ferrowasp_cli::tasks::flash::flash_manager_task
     verification:
       mode: direct
       entries:

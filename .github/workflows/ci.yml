@@ -52,12 +52,12 @@ jobs:
       - name: Check embedded workspace
         run: >
           cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-tasks/stm32f405,ferrowasp-stm32-tasks/dshot
+          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
 
       - name: Lint embedded workspace
         run: >
           cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-tasks/stm32f405,ferrowasp-stm32-tasks/dshot
+          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
           -- -D warnings
 
       - name: Check STM32F401 bring-up firmware
@@ -80,13 +80,13 @@ jobs:
         working-directory: firmware/foxeer-f405-v2
         run: >
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "blackbox_defmt bench_spi_timeout_recovery"
+          --features "bench_spi_timeout_recovery"
 
       - name: Check Foxeer equal-motor bench path
         working-directory: firmware/foxeer-f405-v2
         run: >
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
+          --features "bench_actuator_validation bench_equal_motors"
 
       - name: Check Foxeer bidirectional DShot bench image
         working-directory: firmware/foxeer-f405-v2
@@ -100,9 +100,9 @@ jobs:
 
       - name: Check embedded workspace for STM32H743
         run: >
-          cargo check -p ferrowasp-stm32h7 -p ferrowasp-stm32-tasks --locked
+          cargo check -p ferrowasp-stm32h7 -p ferrowasp-stm32-app --locked
           --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32h7/stm32h743,ferrowasp-stm32-tasks/stm32h743,ferrowasp-stm32-tasks/dshot
+          --features ferrowasp-stm32h7/stm32h743,ferrowasp-stm32-app/stm32h743,ferrowasp-stm32-app/dshot
 
       - name: Lint STM32H7 backend
         run: >
@@ -121,8 +121,8 @@ jobs:
       - name: Check TBS Lucid H7 diagnostic and bench features
         working-directory: firmware/tbs-lucid-h7
         run: |
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "blackbox_defmt bench_spi_timeout_recovery"
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_actuator_validation blackbox_defmt bench_equal_motors"
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_spi_timeout_recovery"
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }} --features "bench_actuator_validation bench_equal_motors"
 
       - name: Build TBS Lucid H7 release firmware
         working-directory: firmware/tbs-lucid-h7

@@ -1,9 +1,16 @@
-//! The safety master: the only task that arms or disarms the system. It
+//! The safety master's tasks (ADR-0060), target-only. The safety master is
+//! the only task that arms or disarms the system. It
 //! decides on arm requests, completes arming once the actuator reports idle,
 //! and disarms on request, on an aborted arming, or when the RC link is
 //! invalidated. It commands the actuator only by spawning `actuator_output`.
 
-use crate::prelude::*;
+use crate::prearm::ImuPreArmReader;
+use crate::{self as safety, signals};
+use defmt::{info, warn};
+use ferrowasp_boundary_contracts::messages as observed;
+use ferrowasp_io_contracts::link::LinkProducer;
+use ferrowasp_io_contracts::time::TimestampMicros;
+use fugit::ExtU64 as _;
 
 pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
     match reason {
@@ -84,14 +91,14 @@ fn report_arm_state(
         // since boot; arming is refused for a short while after it.
         last_bench_request_ms: Option<u64> = None,
         safety_status_link: LinkProducer<'static, observed::SafetyStatus>,
-        safety_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+        safety_imu_prearm: ImuPreArmReader<'static>,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
         actuator_output_enabled: bool,
         actuator_inhibit_reason: &'static str,
         bench_actuator_validation_enabled: bool,
-        validate_live_arming_guard: crate::ArmingGuard,
+        validate_live_arming_guard: safety::ArmingGuard,
     ],
     monotonic = Mono,
 )]

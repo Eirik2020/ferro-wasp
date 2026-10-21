@@ -10,8 +10,16 @@ path = "src/lib.rs"
 
 [dependencies]
 critical-section = { workspace = true }
+ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 heapless = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+defmt = { version = "=1.0.1", optional = true }
+ferroforge = { version = "=0.4.0", optional = true }
+fugit = { version = "=0.3.9", optional = true }
+rtic = { version = "=2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "=2.1.0", default-features = false, optional = true }
 
 [dev-dependencies]
 # Host tests that write signals take a critical section; std provides one.
@@ -20,6 +28,15 @@ critical-section = { workspace = true, features = ["std"] }
 [features]
 default = []
 std = ["critical-section/std"]
+# The safety master's RTIC task definitions, target-only (ADR-0060).
+tasks = [
+    "dep:ferrowasp-boundary-contracts",
+    "dep:defmt",
+    "dep:ferroforge",
+    "dep:fugit",
+    "dep:rtic",
+    "dep:rtic-monotonics",
+]
 bench_motor1_only = []
 bench_motor2_only = []
 bench_motor3_only = []

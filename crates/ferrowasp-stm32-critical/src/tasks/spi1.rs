@@ -5,7 +5,7 @@
 //! The owner, timebase and watchdog are bounded rather than named, because
 //! boards wire them to different DMA streams and timers.
 
-use crate::prelude::*;
+use super::prelude::*;
 
 /// Requests from the SPI1 device to its DMA owner. One per firmware: the
 /// device posts here and the owner's tasks serve it, so they must name the
@@ -14,7 +14,7 @@ pub type Spi1Mailbox = SharedSpiRequestMailbox<SPI1_JOB_MAX_OPERATIONS, SPI1_JOB
 pub type Spi1Executor =
     CriticalSectionSpiExecutor<'static, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
 pub type Spi1Device = AsyncSpiDevice<Spi1Executor, SPI1_JOB_MAX_OPERATIONS, SPI1_JOB_MAX_BYTES>;
-pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
+pub use crate::spi1_imu::Spi1ImuKind;
 
 /// One decoded IMU sample, in g, degrees per second and degrees Celsius.
 pub struct ParsedImuSample {
@@ -145,7 +145,10 @@ pub fn spi1_rx_dma(mut cx: spi1_rx_dma::Context) {
 /// The IMU's data-ready interrupt: timestamp it and start a poll, counting
 /// ones that arrive before the last poll was taken.
 #[ferroforge::task(
-    bounds = [imu_data_ready: ExtiPin, io_timebase: stm32_timebase::Timebase],
+    bounds = [
+        imu_data_ready: crate::exti::InterruptInput,
+        io_timebase: stm32_timebase::Timebase,
+    ],
     local = [
         imu_data_ready,
         // Whether the IMU configured at boot: a fact of init.
