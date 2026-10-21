@@ -7,13 +7,13 @@
 /// the sample parser.
 #[ferroforge::group]
 pub mod spi1_imu {
-    pub use crate::imu_data_ready;
-    pub use crate::io_watchdog;
-    pub use crate::spi1_owner_service;
-    pub use crate::spi1_parser;
-    pub use crate::spi1_poll;
-    pub use crate::spi1_rx_dma;
-    pub use crate::spi1_timeout;
+    pub use ferrowasp_stm32_critical::tasks::spi1::imu_data_ready;
+    pub use ferrowasp_stm32_critical::tasks::spi1::io_watchdog;
+    pub use ferrowasp_stm32_critical::tasks::spi1::spi1_owner_service;
+    pub use ferrowasp_stm32_critical::tasks::spi1::spi1_parser;
+    pub use ferrowasp_stm32_critical::tasks::spi1::spi1_poll;
+    pub use ferrowasp_stm32_critical::tasks::spi1::spi1_rx_dma;
+    pub use ferrowasp_stm32_critical::tasks::spi1::spi1_timeout;
 }
 
 /// Every flight task a board runs the same way: arming and actuator output,

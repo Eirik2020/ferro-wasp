@@ -76,10 +76,6 @@ mod prelude;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod rc;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod spi1;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod uart_port;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod usb;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod views;
@@ -121,6 +117,21 @@ pub use ferrowasp_flight_control::tasks::{control_loop, motor_command_timestamp}
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_safety::tasks::{actuator_idle_notify, safety_master, warn_arming_abort};
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_stm32_critical::tasks::spi1::{
+    ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox, imu_data_ready,
+    io_watchdog, spi1_owner_service, spi1_parser, spi1_poll, spi1_rx_dma, spi1_timeout,
+};
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_stm32_critical::tasks::uart_port::{
+    uart1_rx_dma, uart1_rx_idle, uart1_tx_dma_complete, uart1_tx_worker, uart2_rx_dma,
+    uart2_rx_idle, uart2_tx_dma_complete, uart2_tx_worker, uart3_rx_dma, uart3_rx_idle,
+    uart3_tx_dma_complete, uart3_tx_worker, uart4_rx_dma, uart4_rx_idle, uart4_tx_dma_complete,
+    uart4_tx_worker, uart5_rx_dma, uart5_rx_idle, uart5_tx_dma_complete, uart5_tx_worker,
+    uart6_rx_dma, uart6_rx_idle, uart6_tx_dma_complete, uart6_tx_worker, uart7_rx_dma,
+    uart7_rx_idle, uart7_tx_dma_complete, uart7_tx_worker, uart8_rx_dma, uart8_rx_idle,
+    uart8_tx_dma_complete, uart8_tx_worker,
+};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use flash::{
     ConfigRpcCompletion, FlashProbe, FlashRpcCommandConsumer, FlashRpcResponseProducer,
@@ -132,20 +143,5 @@ pub use leds::status_leds;
 pub use osd::osd_refresh;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use rc::{rc_input, rc_telemetry};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use spi1::{
-    ParsedImuSample, SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox, imu_data_ready,
-    io_watchdog, spi1_owner_service, spi1_parser, spi1_poll, spi1_rx_dma, spi1_timeout,
-};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use uart_port::{
-    uart1_rx_dma, uart1_rx_idle, uart1_tx_dma_complete, uart1_tx_worker, uart2_rx_dma,
-    uart2_rx_idle, uart2_tx_dma_complete, uart2_tx_worker, uart3_rx_dma, uart3_rx_idle,
-    uart3_tx_dma_complete, uart3_tx_worker, uart4_rx_dma, uart4_rx_idle, uart4_tx_dma_complete,
-    uart4_tx_worker, uart5_rx_dma, uart5_rx_idle, uart5_tx_dma_complete, uart5_tx_worker,
-    uart6_rx_dma, uart6_rx_idle, uart6_tx_dma_complete, uart6_tx_worker, uart7_rx_dma,
-    uart7_rx_idle, uart7_tx_dma_complete, uart7_tx_worker, uart8_rx_dma, uart8_rx_idle,
-    uart8_tx_dma_complete, uart8_tx_worker,
-};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use usb::usb_fs;

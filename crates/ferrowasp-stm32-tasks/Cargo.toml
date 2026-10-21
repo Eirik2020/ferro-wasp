@@ -73,7 +73,7 @@ ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 heapless = { workspace = true }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
-ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical" }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", features = ["tasks"] }
 ferrowasp-stm32f4 = { path = "../ferrowasp-stm32f4", optional = true }
 ferrowasp-stm32h7 = { path = "../ferrowasp-stm32h7", optional = true }
 

@@ -7,8 +7,8 @@
 //! transports run at one priority, chosen by the firmware, since any port may
 //! serve any function.
 
-use crate::prelude::*;
-use ferrowasp_stm32::uart_port::{UartRxEvent, UartRxPortService};
+use super::prelude::*;
+use crate::uart_port::{UartRxEvent, UartRxPortService};
 
 macro_rules! uart_port_tasks {
     (

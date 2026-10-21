@@ -16,15 +16,40 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = []
 dshot = ["dep:ferrowasp-output"]
+# The hardware transports' RTIC task definitions, target-only (ADR-0065).
+tasks = [
+    "dep:critical-section",
+    "dep:embedded-hal-async",
+    "dep:ferrowasp-boundary-contracts",
+    "dep:ferrowasp-icm42688p",
+    "dep:ferrowasp-mpu6000",
+    "dep:ferrowasp-mpu6500",
+    "dep:ferroforge",
+    "dep:fugit",
+    "dep:rtic",
+    "dep:rtic-monotonics",
+]
 
 [dependencies]
+critical-section = { workspace = true, optional = true }
 defmt = "=1.0.1"
 embedded-hal = { workspace = true }
+embedded-hal-async = { workspace = true, optional = true }
+ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
+ferrowasp-icm42688p = { path = "../ferrowasp-icm42688p", optional = true }
 ferrowasp-imu = { path = "../ferrowasp-imu" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-mpu6000 = { path = "../ferrowasp-mpu6000", optional = true }
+ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500", optional = true }
 ferrowasp-output = { path = "../ferrowasp-output", optional = true }
 ferrowasp-serial = { path = "../ferrowasp-serial" }
 heapless = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+ferroforge = { version = "=0.4.0", optional = true }
+fugit = { version = "=0.3.9", optional = true }
+rtic = { version = "=2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "=2.1.0", default-features = false, optional = true }
 
 [dev-dependencies]
 ferrowasp-output = { path = "../ferrowasp-output" }

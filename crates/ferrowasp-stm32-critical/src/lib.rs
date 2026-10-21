@@ -22,6 +22,8 @@ pub mod spi;
 pub mod spi1_imu;
 pub mod spi_common;
 pub mod system_reset;
+#[cfg(all(feature = "tasks", target_arch = "arm"))]
+pub mod tasks;
 pub mod timebase;
 pub mod timer_dma;
 pub mod timer_tick;
