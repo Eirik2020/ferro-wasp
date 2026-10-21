@@ -10,7 +10,8 @@ corrected.
 
 The requirements and evidence system (sections 2 to 7) is implemented in
 `tools/reqtool`, except the `app!` parser and the analysis-level checks; the
-architecture (sections 8 to 16) is not implemented yet. The code findings
+architecture (sections 8 to 16 and 19) is being built one mechanism at a
+time, and [remaining work](../remaining-work.md) lists what is left. The code findings
 quoted in the chapters describe the code the design was made against, as
 motivation; they are not a description of the target.
 
