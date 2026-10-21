@@ -7,6 +7,8 @@ members = [
     "firmware/tbs-lucid-h7/board",
     "crates/ferrowasp-blackbox",
     "crates/ferrowasp-blheli-telemetry",
+    "crates/ferrowasp-border",
+    "crates/ferrowasp-boundary-contracts",
     "crates/ferrowasp-cli",
     "crates/ferrowasp-crsf",
     "crates/ferrowasp-feedback",

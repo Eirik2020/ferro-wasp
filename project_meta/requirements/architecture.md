@@ -208,6 +208,47 @@ master, and path fingerprints can omit non-critical tasks by construction.
 The ledger replaces `snapshots.rs`: about 30 global atomics that
 safety-critical tasks wrote directly and anyone read.
 
+**The mechanism**, decided by the user before implementation:
+
+- **What `snapshots.rs` carried goes four ways.** Values leaving the core for
+  display go to the ledger. Values between core tasks become links, flags or
+  init values, because the core never reads a border role: the IMU sample
+  to the control loop, a `state` link with gyro and accelerometer in one
+  message (the control loop read its gyro as three atomics the parser
+  writes at a lower priority, so a tick could mix two samples); the control
+  loop's IMU status to the pre-arm check, a `state` link with an age limit,
+  since nothing yet covers the control loop's liveness; the motor map and
+  the DShot release time, flags; IMU readiness and kind, init values.
+  Values non-critical tasks share among themselves also go through the
+  observer. Inbound values (the accelerometer level, the host-connected
+  flags, `tuning_profile`) wait for the coordinator.
+- **The link type** and the `Stamped` envelope (sequence, timestamp) live in
+  `ferrowasp-io-contracts`, under every link, including the hardware ones
+  ADR-0057 plans. A refused message still takes a sequence number, so the
+  consumer reads the loss as a gap.
+- **The ledger** is one shared resource. Its fields are private, getters
+  return copies and only the observer module publishes, so a reader cannot
+  write it. A pass-through topic is its message; a derived topic gets its
+  own type, so a new derived value changes no producer.
+- **The observer runs periodically**, every millisecond at priority 7.
+  Producers only enqueue and never wake it; a run takes at most each link's
+  capacity, so its cost is bounded. The control tick is an `event` link
+  sized for 8 ms; every other link is a `state` link.
+- **The blackbox stream carries control ticks.** The record format lives in
+  non-critical `ferrowasp-protocol`, which a critical observer cannot depend
+  on, so the observer forwards each tick with its stamp and the flash
+  manager builds the record and applies the log rate divisor: the divisor
+  is the blackbox's setting and needs no way in. The log's dropped count is
+  the sum of both stages, so the format does not change.
+- **Gates read flags, not the ledger.** The flash manager's disarmed-only
+  checks and the ESC manager keep their arm-state flag readers, so a
+  stalled observer can never show a gate "disarmed".
+- **Priorities.** `esc_manager_task` is core and ran below `usb_fs` (5); it
+  moves to 8, so the border band is 6 to 7 and no border role or
+  non-critical task sits above core code.
+- The heartbeat to the safety master comes with the fault classes, which
+  it needs.
+
 ---
 
 ## 11. The coordinator

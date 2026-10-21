@@ -1,0 +1,135 @@
+schema_version: 1
+requirements:
+  - id: BORDER-001
+    title: The observer publishes every link and streams every control tick
+    statement: >-
+      Each run, the observer shall take at most each link's capacity;
+      publish on the ledger the newest message of every `state` link and
+      the last control tick, each with its producer's sequence and
+      timestamp, keeping a topic's previous value when its link brought
+      nothing; forward every control tick it takes to the blackbox stream
+      in order, with its original stamp; and publish, stamped with its
+      run count, the control ticks missing from the sequence it read and
+      the ticks the stream refused.
+    rationale: >-
+      The observer is the one way data leaves the safety-critical tasks
+      (ADR-0056). A bounded run keeps its cost known below the core
+      (ADR-0061); counting both losses makes a slow observer or a slow
+      blackbox honest evidence in the log rather than silent gaps; its
+      run count lets a reader see the observer itself stop. The ledger's
+      readers can only copy topics out: only the observer module
+      publishes.
+    derived_from: [W2, W4]
+    allocated_to:
+      - ferrowasp_border::observer
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::every_state_link_publishes_its_newest_message_with_its_stamp
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::a_link_that_brought_nothing_keeps_its_topic
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::every_control_tick_reaches_the_stream_in_order_and_the_last_is_published
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::one_run_takes_at_most_a_links_capacity
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::lost_control_ticks_and_stream_refusals_are_counted
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::messages_lost_counts_gaps_across_the_wrap
+
+  - id: BORDER-002
+    title: Messages to the observer carry what their readers need
+    statement: >-
+      The messages to the observer shall carry, for the control tick, the
+      loop's sequences, IMU freshness and staleness, tolerated stale
+      ticks, gyro calibration, arm state, raw and filtered rates,
+      commanded rates, PID terms, throttle, motor commands and attitude;
+      and, from their own producers, the IMU sample, the data-ready
+      counts, Command Input's channels and link state, the safety
+      master's arm state, the DShot lanes and replies, UART ESC
+      telemetry, the battery and the log storage.
+    rationale: >-
+      These are the values `snapshots.rs` carried as separate atomics,
+      grouped by producer so one message is one consistent sample
+      (section 9); a change here changes its producer, so the set stays
+      what readers use (ADR-0056).
+    derived_from: [W4]
+    allocated_to:
+      - ferrowasp_boundary_contracts::messages
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::every_state_link_publishes_its_newest_message_with_its_stamp
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::every_control_tick_reaches_the_stream_in_order_and_the_last_is_published
+
+  - id: BORDER-003
+    title: A reader sees a topic stop advancing
+    statement: >-
+      A reader's watch on a topic shall report it as stalled once its
+      sequence has held for the reader's limit by the reader's clock,
+      counting the first look as a change, so a topic never published
+      stalls too; and the ledger shall carry the boot identity and the
+      observer's own status as topics.
+    rationale: >-
+      A silently stalled observer leaves the OSD running with frozen
+      values; the OSD and telemetry warn when a topic they show stops
+      advancing (section 19, ADR-0061). The reader's clock is used so the
+      check never compares two tasks' timestamps.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_boundary_contracts::topics
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_boundary_contracts::topics::tests::a_topic_that_keeps_advancing_is_not_stalled
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_boundary_contracts::topics::tests::a_topic_stalls_once_its_sequence_holds_past_the_limit
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_boundary_contracts::topics::tests::a_topic_never_published_stalls_after_the_limit
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count

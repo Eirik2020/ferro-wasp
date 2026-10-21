@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 embedded-io = { workspace = true }
+heapless = { workspace = true }
 
 [package.metadata.ferrowasp]
 critical = true

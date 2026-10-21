@@ -78,3 +78,51 @@ requirements:
           setup: none
           method:
             test: ferrowasp_io_contracts::time::tests::a_deadline_expires_at_its_timeout_and_saturates
+
+  - id: IO-003
+    title: A link never blocks its producer and shows what it lost
+    statement: >-
+      A link's producer shall never block: on a full queue it shall
+      refuse the new message, keep the queued ones and count the refusal.
+      It shall number every message it tries to send from 1, skipping 0
+      when the number wraps, so a consumer reads a refused message as a
+      gap in the sequence; a forwarded message shall keep its upstream
+      sequence and timestamp. A consumer shall read an `event` link in
+      order and a `state` link as its newest message, taking at most the
+      queue's capacity, and an empty link shall read as nothing new.
+    rationale: >-
+      Every link between safety-critical tasks, and to the observer, is
+      this queue (ADR-0055): a consumer that stalls must cost its
+      producer data, never time (W2), and the loss must be visible.
+      Staleness stays the consumer's decision.
+    derived_from: [W2]
+    allocated_to:
+      - ferrowasp_io_contracts::link
+    verification:
+      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::link::tests::a_full_link_refuses_the_new_message_and_keeps_the_queued_ones
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::link::tests::a_refused_message_leaves_a_gap_in_the_sequence
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::link::tests::newest_drains_to_the_latest_and_empty_means_nothing_new
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::link::tests::forward_keeps_the_upstream_stamp
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::link::tests::the_sequence_skips_zero_when_it_wraps

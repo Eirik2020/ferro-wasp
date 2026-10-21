@@ -303,6 +303,7 @@ name = "ferrowasp-io-contracts"
 version = "0.1.0"
 dependencies = [
  "embedded-io 0.7.1",
+ "heapless",
 ]
 
 [[package]]

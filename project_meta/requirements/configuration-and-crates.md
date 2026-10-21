@@ -204,7 +204,7 @@ Safety-critical (`critical = true`):
 
 | Crate | Holds | From |
 |---|---|---|
-| `ferrowasp-io-contracts` | `RxChunk`, `ImuSample`, `ActuatorFeedback`, `MotorCommand`, `DshotCommand` | parts of `core`, `io-core` |
+| `ferrowasp-io-contracts` | `RxChunk`, `ImuSample`, `ActuatorFeedback`, `MotorCommand`, `DshotCommand`, the link type and `Stamped` | parts of `core`, `io-core` |
 | `ferrowasp-boundary-contracts` | `Request`, results, outbound messages | new |
 | `ferrowasp-config` | schema, `validate()`, page format, migration, motor map | `core::config`, part of `core::blackbox`, `flight::flash_storage` |
 | `ferrowasp-safety` | safety master, arming, actuator authority | `core::safety`, `flight::arming`, `flight::actuator` |
