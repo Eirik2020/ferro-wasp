@@ -7,7 +7,6 @@
 //! crate: `cfg!(feature = ..)`, `board::` paths, and `env!` resolve where the
 //! macro expands.
 
-
 /// The names a flight application's `main.rs` uses, whatever its board.
 pub mod prelude {
     pub use crate::dt;

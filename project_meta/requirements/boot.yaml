@@ -11,7 +11,7 @@ requirements:
       nothing may move then.
     derived_from: [W1, W2]
     allocated_to:
-      - ferrowasp_stm32_tasks::actuator_output
+      - ferrowasp_stm32_app::actuator_output
     verification:
       mode: direct
       entries:
@@ -33,7 +33,7 @@ requirements:
     derived_from: [W2]
     allocated_to:
       - ferrowasp_safety::RcLinkState
-      - ferrowasp_stm32_tasks::heartbeat
+      - ferrowasp_cli::tasks::heartbeat::heartbeat
     verification:
       mode: direct
       entries:

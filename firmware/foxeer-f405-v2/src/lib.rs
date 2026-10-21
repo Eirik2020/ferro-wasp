@@ -1,7 +1,7 @@
 #![deny(unsafe_code)]
 #![no_std]
 
-ferrowasp_stm32_tasks::flight_app_facade! {
+ferrowasp_stm32_app::flight_app_facade! {
     board_name: "Foxeer F405 V2",
     msp_identifier: *b"FXR2",
     target_name: "foxeer_f405_v2",

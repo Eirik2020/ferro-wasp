@@ -180,7 +180,7 @@ requirements:
       - ferrowasp_safety::rc_fault_response
       - ferrowasp_safety::neutralize_rc_outputs
       - ferrowasp_input::channel_map::RcChannelMap::replaced
-      - ferrowasp_stm32_tasks::rc_input
+      - ferrowasp_stm32_app::rc_input
       - ferrowasp_safety::RcInputFault
       - ferrowasp_safety::RcFaultResponse
     verification:
@@ -321,8 +321,8 @@ requirements:
       procedure covers them today.
     derived_from: [INPUT-001, W2]
     allocated_to:
-      - ferrowasp_stm32_tasks::control_loop
-      - ferrowasp_stm32_tasks::safety_master
+      - ferrowasp_flight_control::tasks::control_loop
+      - ferrowasp_safety::tasks::safety_master
     verification:
       mode: direct
       entries:

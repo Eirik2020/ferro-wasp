@@ -849,7 +849,7 @@ ferroforge::app! {
 
     // The flight tasks every board runs the same way. Each member's own
     // resources and configuration are in its definition in
-    // ferrowasp-stm32-tasks; this selection binds them once.
+    // their crates (ADR-0065); this selection binds them once.
     #[group(
         from = flight_tasks::groups::flight,
         local = [

@@ -246,7 +246,7 @@ FLIGHT_APP_CONTRACTS = {
     # blackbox storage on the microSD card.
     "tbs-lucid-h7": {
         "board_feature": "board-tbs-lucid-h7",
-        "dshot_feature": "ferrowasp-stm32-tasks/dshot",
+        "dshot_feature": "ferrowasp-stm32-app/dshot",
         "mandatory_features": (
             "dshot",
             "pwm_cal",
@@ -343,19 +343,22 @@ STATIC_DEFINITION = re.compile(
     r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?static[ \t]+(?:mut[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]*:",
     re.MULTILINE,
 )
-SHARED_TASK_CRATE = Path("crates/ferrowasp-stm32-tasks/src")
+SHARED_CRATES = Path("crates")
 
 
 def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
-    """A static that shared task definitions read or write exists once.
+    """A static that shared crates define exists once.
 
-    An app defining its own copy would still compile - its tasks would write
-    one static while a shared definition read the other - so the only defence
-    is refusing the copy here.
+    Task definitions and the state they share live in the shared crates. An
+    app defining its own copy of one of their statics would still compile -
+    its tasks would write one static while a shared definition read the
+    other - so the only defence is refusing the copy here.
     """
-    shared: set[str] = set()
-    for source in sorted((root / SHARED_TASK_CRATE).glob("**/*.rs")):
-        shared.update(STATIC_DEFINITION.findall(source.read_text(encoding="utf-8")))
+    shared: dict[str, str] = {}
+    for source in sorted((root / SHARED_CRATES).glob("*/src/**/*.rs")):
+        crate = source.relative_to(root / SHARED_CRATES).parts[0]
+        for name in STATIC_DEFINITION.findall(source.read_text(encoding="utf-8")):
+            shared.setdefault(name, crate)
     if not shared:
         return
     for source in sorted(root.glob("firmware/*/src/**/*.rs")):
@@ -364,7 +367,7 @@ def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
             if match.group(1) in shared:
                 errors.append(
                     f"{_relative(source, root)}:{_line_number(text, match.start())}: "
-                    f"static {match.group(1)!r} belongs to ferrowasp-stm32-tasks; "
+                    f"static {match.group(1)!r} belongs to {shared[match.group(1)]}; "
                     "re-export it instead of defining a second copy"
                 )
 

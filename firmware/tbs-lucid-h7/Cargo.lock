@@ -260,7 +260,7 @@ dependencies = [
  "ferrowasp-safety",
  "ferrowasp-serial",
  "ferrowasp-stm32",
- "ferrowasp-stm32-tasks",
+ "ferrowasp-stm32-app",
  "ferrowasp-stm32h7",
  "ferrowasp-storage",
  "heapless 0.9.2",
@@ -540,30 +540,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrowasp-stm32-critical"
-version = "0.1.0"
-dependencies = [
- "critical-section",
- "defmt",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "ferroforge",
- "ferrowasp-boundary-contracts",
- "ferrowasp-icm42688p",
- "ferrowasp-imu",
- "ferrowasp-io-contracts",
- "ferrowasp-mpu6000",
- "ferrowasp-mpu6500",
- "ferrowasp-output",
- "ferrowasp-serial",
- "fugit",
- "heapless 0.9.2",
- "rtic",
- "rtic-monotonics",
-]
-
-[[package]]
-name = "ferrowasp-stm32-tasks"
+name = "ferrowasp-stm32-app"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
@@ -599,6 +576,29 @@ dependencies = [
  "ferrowasp-stm32f4",
  "ferrowasp-stm32h7",
  "ferrowasp-storage",
+ "fugit",
+ "heapless 0.9.2",
+ "rtic",
+ "rtic-monotonics",
+]
+
+[[package]]
+name = "ferrowasp-stm32-critical"
+version = "0.1.0"
+dependencies = [
+ "critical-section",
+ "defmt",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+ "ferroforge",
+ "ferrowasp-boundary-contracts",
+ "ferrowasp-icm42688p",
+ "ferrowasp-imu",
+ "ferrowasp-io-contracts",
+ "ferrowasp-mpu6000",
+ "ferrowasp-mpu6500",
+ "ferrowasp-output",
+ "ferrowasp-serial",
  "fugit",
  "heapless 0.9.2",
  "rtic",

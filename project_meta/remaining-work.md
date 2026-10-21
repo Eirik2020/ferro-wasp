@@ -75,17 +75,17 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   new crate map. The redesign comes before the next hardware gate run, one
   change at a time against `main`, one mechanism at a time:
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
-     own); then each task moves into its subsystem crate behind a `tasks`
-     feature, and the tasks crate's `dt` and `flash_task` aliases go with the
-     last of them;
+     own);
   2. the remaining SPSC links and typed flags; the coordinator, taking the
-     values in `ferrowasp-stm32-tasks::inbound` (the host-connected flags and
+     values in `ferrowasp-border::inbound` (the host-connected flags and
      the accelerometer level) and the OSD's `tuning_profile`, then reboot,
      config transactions and accelerometer calibration through it; the boot
      fallback; `MotorCommand` and the output group's freshness check;
-     `ActuatorFeedback` with its boot-selected source; the Health Manager and
-     the border heartbeats; the fault classes and the failsafe stages; the
-     independent watchdog; the gyro-synced loop;
+     `ActuatorFeedback` with its boot-selected source, after which actuator
+     output, the DShot service, the ESC manager and RC input move to their
+     crates (ADR-0065) and the `dt` and `flash_task` aliases go with them;
+     the Health Manager and the border heartbeats; the fault classes and the
+     failsafe stages; the independent watchdog; the gyro-synced loop;
   3. the per-family conformance suites behind HW-UART-001 to HW-ROUTE-001,
      which today have host tests only for the HAL-neutral half.
 
@@ -159,7 +159,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **FerroForge adoption.** Retire `tools/rtic-app-builder`. FerroForge 0.4
   expands a group whose members are imported in one brace, `pub use
   crate::{a, b};`, into an empty group without an error, so
-  `ferrowasp-stm32-tasks::groups` imports each member on its own line; the fix
+  `ferrowasp-stm32-app::groups` imports each member on its own line; the fix
   belongs in FerroForge.
 
 ## Tooling and Environment

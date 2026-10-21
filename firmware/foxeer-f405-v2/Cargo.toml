@@ -19,27 +19,27 @@ bench = false
 
 [features]
 default = ["board-foxeer-f405-v2"]
-board-foxeer-f405-v2 = ["ferrowasp-stm32f4/stm32f405", "ferrowasp-stm32f4/dshot", "ferrowasp-stm32-tasks/stm32f405", "ferrowasp-stm32-tasks/dshot"]
+board-foxeer-f405-v2 = ["ferrowasp-stm32f4/stm32f405", "ferrowasp-stm32f4/dshot", "ferrowasp-stm32-app/stm32f405", "ferrowasp-stm32-app/dshot"]
 bench_actuator_validation = []
-bench_blackbox = ["ferrowasp-stm32-tasks/bench_blackbox"]
-bench_equal_motors = ["ferrowasp-stm32-tasks/bench_equal_motors"]
-bench_motor1_only = ["ferrowasp-safety/bench_motor1_only", "ferrowasp-stm32-tasks/bench_motor1_only"]
-bench_motor2_only = ["ferrowasp-safety/bench_motor2_only", "ferrowasp-stm32-tasks/bench_motor2_only"]
-bench_motor3_only = ["ferrowasp-safety/bench_motor3_only", "ferrowasp-stm32-tasks/bench_motor3_only"]
-bench_motor4_only = ["ferrowasp-safety/bench_motor4_only", "ferrowasp-stm32-tasks/bench_motor4_only"]
-bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only", "ferrowasp-stm32-tasks/bench_logical_motor1_only"]
-bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only", "ferrowasp-stm32-tasks/bench_logical_motor2_only"]
-bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only", "ferrowasp-stm32-tasks/bench_logical_motor3_only"]
-bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only", "ferrowasp-stm32-tasks/bench_logical_motor4_only"]
-imu_transport_rtt = ["ferrowasp-stm32-tasks/imu_transport_rtt"]
-imu_orientation_rtt = ["imu_transport_rtt", "ferrowasp-stm32-tasks/imu_orientation_rtt"]
+bench_blackbox = ["ferrowasp-stm32-app/bench_blackbox"]
+bench_equal_motors = ["ferrowasp-stm32-app/bench_equal_motors"]
+bench_motor1_only = ["ferrowasp-safety/bench_motor1_only", "ferrowasp-stm32-app/bench_motor1_only"]
+bench_motor2_only = ["ferrowasp-safety/bench_motor2_only", "ferrowasp-stm32-app/bench_motor2_only"]
+bench_motor3_only = ["ferrowasp-safety/bench_motor3_only", "ferrowasp-stm32-app/bench_motor3_only"]
+bench_motor4_only = ["ferrowasp-safety/bench_motor4_only", "ferrowasp-stm32-app/bench_motor4_only"]
+bench_logical_motor1_only = ["ferrowasp-safety/bench_logical_motor1_only", "ferrowasp-stm32-app/bench_logical_motor1_only"]
+bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only", "ferrowasp-stm32-app/bench_logical_motor2_only"]
+bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only", "ferrowasp-stm32-app/bench_logical_motor3_only"]
+bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only", "ferrowasp-stm32-app/bench_logical_motor4_only"]
+imu_transport_rtt = ["ferrowasp-stm32-app/imu_transport_rtt"]
+imu_orientation_rtt = ["imu_transport_rtt", "ferrowasp-stm32-app/imu_orientation_rtt"]
 smoke_actuator_inhibit = []
-bench_motor_cmd_stale_rejection = ["ferrowasp-stm32-tasks/bench_motor_cmd_stale_rejection"]
+bench_motor_cmd_stale_rejection = ["ferrowasp-stm32-app/bench_motor_cmd_stale_rejection"]
 bench_prearm_imu_stale = []
 bench_spi_timeout_recovery = ["ferrowasp-stm32/bench_spi_timeout_recovery"]
-bench_dshot_idle_output1_not_running = ["ferrowasp-stm32-tasks/bench_dshot_idle_output1_not_running"]
+bench_dshot_idle_output1_not_running = ["ferrowasp-stm32-app/bench_dshot_idle_output1_not_running"]
 bench_bidirectional_dshot = []
-mspv2_configurator = ["ferrowasp-cli/mspv2_configurator", "ferrowasp-stm32-tasks/mspv2_configurator"]
+mspv2_configurator = ["ferrowasp-cli/mspv2_configurator", "ferrowasp-stm32-app/mspv2_configurator"]
 
 [dependencies]
 ferrowasp-icm42688p = { path = "../../crates/ferrowasp-icm42688p" }
@@ -64,7 +64,7 @@ ferrowasp-mspv1 = { path = "../../crates/ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../../crates/ferrowasp-mspv2" }
 ferrowasp-stm32 = { path = "../../crates/ferrowasp-stm32" }
 ferrowasp-stm32f4 = { path = "../../crates/ferrowasp-stm32f4" }
-ferrowasp-stm32-tasks = { path = "../../crates/ferrowasp-stm32-tasks" }
+ferrowasp-stm32-app = { path = "../../crates/ferrowasp-stm32-app" }
 ferroforge = "0.4"
 heapless = "0.9.2"
 nb = "1.1"

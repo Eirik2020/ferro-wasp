@@ -28,10 +28,10 @@ What the parse yields:
 - every task names its definition with `from =`, for example
   `from = flight_tasks::uart1_rx_dma` or a group's
   `from = flight_tasks::groups::flight`;
-- group members are flat `pub use crate::x` re-exports
-  (`ferrowasp-stm32-tasks/src/groups.rs`), so task definitions share one
-  namespace per crate, and "crate plus task name" is unique: a duplicate is a
-  compile error. The plan's claim that Rust's namespace rules guarantee
+- group members are flat `pub use` re-exports of definitions in their own
+  crates (`ferrowasp-stm32-app/src/groups.rs`), so a group holds each task
+  name once and "crate plus task name" is unique: a duplicate is a compile
+  error. The plan's claim that Rust's namespace rules guarantee
   uniqueness holds for tasks, not for arbitrary functions;
 - an instance and its definition can differ: `dshot_motor1_dma_complete` to
   `motor4` are four instances of `dshot_dma_complete` with different config.
