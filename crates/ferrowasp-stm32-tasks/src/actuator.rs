@@ -10,15 +10,7 @@ use crate::prelude::*;
 
 /// A live arming guard: permit, RC link armable, arm switch high, throttle.
 /// Which pre-arm health it also requires is the board's safety policy.
-/// The board's live arming guard: the arm permit, RC link, arm switch and
-/// throttle, then the control loop's IMU status (`None` once too old).
-pub type ArmingGuard = fn(
-    bool,
-    bool,
-    bool,
-    u32,
-    Option<safety::prearm::ImuPreArmStatus>,
-) -> Result<(), safety::ArmingAbortReason>;
+pub use ferrowasp_safety::ArmingGuard;
 
 pub struct ActuatorHardware<'a, SharedDshot>
 where

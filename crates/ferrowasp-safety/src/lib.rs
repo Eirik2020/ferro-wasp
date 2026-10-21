@@ -11,6 +11,13 @@
 pub mod actuator;
 pub mod arming;
 pub mod prearm;
+#[cfg(all(feature = "tasks", target_arch = "arm"))]
+pub mod tasks;
+
+/// The board's live arming guard: the arm permit, RC link, arm switch and
+/// throttle, then the control loop's IMU status (`None` once too old).
+pub type ArmingGuard =
+    fn(bool, bool, bool, u32, Option<prearm::ImuPreArmStatus>) -> Result<(), ArmingAbortReason>;
 
 pub const ARM_HOLD_US: u64 = 200_000;
 pub const ARM_THRESHOLD: u16 = 1500;

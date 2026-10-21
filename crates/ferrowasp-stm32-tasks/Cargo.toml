@@ -67,7 +67,7 @@ ferrowasp-mpu6000 = { path = "../ferrowasp-mpu6000" }
 ferrowasp-mpu6500 = { path = "../ferrowasp-mpu6500" }
 ferrowasp-osd = { path = "../ferrowasp-osd" }
 ferrowasp-protocol = { path = "../ferrowasp-protocol" }
-ferrowasp-safety = { path = "../ferrowasp-safety" }
+ferrowasp-safety = { path = "../ferrowasp-safety", features = ["tasks"] }
 ferrowasp-serial = { path = "../ferrowasp-serial" }
 ferrowasp-storage = { path = "../ferrowasp-storage" }
 ferrowasp-mspv1 = { path = "../ferrowasp-mspv1" }

@@ -23,7 +23,6 @@ pub mod spi1_imu {
 #[cfg(feature = "dshot")]
 #[ferroforge::group]
 pub mod flight {
-    pub use crate::actuator_idle_notify;
     pub use crate::actuator_output;
     pub use crate::adc1_polling;
     pub use crate::control_loop;
@@ -36,7 +35,8 @@ pub mod flight {
     pub use crate::osd_refresh;
     pub use crate::rc_input;
     pub use crate::rc_telemetry;
-    pub use crate::safety_master;
     pub use crate::usb_fs;
     pub use ferrowasp_border::tasks::observer_task;
+    pub use ferrowasp_safety::tasks::actuator_idle_notify;
+    pub use ferrowasp_safety::tasks::safety_master;
 }

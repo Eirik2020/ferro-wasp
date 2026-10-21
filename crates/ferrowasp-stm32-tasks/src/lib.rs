@@ -45,8 +45,6 @@ mod actuator;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod adc;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-mod arming;
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod channels;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 mod cli_link;
@@ -100,8 +98,6 @@ pub use actuator::{
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use adc::{adc1_polling, dma_adc1};
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-pub use arming::{actuator_idle_notify, safety_master, warn_arming_abort};
-#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use channels::{
     CommandLinkChannels, EscChannels, ImuChannels, ObserverChannels, StorageChannels,
     command_link_channels, esc_channels, imu_channels, observer_channels, storage_channels,
@@ -124,6 +120,8 @@ pub use esc::esc_manager_task;
 pub use ferrowasp_border::tasks::observer_task;
 /// What a firmware was built from, for the `build` command.
 pub use ferrowasp_cli::usb_debug::BuildIdentity;
+#[cfg(target_arch = "arm")]
+pub use ferrowasp_safety::tasks::{actuator_idle_notify, safety_master, warn_arming_abort};
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use flash::{
