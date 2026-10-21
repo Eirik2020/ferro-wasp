@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a1f7d380.js";
+            window.path_to_searchindex_js = "searchindex-24be5c6e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1480,26 +1480,33 @@ had a failed ESC. The turnaround and the reply window are unmeasured, and so
 is reply loss under flight DMA load.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="priority-and-scheduling"><a class="header" href="#priority-and-scheduling">Priority and Scheduling</a></h1>
+<p>Task priorities on the Foxeer F405 V2, the reference board; the TBS Lucid H7
+uses the same levels. Higher numbers preempt lower ones. The safety-critical
+core runs at 8 and above, the border roles at 6 and 7, and everything that
+is not safety-critical at 5 and below, so no display, storage or host link
+can delay flight work.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th style="text-align: right">Priority</th><th>Task name</th><th>Type</th><th>Description</th></tr>
+<tr><th style="text-align: right">Priority</th><th>Task</th><th>Type</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td style="text-align: right">16</td><td>Safety Master</td><td>SW</td><td>Highest-level safety authority. Handles kill/disarm state, failsafe decisions, watchdog supervision, and emergency shutdown.</td></tr>
-<tr><td style="text-align: right">15</td><td>Actuator Output</td><td>SW</td><td>Sole owner of motor/ESC outputs. Applies the final safety gate and writes DShot, PWM, OneShot, or other actuator commands.</td></tr>
-<tr><td style="text-align: right">14</td><td>Control Loop</td><td>SW</td><td>Runs rate/attitude control, mixing, and command limiting, and produces desired actuator outputs.</td></tr>
-<tr><td style="text-align: right">13</td><td>Actuator Idle Notifier</td><td>SW</td><td>Relays completed idle preparation after the actuator executor has returned, allowing final safety checks and forced-low fallback.</td></tr>
-<tr><td style="text-align: right">13</td><td>SPI HW</td><td>HW</td><td>Handles SPI interrupt/DMA completion for high-rate sensors, especially IMU transfers. Keeps ISR work short and bounded.</td></tr>
-<tr><td style="text-align: right">12</td><td>IMU Data</td><td>SW</td><td>Converts raw IMU samples into calibrated gyro/accelerometer data and updates the latest control-loop input state.</td></tr>
-<tr><td style="text-align: right">11</td><td>UART HW</td><td>HW</td><td>Handles UART RX/TX interrupt, DMA, and idle-line events. Captures byte buffers and wakes protocol parsers.</td></tr>
-<tr><td style="text-align: right">10</td><td>RC Input</td><td>SW</td><td>Parses CRSF, SBUS, ELRS, IBUS, or similar receiver protocols and updates normalized pilot setpoints.</td></tr>
-<tr><td style="text-align: right">9</td><td>I2C HW</td><td>HW</td><td>Handles I2C interrupt/DMA completion for lower-rate sensors or peripherals such as barometers, magnetometers, or expanders.</td></tr>
-<tr><td style="text-align: right">9</td><td>ADC HW</td><td>HW</td><td>Handles ADC conversion/DMA completion for battery voltage, current, temperature, RSSI, or other analog inputs.</td></tr>
-<tr><td style="text-align: right">4</td><td>OSD</td><td>SW</td><td>Updates display/status data for analog or digital FPV systems. Non-flight-critical.</td></tr>
-<tr><td style="text-align: right">3</td><td>Error Handler</td><td>SW</td><td>Processes non-critical faults, degraded-mode reports, and diagnostic events after safety-critical handling is complete.</td></tr>
-<tr><td style="text-align: right">2</td><td>Debugger</td><td>SW</td><td>Used for debugging without clogging up critical sections</td></tr>
-<tr><td style="text-align: right">1</td><td>Telemetry</td><td>SW</td><td>Sends status, sensor data, link statistics, logs, and debug information. Lowest-priority background communication.</td></tr>
+<tr><td style="text-align: right">16</td><td><code>safety_master</code></td><td>SW</td><td>Arms and disarms; the only arming authority.</td></tr>
+<tr><td style="text-align: right">16</td><td>DShot DMA completions</td><td>HW</td><td>Finish each motor lane’s frame.</td></tr>
+<tr><td style="text-align: right">15</td><td><code>actuator_output</code></td><td>SW</td><td>The only owner of motor output; applies the final safety gate.</td></tr>
+<tr><td style="text-align: right">14</td><td><code>control_loop</code></td><td>HW (timer)</td><td>The rate controller and mixer; publishes motor commands.</td></tr>
+<tr><td style="text-align: right">14</td><td><code>imu_data_ready</code></td><td>HW (EXTI)</td><td>The IMU’s data-ready line; starts a sample read.</td></tr>
+<tr><td style="text-align: right">13</td><td><code>dshot_service</code>, <code>dshot_fallback</code>, <code>actuator_idle_notify</code></td><td>SW</td><td>Start DShot frame sets; relay idle preparation to the safety master.</td></tr>
+<tr><td style="text-align: right">13</td><td>SPI1 owner, receive DMA and timeout</td><td>SW, HW</td><td>Run the IMU’s SPI transfers.</td></tr>
+<tr><td style="text-align: right">12</td><td><code>spi1_poll</code>, <code>spi1_parser</code></td><td>SW</td><td>Read and decode IMU samples.</td></tr>
+<tr><td style="text-align: right">11</td><td>UART transports</td><td>HW, SW</td><td>Receive and transmit DMA and idle-line events for every port.</td></tr>
+<tr><td style="text-align: right">10</td><td><code>rc_input</code></td><td>SW</td><td>Decodes the receiver and qualifies the RC link.</td></tr>
+<tr><td style="text-align: right">9</td><td><code>io_watchdog</code></td><td>HW (timer)</td><td>Recovers a stalled SPI transfer.</td></tr>
+<tr><td style="text-align: right">8</td><td><code>esc_manager_task</code></td><td>SW</td><td>Polls ESC telemetry over its return line.</td></tr>
+<tr><td style="text-align: right">7</td><td><code>observer_task</code></td><td>SW</td><td>Publishes the craft’s state on the read-only ledger the tasks below read, and streams logged control ticks to the blackbox.</td></tr>
+<tr><td style="text-align: right">5</td><td><code>usb_fs</code></td><td>HW</td><td>The USB command line and status.</td></tr>
+<tr><td style="text-align: right">3</td><td><code>osd_refresh</code>, <code>configurator_link</code></td><td>SW</td><td>The MSP OSD; the command line on a UART.</td></tr>
+<tr><td style="text-align: right">1</td><td><code>flash_manager_task</code>, <code>heartbeat</code>, <code>rc_telemetry</code>, ADC</td><td>SW, HW</td><td>Storage and the blackbox, diagnostics, receiver telemetry, battery sensing.</td></tr>
 </tbody>
 </table>
 </div>
@@ -2160,7 +2167,7 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-crsf</code>, <code>ferrowasp-blheli-telemetry</code></td><td>The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each</td></tr>
 <tr><td><code>ferrowasp-icm42688p</code>, <code>ferrowasp-mpu6000</code>, <code>ferrowasp-mpu6500</code></td><td>The IMU drivers over <code>embedded-hal</code>, safety-critical, one crate per sensor</td></tr>
 <tr><td><code>ferrowasp-storage</code></td><td>The SPI NOR flash driver and the <code>NorStorage</code> trait, the storage layout and boot slot selection, and configuration saving</td></tr>
-<tr><td><code>ferrowasp-blackbox</code></td><td>The onboard flight log: the record queue and page assembly, the log writer, the sync ledger, and log maintenance</td></tr>
+<tr><td><code>ferrowasp-blackbox</code></td><td>The onboard flight log: records from the observer’s stream of logged control ticks, page assembly, the log writer, the sync ledger, and log maintenance</td></tr>
 <tr><td><code>ferrowasp-cli</code></td><td>The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC</td></tr>
 <tr><td><code>ferrowasp-flight-control</code></td><td>How FerroWasp flies, safety-critical: the rate controller and its tuning, stick shaping, the mixer and motor map, dynamic idle, the RPM filter’s wiring</td></tr>
 <tr><td><code>ferrowasp-feedback</code></td><td>Actuator feedback, safety-critical: the ESC telemetry manager and the idle qualification arming waits for</td></tr>
