@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-24be5c6e.js";
+            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -207,7 +207,7 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-serial</code></td><td>The serial transport every port shares, safety-critical: port bindings, line settings and routing, and the bounded reader and writer</td></tr>
 <tr><td><code>ferrowasp-mspv1</code></td><td>MSPv1 framing and the DJI O4 OSD responder</td></tr>
 <tr><td><code>ferrowasp-mspv2</code></td><td>MSPv2 framing and the opt-in configurator RPC</td></tr>
-<tr><td><code>ferrowasp-osd</code></td><td>The MSP OSD the DJI goggles show, encoded from snapshots of the craft’s state</td></tr>
+<tr><td><code>ferrowasp-osd</code></td><td>The MSP OSD the DJI goggles show, encoded from the craft’s published state, with a warning when it stops updating</td></tr>
 <tr><td><code>ferrowasp-output</code></td><td>Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding</td></tr>
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
 <tr><td><code>ferrowasp-stm32-critical</code></td><td>The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory</td></tr>

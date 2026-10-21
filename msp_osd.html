@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-24be5c6e.js";
+            window.path_to_searchindex_js = "searchindex-cbf668a7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -204,15 +204,24 @@
 </ul>
 <h2 id="text-layout-model"><a class="header" href="#text-layout-model">Text Layout Model</a></h2>
 <p>The DJI O4 OSD is driven as a character grid, not as pixels. Each text item is written at a row and column. Row <code>0</code>, column <code>0</code> is the upper-left corner of the visible canvas.</p>
-<p>The first proven FerroWasp layout is:</p>
+<p>The current FerroWasp layout is:</p>
 <pre><code class="language-text">row 1, col 2: FERROWASP
 row 2, col 2: DISARMED / ARMED
-row 3, col 2: VBAT 0.0
-row 4, col 2: CELL ---
-row 5, col 2: CUR 0.0A
-row 6, col 2: THR 1000
+row 3, col 2: IMU OK / IMU STALE
+row 4, col 2: VBAT 0.0
+row 5, col 2: CELL ---
+row 6, col 2: CUR 0.0A
+row 7, col 2: THR 1000
+row 8, col 2: DATA STALE (blinking, only while it applies)
 </code></pre>
 <p>This currently appears in the upper-left corner of the goggles.</p>
+<p><code>DATA STALE</code> means the values on screen have stopped updating: the
+firmware’s published state, or the control loop’s part of it, has not
+changed for a quarter of a second. Treat everything shown as old and land.
+While the battery reading alone has stopped for half a second, the three
+battery rows show dashes (<code>VBAT --.-</code>, <code>CELL ---</code>, <code>CUR ---</code>) instead of
+the last value. The goggles’ own battery element, fed by the MSP battery
+replies, still shows the last value.</p>
 <h2 id="display-update-sequence"><a class="header" href="#display-update-sequence">Display Update Sequence</a></h2>
 <p>Treat one screen update as a small transaction:</p>
 <ol>
@@ -227,10 +236,11 @@ row 6, col 2: THR 1000
 clear_screen
 write_string(row=1, col=2, attr=0, "FERROWASP")
 write_string(row=2, col=2, attr=0, "DISARMED")
-write_string(row=3, col=2, attr=0, "VBAT 0.0")
-write_string(row=4, col=2, attr=0, "CELL ---")
-write_string(row=5, col=2, attr=0, "CUR 0.0A")
-write_string(row=6, col=2, attr=0, "THR 1000")
+write_string(row=3, col=2, attr=0, "IMU OK")
+write_string(row=4, col=2, attr=0, "VBAT 0.0")
+write_string(row=5, col=2, attr=0, "CELL ---")
+write_string(row=6, col=2, attr=0, "CUR 0.0A")
+write_string(row=7, col=2, attr=0, "THR 1000")
 draw_screen
 </code></pre>
 <h2 id="write-string-payload"><a class="header" href="#write-string-payload">Write String Payload</a></h2>
@@ -281,6 +291,7 @@ text bytes
 </thead>
 <tbody>
 <tr><td>Armed state</td><td><code>ARMED</code> / <code>DISARMED</code></td><td>Safety arm reader</td></tr>
+<tr><td>Stale data</td><td><code>DATA STALE</code>, blinking</td><td>The published state has stopped updating</td></tr>
 <tr><td>Battery voltage</td><td><code>VBAT 16.4</code></td><td>ADC-derived pack voltage from <code>ADC_VBAT</code> on PC0</td></tr>
 <tr><td>Cell voltage</td><td><code>CELL 4.10</code></td><td>Pack voltage divided by the configured battery cell count</td></tr>
 <tr><td>Current</td><td><code>CUR 12.3A</code></td><td>ADC-derived current sensor voltage from <code>ADC_CURR</code> on PC1 using the Foxeer/Betaflight scale value</td></tr>
