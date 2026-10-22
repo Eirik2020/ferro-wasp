@@ -82,6 +82,22 @@ existence.
   `flight` on the FCU. `unit` takes a test; `mcu`, `bench` and `flight` take a
   procedure.
 
+**What requirement text holds.** A requirement says what must hold and why
+it matters, nothing else:
+
+| Field | Holds | Never holds |
+|---|---|---|
+| `statement` | one testable claim ("shall"), saying what must hold, in at most 60 words | how it is built, a path into the code, history, a second claim |
+| `rationale` | why it matters: the hazard, or the governing requirement it serves, in at most 50 words | alternatives, who decided or when, evidence, plans |
+| `verification` | how it is verified: a test or a procedure | results, which are evidence records |
+
+A statement that needs two "shall" is two requirements. Where the rest goes:
+the current structure in the spec section that owns the topic; why a
+tempting alternative lost in [the FAQ](../faq.md); what is left in
+remaining work; results in the evidence records; who decided, and when, in
+git and the PR. `reqtool validate` lints requirement text and the FAQ
+against these rules and reports what it finds; `--strict` fails on it.
+
 The governance Markdown mirrors a requirement as prose: header, "shall"
 statement, rationale, verification method, derived-from. The plan's
 illustrative requirement:

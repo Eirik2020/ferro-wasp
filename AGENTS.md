@@ -41,7 +41,7 @@ Start from the task, not the chapter. Read the named sections, not whole files.
 | Host tools or FerroConfigurator | W1; Host Tools below |
 | Public documentation | Public Book below; `mdbook/src/SUMMARY.md` |
 | Building or checking anything | `mdbook/src/testing.md` Software Checks; `.github/workflows/ci.yml` is exact |
-| Whether something was already decided | `project_meta/ARCHITECTURE_DECISIONS.md` |
+| Whether something was already decided | `project_meta/faq.md`, then `project_meta/ARCHITECTURE_DECISIONS.md` |
 | What is left to build | `project_meta/remaining-work.md` |
 | Publishing a release | `project_meta/releasing.md` |
 
@@ -52,7 +52,7 @@ links into the internal book.
 | Topic | Owner |
 | --- | --- |
 | Requirements W1-W7 | `project_meta/governing-requirements.md` |
-| What was decided, and why | `project_meta/ARCHITECTURE_DECISIONS.md` and `decisions/` |
+| What was decided, and why; why an alternative lost | `project_meta/ARCHITECTURE_DECISIONS.md` and `decisions/`; `project_meta/faq.md` |
 | What is left to build | `project_meta/remaining-work.md` |
 | Test definitions, procedures, evidence workflow | `project_meta/testing/README.md` |
 | Requirements and their design | `project_meta/requirements/` and its `design.md` |

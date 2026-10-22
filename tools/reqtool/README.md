@@ -18,6 +18,7 @@ Run from anywhere inside the repository, or pass `--repository`:
 
 ```text
 cargo run --release -- validate
+cargo run --release -- validate --strict
 cargo run --release -- check
 cargo run --release -- check INPUT-001
 cargo run --release -- check ferrowasp_input::rc_receiver
@@ -30,6 +31,9 @@ cargo run --release -- check ferrowasp_input::rc_receiver
   `critical = true` crate, outside `#[cfg(test)]` modules, needs a
   requirement allocated to it or to a module or type enclosing it, compared
   where the item is defined, so a re-exported name counts.
+  It lints requirement text and `project_meta/faq.md` against
+  [what requirement text holds](../../project_meta/requirements/schema-and-tooling.md#6-schema-tooling-and-the-parser)
+  and prints each finding as a warning; `validate --strict` fails on them.
 - `check` with no target summarizes every requirement. With an ID it shows
   that requirement; with `W1`-`W7` the requirements derived from it; with an
   item path every requirement allocated to that item, inside it, or around

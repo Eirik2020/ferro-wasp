@@ -31,6 +31,13 @@
       "max_bytes": 6144
     },
     {
+      "path": "project_meta/faq.md",
+      "role": "rejected-alternatives",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 16000
+    },
+    {
       "path": "project_meta/remaining-work.md",
       "role": "remaining-work",
       "lifecycle": "live",

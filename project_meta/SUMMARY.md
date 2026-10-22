@@ -4,6 +4,7 @@
 
 - [Governing Requirements](governing-requirements.md)
 - [Remaining Work](remaining-work.md)
+- [FAQ](faq.md)
 - [Architecture Decisions](ARCHITECTURE_DECISIONS.md)
   - [Planned Decisions: Accepted, Not Yet Implemented](ARCHITECTURE_DECISIONS_PLANNED.md)
   - [Decision History: Retired and Superseded](ARCHITECTURE_DECISIONS_HISTORY.md)
