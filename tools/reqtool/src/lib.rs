@@ -10,6 +10,7 @@ pub mod evidence;
 pub mod fingerprint;
 pub mod gates;
 pub mod items;
+pub mod lint;
 pub mod project;
 pub mod report;
 pub mod roots;

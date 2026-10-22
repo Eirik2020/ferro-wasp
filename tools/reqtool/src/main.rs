@@ -24,8 +24,13 @@ struct Cli {
 enum Command {
     /// Check every requirement file against the schema, the roots, each other
     /// and the code, and that every `pub` item of a safety-critical crate has
-    /// a requirement. Exits nonzero on any problem.
-    Validate,
+    /// a requirement. Exits nonzero on any problem. Also lints requirement
+    /// text and the FAQ, reporting what they may not hold as warnings.
+    Validate {
+        /// Fail on lint findings too.
+        #[arg(long)]
+        strict: bool,
+    },
     /// Show status: of everything, of one requirement by ID, of a governing
     /// requirement, or of the requirements allocated to an item path such as
     /// `ferrowasp_input::rc_receiver`.
@@ -126,13 +131,20 @@ fn main() -> ExitCode {
         return test(&project, requirements, *dry_run);
     }
     let result = match cli.command {
-        Command::Validate => {
+        Command::Validate { strict } => {
             let unlinked = project.unlinked_critical_items();
-            if unlinked.is_empty() {
+            let findings = lint_findings(&project);
+            for finding in &findings {
+                eprintln!("warning: {finding}");
+            }
+            if unlinked.is_empty() && (findings.is_empty() || !strict) {
                 Ok(format!(
-                    "{} requirements valid\n",
-                    project.requirements.len()
+                    "{} requirements valid; {} text finding(s)\n",
+                    project.requirements.len(),
+                    findings.len()
                 ))
+            } else if unlinked.is_empty() {
+                Err(format!("{} text finding(s)", findings.len()))
             } else {
                 for problem in &unlinked {
                     eprintln!("{problem}");
@@ -341,4 +353,25 @@ fn recorded(project: &Project) -> Result<Recorded, String> {
 fn fail(message: &str) -> ExitCode {
     eprintln!("error: {message}");
     ExitCode::FAILURE
+}
+
+/// What requirement text and the FAQ may not hold, each prefixed with where.
+fn lint_findings(project: &Project) -> Vec<String> {
+    let mut findings = Vec::new();
+    for requirement in project.requirements.values() {
+        for finding in reqtool::lint::requirement(requirement) {
+            findings.push(format!("{}: {finding}", requirement.id));
+        }
+    }
+    let path = project.repository.join(reqtool::lint::FAQ);
+    match std::fs::read_to_string(&path) {
+        Ok(text) => {
+            let ids = project.requirements.keys().cloned().collect();
+            for finding in reqtool::lint::faq(&text, &project.repository, &ids) {
+                findings.push(format!("{}: {finding}", reqtool::lint::FAQ));
+            }
+        }
+        Err(_) => findings.push(format!("{} is missing", reqtool::lint::FAQ)),
+    }
+    findings
 }
