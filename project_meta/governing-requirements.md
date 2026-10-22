@@ -5,7 +5,7 @@ small multirotors, built on FerroForge, and a prototype research platform. It
 puts auditability, timing determinism, fault containment, and evidence before
 feature count.
 
-Agreed direction, updated 2026-10-17. This document is limited to two pages
+Agreed direction, updated 2026-10-22. This document is limited to two pages
 maximum.
 
 **Authority.** `AGENTS.md` in the repository root defines the authority order and
@@ -33,9 +33,9 @@ rather than editing around it. Implementation status does not change them.
 4. **W4 - Layering.** Shared logic is free of HAL types. A board's physical facts
    are host-tested data, and an app shell is RTIC wiring. Code still useful after
    substituting hardware facts moves to the narrowest shared crate, and each new
-   type, task, or failure response has one owning layer. Each crate is
-   safety-critical or not, and a safety-critical crate never depends on a
-   non-critical one. Firmware is `no_std`,
+   type, task, or failure response has one owning layer. Code is
+   safety-critical or not, and safety-critical code never depends on
+   non-critical code. Firmware is `no_std`,
    allocation-free, and uses bounded queues. Unsafe code lives only at
    chip-backend peripheral and DMA boundaries, and is documented. The crate map
    is `mdbook/src/project_structure.md`.
@@ -54,11 +54,10 @@ rather than editing around it. Implementation status does not change them.
 7. **W7 - Evidence.** A compile does not establish target behaviour, a target
    boot does not establish actuator behaviour, and props-off operation does not
    establish flight readiness; each claim needs evidence at its own level.
-   Evidence verifies the requirements in `project_meta/requirements/`, which
-   derive from W1-W7, and carries a fingerprint the tooling derives from the
-   code they are allocated to, or from the path where behaviour depends on
-   timing or scheduling. A record stands while its fingerprint is unchanged,
-   and status is computed from evidence, never recorded by hand.
+   Evidence verifies the requirements in `project_meta/requirements/`, each
+   derived from W1-W7 or from another requirement. A record stands while the
+   code and configuration it covered are unchanged, and status is computed
+   from evidence, never recorded by hand.
 
 Implementation details belong in the public book, `mdbook/`, what is left to
 build in [remaining work](remaining-work.md), and decisions in the

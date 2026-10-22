@@ -205,19 +205,19 @@ new system. The user chose (b). W1-W7 stay prose Markdown in
 requirements reference them through `derived_from` (`CMD-INPUT-001`
 `derived_from: [W2]`) and never copy them, which keeps one owner per topic.
 
-W7 is reworded, because "evidence is tied to component IDs" named the retired
-mechanism. As landed with the first schema:
+W7 names no mechanism:
 
 > 7. **W7 - Evidence.** A compile does not establish target behaviour, a
 > target boot does not establish actuator behaviour, and props-off operation
 > does not establish flight readiness; each claim needs evidence at its own
 > level. Evidence verifies the requirements in `project_meta/requirements/`,
-> which derive from W1-W7, and carries a fingerprint the tooling derives from
-> the code they are allocated to, or from the path where behaviour depends on
-> timing or scheduling. A record stands while its fingerprint is unchanged,
-> and status is computed from evidence, never recorded by hand.
+> each derived from W1-W7 or from another requirement. A record stands while
+> the code and configuration it covered are unchanged, and status is computed
+> from evidence, never recorded by hand.
 
-W4 gains criticality as a layering dimension (section 8): "Each crate is
-safety-critical or not, and a safety-critical crate never depends on a
-non-critical one." `reqtool` reads W1-W7's IDs and titles from the governing
+How a record's coverage is established belongs to the requirements under it
+(section 4, and section 20 once `reqtool` implements it), so a change of
+method leaves W7 standing. W4 states criticality as a layering dimension
+(section 8) the same way: "Code is safety-critical or not, and
+safety-critical code never depends on non-critical code." `reqtool` reads W1-W7's IDs and titles from the governing
 document itself, so it stays their one owner.
