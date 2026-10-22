@@ -89,7 +89,7 @@ the current structure in the spec section that owns the topic; why a
 tempting alternative lost in [the FAQ](../faq.md); what is left in
 remaining work; results in the evidence records; who decided, and when, in
 git and the PR. `reqtool validate` lints requirement text and the FAQ
-against these rules and reports what it finds; `--strict` fails on it.
+against these rules and fails on any finding.
 
 The governance Markdown mirrors a requirement as prose: header, "shall"
 statement, rationale, verification method, derived-from. A requirement:

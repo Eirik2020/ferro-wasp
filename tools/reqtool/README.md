@@ -20,7 +20,6 @@ Run from anywhere inside the repository, or pass `--repository`:
 
 ```text
 cargo run --release -- validate
-cargo run --release -- validate --strict
 cargo run --release -- check
 cargo run --release -- check INPUT-001
 cargo run --release -- check ferrowasp_input::rc_receiver
@@ -35,7 +34,7 @@ cargo run --release -- report --board foxeer-f405-v2
   (TRACE-001), and it imports only safety-critical files and external crates
   its manifest pins to one version (TRACE-002). It lints requirement text and `project_meta/faq.md` against
   [what requirement text holds](../../project_meta/requirements/schema-and-tooling.md#6-schema-tooling-and-the-parser)
-  and prints each finding as a warning; `validate --strict` fails on them.
+  and fails on any finding.
 - `check` with no target summarizes every requirement. With an ID it shows
   that requirement and the files that declare it; with `W1`-`W7` the
   requirements derived from it; with a file, by path or by module path, the

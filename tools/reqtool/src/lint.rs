@@ -8,6 +8,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::project::Project;
 use crate::schema::Requirement;
 
 pub const STATEMENT_MAX_WORDS: usize = 60;
@@ -31,6 +32,27 @@ const NARRATIVE: [&str; 12] = [
     "was rejected",
     "was decided",
 ];
+
+/// Every finding in the project's requirement text and its FAQ, each
+/// prefixed with where it is.
+pub fn project(project: &Project) -> Vec<String> {
+    let mut findings = Vec::new();
+    for requirement in project.requirements.values() {
+        for finding in self::requirement(requirement) {
+            findings.push(format!("{}: {finding}", requirement.id));
+        }
+    }
+    match std::fs::read_to_string(project.repository.join(FAQ)) {
+        Ok(text) => {
+            let ids = project.requirements.keys().cloned().collect();
+            for finding in faq(&text, &project.repository, &ids) {
+                findings.push(format!("{FAQ}: {finding}"));
+            }
+        }
+        Err(_) => findings.push(format!("{FAQ} is missing")),
+    }
+    findings
+}
 
 /// The findings for one requirement's text.
 pub fn requirement(requirement: &Requirement) -> Vec<String> {

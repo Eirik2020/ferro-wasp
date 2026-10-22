@@ -114,6 +114,8 @@ fn the_real_repository_is_valid() {
     assert!(problems.is_empty(), "{problems:#?}");
     let findings = project.trace_findings();
     assert!(findings.is_empty(), "{findings:#?}");
+    let text = reqtool::lint::project(&project);
+    assert!(text.is_empty(), "{text:#?}");
 }
 
 #[test]

@@ -27,13 +27,9 @@ enum Command {
     /// and the code; that the requirements source files declare exist; and
     /// that every safety-critical file declares a requirement and imports
     /// only safety-critical files and pinned external crates. Exits nonzero
-    /// on any problem. Also lints requirement text and the FAQ, reporting
-    /// what they may not hold as warnings.
-    Validate {
-        /// Fail on lint findings too.
-        #[arg(long)]
-        strict: bool,
-    },
+    /// on any problem, including requirement text or an FAQ entry that holds
+    /// what it may not.
+    Validate,
     /// Show status: of everything, of one requirement by ID, of a governing
     /// requirement, or of a source file and the requirements it declares, by
     /// path or by module path such as `ferrowasp_input::rc_receiver`.
@@ -155,20 +151,22 @@ fn main() -> ExitCode {
         return test(&current, requirements, *dry_run);
     }
     let result = match cli.command {
-        Command::Validate { strict } => {
+        Command::Validate => {
             let unlinked = project.trace_findings();
-            let findings = lint_findings(&project);
+            let findings = reqtool::lint::project(&project);
             for finding in &findings {
-                eprintln!("warning: {finding}");
+                eprintln!("{finding}");
             }
-            if unlinked.is_empty() && (findings.is_empty() || !strict) {
+            if unlinked.is_empty() && findings.is_empty() {
                 Ok(format!(
-                    "{} requirements valid; {} text finding(s)\n",
-                    project.requirements.len(),
-                    findings.len()
+                    "{} requirements valid\n",
+                    project.requirements.len()
                 ))
             } else if unlinked.is_empty() {
-                Err(format!("{} text finding(s)", findings.len()))
+                Err(format!(
+                    "{} text finding(s): requirement text and the FAQ break their rules",
+                    findings.len()
+                ))
             } else {
                 for problem in &unlinked {
                     eprintln!("{problem}");
@@ -391,25 +389,4 @@ fn recorded(
 fn fail(message: &str) -> ExitCode {
     eprintln!("error: {message}");
     ExitCode::FAILURE
-}
-
-/// What requirement text and the FAQ may not hold, each prefixed with where.
-fn lint_findings(project: &Project) -> Vec<String> {
-    let mut findings = Vec::new();
-    for requirement in project.requirements.values() {
-        for finding in reqtool::lint::requirement(requirement) {
-            findings.push(format!("{}: {finding}", requirement.id));
-        }
-    }
-    let path = project.repository.join(reqtool::lint::FAQ);
-    match std::fs::read_to_string(&path) {
-        Ok(text) => {
-            let ids = project.requirements.keys().cloned().collect();
-            for finding in reqtool::lint::faq(&text, &project.repository, &ids) {
-                findings.push(format!("{}: {finding}", reqtool::lint::FAQ));
-            }
-        }
-        Err(_) => findings.push(format!("{} is missing", reqtool::lint::FAQ)),
-    }
-    findings
 }
