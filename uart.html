@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-e9849004.js";
+            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -179,7 +179,8 @@
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The reusable STM32F4 UART DMA mechanism lives in
-<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. Each board’s UART routes are data
+<code>crates/ferrowasp-stm32f4-critical/src/uart_dma.rs</code>, over the family-neutral
+transport in <code>ferrowasp-stm32-critical</code>. Each board’s UART routes are data
 in its board crate (<code>board/src/serial.rs</code>); peripheral construction is in the
 app’s <code>src/board/</code>.</p>
 <p>It provides:</p>
@@ -193,6 +194,17 @@ app’s <code>src/board/</code>.</p>
 <li>IDLE interrupt handling</li>
 <li>transfer-complete handling</li>
 </ul>
+<p>Transmit goes through one bounded channel split three ways: a writer, which
+implements <code>embedded_io_async::Write</code> and copies at most one fixed-capacity
+chunk per call; the port’s transport task, which starts one chunk at a time
+and marks it in flight; and the DMA interrupt, which reports that chunk’s
+completion or terminal fault. A write still waiting for queue space has
+changed nothing, so dropping it sends nothing partial, and <code>flush</code> completes
+only when the queue is empty and no chunk is in flight. A stale or duplicate
+interrupt cannot complete another chunk. Each transfer keeps the fixed 70-byte
+DMA length, zero-padding a shorter frame. On the STM32F4 a DMA FIFO-error flag
+is advisory on this path, as in the HAL’s UART DMA policy: it is cleared and
+the transfer stays in flight; transfer and direct-mode errors are terminal.</p>
 <p>Current UART modes:</p>
 <div class="table-wrapper">
 <table>

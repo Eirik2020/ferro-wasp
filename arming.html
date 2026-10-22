@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-e9849004.js";
+            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -305,6 +305,13 @@ data from the previous arm cycle.</p>
 <p>The current freshness check runs when Actuator Output is woken. An independent
 deadline that detects complete absence of future control-loop wakes remains
 open.</p>
+<h2 id="bench-motor-test"><a class="header" href="#bench-motor-test">Bench Motor Test</a></h2>
+<p>FerroConfigurator’s motor test is a request over USB only, which the safety
+master accepts only while disarmed, not arming, with the arm switch low and
+output enabled. An accepted request idles one logical motor for a 250 ms lease
+that the host renews while its button is held; a lapsed lease stops the motor.
+Arming is refused for 2 s after the last request. Bench images, and the
+features that build them, are in <a href="dshot.html#bench-images">DShot</a>.</p>
 <h2 id="failure-responses"><a class="header" href="#failure-responses">Failure Responses</a></h2>
 <div class="table-wrapper">
 <table>

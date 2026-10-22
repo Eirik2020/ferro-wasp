@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-e9849004.js";
+            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -266,8 +266,12 @@ test; log listing, page reads, sync acknowledgement, and erase; and the props-of
 motor test. The firmware validates every command. Writes and the motor test
 are refused while armed, a motor test is a request the safety master may
 refuse, and nothing on the command line can arm the craft. A UART bound to the
-<code>configurator</code> function accepts the same command line except the motor test and
-the unconditional log erase.</p>
+<code>configurator</code> function accepts the same command line except the motor test,
+the unconditional log erase, and <code>reboot</code> and <code>reboot dfu</code>. A reboot is
+accepted only while disarmed with no flash maintenance or flight log open;
+<code>reboot dfu</code> restarts into the chip’s ROM USB DFU bootloader, from which
+FerroConfigurator flashes, and holding BOOT at power-on stays the recovery
+path.</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
 fixed-size buffers.</p>
 <h2 id="esc-telemetry"><a class="header" href="#esc-telemetry">ESC Telemetry</a></h2>

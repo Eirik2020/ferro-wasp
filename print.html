@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-e9849004.js";
+            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1070,6 +1070,29 @@ pulses, which trigger sampling: PC4/EXTI4 on Foxeer, PB2/EXTI2 on the Lucid. The
 edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
 their two-second deltas.</p>
+<h2 id="spi-transfers-deadlines-and-recovery"><a class="header" href="#spi-transfers-deadlines-and-recovery">SPI Transfers, Deadlines and Recovery</a></h2>
+<p>The IMU tasks never touch SPI1. They hold one handle that copies a request’s
+metadata and transmit bytes into a bounded mailbox and wakes the SPI1 owner
+service, at priority 13. The owner alone holds SPI1, both DMA halves, the chip
+select and the recovery buffers; the receive DMA interrupt copies the finished
+frame into the job and hands it to the parser. No lock is held across an
+<code>.await</code>, and a dropped request is cancelled by its generation, so a late
+completion cannot finish a reused slot. The backend accepts one transfer shape:
+the one-operation, 15-byte full-duplex burst every supported sensor uses.</p>
+<p>Deadlines are measured on TIM2, a pinless 32-bit timer at 1 MHz whose wrap,
+about every 71 minutes, is extended in software. A transfer has 250 us from
+submission, and the deadline restarts when the owner accepts it, so dispatch
+latency cannot use up time meant for the wire while a request that never
+reaches the owner stays bounded.</p>
+<p>The I/O watchdog, TIM6 at 8 kHz and priority 9, reads the timebase and checks
+the transfer’s state but touches no peripheral. On expiry it posts recovery to
+a task at the owner’s priority, 13, so recovery and receive completion never
+run at once. The owner cancels the transfer, pauses both DMA streams, releases
+chip select, swaps in a spare receive buffer, restarts receive DMA and recycles
+the job. If receive DMA cannot restart, the owner becomes unavailable and
+refuses every later transfer rather than run with unclear buffer ownership.
+This recovers DMA ownership, not the SPI peripheral: the HAL’s split DMA
+handles give no safe way to reset it, and no unsafe code is added to get one.</p>
 <h2 id="axis-and-rate-convention"><a class="header" href="#axis-and-rate-convention">Axis And Rate Convention</a></h2>
 <p>The drone body frame is forward/right/down: +X forward, +Y right, +Z down,
 with angular rates by the right-hand rule. Board support states the
@@ -1100,6 +1123,20 @@ passed to the rate PID. Host viewers should display those roll, pitch, and yaw
 fields directly.</p>
 <p>See <a href="#bench-and-analysis-tools">Bench and Analysis Tools</a> for the terminal logger and live
 IMU viewer.</p>
+<h2 id="accelerometer-level"><a class="header" href="#accelerometer-level">Accelerometer Level</a></h2>
+<p><code>imu calibrate</code>, on either command line, while disarmed and with no flash
+maintenance running, averages 500 samples of drone-frame gravity. It refuses a
+craft that moves (any gravity axis wandering more than 0.05 g, or any gyro axis
+more than 10 degrees per second), one leaning more than 10 degrees, and a
+gravity magnitude more than 0.15 g from 1 g. The mean’s offset from level, in
+milli-g per drone axis and at most 400 mg on each, is saved with the
+configuration through the same two-slot verified write as <code>config save</code>;
+<code>imu level</code> reports it.</p>
+<p>The offsets belong to one craft, so they are not configuration keys and do not
+travel with an exported tune. The control loop subtracts them from gravity
+before the attitude estimate only. The rate loop never reads the
+accelerometer, so a calibration changes the estimated attitude, not what flies
+the craft. The gyro bias is not stored; it is measured at every boot.</p>
 <h2 id="foxeer-bring-up-checklist"><a class="header" href="#foxeer-bring-up-checklist">Foxeer Bring-Up Checklist</a></h2>
 <ol>
 <li>Flash with motor power and props disconnected.</li>
@@ -1262,6 +1299,13 @@ data from the previous arm cycle.</p>
 <p>The current freshness check runs when Actuator Output is woken. An independent
 deadline that detects complete absence of future control-loop wakes remains
 open.</p>
+<h2 id="bench-motor-test"><a class="header" href="#bench-motor-test">Bench Motor Test</a></h2>
+<p>FerroConfigurator’s motor test is a request over USB only, which the safety
+master accepts only while disarmed, not arming, with the arm switch low and
+output enabled. An accepted request idles one logical motor for a 250 ms lease
+that the host renews while its button is held; a lapsed lease stops the motor.
+Arming is refused for 2 s after the last request. Bench images, and the
+features that build them, are in <a href="#bench-images">DShot</a>.</p>
 <h2 id="failure-responses"><a class="header" href="#failure-responses">Failure Responses</a></h2>
 <div class="table-wrapper">
 <table>
@@ -1435,6 +1479,13 @@ fault does. Decoding is host-tested in <code>ferrowasp-output::dshot_reply</code
 complementary output, which a timer cannot input-capture. Bidirectional mode
 is fixed when the bank is built, and for now only the props-off bench feature
 below selects it. The TBS Lucid H7 sends plain DShot only.</p>
+<p>On the STM32F405, receiving reads GPIO through DMA2 while SPI1, ADC1 and
+USART1 may use DMA2 too, and the window is not ordered against the IMU
+transfer. Erratum 2.2.19 (ES0182 Rev 19; 2.1.10 in older sheets), DMA2 data
+corruption with concurrent AHB and APB2 transfers, does not apply: it covers
+DMA2 writes to GPIO, not reads from GPIO into SRAM, and SPI1 is not among its
+affected peripherals. The design never writes GPIO through DMA; transmit stays
+timer compare DMA.</p>
 <h2 id="bench-images"><a class="header" href="#bench-images">Bench Images</a></h2>
 <p>Bench features build images for props-off work and never ship as the flight
 image. Every motor bench feature needs the explicit props-off gate
@@ -1617,8 +1668,12 @@ test; log listing, page reads, sync acknowledgement, and erase; and the props-of
 motor test. The firmware validates every command. Writes and the motor test
 are refused while armed, a motor test is a request the safety master may
 refuse, and nothing on the command line can arm the craft. A UART bound to the
-<code>configurator</code> function accepts the same command line except the motor test and
-the unconditional log erase.</p>
+<code>configurator</code> function accepts the same command line except the motor test,
+the unconditional log erase, and <code>reboot</code> and <code>reboot dfu</code>. A reboot is
+accepted only while disarmed with no flash maintenance or flight log open;
+<code>reboot dfu</code> restarts into the chip’s ROM USB DFU bootloader, from which
+FerroConfigurator flashes, and holding BOOT at power-on stays the recovery
+path.</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
 fixed-size buffers.</p>
 <h2 id="esc-telemetry-1"><a class="header" href="#esc-telemetry-1">ESC Telemetry</a></h2>
@@ -1859,7 +1914,8 @@ row 8, col 2: WARN ...
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The reusable STM32F4 UART DMA mechanism lives in
-<code>crates/ferrowasp-stm32f4/src/uart_dma.rs</code>. Each board’s UART routes are data
+<code>crates/ferrowasp-stm32f4-critical/src/uart_dma.rs</code>, over the family-neutral
+transport in <code>ferrowasp-stm32-critical</code>. Each board’s UART routes are data
 in its board crate (<code>board/src/serial.rs</code>); peripheral construction is in the
 app’s <code>src/board/</code>.</p>
 <p>It provides:</p>
@@ -1873,6 +1929,17 @@ app’s <code>src/board/</code>.</p>
 <li>IDLE interrupt handling</li>
 <li>transfer-complete handling</li>
 </ul>
+<p>Transmit goes through one bounded channel split three ways: a writer, which
+implements <code>embedded_io_async::Write</code> and copies at most one fixed-capacity
+chunk per call; the port’s transport task, which starts one chunk at a time
+and marks it in flight; and the DMA interrupt, which reports that chunk’s
+completion or terminal fault. A write still waiting for queue space has
+changed nothing, so dropping it sends nothing partial, and <code>flush</code> completes
+only when the queue is empty and no chunk is in flight. A stale or duplicate
+interrupt cannot complete another chunk. Each transfer keeps the fixed 70-byte
+DMA length, zero-padding a shorter frame. On the STM32F4 a DMA FIFO-error flag
+is advisory on this path, as in the HAL’s UART DMA policy: it is cleared and
+the transfer stays in flight; transfer and direct-mode errors are terminal.</p>
 <p>Current UART modes:</p>
 <div class="table-wrapper">
 <table>
