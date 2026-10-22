@@ -4,7 +4,7 @@
 //! and disarms on request, on an aborted arming, or when the RC link is
 //! invalidated. It commands the actuator only by spawning `actuator_output`.
 //!
-//! Requirements: ARM-001, ARM-002, INPUT-010
+//! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020
 //! Safety-critical.
 
 use crate::prearm::ImuPreArmReader;

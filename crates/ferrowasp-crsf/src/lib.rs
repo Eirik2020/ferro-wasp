@@ -13,7 +13,7 @@
 //! sending channels when its link drops, so the consumer's frame timeout is the
 //! primary loss detector; link statistics add an explicit zero-quality signal.
 //!
-//! Requirements: INPUT-005, INPUT-011
+//! Requirements: INPUT-005, INPUT-016, INPUT-011
 //! Safety-critical.
 
 #![no_std]

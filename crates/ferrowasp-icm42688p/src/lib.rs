@@ -5,7 +5,7 @@
 //! big-endian sensor data. The 14-byte temperature/accelerometer/gyroscope
 //! payload fits the existing 15-byte full-duplex SPI DMA frame.
 //!
-//! Requirements: IMU-003
+//! Requirements: IMU-003, IMU-007, IMU-008
 //! Safety-critical.
 
 #![no_std]

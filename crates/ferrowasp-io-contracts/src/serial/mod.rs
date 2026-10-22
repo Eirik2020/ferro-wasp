@@ -1,7 +1,7 @@
 //! Serial chunks in and out, and the continuity metadata that lets a consumer
 //! tell lost bytes from a quiet line (design §12).
 //!
-//! Requirements: IO-001
+//! Requirements: IO-001, IO-005, IO-006, IO-007
 //! Safety-critical.
 
 mod chunk;

@@ -1,4 +1,4 @@
-//! Requirements: MOTOR-001, MOTOR-002
+//! Requirements: MOTOR-001, MOTOR-002, MOTOR-003, MOTOR-004, MOTOR-005
 //! Safety-critical.
 
 pub const PPM_FREQ: u32 = 600;

@@ -7,7 +7,7 @@
 //! every tick marked for it; every other message over a `state` link, whose
 //! newest message is all the observer keeps.
 //!
-//! Requirements: BORDER-002
+//! Requirements: BORDER-002, BORDER-008
 //! Safety-critical.
 
 /// One control-loop tick: what the loop measured, commanded and decided.

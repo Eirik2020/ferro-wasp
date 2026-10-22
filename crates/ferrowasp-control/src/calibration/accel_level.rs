@@ -10,7 +10,7 @@
 //! Offsets are in the drone frame, in milli-g, so they mean the same whatever
 //! IMU the board fits.
 //!
-//! Requirements: CTRL-009
+//! Requirements: CTRL-009, CTRL-021, CTRL-022
 //! Safety-critical.
 
 /// Gravity as the drone frame sees it on level ground, in g.

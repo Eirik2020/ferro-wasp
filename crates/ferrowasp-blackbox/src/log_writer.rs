@@ -6,7 +6,7 @@
 //! owns where the log ends, which flight is next, and the one page waiting to
 //! be written; the owner reports what each call says happened.
 //!
-//! Requirements: LOG-001
+//! Requirements: LOG-001, LOG-002, LOG-003
 
 use ferrowasp_protocol::blackbox::FLASH_PAGE_LEN;
 use ferrowasp_storage::nor_storage::NorStorage;

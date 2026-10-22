@@ -1,4 +1,4 @@
-//! Requirements: HW-ROUTE-001
+//! Requirements: HW-ROUTE-001, HW-ROUTE-002
 //! Safety-critical.
 
 /// Frequency used by the firmware's microsecond-resolution blocking delay timer.

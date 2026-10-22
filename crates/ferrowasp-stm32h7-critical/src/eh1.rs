@@ -1,7 +1,7 @@
 //! embedded-hal 1.0 views of the H7 HAL's embedded-hal 0.2 types, for the
 //! drivers and the SPI owner, which take 1.0 traits.
 //!
-//! Requirements: HW-SPI-001
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
 //! Safety-critical.
 
 use core::convert::Infallible;

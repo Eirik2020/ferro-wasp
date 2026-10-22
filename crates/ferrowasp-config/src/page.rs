@@ -1,7 +1,7 @@
 //! One configuration slot: a flash page holding a versioned, CRC-protected
 //! payload, so a slot cut short by power loss never decodes.
 //!
-//! Requirements: CONFIG-004
+//! Requirements: CONFIG-004, CONFIG-011
 //! Safety-critical.
 
 pub const FLASH_PAGE_LEN: usize = 256;

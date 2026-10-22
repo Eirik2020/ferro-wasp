@@ -1,4 +1,4 @@
-//! Requirements: CTRL-005
+//! Requirements: CTRL-005, CTRL-016
 //! Safety-critical.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

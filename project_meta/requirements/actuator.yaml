@@ -3,9 +3,9 @@ requirements:
   - id: MOTOR-001
     title: Motor identity is Betaflight Quad X
     statement: >-
-      Logical motors shall map to Betaflight Quad X: M1 rear-right CW,
-      M2 front-right CCW, M3 rear-left CCW, M4 front-left CW, through
-      the board's default motor order and any stored motor map.
+      Logical motors shall map to Betaflight Quad X: M1 rear-right CW, M2
+      front-right CCW, M3 rear-left CCW, M4 front-left CW, through the
+      board's default motor order and any stored motor map.
     rationale: >-
       A wrong motor order flips the craft on takeoff.
     derived_from: [W6]
@@ -33,26 +33,17 @@ requirements:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
   - id: MOTOR-002
-    title: A motor map is a permutation, and throttle stays in range
+    title: A motor map is a permutation
     statement: >-
-      A motor map shall be a permutation of the four outputs, one-based,
-      with the identity keeping the board's own order and a swap moving
-      board outputs between logical motors; a lookup outside the four
-      motors shall be refused; a packed map shall round-trip, zero
-      meaning none published; and throttle shall convert to the output
-      range saturating, with a non-finite value refused.
+      A motor map shall be a one-based permutation of the four outputs, the
+      identity keeping the board's own order and a swap moving board outputs
+      between logical motors.
     rationale: >-
-      The motor map decides which motor each output drives; a map that
-      is not a permutation drives one motor twice and another not at all
-      (W6).
+      The motor map decides which motor each output drives; a map that is
+      not a permutation drives one motor twice and another not at all (W6).
     derived_from: [W6]
     verification:
       entries:
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_flight_control::actuator::tests::throttle_to_u16_saturates_and_rejects_non_finite_values
         - level: unit
           target: host
           setup: none
@@ -73,13 +64,53 @@ requirements:
           setup: none
           method:
             test: ferrowasp_flight_control::actuator::tests::a_swap_moves_board_outputs_between_logical_motors
+
+  - id: MOTOR-003
+    title: A motor lookup outside the four is refused
+    statement: >-
+      A lookup of a logical motor outside the four shall be refused.
+    rationale: >-
+      The motor map decides which motor each output drives; a map that is
+      not a permutation drives one motor twice and another not at all (W6).
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_flight_control::actuator::tests::logical_motor_lookup_rejects_out_of_range
+
+  - id: MOTOR-004
+    title: A packed motor map round-trips
+    statement: >-
+      A packed motor map shall decode to the map that was packed, with zero
+      meaning that none was published.
+    rationale: >-
+      The motor map decides which motor each output drives; a map that is
+      not a permutation drives one motor twice and another not at all (W6).
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_flight_control::actuator::tests::packed_maps_round_trip_and_zero_is_unpublished
+
+  - id: MOTOR-005
+    title: Throttle converts to the output range
+    statement: >-
+      Throttle shall convert to the output range, saturating at its ends and
+      refusing a non-finite value.
+    rationale: >-
+      A throttle outside the range, or a value that is not a number, must
+      never reach an output as a command (W2).
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_flight_control::actuator::tests::throttle_to_u16_saturates_and_rejects_non_finite_values

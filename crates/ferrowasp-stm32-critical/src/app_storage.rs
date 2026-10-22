@@ -1,4 +1,4 @@
-//! Requirements: HW-UART-001
+//! Requirements: HW-UART-001, HW-UART-002, HW-UART-003, HW-UART-004
 //! Safety-critical.
 
 use crate::{spi_common as spi_dma, uart_common as uart_dma};

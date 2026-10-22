@@ -1,23 +1,16 @@
 schema_version: 2
 requirements:
   - id: BORDER-001
-    title: The observer publishes every link and streams every control tick
+    title: The observer publishes every state link
     statement: >-
-      Each run, the observer shall take at most each link's capacity;
-      publish on the ledger the newest message of every `state` link and
-      the last control tick, each with its producer's sequence and
-      timestamp, keeping a topic's previous value when its link brought
-      nothing; forward every control tick marked for the log to the
-      blackbox stream in order, with its original stamp; and publish,
-      stamped with its
-      run count, the control ticks missing from the sequence it read and
-      the ticks the stream refused.
+      Each run, the observer shall publish on the ledger the newest message
+      of every `state` link, with its producer's sequence and timestamp,
+      taking at most each link's capacity and keeping a topic's previous
+      value when its link brought nothing.
     rationale: >-
-      The observer is the one way data leaves the safety-critical tasks. A bounded run keeps its cost known below the core; counting both losses makes a slow observer or a slow
-      blackbox honest evidence in the log rather than silent gaps; its
-      run count lets a reader see the observer itself stop. The ledger's
-      readers can only copy topics out: only the observer module
-      publishes.
+      The observer is the one way data leaves the safety-critical tasks, and
+      a bounded run keeps its cost known below the core. The ledger's
+      readers can only copy topics out: only the observer module publishes.
     derived_from: [W2, W4]
     verification:
       entries:
@@ -35,17 +28,44 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_border::observer::tests::one_run_takes_at_most_a_links_capacity
+
+  - id: BORDER-006
+    title: Every logged control tick reaches the blackbox stream
+    statement: >-
+      Each run, the observer shall forward every control tick marked for the
+      log to the blackbox stream, in order and with its original stamp, and
+      publish the last tick on the ledger.
+    rationale: >-
+      The blackbox needs every logged tick, in order, to be evidence for a
+      flight (W7).
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_border::observer::tests::a_tick_not_marked_for_the_log_is_published_but_not_streamed
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_border::observer::tests::one_run_takes_at_most_a_links_capacity
+
+  - id: BORDER-007
+    title: The observer counts what it lost
+    statement: >-
+      Each run, the observer shall publish, stamped with its run count, the
+      control ticks missing from the sequence it read and the ticks the
+      stream refused.
+    rationale: >-
+      Counting both losses makes a slow observer or a slow blackbox honest
+      evidence in the log rather than silent gaps; the run count lets a
+      reader see the observer itself stop.
+    derived_from: [W2, W4]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -63,22 +83,36 @@ requirements:
             test: ferrowasp_border::observer::tests::messages_lost_counts_gaps_across_the_wrap
 
   - id: BORDER-002
-    title: Messages to the observer carry what their readers need
+    title: The control tick carries what its readers need
     statement: >-
-      The messages to the observer shall carry, for the control tick,
-      whether the blackbox records it, the loop's sequences, IMU freshness
-      and staleness, tolerated stale ticks, gyro calibration, arm state,
-      raw, filtered and body-axis rates, commanded rates, PID terms,
-      throttle, motor commands and attitude;
-      and, from their own producers, the IMU sample, the data-ready
-      counts, Command Input's channels and link state, the safety
-      master's arm state, the DShot lanes and replies, UART ESC
+      The control-tick message to the observer shall carry whether the
+      blackbox records it, the loop's sequences, IMU freshness and
+      staleness, tolerated stale ticks, gyro calibration, arm state, raw,
+      filtered and body-axis rates, commanded rates, PID terms, throttle,
+      motor commands and attitude.
+    rationale: >-
+      These are the values the old snapshot atomics carried, in one message
+      so that a tick is one consistent sample (section 9); a change here
+      changes its producer, so the set stays what readers use.
+    derived_from: [W4]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
+
+  - id: BORDER-008
+    title: Each producer's message carries what its readers need
+    statement: >-
+      The messages producers send the observer shall carry the IMU sample,
+      the data-ready counts, Command Input's channels and link state, the
+      safety master's arm state, the DShot lanes and replies, UART ESC
       telemetry, the battery and the log storage.
     rationale: >-
-      These are the values `snapshots.rs` carried as separate atomics,
-      grouped by producer so one message is one consistent sample
-      (section 9); a change here changes its producer, so the set stays
-      what readers use.
+      These are the values the old snapshot atomics carried, grouped by
+      producer so that one message is one consistent sample (section 9).
     derived_from: [W4]
     verification:
       entries:
@@ -87,25 +121,18 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::observer::tests::every_state_link_publishes_its_newest_message_with_its_stamp
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
 
   - id: BORDER-003
     title: A reader sees a topic stop advancing
     statement: >-
-      A reader's watch on a topic shall report it as stalled once its
-      sequence has held for the reader's limit by the reader's clock,
-      counting the first look as a change, so a topic never published
-      stalls too; and the ledger shall carry the boot identity and the
-      observer's own status as topics.
+      A reader's watch on a topic shall report it stalled once its sequence
+      has held for the reader's limit by the reader's clock, counting the
+      first look as a change, so that a topic never published stalls too.
     rationale: >-
-      A silently stalled observer leaves the OSD running with frozen
-      values; the OSD and telemetry warn when a topic they show stops
-      advancing (section 19). The reader's clock is used so the
-      check never compares two tasks' timestamps.
+      A silently stalled observer leaves the OSD running with frozen values;
+      the OSD and telemetry warn when a topic they show stops advancing
+      (section 19). The reader's clock is used so the check never compares
+      two tasks' timestamps.
     derived_from: [W2]
     verification:
       entries:
@@ -124,6 +151,18 @@ requirements:
           setup: none
           method:
             test: ferrowasp_boundary_contracts::topics::tests::a_topic_never_published_stalls_after_the_limit
+
+  - id: BORDER-009
+    title: The ledger carries the boot identity and the observer's status
+    statement: >-
+      The ledger shall carry the boot identity and the observer's own status
+      as topics.
+    rationale: >-
+      A reader needs to know which boot it is reading, and whether the
+      observer itself still runs.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -131,18 +170,32 @@ requirements:
             test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count
 
   - id: BORDER-004
-    title: The inbound values read back as they were written
+    title: The stored level reads back as published
     statement: >-
-      Until the coordinator takes them in, the stored accelerometer level
-      shall read back as last published, and a computer shall count as
-      connected while either the USB host flag or the configurator-link
-      flag is set.
+      Until the coordinator takes it in, the stored accelerometer level
+      shall read back as last published.
     rationale: >-
-      These are the values non-critical tasks hand the safety-critical side
-      without the coordinator; the arming guard refuses while a
-      computer is connected, and the attitude estimate subtracts
-      the level. Kept beside the coordinator so the control loop reads them
-      from a safety-critical crate.
+      The attitude estimate subtracts the level, which a non-critical task
+      hands the safety-critical side; kept beside the coordinator so the
+      control loop reads it from a safety-critical crate.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
+
+  - id: BORDER-010
+    title: Either host flag counts as a connected computer
+    statement: >-
+      Until the coordinator takes them in, a computer shall count as
+      connected while either the USB host flag or the configurator-link flag
+      is set.
+    rationale: >-
+      The arming guard refuses while a computer is connected, and two
+      non-critical tasks each see one way a computer can be connected (W1).
     derived_from: [W2]
     verification:
       entries:
@@ -153,15 +206,25 @@ requirements:
             test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
 
   - id: BORDER-005
-    title: The observer runs every millisecond below the core
+    title: The observer runs every millisecond
     statement: >-
       The observer task shall run the observer once a millisecond on
-      absolute deadlines, so its cadence does not drift, and shall hold the
-      ledger's lock only for the run, at the firmware's border priority.
+      absolute deadlines, so that its cadence does not drift.
     rationale: >-
       Readers' stall limits and every link's depth assume a 1 ms observer
-      (section 10); a run longer than that, or a priority above the core,
-      would break both. Its evidence is on the board, not yet recorded.
+      (section 10).
+    derived_from: [BORDER-001]
+    verification:
+      entries: []
+
+  - id: BORDER-011
+    title: The observer holds the ledger only for its run
+    statement: >-
+      The observer task shall hold the ledger's lock only for the run, at
+      the firmware's border priority.
+    rationale: >-
+      A run that held the ledger longer, or ran above the core, would delay
+      the readers and the core it serves (section 10).
     derived_from: [BORDER-001]
     verification:
       entries: []

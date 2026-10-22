@@ -5,7 +5,7 @@
 //! wired. The firmware chooses the protocol when it builds the receiver, to
 //! match the UART configuration it selected for the receiver port.
 //!
-//! Requirements: INPUT-003, INPUT-004, INPUT-005, INPUT-012
+//! Requirements: INPUT-003, INPUT-004, INPUT-005, INPUT-016, INPUT-012
 //! Safety-critical.
 
 use ferrowasp_crsf as crsf;

@@ -20,7 +20,7 @@
 //! Endpoints are constructed only from a reference to the peripheral they
 //! name, by the modules that take exclusive ownership of it.
 //!
-//! Requirements: HW-DSHOT-001
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
 //! Safety-critical.
 
 #![deny(unsafe_op_in_unsafe_fn)]

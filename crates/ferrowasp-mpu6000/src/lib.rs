@@ -11,7 +11,7 @@
 //! 15-byte burst takes about 120 us: 24% of a 2 kHz period, 48% at 4 kHz, and
 //! too long for 8 kHz.
 //!
-//! Requirements: IMU-001
+//! Requirements: IMU-001, IMU-005, IMU-006
 //! Safety-critical.
 
 #![no_std]

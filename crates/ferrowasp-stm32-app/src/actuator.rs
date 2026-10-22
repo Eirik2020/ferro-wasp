@@ -4,7 +4,7 @@
 //! while the system is armed. `ActuatorHardware` is the one place a motor
 //! command reaches the DShot bank.
 //!
-//! Requirements: ARM-002, BOOT-001
+//! Requirements: ARM-002, BOOT-001, BOOT-003
 
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;

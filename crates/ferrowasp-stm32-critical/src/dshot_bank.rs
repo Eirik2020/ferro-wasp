@@ -16,7 +16,7 @@
 //! around, or a stream that never completes, faults the bank as a transmit
 //! fault does.
 //!
-//! Requirements: HW-DSHOT-001
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
 //! Safety-critical.
 
 use ferrowasp_output::dshot::{

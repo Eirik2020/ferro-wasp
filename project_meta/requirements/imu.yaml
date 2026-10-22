@@ -1,19 +1,15 @@
 schema_version: 2
 requirements:
   - id: IMU-001
-    title: The MPU-6000 driver configures, verifies and decodes the sensor
+    title: The MPU-6000 driver configures the sensor
     statement: >-
       The MPU-6000 driver shall configure a 2000 dps gyro, a 16 g
-      accelerometer and a 2 kHz data-ready output, with every output
-      rate dividing the internal rate exactly; shall reset the part over
-      SPI, space each initialization transaction from the one before,
-      reject another InvenSense part and report a register that did not
-      take; and shall read the sample burst from ACCEL_XOUT_H, decoding
-      it big-endian and rejecting a short or implausible frame.
+      accelerometer and a 2 kHz data-ready output, every output rate
+      dividing the internal rate exactly.
     rationale: >-
-      A sensor misidentified, misconfigured or misread feeds the rate
-      loop wrong rates; the driver is proven once and stays proven on
-      every board while unchanged (requirements design section 12).
+      A sensor misidentified, misconfigured or misread feeds the rate loop
+      wrong rates; the driver is proven once and stays proven on every board
+      while unchanged (requirements design section 12).
     derived_from: [W2, W6]
     verification:
       entries:
@@ -27,6 +23,20 @@ requirements:
           setup: none
           method:
             test: ferrowasp_mpu6000::tests::every_output_rate_divides_its_internal_rate_exactly
+
+  - id: IMU-005
+    title: The MPU-6000 driver verifies its initialization
+    statement: >-
+      The MPU-6000 driver shall reset the part over SPI, space each
+      initialization transaction from the one before, reject another
+      InvenSense part and report a register that did not take.
+    rationale: >-
+      A sensor misidentified, misconfigured or misread feeds the rate loop
+      wrong rates; the driver is proven once and stays proven on every board
+      while unchanged (requirements design section 12).
+    derived_from: [W2, W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -52,6 +62,19 @@ requirements:
           setup: none
           method:
             test: ferrowasp_mpu6000::tests::read_reg_sets_read_bit_and_toggles_chip_select
+
+  - id: IMU-006
+    title: The MPU-6000 driver decodes the sample burst
+    statement: >-
+      The MPU-6000 driver shall read the sample burst from ACCEL_XOUT_H,
+      decoding it big-endian and rejecting a short or implausible frame.
+    rationale: >-
+      A sensor misidentified, misconfigured or misread feeds the rate loop
+      wrong rates; the driver is proven once and stays proven on every board
+      while unchanged (requirements design section 12).
+    derived_from: [W2, W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -71,12 +94,11 @@ requirements:
   - id: IMU-002
     title: The MPU-6500 driver reads and decodes the sensor
     statement: >-
-      The MPU-6500 driver shall read registers with the read bit set
-      inside one chip-select frame and change only the requested bits,
-      set the sample-rate divider for the configured rate, decode gyro
-      and accelerometer bursts big-endian while rejecting short or
-      implausible frames, and count a sample as fresh only when its
-      sequence changes.
+      The MPU-6500 driver shall read registers with the read bit set inside
+      one chip-select frame and change only the requested bits, set the
+      sample-rate divider for the configured rate, decode gyro and
+      accelerometer bursts big-endian while rejecting short or implausible
+      frames, and count a sample as fresh only when its sequence changes.
     rationale: >-
       A sensor misread feeds the rate loop wrong rates, and a repeated
       sample counted as fresh hides a stalled IMU.
@@ -125,20 +147,14 @@ requirements:
             test: ferrowasp_mpu6500::tests::gyro_sample_rate_writes_expected_divider_for_dlpf_rate
 
   - id: IMU-003
-    title: The ICM-42688-P driver configures, verifies and decodes the sensor
+    title: The ICM-42688-P driver configures the sensor
     statement: >-
       The ICM-42688-P driver shall configure 2 kHz output, a 16 g
-      accelerometer, a 2000 dps gyro and big-endian data; shall reset
-      the part, verify its identity, its reset completion, its
-      configuration and its data-ready interrupt by readback, and wait
-      for gyro startup; and shall read samples from the temperature
-      register in the part's register order, convert them at the
-      selected full scales, reject short and stuck-bus frames, and
-      release chip select even when SPI fails.
+      accelerometer, a 2000 dps gyro and big-endian data.
     rationale: >-
-      A sensor misidentified, misconfigured or misread feeds the rate
-      loop wrong rates; a chip select left asserted after a failure
-      blocks the bus.
+      A sensor misidentified, misconfigured or misread feeds the rate loop
+      wrong rates; a chip select left asserted after a failure blocks the
+      bus.
     derived_from: [W2, W6]
     verification:
       entries:
@@ -147,6 +163,20 @@ requirements:
           setup: none
           method:
             test: ferrowasp_icm42688p::tests::default_configuration_matches_ferrowasp_control_contract
+
+  - id: IMU-007
+    title: The ICM-42688-P driver verifies its initialization
+    statement: >-
+      The ICM-42688-P driver shall reset the part, verify its identity, its
+      reset completion, its configuration and its data-ready interrupt by
+      readback, and wait for gyro startup.
+    rationale: >-
+      A sensor misidentified, misconfigured or misread feeds the rate loop
+      wrong rates; a chip select left asserted after a failure blocks the
+      bus.
+    derived_from: [W2, W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -167,6 +197,21 @@ requirements:
           setup: none
           method:
             test: ferrowasp_icm42688p::tests::init_rejects_data_ready_interrupt_configuration_that_does_not_read_back
+
+  - id: IMU-008
+    title: The ICM-42688-P driver decodes samples
+    statement: >-
+      The ICM-42688-P driver shall read samples from the temperature
+      register in the part's register order, convert them at the selected
+      full scales, reject short and stuck-bus frames, and release chip
+      select even when SPI fails.
+    rationale: >-
+      A sensor misidentified, misconfigured or misread feeds the rate loop
+      wrong rates; a chip select left asserted after a failure blocks the
+      bus.
+    derived_from: [W2, W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -194,21 +239,44 @@ requirements:
             test: ferrowasp_icm42688p::tests::spi_failure_still_deasserts_chip_select
 
   - id: IMU-004
-    title: An SPI transaction completes once, for the job that started it
+    title: The IMU bus holds one job per slot
     statement: >-
-      The IMU bus shall hold one job per slot and refuse a second while
-      it is occupied; a job shall pack its operations without keeping
-      their borrows, check its capacity and operation limit before
-      replacing the previous job, and copy results back only to its read
-      operations, refusing a mismatched shape before any write; a
-      timeout shall request the owner's cancellation and reject a late
-      interrupt; a dropped waiter shall cancel its job; and a completion
-      from an older generation shall never complete a newer job, nor a
-      DMA error copy data back.
+      The IMU bus shall hold one job per slot and refuse a second while it
+      is occupied.
     rationale: >-
       The IMU samples the rate loop flies on arrive over this mailbox; a
-      completion credited to the wrong job, or late data copied into a
-      new one, would feed the loop a sample from another time.
+      completion credited to the wrong job, or late data copied into a new
+      one, would feed the loop a sample from another time.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::successful_job_moves_through_owner_states_and_recycles
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::transaction::tests::occupied_slot_rejects_a_second_job
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::packing_failure_leaves_slot_reusable
+
+  - id: IMU-009
+    title: A job packs and copies back only what it owns
+    statement: >-
+      An IMU bus job shall pack its operations without keeping their
+      borrows, check its capacity and operation limit before replacing the
+      previous job, and copy results back only to its read operations,
+      refusing a mismatched shape before any write.
+    rationale: >-
+      The IMU samples the rate loop flies on arrive over this mailbox; a
+      completion credited to the wrong job, or late data copied into a new
+      one, would feed the loop a sample from another time.
     derived_from: [W2]
     verification:
       entries:
@@ -222,21 +290,6 @@ requirements:
           setup: none
           method:
             test: ferrowasp_imu::spi::async_device::tests::operation_limit_is_rejected_before_executor_submission
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_imu::spi::async_device::tests::dropping_pending_transaction_requests_generation_scoped_cancel
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_imu::spi::async_device::tests::terminal_dma_error_does_not_copy_rx_or_request_cancel
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_imu::spi::async_device::tests::critical_section_executor_pends_on_submit_and_cancel
         - level: unit
           target: host
           setup: none
@@ -266,12 +319,25 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_imu::spi::transaction::tests::successful_job_moves_through_owner_states_and_recycles
+            test: ferrowasp_imu::spi::mailbox::tests::successful_completion_wakes_and_retains_rx_until_copyback
+
+  - id: IMU-010
+    title: A timeout cancels the job and rejects a late interrupt
+    statement: >-
+      An IMU bus timeout shall request the owner's cancellation and reject a
+      late interrupt.
+    rationale: >-
+      The IMU samples the rate loop flies on arrive over this mailbox; a
+      completion credited to the wrong job, or late data copied into a new
+      one, would feed the loop a sample from another time.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_imu::spi::transaction::tests::occupied_slot_rejects_a_second_job
+            test: ferrowasp_imu::spi::async_device::tests::critical_section_executor_pends_on_submit_and_cancel
         - level: unit
           target: host
           setup: none
@@ -296,6 +362,51 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_imu::spi::mailbox::tests::timeout_is_delivered_to_existing_waiter_and_recycles_on_poll
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::owner_activation_rebases_mailbox_wire_deadline
+
+  - id: IMU-011
+    title: A dropped waiter cancels its job
+    statement: >-
+      A dropped IMU bus waiter shall cancel its job.
+    rationale: >-
+      The IMU samples the rate loop flies on arrive over this mailbox; a
+      completion credited to the wrong job, or late data copied into a new
+      one, would feed the loop a sample from another time.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::async_device::tests::dropping_pending_transaction_requests_generation_scoped_cancel
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_imu::spi::mailbox::tests::dropped_waiter_cancels_and_late_generation_cannot_complete_reused_slot
+
+  - id: IMU-012
+    title: An older completion never completes a newer job
+    statement: >-
+      A completion from an older generation shall never complete a newer IMU
+      bus job.
+    rationale: >-
+      The IMU samples the rate loop flies on arrive over this mailbox; a
+      completion credited to the wrong job, or late data copied into a new
+      one, would feed the loop a sample from another time.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_imu::spi::transaction::tests::old_generation_cannot_complete_a_new_job
         - level: unit
           target: host
@@ -306,24 +417,26 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_imu::spi::mailbox::tests::successful_completion_wakes_and_retains_rx_until_copyback
-        - level: unit
-          target: host
-          setup: none
-          method:
             test: ferrowasp_imu::spi::mailbox::tests::dropped_waiter_cancels_and_late_generation_cannot_complete_reused_slot
+
+  - id: IMU-013
+    title: A DMA error copies no data back
+    statement: >-
+      An IMU bus DMA error shall end its job without copying data back.
+    rationale: >-
+      The IMU samples the rate loop flies on arrive over this mailbox; a
+      completion credited to the wrong job, or late data copied into a new
+      one, would feed the loop a sample from another time.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_imu::spi::mailbox::tests::timeout_is_delivered_to_existing_waiter_and_recycles_on_poll
+            test: ferrowasp_imu::spi::async_device::tests::terminal_dma_error_does_not_copy_rx_or_request_cancel
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_imu::spi::mailbox::tests::owner_activation_rebases_mailbox_wire_deadline
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_imu::spi::mailbox::tests::packing_failure_leaves_slot_reusable
+            test: ferrowasp_imu::spi::transaction::tests::owner_start_fault_is_terminal_and_invalidates_generation

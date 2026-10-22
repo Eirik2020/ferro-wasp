@@ -1,4 +1,4 @@
-//! Requirements: CTRL-001, CTRL-002, CTRL-003, CTRL-008, CTRL-010, INPUT-009
+//! Requirements: CTRL-001, CTRL-014, CTRL-002, CTRL-015, CTRL-003, CTRL-008, CTRL-010, CTRL-023, CTRL-024, CTRL-025, CTRL-026, CTRL-027, INPUT-009
 //! Safety-critical.
 
 #![allow(dead_code)]

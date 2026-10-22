@@ -1,21 +1,14 @@
 schema_version: 2
 requirements:
   - id: SAFETY-001
-    title: A motor command reaches the actuators only fresh and in range
+    title: A motor command is stale once too old
     statement: >-
-      A motor command shall carry its sequence and issue time and count
-      as stale once older than its maximum age, from the future, or past
-      a 32-bit millisecond wrap read wrongly; the actuator side shall
-      take only the newest fresh command, dropping stale ones and
-      reporting a missing or expired command; active motor outputs shall
-      be floored at the protocol's idle and clamped, a non-finite output
-      or an invalid idle configuration refused; and publishing shall
-      advance the sequence only for a queued command, reporting a full
-      queue and a refused wake.
+      A motor command shall carry its sequence and issue time, and count as
+      stale once older than its maximum age, from the future, or across a
+      32-bit millisecond wrap.
     rationale: >-
-      This is the boundary between control and actuator authority
-      (W1); a stale or out-of-range command must never reach a
-      motor (W2).
+      This is the boundary between control and actuator authority (W1); a
+      stale or out-of-range command must never reach a motor (W2).
     derived_from: [W1, W2]
     verification:
       entries:
@@ -29,6 +22,18 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::tests::motor_command_from_the_future_is_stale
+
+  - id: SAFETY-006
+    title: Actuator output takes only the newest fresh command
+    statement: >-
+      The actuator side shall take only the newest fresh motor command,
+      dropping stale ones and reporting a missing or expired command.
+    rationale: >-
+      This is the boundary between control and actuator authority (W1); a
+      stale or out-of-range command must never reach a motor (W2).
+    derived_from: [W1, W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -39,6 +44,19 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::tests::motor_command_reader_rejects_missing_and_expired_latest_commands
+
+  - id: SAFETY-007
+    title: Active motor outputs are floored and clamped
+    statement: >-
+      Active motor outputs shall be floored at the protocol's idle and
+      clamped to range, refusing a non-finite output or an invalid idle
+      configuration.
+    rationale: >-
+      This is the boundary between control and actuator authority (W1); a
+      stale or out-of-range command must never reach a motor (W2).
+    derived_from: [W1, W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -59,6 +77,18 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::tests::active_motor_output_validation_rejects_invalid_idle_configuration
+
+  - id: SAFETY-008
+    title: Publishing a command advances the sequence only when queued
+    statement: >-
+      Publishing a motor command shall advance the sequence only for a
+      queued command, reporting a full queue and a refused wake.
+    rationale: >-
+      This is the boundary between control and actuator authority (W1); a
+      stale or out-of-range command must never reach a motor (W2).
+    derived_from: [W1, W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -76,18 +106,14 @@ requirements:
             test: ferrowasp_safety::actuator::tests::a_rejected_wake_is_reported_after_the_command_is_queued
 
   - id: SAFETY-002
-    title: A bench motor request runs only disarmed and never reaches an armed craft
+    title: A bench motor request runs only disarmed
     statement: >-
-      A bench motor request shall be refused while the craft is armed or
-      arming; a spin or direction request shall also be refused while
-      the arm switch is high, the outputs are disabled or the motor is
-      not one of 1 to 4, while a stop is accepted whenever the craft is
-      disarmed and never reaches an armed one; and a recent bench
-      request shall block arming until its window expires.
+      A bench spin or direction request shall be refused while the craft is
+      armed or arming, the arm switch is high, the outputs are disabled or
+      the motor is not one of 1 to 4.
     rationale: >-
-      The motor test is a disarmed bench request under a firmware-held
-      lease (W1); nothing from the bench may act on a craft that can
-      fly.
+      The motor test is a disarmed bench request under a firmware-held lease
+      (W1); nothing from the bench may act on a craft that can fly.
     derived_from: [W1]
     verification:
       entries:
@@ -96,11 +122,35 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::tests::bench_motor_requests_are_refused_unless_disarmed_and_idle
+
+  - id: SAFETY-009
+    title: A bench stop never reaches an armed craft
+    statement: >-
+      A bench stop request shall act only on a disarmed craft, where it is
+      always accepted.
+    rationale: >-
+      The motor test is a disarmed bench request under a firmware-held lease
+      (W1); nothing from the bench may act on a craft that can fly.
+    derived_from: [W1]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_safety::tests::bench_stop_never_reaches_an_armed_aircraft
+
+  - id: SAFETY-010
+    title: A recent bench request blocks arming
+    statement: >-
+      A recent bench motor request shall block arming until its 2 s window
+      expires.
+    rationale: >-
+      The motor test is a disarmed bench request under a firmware-held lease
+      (W1); nothing from the bench may act on a craft that can fly.
+    derived_from: [W1]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -111,12 +161,9 @@ requirements:
     title: Arming needs a ready, calibrated and fresh IMU
     statement: >-
       Pre-arm health shall refuse arming while the IMU is not ready, its
-      gyro bias is not calibrated or its data is not fresh, and the
-      control loop shall tolerate one isolated stale IMU tick but not
-      two in a row.
+      gyro bias is not calibrated or its data is not fresh.
     rationale: >-
-      Arming on a stale or uncalibrated IMU flies on a guessed state
-      (W2).
+      Arming on a stale or uncalibrated IMU flies on a guessed state (W2).
     derived_from: [W2]
     verification:
       entries:
@@ -125,6 +172,17 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::tests::prearm_health_requires_ready_calibrated_fresh_imu
+
+  - id: SAFETY-011
+    title: One stale IMU tick is tolerated, two are not
+    statement: >-
+      The control loop shall tolerate one isolated stale IMU tick but not
+      two in a row.
+    rationale: >-
+      Arming on a stale or uncalibrated IMU flies on a guessed state (W2).
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -132,14 +190,29 @@ requirements:
             test: ferrowasp_safety::tests::one_stale_tick_is_tolerated_and_two_in_a_row_are_not
 
   - id: SAFETY-004
-    title: Each shared signal has one writer, and its readers see what it wrote
+    title: Each shared signal has one writer
     statement: >-
       Each shared signal shall be split once into one writer and its
-      readers, and a reader shall see what the writer last wrote;
-      revoking the arm permit shall report whether one was held.
+      readers, each reader seeing what the writer last wrote.
     rationale: >-
-      One writer per flag is enforced by the type system, so
-      two tasks can never both decide armed.
+      One writer per flag is enforced by the type system, so two tasks can
+      never both decide armed.
+    derived_from: [W1]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
+
+  - id: SAFETY-012
+    title: Revoking the arm permit reports whether one was held
+    statement: >-
+      Revoking the arm permit shall report whether one was held.
+    rationale: >-
+      One writer per flag is enforced by the type system, so two tasks can
+      never both decide armed.
     derived_from: [W1]
     verification:
       entries:
@@ -150,19 +223,14 @@ requirements:
             test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
 
   - id: SAFETY-005
-    title: The pre-arm checks use only a recent IMU status from the control loop
+    title: The pre-arm checks use only a recent IMU status
     statement: >-
       Each pre-arm check shall keep the newest IMU status from the control
-      loop's link to it and use it only while it is younger than 10 ms;
-      with none, arming shall be refused as the control loop's status being
-      stale. A status shall make the IMU unavailable unless its transport
-      configured, its kind may fly on the board and a sample has arrived;
-      uncalibrated while its gyro bias is not calibrated; and stale while
-      it is stale or the fault-injection image forces it.
+      loop's link and use it only while it is younger than 10 ms, refusing
+      arming as a stale control-loop status when it has none.
     rationale: >-
-      Nothing yet tells a pre-arm check that the control loop is still
-      running, so a flag it wrote could read as healthy after it stopped
-      (section 9); a status that stops arriving must read as none.
+      A flag the control loop wrote could read as healthy after the loop
+      stopped (section 9); a status that stops arriving must read as none.
     derived_from: [SAFETY-003]
     verification:
       entries:
@@ -176,6 +244,25 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::prearm::tests::the_newest_status_stands_until_it_is_too_old
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::prearm::tests::no_status_refuses_arming_and_a_status_gives_its_health
+
+  - id: SAFETY-013
+    title: Each IMU status field maps to its refusal
+    statement: >-
+      An IMU status shall make the IMU unavailable unless its transport
+      configured, its kind may fly on the board and a sample arrived;
+      uncalibrated while its gyro bias is not; and stale while it is stale
+      or the fault-injection image forces it.
+    rationale: >-
+      Each way the IMU can be unfit to fly must refuse arming with its own
+      reason (W2).
+    derived_from: [SAFETY-003]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none

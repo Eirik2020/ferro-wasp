@@ -3,14 +3,13 @@ requirements:
   - id: ARM-001
     title: Arming waits for qualified idle on every motor
     statement: >-
-      An arm request shall pass the arming guard (permission, valid
-      link, arm switch, low throttle), then the guarded DShot stop
-      dwell, then idle qualification on fresh, consecutive, in-range
-      eRPM from every output, before the armed transition; zero, stale
-      or overspeed eRPM shall abort.
+      An arm request shall reach the armed transition only after the arming
+      guard (permission, valid link, arm switch, low throttle), the guarded
+      DShot stop dwell, and idle qualification on fresh, consecutive,
+      in-range eRPM from every output.
     rationale: >-
-      A motor that does not spin up as expected must be found on the
-      ground, before authority is handed to the control loop.
+      A motor that does not spin up as expected must be found on the ground,
+      before authority is handed to the control loop.
     derived_from: [W1, W2]
     verification:
       entries:
@@ -39,6 +38,23 @@ requirements:
           setup: none
           method:
             test: ferrowasp_feedback::esc_manager::tests::idle_qualification_requires_fresh_consecutive_samples_from_every_output
+        - level: bench
+          target: fcu
+          setup: props-off
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: ARM-004
+    title: Bad eRPM aborts arming
+    statement: >-
+      Zero, stale or overspeed eRPM during idle qualification shall abort
+      the arming attempt.
+    rationale: >-
+      A motor that does not spin up as expected must be found on the ground,
+      before authority is handed to the control loop.
+    derived_from: [W1, W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -63,8 +79,8 @@ requirements:
   - id: ARM-002
     title: Disarming stops every motor
     statement: >-
-      On disarm, every motor shall receive its stop value and report
-      zero eRPM.
+      On disarm, every motor shall receive its stop value and report zero
+      eRPM.
     rationale: >-
       Disarm is the pilot's last command; it must end all motor output.
     derived_from: [W1, W2]
@@ -97,4 +113,3 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
-

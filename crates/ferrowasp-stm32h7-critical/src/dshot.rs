@@ -21,7 +21,7 @@
 //! TIM5 have 32-bit compare registers, and TIM3 and TIM4 ignore the upper
 //! half.
 //!
-//! Requirements: HW-DSHOT-001
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
 //! Safety-critical.
 
 use core::marker::PhantomData;

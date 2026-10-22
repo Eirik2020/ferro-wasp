@@ -11,7 +11,7 @@
 //! The mixer adds it to its floor; `actuator_output` still validates every
 //! command (W1).
 //!
-//! Requirements: CTRL-011
+//! Requirements: CTRL-011, CTRL-028, CTRL-029, CTRL-030
 //! Safety-critical.
 
 /// Dynamic idle's settings, in Betaflight's units so a tune carries over.

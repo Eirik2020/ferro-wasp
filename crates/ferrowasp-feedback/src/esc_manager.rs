@@ -1,4 +1,4 @@
-//! Requirements: ARM-001, FEEDBACK-002
+//! Requirements: ARM-001, ARM-004, FEEDBACK-002, FEEDBACK-005, FEEDBACK-006, FEEDBACK-007, FEEDBACK-008
 //! Safety-critical.
 
 use ferrowasp_blheli_telemetry::{EscTelemetry, ParserStats as WireParserStats, StreamParser};

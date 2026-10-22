@@ -1,7 +1,7 @@
 //! The border roles' tasks (design §16), target-only: the
 //! observer's run every millisecond, publishing on the ledger (design §10, §19).
 //!
-//! Requirements: BORDER-005
+//! Requirements: BORDER-005, BORDER-011
 //! Safety-critical.
 
 use crate::observer::{Ledger, Observer};

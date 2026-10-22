@@ -7,7 +7,7 @@
 //! receive-complete interrupt, as on the F4. The HAL configures the bus for
 //! blocking bring-up and is then released, so the poller owns SPI1 itself.
 //!
-//! Requirements: HW-SPI-001
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
 //! Safety-critical.
 
 use crate::dma_endpoints::{Spi1RxEndpoint, Spi1TxEndpoint, StreamErrors, spi1_endpoints};

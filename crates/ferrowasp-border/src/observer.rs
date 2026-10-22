@@ -8,7 +8,7 @@
 //! below the core. Its readers can only copy a topic out; only this module
 //! publishes.
 //!
-//! Requirements: BORDER-001
+//! Requirements: BORDER-001, BORDER-006, BORDER-007
 //! Safety-critical.
 
 use ferrowasp_boundary_contracts::messages::{

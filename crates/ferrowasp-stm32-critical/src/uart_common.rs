@@ -4,7 +4,7 @@
 //! behind the two small traits here, so a board on either family runs the
 //! same receive and transmit policy.
 //!
-//! Requirements: HW-UART-001
+//! Requirements: HW-UART-001, HW-UART-002, HW-UART-003, HW-UART-004
 //! Safety-critical.
 
 use crate::serial::irq_plan::{RxIrqAction, RxIrqFlags, RxIrqPlanner};

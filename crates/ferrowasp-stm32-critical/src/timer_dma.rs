@@ -1,4 +1,4 @@
-//! Requirements: HW-DSHOT-001
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
 //! Safety-critical.
 
 pub const TIMER_DMA_STATUS_NOTE: &str = "FCU3 has an opt-in four-motor DShot600 bench backend; PWM timer-DMA and flight use remain deferred.";

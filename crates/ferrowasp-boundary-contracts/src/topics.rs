@@ -6,7 +6,7 @@
 //! its own type here, so a new derived value changes only the observer and
 //! its readers, never a producer.
 //!
-//! Requirements: BORDER-003
+//! Requirements: BORDER-003, BORDER-009
 //! Safety-critical.
 
 use ferrowasp_io_contracts::link::Stamped;

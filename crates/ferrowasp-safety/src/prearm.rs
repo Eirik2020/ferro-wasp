@@ -4,7 +4,7 @@
 //! check that the control loop is still running, so a status that stops
 //! arriving reads as no status at all.
 //!
-//! Requirements: SAFETY-005
+//! Requirements: SAFETY-005, SAFETY-013
 //! Safety-critical.
 
 use crate::{ArmingAbortReason, PreArmHealth};

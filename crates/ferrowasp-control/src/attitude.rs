@@ -1,4 +1,4 @@
-//! Requirements: CTRL-007, CTRL-008
+//! Requirements: CTRL-007, CTRL-020, CTRL-008
 //! Safety-critical.
 
 pub const IMU_COMPLEMENTARY_GYRO_WEIGHT: f32 = 0.98;

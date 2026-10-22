@@ -5,7 +5,7 @@
 //! The owner, timebase and watchdog are bounded rather than named, because
 //! boards wire them to different DMA streams and timers.
 //!
-//! Requirements: HW-SPI-001
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
 //! Safety-critical.
 
 use super::prelude::*;

@@ -11,7 +11,7 @@
 //! when replies stop (design §21): stale eRPM moves the notches, never motor
 //! output.
 //!
-//! Requirements: CTRL-012
+//! Requirements: CTRL-012, CTRL-031, CTRL-032, CTRL-033, CTRL-034
 //! Safety-critical.
 
 use core::f32::consts::PI;

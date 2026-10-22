@@ -1,4 +1,4 @@
-//! Requirements: CTRL-009
+//! Requirements: CTRL-009, CTRL-021, CTRL-022
 //! Safety-critical.
 
 pub mod accel_level;

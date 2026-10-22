@@ -1,4 +1,4 @@
-//! Requirements: OUTPUT-001, OUTPUT-002
+//! Requirements: OUTPUT-001, OUTPUT-004, OUTPUT-005, OUTPUT-006, OUTPUT-007, OUTPUT-002, OUTPUT-008, OUTPUT-009
 //! Safety-critical.
 
 pub const DSHOT_BITS: usize = 16;

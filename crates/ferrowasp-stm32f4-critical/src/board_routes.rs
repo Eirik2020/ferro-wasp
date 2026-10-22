@@ -1,7 +1,7 @@
 //! Compile-time checks that a board's DMA and timer routes exist on the
 //! STM32F4, beside the chip-neutral route descriptions.
 //!
-//! Requirements: HW-ROUTE-001
+//! Requirements: HW-ROUTE-001, HW-ROUTE-002
 //! Safety-critical.
 
 pub use ferrowasp_stm32_critical::board_routes::*;

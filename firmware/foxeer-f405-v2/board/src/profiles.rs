@@ -1,4 +1,4 @@
-//! Requirements: CTRL-002, MOTOR-001
+//! Requirements: CTRL-002, CTRL-015, MOTOR-001
 
 use ferrowasp_config::stored::StoredConfig;
 use ferrowasp_control::calibration::accel_level::AccelLevel;

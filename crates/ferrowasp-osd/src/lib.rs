@@ -2,7 +2,7 @@
 //! from the observer's ledger. It reads the craft's state and never writes
 //! it, and says so when what it shows has stopped updating (section 19).
 //!
-//! Requirements: OSD-001
+//! Requirements: OSD-001, OSD-002
 
 #![forbid(unsafe_code)]
 #![no_std]

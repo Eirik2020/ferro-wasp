@@ -4,7 +4,7 @@
 //! the arming guard reads, and the stored accelerometer level the control
 //! loop subtracts.
 //!
-//! Requirements: ARM-003, BORDER-004
+//! Requirements: ARM-003, BORDER-004, BORDER-010
 //! Safety-critical.
 
 use core::sync::atomic::{AtomicBool, AtomicI16, Ordering};

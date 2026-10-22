@@ -1,18 +1,15 @@
 schema_version: 2
 requirements:
   - id: SERIAL-001
-    title: Port bindings resolve once, and a conflict drops the binding
+    title: Port bindings resolve once at boot
     statement: >-
-      Bindings shall resolve once at boot: RC input shall take the
-      configured protocol, and CRSF and the command line a port that
-      also transmits; a binding the port cannot carry shall be dropped
-      and reported while the rest apply; a function bound to two ports
-      shall be on neither; and stored bindings shall round-trip,
-      rejecting an unknown function.
+      Serial bindings shall resolve once at boot, RC input taking the
+      configured protocol, and CRSF and the command line each a port that
+      also transmits.
     rationale: >-
-      Serial bindings are stored configuration (W6); a function bound
-      twice or to a port that cannot carry it must fail visibly, never
-      leave RC on a guessed port.
+      Serial bindings are stored configuration (W6); a function bound twice
+      or to a port that cannot carry it must fail visibly, never leave RC on
+      a guessed port.
     derived_from: [W6]
     verification:
       entries:
@@ -35,12 +32,55 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_serial::binding::tests::slots_take_one_endpoint_per_function
+
+  - id: SERIAL-005
+    title: A binding the port cannot carry is dropped
+    statement: >-
+      A binding the port cannot carry shall be dropped and reported while
+      the other bindings apply.
+    rationale: >-
+      Serial bindings are stored configuration (W6); a function bound twice
+      or to a port that cannot carry it must fail visibly, never leave RC on
+      a guessed port.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_serial::binding::tests::a_port_that_cannot_carry_the_protocol_is_dropped
+
+  - id: SERIAL-006
+    title: A function bound to two ports is on neither
+    statement: >-
+      A function bound to two ports shall be on neither.
+    rationale: >-
+      Serial bindings are stored configuration (W6); a function bound twice
+      or to a port that cannot carry it must fail visibly, never leave RC on
+      a guessed port.
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_serial::binding::tests::a_function_on_two_ports_is_on_neither
+
+  - id: SERIAL-007
+    title: Stored bindings round-trip
+    statement: >-
+      Stored serial bindings shall round-trip through their encoding and
+      their names, rejecting an unknown function.
+    rationale: >-
+      Serial bindings are stored configuration (W6); a function bound twice
+      or to a port that cannot carry it must fail visibly, never leave RC on
+      a guessed port.
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -51,23 +91,16 @@ requirements:
           setup: none
           method:
             test: ferrowasp_serial::binding::tests::names_parse_back
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_serial::binding::tests::slots_take_one_endpoint_per_function
 
   - id: SERIAL-002
-    title: Each protocol has its line settings, and a port carries only what it is wired for
+    title: Each protocol has its line settings
     statement: >-
-      Each protocol shall use its line settings: SBUS 100 000 baud with
-      8 data bits, even parity and two stop bits; CRSF 420 000 baud 8N1;
-      MSP, the command line and ESC telemetry 115 200 baud 8N1. A
-      protocol that answers shall need a transmit path, and a port shall
-      refuse a protocol its wiring cannot carry.
+      Each serial protocol shall use its line settings: SBUS 100 000 baud
+      with 8 data bits, even parity and two stop bits; CRSF 420 000 baud
+      8N1; MSP, the command line and ESC telemetry 115 200 baud 8N1.
     rationale: >-
-      Line settings are a public wire format (W6); wrong settings read
-      as garbage, which the parsers must then reject.
+      Line settings are a public wire format (W6); wrong settings read as
+      garbage, which the parsers must then reject.
     derived_from: [W6]
     verification:
       entries:
@@ -76,29 +109,49 @@ requirements:
           setup: none
           method:
             test: ferrowasp_serial::routing::tests::each_protocol_uses_its_line_settings
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_serial::routing::tests::a_port_refuses_what_its_wiring_cannot_carry
+
+  - id: SERIAL-008
+    title: A protocol that answers needs a transmit path
+    statement: >-
+      A protocol that answers shall be bound only to a port with a transmit
+      path.
+    rationale: >-
+      Line settings are a public wire format (W6); wrong settings read as
+      garbage, which the parsers must then reject.
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_serial::routing::tests::only_protocols_that_answer_need_a_transmit_path
 
-  - id: SERIAL-003
-    title: The serial reader delivers bytes in order and never hides a gap
+  - id: SERIAL-009
+    title: A port carries only what it is wired for
     statement: >-
-      The serial reader shall deliver received bytes in order, split one
-      chunk across reads without losing bytes and never join adjacent
-      chunks into one read; on an overflow it shall record a
-      discontinuity, mark the next chunk and wake a waiting reader even
-      with no data; a dropped pending read shall consume nothing; and a
-      disabled empty stream shall return a structured error.
+      A port shall refuse a protocol its wiring cannot carry.
     rationale: >-
-      A consumer that cannot see lost bytes joins halves of two frames
-      into one valid-looking frame.
+      Line settings are a public wire format (W6); wrong settings read as
+      garbage, which the parsers must then reject.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::routing::tests::a_port_refuses_what_its_wiring_cannot_carry
+
+  - id: SERIAL-003
+    title: The serial reader delivers bytes in order
+    statement: >-
+      The serial reader shall deliver received bytes in order, splitting one
+      chunk across reads without losing bytes and never joining adjacent
+      chunks into one read.
+    rationale: >-
+      A consumer that cannot see lost bytes joins halves of two frames into
+      one valid-looking frame.
     derived_from: [W2]
     verification:
       entries:
@@ -121,26 +174,6 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_serial::reader::tests::overflow_records_discontinuity_and_marks_next_chunk
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_serial::reader::tests::dropping_pending_read_does_not_consume_future_data
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_serial::reader::tests::disabled_empty_stream_returns_structured_error
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_serial::reader::tests::discontinuity_wakes_a_waiting_reader_with_no_data
-        - level: unit
-          target: host
-          setup: none
-          method:
             test: ferrowasp_serial::reader::tests::try_read_returns_queued_bytes_and_zero_when_empty
         - level: unit
           target: host
@@ -148,14 +181,68 @@ requirements:
           method:
             test: ferrowasp_serial::reader::tests::serial_reader_implements_workspace_async_read
 
+  - id: SERIAL-010
+    title: An overflow is marked and wakes the reader
+    statement: >-
+      On an overflow the serial reader shall record a discontinuity, mark
+      the next chunk and wake a waiting reader, even with no data.
+    rationale: >-
+      A consumer that cannot see lost bytes joins halves of two frames into
+      one valid-looking frame.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::overflow_records_discontinuity_and_marks_next_chunk
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::discontinuity_wakes_a_waiting_reader_with_no_data
+
+  - id: SERIAL-011
+    title: A dropped read consumes nothing
+    statement: >-
+      A dropped pending serial read shall consume nothing.
+    rationale: >-
+      A consumer that cannot see lost bytes joins halves of two frames into
+      one valid-looking frame.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::dropping_pending_read_does_not_consume_future_data
+
+  - id: SERIAL-012
+    title: A disabled empty stream reports an error
+    statement: >-
+      A disabled, empty serial stream shall return a structured error.
+    rationale: >-
+      A consumer that cannot see lost bytes joins halves of two frames into
+      one valid-looking frame.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_serial::reader::tests::disabled_empty_stream_returns_structured_error
+
   - id: SERIAL-004
     title: The serial writer is bounded and ordered, and a fault clears it
     statement: >-
       The serial writer shall split writes into ordered, bounded chunks,
-      wait for owner capacity rather than drop bytes, report a flush
-      only after the queue and the hardware complete, enqueue nothing
-      for a dropped write, and on an owner fault wake a pending flush
-      and clear the queued chunks.
+      wait for owner capacity rather than drop bytes, report a flush only
+      after the queue and the hardware complete, enqueue nothing for a
+      dropped write, and on an owner fault wake a pending flush and clear
+      the queued chunks.
     rationale: >-
       The OSD and telemetry share a transport that may also carry RC; an
       unbounded or stuck writer must not hold that port.

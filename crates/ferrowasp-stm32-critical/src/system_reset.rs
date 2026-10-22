@@ -8,7 +8,7 @@
 //! and the jump: `ferrowasp-stm32f4::system_bootloader` and
 //! `ferrowasp-stm32h7::system_bootloader`.
 //!
-//! Requirements: REBOOT-002
+//! Requirements: REBOOT-002, REBOOT-005
 //! Safety-critical.
 
 /// Where a requested reboot goes.

@@ -50,7 +50,7 @@
 //! buffer ownership, stream fencing, and buffer exchange remain delegated to
 //! `stm32f4xx-hal::dma::Transfer`.
 //!
-//! Requirements: HW-DSHOT-001
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
 //! Safety-critical.
 
 #![deny(unsafe_op_in_unsafe_fn)]

@@ -6,7 +6,7 @@
 //! their timer in the set by type, so a board names a lane once, as a timer,
 //! a channel, and a stream, and the backend derives everything else.
 //!
-//! Requirements: HW-DSHOT-001
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
 //! Safety-critical.
 
 use core::any::Any;

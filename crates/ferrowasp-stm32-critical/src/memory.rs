@@ -1,4 +1,4 @@
-//! Requirements: HW-SPI-001
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
 //! Safety-critical.
 
 use ferrowasp_serial::{

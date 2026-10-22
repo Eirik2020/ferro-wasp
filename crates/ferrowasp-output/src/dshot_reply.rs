@@ -18,7 +18,7 @@
 //! The sampling layer follows Betaflight's `drivers/dshot_bitbang_decode.c`,
 //! and the value layer its `drivers/dshot.c`, at commit `41a5b43`.
 //!
-//! Requirements: OUTPUT-003
+//! Requirements: OUTPUT-003, OUTPUT-010, OUTPUT-011, OUTPUT-012, OUTPUT-013
 //! Safety-critical.
 
 /// Bits in a reply, the start edge included.

@@ -2,7 +2,7 @@
 //! (design §9): a producer that never blocks, and a consumer that reads in
 //! order or takes the newest.
 //!
-//! Requirements: IO-003
+//! Requirements: IO-003, IO-009, IO-010, IO-011
 //! Safety-critical.
 
 use heapless::spsc::{Consumer, Producer, Queue};

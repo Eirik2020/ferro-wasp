@@ -1,4 +1,4 @@
-//! Requirements: SERIAL-002
+//! Requirements: SERIAL-002, SERIAL-008, SERIAL-009
 //! Safety-critical.
 
 /// A UART by its number on the chip, the name a pilot sees on the board:

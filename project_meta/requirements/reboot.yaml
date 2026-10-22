@@ -3,9 +3,25 @@ requirements:
   - id: REBOOT-001
     title: A reboot is refused while armed or with a flight log open
     statement: >-
-      A reboot or DFU request shall be honoured only while disarmed and
-      with no flight log being written; otherwise it shall be refused
-      with a reason and the board shall keep running.
+      A reboot or DFU request shall be refused, with a reason, unless the
+      craft is disarmed and no flight log is being written.
+    rationale: >-
+      The configurator has no authority over a flying craft, and an open
+      flight log is evidence that must not be cut off.
+    derived_from: [W1, W7]
+    verification:
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+
+  - id: REBOOT-004
+    title: A refused reboot leaves the board running
+    statement: >-
+      A refused reboot or DFU request shall leave the board running as
+      before.
     rationale: >-
       The configurator has no authority over a flying craft, and an open
       flight log is evidence that must not be cut off.
@@ -22,11 +38,9 @@ requirements:
     title: The ROM bootloader is entered only on request
     statement: >-
       The firmware shall start the ROM bootloader only after a software
-      reset that carries the request word; after any other reset the
-      word shall be cleared unread.
+      reset that carries the request word.
     rationale: >-
-      An unexpected jump to the bootloader would end the flight
-      firmware.
+      An unexpected jump to the bootloader would end the flight firmware.
     derived_from: [W2]
     verification:
       entries:
@@ -41,13 +55,62 @@ requirements:
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
 
-  - id: REBOOT-003
-    title: Flashing through DFU returns the same board unchanged
+  - id: REBOOT-005
+    title: Any other reset clears the request word
     statement: >-
-      Flashing from running FerroWasp through the ROM bootloader shall
-      need no BOOT button, shall write exactly the image's load
-      segments, and shall return the board as FerroWasp with the same
-      USB serial number and an identical exported configuration.
+      After any reset other than a software reset, the firmware shall clear
+      the bootloader request word without acting on it.
+    rationale: >-
+      An unexpected jump to the bootloader would end the flight firmware.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_stm32_critical::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
+
+  - id: REBOOT-003
+    title: Flashing through DFU needs no BOOT button
+    statement: >-
+      Flashing from running FerroWasp through the ROM bootloader shall need
+      no BOOT button.
+    rationale: >-
+      Flashing must never cost the pilot their configuration or leave a
+      half-written image.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+
+  - id: REBOOT-006
+    title: Flashing writes exactly the image
+    statement: >-
+      Flashing through the ROM bootloader shall write exactly the image's
+      load segments.
+    rationale: >-
+      Flashing must never cost the pilot their configuration or leave a
+      half-written image.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+
+  - id: REBOOT-007
+    title: Flashing returns the same board unchanged
+    statement: >-
+      After flashing through the ROM bootloader, the board shall return as
+      FerroWasp with the same USB serial number and an identical exported
+      configuration.
     rationale: >-
       Flashing must never cost the pilot their configuration or leave a
       half-written image.

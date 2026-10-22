@@ -4,7 +4,7 @@
 //! identifier, so the caller must associate a validated frame with the DShot
 //! lane whose telemetry bit was most recently requested.
 //!
-//! Requirements: FEEDBACK-001
+//! Requirements: FEEDBACK-001, FEEDBACK-003, FEEDBACK-004
 //! Safety-critical.
 
 #![no_std]
