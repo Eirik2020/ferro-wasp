@@ -94,6 +94,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **The `app!` parser** in `ferroforge-contracts`, and a FerroForge release, so
   board requirements fingerprint the tasks they name instead of the whole app
   closure.
+- **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file),
+  TRACE-001 to TRACE-007): declarations in the files, module identities and
+  their direct imports, configurations from dep-info, features and the
+  scheduling table, the maturity report, the per-file direction rule, and
+  recomputing old records from git.
 - **`reqtool`**: the analysis-level checks, and running tests behind opt-in
   features, so they can be evidence.
 

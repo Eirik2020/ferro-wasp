@@ -112,7 +112,9 @@ operation does not establish flight readiness.
 
 ## 4. Fingerprints
 
-ADR-0052.
+ADR-0052. Replaced by [section 20](tracing.md#20-tracing-per-source-file)
+once `reqtool` implements it; until then this is how evidence is
+fingerprinted.
 
 A fingerprint answers: which code has to stay the same for this evidence to
 still count? The tool derives it from what the evidence claims to verify:
@@ -209,7 +211,9 @@ reported for each variant a board can run.
 
 ## 5. Verification modes and timing
 
-ADR-0052.
+ADR-0052. The verification modes are dropped by
+[section 20](tracing.md#20-tracing-per-source-file) once `reqtool`
+implements it.
 
 The plan's cascade rule stands: a safety-critical parent is satisfied by its
 own requirement and test, or by full coverage from its children, never both

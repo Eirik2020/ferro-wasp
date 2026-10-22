@@ -38,6 +38,7 @@ The design is split into chapters; section numbers run across all of them.
 17. [Order of work](#17-order-of-work)
 18. [Open items](#18-open-items)
 19. [Fault handling and the border roles](fault-handling.md#19-fault-handling-and-the-border-roles)
+20. [Tracing per source file](tracing.md#20-tracing-per-source-file)
 
 ---
 

@@ -87,5 +87,6 @@
   - [Hardware Contracts and the Control Loop](requirements/hardware-and-loop.md)
   - [Configuration, Classifications and Crates](requirements/configuration-and-crates.md)
   - [Fault Handling and the Border Roles](requirements/fault-handling.md)
+  - [Tracing per Source File](requirements/tracing.md)
 - [Repository Tooling](tooling.md)
 - [Development Container Internals](dev-environment.md)
