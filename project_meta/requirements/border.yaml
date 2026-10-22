@@ -316,3 +316,20 @@ requirements:
     derived_from: [BORDER-012]
     verification:
       entries: []
+
+  - id: BORDER-018
+    title: Only the storage owner may ask for a reboot
+    statement: >-
+      The coordinator shall pass a reboot to the safety master only from the
+      storage owner's link, refusing it from every other requester.
+    rationale: >-
+      A reset cuts the store off, so only the task that has just settled it
+      may ask; a command line asks the storage owner, never the coordinator.
+    derived_from: [REBOOT-001]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_reboot_comes_only_from_the_storage_owner_and_its_decision_comes_back

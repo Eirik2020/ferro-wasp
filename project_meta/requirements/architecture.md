@@ -369,18 +369,23 @@ priority 1) handled `reboot` and `reboot dfu`, read `SAFETY_ARMED`, and called
 `backend::system_bootloader::reboot` itself (`stm32-tasks/src/flash.rs`).
 That is check-then-act by non-critical code, and it checked only armed, not
 arming in progress, when motors already spin for idle qualification. Under
-the design:
+the design, the storage owner, which alone knows the store is settled, is
+the requester:
 
 ```
-CLI ─▶ flash manager: quiesce storage          (non-critical ↔ non-critical)
-CLI ─▶ coordinator: Request::Reboot(Firmware | RomBootloader)
+CLI ─▶ flash manager: reboot dfu                (non-critical ↔ non-critical)
+       flash manager: refuse while armed, maintaining or logging;
+                      settle the store; answer; wait for the answer to leave
+       flash manager ─▶ coordinator: Request::Reboot(RomBootloader)
+         coordinator: from the storage owner? → forward, ticketed
          coordinator ─▶ safety master (participant):
-             disarmed and not arming? → hold arm inhibit → reset
+             disarmed and not arming? → reset
              otherwise               → refused(Armed | ArmingInProgress)
 ```
 
 Only the safety master can end the flight firmware; non-critical crates
-cannot even name `reboot()`. A write cut by a reboot is covered by the
+cannot even name `reboot()`. No inhibit is needed: the check and the reset
+run in one safety-master run, and arming is that task's alone. A write cut by a reboot is covered by the
 two-slot scheme and boot validation (section 14).
 
 **Naming.** The task was first called "the gate". Candidates were checked for

@@ -2,9 +2,11 @@
 //! the only task that arms or disarms the system. It
 //! decides on arm requests, completes arming once the actuator reports idle,
 //! and disarms on request, on an aborted arming, or when the RC link is
-//! invalidated. It commands the actuator only by spawning `actuator_output`.
+//! invalidated. It commands the actuator only by spawning `actuator_output`,
+//! and it alone restarts the board, on a reboot the coordinator passes it.
 //!
-//! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020
+//! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020,
+//! SAFETY-015
 //! Safety-critical.
 
 use crate::prearm::ImuPreArmReader;
@@ -99,7 +101,7 @@ fn report_arm_state(
         // refused while one stands, and actuator output reads the flag.
         host_leases: safety::host::HostLeases = safety::host::HostLeases::new(),
         host_lease_writer: signals::HostLeaseWriter,
-        bench_reply_link: LinkProducer<'static, safety::BenchReply>,
+        safety_reply_link: LinkProducer<'static, safety::SafetyReply>,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
@@ -107,6 +109,7 @@ fn report_arm_state(
         actuator_inhibit_reason: &'static str,
         bench_actuator_validation_enabled: bool,
         validate_live_arming_guard: safety::ArmingGuard,
+        reboot: fn(safety::RebootTarget) -> !,
     ],
     monotonic = Mono,
 )]
@@ -238,11 +241,14 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 rc_arm_high.read(),
                 CONFIG::ACTUATOR_OUTPUT_ENABLED,
             );
-            cx.local.bench_reply_link.push(
+            cx.local.safety_reply_link.push(
                 TimestampMicros(now_us),
-                safety::BenchReply {
+                safety::SafetyReply {
                     ticket,
-                    result: decision,
+                    outcome: match decision {
+                        Ok(()) => safety::Outcome::Accepted,
+                        Err(refusal) => safety::Outcome::Refused(safety::bench_refusal(refusal)),
+                    },
                 },
             );
             match decision {
@@ -259,6 +265,29 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                     }
                 }
                 Err(refusal) => warn!("Bench motor request refused: {}", refusal.as_str()),
+            }
+        }
+
+        // A restart the storage owner asked for once its store was settled.
+        // Only disarmed and not arming: the reset ends the flight firmware,
+        // and nothing between the check and the reset can arm, since arming
+        // is this task's alone.
+        // An accepted reboot never returns, so only a refusal is answered.
+        safety::SafetyEvent::Reboot { target, ticket } => {
+            match safety::validate_reboot(system_arm.is_armed(), arm_permit.is_allowed()) {
+                Ok(()) => {
+                    warn!("Rebooting on request");
+                    (CONFIG::REBOOT)(target);
+                }
+                Err(refusal) => {
+                    cx.local.safety_reply_link.push(
+                        TimestampMicros(now_us),
+                        safety::SafetyReply {
+                            ticket,
+                            outcome: safety::Outcome::Refused(refusal),
+                        },
+                    );
+                }
             }
         }
 

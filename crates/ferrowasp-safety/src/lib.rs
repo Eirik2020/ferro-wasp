@@ -4,7 +4,7 @@
 //! master and actuator tasks join it later; making it domain-agnostic is
 //! deferred (design §19).
 //!
-//! Requirements: ARM-001, ARM-004, ARM-003, BOOT-002, BOOT-004, INPUT-002, INPUT-015, INPUT-003, INPUT-006, INPUT-007, INPUT-008, INPUT-017, INPUT-018, SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008, SAFETY-002, SAFETY-009, SAFETY-010, SAFETY-003, SAFETY-011, SAFETY-004, SAFETY-012, SAFETY-014, SAFETY-005, SAFETY-013
+//! Requirements: ARM-001, ARM-004, ARM-003, BOOT-002, BOOT-004, INPUT-002, INPUT-015, INPUT-003, INPUT-006, INPUT-007, INPUT-008, INPUT-017, INPUT-018, SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008, SAFETY-002, SAFETY-009, SAFETY-010, SAFETY-003, SAFETY-011, SAFETY-004, SAFETY-012, SAFETY-014, SAFETY-015, SAFETY-005, SAFETY-013
 //! Safety-critical.
 
 #![forbid(unsafe_code)]
@@ -115,22 +115,45 @@ pub enum SafetyEvent {
     },
     /// A computer is attached on this link: renew its lease.
     HostPresent(host::HostLink),
+    /// A reboot the coordinator accepted from the storage owner, with the
+    /// ticket the safety master's reply names it by.
+    Reboot {
+        target: RebootTarget,
+        ticket: u32,
+    },
 }
 
-/// The safety master's decision on one bench motor request, back to the
-/// coordinator.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct BenchReply {
+pub use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Refusal};
+
+/// The safety master's decision on one request the coordinator passed it
+/// by ticket, back to the coordinator.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SafetyReply {
     pub ticket: u32,
-    pub result: Result<(), BenchMotorRefusal>,
+    pub outcome: Outcome,
 }
 
-impl Default for BenchReply {
-    fn default() -> Self {
-        Self {
-            ticket: 0,
-            result: Ok(()),
-        }
+/// Whether the safety master may restart the board now: only disarmed and
+/// not arming, since a reset ends the flight firmware.
+pub const fn validate_reboot(system_armed: bool, arming_in_progress: bool) -> Result<(), Refusal> {
+    if system_armed {
+        Err(Refusal::Armed)
+    } else if arming_in_progress {
+        Err(Refusal::ArmingInProgress)
+    } else {
+        Ok(())
+    }
+}
+
+/// A bench refusal as the requester sees it.
+pub const fn bench_refusal(refusal: BenchMotorRefusal) -> Refusal {
+    match refusal {
+        BenchMotorRefusal::Armed => Refusal::Armed,
+        BenchMotorRefusal::ArmingInProgress => Refusal::ArmingInProgress,
+        BenchMotorRefusal::ArmSwitchHigh => Refusal::ArmSwitchHigh,
+        BenchMotorRefusal::OutputDisabled => Refusal::OutputDisabled,
+        BenchMotorRefusal::InvalidMotor => Refusal::Invalid,
+        BenchMotorRefusal::MotorMapUnavailable => Refusal::MotorMapUnavailable,
     }
 }
 
@@ -1402,6 +1425,14 @@ mod tests {
                 Err(MotorOutputValidationError::InvalidIdleThrottle)
             );
         }
+    }
+
+    #[test]
+    fn a_reboot_is_allowed_only_disarmed_and_not_arming() {
+        assert_eq!(validate_reboot(false, false), Ok(()));
+        assert_eq!(validate_reboot(true, false), Err(Refusal::Armed));
+        assert_eq!(validate_reboot(true, true), Err(Refusal::Armed));
+        assert_eq!(validate_reboot(false, true), Err(Refusal::ArmingInProgress));
     }
 
     #[test]

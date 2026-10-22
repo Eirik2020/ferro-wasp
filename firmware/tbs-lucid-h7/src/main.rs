@@ -206,7 +206,8 @@ ferroforge::app! {
         // output. This board has no configurator link.
         coordinator: CoordinatorState,
         usb_request_link: ObserverLink<requests::Request>,
-        bench_reply_link: ObserverLink<safety::BenchReply>,
+        storage_request_link: ObserverLink<requests::Request>,
+        safety_reply_link: ObserverLink<safety::SafetyReply>,
         host_lease_writer: safety::signals::HostLeaseWriter,
         actuator_host_lease_reader: safety::signals::HostLeaseReader,
     }
@@ -429,7 +430,8 @@ ferroforge::app! {
         let flight_tasks::CoordinatorChannels {
             coordinator,
             usb_request_link,
-            bench_reply_link,
+            storage_request_link,
+            safety_reply_link,
             request_results,
             ..
         } = flight_tasks::coordinator_channels();
@@ -868,7 +870,8 @@ ferroforge::app! {
                 // Coordinator
                 coordinator,
                 usb_request_link,
-                bench_reply_link,
+                storage_request_link,
+                safety_reply_link,
                 host_lease_writer,
                 actuator_host_lease_reader,
             },
@@ -885,7 +888,7 @@ ferroforge::app! {
             safety_rc_arm_high_reader, safety_rc_throttle_reader, safety_rc_link_reader,
             safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
             actuator_arm_done_reader, safety_status_link, safety_imu_prearm, host_lease_writer,
-            bench_reply_link,
+            safety_reply_link,
             // usb_fs
             usb_cdc, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
@@ -895,6 +898,7 @@ ferroforge::app! {
             storage_status_link, flash_safety_arm_reader, flash_probe, flash_commands,
             flash_responses,
             flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
+            storage_request_link,
             stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             // control_loop
             control_loop_cnt, samples_per_control_loop, flight_controller, control_loop_scheduler,
@@ -950,7 +954,7 @@ ferroforge::app! {
             validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
             usb_debug_header: &'static [u8] = USB_DEBUG_HEADER,
             wake_usb: fn() = wake_usb,
-            reboot: fn(RebootTarget) -> ! = stm32_bootloader::reboot,
+            reboot: fn(requests::RebootTarget) -> ! = reboot_on_request,
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,

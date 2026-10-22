@@ -14,17 +14,22 @@ pub enum Requester {
     Usb,
     ConfiguratorLink,
     Osd,
+    /// The storage owner, which asks for a reboot once it has settled the
+    /// store.
+    Storage,
 }
 
 impl Requester {
-    pub const COUNT: usize = 3;
-    pub const ALL: [Self; Self::COUNT] = [Self::Usb, Self::ConfiguratorLink, Self::Osd];
+    pub const COUNT: usize = 4;
+    pub const ALL: [Self; Self::COUNT] =
+        [Self::Usb, Self::ConfiguratorLink, Self::Osd, Self::Storage];
 
     pub const fn index(self) -> usize {
         match self {
             Self::Usb => 0,
             Self::ConfiguratorLink => 1,
             Self::Osd => 2,
+            Self::Storage => 3,
         }
     }
 }
@@ -36,6 +41,14 @@ pub enum Request {
     /// A computer is attached on the requester's link; arming is refused
     /// while the lease this renews stands.
     HostPresent,
+    /// Restart, into the firmware or the chip's ROM bootloader.
+    Reboot(RebootTarget),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RebootTarget {
+    Firmware,
+    RomBootloader,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

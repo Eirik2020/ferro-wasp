@@ -271,7 +271,8 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     | safety::SafetyEvent::ArmingAborted(_)
                     | safety::SafetyEvent::RcLinkInvalid(_)
                     | safety::SafetyEvent::BenchMotor { .. }
-                    | safety::SafetyEvent::HostPresent(_) => {}
+                    | safety::SafetyEvent::HostPresent(_)
+                    | safety::SafetyEvent::Reboot { .. } => {}
                 }
 
                 cx.spawn.safety_master(event).ok();

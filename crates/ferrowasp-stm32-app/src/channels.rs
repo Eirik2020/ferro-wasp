@@ -109,7 +109,8 @@ pub struct CoordinatorChannels {
     pub coordinator: ferrowasp_border::coordinator::Coordinator<'static>,
     pub usb_request_link: LinkProducer<'static, requests::Request>,
     pub configurator_request_link: LinkProducer<'static, requests::Request>,
-    pub bench_reply_link: LinkProducer<'static, safety::BenchReply>,
+    pub storage_request_link: LinkProducer<'static, requests::Request>,
+    pub safety_reply_link: LinkProducer<'static, safety::SafetyReply>,
     pub request_results: LinkConsumer<'static, requests::RequesterResult>,
 }
 
@@ -133,9 +134,10 @@ pub fn coordinator_channels() -> CoordinatorChannels {
     let (usb_request_link, usb) = request_link!();
     let (configurator_request_link, configurator_link) = request_link!();
     let (_, osd) = request_link!();
-    let (bench_reply_link, bench_replies) = link(
+    let (storage_request_link, storage) = request_link!();
+    let (safety_reply_link, safety_replies) = link(
         cortex_m::singleton!(
-            : Queue<Stamped<safety::BenchReply>, RESULT_LINK_DEPTH> = Queue::new()
+            : Queue<Stamped<safety::SafetyReply>, RESULT_LINK_DEPTH> = Queue::new()
         )
         .unwrap(),
     );
@@ -151,13 +153,15 @@ pub fn coordinator_channels() -> CoordinatorChannels {
                 usb,
                 configurator_link,
                 osd,
-                bench_replies,
+                storage,
+                safety_replies,
             },
             results,
         ),
         usb_request_link,
         configurator_request_link,
-        bench_reply_link,
+        storage_request_link,
+        safety_reply_link,
         request_results,
     }
 }

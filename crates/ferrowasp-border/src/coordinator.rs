@@ -4,10 +4,12 @@
 //! requests from each, in turn. The coordinator checks a request's content
 //! and who may send it, and passes what it accepts to the owner of the
 //! state, the safety master, which decides. Motor tests come only from USB,
-//! so there is no bench session to arbitrate yet. It never applies anything
+//! so there is no bench session to arbitrate yet, and a reboot only from the
+//! storage owner, once it has settled the store. It never applies anything
 //! itself, and never judges flight state.
 //!
-//! Requirements: BORDER-012, BORDER-013, BORDER-014, BORDER-015, BORDER-016
+//! Requirements: BORDER-012, BORDER-013, BORDER-014, BORDER-015, BORDER-016,
+//! BORDER-018
 //! Safety-critical.
 
 use ferrowasp_boundary_contracts::requests::{
@@ -16,11 +18,11 @@ use ferrowasp_boundary_contracts::requests::{
 use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
 use ferrowasp_io_contracts::time::TimestampMicros;
 use ferrowasp_safety::host::HostLink;
-use ferrowasp_safety::{BenchMotorRefusal, BenchMotorRequest, BenchReply, SafetyEvent};
+use ferrowasp_safety::{BenchMotorRequest, SafetyEvent, SafetyReply};
 
 /// Requests taken from one requester in one run.
 pub const REQUESTS_PER_RUN: usize = 2;
-/// Bench requests the safety master may hold unanswered at once.
+/// Requests the safety master may hold unanswered at once.
 const TICKETS: usize = 4;
 
 /// The consuming end of every requester's link, and of the safety master's
@@ -29,7 +31,8 @@ pub struct CoordinatorLinks<'a> {
     pub usb: LinkConsumer<'a, Request>,
     pub configurator_link: LinkConsumer<'a, Request>,
     pub osd: LinkConsumer<'a, Request>,
-    pub bench_replies: LinkConsumer<'a, BenchReply>,
+    pub storage: LinkConsumer<'a, Request>,
+    pub safety_replies: LinkConsumer<'a, SafetyReply>,
 }
 
 #[derive(Clone, Copy)]
@@ -72,8 +75,8 @@ impl<'a> Coordinator<'a> {
     /// next run.
     pub fn run_once(&mut self, now_ms: u64, mut send: impl FnMut(SafetyEvent) -> bool) {
         self.now_ms = now_ms;
-        for _ in 0..self.links.bench_replies.capacity() {
-            let Some(reply) = self.links.bench_replies.oldest() else {
+        for _ in 0..self.links.safety_replies.capacity() {
+            let Some(reply) = self.links.safety_replies.oldest() else {
                 break;
             };
             self.settle(reply.value);
@@ -100,6 +103,7 @@ impl<'a> Coordinator<'a> {
                 Requester::Usb => &mut self.links.usb,
                 Requester::ConfiguratorLink => &mut self.links.configurator_link,
                 Requester::Osd => &mut self.links.osd,
+                Requester::Storage => &mut self.links.storage,
             };
             let Some(request) = link.oldest() else {
                 break;
@@ -118,7 +122,7 @@ impl<'a> Coordinator<'a> {
     }
 
     /// Hand `event` to the safety master; false when it was not taken, or
-    /// no ticket is free for a bench request's reply.
+    /// no ticket is free for a decision the requester waits for.
     fn forward(
         &mut self,
         requester: Requester,
@@ -126,33 +130,34 @@ impl<'a> Coordinator<'a> {
         event: SafetyEvent,
         send: &mut impl FnMut(SafetyEvent) -> bool,
     ) -> bool {
-        match event {
-            SafetyEvent::BenchMotor { request: bench, .. } => {
-                let Some(slot) = self.tickets.iter().position(Option::is_none) else {
-                    return false;
-                };
-                let ticket = self.next_ticket;
-                if !send(SafetyEvent::BenchMotor {
-                    request: bench,
-                    ticket,
-                }) {
-                    return false;
-                }
-                self.next_ticket = self.next_ticket.wrapping_add(1).max(1);
-                self.tickets[slot] = Some(Ticket {
-                    ticket,
-                    requester,
-                    request_seq: request.seq,
-                });
-                true
+        let ticketed = |ticket| match event {
+            SafetyEvent::BenchMotor { request, .. } => {
+                Some(SafetyEvent::BenchMotor { request, ticket })
             }
+            SafetyEvent::Reboot { target, .. } => Some(SafetyEvent::Reboot { target, ticket }),
+            _ => None,
+        };
+        let Some(with_ticket) = ticketed(self.next_ticket) else {
             // A host renewal publishes no result: it arrives several times a
             // second and only extends a lease.
-            other => send(other),
+            return send(event);
+        };
+        let Some(slot) = self.tickets.iter().position(Option::is_none) else {
+            return false;
+        };
+        if !send(with_ticket) {
+            return false;
         }
+        self.tickets[slot] = Some(Ticket {
+            ticket: self.next_ticket,
+            requester,
+            request_seq: request.seq,
+        });
+        self.next_ticket = self.next_ticket.wrapping_add(1).max(1);
+        true
     }
 
-    fn settle(&mut self, reply: BenchReply) {
+    fn settle(&mut self, reply: SafetyReply) {
         let Some(slot) = self
             .tickets
             .iter()
@@ -163,11 +168,7 @@ impl<'a> Coordinator<'a> {
         let Some(ticket) = self.tickets[slot].take() else {
             return;
         };
-        let outcome = match reply.result {
-            Ok(()) => Outcome::Accepted,
-            Err(refusal) => Outcome::Refused(bench_refusal(refusal)),
-        };
-        self.publish(ticket.requester, ticket.request_seq, outcome);
+        self.publish(ticket.requester, ticket.request_seq, reply.outcome);
     }
 
     fn publish(&mut self, requester: Requester, request_seq: u32, outcome: Outcome) {
@@ -191,7 +192,13 @@ fn check(requester: Requester, request: Request) -> Result<SafetyEvent, Refusal>
         Request::HostPresent => match requester {
             Requester::Usb => Ok(SafetyEvent::HostPresent(HostLink::Usb)),
             Requester::ConfiguratorLink => Ok(SafetyEvent::HostPresent(HostLink::ConfiguratorLink)),
-            Requester::Osd => Err(Refusal::NotPermitted),
+            Requester::Osd | Requester::Storage => Err(Refusal::NotPermitted),
+        },
+        // Only the storage owner asks for a reboot, once the store is
+        // settled; the command lines ask it, not the coordinator.
+        Request::Reboot(target) => match requester {
+            Requester::Storage => Ok(SafetyEvent::Reboot { target, ticket: 0 }),
+            _ => Err(Refusal::NotPermitted),
         },
         Request::MotorTest(test) => {
             // Only the USB command line carries motor tests.
@@ -229,17 +236,6 @@ const fn valid_motor(logical_motor: u8) -> Result<(), Refusal> {
     }
 }
 
-const fn bench_refusal(refusal: BenchMotorRefusal) -> Refusal {
-    match refusal {
-        BenchMotorRefusal::Armed => Refusal::Armed,
-        BenchMotorRefusal::ArmingInProgress => Refusal::ArmingInProgress,
-        BenchMotorRefusal::ArmSwitchHigh => Refusal::ArmSwitchHigh,
-        BenchMotorRefusal::OutputDisabled => Refusal::OutputDisabled,
-        BenchMotorRefusal::InvalidMotor => Refusal::Invalid,
-        BenchMotorRefusal::MotorMapUnavailable => Refusal::MotorMapUnavailable,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     extern crate std;
@@ -253,7 +249,8 @@ mod tests {
         usb: Queue<Stamped<Request>, 5>,
         configurator_link: Queue<Stamped<Request>, 5>,
         osd: Queue<Stamped<Request>, 5>,
-        replies: Queue<Stamped<BenchReply>, 5>,
+        storage: Queue<Stamped<Request>, 5>,
+        replies: Queue<Stamped<SafetyReply>, 5>,
         results: Queue<Stamped<RequesterResult>, 9>,
     }
 
@@ -263,6 +260,7 @@ mod tests {
                 usb: Queue::new(),
                 configurator_link: Queue::new(),
                 osd: Queue::new(),
+                storage: Queue::new(),
                 replies: Queue::new(),
                 results: Queue::new(),
             }
@@ -273,7 +271,8 @@ mod tests {
         usb: LinkProducer<'a, Request>,
         configurator_link: LinkProducer<'a, Request>,
         osd: LinkProducer<'a, Request>,
-        replies: LinkProducer<'a, BenchReply>,
+        storage: LinkProducer<'a, Request>,
+        replies: LinkProducer<'a, SafetyReply>,
         results: LinkConsumer<'a, RequesterResult>,
     }
 
@@ -281,6 +280,7 @@ mod tests {
         let (usb, usb_rx) = link(&mut queues.usb);
         let (configurator_link, configurator_rx) = link(&mut queues.configurator_link);
         let (osd, osd_rx) = link(&mut queues.osd);
+        let (storage, storage_rx) = link(&mut queues.storage);
         let (replies, replies_rx) = link(&mut queues.replies);
         let (results_tx, results) = link(&mut queues.results);
         (
@@ -289,7 +289,8 @@ mod tests {
                     usb: usb_rx,
                     configurator_link: configurator_rx,
                     osd: osd_rx,
-                    bench_replies: replies_rx,
+                    storage: storage_rx,
+                    safety_replies: replies_rx,
                 },
                 results_tx,
             ),
@@ -297,6 +298,7 @@ mod tests {
                 usb,
                 configurator_link,
                 osd,
+                storage,
                 replies,
                 results,
             },
@@ -333,9 +335,9 @@ mod tests {
 
         ends.replies.push(
             TimestampMicros(0),
-            BenchReply {
+            SafetyReply {
                 ticket,
-                result: Err(BenchMotorRefusal::Armed),
+                outcome: Outcome::Refused(Refusal::Armed),
             },
         );
         coordinator.run_once(11, |_| true);
@@ -475,5 +477,55 @@ mod tests {
             "a flood of USB requests waits its turn"
         );
         assert!(sent.contains(&SafetyEvent::HostPresent(HostLink::ConfiguratorLink)));
+    }
+
+    #[test]
+    fn a_reboot_comes_only_from_the_storage_owner_and_its_decision_comes_back() {
+        use ferrowasp_boundary_contracts::requests::RebootTarget;
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        let mut sent = Vec::new();
+
+        let reboot = Request::Reboot(RebootTarget::RomBootloader);
+        ends.usb.push(TimestampMicros(0), reboot);
+        ends.configurator_link.push(TimestampMicros(0), reboot);
+        ends.osd.push(TimestampMicros(0), reboot);
+        ends.storage.push(TimestampMicros(0), reboot);
+        coordinator.run_once(10, |event| {
+            sent.push(event);
+            true
+        });
+
+        let [SafetyEvent::Reboot { target, ticket }] = sent[..] else {
+            panic!("expected one reboot, got {sent:?}");
+        };
+        assert_eq!(target, RebootTarget::RomBootloader);
+        let refused = results(&mut ends);
+        assert_eq!(refused.len(), 3);
+        assert!(
+            refused
+                .iter()
+                .all(|result| result.requester != Requester::Storage
+                    && result.result.outcome == Outcome::Refused(Refusal::NotPermitted))
+        );
+
+        ends.replies.push(
+            TimestampMicros(0),
+            SafetyReply {
+                ticket,
+                outcome: Outcome::Refused(Refusal::ArmingInProgress),
+            },
+        );
+        coordinator.run_once(11, |_| true);
+        assert_eq!(
+            results(&mut ends),
+            [RequesterResult {
+                requester: Requester::Storage,
+                result: RequestResult {
+                    request_seq: 1,
+                    outcome: Outcome::Refused(Refusal::ArmingInProgress),
+                },
+            }]
+        );
     }
 }

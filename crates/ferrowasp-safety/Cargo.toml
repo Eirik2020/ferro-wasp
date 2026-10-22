@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 critical-section = { workspace = true }
-ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
+ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 heapless = { workspace = true }
 
@@ -30,7 +30,6 @@ default = []
 std = ["critical-section/std"]
 # The safety master's RTIC task definitions, target-only (design §16).
 tasks = [
-    "dep:ferrowasp-boundary-contracts",
     "dep:defmt",
     "dep:ferroforge",
     "dep:fugit",

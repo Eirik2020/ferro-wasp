@@ -271,6 +271,18 @@ macro_rules! flight_app_facade {
             Mutex::new(RefCell::new(safety::RcLinkState::new()));
         pub static ACTUATOR_ARM_DONE: AtomicBool = AtomicBool::new(false);
         pub static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
+        /// Restart as the safety master decided: into the firmware, or into
+        /// the chip's ROM bootloader.
+        pub fn reboot_on_request(target: requests::RebootTarget) -> ! {
+            stm32_bootloader::reboot(match target {
+                requests::RebootTarget::Firmware => {
+                    RebootTarget::Firmware
+                }
+                requests::RebootTarget::RomBootloader => {
+                    RebootTarget::RomBootloader
+                }
+            })
+        }
         /// Wake the USB task, which serves its queues on its interrupt.
         pub fn wake_usb() {
             cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);

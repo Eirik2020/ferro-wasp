@@ -78,7 +78,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own);
   2. the remaining SPSC links and typed flags; through the coordinator, the
-     arm inhibit and its two kinds of lease, reboot, config transactions
+     arm inhibit and its two kinds of lease, config transactions
      (taking the accelerometer level in `ferrowasp-border::inbound` and the
      OSD's `tuning_profile`) and accelerometer calibration; the OSD menu as
      a requester; the boot

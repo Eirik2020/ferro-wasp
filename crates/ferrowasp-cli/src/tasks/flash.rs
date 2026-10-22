@@ -18,11 +18,11 @@ use ferrowasp_blackbox::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
 use ferrowasp_border::inbound::publish_accel_level;
+use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Refusal, Request, Requester};
 use ferrowasp_control::calibration::accel_level::{AccelLevelCalibration, CalibrationError};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
 use ferrowasp_serial::{SerialBindings, SerialRoute};
-use ferrowasp_stm32_critical::system_reset::RebootTarget;
 use ferrowasp_storage::config_save::{ConfigSave, SaveFailure, SaveStep};
 use ferrowasp_storage::nor_storage::NorStorage;
 
@@ -34,6 +34,10 @@ pub const REBOOT_STORAGE_SETTLE_MS: u32 = 500;
 /// How long a reboot waits after answering, so the answer leaves over USB
 /// before the port goes away.
 pub const REBOOT_ANSWER_MS: u64 = 100;
+
+/// How long a reboot waits for the safety master's decision, ten
+/// coordinator runs.
+pub const REBOOT_DECISION_MS: u64 = 100;
 
 pub use ferrowasp_storage::config_save::ConfigRpcCompletion;
 
@@ -174,6 +178,9 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         accel_calibration: Option<AccelLevelCalibration> = None,
         accel_calibration_seq: u32 = 0,
         accel_calibration_deadline_ms: u64 = 0,
+        // The link to the coordinator, which passes a reboot to the safety
+        // master once the store is settled.
+        storage_request_link: LinkProducer<'static, Request>,
     ],
     shared = [
         tuning_profile: dt::TuningProfile,
@@ -182,7 +189,6 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
     ],
     config = [
         wake_usb: fn(),
-        reboot: fn(RebootTarget) -> !,
         default_stored_config: flash_task::StoredConfig,
         default_serial_bindings: SerialBindings,
         serial_routes: &'static [SerialRoute],
@@ -219,6 +225,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let accel_calibration = cx.local.accel_calibration;
     let accel_calibration_seq = cx.local.accel_calibration_seq;
     let accel_calibration_deadline_ms = cx.local.accel_calibration_deadline_ms;
+    let storage_request_link = cx.local.storage_request_link;
     #[cfg(not(feature = "mspv2_configurator"))]
     let _ = (
         flash_rpc_command_consumer,
@@ -610,21 +617,45 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 },
                             );
                             // Let the USB task send the answer before the
-                            // port goes away.
+                            // port goes away, then ask the safety master,
+                            // through the coordinator, to restart. An
+                            // accepted reboot does not come back.
                             Mono::delay(REBOOT_ANSWER_MS.millis()).await;
-                            if flash_safety_arm_reader.read() {
-                                queue_storage_response(
-                                    flash_responses,
-                                    "ERR reboot cancelled; system armed\r\n",
-                                );
+                            let target = if rom_bootloader {
+                                RebootTarget::RomBootloader
                             } else {
-                                warn!("Rebooting on request, ROM bootloader: {}", rom_bootloader);
-                                (CONFIG::REBOOT)(if rom_bootloader {
-                                    RebootTarget::RomBootloader
-                                } else {
-                                    RebootTarget::Firmware
-                                });
+                                RebootTarget::Firmware
+                            };
+                            storage_request_link.push(
+                                TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+                                Request::Reboot(target),
+                            );
+                            let request_seq = storage_request_link.sequence();
+                            let mut outcome = None;
+                            for _ in 0..REBOOT_DECISION_MS {
+                                let result = cx
+                                    .shared
+                                    .ledger
+                                    .lock(|ledger| ledger.result(Requester::Storage));
+                                if result.seq != 0 && result.value.request_seq == request_seq {
+                                    outcome = Some(result.value.outcome);
+                                    break;
+                                }
+                                Mono::delay(1u64.millis()).await;
                             }
+                            queue_storage_response(
+                                flash_responses,
+                                match outcome {
+                                    Some(Outcome::Refused(Refusal::Armed)) => {
+                                        "ERR reboot cancelled; system armed\r\n"
+                                    }
+                                    Some(Outcome::Refused(Refusal::ArmingInProgress)) => {
+                                        "ERR reboot cancelled; arming in progress\r\n"
+                                    }
+                                    Some(_) => "ERR reboot refused\r\n",
+                                    None => "ERR reboot no answer\r\n",
+                                },
+                            );
                         }
                     }
                 }
