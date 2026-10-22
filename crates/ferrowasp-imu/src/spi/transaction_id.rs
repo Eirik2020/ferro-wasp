@@ -1,3 +1,6 @@
+//! Requirements: IMU-004
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TransactionId(pub u32);
 

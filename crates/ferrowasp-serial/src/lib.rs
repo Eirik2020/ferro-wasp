@@ -3,6 +3,8 @@
 //! writer between a port's DMA and its consumer. A port's function is chosen
 //! at boot, and the same transport may carry RC, so it is safety-critical for
 //! every port.
+//!
+//! Safety-critical.
 
 #![no_std]
 #![forbid(unsafe_code)]

@@ -1,6 +1,8 @@
 //! The IMU group, safety-critical (ADR-0060): the SPI request mailbox and
 //! async device the IMU task reads its sensor through. The IMU trait and the
 //! group's task join it as the redesign proceeds.
+//!
+//! Safety-critical.
 
 #![forbid(unsafe_code)]
 #![no_std]

@@ -1,5 +1,8 @@
 //! Which receiver channel carries each stick and the arm switch: Command
 //! Input's mapping from a receiver frame to the pilot's controls.
+//!
+//! Requirements: INPUT-006, INPUT-007, INPUT-013
+//! Safety-critical.
 
 /// Lowest one-based channel the arm switch may use: channels 1-4 are sticks.
 pub const RC_ARM_CHANNEL_MIN: u8 = 5;

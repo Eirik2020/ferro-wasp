@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: FEEDBACK-001
     title: BLHeli telemetry decodes only valid frames
@@ -11,10 +11,7 @@ requirements:
       Telemetry eRPM qualifies arming (ARM-001); a corrupt or misaligned
       frame must never read as a motor that is spinning.
     derived_from: [ARM-001]
-    allocated_to:
-      - ferrowasp_blheli_telemetry
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -54,10 +51,7 @@ requirements:
       the wrong output could qualify a motor that is not spinning
       (ARM-001).
     derived_from: [ARM-001]
-    allocated_to:
-      - ferrowasp_feedback::esc_manager
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

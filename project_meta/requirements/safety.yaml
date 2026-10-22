@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: SAFETY-001
     title: A motor command reaches the actuators only fresh and in range
@@ -17,31 +17,7 @@ requirements:
       (ADR-0015, W1); a stale or out-of-range command must never reach a
       motor (W2).
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_safety::MotorCmd
-      - ferrowasp_safety::MotorCmdReadError
-      - ferrowasp_safety::MotorOutputValidationError
-      - ferrowasp_safety::validate_active_motor_outputs
-      - ferrowasp_safety::validate_active_motor_outputs_with_idle
-      - ferrowasp_safety::MOTOR_CMD_QUEUE_CAP
-      - ferrowasp_safety::MOTOR_CMD_MAX_AGE_MS
-      - ferrowasp_safety::ActuatorCmd
-      - ferrowasp_safety::ZERO_THROTTLE
-      - ferrowasp_safety::ARM_IDLE_THROTTLE
-      - ferrowasp_safety::ESC_LOW_THROTTLE
-      - ferrowasp_safety::ESC_IDLE_THROTTLE
-      - ferrowasp_safety::ESC_ARM_THROTTLE
-      - ferrowasp_safety::ESC_MAX_THROTTLE
-      - ferrowasp_safety::BLHELI_ARM_LOW_HOLD_MS
-      - ferrowasp_safety::BLHELI_ARM_IDLE_HOLD_MS
-      - ferrowasp_safety::ESC_LOW_HOLD_MS
-      - ferrowasp_safety::ESC_IDLE_HOLD_MS
-      - ferrowasp_safety::PWM_CAL_MAX_HOLD_MS
-      - ferrowasp_safety::PWM_CAL_LOW_HOLD_MS
-      - ferrowasp_safety::PWM_CAL_MOTOR
-      - ferrowasp_safety::actuator
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -113,15 +89,7 @@ requirements:
       lease (W1); nothing from the bench may act on a craft that can
       fly.
     derived_from: [W1]
-    allocated_to:
-      - ferrowasp_safety::BenchMotorRequest
-      - ferrowasp_safety::BenchMotorRefusal
-      - ferrowasp_safety::validate_bench_motor_request
-      - ferrowasp_safety::BENCH_MOTOR_LEASE_MS
-      - ferrowasp_safety::BENCH_ARMING_BLOCK_MS
-      - ferrowasp_safety::bench_blocks_arming
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -150,13 +118,7 @@ requirements:
       Arming on a stale or uncalibrated IMU flies on a guessed state
       (W2).
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_safety::PreArmHealth
-      - ferrowasp_safety::validate_prearm_health
-      - ferrowasp_safety::IMU_STALE_TICKS_TOLERATED
-      - ferrowasp_safety::imu_stale_beyond_tolerance
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -179,11 +141,7 @@ requirements:
       One writer per flag is enforced by the type system (ADR-0055), so
       two tasks can never both decide armed.
     derived_from: [W1]
-    allocated_to:
-      - ferrowasp_safety::signals
-      - ferrowasp_safety::RcRates
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -206,11 +164,7 @@ requirements:
       running, so a flag it wrote could read as healthy after it stopped
       (section 9); a status that stops arriving must read as none.
     derived_from: [SAFETY-003]
-    allocated_to:
-      - ferrowasp_safety::prearm
-      - ferrowasp_safety::ArmingAbortReason::ControlStatusStale
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

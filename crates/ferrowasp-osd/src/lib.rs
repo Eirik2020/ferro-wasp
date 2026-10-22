@@ -1,6 +1,8 @@
 //! The MSP OSD, non-critical (ADR-0060): what the DJI goggles show, encoded
 //! from the observer's ledger. It reads the craft's state and never writes
 //! it, and says so when what it shows has stopped updating (section 19).
+//!
+//! Requirements: OSD-001
 
 #![forbid(unsafe_code)]
 #![no_std]

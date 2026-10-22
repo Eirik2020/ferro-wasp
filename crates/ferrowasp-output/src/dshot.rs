@@ -1,3 +1,6 @@
+//! Requirements: OUTPUT-001, OUTPUT-002
+//! Safety-critical.
+
 pub const DSHOT_BITS: usize = 16;
 pub const RESET_SLOTS: usize = 6;
 pub const FRAME_SLOTS: usize = DSHOT_BITS + RESET_SLOTS;

@@ -11,6 +11,9 @@
 //! settings and the function are chosen at boot, from `ResolvedBindings`.
 //! Nothing here depends on a chip family: each family's backend starts its
 //! ports and hands back the pieces defined here.
+//!
+//! Requirements: HW-UART-001
+//! Safety-critical.
 
 use crate::app_storage::UartRxStorageResources;
 use crate::memory::{

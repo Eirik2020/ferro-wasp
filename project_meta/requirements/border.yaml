@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: BORDER-001
     title: The observer publishes every link and streams every control tick
@@ -21,10 +21,7 @@ requirements:
       readers can only copy topics out: only the observer module
       publishes.
     derived_from: [W2, W4]
-    allocated_to:
-      - ferrowasp_border::observer
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -85,10 +82,7 @@ requirements:
       (section 9); a change here changes its producer, so the set stays
       what readers use (ADR-0056).
     derived_from: [W4]
-    allocated_to:
-      - ferrowasp_boundary_contracts::messages
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -115,10 +109,7 @@ requirements:
       advancing (section 19, ADR-0061). The reader's clock is used so the
       check never compares two tasks' timestamps.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_boundary_contracts::topics
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -155,10 +146,7 @@ requirements:
       the level. Kept beside the coordinator so the control loop reads them
       from a safety-critical crate.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_border::inbound
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -177,8 +165,5 @@ requirements:
       (section 10); a run longer than that, or a priority above the core,
       would break both. Its evidence is on the board, not yet recorded.
     derived_from: [BORDER-001]
-    allocated_to:
-      - ferrowasp_border::tasks
     verification:
-      mode: direct
       entries: []

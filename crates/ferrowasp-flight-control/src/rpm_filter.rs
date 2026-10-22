@@ -10,6 +10,9 @@
 //! The caller feeds each motor's last valid eRPM, held without an age limit
 //! when replies stop (ADR-0047): stale eRPM moves the notches, never motor
 //! output.
+//!
+//! Requirements: CTRL-012
+//! Safety-critical.
 
 use core::f32::consts::PI;
 

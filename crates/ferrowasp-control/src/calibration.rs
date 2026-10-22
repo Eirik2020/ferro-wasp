@@ -1,3 +1,6 @@
+//! Requirements: CTRL-009
+//! Safety-critical.
+
 pub mod accel_level;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

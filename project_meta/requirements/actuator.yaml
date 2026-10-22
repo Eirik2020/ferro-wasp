@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: MOTOR-001
     title: Motor identity is Betaflight Quad X
@@ -9,11 +9,7 @@ requirements:
     rationale: >-
       A wrong motor order flips the craft on takeoff.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_flight_control::actuator::MotorOutputMap
-      - ferrowasp_board_foxeer_f405_v2::profiles::LOGICAL_TO_PHYSICAL_MOTOR_OUTPUT
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -50,10 +46,7 @@ requirements:
       is not a permutation drives one motor twice and another not at all
       (W6).
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_flight_control::actuator
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

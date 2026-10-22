@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: LOG-001
     title: A flight's log is complete and verifiable
@@ -10,11 +10,7 @@ requirements:
       The blackbox is the evidence for every flight claim; an incomplete
       log proves nothing.
     derived_from: [W7]
-    allocated_to:
-      - ferrowasp_blackbox::log_writer
-      - ferrowasp_blackbox::records
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

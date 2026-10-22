@@ -20,6 +20,9 @@
 //! against a 1.67 us bit. Every lane writes 32-bit compare words: TIM2 and
 //! TIM5 have 32-bit compare registers, and TIM3 and TIM4 ignore the upper
 //! half.
+//!
+//! Requirements: HW-DSHOT-001
+//! Safety-critical.
 
 use core::marker::PhantomData;
 

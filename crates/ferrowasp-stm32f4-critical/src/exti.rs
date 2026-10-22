@@ -1,4 +1,7 @@
 //! Reusable STM32F4 external-interrupt input initialization.
+//!
+//! Requirements: HW-SPI-001
+//! Safety-critical.
 
 use ferrowasp_stm32_critical::exti::InterruptInput;
 use stm32f4xx_hal::{

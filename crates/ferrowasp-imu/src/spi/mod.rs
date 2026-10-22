@@ -1,3 +1,6 @@
+//! Requirements: IMU-004
+//! Safety-critical.
+
 mod async_device;
 mod fault;
 mod job;

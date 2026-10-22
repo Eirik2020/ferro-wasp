@@ -1,3 +1,6 @@
+//! Requirements: CTRL-006
+//! Safety-critical.
+
 use core::f32::consts::PI;
 
 /// The one-pole smoothing factor that places the corner at `corner_hz` when

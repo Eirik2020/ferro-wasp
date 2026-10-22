@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: IMU-001
     title: The MPU-6000 driver configures, verifies and decodes the sensor
@@ -15,10 +15,7 @@ requirements:
       loop wrong rates; the driver is proven once and stays proven on
       every board while unchanged (requirements design section 12).
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_mpu6000
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -84,10 +81,7 @@ requirements:
       A sensor misread feeds the rate loop wrong rates, and a repeated
       sample counted as fresh hides a stalled IMU.
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_mpu6500
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -146,10 +140,7 @@ requirements:
       loop wrong rates; a chip select left asserted after a failure
       blocks the bus.
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_icm42688p
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -220,10 +211,7 @@ requirements:
       new one, would feed the loop a sample from another time
       (ADR-0010).
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_imu::spi
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

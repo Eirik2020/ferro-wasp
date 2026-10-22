@@ -3,6 +3,9 @@
 //! the transmit lifecycle. Each family's backend supplies the DMA transfer
 //! behind the two small traits here, so a board on either family runs the
 //! same receive and transmit policy.
+//!
+//! Requirements: HW-UART-001
+//! Safety-critical.
 
 use crate::serial::irq_plan::{RxIrqAction, RxIrqFlags, RxIrqPlanner};
 use crate::serial::rx_state::{DetachedRxBuffer, RxDetachCause};

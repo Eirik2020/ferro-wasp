@@ -3,6 +3,9 @@
 //! The mechanism is `ferrowasp_stm32_critical::system_reset`. Unsafe code here does
 //! three things: places the request word in RAM startup leaves alone, reads
 //! the reset flags before the HAL owns RCC, and jumps to system memory.
+//!
+//! Requirements: REBOOT-002, REBOOT-003
+//! Safety-critical.
 
 use core::mem::MaybeUninit;
 

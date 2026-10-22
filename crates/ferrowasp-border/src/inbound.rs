@@ -3,6 +3,9 @@
 //! typed requests (ADR-0056, section 11, ADR-0065): the host-connected flags
 //! the arming guard reads, and the stored accelerometer level the control
 //! loop subtracts.
+//!
+//! Requirements: BORDER-004
+//! Safety-critical.
 
 use core::sync::atomic::{AtomicBool, AtomicI16, Ordering};
 

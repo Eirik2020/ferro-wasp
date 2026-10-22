@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: OUTPUT-001
     title: DShot frames carry the commanded value at DShot600 timing
@@ -16,10 +16,7 @@ requirements:
       configuration (W6), and a wrong checksum, lane or throttle bound
       reaches a motor directly.
     derived_from: [W1, W6]
-    allocated_to:
-      - ferrowasp_output::dshot
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -100,11 +97,7 @@ requirements:
       source stopped (W1, W2); a special command mistaken for throttle
       spins a motor.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_output::dshot::command_lease_expired
-      - ferrowasp_output::dshot::DshotCommandSequence
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -154,10 +147,7 @@ requirements:
       input (ADR-0045, ADR-0048); a corrupt reply read as a spinning
       motor would qualify a motor that is not running.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_output::dshot_reply
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

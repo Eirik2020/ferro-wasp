@@ -5,6 +5,9 @@
 //! each timer type it can drive, and `LaneDma` for its DMA lanes. Lanes find
 //! their timer in the set by type, so a board names a lane once, as a timer,
 //! a channel, and a stream, and the backend derives everything else.
+//!
+//! Requirements: HW-DSHOT-001
+//! Safety-critical.
 
 use core::any::Any;
 use core::marker::PhantomData;

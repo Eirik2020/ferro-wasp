@@ -1,3 +1,6 @@
+//! Requirements: HW-ROUTE-001
+//! Safety-critical.
+
 /// Frequency used by the firmware's microsecond-resolution blocking delay timer.
 pub const DELAY_TIMER_HZ: u32 = 1_000_000;
 

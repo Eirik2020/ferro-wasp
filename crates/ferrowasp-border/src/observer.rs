@@ -7,6 +7,9 @@
 //! The ledger is a shared resource the observer and its readers lock, all
 //! below the core. Its readers can only copy a topic out; only this module
 //! publishes.
+//!
+//! Requirements: BORDER-001
+//! Safety-critical.
 
 use ferrowasp_boundary_contracts::messages::{
     BatteryStatus, ControlTick, DrdyStatus, EscStatus, ImuStatus, OutputStatus, RcStatus,

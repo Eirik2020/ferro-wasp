@@ -2,6 +2,8 @@
 //! estimator and the calibrations, reusable outside FerroWasp and proven by
 //! unit tests. How FerroWasp flies with them lives in the flight-controller
 //! crates (ADR-0060).
+//!
+//! Safety-critical.
 
 #![no_std]
 #![forbid(unsafe_code)]

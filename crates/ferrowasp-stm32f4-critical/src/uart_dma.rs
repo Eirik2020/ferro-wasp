@@ -1,3 +1,6 @@
+//! Requirements: HW-UART-001
+//! Safety-critical.
+
 use ferrowasp_serial::{
     LogicalSerialPort, ResolvedBindings, SerialFunctionSlots, SerialProtocol as Mode,
 };

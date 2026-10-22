@@ -1,3 +1,6 @@
+//! Requirements: HW-UART-001
+//! Safety-critical.
+
 use crate::{spi_common as spi_dma, uart_common as uart_dma};
 
 pub const UART_RX_BUFFER_COUNT: usize = 4;

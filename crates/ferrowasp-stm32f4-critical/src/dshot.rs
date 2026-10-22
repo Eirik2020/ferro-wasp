@@ -49,6 +49,9 @@
 //! reads a port's pin levels, so it needs no ownership of the port. DMA
 //! buffer ownership, stream fencing, and buffer exchange remain delegated to
 //! `stm32f4xx-hal::dma::Transfer`.
+//!
+//! Requirements: HW-DSHOT-001
+//! Safety-critical.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

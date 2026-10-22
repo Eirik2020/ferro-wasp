@@ -1,3 +1,6 @@
+//! Requirements: HW-SPI-001
+//! Safety-critical.
+
 use ferrowasp_serial::{
     DiscontinuityReader, SerialProtocol, SerialReader, SerialRxChannel, SerialRxProducer,
     SerialTxChannel, SerialTxCompletion, SerialTxOwner, SerialWriter,

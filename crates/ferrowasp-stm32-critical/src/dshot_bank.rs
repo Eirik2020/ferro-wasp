@@ -15,6 +15,9 @@
 //! missing or bad reply is counted, never a fault; a lane that cannot turn
 //! around, or a stream that never completes, faults the bank as a transmit
 //! fault does.
+//!
+//! Requirements: HW-DSHOT-001
+//! Safety-critical.
 
 use ferrowasp_output::dshot::{
     DshotPacket, DshotTiming, command_lease_expired, four_motor_bidirectional_packets,

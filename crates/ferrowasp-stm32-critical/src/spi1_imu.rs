@@ -1,5 +1,8 @@
 //! The IMU kinds a board may carry on SPI1, as plain data: a board's data
 //! crate names them, and the shared SPI1 tasks identify and read them.
+//!
+//! Requirements: HW-SPI-001
+//! Safety-critical.
 
 /// The IMU detected on SPI1, identified by its WHO_AM_I byte. Which of these
 /// a board may carry is the board's; how each is identified and read is not.

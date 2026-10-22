@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: SERIAL-001
     title: Port bindings resolve once, and a conflict drops the binding
@@ -14,10 +14,7 @@ requirements:
       twice or to a port that cannot carry it must fail visibly, never
       leave RC on a guessed port.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_serial::binding
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -72,11 +69,7 @@ requirements:
       Line settings are a public wire format (W6); wrong settings read
       as garbage, which the parsers must then reject.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_serial::profile
-      - ferrowasp_serial::routing
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -107,10 +100,7 @@ requirements:
       A consumer that cannot see lost bytes joins halves of two frames
       into one valid-looking frame (ADR-0011).
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_serial::reader
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -170,10 +160,7 @@ requirements:
       The OSD and telemetry share a transport that may also carry RC; an
       unbounded or stuck writer must not hold that port.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_serial::writer
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

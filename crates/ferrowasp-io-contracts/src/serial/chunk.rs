@@ -1,3 +1,6 @@
+//! Requirements: IO-001
+//! Safety-critical.
+
 use super::StreamGeneration;
 use crate::time::TimestampMicros;
 

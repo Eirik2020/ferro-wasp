@@ -1,3 +1,6 @@
+//! Requirements: SERIAL-003
+//! Safety-critical.
+
 use core::{
     cell::RefCell,
     future::poll_fn,

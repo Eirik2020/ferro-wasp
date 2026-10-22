@@ -1,3 +1,6 @@
+//! Requirements: HW-ROUTE-001
+//! Safety-critical.
+
 pub use hal::{
     adc::{
         Adc, Temperature,

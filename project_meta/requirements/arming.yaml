@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: ARM-001
     title: Arming waits for qualified idle on every motor
@@ -12,18 +12,7 @@ requirements:
       A motor that does not spin up as expected must be found on the
       ground, before authority is handed to the control loop.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_safety::validate_arming_guard
-      - ferrowasp_feedback::esc_manager::EscIdleQualification
-      - ferrowasp_safety::SafetyEvent
-      - ferrowasp_safety::ArmingState
-      - ferrowasp_safety::ArmingAbortReason
-      - ferrowasp_safety::ARMING_MAX_THROTTLE
-      - ferrowasp_safety::arming
-      - ferrowasp_safety::ArmingGuard
-      - ferrowasp_safety::tasks
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -79,11 +68,7 @@ requirements:
     rationale: >-
       Disarm is the pilot's last command; it must end all motor output.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_stm32_app::actuator_output
-      - ferrowasp_safety::tasks::safety_master
     verification:
-      mode: direct
       entries:
         - level: bench
           target: fcu

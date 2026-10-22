@@ -1,3 +1,6 @@
+//! Requirements: CTRL-001, CTRL-002, CTRL-003, CTRL-008, CTRL-010, INPUT-009
+//! Safety-critical.
+
 #![allow(dead_code)]
 pub use ferrowasp_control::attitude::{
     GyroAngleIntegrator, IMU_COMPLEMENTARY_GYRO_WEIGHT, accel_roll_pitch_degrees,

@@ -1,3 +1,6 @@
+//! Requirements: HW-UART-001
+//! Safety-critical.
+
 use ferrowasp_serial::StreamGeneration;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

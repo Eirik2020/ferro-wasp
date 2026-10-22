@@ -1,5 +1,8 @@
 //! embedded-hal 1.0 views of the H7 HAL's embedded-hal 0.2 types, for the
 //! drivers and the SPI owner, which take 1.0 traits.
+//!
+//! Requirements: HW-SPI-001
+//! Safety-critical.
 
 use core::convert::Infallible;
 use embedded_hal::{delay::DelayNs, digital, spi};

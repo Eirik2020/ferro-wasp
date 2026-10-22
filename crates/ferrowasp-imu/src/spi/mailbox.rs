@@ -1,3 +1,6 @@
+//! Requirements: IMU-004
+//! Safety-critical.
+
 use core::task::{Context, Poll, Waker};
 
 use super::{

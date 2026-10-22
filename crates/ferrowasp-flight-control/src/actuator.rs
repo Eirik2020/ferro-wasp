@@ -1,3 +1,6 @@
+//! Requirements: MOTOR-001, MOTOR-002
+//! Safety-critical.
+
 pub const PPM_FREQ: u32 = 600;
 
 pub fn throttle_to_u16(value: f32) -> u16 {

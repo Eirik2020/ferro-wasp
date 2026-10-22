@@ -3,6 +3,9 @@
 //! only while it is younger than the age limit: nothing else yet tells the
 //! check that the control loop is still running, so a status that stops
 //! arriving reads as no status at all.
+//!
+//! Requirements: SAFETY-005
+//! Safety-critical.
 
 use crate::{ArmingAbortReason, PreArmHealth};
 use ferrowasp_io_contracts::link::{LinkConsumer, Stamped};

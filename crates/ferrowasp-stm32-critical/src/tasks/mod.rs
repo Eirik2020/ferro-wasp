@@ -2,6 +2,8 @@
 //! ADR-0065), target-only: the SPI1 IMU group and the UART ports'
 //! transports. They live here because this crate depends on the IMU and
 //! serial crates whose logic they serve.
+//!
+//! Safety-critical.
 
 pub mod spi1;
 pub mod uart_port;

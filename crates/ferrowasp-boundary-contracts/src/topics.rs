@@ -5,6 +5,9 @@
 //! its producer's sequence and timestamp. A topic the observer derives has
 //! its own type here, so a new derived value changes only the observer and
 //! its readers, never a producer.
+//!
+//! Requirements: BORDER-003
+//! Safety-critical.
 
 use ferrowasp_io_contracts::link::Stamped;
 use ferrowasp_io_contracts::time::{Deadline, TimestampMicros};

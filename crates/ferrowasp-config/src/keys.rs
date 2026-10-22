@@ -1,4 +1,7 @@
 //! Firmware-owned public configuration key metadata shared with host tools.
+//!
+//! Requirements: CONFIG-001
+//! Safety-critical.
 
 use core::{fmt, str::FromStr};
 

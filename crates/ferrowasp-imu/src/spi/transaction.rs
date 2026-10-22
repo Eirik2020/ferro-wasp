@@ -1,3 +1,6 @@
+//! Requirements: IMU-004
+//! Safety-critical.
+
 use super::{SpiDeadlineUs, SpiFault, TransactionId};
 use crate::time::{Deadline, TimestampMicros};
 

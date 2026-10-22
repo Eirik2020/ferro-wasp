@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: INPUT-001
     title: Command Input fails closed
@@ -12,12 +12,7 @@ requirements:
       prevent.
     derived_from: [W1, W2]
     verification:
-      mode: via_children
-      reason: >-
-        The children cover every way the link can fail (staleness,
-        receiver-flagged loss, corrupt or interrupted input, a changed channel
-        map) and every way RC input acts (neutral outputs, stick scaling, arm
-        qualification, disarm on loss).
+      entries: []
 
   - id: INPUT-002
     title: Stale RC input invalidates the link
@@ -27,14 +22,7 @@ requirements:
       after RC_LINK_RECOVERY_FRAMES (3) consecutive healthy frames.
     rationale: Stale input must never be acted on as a live command.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_safety::RcLinkState
-      - ferrowasp_safety::RcLinkInvalidation
-      - ferrowasp_safety::RcLinkStatus
-      - ferrowasp_safety::RC_LINK_TIMEOUT_US
-      - ferrowasp_safety::RC_LINK_RECOVERY_FRAMES
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -57,11 +45,7 @@ requirements:
       The receiver knows before the flight controller does that the radio link
       has gone.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_safety::classify_rc_frame_flags
-      - ferrowasp_input::rc_receiver::RcReceiver
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -85,10 +69,7 @@ requirements:
       sbus-rs is not verified in-house (trust: external), so the boundary
       where its output enters FerroWasp is where it is proven.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_input::rc_receiver::RcReceiver::sbus
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -131,11 +112,7 @@ requirements:
       Corruption must invalidate the link (INPUT-006), and a single bad frame
       must not leave the parser stuck.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_crsf
-      - ferrowasp_input::rc_receiver::RcReceiver::push_byte
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -176,15 +153,7 @@ requirements:
       reaching the control loop. They live in host-tested functions; the
       rc_input task body only wires them, as AGENTS.md requires.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_safety::rc_fault_response
-      - ferrowasp_safety::neutralize_rc_outputs
-      - ferrowasp_input::channel_map::RcChannelMap::replaced
-      - ferrowasp_stm32_app::rc_input
-      - ferrowasp_safety::RcInputFault
-      - ferrowasp_safety::RcFaultResponse
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -217,11 +186,7 @@ requirements:
       A new map may read the arm switch from a channel that is already high,
       which would otherwise look like the pilot arming.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_safety::RcLinkState
-      - ferrowasp_input::channel_map::RcChannelMap
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -244,13 +209,7 @@ requirements:
       request.
     rationale: A glitch or a switch already high at connect must never arm.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_safety::ArmQualifier
-      - ferrowasp_safety::RcLinkState
-      - ferrowasp_safety::ARM_THRESHOLD
-      - ferrowasp_safety::ARM_HOLD_US
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -282,11 +241,7 @@ requirements:
     rationale: >-
       A receiver or parser fault must not command more than full stick.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_flight_control::drone_toolbox::remap_rc_channels_with_profile
-      - ferrowasp_flight_control::drone_toolbox::remap_rc_throttle_channel
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -320,11 +275,7 @@ requirements:
       sit in the control_loop and safety_master task bodies, so only the bench
       procedure covers them today.
     derived_from: [INPUT-001, W2]
-    allocated_to:
-      - ferrowasp_flight_control::tasks::control_loop
-      - ferrowasp_safety::tasks::safety_master
     verification:
-      mode: direct
       entries:
         - level: bench
           target: fcu
@@ -345,10 +296,7 @@ requirements:
       receivers; a channel unpacked at the wrong bit offset commands the
       wrong stick.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_crsf
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -399,10 +347,7 @@ requirements:
       protocol the board wired; a conversion or protocol difference that
       leaked through would command the wrong stick.
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_input::rc_receiver
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -432,10 +377,7 @@ requirements:
       A wrong channel puts a stick on the wrong axis or the arm switch
       on a stick; RC mapping is controlled configuration (W6).
     derived_from: [INPUT-001]
-    allocated_to:
-      - ferrowasp_input::channel_map
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

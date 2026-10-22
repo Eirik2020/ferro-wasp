@@ -1,3 +1,6 @@
+//! Requirements: HW-UART-001
+//! Safety-critical.
+
 pub mod irq_plan;
 pub mod rx_state;
 pub mod tx_state;

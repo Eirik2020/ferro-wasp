@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: REBOOT-001
     title: A reboot is refused while armed or with a flight log open
@@ -10,10 +10,7 @@ requirements:
       The configurator has no authority over a flying craft, and an open
       flight log is evidence that must not be cut off.
     derived_from: [W1, W7]
-    allocated_to:
-      - ferrowasp_cli::tasks::flash::flash_manager_task
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu
@@ -31,12 +28,7 @@ requirements:
       An unexpected jump to the bootloader would end the flight
       firmware.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_stm32_critical::system_reset
-      - ferrowasp_stm32f4_critical::system_bootloader
-      - ferrowasp_stm32h7_critical::system_bootloader
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -60,10 +52,7 @@ requirements:
       Flashing must never cost the pilot their configuration or leave a
       half-written image.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_stm32f4_critical::system_bootloader
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu

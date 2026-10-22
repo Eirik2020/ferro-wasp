@@ -1,3 +1,6 @@
+//! Requirements: HW-ROUTE-001
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DmaDirection {
     PeripheralToMemory,

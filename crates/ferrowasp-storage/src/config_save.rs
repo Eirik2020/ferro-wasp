@@ -9,6 +9,8 @@
 //!
 //! Each step runs one flash operation, so the storage owner interleaves its
 //! other work and can stop a save between steps.
+//!
+//! Requirements: CONFIG-002
 
 use crate::nor_storage::NorStorage;
 use ferrowasp_config::page::{FLASH_PAGE_LEN, decode_config_page, encode_config_page};

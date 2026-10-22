@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: OSD-001
     title: The OSD says when what it shows has stopped updating
@@ -15,11 +15,7 @@ requirements:
       also shows a battery reading that stopped, such as the ADC's after a
       DMA error.
     derived_from: [BORDER-003]
-    allocated_to:
-      - ferrowasp_osd::StallWatch
-      - ferrowasp_osd::OsdTask
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

@@ -1,6 +1,9 @@
 //! The envelope every message carries and the queue every link is
 //! (ADR-0055): a producer that never blocks, and a consumer that reads in
 //! order or takes the newest.
+//!
+//! Requirements: IO-003
+//! Safety-critical.
 
 use heapless::spsc::{Consumer, Producer, Queue};
 

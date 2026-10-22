@@ -1,3 +1,6 @@
+//! Requirements: IMU-002
+//! Safety-critical.
+
 #![no_std]
 #![forbid(unsafe_code)]
 #![allow(dead_code)]

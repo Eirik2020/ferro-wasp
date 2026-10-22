@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: CTRL-001
     title: Sticks command the configured positive directions
@@ -10,10 +10,7 @@ requirements:
       A reversed stick is a crash; command signs are controlled
       configuration.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_flight_control::drone_toolbox::remap_rc_channels_with_profile
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -42,11 +39,7 @@ requirements:
       A sign hidden anywhere between the IMU and the mixer turns
       stabilization into a runaway.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_flight_control::drone_toolbox::FlightController
-      - ferrowasp_board_foxeer_f405_v2::profiles
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -94,10 +87,7 @@ requirements:
       Props-off checks cannot show flight readiness; only flight
       evidence can.
     derived_from: [W6, W7]
-    allocated_to:
-      - ferrowasp_flight_control::drone_toolbox::FlightController
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -124,10 +114,7 @@ requirements:
       integral windup and derivative kick are classic sources of a flip
       after a saturation or a stick step.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_control::pid
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -207,10 +194,7 @@ requirements:
       hidden in a rotation turns stabilization into a runaway
       (ADR-0025).
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_control::frames
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -259,10 +243,7 @@ requirements:
       filter that lets a non-finite coefficient through corrupts every
       later sample.
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_control::filter
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -307,10 +288,7 @@ requirements:
       The estimate drives the OSD horizon and the blackbox now and the
       stabilized mode next (requirements design section 15).
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_control::attitude
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -334,11 +312,7 @@ requirements:
       the blackbox; this is the one estimator requirement until angle
       mode is built (requirements design section 15).
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_control::attitude
-      - ferrowasp_flight_control::drone_toolbox::FlightController
     verification:
-      mode: direct
       entries: []
 
   - id: CTRL-009
@@ -353,10 +327,7 @@ requirements:
       A bias learned while moving, or a level learned on a tilt, is a
       guessed state that biases every later rate or attitude (ADR-0044).
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_control::calibration
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -400,10 +371,7 @@ requirements:
       signs, gains, rates and motor order are controlled configuration
       (W6).
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_flight_control::drone_toolbox
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -512,10 +480,7 @@ requirements:
       Dynamic idle changes motor output from motor feedback; stale
       feedback must never push the floor up.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_flight_control::dynamic_idle
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -604,10 +569,7 @@ requirements:
       notch misplaced on a stick frequency would cut the pilot's own
       commands.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_flight_control::rpm_filter
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -694,8 +656,5 @@ requirements:
       rule (SAFETY-003) and pre-arm status (SAFETY-005) together; its
       evidence is on the board, not yet recorded.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_flight_control::tasks
     verification:
-      mode: direct
       entries: []

@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: BUILD-001
     title: Each board's release image builds from locked, released dependencies
@@ -9,10 +9,7 @@ requirements:
     rationale: >-
       A path dependency or patch silently changes the flight image (W3).
     derived_from: [W3]
-    allocated_to:
-      - ferrowasp_app_foxeer_f405_v2
     verification:
-      mode: direct
       entries:
         - level: analysis
           target: host

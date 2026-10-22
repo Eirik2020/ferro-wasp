@@ -1,3 +1,6 @@
+//! Requirements: CTRL-005
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DroneBodyFrame {
     /// Body frame used by flight-control logic:

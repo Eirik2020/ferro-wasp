@@ -1,3 +1,6 @@
+//! Requirements: IMU-004
+//! Safety-critical.
+
 use core::{
     cell::RefCell,
     future::poll_fn,

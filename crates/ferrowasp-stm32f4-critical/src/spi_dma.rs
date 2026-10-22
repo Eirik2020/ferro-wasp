@@ -1,3 +1,6 @@
+//! Requirements: HW-SPI-001
+//! Safety-critical.
+
 pub use ferrowasp_stm32_critical::spi_common::*;
 use stm32f4xx_hal::{
     dma::{

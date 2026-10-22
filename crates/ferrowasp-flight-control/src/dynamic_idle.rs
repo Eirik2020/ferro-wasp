@@ -10,6 +10,9 @@
 //! The output is the floor increase as a fraction of the motor output range.
 //! The mixer adds it to its floor; `actuator_output` still validates every
 //! command (W1).
+//!
+//! Requirements: CTRL-011
+//! Safety-critical.
 
 /// Dynamic idle's settings, in Betaflight's units so a tune carries over.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

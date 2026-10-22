@@ -17,6 +17,9 @@
 //!
 //! The sampling layer follows Betaflight's `drivers/dshot_bitbang_decode.c`,
 //! and the value layer its `drivers/dshot.c`, at commit `41a5b43`.
+//!
+//! Requirements: OUTPUT-003
+//! Safety-critical.
 
 /// Bits in a reply, the start edge included.
 pub const REPLY_BITS: u32 = 21;

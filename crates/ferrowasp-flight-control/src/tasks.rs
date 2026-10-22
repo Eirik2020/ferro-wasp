@@ -3,6 +3,9 @@
 //! timer interrupt. It turns the latest IMU sample and RC rates into motor
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
+//!
+//! Requirements: CTRL-013, INPUT-010
+//! Safety-critical.
 
 // The equal-motor and physical-motor bench images mix nothing.
 #[allow(unused_imports)]

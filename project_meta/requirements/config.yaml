@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: CONFIG-001
     title: An out-of-range value is refused and changes nothing
@@ -10,11 +10,7 @@ requirements:
       Gains, rates and RC settings fly the craft; an invalid one must
       never be stored or applied.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_config::keys
-      - ferrowasp_config::stored::StoredConfig
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -43,11 +39,7 @@ requirements:
       The pilot must be able to trust that what was set is what flies,
       now and after the next power-up.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_storage::config_save
-      - ferrowasp_config::stored::StoredConfig
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -80,10 +72,7 @@ requirements:
       Restoring a known-good tune is the recovery path after any
       experiment.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_config::stored::StoredConfig
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu
@@ -103,10 +92,7 @@ requirements:
       Storage is untrusted input (ADR-0059); a torn slot read as valid
       would fly whatever bytes it held.
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_config::page
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -133,10 +119,7 @@ requirements:
       A firmware update must never move a pilot's arm switch, motor
       order or filter (W6).
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_config::stored
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

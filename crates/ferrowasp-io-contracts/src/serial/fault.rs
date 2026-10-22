@@ -1,3 +1,6 @@
+//! Requirements: IO-001
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SerialFault {
     Disabled,

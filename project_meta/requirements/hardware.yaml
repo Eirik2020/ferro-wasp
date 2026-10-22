@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: HW-UART-001
     title: A UART hands the core every received byte once, and marks every gap
@@ -17,16 +17,7 @@ requirements:
       chip family implements; a chunk joined across a gap or delivered
       twice reads as a valid frame that never arrived.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_stm32_critical::tasks::uart_port
-      - ferrowasp_stm32_critical::uart_common
-      - ferrowasp_stm32_critical::uart_port
-      - ferrowasp_stm32_critical::serial
-      - ferrowasp_stm32_critical::app_storage
-      - ferrowasp_stm32f4_critical::uart_dma
-      - ferrowasp_stm32h7_critical::uart_dma
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -127,20 +118,7 @@ requirements:
       (ADR-0010); a completion credited twice or a silent DMA error
       feeds it a sample that is not current.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_stm32_critical::spi
-      - ferrowasp_stm32_critical::spi_common
-      - ferrowasp_stm32_critical::spi1_imu
-      - ferrowasp_stm32_critical::memory
-      - ferrowasp_stm32f4_critical::spi_dma
-      - ferrowasp_stm32_critical::exti
-      - ferrowasp_stm32_critical::tasks::spi1
-      - ferrowasp_stm32f4_critical::exti
-      - ferrowasp_stm32h7_critical::spi_dma
-      - ferrowasp_stm32h7_critical::eh1
-      - ferrowasp_stm32h7_critical::exti
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -188,15 +166,7 @@ requirements:
       stop the bank, never leave a motor on a guessed command (W2), and
       DShot timing is controlled configuration (W6).
     derived_from: [W1, W2, W6]
-    allocated_to:
-      - ferrowasp_stm32_critical::dshot_bank
-      - ferrowasp_stm32_critical::dshot_lanes
-      - ferrowasp_stm32_critical::timer_dma
-      - ferrowasp_stm32f4_critical::dshot
-      - ferrowasp_stm32h7_critical::dshot
-      - ferrowasp_stm32h7_critical::dma_endpoints
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -361,20 +331,7 @@ requirements:
       no host tests yet, so the boot check is their evidence until the
       conformance suite exists.
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_stm32_critical::timebase
-      - ferrowasp_stm32_critical::timer_tick
-      - ferrowasp_stm32_critical::scheduler
-      - ferrowasp_stm32_critical::watchdog
-      - ferrowasp_stm32f4_critical::clocks
-      - ferrowasp_stm32f4_critical::timebase
-      - ferrowasp_stm32f4_critical::timer_tick
-      - ferrowasp_stm32f4_critical::scheduler
-      - ferrowasp_stm32f4_critical::watchdog
-      - ferrowasp_stm32h7_critical::clocks
-      - ferrowasp_stm32h7_critical::timers
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu
@@ -393,15 +350,7 @@ requirements:
       configuration (W6); a route that does not match its claim drives
       the wrong peripheral.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_stm32_critical::board_routes
-      - ferrowasp_stm32_critical::board_manifest
-      - ferrowasp_stm32_critical::app_config
-      - ferrowasp_stm32f4_critical::board_routes
-      - ferrowasp_stm32f4_critical::hal_prelude
-      - ferrowasp_stm32h7_critical::hal_prelude
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host

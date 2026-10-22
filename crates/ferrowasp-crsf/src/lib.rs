@@ -12,6 +12,9 @@
 //! CRSF has no failsafe flag in the channel frame. An ExpressLRS receiver stops
 //! sending channels when its link drops, so the consumer's frame timeout is the
 //! primary loss detector; link statistics add an explicit zero-quality signal.
+//!
+//! Requirements: INPUT-005, INPUT-011
+//! Safety-critical.
 
 #![no_std]
 #![forbid(unsafe_code)]

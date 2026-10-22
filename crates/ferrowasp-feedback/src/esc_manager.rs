@@ -1,3 +1,6 @@
+//! Requirements: ARM-001, FEEDBACK-002
+//! Safety-critical.
+
 use ferrowasp_blheli_telemetry::{EscTelemetry, ParserStats as WireParserStats, StreamParser};
 use heapless::spsc::{Consumer, Producer, Queue};
 

@@ -4,6 +4,9 @@
 //! 2 kHz accelerometer and gyroscope output, +/-16 g, +/-2000 dps, and
 //! big-endian sensor data. The 14-byte temperature/accelerometer/gyroscope
 //! payload fits the existing 15-byte full-duplex SPI DMA frame.
+//!
+//! Requirements: IMU-003
+//! Safety-critical.
 
 #![no_std]
 #![forbid(unsafe_code)]

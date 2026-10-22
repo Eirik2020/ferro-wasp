@@ -2,6 +2,8 @@
 //! its tuning, stick shaping, the mixer and the motor map it applies, dynamic
 //! idle and the RPM filter's wiring. The general maths it builds on lives in
 //! `ferrowasp-control`; the control loop task joins it later.
+//!
+//! Safety-critical.
 
 #![forbid(unsafe_code)]
 #![no_std]

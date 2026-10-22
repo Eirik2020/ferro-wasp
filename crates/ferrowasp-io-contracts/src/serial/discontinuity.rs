@@ -1,3 +1,6 @@
+//! Requirements: IO-001
+//! Safety-critical.
+
 use crate::time::TimestampMicros;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

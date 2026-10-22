@@ -1,3 +1,5 @@
+//! Requirements: BUILD-001
+
 use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxTransfer};
 use super::manifest::Spi1ImuKind;
 use backend::dshot::channel::{Ch1, Ch3, Ch3N, Ch4};

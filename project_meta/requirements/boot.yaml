@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: BOOT-001
     title: Motor outputs stay stopped through boot and reset
@@ -10,10 +10,7 @@ requirements:
       A boot or reset is the moment no task yet guards the motors;
       nothing may move then.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_stm32_app::actuator_output
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu
@@ -31,11 +28,7 @@ requirements:
       A missing receiver must fail closed and be visible, never leave
       the craft in a guessed state.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_safety::RcLinkState
-      - ferrowasp_cli::tasks::heartbeat::heartbeat
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu

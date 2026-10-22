@@ -1,3 +1,6 @@
+//! Requirements: IMU-004
+//! Safety-critical.
+
 use super::TransactionId;
 use heapless::Vec;
 

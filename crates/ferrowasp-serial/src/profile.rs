@@ -1,3 +1,6 @@
+//! Requirements: SERIAL-002
+//! Safety-critical.
+
 /// A UART by its number on the chip, the name a pilot sees on the board:
 /// USART3 is `Uart3` whichever function it serves. Eight covers the UARTs of
 /// every supported family; the STM32H743 numbers its eighth UART8.

@@ -2,6 +2,8 @@
 //! the storage commands from USB, the configurator link and MSPv2. One task
 //! for every board, over any store with NOR semantics; a board supplies its
 //! store and its defaults.
+//!
+//! Requirements: REBOOT-001
 
 use super::prelude::*;
 use crate::command_link::{CommandLink, CommandSources, ResponseRouter};
