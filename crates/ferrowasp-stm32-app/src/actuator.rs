@@ -73,12 +73,16 @@ where
     }
 }
 
+// Eight arguments: the board's guard, the five readers it checks, the
+// control loop's IMU status, and the time.
+#[allow(clippy::too_many_arguments)]
 pub fn current_live_arming_guard(
     guard: ArmingGuard,
     permit: &signals::ActuatorArmPermitReader,
     rc_link: &signals::RcLinkReader,
     arm_high: &signals::RcArmHighReader,
     throttle: &signals::RcThrottleReader,
+    host: &signals::HostLeaseReader,
     imu: &mut safety::prearm::ImuPreArmReader<'static>,
     now_us: u64,
 ) -> Result<(), safety::ArmingAbortReason> {
@@ -87,12 +91,13 @@ pub fn current_live_arming_guard(
         rc_link.is_armable(now_us),
         arm_high.read(),
         throttle.read(),
+        host.present(now_us / 1_000),
         imu.current(TimestampMicros(now_us)),
     )
 }
 
-// Nine arguments: the seven it had in the app, the board's guard it used to
-// name directly, and the control loop's IMU status.
+// Ten arguments: the seven it had in the app, the board's guard it used to
+// name directly, the host leases and the control loop's IMU status.
 #[allow(clippy::too_many_arguments)]
 pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
     guard: ArmingGuard,
@@ -100,6 +105,7 @@ pub async fn wait_live_arming_hold<Now, Delay, DelayFuture>(
     rc_link: &signals::RcLinkReader,
     arm_high: &signals::RcArmHighReader,
     throttle: &signals::RcThrottleReader,
+    host: &signals::HostLeaseReader,
     imu: &mut safety::prearm::ImuPreArmReader<'static>,
     hold_ms: u32,
     mut now_us: Now,
@@ -113,7 +119,18 @@ where
     ferrowasp_safety::arming::wait_hold(
         hold_ms,
         ARMING_GUARD_POLL_MS,
-        || current_live_arming_guard(guard, permit, rc_link, arm_high, throttle, imu, now_us()),
+        || {
+            current_live_arming_guard(
+                guard,
+                permit,
+                rc_link,
+                arm_high,
+                throttle,
+                host,
+                imu,
+                now_us(),
+            )
+        },
         delay_ms,
     )
     .await
@@ -234,6 +251,7 @@ pub const fn inject_idle_qualification_fault(
         actuator_rc_throttle_reader: signals::RcThrottleReader,
         actuator_rc_link_reader: signals::RcLinkReader,
         actuator_imu_prearm: safety::prearm::ImuPreArmReader<'static>,
+        actuator_host_lease_reader: signals::HostLeaseReader,
         actuator_motor_map_reader: signals::MotorMapReader,
         actuator_arm_done_writer: signals::ActuatorArmDoneWriter,
         motor_cmd_reader: signals::MotorCmdReader,
@@ -286,6 +304,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                 cx.local.actuator_rc_link_reader,
                 cx.local.actuator_rc_arm_high_reader,
                 cx.local.actuator_rc_throttle_reader,
+                cx.local.actuator_host_lease_reader,
                 cx.local.actuator_imu_prearm,
                 Mono::now().duration_since_epoch().to_micros(),
             ) {
@@ -314,6 +333,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                     cx.local.actuator_rc_link_reader,
                     cx.local.actuator_rc_arm_high_reader,
                     cx.local.actuator_rc_throttle_reader,
+                    cx.local.actuator_host_lease_reader,
                     cx.local.actuator_imu_prearm,
                     DSHOT_PREARM_STOP_HOLD_MS,
                     || Mono::now().duration_since_epoch().to_micros(),
@@ -356,6 +376,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
                         cx.local.actuator_rc_link_reader,
                         cx.local.actuator_rc_arm_high_reader,
                         cx.local.actuator_rc_throttle_reader,
+                        cx.local.actuator_host_lease_reader,
                         cx.local.actuator_imu_prearm,
                         Mono::now().duration_since_epoch().to_micros(),
                     ) {

@@ -185,25 +185,7 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
-
-  - id: BORDER-010
-    title: Either host flag counts as a connected computer
-    statement: >-
-      Until the coordinator takes them in, a computer shall count as
-      connected while either the USB host flag or the configurator-link flag
-      is set.
-    rationale: >-
-      The arming guard refuses while a computer is connected, and two
-      non-critical tasks each see one way a computer can be connected (W1).
-    derived_from: [W2]
-    verification:
-      entries:
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
+            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole
 
   - id: BORDER-005
     title: The observer runs every millisecond
@@ -226,5 +208,111 @@ requirements:
       A run that held the ledger longer, or ran above the core, would delay
       the readers and the core it serves (section 10).
     derived_from: [BORDER-001]
+    verification:
+      entries: []
+
+  - id: BORDER-012
+    title: The coordinator takes a bounded number from each requester in turn
+    statement: >-
+      Each coordinator run shall take at most two requests from each
+      requester's own link, serving the requesters in turn.
+    rationale: >-
+      A requester that floods its link must fill only its own queue and
+      never starve another or stall the core (section 11).
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::one_run_takes_a_bounded_number_from_each_requester_in_turn
+
+  - id: BORDER-013
+    title: The coordinator refuses what a requester may not ask
+    statement: >-
+      The coordinator shall refuse, before the safety master sees it, a
+      motor test from any link but USB, a host renewal from the OSD, and a
+      motor outside 1 to 4.
+    rationale: >-
+      A Bluetooth configurator can be paired by anyone in range, so motor
+      tests stay on USB; content checks keep the safety master to deciding
+      (W1).
+    derived_from: [W1]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::content_and_permission_are_refused_before_the_safety_master_sees_them
+
+  - id: BORDER-014
+    title: The safety master's decision returns to its requester
+    statement: >-
+      The coordinator shall publish the safety master's decision on each
+      motor test it forwarded on its requester's result topic, under the
+      request's sequence.
+    rationale: >-
+      The requester must learn whether the motor moves, and from the owner
+      of that decision, not from a guess of its own (W1).
+    derived_from: [W1]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_motor_test_reaches_the_safety_master_and_its_decision_comes_back
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::each_result_lands_on_its_requesters_topic
+
+  - id: BORDER-015
+    title: A request the safety master cannot take waits its turn
+    statement: >-
+      A request the safety master cannot take shall wait, holding its
+      requester's queue, and be offered again on the next run, in order.
+    rationale: >-
+      A request is never lost because the safety master was busy, and a
+      later one never overtakes it.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_request_the_safety_master_cannot_take_waits_and_holds_its_queue
+
+  - id: BORDER-016
+    title: A host renewal names its link and publishes nothing
+    statement: >-
+      The coordinator shall pass a host renewal to the safety master as a
+      renewal of the link it arrived on, publishing no result.
+    rationale: >-
+      The lease belongs to a link, which only the link a request arrived on
+      can say; renewals arrive several times a second and need no answer.
+    derived_from: [W1]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_host_renewal_names_its_link_and_publishes_nothing
+
+  - id: BORDER-017
+    title: The coordinator runs every ten milliseconds below the observer
+    statement: >-
+      The coordinator task shall run the coordinator every 10 ms on absolute
+      deadlines, at the border priority below the observer.
+    rationale: >-
+      Request latency and every requester link's depth assume a 10 ms
+      coordinator; a priority above the core would let requests delay flight
+      work (section 19).
+    derived_from: [BORDER-012]
     verification:
       entries: []

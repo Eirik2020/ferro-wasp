@@ -94,6 +94,74 @@ pub fn imu_channels() -> ImuChannels {
     }
 }
 
+/// Each requester's link to the coordinator holds four requests, two runs'
+/// worth.
+const REQUEST_LINK_DEPTH: usize = 5;
+/// The safety master's replies and the coordinator's results: every
+/// request two requesters can have in flight.
+const RESULT_LINK_DEPTH: usize = 9;
+
+/// The coordinator and the ends of its links (section 11): each
+/// requester's own request link, the safety master's replies, and the
+/// results the observer publishes. The OSD has its link but sends nothing
+/// yet, so its producing end is dropped here.
+pub struct CoordinatorChannels {
+    pub coordinator: ferrowasp_border::coordinator::Coordinator<'static>,
+    pub usb_request_link: LinkProducer<'static, requests::Request>,
+    pub configurator_request_link: LinkProducer<'static, requests::Request>,
+    pub bench_reply_link: LinkProducer<'static, safety::BenchReply>,
+    pub request_results: LinkConsumer<'static, requests::RequesterResult>,
+}
+
+/// Create the coordinator's links. Call once, before the observer's, which
+/// takes `request_results`.
+pub fn coordinator_channels() -> CoordinatorChannels {
+    use ferrowasp_io_contracts::link::link;
+    use heapless::spsc::Queue;
+    use requests::{Request, RequesterResult};
+
+    macro_rules! request_link {
+        () => {
+            link(
+                cortex_m::singleton!(
+                    : Queue<Stamped<Request>, REQUEST_LINK_DEPTH> = Queue::new()
+                )
+                .unwrap(),
+            )
+        };
+    }
+    let (usb_request_link, usb) = request_link!();
+    let (configurator_request_link, configurator_link) = request_link!();
+    let (_, osd) = request_link!();
+    let (bench_reply_link, bench_replies) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<safety::BenchReply>, RESULT_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    let (results, request_results) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<RequesterResult>, RESULT_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    CoordinatorChannels {
+        coordinator: ferrowasp_border::coordinator::Coordinator::new(
+            ferrowasp_border::coordinator::CoordinatorLinks {
+                usb,
+                configurator_link,
+                osd,
+                bench_replies,
+            },
+            results,
+        ),
+        usb_request_link,
+        configurator_request_link,
+        bench_reply_link,
+        request_results,
+    }
+}
+
 /// The observer and the producing end of every link into it (section 10):
 /// each producer's end is a local resource of that task alone. The
 /// blackbox stream's consuming end is the flash manager's.
@@ -115,6 +183,7 @@ pub struct ObserverChannels {
 /// the board sizes to ride out its storage's longest write stall. Call once.
 pub fn observer_channels<const N: usize>(
     stream: &'static mut heapless::spsc::Queue<Stamped<observed::ControlTick>, N>,
+    results: LinkConsumer<'static, requests::RequesterResult>,
 ) -> ObserverChannels {
     use ferrowasp_io_contracts::link::link;
     use heapless::spsc::Queue;
@@ -157,6 +226,7 @@ pub fn observer_channels<const N: usize>(
                 esc,
                 battery,
                 storage,
+                results,
             },
             stream_producer,
         ),

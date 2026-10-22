@@ -15,6 +15,7 @@ use ferrowasp_boundary_contracts::messages::{
     BatteryStatus, ControlTick, DrdyStatus, EscStatus, ImuStatus, OutputStatus, RcStatus,
     SafetyStatus, StorageStatus,
 };
+use ferrowasp_boundary_contracts::requests::{RequestResult, Requester, RequesterResult};
 use ferrowasp_boundary_contracts::topics::{Identity, ObserverStatus};
 use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
 use ferrowasp_io_contracts::time::TimestampMicros;
@@ -34,6 +35,7 @@ pub struct Ledger {
     esc: Stamped<EscStatus>,
     battery: Stamped<BatteryStatus>,
     storage: Stamped<StorageStatus>,
+    results: [Stamped<RequestResult>; Requester::COUNT],
 }
 
 impl Ledger {
@@ -50,6 +52,7 @@ impl Ledger {
             esc: Stamped::default(),
             battery: Stamped::default(),
             storage: Stamped::default(),
+            results: [Stamped::default(); Requester::COUNT],
         }
     }
 
@@ -96,6 +99,11 @@ impl Ledger {
     pub fn storage(&self) -> Stamped<StorageStatus> {
         self.storage
     }
+
+    /// The coordinator's latest result for `requester`'s requests.
+    pub fn result(&self, requester: Requester) -> Stamped<RequestResult> {
+        self.results[requester.index()]
+    }
 }
 
 /// The consuming end of every link into the observer.
@@ -109,6 +117,7 @@ pub struct ObserverLinks<'a> {
     pub esc: LinkConsumer<'a, EscStatus>,
     pub battery: LinkConsumer<'a, BatteryStatus>,
     pub storage: LinkConsumer<'a, StorageStatus>,
+    pub results: LinkConsumer<'a, RequesterResult>,
 }
 
 pub struct Observer<'a> {
@@ -149,6 +158,20 @@ impl<'a> Observer<'a> {
                 self.stream.forward(tick);
             }
             ledger.control = tick;
+        }
+
+        // Each result on its requester's topic: an `event` link, so none
+        // is skipped, though a later one for the same requester replaces
+        // it on the topic.
+        for _ in 0..self.links.results.capacity() {
+            let Some(result) = self.links.results.oldest() else {
+                break;
+            };
+            ledger.results[result.value.requester.index()] = Stamped {
+                seq: result.seq,
+                at: result.at,
+                value: result.value.result,
+            };
         }
 
         let links = &mut self.links;
@@ -211,6 +234,7 @@ mod tests {
         esc: Queue<Stamped<EscStatus>, 4>,
         battery: Queue<Stamped<BatteryStatus>, 4>,
         storage: Queue<Stamped<StorageStatus>, 4>,
+        results: Queue<Stamped<RequesterResult>, 4>,
         stream: Queue<Stamped<ControlTick>, 3>,
     }
 
@@ -226,6 +250,7 @@ mod tests {
                 esc: Queue::new(),
                 battery: Queue::new(),
                 storage: Queue::new(),
+                results: Queue::new(),
                 stream: Queue::new(),
             }
         }
@@ -237,6 +262,7 @@ mod tests {
         rc: LinkProducer<'a, RcStatus>,
         safety: LinkProducer<'a, SafetyStatus>,
         battery: LinkProducer<'a, BatteryStatus>,
+        results: LinkProducer<'a, RequesterResult>,
     }
 
     fn wire(queues: &mut Queues) -> (Producers<'_>, Observer<'_>, LinkConsumer<'_, ControlTick>) {
@@ -249,6 +275,7 @@ mod tests {
         let (_, esc_rx) = link(&mut queues.esc);
         let (battery, battery_rx) = link(&mut queues.battery);
         let (_, storage_rx) = link(&mut queues.storage);
+        let (results, results_rx) = link(&mut queues.results);
         let (stream_tx, stream_rx) = link(&mut queues.stream);
         let observer = Observer::new(
             ObserverLinks {
@@ -261,6 +288,7 @@ mod tests {
                 esc: esc_rx,
                 battery: battery_rx,
                 storage: storage_rx,
+                results: results_rx,
             },
             stream_tx,
         );
@@ -271,6 +299,7 @@ mod tests {
                 rc,
                 safety,
                 battery,
+                results,
             },
             observer,
             stream_rx,
@@ -329,6 +358,42 @@ mod tests {
         assert_eq!(ledger.rc().value.channels_us, [1500; 16]);
         assert_eq!(ledger.battery().value.voltage_dv, 168);
         assert_eq!(ledger.safety().seq, 0);
+    }
+
+    #[test]
+    fn each_result_lands_on_its_requesters_topic() {
+        use ferrowasp_boundary_contracts::requests::{Outcome, Refusal};
+        let mut queues = Queues::new();
+        let (mut producers, mut observer, _stream) = wire(&mut queues);
+        let mut ledger = Ledger::new(Identity::default());
+
+        let result = |requester, request_seq, outcome| RequesterResult {
+            requester,
+            result: RequestResult {
+                request_seq,
+                outcome,
+            },
+        };
+        producers.results.push(
+            TimestampMicros(10),
+            result(Requester::Usb, 4, Outcome::Accepted),
+        );
+        producers.results.push(
+            TimestampMicros(20),
+            result(Requester::Osd, 9, Outcome::Refused(Refusal::NotPermitted)),
+        );
+        observer.run_once(TimestampMicros(100), &mut ledger);
+
+        assert_eq!(ledger.result(Requester::Usb).value.request_seq, 4);
+        assert_eq!(
+            ledger.result(Requester::Usb).value.outcome,
+            Outcome::Accepted
+        );
+        assert_eq!(
+            ledger.result(Requester::Osd).value.outcome,
+            Outcome::Refused(Refusal::NotPermitted)
+        );
+        assert_eq!(ledger.result(Requester::ConfiguratorLink).seq, 0);
     }
 
     #[test]

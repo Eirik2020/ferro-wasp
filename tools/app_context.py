@@ -120,6 +120,16 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-io-contracts/src/link.rs"),
         ),
     ),
+    "coordinator": TopicRoute(
+        summary="The coordinator, each requester's link into it, host leases, and request results.",
+        common_symbols=("coordinator_task",),
+        companions=(
+            PurePosixPath("project_meta/requirements/architecture.md"),
+            PurePosixPath("crates/ferrowasp-border/src/coordinator.rs"),
+            PurePosixPath("crates/ferrowasp-boundary-contracts/src/requests.rs"),
+            PurePosixPath("crates/ferrowasp-safety/src/host.rs"),
+        ),
+    ),
     "arming": TopicRoute(
         summary="Safety events, live guards, guarded holds, and actuator handoff.",
         common_symbols=(
@@ -266,7 +276,7 @@ TOPIC_ROUTES = {
     ),
     "usb": TopicRoute(
         summary="USB task, the Foxeer UART configurator link, and debug/configurator request handling.",
-        common_symbols=("usb_fs",),
+        common_symbols=("usb_fs", "usb_keepalive"),
         foxeer_symbols=(
             "configurator_link",
             "uart3_rx_dma",

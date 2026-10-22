@@ -333,6 +333,15 @@ apply time from the owner. A requester never assumes success; with no result
 within its limit it shows a timeout. A full requester queue drops the request,
 and the requester times out.
 
+**Host leases.** Arming is refused while a computer is attached (ARM-003).
+Each link a computer can be attached by renews its own lease through the
+coordinator: USB every 100 ms while a host has the board configured, for
+500 ms, and the configurator link with each command, for 2 s. The safety
+master holds the leases and publishes when the last one ends, for Actuator
+Output's guard. A link that stops renewing releases arming by itself, so no
+non-critical task writes what the arming guard reads; the Foxeer has no VBUS
+sense pin, so a USB supply that only gives power does not count.
+
 **Worked example: the motor test.** Before, `usb_fs` (non-critical) put
 `SafetyEvent::BenchMotor` straight into the safety master's own event input,
 beside `ArmRequested`, `DisarmRequested` and `RcLinkInvalid`, and

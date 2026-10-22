@@ -363,6 +363,7 @@ dependencies = [
  "ferrowasp-boundary-contracts",
  "ferrowasp-control",
  "ferrowasp-io-contracts",
+ "ferrowasp-safety",
  "fugit",
  "rtic",
  "rtic-monotonics",

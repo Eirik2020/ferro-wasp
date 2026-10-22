@@ -77,10 +77,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   change at a time against `main`, one mechanism at a time:
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own);
-  2. the remaining SPSC links and typed flags; the coordinator, taking the
-     values in `ferrowasp-border::inbound` (the host-connected flags and
-     the accelerometer level) and the OSD's `tuning_profile`, then reboot,
-     config transactions and accelerometer calibration through it; the boot
+  2. the remaining SPSC links and typed flags; through the coordinator, the
+     arm inhibit and its two kinds of lease, reboot, config transactions
+     (taking the accelerometer level in `ferrowasp-border::inbound` and the
+     OSD's `tuning_profile`) and accelerometer calibration; the OSD menu as
+     a requester; the boot
      fallback; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source, after which actuator
      output, the DShot service, the ESC manager and RC input move to their

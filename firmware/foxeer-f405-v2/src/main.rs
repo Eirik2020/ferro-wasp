@@ -11,7 +11,7 @@ use ferrowasp_app_foxeer_f405_v2::internal::*;
 ferroforge::app! {
     device = pac,
     peripherals = true,
-    dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN, SDIO],
+    dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN, SDIO, CAN2_SCE],
 
     use super::*; // Import everything from parent module
 
@@ -206,6 +206,16 @@ ferroforge::app! {
         usb_cdc: UsbCdcLink,
         usb_header_sent: bool,
         configurator_usb: ConfiguratorUsbState,
+
+        // The coordinator, each requester's link into it, the safety
+        // master's replies, and the host lease the safety master publishes
+        // for actuator output.
+        coordinator: CoordinatorState,
+        usb_request_link: ObserverLink<requests::Request>,
+        configurator_request_link: ObserverLink<requests::Request>,
+        bench_reply_link: ObserverLink<safety::BenchReply>,
+        host_lease_writer: safety::signals::HostLeaseWriter,
+        actuator_host_lease_reader: safety::signals::HostLeaseReader,
     }
     #[init(local = [
         uart1_rx_buffers: stm32_storage::UartRxBufferBank =
@@ -418,6 +428,13 @@ ferroforge::app! {
             flash_rpc_response_producer,
             flash_rpc_response_consumer,
         } = flight_tasks::storage_channels();
+        let flight_tasks::CoordinatorChannels {
+            coordinator,
+            usb_request_link,
+            configurator_request_link,
+            bench_reply_link,
+            request_results,
+        } = flight_tasks::coordinator_channels();
         let flight_tasks::ObserverChannels {
             observer,
             control_tick_link,
@@ -435,6 +452,7 @@ ferroforge::app! {
                 : BlackboxStreamQueue<BLACKBOX_STREAM_CAPACITY> = BlackboxStreamQueue::new()
             )
             .unwrap(),
+            request_results,
         );
         let flight_tasks::ImuChannels {
             imu_sample_link,
@@ -609,6 +627,8 @@ ferroforge::app! {
         let (motor_map_writer, motor_map_reader) = signals::split_motor_map(&MOTOR_OUTPUT_MAP);
         let (dshot_release_writer, dshot_release_reader) =
             signals::split_dshot_release(&DSHOT_LAST_RELEASE);
+        let (host_lease_writer, actuator_host_lease_reader) =
+            signals::split_host_lease(&HOST_LEASE_UNTIL);
         let (rc_rates_writer, rc_rates_reader) = signals::split_rc_rates(&RC_RATES);
         let (rc_link_frame_writer, rc_link_invalidator, rc_link_reader) =
             signals::split_rc_link(&RC_LINK);
@@ -693,6 +713,8 @@ ferroforge::app! {
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         flight::heartbeat::spawn().unwrap();
         flight::observer_task::spawn().unwrap();
+        flight::coordinator_task::spawn().unwrap();
+        flight::usb_keepalive::spawn().unwrap();
         flight::adc1_polling::spawn().ok();
         uart2_tx_worker::spawn().unwrap();
         uart3_tx_worker::spawn().unwrap();
@@ -883,6 +905,14 @@ ferroforge::app! {
                 usb_cdc,
                 usb_header_sent: false,
                 configurator_usb: ConfiguratorUsbState::new(),
+
+                // Coordinator
+                coordinator,
+                usb_request_link,
+                configurator_request_link,
+                bench_reply_link,
+                host_lease_writer,
+                actuator_host_lease_reader,
             },
         )
     }
@@ -896,10 +926,12 @@ ferroforge::app! {
             // safety_master
             safety_rc_arm_high_reader, safety_rc_throttle_reader, safety_rc_link_reader,
             safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
-            actuator_arm_done_reader, safety_status_link, safety_imu_prearm,
+            actuator_arm_done_reader, safety_status_link, safety_imu_prearm, host_lease_writer,
+            bench_reply_link,
             // usb_fs
             usb_cdc, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
+            usb_request_link,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
             storage_status_link, flash_safety_arm_reader, flash_probe, flash_commands,
@@ -925,7 +957,7 @@ ferroforge::app! {
             actuator_safety_arm_reader, actuator_arm_permit_reader, actuator_rc_arm_high_reader,
             actuator_rc_throttle_reader, actuator_rc_link_reader, actuator_arm_done_writer,
             motor_cmd_reader, esc_telemetry_update_consumer, actuator_imu_prearm,
-            actuator_motor_map_reader,
+            actuator_motor_map_reader, actuator_host_lease_reader,
             // rc_input
             rc_port, rc_receiver, arm_qualifier, rc_rates_writer, rc_throttle_writer,
             rc_arm_high_writer, rc_link_frame_writer, rc_status_link,
@@ -942,7 +974,9 @@ ferroforge::app! {
                 BATTERY_MAX_CELLS,
             ),
             // observer_task
-            observer
+            observer,
+            // coordinator_task
+            coordinator
         ],
         shared = [
             tuning_profile,
@@ -1002,6 +1036,13 @@ ferroforge::app! {
         // is not safety-critical. One bounded run a millisecond.
         #[task(priority = 7)]
         async fn observer_task;
+        // Below the observer: requests from the command lines, a bounded
+        // number from each every 10 ms.
+        #[task(priority = 6)]
+        async fn coordinator_task;
+        // Wakes USB every 100 ms to renew its host lease.
+        #[task(priority = 1)]
+        async fn usb_keepalive;
         // Lowest priority: storage never preempts flight work.
         #[task(priority = 1)]
         async fn flash_manager_task;
@@ -1184,7 +1225,12 @@ ferroforge::app! {
     #[task(
         from = flight_tasks::configurator_link,
         priority = 3,
-        local = [configurator_port, configurator_commands, configurator_responses],
+        local = [
+            configurator_port,
+            configurator_commands,
+            configurator_responses,
+            configurator_request_link
+        ],
         shared = [ledger],
         config = [build_identity: flight_tasks::BuildIdentity = BUILD_IDENTITY]
     )]

@@ -86,6 +86,12 @@ impl<T> LinkProducer<'_, T> {
     pub fn refused(&self) -> u32 {
         self.refused
     }
+
+    /// The sequence the last push stamped, refused or sent; 0 before any.
+    /// A requester keeps it to find its request's result.
+    pub fn sequence(&self) -> u32 {
+        self.seq
+    }
 }
 
 impl<T> LinkConsumer<'_, T> {

@@ -95,6 +95,11 @@ fn report_arm_state(
         last_bench_request_ms: Option<u64> = None,
         safety_status_link: LinkProducer<'static, observed::SafetyStatus>,
         safety_imu_prearm: ImuPreArmReader<'static>,
+        // Each host link's lease, renewed through the coordinator; arming is
+        // refused while one stands, and actuator output reads the flag.
+        host_leases: safety::host::HostLeases = safety::host::HostLeases::new(),
+        host_lease_writer: signals::HostLeaseWriter,
+        bench_reply_link: LinkProducer<'static, safety::BenchReply>,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
@@ -138,6 +143,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 rc_link.is_armable(now_us),
                 rc_arm_high.read(),
                 rc_throttle.read(),
+                cx.local.host_leases.present(now_us / 1_000),
                 cx.local.safety_imu_prearm.current(TimestampMicros(now_us)),
             );
             if guard.is_ok() {
@@ -165,6 +171,7 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                     rc_link.is_armable(now_us),
                     rc_arm_high.read(),
                     rc_throttle.read(),
+                    cx.local.host_leases.present(now_us / 1_000),
                     cx.local.safety_imu_prearm.current(TimestampMicros(now_us)),
                 )
                 .is_ok()
@@ -218,17 +225,27 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
             }
         }
 
-        // A props-off motor check from the configurator. Decided here, like
-        // every other request that can reach the motors, and refused unless
-        // the system is disarmed, not arming, and the arm switch is off.
-        safety::SafetyEvent::BenchMotor(request) => {
-            match safety::validate_bench_motor_request(
+        // A props-off motor check from the configurator, through the
+        // coordinator. Decided here, like every other request that can reach
+        // the motors, and refused unless the system is disarmed, not arming,
+        // and the arm switch is off; the decision goes back to the
+        // coordinator by its ticket.
+        safety::SafetyEvent::BenchMotor { request, ticket } => {
+            let decision = safety::validate_bench_motor_request(
                 request,
                 system_arm.is_armed(),
                 arm_permit.is_allowed(),
                 rc_arm_high.read(),
                 CONFIG::ACTUATOR_OUTPUT_ENABLED,
-            ) {
+            );
+            cx.local.bench_reply_link.push(
+                TimestampMicros(now_us),
+                safety::BenchReply {
+                    ticket,
+                    result: decision,
+                },
+            );
+            match decision {
                 Ok(()) => {
                     if request != safety::BenchMotorRequest::Stop {
                         *cx.local.last_bench_request_ms = Some(now_us / 1_000);
@@ -243,6 +260,13 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 }
                 Err(refusal) => warn!("Bench motor request refused: {}", refusal.as_str()),
             }
+        }
+
+        safety::SafetyEvent::HostPresent(link) => {
+            cx.local.host_leases.renew(link, now_us / 1_000);
+            cx.local
+                .host_lease_writer
+                .write(cx.local.host_leases.until_ms());
         }
 
         safety::SafetyEvent::RcLinkInvalid(reason) => {

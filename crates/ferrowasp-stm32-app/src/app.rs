@@ -60,7 +60,6 @@ pub mod prelude {
 
     pub use crate as flight_tasks;
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
-    pub use ferrowasp_border::inbound::host_connected;
     pub use ferrowasp_cli::tasks::usb::{
         ConfiguratorUsbState, FlashRpcCommandProducer, FlashRpcResponseConsumer, MspCommonInfoFn,
     };
@@ -83,12 +82,14 @@ pub mod prelude {
     pub type UsbCdcLink = crate::prelude::backend::usb_serial::UsbCdcLink;
     pub use ferrowasp_border::observer::Ledger;
     pub use ferrowasp_boundary_contracts::messages as observed;
+    pub use ferrowasp_boundary_contracts::requests;
     pub use ferrowasp_boundary_contracts::topics::Identity;
     pub use ferrowasp_io_contracts::link::Stamped;
     pub use ferrowasp_stm32::system_reset::RebootTarget;
     /// The producing end of one task's link into the observer.
     pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
     pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
+    pub type CoordinatorState = ferrowasp_border::coordinator::Coordinator<'static>;
     pub use ferrowasp_io_contracts::imu::ImuSample;
     /// The control loop's end of the IMU sample link.
     pub type ImuSampleConsumer = ferrowasp_io_contracts::link::LinkConsumer<'static, ImuSample>;
@@ -279,6 +280,8 @@ macro_rules! flight_app_facade {
         pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
         pub static MOTOR_OUTPUT_MAP: AtomicU16 = AtomicU16::new(0);
         pub static DSHOT_LAST_RELEASE: AtomicU32 = AtomicU32::new(0);
+        /// When the last host lease ends; the safety master writes it.
+        pub static HOST_LEASE_UNTIL: AtomicU32 = AtomicU32::new(0);
         pub const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
         pub const ADC_CURRENT_BETAFLIGHT_SCALE: u32 =
             ADC_OBSERVATION_PROFILE.current_betaflight_scale;
@@ -400,12 +403,13 @@ macro_rules! flight_app_facade {
             rc_link_armable: bool,
             arm_high: bool,
             throttle: u32,
+            host_connected: bool,
             imu: Option<safety::prearm::ImuPreArmStatus>,
         ) -> Result<(), safety::ArmingAbortReason> {
             safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
             safety::validate_prearm_health(safety::prearm::prearm_health(
                 imu,
-                host_connected(),
+                host_connected,
                 |kind| Spi1ImuKind::from_discriminant(kind).is_some_and(imu_kind_flight_verified),
                 cfg!(feature = "bench_prearm_imu_stale"),
             )?)

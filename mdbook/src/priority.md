@@ -21,6 +21,7 @@ can delay flight work.
 | 9 | `io_watchdog` | HW (timer) | Recovers a stalled SPI transfer. |
 | 8 | `esc_manager_task` | SW | Polls ESC telemetry over its return line. |
 | 7 | `observer_task` | SW | Publishes the craft's state on the read-only ledger the tasks below read, and streams logged control ticks to the blackbox. |
+| 6 | `coordinator_task` | SW | Takes the command lines' requests in every 10 ms, checks them, and passes them to the safety master. |
 | 5 | `usb_fs` | HW | The USB command line and status. |
 | 3 | `osd_refresh`, `configurator_link` | SW | The MSP OSD; the command line on a UART. |
-| 1 | `flash_manager_task`, `heartbeat`, `rc_telemetry`, ADC | SW, HW | Storage and the blackbox, diagnostics, receiver telemetry, battery sensing. |
+| 1 | `flash_manager_task`, `heartbeat`, `usb_keepalive`, `rc_telemetry`, ADC | SW, HW | Storage and the blackbox, diagnostics, the USB host lease's wake, receiver telemetry, battery sensing. |

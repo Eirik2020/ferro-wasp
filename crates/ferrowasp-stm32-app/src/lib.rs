@@ -75,8 +75,9 @@ pub use actuator::{
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use channels::{
-    CommandLinkChannels, EscChannels, ImuChannels, ObserverChannels, StorageChannels,
-    command_link_channels, esc_channels, imu_channels, observer_channels, storage_channels,
+    CommandLinkChannels, CoordinatorChannels, EscChannels, ImuChannels, ObserverChannels,
+    StorageChannels, command_link_channels, coordinator_channels, esc_channels, imu_channels,
+    observer_channels, storage_channels,
 };
 #[cfg(all(
     target_arch = "arm",

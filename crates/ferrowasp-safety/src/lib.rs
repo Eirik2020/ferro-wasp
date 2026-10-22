@@ -4,7 +4,7 @@
 //! master and actuator tasks join it later; making it domain-agnostic is
 //! deferred (design §19).
 //!
-//! Requirements: ARM-001, ARM-004, ARM-003, BOOT-002, BOOT-004, INPUT-002, INPUT-015, INPUT-003, INPUT-006, INPUT-007, INPUT-008, INPUT-017, INPUT-018, SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008, SAFETY-002, SAFETY-009, SAFETY-010, SAFETY-003, SAFETY-011, SAFETY-004, SAFETY-012, SAFETY-005, SAFETY-013
+//! Requirements: ARM-001, ARM-004, ARM-003, BOOT-002, BOOT-004, INPUT-002, INPUT-015, INPUT-003, INPUT-006, INPUT-007, INPUT-008, INPUT-017, INPUT-018, SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008, SAFETY-002, SAFETY-009, SAFETY-010, SAFETY-003, SAFETY-011, SAFETY-004, SAFETY-012, SAFETY-014, SAFETY-005, SAFETY-013
 //! Safety-critical.
 
 #![forbid(unsafe_code)]
@@ -13,14 +13,22 @@
 
 pub mod actuator;
 pub mod arming;
+pub mod host;
 pub mod prearm;
 #[cfg(all(feature = "tasks", target_arch = "arm"))]
 pub mod tasks;
 
 /// The board's live arming guard: the arm permit, RC link, arm switch and
-/// throttle, then the control loop's IMU status (`None` once too old).
-pub type ArmingGuard =
-    fn(bool, bool, bool, u32, Option<prearm::ImuPreArmStatus>) -> Result<(), ArmingAbortReason>;
+/// throttle, whether a computer is attached, then the control loop's IMU
+/// status (`None` once too old).
+pub type ArmingGuard = fn(
+    bool,
+    bool,
+    bool,
+    u32,
+    bool,
+    Option<prearm::ImuPreArmStatus>,
+) -> Result<(), ArmingAbortReason>;
 
 pub const ARM_HOLD_US: u64 = 200_000;
 pub const ARM_THRESHOLD: u16 = 1500;
@@ -99,7 +107,31 @@ pub enum SafetyEvent {
     ArmingAborted(ArmingAbortReason),
     DisarmRequested,
     RcLinkInvalid(RcLinkInvalidation),
-    BenchMotor(BenchMotorRequest),
+    /// A bench motor request the coordinator accepted, with the ticket the
+    /// safety master's reply names it by.
+    BenchMotor {
+        request: BenchMotorRequest,
+        ticket: u32,
+    },
+    /// A computer is attached on this link: renew its lease.
+    HostPresent(host::HostLink),
+}
+
+/// The safety master's decision on one bench motor request, back to the
+/// coordinator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BenchReply {
+    pub ticket: u32,
+    pub result: Result<(), BenchMotorRefusal>,
+}
+
+impl Default for BenchReply {
+    fn default() -> Self {
+        Self {
+            ticket: 0,
+            result: Ok(()),
+        }
+    }
 }
 
 /// A disarmed, props-off motor check requested over USB.
@@ -551,6 +583,9 @@ pub mod signals {
     /// When the DShot service last started a frame set, in wrapping
     /// milliseconds.
     pub struct DshotReleaseWriter(&'static AtomicU32);
+    /// When the last host lease ends, in wrapping milliseconds since boot;
+    /// written by the safety master, `0` while no lease was ever taken.
+    pub struct HostLeaseWriter(&'static AtomicU32);
 
     pub struct MotorCmdWriter(MotorCmdProducer);
     pub struct MotorCmdReader(MotorCmdConsumer);
@@ -573,6 +608,32 @@ pub mod signals {
     pub struct MotorMapReader(&'static AtomicU16);
     #[derive(Clone, Copy)]
     pub struct DshotReleaseReader(&'static AtomicU32);
+    #[derive(Clone, Copy)]
+    pub struct HostLeaseReader(&'static AtomicU32);
+
+    pub fn split_host_lease(value: &'static AtomicU32) -> (HostLeaseWriter, HostLeaseReader) {
+        (HostLeaseWriter(value), HostLeaseReader(value))
+    }
+
+    impl HostLeaseWriter {
+        /// Publish when the last standing lease ends, `until_ms` since boot.
+        pub fn write(&self, until_ms: Option<u64>) {
+            // Zero means none, so a lease that would end at a multiple of
+            // 2^32 ms is published one millisecond later.
+            let value = until_ms.map_or(0, |until| (until as u32).max(1));
+            self.0.store(value, Ordering::Release);
+        }
+    }
+
+    impl HostLeaseReader {
+        /// Whether a lease stands at `now_ms` since boot. Leases are
+        /// seconds long, so the wrapping comparison never sees a lease more
+        /// than 2^31 ms away.
+        pub fn present(&self, now_ms: u64) -> bool {
+            let until = self.0.load(Ordering::Acquire);
+            until != 0 && (until.wrapping_sub(now_ms as u32) as i32) > 0
+        }
+    }
 
     pub fn split_motor_map(value: &'static AtomicU16) -> (MotorMapWriter, MotorMapReader) {
         (MotorMapWriter(value), MotorMapReader(value))
@@ -1452,5 +1513,18 @@ mod tests {
         let (release, release_reader) = signals::split_dshot_release(&RELEASE);
         release.write(u32::MAX);
         assert_eq!(release_reader.read(), u32::MAX);
+
+        static HOST: AtomicU32 = AtomicU32::new(0);
+        let (host, host_reader) = signals::split_host_lease(&HOST);
+        assert!(!host_reader.present(0));
+        host.write(Some(1_500));
+        assert!(host_reader.present(1_499));
+        assert!(!host_reader.present(1_500));
+        // Across the wrap of the 32-bit millisecond count.
+        host.write(Some((1 << 32) + 100));
+        assert!(host_reader.present((1 << 32) - 10));
+        assert!(!host_reader.present((1 << 32) + 100));
+        host.write(None);
+        assert!(!host_reader.present(0));
     }
 }

@@ -344,6 +344,7 @@ dependencies = [
  "ferrowasp-boundary-contracts",
  "ferrowasp-control",
  "ferrowasp-io-contracts",
+ "ferrowasp-safety",
  "fugit",
  "heapless 0.9.2",
  "rtic",

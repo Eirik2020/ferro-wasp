@@ -4,18 +4,18 @@
 //! Commands go to the storage owner on this link's own queue, and its answers
 //! come back on this link's own queue, so USB and the UART never see each
 //! other's replies. Motor commands and the unconditional log erase stay on
-//! USB: a Bluetooth module can be paired by anyone in range.
+//! USB: a Bluetooth module can be paired by anyone in range. Each command
+//! renews the link's host lease through the coordinator, so arming is
+//! refused for two seconds after the last one.
 
 use super::prelude::*;
-use ferrowasp_border::inbound::CONFIGURATOR_LINK_ACTIVE;
+use ferrowasp_boundary_contracts::requests::Request;
 
 /// Answers leave in whole transmit chunks. The last chunk of a burst is
 /// padded with NUL bytes, which a host skips.
 const CHUNK_LEN: usize = stm32_memory::UART_RX_BUFFER_BYTES;
 /// How often the link looks for input and answers when idle.
 const POLL_MS: u64 = 2;
-/// How long after its last command the link still blocks arming.
-const ACTIVE_HOLD_MS: u64 = 2_000;
 
 /// Packs answer lines into transmit chunks.
 struct Outbox {
@@ -60,6 +60,7 @@ impl Outbox {
         configurator_port: Option<ferrowasp_stm32_critical::uart_port::SerialPortEndpoint>,
         configurator_commands: Option<flash_task::CommandProducer>,
         configurator_responses: Option<flash_task::ResponseConsumer>,
+        configurator_request_link: LinkProducer<'static, Request>,
     ],
     shared = [ledger: Ledger],
     config = [build_identity: crate::usb_debug::BuildIdentity],
@@ -85,7 +86,8 @@ pub async fn configurator_link(mut cx: configurator_link::Context) {
         healthy: true,
     };
     let mut input = [0u8; 32];
-    let mut last_command_ms: Option<u64> = None;
+    // A command arrived whose lease renewal the coordinator has not taken.
+    let mut renewal_due = false;
     loop {
         // A break in the stream would splice two half lines into one command.
         if port.discontinuities.take_new().is_some() {
@@ -106,7 +108,7 @@ pub async fn configurator_link(mut cx: configurator_link::Context) {
                 let Some(parsed) = parser.ingest(*byte) else {
                     continue;
                 };
-                last_command_ms = Some(Mono::now().duration_since_epoch().to_millis());
+                renewal_due = true;
                 match parsed {
                     Ok(flash_task::StorageCommand::Live) => {
                         let live = cx
@@ -164,11 +166,14 @@ pub async fn configurator_link(mut cx: configurator_link::Context) {
             outbox.push(&mut writer, frame.as_bytes()).await;
         }
         outbox.flush(&mut writer).await;
-        let now_ms = Mono::now().duration_since_epoch().to_millis();
-        CONFIGURATOR_LINK_ACTIVE.store(
-            last_command_ms.is_some_and(|last| now_ms.saturating_sub(last) < ACTIVE_HOLD_MS),
-            Ordering::Release,
-        );
+        if renewal_due
+            && cx.local.configurator_request_link.push(
+                TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+                Request::HostPresent,
+            ) == ferrowasp_io_contracts::link::Pushed::Sent
+        {
+            renewal_due = false;
+        }
         Mono::delay(POLL_MS.millis()).await;
     }
 }

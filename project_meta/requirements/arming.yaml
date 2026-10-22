@@ -95,8 +95,9 @@ requirements:
   - id: ARM-003
     title: A connected computer blocks arming
     statement: >-
-      Arming shall be refused while a USB host has configured the board or
-      the configurator link has sent a command within the last 2 s.
+      Arming shall be refused while a host lease stands: USB's, renewed
+      while a host has the board configured and lasting 500 ms, or the
+      configurator link's, renewed by each command and lasting 2 s.
     rationale: >-
       A craft on a desk beside a computer is being configured, and the
       command line must never be a path to spinning props (W1).
@@ -112,4 +113,4 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
+            test: ferrowasp_safety::host::tests::either_link_holds_the_host_present
