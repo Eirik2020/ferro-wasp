@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-# The OSD and RC telemetry RTIC task definitions, target-only (ADR-0065).
+# The OSD and RC telemetry RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:defmt",
     "dep:embedded-io-async",

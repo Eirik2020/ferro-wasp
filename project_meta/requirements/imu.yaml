@@ -208,8 +208,7 @@ requirements:
     rationale: >-
       The IMU samples the rate loop flies on arrive over this mailbox; a
       completion credited to the wrong job, or late data copied into a
-      new one, would feed the loop a sample from another time
-      (ADR-0010).
+      new one, would feed the loop a sample from another time.
     derived_from: [W2]
     verification:
       entries:

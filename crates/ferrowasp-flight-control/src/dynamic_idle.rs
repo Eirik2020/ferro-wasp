@@ -1,4 +1,4 @@
-//! Dynamic idle (ADR-0049): a PID loop on the slowest motor's speed that
+//! Dynamic idle (design §21): a PID loop on the slowest motor's speed that
 //! raises the motor output floor for all four motors together.
 //!
 //! It follows Betaflight's `flight/mixer.c` and `mixer_init.c` at commit
@@ -33,7 +33,7 @@ pub struct DynamicIdleConfig {
 }
 
 /// Betaflight's defaults: off, P/I/D 50, 15%. The stale hold and decay are
-/// provisional, until logged reply-loss data sets them (ADR-0049).
+/// provisional, until logged reply-loss data sets them (design §21).
 pub const DEFAULT_DYNAMIC_IDLE_CONFIG: DynamicIdleConfig = DynamicIdleConfig {
     min_rpm_hundreds: 0,
     p_gain: 50,
@@ -52,7 +52,7 @@ pub enum DynamicIdleConfigError {
     StaticIdle,
 }
 
-/// The controller's last update, for the blackbox (ADR-0049).
+/// The controller's last update, for the blackbox (design §21).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DynamicIdleTerms {
     pub p: f32,

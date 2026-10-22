@@ -1,4 +1,4 @@
-//! Computed status (ADR-0050). Nothing here is ever stored.
+//! Computed status (design §2). Nothing here is ever stored.
 
 use std::collections::BTreeMap;
 

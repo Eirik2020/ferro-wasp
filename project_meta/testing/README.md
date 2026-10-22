@@ -4,8 +4,7 @@ This directory is the entry point for verifying FerroWasp: choosing what to
 test, running it, and recording the evidence. Start here when the user asks to
 test firmware, prepare a target, run a bench procedure, or perform a flight.
 
-The design is [the requirements design](../requirements/design.md) and
-ADR-0050 to ADR-0053; the tool is `tools/reqtool`, described in its README.
+The design is [the requirements design](../requirements/design.md); the tool is `tools/reqtool`, described in its README.
 
 ## Requirements, Procedures and Evidence
 

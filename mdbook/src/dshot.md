@@ -159,6 +159,14 @@ complementary output, which a timer cannot input-capture. Bidirectional mode
 is fixed when the bank is built, and for now only the props-off bench feature
 below selects it. The TBS Lucid H7 sends plain DShot only.
 
+On the STM32F405, receiving reads GPIO through DMA2 while SPI1, ADC1 and
+USART1 may use DMA2 too, and the window is not ordered against the IMU
+transfer. Erratum 2.2.19 (ES0182 Rev 19; 2.1.10 in older sheets), DMA2 data
+corruption with concurrent AHB and APB2 transfers, does not apply: it covers
+DMA2 writes to GPIO, not reads from GPIO into SRAM, and SPI1 is not among its
+affected peripherals. The design never writes GPIO through DMA; transmit stays
+timer compare DMA.
+
 ## Bench Images
 
 Bench features build images for props-off work and never ship as the flight

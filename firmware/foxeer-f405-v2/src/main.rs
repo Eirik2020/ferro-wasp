@@ -889,7 +889,7 @@ ferroforge::app! {
 
     // The flight tasks every board runs the same way. Each member's own
     // resources and configuration are in its definition in
-    // their crates (ADR-0065); this selection binds them once.
+    // their crates (design §16); this selection binds them once.
     #[group(
         from = flight_tasks::groups::flight,
         local = [
@@ -1010,7 +1010,7 @@ ferroforge::app! {
         #[task(priority = 13)]
         async fn actuator_idle_notify;
         // Released by each accepted motor command, so frames follow the
-        // control loop, and by the fallback when none arrives (ADR-0046).
+        // control loop, and by the fallback when none arrives (dshot.md).
         #[task(priority = 13)]
         async fn dshot_service;
         // Same priority as the service it releases, as the old 2 ms service

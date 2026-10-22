@@ -397,7 +397,7 @@ def _dependency_tables(manifest: dict) -> list[tuple[str, dict]]:
 
 
 def _validate_critical_crates(root: Path, errors: list[str]) -> None:
-    """ADR-0054's direction rule: a safety-critical crate never depends on a
+    """Design §8's direction rule: a safety-critical crate never depends on a
     non-critical one. Criticality is `[package.metadata.ferrowasp] critical =
     true`; a `-critical` name must agree with it. A safety-critical crate's
     external dependencies are pinned to one version (`=x.y.z`, or a git

@@ -1,4 +1,4 @@
-"""Record a bench gate's result with reqtool (ADR-0050).
+"""Record a bench gate's result with reqtool (design §2).
 
 The gate tools judge a run and describe how it was done; `reqtool record`
 fingerprints it, checks the hardware rules, hashes the artifacts, and writes

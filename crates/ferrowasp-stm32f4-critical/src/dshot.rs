@@ -19,7 +19,7 @@
 //!
 //! # Bidirectional replies
 //!
-//! Every lane names its motor pin, so a bank built bidirectional (ADR-0045)
+//! Every lane names its motor pin, so a bank built bidirectional (dshot.md)
 //! can hear each ESC's reply. After a frame set the lane's stream is released
 //! and rebuilt to read the pin's GPIO input register into the lane's sample
 //! buffer, paced by its own timer channel's compare request, three samples

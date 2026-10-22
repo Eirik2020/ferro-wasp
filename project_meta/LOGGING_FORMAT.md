@@ -5,12 +5,13 @@ open.
 
 ## Open work
 
-- Where bidirectional DShot runs (ADR-0045), record each motor's eRPM for
+- Where bidirectional DShot runs ([motor speed
+  feedback](requirements/hardware-and-loop.md#21-motor-speed-feedback)), record each motor's eRPM for
   every frame set, its consecutive-invalid-reply count, and its invalid-reply
-  total (ADR-0047), plus each extended-telemetry temperature, voltage and
-  current value when it arrives, with its motor identity (ADR-0048).
+  total, plus each extended-telemetry temperature, voltage and
+  current value when it arrives, with its motor identity.
 - With dynamic idle on, record the floor increase, its P, I and D terms, and
-  the stale-hold state on every control update (ADR-0049).
+  the stale-hold state on every control update.
 - Record every fresh per-motor legacy-UART eRPM observation at its actual
   bounded rate, including time/age, physical and logical motor identity, request
   sequence, freshness, and transport health; never present repeated stale

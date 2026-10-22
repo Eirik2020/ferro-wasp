@@ -1,4 +1,4 @@
-//! What tasks send the observer (ADR-0056): the safety-critical tasks, and
+//! What tasks send the observer (design §10): the safety-critical tasks, and
 //! the non-critical sources the ledger also carries. Each message travels
 //! [`Stamped`](ferrowasp_io_contracts::link::Stamped) over its producer's own
 //! link, so a change here changes that producer.

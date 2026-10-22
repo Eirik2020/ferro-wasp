@@ -13,7 +13,7 @@ requirements:
       transfer error pre-empt completion and treat a FIFO error as
       recoverable; and on target, the RC receiver shall run over it.
     rationale: >-
-      This is the serial RX and TX contract (ADR-0011, ADR-0057) every
+      This is the serial RX and TX contract every
       chip family implements; a chunk joined across a gap or delivered
       twice reads as a valid frame that never arrived.
     derived_from: [W2]
@@ -114,8 +114,7 @@ requirements:
       the static storage budget; and on target, the IMU shall be read
       through it with a healthy calibration at boot.
     rationale: >-
-      The rate loop flies on IMU samples that cross this transport
-      (ADR-0010); a completion credited twice or a silent DMA error
+      The rate loop flies on IMU samples that cross this transport; a completion credited twice or a silent DMA error
       feeds it a sample that is not current.
     derived_from: [W2]
     verification:

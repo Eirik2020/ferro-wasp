@@ -1,10 +1,10 @@
-//! The safety master's rules, safety-critical (ADR-0060): arming and its
+//! The safety master's rules, safety-critical (design §16): arming and its
 //! guard, the RC link and its fault responses, the motor command boundary,
 //! bench motor requests, and the typed signals tasks share. The safety
 //! master and actuator tasks join it later; making it domain-agnostic is
-//! deferred (ADR-0061).
+//! deferred (design §19).
 //!
-//! Requirements: ARM-001, BOOT-002, INPUT-002, INPUT-003, INPUT-006, INPUT-007, INPUT-008, SAFETY-001, SAFETY-002, SAFETY-003, SAFETY-004, SAFETY-005
+//! Requirements: ARM-001, ARM-003, BOOT-002, INPUT-002, INPUT-003, INPUT-006, INPUT-007, INPUT-008, SAFETY-001, SAFETY-002, SAFETY-003, SAFETY-004, SAFETY-005
 //! Safety-critical.
 
 #![forbid(unsafe_code)]

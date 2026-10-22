@@ -1,4 +1,4 @@
-//! The command line, non-critical (ADR-0060): the commands USB and the UART
+//! The command line, non-critical (design §16): the commands USB and the UART
 //! command line carry, the link that routes them, the storage, log-sync and
 //! debug commands, and the opt-in MSPv2 configurator RPC.
 

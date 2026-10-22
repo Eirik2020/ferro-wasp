@@ -147,6 +147,15 @@ The current freshness check runs when Actuator Output is woken. An independent
 deadline that detects complete absence of future control-loop wakes remains
 open.
 
+## Bench Motor Test
+
+FerroConfigurator's motor test is a request over USB only, which the safety
+master accepts only while disarmed, not arming, with the arm switch low and
+output enabled. An accepted request idles one logical motor for a 250 ms lease
+that the host renews while its button is held; a lapsed lease stops the motor.
+Arming is refused for 2 s after the last request. Bench images, and the
+features that build them, are in [DShot](dshot.md#bench-images).
+
 ## Failure Responses
 
 | Condition | Required response |

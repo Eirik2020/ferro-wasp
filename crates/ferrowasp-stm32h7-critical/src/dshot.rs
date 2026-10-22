@@ -378,7 +378,7 @@ where
     LC: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
     LD: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
 {
-    // H7 lanes do not receive replies yet (ADR-0045 leaves the Lucid's
+    // H7 lanes do not receive replies yet (design §21 leaves the Lucid's
     // receive path open), so an H7 bank is always unidirectional.
     build_bank(
         timers,

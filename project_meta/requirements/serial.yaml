@@ -98,7 +98,7 @@ requirements:
       disabled empty stream shall return a structured error.
     rationale: >-
       A consumer that cannot see lost bytes joins halves of two frames
-      into one valid-looking frame (ADR-0011).
+      into one valid-looking frame.
     derived_from: [W2]
     verification:
       entries:

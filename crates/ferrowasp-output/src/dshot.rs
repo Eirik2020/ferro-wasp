@@ -34,7 +34,7 @@ impl DshotPacket {
         Self((payload << 4) | crc)
     }
 
-    /// The same payload for a bidirectional-DShot ESC (ADR-0045): its
+    /// The same payload for a bidirectional-DShot ESC (dshot.md): its
     /// checksum is inverted, which is what tells the ESC to answer on the
     /// same wire.
     pub const fn from_value_bidirectional(value: u16, telemetry: bool) -> Self {
@@ -75,7 +75,7 @@ pub struct DshotTiming {
     pub arr: u16,
     pub zero_high: u16,
     pub one_high: u16,
-    /// Auto-reload that paces bidirectional reply sampling (ADR-0045):
+    /// Auto-reload that paces bidirectional reply sampling (dshot.md):
     /// `REPLY_SAMPLES_PER_BIT` samples per reply bit, which runs at 5/4 of
     /// the command bit rate.
     pub reply_sample_arr: u16,

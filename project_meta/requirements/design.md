@@ -3,10 +3,9 @@
 This document records the design of FerroWasp's requirements and verification
 system, and the firmware architecture that system depends on: why each
 decision was made, which alternatives were rejected and why, and what in the
-code motivated it. The binding records are ADR-0050 to ADR-0060
-([index](../ARCHITECTURE_DECISIONS.md)); this document carries the reasoning
-behind them. Where the two differ, the ADR governs and this document is
-corrected.
+code motivated it. Its chapters are the design's specification, edited in
+place as the design changes; binding rules that can be checked are
+requirements, and why a tempting alternative lost is in [the FAQ](../faq.md).
 
 The requirements and evidence system (sections 2 to 7) is implemented in
 `tools/reqtool`, except the `app!` parser and the analysis-level checks; the
@@ -39,6 +38,7 @@ The design is split into chapters; section numbers run across all of them.
 18. [Open items](#18-open-items)
 19. [Fault handling and the border roles](fault-handling.md#19-fault-handling-and-the-border-roles)
 20. [Tracing per source file](tracing.md#20-tracing-per-source-file)
+21. [Motor speed feedback](hardware-and-loop.md#21-motor-speed-feedback)
 
 ---
 
@@ -73,7 +73,7 @@ root), these points carried through unchanged:
 
 **Clean sheet.** The design is new, not an extension of the system it
 replaces: `COMPONENTS.json`, `TEST_CATALOG.json`, the schema 2 run records and
-`tools/components.py` (ADR-0038). Old parts are reused only where they earn it
+`tools/components.py`. Old parts are reused only where they earn it
 on their own merits. What survives: W7's principle that evidence stands while
 what it covered is unchanged; procedures as Markdown, because people run them;
 raw artifacts kept in `logs/` with records holding only path and hash.
@@ -87,7 +87,7 @@ obstacle. The two tracks are kept apart in the work that follows (section 17).
 
 ## 17. Order of work
 
-1. Record the decisions: ADR-0050 to ADR-0060 and this document, on the
+1. Record the decisions in this document, on the
    `requirements-system` branch. The governing-document edits (W1-W7 IDs, W7,
    W4) land with the first schema on that branch.
 2. Goal 1: a minimal `reqtool` and schema — define a requirement, link it to
@@ -121,14 +121,14 @@ keeps its own hardware list and never ingests imported targets.
 
 ## 18. Open items
 
-- **USB-host arming refusal.** ADR-0042 refuses arming while a USB host is
+- **USB-host arming refusal.** ARM-003 refuses arming while a USB host is
   connected or within 2 s of a configurator-link command, by reading flags
   written by non-critical tasks (`USB_HOST_CONNECTED`,
   `CONFIGURATOR_LINK_ACTIVE`). That breaks the flag rule. It moves either to
   an inhibit lease each link holds through the coordinator or to a
   safety-critical VBUS sense; decided during the redesign.
 - **Discontinuity handling in the RC group.** The RC group observes
-  ADR-0011's out-of-band handle and calls the parser's `reset` (`rc_input`).
+  the serial reader's out-of-band discontinuity handle and calls the parser's `reset` (`rc_input`).
   Its fault decisions are host-tested functions
   (`ferrowasp_safety::rc_fault_response`, `neutralize_rc_outputs`),
   which declare INPUT-006; where the handle and the reset live in the
@@ -138,22 +138,20 @@ keeps its own hardware list and never ingests imported targets.
 - **Datasheet rates.** The MPU-6000 and ICM-42688-P output rates above are
   recalled, not checked.
 - **Betaflight's scheduler.** Gyro-locking is to be confirmed in its source.
-- **Betaflight's failsafe** (ADR-0062): its stage timings, stage 1 channel
+- **Betaflight's failsafe** (section 19): its stage timings, stage 1 channel
   values and recovery rules, from its source.
-- **The IWDG** (ADR-0063), from RM0090 and RM0433 and the datasheets: that a
+- **The IWDG** (section 19), from RM0090 and RM0433 and the datasheets: that a
   system reset stops a software-started IWDG, the LSI frequency range behind
   the timeout bounds, and each family's debugger freeze bit.
 - **BLHeli_32's signal-loss timeout**, on which a disarm by forced-low lines
-  relies (ADR-0064).
+  relies (section 19).
 - **Health Manager escalation rules as controlled configuration.** Each rule
-  is a requirement with its own evidence (ADR-0061); whether the rules are
+  is a requirement with its own evidence (section 19); whether the rules are
   also W6 controlled configuration was proposed and not decided.
 - **Stack-analysis tooling** for the image-level check, chosen at
   implementation.
 - **Document sizes.** Size limits are met by restructuring, never by
-  shortening content. The design is split into chapters and the ADR index
-  into active and historical decisions, so the index meets its original
-  8,192-byte limit. Budgets were raised where a document only grows: the
+  shortening content. The design is split into chapters. Budgets were raised where a document only grows: the
   internal book's summary (8 KB), the document registry (24 KB), and
   `AGENTS.md` (13,312 bytes; its rules stay in the one file every agent
   reads). The always-loaded files are at 296 of 300 lines.

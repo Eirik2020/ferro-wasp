@@ -1,4 +1,4 @@
-//! The safety-critical half of `ferrowasp-stm32f4` (ADR-0060): the motor output,
+//! The safety-critical half of `ferrowasp-stm32f4` (design §16): the motor output,
 //! SPI and IMU, UART, timing, routing and reset mechanisms. The non-critical
 //! half (USB, status LEDs, storage, ADC) stays in `ferrowasp-stm32f4`, which
 //! re-exports these modules under their former paths.

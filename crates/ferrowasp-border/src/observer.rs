@@ -1,4 +1,4 @@
-//! The observer (ADR-0056, ADR-0061): the one way data leaves the
+//! The observer (design §10, §19): the one way data leaves the
 //! safety-critical tasks. Each run it takes what every link has brought,
 //! publishes it on the ledger, and passes every logged control tick on to
 //! the blackbox stream. A producer never waits for it: a link it falls behind on

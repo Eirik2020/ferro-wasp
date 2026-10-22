@@ -144,7 +144,7 @@ requirements:
       decoder.
     rationale: >-
       Reply eRPM becomes the arming qualification and the RPM filter
-      input (ADR-0045, ADR-0048); a corrupt reply read as a spinning
+      input; a corrupt reply read as a spinning
       motor would qualify a motor that is not running.
     derived_from: [W2]
     verification:

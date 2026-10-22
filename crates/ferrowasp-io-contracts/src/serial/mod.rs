@@ -1,5 +1,5 @@
 //! Serial chunks in and out, and the continuity metadata that lets a consumer
-//! tell lost bytes from a quiet line (ADR-0011).
+//! tell lost bytes from a quiet line (design §12).
 //!
 //! Requirements: IO-001
 //! Safety-critical.

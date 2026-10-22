@@ -13,9 +13,7 @@ requirements:
       run count, the control ticks missing from the sequence it read and
       the ticks the stream refused.
     rationale: >-
-      The observer is the one way data leaves the safety-critical tasks
-      (ADR-0056). A bounded run keeps its cost known below the core
-      (ADR-0061); counting both losses makes a slow observer or a slow
+      The observer is the one way data leaves the safety-critical tasks. A bounded run keeps its cost known below the core; counting both losses makes a slow observer or a slow
       blackbox honest evidence in the log rather than silent gaps; its
       run count lets a reader see the observer itself stop. The ledger's
       readers can only copy topics out: only the observer module
@@ -80,7 +78,7 @@ requirements:
       These are the values `snapshots.rs` carried as separate atomics,
       grouped by producer so one message is one consistent sample
       (section 9); a change here changes its producer, so the set stays
-      what readers use (ADR-0056).
+      what readers use.
     derived_from: [W4]
     verification:
       entries:
@@ -106,7 +104,7 @@ requirements:
     rationale: >-
       A silently stalled observer leaves the OSD running with frozen
       values; the OSD and telemetry warn when a topic they show stops
-      advancing (section 19, ADR-0061). The reader's clock is used so the
+      advancing (section 19). The reader's clock is used so the
       check never compares two tasks' timestamps.
     derived_from: [W2]
     verification:
@@ -141,8 +139,8 @@ requirements:
       flag is set.
     rationale: >-
       These are the values non-critical tasks hand the safety-critical side
-      without the coordinator (ADR-0065); the arming guard refuses while a
-      computer is connected (ADR-0042), and the attitude estimate subtracts
+      without the coordinator; the arming guard refuses while a
+      computer is connected, and the attitude estimate subtracts
       the level. Kept beside the coordinator so the control loop reads them
       from a safety-critical crate.
     derived_from: [W2]

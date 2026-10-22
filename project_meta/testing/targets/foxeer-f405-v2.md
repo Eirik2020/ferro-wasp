@@ -159,7 +159,7 @@ Verifies: REBOOT-001, REBOOT-002, REBOOT-003. Former catalog ID
 Shows that a disarmed Foxeer running FerroWasp restarts, and restarts into the
 STM32 ROM bootloader, on command, that FerroConfigurator flashes it without the
 BOOT button and it returns as FerroWasp, and that a reboot is refused while a
-flight log is open. ADR-0043 is the design.
+flight log is open. REBOOT-001 to REBOOT-003 are its requirements.
 
 Keep the aircraft disarmed and on USB power only. Before flashing anything,
 download every flight on the board and export the configuration; a bench

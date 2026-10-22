@@ -1,4 +1,4 @@
-//! Gyro notches that follow each motor's speed (ADR-0047).
+//! Gyro notches that follow each motor's speed (design §21).
 //!
 //! Each motor's bidirectional-DShot eRPM becomes a smoothed mechanical
 //! frequency ([`MotorFrequencies`]). The [`RpmFilter`] places one notch per
@@ -8,7 +8,7 @@
 //! the loop rate is fixed, so there is no cycle-time compensation.
 //!
 //! The caller feeds each motor's last valid eRPM, held without an age limit
-//! when replies stop (ADR-0047): stale eRPM moves the notches, never motor
+//! when replies stop (design §21): stale eRPM moves the notches, never motor
 //! output.
 //!
 //! Requirements: CTRL-012
@@ -44,7 +44,7 @@ pub struct RpmFilterConfig {
     pub frequency_lpf_hz: u16,
 }
 
-/// Betaflight's defaults (ADR-0047). The pole count is the motors', set
+/// Betaflight's defaults (design §21). The pole count is the motors', set
 /// before bench testing.
 pub const DEFAULT_RPM_FILTER_CONFIG: RpmFilterConfig = RpmFilterConfig {
     motor_poles: 14,
@@ -100,7 +100,7 @@ fn pt1_gain(cutoff_hz: f32, dt_s: f32) -> f32 {
 
 /// Each motor's mechanical frequency from its eRPM, smoothed at the loop
 /// rate. The RPM filter places its notches from it, and dynamic idle
-/// (ADR-0049) regulates its minimum.
+/// (design §21) regulates its minimum.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MotorFrequencies {
     /// Mechanical hertz per unit of eRPM/100.

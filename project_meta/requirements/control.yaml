@@ -191,8 +191,7 @@ requirements:
       controller's convention shall invert physical pitch rate only.
     rationale: >-
       IMU orientation and signs are controlled configuration; a sign
-      hidden in a rotation turns stabilization into a runaway
-      (ADR-0025).
+      hidden in a rotation turns stabilization into a runaway.
     derived_from: [W6]
     verification:
       entries:
@@ -325,7 +324,7 @@ requirements:
       magnitude, and shall bound the offsets it stores.
     rationale: >-
       A bias learned while moving, or a level learned on a tilt, is a
-      guessed state that biases every later rate or attitude (ADR-0044).
+      guessed state that biases every later rate or attitude.
     derived_from: [W2, W6]
     verification:
       entries:
@@ -475,7 +474,7 @@ requirements:
       static idle; and while any eRPM is stale it shall hold the
       increase without integrating, then decay it to static idle, never
       wind it up past static idle, and resume from where the decay left
-      off once eRPM is fresh (ADR-0049).
+      off once eRPM is fresh.
     rationale: >-
       Dynamic idle changes motor output from motor feedback; stale
       feedback must never push the floor up.
@@ -563,7 +562,7 @@ requirements:
       gyro unchanged with no harmonics and pass stick frequencies, fade
       notches out below the minimum frequency, stop them short of
       Nyquist, refresh every notch within a millisecond, and neither
-      refresh nor apply a zero-weight harmonic (ADR-0047).
+      refresh nor apply a zero-weight harmonic.
     rationale: >-
       The RPM filter shapes the gyro signal the rate loop flies on; a
       notch misplaced on a stick frequency would cut the pilot's own

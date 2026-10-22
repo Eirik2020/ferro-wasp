@@ -102,8 +102,12 @@ test; log listing, page reads, sync acknowledgement, and erase; and the props-of
 motor test. The firmware validates every command. Writes and the motor test
 are refused while armed, a motor test is a request the safety master may
 refuse, and nothing on the command line can arm the craft. A UART bound to the
-`configurator` function accepts the same command line except the motor test and
-the unconditional log erase.
+`configurator` function accepts the same command line except the motor test,
+the unconditional log erase, and `reboot` and `reboot dfu`. A reboot is
+accepted only while disarmed with no flash maintenance or flight log open;
+`reboot dfu` restarts into the chip's ROM USB DFU bootloader, from which
+FerroConfigurator flashes, and holding BOOT at power-on stays the recovery
+path.
 
 USB service runs below the control, IMU, RC, and safety priorities, with
 fixed-size buffers.

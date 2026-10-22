@@ -1,4 +1,4 @@
-//! What the observer publishes on the ledger (ADR-0056), and how a reader
+//! What the observer publishes on the ledger (design §10), and how a reader
 //! tells that a topic has stopped advancing (section 19).
 //!
 //! A topic whose value is its message's is published as that message, with

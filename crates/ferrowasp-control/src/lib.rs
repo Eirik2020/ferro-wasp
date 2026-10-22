@@ -1,7 +1,7 @@
 //! General control maths: PID, filters, frame rotation, the attitude
 //! estimator and the calibrations, reusable outside FerroWasp and proven by
 //! unit tests. How FerroWasp flies with them lives in the flight-controller
-//! crates (ADR-0060).
+//! crates (design §16).
 //!
 //! Safety-critical.
 

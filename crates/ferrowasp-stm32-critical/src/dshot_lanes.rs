@@ -20,7 +20,7 @@ use ferrowasp_output::dshot::{
 /// Which outputs of one timer the bank drives: bit n is channel n + 1, and
 /// a bit also set in `complementary` drives that channel's CHxN output
 /// instead of CHx. `inverted` drives them active low, idling high, for
-/// bidirectional DShot (ADR-0045).
+/// bidirectional DShot (dshot.md).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct LaneOutputs {
     pub channels: u8,
@@ -28,7 +28,7 @@ pub struct LaneOutputs {
     pub inverted: bool,
 }
 
-/// Whether a bank sends plain DShot or bidirectional DShot (ADR-0045), fixed
+/// Whether a bank sends plain DShot or bidirectional DShot (dshot.md), fixed
 /// when it is built.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DshotMode {
@@ -56,7 +56,7 @@ pub trait LaneTimer: Any {
     /// Stop, then hold the outputs inactive until the bank is rebuilt.
     fn force_inactive(&self, outputs: LaneOutputs);
 
-    /// For a reply window (ADR-0045): stop with the requests closed, release
+    /// For a reply window (dshot.md): stop with the requests closed, release
     /// the outputs so the pins' pull-ups hold the lines, and count at
     /// `sample_arr` with each channel's compare event once per period.
     /// Only backends whose lanes receive replies implement it.

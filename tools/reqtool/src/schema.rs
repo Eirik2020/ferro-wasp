@@ -2,7 +2,7 @@
 //!
 //! Every type refuses unknown fields, so a misspelt or invented field is an
 //! error rather than silently ignored. There is deliberately no `status`
-//! field anywhere: status is computed from evidence (ADR-0050). Which code
+//! field anywhere: status is computed from evidence (design §2). Which code
 //! implements a requirement is declared in the code (design section 20).
 
 use serde::{Deserialize, Serialize};
@@ -50,7 +50,7 @@ pub struct Entry {
     pub method: Method,
 }
 
-/// Verification levels, ordered by cost and risk (ADR-0051).
+/// Verification levels, ordered by cost and risk (design §3).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "snake_case")]
 pub enum Level {

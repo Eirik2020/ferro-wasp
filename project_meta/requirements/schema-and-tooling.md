@@ -1,12 +1,9 @@
 # Requirements Design: Schema, Tooling and Governing Requirements
 
 Sections 6 to 7 of [the requirements design](design.md), which
-maps every section to its chapter. The ADRs it names are the binding
-records; this chapter carries the reasoning behind them.
+maps every section to its chapter.
 
 ## 6. Schema, tooling and the parser
-
-ADR-0053.
 
 **Parsing the firmware.** `main.rs` is a single `ferroforge::app! { … }`
 invocation. To `syn` it is one `ItemMacro` with opaque tokens, so plain `syn`
@@ -195,8 +192,6 @@ tag `foxeer-candidate-16f6e8ed` plus the preserved binaries, never a rebuild.
 ---
 
 ## 7. Governing requirements
-
-ADR-0053.
 
 Two readings of "update the governing document to the new format" were
 offered: (a) only reword W7, or (b) make W1-W7 the root requirements of the

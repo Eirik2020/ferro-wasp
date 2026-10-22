@@ -75,3 +75,26 @@ requirements:
           setup: props-off
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+
+  - id: ARM-003
+    title: A connected computer blocks arming
+    statement: >-
+      Arming shall be refused while a USB host has configured the board or
+      the configurator link has sent a command within the last 2 s.
+    rationale: >-
+      A craft on a desk beside a computer is being configured, and the
+      command line must never be a path to spinning props (W1).
+    derived_from: [W1]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::prearm_health_requires_ready_calibrated_fresh_imu
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole_and_either_host_flag_counts_as_connected
+

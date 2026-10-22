@@ -89,7 +89,7 @@ requirements:
       decode only a page whose magic, version, length and CRC all check,
       so a slot cut short by power loss never decodes.
     rationale: >-
-      Storage is untrusted input (ADR-0059); a torn slot read as valid
+      Storage is untrusted input; a torn slot read as valid
       would fly whatever bytes it held.
     derived_from: [W2, W6]
     verification:

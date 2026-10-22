@@ -1,4 +1,4 @@
-//! Bidirectional DShot replies (ADR-0045): what an ESC answers on its motor
+//! Bidirectional DShot replies (dshot.md): what an ESC answers on its motor
 //! wire after each frame, from the sampled pin to eRPM or a telemetry reading.
 //!
 //! After a command frame with an inverted checksum, the ESC drives the line

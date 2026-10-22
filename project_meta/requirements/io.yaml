@@ -10,8 +10,7 @@ requirements:
       either direction, shall be refused; and every serial fault shall
       map to an embedded-io error kind.
     rationale: >-
-      This is the contract every serial consumer reads (ADR-0011,
-      ADR-0057): without the arrival time a consumer cannot judge a
+      This is the contract every serial consumer reads: without the arrival time a consumer cannot judge a
       frame's age, and without the generation and the discontinuity mark
       it would join bytes across a gap.
     derived_from: [W2]
@@ -86,7 +85,7 @@ requirements:
       queue's capacity, and an empty link shall read as nothing new.
     rationale: >-
       Every link between safety-critical tasks, and to the observer, is
-      this queue (ADR-0055): a consumer that stalls must cost its
+      this queue: a consumer that stalls must cost its
       producer data, never time (W2), and the loss must be visible.
       Staleness stays the consumer's decision.
     derived_from: [W2]
@@ -128,7 +127,7 @@ requirements:
     rationale: >-
       The control loop read its gyro as three atomics the parser wrote at a
       lower priority, and its accelerometer through a separate lock, so a
-      tick could mix two samples (section 9, ADR-0057).
+      tick could mix two samples (section 9).
     derived_from: [W2]
     verification:
       entries: []

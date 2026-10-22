@@ -10,7 +10,7 @@ requirements:
       voltage and current while the battery's topic has held for 500 ms.
     rationale: >-
       A silently stalled observer leaves the OSD running with frozen values
-      (section 19, ADR-0061); the pilot must not read them as current. The
+      (section 19); the pilot must not read them as current. The
       battery topic has its own, longer limit, twice its 10 Hz period, and
       also shows a battery reading that stopped, such as the ADC's after a
       DMA error.

@@ -40,7 +40,7 @@ compile_error!(
     "Foxeer bidirectional DShot is props-off only until a stored setting selects it: add `bench_actuator_validation` and a capped motor feature."
 );
 
-/// Plain DShot, or bidirectional DShot (ADR-0045) in the props-off
+/// Plain DShot, or bidirectional DShot (dshot.md) in the props-off
 /// `bench_bidirectional_dshot` image until a stored setting selects it.
 pub const DSHOT_MODE: DshotMode = if cfg!(feature = "bench_bidirectional_dshot") {
     DshotMode::Bidirectional

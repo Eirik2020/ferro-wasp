@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-# The border roles' RTIC task definitions, target-only (ADR-0060).
+# The border roles' RTIC task definitions, target-only (design §16).
 tasks = ["dep:ferroforge", "dep:rtic", "dep:rtic-monotonics", "dep:fugit"]
 
 [dependencies]

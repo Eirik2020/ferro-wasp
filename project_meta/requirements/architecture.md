@@ -1,12 +1,9 @@
 # Requirements Design: Safety-Critical Architecture
 
 Sections 8 to 11 of [the requirements design](design.md), which
-maps every section to its chapter. The ADRs it names are the binding
-records; this chapter carries the reasoning behind them.
+maps every section to its chapter.
 
 ## 8. Safety-critical and non-critical code
-
-ADR-0054.
 
 **Two axes.** The user's example path:
 
@@ -73,7 +70,7 @@ unmarked crates are the default. Three conventions were weighed:
 
 **The priority rule.** Every non-critical task runs below the border roles
 (the coordinator, the observer and the Health Manager), which run below the
-control path and the safety master (section 19, ADR-0061); the parser checks
+control path and the safety master (section 19); the parser checks
 it. `esc_manager_task` is core (Actuator Feedback) and ran at 4, below
 `usb_fs` (5); it runs at 8, above the border band (6 and 7) and below the
 I/O watchdog (9). Each of its 2 ms runs is bounded by the bytes one period
@@ -92,8 +89,6 @@ buses, which is why the rule is explicit.
 ---
 
 ## 9. Links between tasks
-
-ADR-0055.
 
 **Every link is an SPSC queue.** Every link between safety-critical tasks,
 and from a safety-critical task to the observer, is a single-producer,
@@ -160,15 +155,14 @@ tuning into the control loop. Under this design `tuning_profile` is state
 owned by the control loop; the OSD and flash manager send requests and read
 the active profile from the ledger.
 
-ADR-0010's SPI1 mailbox (`critical-section::Mutex<RefCell<_>>`) becomes SPSC
-request and response queues. ADR-0015's motor-command SPSC boundary was the
-first instance of this rule.
+The SPI1 mailbox between the IMU tasks and the SPI owner
+(`critical-section::Mutex<RefCell<_>>`) becomes SPSC request and response
+queues. The motor-command queue between the control loop and Actuator Output
+was the first instance of this rule.
 
 ---
 
 ## 10. The observer and the ledger
-
-ADR-0056. The design is the user's.
 
 The observer reads data from the safety-critical tasks and publishes it as a
 uORB-like, read-only ledger. The OSD, telemetry and other non-critical tasks
@@ -192,7 +186,7 @@ master, and path fingerprints can omit non-critical tasks by construction.
   safety-critical tasks drop data, never stall. The policy is a contract
   requirement on the channel type. On that ground the observer was first
   non-critical; it became safety-critical when the Health Manager came to read
-  the ledger (section 19, ADR-0061).
+  the ledger (section 19).
 - **Two contracts.** The SPSC message types (what critical tasks send) change
   the critical producers; ledger topics (what the observer publishes) change
   only the observer and its readers. The observer translates, so a new
@@ -226,7 +220,7 @@ safety-critical tasks wrote directly and anyone read.
   flags, `tuning_profile`) wait for the coordinator.
 - **The link type** and the `Stamped` envelope (sequence, timestamp) live in
   `ferrowasp-io-contracts`, under every link, including the hardware ones
-  ADR-0057 plans. A refused message still takes a sequence number, so the
+  section 12 plans. A refused message still takes a sequence number, so the
   consumer reads the loss as a gap.
 - **The ledger** is one shared resource. Its fields are private, getters
   return copies and only the observer module publishes, so a reader cannot
@@ -254,8 +248,6 @@ safety-critical tasks wrote directly and anyone read.
 ---
 
 ## 11. The coordinator
-
-ADR-0056.
 
 **Purpose.** The observer is the single way out for data; the coordinator is
 the single way in. It is the trust boundary for everything non-critical code

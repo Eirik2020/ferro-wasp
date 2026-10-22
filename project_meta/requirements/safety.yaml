@@ -14,7 +14,7 @@ requirements:
       queue and a refused wake.
     rationale: >-
       This is the boundary between control and actuator authority
-      (ADR-0015, W1); a stale or out-of-range command must never reach a
+      (W1); a stale or out-of-range command must never reach a
       motor (W2).
     derived_from: [W1, W2]
     verification:
@@ -138,7 +138,7 @@ requirements:
       readers, and a reader shall see what the writer last wrote;
       revoking the arm permit shall report whether one was held.
     rationale: >-
-      One writer per flag is enforced by the type system (ADR-0055), so
+      One writer per flag is enforced by the type system, so
       two tasks can never both decide armed.
     derived_from: [W1]
     verification:

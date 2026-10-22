@@ -1,12 +1,9 @@
 # Requirements Design: The Evidence Model
 
 Sections 2 to 5 of [the requirements design](design.md), which
-maps every section to its chapter. The ADRs it names are the binding
-records; this chapter carries the reasoning behind them.
+maps every section to its chapter.
 
 ## 2. The requirements and evidence model
-
-ADR-0050.
 
 **Primitives.**
 
@@ -57,7 +54,7 @@ ruling, not an edited result.
 **Who writes what.** People and agents write requirements. `reqtool record`
 writes evidence. Nobody writes status. Gates read status.
 
-**Why ADR-0038's registry was replaced.** It tied evidence to hand-listed
+**Why the component registry was replaced.** It tied evidence to hand-listed
 components, and the person writing a run record listed which components the
 run exercised. That is unsound: a record for `driver-mpu6000` that does not
 also list `drivers/lib.rs` keeps passing after a change to `lib.rs`. Its goal
@@ -67,8 +64,6 @@ moves to derived identities (section 20).
 ---
 
 ## 3. Verification levels and gates
-
-ADR-0051.
 
 The plan's levels (unit, SITL, MCU, bench, flight) did not match the old six
 tiers (software, embedded-build, bench-unpowered, bench-powered-props-off,
@@ -113,7 +108,7 @@ operation does not establish flight readiness.
 
 ## 4. Fingerprints
 
-ADR-0052. Superseded by [section 20](tracing.md#20-tracing-per-source-file);
+Superseded by [section 20](tracing.md#20-tracing-per-source-file);
 `reqtool` no longer fingerprints evidence this way.
 
 A fingerprint answers: which code has to stay the same for this evidence to
@@ -211,7 +206,7 @@ reported for each variant a board can run.
 
 ## 5. Verification modes and timing
 
-ADR-0052. The verification modes are superseded by
+The verification modes are superseded by
 [section 20](tracing.md#20-tracing-per-source-file): a requirement is
 verified only by its own entries. A timing requirement names the bench or
 flight procedure of the path it is observed on, so one run records a result

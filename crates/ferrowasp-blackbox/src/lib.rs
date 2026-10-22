@@ -1,4 +1,4 @@
-//! The onboard flight log, non-critical (ADR-0060): the record queue and page
+//! The onboard flight log, non-critical (design §16): the record queue and page
 //! assembly, the log writer, the sync ledger of acknowledged flights, and log
 //! maintenance (erase and the scratch-sector test).
 
