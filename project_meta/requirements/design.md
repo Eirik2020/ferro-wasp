@@ -131,7 +131,7 @@ keeps its own hardware list and never ingests imported targets.
   ADR-0011's out-of-band handle and calls the parser's `reset` (`rc_input`).
   Its fault decisions are host-tested functions
   (`ferrowasp_safety::rc_fault_response`, `neutralize_rc_outputs`),
-  which INPUT-006 is allocated to; where the handle and the reset live in the
+  which declare INPUT-006; where the handle and the reset live in the
   new RC group is settled in the redesign.
 - **Feature-gated tests.** `reqtool test` runs each package with its default
   features, so a test behind an opt-in feature cannot be evidence yet.

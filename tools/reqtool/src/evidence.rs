@@ -1,26 +1,37 @@
-//! Evidence records (schema 3), written only by `reqtool record` and
-//! `reqtool test`, and the entry statuses computed from them (ADR-0050).
+//! Evidence records (schema 4), written only by `reqtool record` and
+//! `reqtool test`, and the entry statuses computed from them (design
+//! section 20).
 //!
 //! A record is one session: one or more methods run together, with a result
-//! and fingerprint for every requirement entry that names each method.
-//! Records live beside the old schema 2 run records in
-//! `project_meta/testing/evidence/runs/YYYY/MM/`; only schema 3 is read here,
-//! and the old validator leaves schema 3 to this tool.
+//! for every requirement entry that names each method. Each result carries
+//! the claim it proved. Host evidence names the modules it exercised (the
+//! test's file and the files it imports directly), each with its direct
+//! imports, and the record holds the identity of every one of those. Board
+//! evidence carries the whole configuration it ran in.
+//!
+//! A host result counts for a module while the claim, the toolchain, the
+//! module, its direct imports and their identities are all as recorded. A
+//! board result counts for a configuration whose identity is the one
+//! recorded. Records of earlier schemas are left beside these untouched.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::configuration::{Configuration, Configurations};
 use crate::details::{self, Details};
-use crate::fingerprint::Fingerprinter;
+use crate::identity;
+use crate::items::Resolver;
 use crate::project::Project;
 use crate::schema::{Entry, Level, Method, Requirement, Setup, Target};
 use crate::status::{Evidence, Status};
+use crate::trace::{Import, Trace};
 
 pub const RUNS: &str = "project_meta/testing/evidence/runs";
-pub const RECORD_SCHEMA_VERSION: u32 = 3;
+pub const RECORD_SCHEMA_VERSION: u32 = 4;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +44,13 @@ pub struct Record {
     pub revision: String,
     /// `clean` or `dirty`: uncommitted changes to tracked files.
     pub working_tree: String,
+    /// What board evidence ran in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<Configuration>,
+    /// For host evidence: the identity of every module a result exercised
+    /// and of everything those import, by import key.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub identities: BTreeMap<String, String>,
     pub results: Vec<RunResult>,
     #[serde(default)]
     pub note: Option<String>,
@@ -44,6 +62,18 @@ pub struct Record {
     /// How the run was done; required for board evidence ([`details::check`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub details: Option<Details>,
+    /// For a record derived from an earlier schema's: where from, and what
+    /// could not be derived.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retraced: Option<Retraced>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Retraced {
+    pub from: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limitations: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -54,7 +84,14 @@ pub struct RunResult {
     pub level: Level,
     pub target: Target,
     pub setup: Setup,
-    pub fingerprint: String,
+    /// What the entry claimed when it ran ([`identity::claim`]).
+    pub claim: String,
+    /// For host evidence: the toolchain it ran on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain: Option<String>,
+    /// For host evidence: each module exercised, with its direct imports.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub exercised: BTreeMap<String, Vec<String>>,
     pub result: Outcome,
 }
 
@@ -65,7 +102,7 @@ pub enum Outcome {
     Fail,
 }
 
-/// Every schema 3 record under `runs/`, minus those another record
+/// Every schema 4 record under `runs/`, minus those another record
 /// supersedes.
 pub fn load(repository: &Path) -> Result<Vec<Record>, String> {
     let mut files = Vec::new();
@@ -103,7 +140,7 @@ pub fn load(repository: &Path) -> Result<Vec<Record>, String> {
     Ok(records)
 }
 
-fn collect_json(directory: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn collect_json(directory: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(directory) else {
         return;
     };
@@ -128,13 +165,14 @@ fn same_entry(result: &RunResult, requirement: &Requirement, entry: &Entry) -> b
         && result.setup == entry.setup
 }
 
-/// Leaves out passes already on record at the same fingerprint, so re-running
+/// Leaves out passes already on record with the same coverage, so re-running
 /// unchanged code adds nothing. A fail is always kept.
 pub fn drop_repeats(record: &mut Record, existing: &[Record]) {
+    let new = record.clone();
     record.results.retain(|result| {
         result.result == Outcome::Fail
             || !existing.iter().any(|old| {
-                old.board == record.board
+                old.board == new.board
                     && old.results.iter().any(|before| {
                         before.result == Outcome::Pass
                             && before.requirement == result.requirement
@@ -142,21 +180,39 @@ pub fn drop_repeats(record: &mut Record, existing: &[Record]) {
                             && before.level == result.level
                             && before.target == result.target
                             && before.setup == result.setup
-                            && before.fingerprint == result.fingerprint
+                            && same_coverage(old, before, &new, result)
                     })
             })
     });
 }
 
-/// One entry's status from its records at one fingerprint:
-/// a fail at the current fingerprint is `failed`, whatever passed beside it;
-/// otherwise a pass at the current fingerprint is `verified`;
+fn same_coverage(old: &Record, before: &RunResult, new: &Record, after: &RunResult) -> bool {
+    if before.claim != after.claim
+        || before.toolchain != after.toolchain
+        || before.exercised != after.exercised
+    {
+        return false;
+    }
+    if after.level.on_target() {
+        return old.configuration.as_ref().map(Configuration::identity)
+            == new.configuration.as_ref().map(Configuration::identity);
+    }
+    after.exercised.iter().all(|(module, imports)| {
+        std::iter::once(module)
+            .chain(imports)
+            .all(|key| old.identities.get(key) == new.identities.get(key))
+    })
+}
+
+/// One entry's status from whether each relevant result still counts:
+/// a fail that counts is `failed`, whatever passed beside it;
+/// otherwise a pass that counts is `verified`;
 /// otherwise any earlier pass is `stale`; otherwise `unverified`.
-pub fn entry_status<'r>(results: impl Iterator<Item = &'r RunResult>, current: &str) -> Status {
+pub fn entry_status(results: impl Iterator<Item = (bool, Outcome)>) -> Status {
     let mut passed_now = false;
     let mut passed_before = false;
-    for result in results {
-        match (result.fingerprint == current, result.result) {
+    for (counts, outcome) in results {
+        match (counts, outcome) {
             (true, Outcome::Fail) => return Status::Failed,
             (true, Outcome::Pass) => passed_now = true,
             (false, Outcome::Pass) => passed_before = true,
@@ -172,17 +228,126 @@ pub fn entry_status<'r>(results: impl Iterator<Item = &'r RunResult>, current: &
     }
 }
 
-/// Statuses from the records and the current code. Target-level entries are
-/// per board; an entry's overall status is the worst board that has
-/// evidence, until gates name which boards are required.
+/// The current state of the code that results are judged against.
+pub struct Current<'a> {
+    pub project: &'a Project,
+    pub trace: &'a Trace,
+    pub configurations: &'a dyn Configurations,
+}
+
+impl Current<'_> {
+    fn claim(&self, requirement: &Requirement, entry: &Entry) -> Result<String, String> {
+        identity::claim(&self.project.repository, requirement, entry)
+    }
+
+    /// The toolchain host evidence for a method runs on: the test crate's
+    /// workspace's, or the repository's for a procedure.
+    fn host_toolchain(&self, method: &Method) -> Result<String, String> {
+        let directory = match method {
+            Method::Test(path) => {
+                let crate_name = path.split("::").next().unwrap_or(path);
+                self.project
+                    .workspace
+                    .crates
+                    .get(crate_name)
+                    .and_then(|found| found.lockfile.parent())
+                    .map_or_else(|| self.project.repository.clone(), Path::to_path_buf)
+            }
+            Method::Procedure(_) => self.project.repository.clone(),
+        };
+        identity::toolchain(&self.project.repository, &directory)
+    }
+
+    /// The file a test is defined in.
+    fn test_file(&self, path: &str) -> Result<String, String> {
+        let resolved = Resolver::new(&self.project.workspace.crates).resolve(path)?;
+        self.trace
+            .locate(&self.project.repository, &resolved.file)
+            .ok_or_else(|| format!("{path}: its file is in no module tree"))
+    }
+
+    /// The modules a host run of this entry exercises.
+    fn exercised(&self, requirement: &Requirement, entry: &Entry) -> Result<Vec<String>, String> {
+        Ok(match &entry.method {
+            Method::Test(path) => {
+                let file = self.test_file(path)?;
+                let mut modules = vec![file.clone()];
+                if let Some(source) = self.trace.files.get(&file) {
+                    modules.extend(
+                        source
+                            .imports
+                            .iter()
+                            .filter(|(_, import)| **import == Import::File)
+                            .map(|(key, _)| key.clone()),
+                    );
+                }
+                modules
+            }
+            Method::Procedure(_) => self
+                .trace
+                .declaring(&requirement.id)
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        })
+    }
+
+    /// Whether a host result still counts for `module`; with no module, for
+    /// a requirement no file declares, whether its claim and every module
+    /// it exercised are unchanged.
+    fn host_counts(
+        &self,
+        record: &Record,
+        result: &RunResult,
+        claim: &str,
+        toolchain: &str,
+        module: Option<&str>,
+    ) -> bool {
+        if result.claim != claim || result.toolchain.as_deref() != Some(toolchain) {
+            return false;
+        }
+        let unchanged = |module: &str| {
+            let imports = self.trace.imports(module);
+            result.exercised.get(module) == Some(&imports)
+                && std::iter::once(module)
+                    .chain(imports.iter().map(String::as_str))
+                    .all(|key| {
+                        record.identities.contains_key(key)
+                            && record.identities.get(key).cloned() == self.trace.identity(key)
+                    })
+        };
+        match module {
+            Some(module) => unchanged(module),
+            // A run that exercised nothing proves nothing.
+            None => {
+                !result.exercised.is_empty()
+                    && result.exercised.keys().all(|module| unchanged(module))
+            }
+        }
+    }
+}
+
+/// Statuses from the records and the current code.
+///
+/// A host entry takes the worst of the modules that declare its requirement,
+/// or, when no module declares it, of what its runs exercised. A pass counts
+/// for a module only if it exercised that module. A board entry
+/// is per board, and its overall status is the worst board with evidence,
+/// until gates name the boards they require. With a configuration in scope,
+/// only the modules it compiles in count, and only board evidence from that
+/// exact configuration.
 pub struct Recorded {
     statuses: BTreeMap<(String, usize), Status>,
     boards: BTreeMap<(String, usize), Vec<(String, Status)>>,
 }
 
 impl Recorded {
-    pub fn new(project: &Project, records: &[Record]) -> Result<Self, String> {
-        let fingerprints = Fingerprinter::new(&project.repository, &project.workspace);
+    pub fn new(
+        current: &Current<'_>,
+        records: &[Record],
+        scope: Option<&Configuration>,
+    ) -> Result<Self, String> {
+        let project = current.project;
         let mut statuses = BTreeMap::new();
         let mut boards = BTreeMap::new();
         for requirement in project.requirements.values() {
@@ -193,27 +358,73 @@ impl Recorded {
                     .flat_map(|record| record.results.iter().map(move |result| (record, result)))
                     .filter(|(_, result)| same_entry(result, requirement, entry))
                     .collect();
+                let claim = current.claim(requirement, entry)?;
                 if !entry.level.on_target() {
-                    let current = fingerprints.entry(requirement, entry, None)?;
-                    let status = entry_status(relevant.iter().map(|(_, result)| *result), &current);
+                    let toolchain = current.host_toolchain(&entry.method)?;
+                    let mut modules: Vec<Option<String>> = current
+                        .trace
+                        .declaring(&requirement.id)
+                        .into_iter()
+                        .filter(|module| {
+                            scope.is_none_or(|configuration| {
+                                configuration.files.contains_key(*module)
+                            })
+                        })
+                        .map(|module| Some(module.to_owned()))
+                        .collect();
+                    if modules.is_empty() {
+                        modules.push(None);
+                    }
+                    // A pass that does not count for a module, because it
+                    // exercised other code or the code changed, leaves it
+                    // stale: it passed before, and needs running again.
+                    let status = modules
+                        .iter()
+                        .map(|module| {
+                            entry_status(relevant.iter().map(|(record, result)| {
+                                let counts = current.host_counts(
+                                    record,
+                                    result,
+                                    &claim,
+                                    &toolchain,
+                                    module.as_deref(),
+                                );
+                                (counts, result.result)
+                            }))
+                        })
+                        .max()
+                        .unwrap_or(Status::Unverified);
                     statuses.insert(key, status);
                     continue;
                 }
                 let names: BTreeSet<&str> = relevant
                     .iter()
                     .filter_map(|(record, _)| record.board.as_deref())
+                    .filter(|board| scope.is_none_or(|configuration| configuration.board == *board))
                     .collect();
                 let mut per_board = Vec::new();
                 for board in names {
-                    let current = fingerprints.entry(requirement, entry, Some(board))?;
-                    let status = entry_status(
-                        relevant
-                            .iter()
-                            .filter(|(record, _)| record.board.as_deref() == Some(board))
-                            .map(|(_, result)| *result),
-                        &current,
-                    );
-                    per_board.push((board.to_owned(), status));
+                    let mut judged = Vec::new();
+                    for (record, result) in relevant
+                        .iter()
+                        .filter(|(record, _)| record.board.as_deref() == Some(board))
+                    {
+                        let counts = result.claim == claim
+                            && match &record.configuration {
+                                None => false,
+                                Some(ran) => {
+                                    let now: Rc<Configuration> = match scope {
+                                        Some(configuration) => Rc::new(configuration.clone()),
+                                        None => current
+                                            .configurations
+                                            .configuration(board, &ran.features)?,
+                                    };
+                                    ran.identity() == now.identity()
+                                }
+                            };
+                        judged.push((counts, result.result));
+                    }
+                    per_board.push((board.to_owned(), entry_status(judged.into_iter())));
                 }
                 let overall = per_board
                     .iter()
@@ -248,6 +459,9 @@ impl Evidence for Recorded {
 pub struct RunRequest<'a> {
     pub runs: Vec<(Method, Outcome)>,
     pub board: Option<&'a str>,
+    /// For board evidence: the features the image was built with, beyond its
+    /// defaults.
+    pub features: &'a [String],
     /// Requirements that failed although their method as a whole passed.
     pub failed: &'a [String],
     pub note: Option<&'a str>,
@@ -260,21 +474,23 @@ pub struct RunRequest<'a> {
 /// Builds the record for one session: a result for every entry, in every
 /// requirement, that names one of the methods that ran.
 pub fn build(
-    project: &Project,
+    current: &Current<'_>,
     request: &RunRequest<'_>,
     now: Timestamp,
 ) -> Result<Record, String> {
+    let project = current.project;
     if request.supersedes.is_empty() != request.ruling.is_none() {
         return Err(
             "superseding a run needs a ruling, and a ruling needs a run to supersede".into(),
         );
     }
-    let fingerprints = Fingerprinter::new(&project.repository, &project.workspace);
-    let mut results = Vec::new();
-    let mut named = BTreeSet::new();
     if request.runs.is_empty() {
         return Err("nothing ran".into());
     }
+    let mut results = Vec::new();
+    let mut identities = BTreeMap::new();
+    let mut configuration = None;
+    let mut named = BTreeSet::new();
     for (method, method_outcome) in &request.runs {
         let before = results.len();
         for requirement in project.requirements.values() {
@@ -282,17 +498,37 @@ pub fn build(
                 if &entry.method != method {
                     continue;
                 }
-                let board = if entry.level.on_target() {
-                    Some(request.board.ok_or_else(|| {
+                let mut exercised = BTreeMap::new();
+                let mut toolchain = None;
+                if entry.level.on_target() {
+                    let board = request.board.ok_or_else(|| {
                         format!(
                             "{} has {} evidence, which needs --board",
                             requirement.id,
                             entry.level.name()
                         )
-                    })?)
+                    })?;
+                    if configuration.is_none() {
+                        configuration = Some(
+                            current
+                                .configurations
+                                .configuration(board, request.features)?
+                                .as_ref()
+                                .clone(),
+                        );
+                    }
                 } else {
-                    None
-                };
+                    toolchain = Some(current.host_toolchain(method)?);
+                    for module in current.exercised(requirement, entry)? {
+                        let imports = current.trace.imports(&module);
+                        for key in std::iter::once(&module).chain(&imports) {
+                            if let Some(identity) = current.trace.identity(key) {
+                                identities.insert(key.clone(), identity);
+                            }
+                        }
+                        exercised.insert(module, imports);
+                    }
+                }
                 named.insert(requirement.id.as_str());
                 let outcome = if request.failed.contains(&requirement.id) {
                     Outcome::Fail
@@ -305,7 +541,9 @@ pub fn build(
                     level: entry.level,
                     target: entry.target,
                     setup: entry.setup,
-                    fingerprint: fingerprints.entry(requirement, entry, board)?,
+                    claim: current.claim(requirement, entry)?,
+                    toolchain,
+                    exercised,
                     result: outcome,
                 });
             }
@@ -322,6 +560,9 @@ pub fn build(
     let host_only = results.iter().all(|result| !result.level.on_target());
     if host_only && request.board.is_some() {
         return Err("--board applies only to mcu, bench and flight evidence".into());
+    }
+    if host_only && !request.features.is_empty() {
+        return Err("--features applies only to mcu, bench and flight evidence".into());
     }
     let mut sealed = request.details.clone();
     if let Some(details) = &mut sealed {
@@ -342,11 +583,14 @@ pub fn build(
         board: request.board.map(str::to_owned),
         revision,
         working_tree,
+        configuration,
+        identities,
         results,
         note: request.note.map(str::to_owned),
         supersedes: request.supersedes.to_vec(),
         ruling: request.ruling.map(str::to_owned),
         details: sealed,
+        retraced: None,
     })
 }
 
@@ -492,48 +736,33 @@ impl Timestamp {
 mod tests {
     use super::*;
 
-    fn result(fingerprint: &str, result: Outcome) -> RunResult {
-        RunResult {
-            requirement: "A-001".into(),
-            method: Method::Test("a::tests::t".into()),
-            level: Level::Unit,
-            target: Target::Host,
-            setup: Setup::None,
-            fingerprint: fingerprint.into(),
-            result,
-        }
-    }
-
     #[test]
-    fn a_fail_at_the_current_fingerprint_is_never_outvoted() {
+    fn a_fail_that_counts_is_never_outvoted() {
         let runs = [
-            result("now", Outcome::Pass),
-            result("now", Outcome::Fail),
-            result("now", Outcome::Pass),
+            (true, Outcome::Pass),
+            (true, Outcome::Fail),
+            (true, Outcome::Pass),
         ];
-        assert_eq!(entry_status(runs.iter(), "now"), Status::Failed);
+        assert_eq!(entry_status(runs.into_iter()), Status::Failed);
     }
 
     #[test]
     fn a_fail_is_cleared_by_a_pass_once_the_code_changed() {
-        let runs = [
-            result("before", Outcome::Fail),
-            result("now", Outcome::Pass),
-        ];
-        assert_eq!(entry_status(runs.iter(), "now"), Status::Verified);
+        let runs = [(false, Outcome::Fail), (true, Outcome::Pass)];
+        assert_eq!(entry_status(runs.into_iter()), Status::Verified);
     }
 
     #[test]
     fn an_old_pass_is_stale_and_an_old_fail_alone_is_unverified() {
         assert_eq!(
-            entry_status([result("before", Outcome::Pass)].iter(), "now"),
+            entry_status([(false, Outcome::Pass)].into_iter()),
             Status::Stale
         );
         assert_eq!(
-            entry_status([result("before", Outcome::Fail)].iter(), "now"),
+            entry_status([(false, Outcome::Fail)].into_iter()),
             Status::Unverified
         );
-        assert_eq!(entry_status([].iter(), "now"), Status::Unverified);
+        assert_eq!(entry_status([].into_iter()), Status::Unverified);
     }
 
     #[test]

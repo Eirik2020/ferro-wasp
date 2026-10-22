@@ -9,8 +9,9 @@ use crate::gates::{self, Gate};
 use crate::items::Resolver;
 use crate::roots::{self, Root};
 use crate::schema::{
-    Entry, Level, Method, Mode, Requirement, RequirementFile, SCHEMA_VERSION, Setup, Target,
+    Entry, Level, Method, Requirement, RequirementFile, SCHEMA_VERSION, Setup, Target,
 };
+use crate::trace::{Import, Trace};
 use crate::workspace::{self, Workspace};
 
 pub const REQUIREMENTS: &str = "project_meta/requirements";
@@ -35,6 +36,8 @@ pub struct Project {
     /// The file each requirement came from, relative to the repository.
     pub sources: BTreeMap<String, String>,
     pub workspace: Workspace,
+    /// Every source file: identities, declarations and imports.
+    pub trace: Trace,
     pub gates: Vec<Gate>,
 }
 
@@ -111,12 +114,18 @@ impl Project {
                 Vec::new()
             }
         };
+        let trace = Trace::build(repository, &workspace)?;
+        problems.extend(trace.problems.iter().map(|message| Problem {
+            location: "source".to_owned(),
+            message: message.clone(),
+        }));
         let project = Self {
             repository: repository.to_path_buf(),
             roots,
             requirements,
             sources,
             workspace,
+            trace,
             gates,
         };
         problems.extend(project.validate());
@@ -143,51 +152,44 @@ impl Project {
             .collect()
     }
 
-    /// Mandatory linking (ADR-0054): every `pub` item of a safety-critical
-    /// crate has a requirement allocated to it or to a module or type
-    /// enclosing it. Allocations are compared where the items are defined, so
-    /// a requirement may name an item by a re-export.
-    pub fn unlinked_critical_items(&self) -> Vec<Problem> {
-        let resolver = Resolver::new(&self.workspace.crates);
-        let allocated: Vec<String> = self
-            .requirements
-            .values()
-            .flat_map(|requirement| &requirement.allocated_to)
-            .filter_map(|path| resolver.resolve(path).ok())
-            .map(|resolved| resolved.canonical)
-            .collect();
+    /// The per-file rules (design section 20), at the `analysis` level:
+    /// a safety-critical file that defines code declares a requirement
+    /// (TRACE-001), and imports only safety-critical files and pinned
+    /// external crates (TRACE-002).
+    pub fn trace_findings(&self) -> Vec<Problem> {
         let mut problems = Vec::new();
-        for found in self
-            .workspace
-            .crates
-            .values()
-            .filter(|found| found.critical)
-        {
-            let items = match resolver.public_items(&found.name) {
-                Ok(items) => items,
-                Err(message) => {
-                    problems.push(Problem {
-                        location: found.package.clone(),
-                        message,
-                    });
-                    continue;
-                }
+        for (path, file) in &self.trace.files {
+            if !file.critical {
+                continue;
+            }
+            let mut problem = |message: String| {
+                problems.push(Problem {
+                    location: path.clone(),
+                    message,
+                })
             };
-            for item in items {
-                let covered = allocated.iter().any(|path| {
-                    item == *path
-                        || item
-                            .strip_prefix(path.as_str())
-                            .is_some_and(|rest| rest.starts_with("::"))
-                });
-                if !covered {
-                    problems.push(Problem {
-                        location: item,
-                        message: format!(
-                            "{} is safety-critical, and no requirement is allocated to this item or one enclosing it",
-                            found.package
-                        ),
-                    });
+            if file.defines_code && file.requirements.is_empty() {
+                problem("is safety-critical, and declares no requirement it implements".into());
+            }
+            for (key, import) in &file.imports {
+                match import {
+                    Import::File => {
+                        if self
+                            .trace
+                            .files
+                            .get(key)
+                            .is_some_and(|target| !target.critical)
+                        {
+                            problem(format!(
+                                "is safety-critical, and imports {key}, which is not"
+                            ));
+                        }
+                    }
+                    Import::External { pinned: false } => problem(format!(
+                        "is safety-critical, and imports {}, which its manifest does not pin to one version",
+                        key.trim_start_matches("extern:")
+                    )),
+                    Import::External { pinned: true } => {}
                 }
             }
         }
@@ -230,100 +232,30 @@ impl Project {
                     problem(format!("derives from unknown {parent}"));
                 }
             }
-            let mut seen = BTreeSet::new();
-            for path in &requirement.allocated_to {
-                if !seen.insert(path) {
-                    problem(format!("allocated twice to {path}"));
-                } else if let Err(message) = resolver.resolve(path) {
-                    problem(format!(
-                        "allocated to an item that does not resolve: {message}"
-                    ));
-                }
-            }
-            for message in self.mode_problems(requirement) {
-                problem(message);
-            }
             for (index, entry) in requirement.verification.entries.iter().enumerate() {
                 for message in entry_problems(entry, &resolver, &self.repository) {
                     problem(format!("entry {}: {message}", index + 1));
                 }
             }
         }
+        for (path, file) in &self.trace.files {
+            let mut seen = BTreeSet::new();
+            for id in &file.requirements {
+                let location = path.clone();
+                if !seen.insert(id) {
+                    problems.push(Problem {
+                        location,
+                        message: format!("declares {id} twice"),
+                    });
+                } else if !self.requirements.contains_key(id) {
+                    problems.push(Problem {
+                        location,
+                        message: format!("declares unknown requirement {id}"),
+                    });
+                }
+            }
+        }
         problems.extend(self.cycles());
-        problems
-    }
-
-    fn mode_problems(&self, requirement: &Requirement) -> Vec<String> {
-        let verification = &requirement.verification;
-        // A child covered by this requirement takes its status from it, so it
-        // cannot help prove it.
-        let has_children = self
-            .children(&requirement.id)
-            .iter()
-            .any(|child| child.verification.mode != Mode::CoveredByParent);
-        let has_parent = requirement
-            .derived_from
-            .iter()
-            .any(|parent| self.requirements.contains_key(parent));
-        let has_reason = verification
-            .reason
-            .as_deref()
-            .is_some_and(|reason| !reason.trim().is_empty());
-        let mut problems = Vec::new();
-        match verification.mode {
-            // A requirement may exist before anything verifies it; `check`
-            // reports it as having no method, which is how a gap shows.
-            Mode::Direct => {}
-            Mode::ViaChildren => {
-                if !has_children {
-                    problems.push(
-                        "via_children, but no child verifies itself (children covered by this one cannot prove it)".into(),
-                    );
-                }
-                if !has_reason {
-                    problems.push(
-                        "via_children needs a reason: why the children are jointly sufficient"
-                            .into(),
-                    );
-                }
-            }
-            Mode::CoveredByParent => {
-                if !has_parent {
-                    problems.push(
-                        "covered_by_parent, but it derives from no parent requirement".into(),
-                    );
-                }
-                if !has_reason {
-                    problems.push("covered_by_parent needs a reason".into());
-                }
-                if verification
-                    .observed_by
-                    .as_deref()
-                    .is_none_or(|observable| observable.trim().is_empty())
-                {
-                    problems.push("covered_by_parent needs observed_by: what in the parent's run observes this".into());
-                }
-            }
-            Mode::Either => {
-                if verification.entries.is_empty() || !has_children {
-                    problems.push(
-                        "either needs its own entries and at least one child that verifies itself"
-                            .into(),
-                    );
-                }
-                if !has_reason {
-                    problems.push(
-                        "either needs a reason: why the children are jointly sufficient".into(),
-                    );
-                }
-            }
-        }
-        if verification.observed_by.is_some() && verification.mode != Mode::CoveredByParent {
-            problems.push(format!(
-                "observed_by only applies to covered_by_parent, not {}",
-                verification.mode.name()
-            ));
-        }
         problems
     }
 

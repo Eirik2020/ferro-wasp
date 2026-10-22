@@ -19,10 +19,26 @@ pub struct Crate {
     pub directory: PathBuf,
     /// The library's root source file, if it has a library.
     pub lib: Option<PathBuf>,
+    /// The binary's root source file, `src/main.rs`, if it has one.
+    pub main: Option<PathBuf>,
     /// The `Cargo.lock` that resolves its dependencies.
     pub lockfile: PathBuf,
     /// `[package.metadata.ferrowasp] critical = true`.
     pub critical: bool,
+    /// Every dependency, build and dev ones included, keyed by the name code
+    /// uses for it.
+    pub dependencies: BTreeMap<String, Dependency>,
+}
+
+/// One dependency as a manifest declares it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Dependency {
+    /// The package it names, after any `package =` rename.
+    pub package: String,
+    /// A `path` dependency: another package in the repository.
+    pub local: bool,
+    /// Pinned to one version (`=x.y.z`) or one git `rev`.
+    pub pinned: bool,
 }
 
 /// Every package, and every board's firmware app.
@@ -41,6 +57,14 @@ struct Manifest {
     package: Option<Package>,
     lib: Option<LibTarget>,
     workspace: Option<ManifestWorkspace>,
+    #[serde(default)]
+    dependencies: toml::Table,
+    #[serde(default, rename = "dev-dependencies")]
+    dev_dependencies: toml::Table,
+    #[serde(default, rename = "build-dependencies")]
+    build_dependencies: toml::Table,
+    #[serde(default)]
+    target: toml::Table,
 }
 
 #[derive(Deserialize)]
@@ -70,6 +94,8 @@ struct LibTarget {
 struct ManifestWorkspace {
     #[serde(default)]
     members: Vec<String>,
+    #[serde(default)]
+    dependencies: toml::Table,
 }
 
 /// The root workspace's members plus each firmware app under `firmware/`.
@@ -77,6 +103,11 @@ pub fn discover(repository: &Path) -> Result<Workspace, String> {
     let root_lock = repository.join("Cargo.lock");
     let mut manifests = Vec::new();
     let root = read_manifest(&repository.join("Cargo.toml"))?;
+    let inherited = root
+        .workspace
+        .as_ref()
+        .map(|workspace| workspace.dependencies.clone())
+        .unwrap_or_default();
     if let Some(workspace) = root.workspace {
         for member in workspace.members {
             if member.contains('*') {
@@ -109,6 +140,7 @@ pub fn discover(repository: &Path) -> Result<Workspace, String> {
     let mut workspace = Workspace::default();
     for (path, lockfile, board) in manifests {
         let manifest = read_manifest(&path)?;
+        let dependencies = dependencies(&manifest, &inherited);
         let Some(package) = manifest.package else {
             continue;
         };
@@ -129,13 +161,16 @@ pub fn discover(repository: &Path) -> Result<Workspace, String> {
             .metadata
             .and_then(|metadata| metadata.ferrowasp)
             .is_some_and(|ferrowasp| ferrowasp.critical);
+        let main = directory.join("src/main.rs");
         let found = Crate {
             name: name.clone(),
             package: package.name.clone(),
-            directory,
             lib: lib_path.is_file().then_some(lib_path),
+            main: main.is_file().then_some(main),
+            directory,
             lockfile,
             critical,
+            dependencies,
         };
         if let Some(board) = board {
             workspace.boards.insert(board, found.clone());
@@ -151,6 +186,49 @@ pub fn discover(repository: &Path) -> Result<Workspace, String> {
         workspace.packages.insert(package.name, found);
     }
     Ok(workspace)
+}
+
+/// Every dependency table of a manifest, `[target.*]` ones included, with
+/// `workspace = true` entries taken from the root's `[workspace.dependencies]`.
+fn dependencies(manifest: &Manifest, inherited: &toml::Table) -> BTreeMap<String, Dependency> {
+    let mut tables = vec![
+        &manifest.dependencies,
+        &manifest.dev_dependencies,
+        &manifest.build_dependencies,
+    ];
+    for target in manifest.target.values().filter_map(toml::Value::as_table) {
+        for key in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            if let Some(table) = target.get(key).and_then(toml::Value::as_table) {
+                tables.push(table);
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    for table in tables {
+        for (key, spec) in table {
+            let spec = match spec.get("workspace").and_then(toml::Value::as_bool) {
+                Some(true) => inherited.get(key).unwrap_or(spec),
+                _ => spec,
+            };
+            let field = |name: &str| spec.get(name).and_then(toml::Value::as_str);
+            let version = spec.as_str().or_else(|| field("version"));
+            let pinned = field("rev").is_some()
+                || version.is_some_and(|version| {
+                    version
+                        .strip_prefix('=')
+                        .is_some_and(|exact| exact.trim().split('.').count() == 3)
+                });
+            out.insert(
+                key.replace('-', "_"),
+                Dependency {
+                    package: field("package").unwrap_or(key).to_owned(),
+                    local: field("path").is_some(),
+                    pinned,
+                },
+            );
+        }
+    }
+    out
 }
 
 fn read_manifest(path: &Path) -> Result<Manifest, String> {

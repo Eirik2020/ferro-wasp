@@ -1,12 +1,15 @@
-//! What `reqtool check` prints: compact, one fact per line, for agents first.
+//! What `reqtool check` and `reqtool report` print: compact, one fact per
+//! line, for agents first.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+use crate::configuration::Configuration;
 use crate::items::Resolver;
 use crate::project::Project;
-use crate::schema::{Method, Mode, Requirement};
+use crate::schema::{Method, Requirement};
 use crate::status::{self, Evidence, Status};
+use crate::trace::Import;
 
 /// The whole project: a count per status, then one line per requirement.
 pub fn summary(project: &Project, evidence: &dyn Evidence) -> String {
@@ -45,13 +48,14 @@ pub fn summary(project: &Project, evidence: &dyn Evidence) -> String {
     out
 }
 
-/// A `direct` requirement with no entries: nothing verifies it yet.
+/// A requirement with no entries: nothing verifies it yet.
 fn has_no_method(requirement: &Requirement) -> bool {
-    requirement.verification.mode == Mode::Direct && requirement.verification.entries.is_empty()
+    requirement.verification.entries.is_empty()
 }
 
-/// One requirement by ID, or every requirement allocated to, inside, or
-/// around an item path.
+/// One requirement by ID, a governing requirement's children, or a source
+/// file, by repository-relative path or by module path, with the
+/// requirements it declares.
 pub fn check(project: &Project, target: &str, evidence: &dyn Evidence) -> Result<String, String> {
     let statuses = status::compute(&project.requirements, evidence);
     if let Some(requirement) = project.requirements.get(target) {
@@ -74,36 +78,46 @@ pub fn check(project: &Project, target: &str, evidence: &dyn Evidence) -> Result
         }
         return Ok(out);
     }
-    Resolver::new(&project.workspace.crates).resolve(target)?;
-    let related: Vec<&Requirement> = project
-        .requirements
+    let path = if project.trace.files.contains_key(target) {
+        target.to_owned()
+    } else {
+        let resolved = Resolver::new(&project.workspace.crates).resolve(target)?;
+        project
+            .trace
+            .locate(&project.repository, &resolved.file)
+            .ok_or_else(|| format!("{target}: its file is in no module tree"))?
+    };
+    let file = &project.trace.files[&path];
+    let mut out = format!(
+        "{path}  {}\n",
+        if file.critical {
+            "safety-critical"
+        } else {
+            "not safety-critical"
+        }
+    );
+    let files = file
+        .imports
         .values()
-        .filter(|requirement| {
-            requirement
-                .allocated_to
-                .iter()
-                .any(|path| overlaps(path, target))
-        })
-        .collect();
-    let crate_name = target.split("::").next().unwrap_or(target);
-    let critical = project
-        .workspace
-        .crates
-        .get(crate_name)
-        .is_some_and(|found| found.critical);
-    if related.is_empty() {
-        let mut out = format!("no requirement is allocated to {target} or around it\n");
-        if critical {
-            let _ = writeln!(
-                out,
-                "{crate_name} is safety-critical: its items must trace to a requirement"
-            );
+        .filter(|import| **import == Import::File)
+        .count();
+    let _ = writeln!(
+        out,
+        "  imports: {files} file(s), {} external crate(s)",
+        file.imports.len() - files
+    );
+    if file.requirements.is_empty() {
+        out.push_str("  declares no requirement\n");
+        if file.critical && file.defines_code {
+            out.push_str("  a safety-critical file must declare the requirements it implements\n");
         }
         return Ok(out);
     }
-    let mut out = String::new();
-    for requirement in related {
-        out.push_str(&detail(project, requirement, &statuses, evidence));
+    let _ = writeln!(out, "  declares: {}", file.requirements.join(", "));
+    for id in &file.requirements {
+        if let Some(requirement) = project.requirements.get(id) {
+            out.push_str(&detail(project, requirement, &statuses, evidence));
+        }
     }
     Ok(out)
 }
@@ -134,12 +148,9 @@ fn detail(
         })
         .collect();
     let _ = writeln!(out, "  derived from: {}", parents.join(", "));
-    if !requirement.allocated_to.is_empty() {
-        let _ = writeln!(
-            out,
-            "  allocated to: {}",
-            requirement.allocated_to.join(", ")
-        );
+    let declaring = project.trace.declaring(&requirement.id);
+    if !declaring.is_empty() {
+        let _ = writeln!(out, "  declared by: {}", declaring.join(", "));
     }
     let children: Vec<&str> = project
         .children(&requirement.id)
@@ -149,16 +160,11 @@ fn detail(
     if !children.is_empty() {
         let _ = writeln!(out, "  children: {}", children.join(", "));
     }
-    let verification = &requirement.verification;
-    let _ = write!(out, "  verification: {}", verification.mode.name());
-    if let Some(observed) = &verification.observed_by {
-        let _ = write!(out, ", observed by {observed}");
-    }
-    out.push('\n');
+    out.push_str("  verification:\n");
     if has_no_method(requirement) {
         out.push_str("    no verification method yet\n");
     }
-    for (index, entry) in verification.entries.iter().enumerate() {
+    for (index, entry) in requirement.verification.entries.iter().enumerate() {
         let method = match &entry.method {
             Method::Test(path) => format!("test {path}"),
             Method::Procedure(reference) => format!("procedure {reference}"),
@@ -178,23 +184,67 @@ fn detail(
     out
 }
 
-/// One path names the other or something inside it.
-fn overlaps(a: &str, b: &str) -> bool {
-    let inside =
-        |outer: &str, inner: &str| inner == outer || inner.starts_with(&format!("{outer}::"));
-    inside(a, b) || inside(b, a)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::overlaps;
-
-    #[test]
-    fn overlap_is_by_whole_path_segments() {
-        assert!(overlaps("a::b", "a::b"));
-        assert!(overlaps("a::b", "a::b::c"));
-        assert!(overlaps("a::b::c", "a"));
-        assert!(!overlaps("a::bc", "a::b"));
-        assert!(!overlaps("a::b", "x::b"));
+/// Maturity for one configuration (TRACE-006): every requirement declared by
+/// the safety-critical files it compiles in, with its status there, and the
+/// safety-critical files that declare nothing.
+pub fn maturity(
+    project: &Project,
+    configuration: &Configuration,
+    evidence: &dyn Evidence,
+) -> String {
+    let statuses = status::compute(&project.requirements, evidence);
+    let critical: Vec<(&String, &crate::trace::SourceFile)> = project
+        .trace
+        .files
+        .iter()
+        .filter(|(path, file)| file.critical && configuration.files.contains_key(*path))
+        .collect();
+    let mut declared: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut silent = Vec::new();
+    for (path, file) in &critical {
+        if file.requirements.is_empty() {
+            silent.push(path.as_str());
+        }
+        for id in &file.requirements {
+            declared.entry(id.as_str()).or_default().push(path.as_str());
+        }
     }
+    let mut counts: BTreeMap<Status, usize> = BTreeMap::new();
+    for id in declared.keys() {
+        if let Some(status) = statuses.get(*id) {
+            *counts.entry(*status).or_default() += 1;
+        }
+    }
+    let features = if configuration.features.is_empty() {
+        "default features".to_owned()
+    } else {
+        configuration.features.join(", ")
+    };
+    let mut out = format!(
+        "{} with {features}: {} files compiled in, {} safety-critical; configuration {}\n",
+        configuration.board,
+        configuration.files.len(),
+        critical.len(),
+        &configuration.identity()[..16]
+    );
+    let _ = write!(out, "{} requirements declared", declared.len());
+    for (status, count) in &counts {
+        let _ = write!(out, ", {count} {}", status.name());
+    }
+    out.push('\n');
+    for (id, files) in &declared {
+        let status = statuses.get(*id).map_or("unknown", |status| status.name());
+        let _ = writeln!(out, "{id:<16} {status:<10} {}", files.join(", "));
+    }
+    if !silent.is_empty() {
+        let _ = writeln!(
+            out,
+            "{} safety-critical file(s) declare no requirement:",
+            silent.len()
+        );
+        for path in silent {
+            let _ = writeln!(out, "  {path}");
+        }
+    }
+    out
 }

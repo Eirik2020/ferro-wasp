@@ -46,28 +46,58 @@ fn assert_problem(yaml: &str, expected: &str) {
     );
 }
 
-const VALID_ONE: &str = "schema_version: 1
+const VALID_ONE: &str = "schema_version: 2
 requirements:
   - id: INPUT-001
     title: Reject stale RC input
     statement: Command Input shall reject stale frames.
     rationale: Stale input is never a live command.
     derived_from: [W2]
-    allocated_to: [alpha::input]
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
           setup: none
           method:
             test: alpha::input::tests::rejects_stale
+  - id: INPUT-002
+    title: a
+    statement: a
+    rationale: a
+    derived_from: [W2]
+    verification:
+      entries: []
+  - id: INPUT-004
+    title: b
+    statement: b
+    rationale: b
+    derived_from: [W2]
+    verification:
+      entries: []
 ";
+
+fn edit(repository: &Path, file: &str, from: &str, to: &str) {
+    let path = repository.join(file);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains(from), "{from} in {file}");
+    std::fs::write(&path, text.replacen(from, to, 1)).unwrap();
+}
+
+fn findings(repository: &Path) -> Vec<String> {
+    let (project, problems) = Project::load(repository).unwrap();
+    assert!(problems.is_empty(), "{problems:#?}");
+    project
+        .trace_findings()
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
 
 #[test]
 fn the_fixture_is_valid_and_everything_starts_unverified() {
     let (project, problems) = Project::load(&fixture()).unwrap();
     assert!(problems.is_empty(), "{problems:#?}");
+    assert!(project.trace_findings().is_empty());
     assert_eq!(project.requirements.len(), 4);
     let statuses = status::compute(&project.requirements, &NoEvidence);
     assert!(
@@ -82,40 +112,76 @@ fn the_real_repository_is_valid() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let (project, problems) = Project::load(&repository).unwrap();
     assert!(problems.is_empty(), "{problems:#?}");
-    let unlinked = project.unlinked_critical_items();
-    assert!(unlinked.is_empty(), "{unlinked:#?}");
+    let findings = project.trace_findings();
+    assert!(findings.is_empty(), "{findings:#?}");
 }
 
 #[test]
-fn check_by_item_finds_requirements_allocated_around_it() {
+fn files_declare_requirements_and_imports_resolve_to_files() {
     let (project, _) = Project::load(&fixture()).unwrap();
-    let inside = report::check(&project, "alpha::input::validate", &NoEvidence).unwrap();
-    assert!(inside.contains("INPUT-001"), "{inside}");
-    let around = report::check(&project, "alpha", &NoEvidence).unwrap();
-    for id in ["INPUT-001", "INPUT-002", "INPUT-004"] {
-        assert!(around.contains(id), "{id} in {around}");
-    }
-    let none = report::check(&project, "beta::plain", &NoEvidence).unwrap();
-    assert!(none.starts_with("no requirement is allocated"), "{none}");
-    assert!(report::check(&project, "alpha::missing", &NoEvidence).is_err());
+    let input = &project.trace.files["crates/alpha/src/input.rs"];
+    assert!(input.critical);
+    assert_eq!(input.requirements, ["INPUT-001", "INPUT-002"]);
+    let imports: Vec<&str> = input.imports.keys().map(String::as_str).collect();
+    assert_eq!(
+        imports,
+        ["crates/alpha/src/hidden.rs"],
+        "its own module is not an import"
+    );
+
+    let root: Vec<&str> = project.trace.files["crates/alpha/src/lib.rs"]
+        .imports
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        root,
+        [
+            "crates/alpha/src/hidden.rs",
+            "crates/alpha/src/input/nested.rs"
+        ],
+        "a glob covers the module it names, not the modules on its path"
+    );
+    assert!(!project.trace.files["crates/alpha/src/lib.rs"].defines_code);
+
+    let beta = &project.trace.files["crates/beta/src/lib.rs"];
+    assert!(!beta.critical);
+    let imports: Vec<&str> = beta.imports.keys().map(String::as_str).collect();
+    assert_eq!(
+        imports,
+        ["crates/alpha/src/input.rs", "extern:heapless@0.8.0"],
+        "a re-export resolves to where the item is defined; an external crate to its locked version"
+    );
 }
 
 #[test]
-fn check_reports_mandatory_linking_in_a_critical_crate() {
-    let copy = with_requirements("schema_version: 1\nrequirements: []\n");
-    let (project, _) = Project::load(copy.path()).unwrap();
-    let text = report::check(&project, "alpha::input::validate", &NoEvidence).unwrap();
-    assert!(text.contains("alpha is safety-critical"), "{text}");
-    let text = report::check(&project, "beta::plain", &NoEvidence).unwrap();
-    assert!(!text.contains("safety-critical"), "{text}");
+fn check_by_file_or_module_shows_what_it_declares() {
+    let (project, _) = Project::load(&fixture()).unwrap();
+    let by_file = report::check(&project, "crates/alpha/src/input.rs", &NoEvidence).unwrap();
+    assert!(by_file.contains("safety-critical"), "{by_file}");
+    assert!(
+        by_file.contains("declares: INPUT-001, INPUT-002"),
+        "{by_file}"
+    );
+    let by_module = report::check(&project, "alpha::input::validate", &NoEvidence).unwrap();
+    assert_eq!(by_file, by_module);
+    let none = report::check(&project, "beta::plain", &NoEvidence).unwrap();
+    assert!(none.contains("not safety-critical"), "{none}");
+    assert!(none.contains("declares no requirement"), "{none}");
+    assert!(report::check(&project, "alpha::missing", &NoEvidence).is_err());
 }
 
 #[test]
 fn check_by_id_and_by_root() {
     let (project, _) = Project::load(&fixture()).unwrap();
     let text = report::check(&project, "INPUT-003", &NoEvidence).unwrap();
-    assert!(text.contains("verification: via_children"), "{text}");
     assert!(text.contains("children: INPUT-002, INPUT-004"), "{text}");
+    assert!(text.contains("no verification method yet"), "{text}");
+    let text = report::check(&project, "INPUT-002", &NoEvidence).unwrap();
+    assert!(
+        text.contains("declared by: crates/alpha/src/hidden.rs, crates/alpha/src/input.rs"),
+        "{text}"
+    );
     let text = report::check(&project, "W2", &NoEvidence).unwrap();
     assert!(text.contains("INPUT-001"), "{text}");
 }
@@ -127,8 +193,15 @@ fn a_valid_single_requirement_has_no_problems() {
 
 #[test]
 fn unknown_fields_are_refused() {
-    let status_field = VALID_ONE.replace("    title:", "    status: verified\n    title:");
-    assert!(!problems(&status_field).is_empty());
+    for field in [
+        "    status: verified\n",
+        "    allocated_to: [alpha::input]\n",
+    ] {
+        let extra = VALID_ONE.replacen("    title:", &format!("{field}    title:"), 1);
+        assert!(!problems(&extra).is_empty(), "{field}");
+    }
+    let mode = VALID_ONE.replacen("      entries:", "      mode: direct\n      entries:", 1);
+    assert!(!problems(&mode).is_empty(), "verification modes are gone");
 }
 
 #[test]
@@ -139,7 +212,7 @@ fn ids_must_be_well_formed_unique_and_not_roots() {
     );
     let twice = format!(
         "{VALID_ONE}{}",
-        &VALID_ONE["schema_version: 1\nrequirements:\n".len()..]
+        &VALID_ONE["schema_version: 2\nrequirements:\n".len()..]
     );
     assert_problem(&twice, "duplicate ID");
 }
@@ -152,16 +225,86 @@ fn references_must_resolve() {
     );
     assert_problem(&VALID_ONE.replace("[W2]", "[]"), "derived_from is empty");
     assert_problem(
-        &VALID_ONE.replace("[alpha::input]", "[alpha::output]"),
-        "does not resolve",
-    );
-    assert_problem(
-        &VALID_ONE.replace("[alpha::input]", "[gamma::x]"),
-        "no crate gamma",
-    );
-    assert_problem(
         &VALID_ONE.replace("tests::rejects_stale", "tests::helper"),
         "is not a #[test] function",
+    );
+    assert_problem(
+        &VALID_ONE.replace("alpha::input::tests", "gamma::tests"),
+        "no crate gamma",
+    );
+}
+
+#[test]
+fn declarations_must_name_known_requirements() {
+    let copy = with_requirements(VALID_ONE);
+    edit(
+        copy.path(),
+        "crates/alpha/src/input.rs",
+        "INPUT-001, INPUT-002",
+        "INPUT-001, INPUT-001, INPUT-099",
+    );
+    let (_, problems) = Project::load(copy.path()).unwrap();
+    let text: Vec<String> = problems.iter().map(ToString::to_string).collect();
+    for expected in [
+        "crates/alpha/src/input.rs: declares INPUT-001 twice",
+        "crates/alpha/src/input.rs: declares unknown requirement INPUT-099",
+    ] {
+        assert!(
+            text.iter().any(|p| p == expected),
+            "{expected} in {text:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_critical_file_declares_a_requirement_and_imports_only_verified_code() {
+    let copy = with_requirements(VALID_ONE);
+    let path = copy.path();
+    edit(
+        path,
+        "crates/alpha/src/input/nested.rs",
+        "//! Requirements: INPUT-004\n",
+        "",
+    );
+    assert_eq!(
+        findings(path),
+        [
+            "crates/alpha/src/input/nested.rs: is safety-critical, and declares no requirement it implements"
+        ]
+    );
+
+    let copy = with_requirements(VALID_ONE);
+    let path = copy.path();
+    edit(
+        path,
+        "crates/alpha/src/hidden.rs",
+        "pub struct Original;",
+        "pub struct Original;\n\npub fn helper() { beta::plain(); }",
+    );
+    edit(
+        path,
+        "crates/alpha/Cargo.toml",
+        "[lib]",
+        "[dependencies]\nheapless = \"0.8\"\n\n[lib]",
+    );
+    edit(
+        path,
+        "crates/alpha/src/input.rs",
+        "use crate::hidden::Original;",
+        "use crate::hidden::Original;\nuse heapless::Vec;",
+    );
+    assert_eq!(
+        findings(path),
+        [
+            "crates/alpha/src/hidden.rs: is safety-critical, and imports crates/beta/src/lib.rs, which is not",
+            "crates/alpha/src/input.rs: is safety-critical, and imports heapless@unlocked, which its manifest does not pin to one version",
+        ]
+    );
+    edit(path, "crates/alpha/Cargo.toml", "\"0.8\"", "\"=0.8.0\"");
+    assert_eq!(
+        findings(path).len(),
+        1,
+        "a pinned external crate is allowed"
     );
 }
 
@@ -189,39 +332,22 @@ fn levels_targets_setups_and_methods_must_fit() {
 }
 
 #[test]
-fn modes_need_their_reasons_and_relations() {
-    assert_problem(
-        &VALID_ONE.replace("mode: direct", "mode: via_children"),
-        "no child verifies itself",
-    );
-    assert_problem(
-        &VALID_ONE.replace("mode: direct", "mode: covered_by_parent"),
-        "derives from no parent requirement",
-    );
-    assert_problem(
-        &VALID_ONE.replace("mode: direct", "mode: direct\n      observed_by: counter"),
-        "observed_by only applies to covered_by_parent",
-    );
-}
-
-#[test]
 fn a_requirement_without_a_method_is_valid_and_shows_as_a_gap() {
-    let no_entries = VALID_ONE.split("      entries:").next().unwrap().to_owned();
-    let copy = with_requirements(&no_entries);
+    let copy = with_requirements(VALID_ONE);
     let (project, problems) = Project::load(copy.path()).unwrap();
     assert!(problems.is_empty(), "{problems:#?}");
-    let detail = report::check(&project, "INPUT-001", &NoEvidence).unwrap();
+    let detail = report::check(&project, "INPUT-002", &NoEvidence).unwrap();
     assert!(detail.contains("no verification method yet"), "{detail}");
     let summary = report::summary(&project, &NoEvidence);
     assert!(
-        summary.contains("1 with no verification method yet"),
+        summary.contains("2 with no verification method yet"),
         "{summary}"
     );
 }
 
 #[test]
 fn derivation_cycles_are_refused() {
-    let cycle = "schema_version: 1
+    let cycle = "schema_version: 2
 requirements:
   - id: A-001
     title: a
@@ -229,45 +355,16 @@ requirements:
     rationale: a
     derived_from: [B-001]
     verification:
-      mode: covered_by_parent
-      observed_by: x
-      reason: x
+      entries: []
   - id: B-001
     title: b
     statement: b
     rationale: b
     derived_from: [A-001]
     verification:
-      mode: covered_by_parent
-      observed_by: x
-      reason: x
+      entries: []
 ";
     assert_problem(cycle, "derived_from forms a cycle");
-}
-
-#[test]
-fn a_parent_cannot_be_proven_only_by_children_it_covers() {
-    let only_covered = "schema_version: 1
-requirements:
-  - id: P-001
-    title: p
-    statement: p
-    rationale: p
-    derived_from: [W7]
-    verification:
-      mode: via_children
-      reason: x
-  - id: C-001
-    title: c
-    statement: c
-    rationale: c
-    derived_from: [P-001]
-    verification:
-      mode: covered_by_parent
-      observed_by: x
-      reason: x
-";
-    assert_problem(only_covered, "no child verifies itself");
 }
 
 #[test]
@@ -281,40 +378,4 @@ fn a_procedure_never_points_into_an_archive() {
             "procedure: archive/old.md#Gate",
         );
     assert_problem(&archived, "is archived");
-}
-
-#[test]
-fn every_public_item_of_a_critical_crate_needs_a_requirement() {
-    let (project, problems) = Project::load(&fixture()).unwrap();
-    assert!(problems.is_empty(), "{problems:?}");
-    // The fixture's requirements reach every item, two of them only through
-    // re-exports (`alpha::Renamed`, `alpha::renamed_module::reexported`).
-    assert_eq!(project.unlinked_critical_items(), Vec::new());
-
-    let copy = with_requirements("schema_version: 1\nrequirements: []\n");
-    let (project, _) = Project::load(copy.path()).unwrap();
-    let unlinked: Vec<String> = project
-        .unlinked_critical_items()
-        .into_iter()
-        .map(|problem| problem.location)
-        .collect();
-    assert_eq!(
-        unlinked,
-        [
-            "alpha::input::nested::deep",
-            "alpha::input::validate",
-            "alpha::input::Frame",
-            "alpha::input::Kind",
-            "alpha::input::inline::inner",
-            "alpha::input::inline::from_parent",
-            "alpha::hidden::reexported",
-            "alpha::hidden::Original",
-        ]
-    );
-    // Test modules and the non-critical crate are not checked.
-    assert!(
-        !unlinked
-            .iter()
-            .any(|item| item.contains("tests") || item.starts_with("beta"))
-    );
 }

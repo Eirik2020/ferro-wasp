@@ -5,12 +5,12 @@ to its chapter.
 
 ## 20. Tracing per source file
 
-This is the agreed design; `reqtool` does not implement it yet. Until it does,
-evidence is fingerprinted as [section 4](evidence.md#4-fingerprints)
-describes, and [remaining work](../remaining-work.md) carries the migration.
-It replaces section 4's crate-closure fingerprints, the crate as the boundary
-of evidence, `allocated_to`, mandatory linking of `pub` items, and the
-verification modes of [section 5](evidence.md#5-verification-modes-and-timing).
+`reqtool` implements this section, except library catalogs, the scheduling
+table without task names, and running the maturity report in release CI;
+[remaining work](../remaining-work.md) carries those. It replaces section 4's
+crate-closure fingerprints, the crate as the boundary of evidence,
+`allocated_to`, mandatory linking of `pub` items, and the verification modes
+of [section 5](evidence.md#5-verification-modes-and-timing).
 Levels, gates, variants and computed status (sections 2 and 3) stand, as do
 the priority and bus rules of [section 8](architecture.md#8-safety-critical-and-non-critical-code).
 The requirements that make its rules checkable are `TRACE-001` to `TRACE-007`
@@ -63,27 +63,37 @@ third-party crate is that crate's verification boundary: bumping the version
 re-owes the modules that import it, and nothing else.
 
 **What an import is.** A `use` declaration or a path in the file, resolved to
-the file that defines what it names. Where a path does not resolve to one
-file, the resolution widens and never narrows: a glob import covers every file
-the glob can reach, a macro the file that defines it, and a trait the files
-holding its implementations for the types the module names. Imports behind a
-`#[cfg]` count only in configurations that enable them.
+the file that defines what it names, or to an external crate at its locked
+version. Where a path does not resolve to one file, the resolution widens and
+never narrows: a glob import covers the module it names and every file that
+module re-exports, a macro the files defining it, and a type or trait the
+files holding `impl` blocks for it, in its own crate and in the importing
+one. Paths inside macro invocations and attribute arguments are read from
+their tokens. `#[cfg]` is ignored, so an import counts whether or not a
+configuration enables it; a configuration's own identity takes only the
+files it compiles in.
 
 **Safety-critical is per file.** Only safety-critical modules owe evidence:
 the safety core does, the OSD does not. A safety-critical module imports only
 other safety-critical modules and external crates pinned to one version
-(`=x.y.z`, or a git `rev`), and declares at least one requirement. `reqtool`
-checks both for each file, at the `analysis` level.
+(`=x.y.z`, or a git `rev`), and, unless it holds only module declarations and
+imports, declares at least one requirement. `reqtool` checks both for each
+file, at the `analysis` level.
 
 **Configurations.** A firmware image is a collection of module identities. A
 configuration is identified by:
 
-- the source files compiled into it, read from the compiler's dep-info;
+- the source files compiled into it, read from the compiler's dep-info, and
+  the files its build scripts rerun on, such as the linker's memory map;
+- the environment variables the compiler read, other than those a build
+  script sets, such as the git revision;
 - its Cargo feature set;
 - the versions of its external crates;
 - the Rust toolchain;
 - its RTIC scheduling table: each task's priority and binding, with task
-  names excluded, so renaming a task in the app shell changes nothing.
+  names excluded, so renaming a task in the app shell changes nothing. Until
+  the `app!` parser exists, the app shell's whole source stands in for the
+  table, names included.
 
 Timing evidence depends on scheduling as much as on code, which is why the
 scheduling table is part of the identity (section 4 has the bench run that

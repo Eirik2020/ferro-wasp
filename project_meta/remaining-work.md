@@ -92,13 +92,16 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   Its scope and open items are in the
   [requirements design](requirements/design.md#17-order-of-work).
 - **The `app!` parser** in `ferroforge-contracts`, and a FerroForge release, so
-  board requirements fingerprint the tasks they name instead of the whole app
-  closure.
-- **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file),
-  TRACE-001 to TRACE-007): declarations in the files, module identities and
-  their direct imports, configurations from dep-info, features and the
-  scheduling table, the maturity report, the per-file direction rule, and
-  recomputing old records from git.
+  a configuration's scheduling table leaves task names out, and the other
+  analysis-level checks can run.
+- **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file)):
+  library catalogs (requirements and tests shipped with a crate's version,
+  and a project mapping its requirements onto them); `reqtool report` for
+  each board's configuration in release CI, reporting and not blocking;
+  tests for TRACE-001 to TRACE-007 named as their methods; reviewing the
+  requirements that existed only for mandatory linking; and folding crates
+  that exist only to keep evidence apart into modules where that reads
+  better.
 - **`reqtool`**: the analysis-level checks, and running tests behind opt-in
   features, so they can be evidence.
 

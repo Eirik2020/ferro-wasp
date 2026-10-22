@@ -5,15 +5,13 @@ version = 4
 [[package]]
 name = "alpha-core"
 version = "0.1.0"
-dependencies = [
- "heapless",
-]
 
 [[package]]
 name = "beta"
 version = "0.1.0"
 dependencies = [
  "alpha-core",
+ "heapless",
 ]
 
 [[package]]

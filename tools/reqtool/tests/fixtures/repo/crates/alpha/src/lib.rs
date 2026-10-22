@@ -1,5 +1,7 @@
+//! Safety-critical.
+
 pub mod input;
-mod hidden;
+pub mod hidden;
 
 pub use hidden::reexported;
 pub use hidden::{self as renamed_module, Original as Renamed};

@@ -53,14 +53,26 @@ pub struct Resolved {
 /// A module: its crate, path from the crate root, the file holding its items,
 /// and the directory its out-of-line child modules live in.
 #[derive(Clone)]
-struct Module {
-    crate_name: String,
-    path: Vec<String>,
-    file: PathBuf,
+pub(crate) struct Module {
+    pub(crate) crate_name: String,
+    pub(crate) path: Vec<String>,
+    pub(crate) file: PathBuf,
     directory: PathBuf,
-    items: Rc<Vec<Item>>,
+    pub(crate) items: Rc<Vec<Item>>,
 }
 
+/// What the longest resolvable prefix of a path reached.
+pub(crate) struct Reached {
+    pub(crate) crate_name: String,
+    pub(crate) file: PathBuf,
+    /// `None` for a module.
+    pub(crate) kind: Option<Kind>,
+    /// The last segment reached: a module, type or trait name.
+    pub(crate) name: String,
+    pub(crate) module: Option<Module>,
+}
+
+#[derive(Clone)]
 enum Found {
     Module(Module),
     Leaf {
@@ -75,9 +87,14 @@ enum Found {
     },
 }
 
+/// A module's identity for caching: its file and path.
+type ModuleKey = (PathBuf, Vec<String>);
+
 pub struct Resolver<'a> {
     crates: &'a BTreeMap<String, Crate>,
     files: RefCell<HashMap<PathBuf, Rc<Vec<Item>>>>,
+    /// Lookups already done, which never change within one run.
+    lookups: RefCell<HashMap<(ModuleKey, String), Result<Found, String>>>,
 }
 
 impl<'a> Resolver<'a> {
@@ -85,6 +102,7 @@ impl<'a> Resolver<'a> {
         Self {
             crates,
             files: RefCell::new(HashMap::new()),
+            lookups: RefCell::new(HashMap::new()),
         }
     }
 
@@ -121,59 +139,69 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    /// Every `pub` item a crate defines, by its defining path: functions,
-    /// types, traits, constants and statics, in every module except
-    /// `#[cfg(test)]` ones. Tests are not items.
-    pub fn public_items(&self, crate_name: &str) -> Result<Vec<String>, String> {
-        let root = self
-            .crate_root(crate_name)
-            .ok_or_else(|| format!("no crate {crate_name} with a readable library"))?;
-        let mut out = Vec::new();
-        self.collect_public(&root, &mut out)?;
-        Ok(out)
-    }
-
-    fn collect_public(&self, module: &Module, out: &mut Vec<String>) -> Result<(), String> {
-        for item in module.items.iter() {
-            if let Item::Mod(child) = item {
-                if !is_cfg_test(&child.attrs) {
-                    let child = self.child(module, child)?;
-                    self.collect_public(&child, out)?;
-                }
-                continue;
-            }
-            let name = match item {
-                Item::Fn(f) if is_pub(&f.vis) && !is_test(&f.attrs) => f.sig.ident.to_string(),
-                Item::Struct(i) if is_pub(&i.vis) => i.ident.to_string(),
-                Item::Enum(i) if is_pub(&i.vis) => i.ident.to_string(),
-                Item::Union(i) if is_pub(&i.vis) => i.ident.to_string(),
-                Item::Type(i) if is_pub(&i.vis) => i.ident.to_string(),
-                Item::Trait(i) if is_pub(&i.vis) => i.ident.to_string(),
-                Item::Const(i) if is_pub(&i.vis) => i.ident.to_string(),
-                Item::Static(i) if is_pub(&i.vis) => i.ident.to_string(),
-                _ => continue,
-            };
-            let mut path = module.path.clone();
-            path.push(name);
-            out.push(qualified(&module.crate_name, &path));
-        }
-        Ok(())
-    }
-
-    fn crate_root(&self, name: &str) -> Option<Module> {
+    pub(crate) fn crate_root(&self, name: &str) -> Option<Module> {
         let found = self.crates.get(name)?;
         let lib = found.lib.as_ref()?;
-        let items = self.parse(lib).ok()?;
-        Some(Module {
-            crate_name: found.name.clone(),
+        self.root_at(&found.name, lib).ok()
+    }
+
+    /// A crate root at `file`, such as a binary's `main.rs`, under a crate
+    /// name of the caller's choosing.
+    pub(crate) fn root_at(&self, crate_name: &str, file: &Path) -> Result<Module, String> {
+        Ok(Module {
+            crate_name: crate_name.to_owned(),
             path: Vec::new(),
-            file: lib.clone(),
-            directory: lib.parent().unwrap_or(Path::new(".")).to_path_buf(),
-            items,
+            file: file.to_path_buf(),
+            directory: file.parent().unwrap_or(Path::new(".")).to_path_buf(),
+            items: self.parse(file)?,
         })
     }
 
-    fn parse(&self, file: &Path) -> Result<Rc<Vec<Item>>, String> {
+    /// The modules a module declares, inline or in their own files,
+    /// whatever their `#[cfg]`.
+    pub(crate) fn submodules(&self, module: &Module) -> Vec<Result<Module, String>> {
+        module
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Mod(child) => Some(self.child(module, child)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Resolves a path as written inside `module`, as far as it resolves:
+    /// the longest prefix that names something, or `None` if not even the
+    /// first segment does.
+    pub(crate) fn reach(&self, module: &Module, path: &[String]) -> Option<Reached> {
+        (1..=path.len()).rev().find_map(|length| {
+            let found = self.follow(module, &path[..length], 0).ok()?;
+            Some(match found {
+                Found::Module(reached) => Reached {
+                    crate_name: reached.crate_name.clone(),
+                    file: reached.file.clone(),
+                    kind: None,
+                    name: reached.path.last().cloned().unwrap_or_default(),
+                    module: Some(reached),
+                },
+                Found::Leaf {
+                    kind,
+                    file,
+                    crate_name,
+                    name,
+                    ..
+                } => Reached {
+                    crate_name,
+                    file,
+                    kind: Some(kind),
+                    name,
+                    module: None,
+                },
+            })
+        })
+    }
+
+    pub(crate) fn parse(&self, file: &Path) -> Result<Rc<Vec<Item>>, String> {
         if let Some(items) = self.files.borrow().get(file) {
             return Ok(Rc::clone(items));
         }
@@ -221,6 +249,20 @@ impl<'a> Resolver<'a> {
     /// Finds `name` in a module: an item, a `use` that brings it in, or an
     /// item reached through a glob import.
     fn lookup(&self, module: &Module, name: &str, depth: usize) -> Result<Found, String> {
+        let key = ((module.file.clone(), module.path.clone()), name.to_owned());
+        if let Some(found) = self.lookups.borrow().get(&key) {
+            return found.clone();
+        }
+        let found = self.lookup_uncached(module, name, depth);
+        // A lookup cut short by depth is not cached, so a shallower one can
+        // still succeed.
+        if depth <= MAX_DEPTH {
+            self.lookups.borrow_mut().insert(key, found.clone());
+        }
+        found
+    }
+
+    fn lookup_uncached(&self, module: &Module, name: &str, depth: usize) -> Result<Found, String> {
         if depth > MAX_DEPTH {
             return Err(format!("re-exports nest deeper than {MAX_DEPTH} levels"));
         }
@@ -392,20 +434,6 @@ fn qualified(crate_name: &str, path: &[String]) -> String {
     }
 }
 
-const fn is_pub(visibility: &syn::Visibility) -> bool {
-    matches!(visibility, syn::Visibility::Public(_))
-}
-
-/// `#[cfg(test)]` exactly; other `cfg` predicates may compile the module.
-fn is_cfg_test(attributes: &[syn::Attribute]) -> bool {
-    attributes.iter().any(|attribute| {
-        attribute.path().is_ident("cfg")
-            && attribute
-                .parse_args::<syn::Ident>()
-                .is_ok_and(|ident| ident == "test")
-    })
-}
-
 fn declares(item: &Item, name: &str) -> bool {
     match item {
         Item::Mod(m) => m.ident == name,
@@ -462,7 +490,7 @@ fn member(items: &[Item], kind: Kind, owner: &str, member: &str) -> Option<Kind>
     None
 }
 
-fn self_type_is(ty: &syn::Type, name: &str) -> bool {
+pub(crate) fn self_type_is(ty: &syn::Type, name: &str) -> bool {
     match ty {
         syn::Type::Path(path) => path
             .path
@@ -502,12 +530,12 @@ fn path_attribute(attributes: &[syn::Attribute]) -> Option<String> {
     })
 }
 
-enum Import {
+pub(crate) enum Import {
     Named { path: Vec<String>, visible: String },
     Glob { path: Vec<String> },
 }
 
-fn flatten(tree: &UseTree, prefix: &mut Vec<String>, out: &mut Vec<Import>) {
+pub(crate) fn flatten(tree: &UseTree, prefix: &mut Vec<String>, out: &mut Vec<Import>) {
     match tree {
         UseTree::Path(path) => {
             prefix.push(path.ident.to_string());

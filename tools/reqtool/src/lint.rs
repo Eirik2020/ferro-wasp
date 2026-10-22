@@ -286,7 +286,7 @@ mod tests {
     fn with(statement: &str, rationale: &str) -> Requirement {
         serde_saphyr::from_str(&format!(
             "id: X-001\ntitle: A title\nstatement: >-\n  {statement}\nrationale: >-\n  {rationale}\n\
-             derived_from: [W2]\nverification:\n  mode: direct\n  entries: []\n"
+             derived_from: [W2]\nverification:\n  entries: []\n"
         ))
         .unwrap()
     }

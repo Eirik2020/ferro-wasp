@@ -34,8 +34,8 @@ highest priority, already 16 on the Foxeer above `actuator_output` (15) and
 guarded idle and eRPM qualification, then `SafetyEvent::ActuatorIdling`;
 disarm immediate and unconditional (W2); SPSC links with compile-time
 ownership (ADR-0055); and a narrow safety-critical HAL beside the broad one,
-unverified by default in `reqtool`, which is the `-critical` backend crates
-with mandatory linking (ADR-0054).
+unverified by default in `reqtool`, which is the `-critical` backend crates,
+whose every file declares the requirements it implements (section 20).
 
 ### The coordinator
 

@@ -12,16 +12,17 @@ ADR-0050 to ADR-0053; the tool is `tools/reqtool`, described in its README.
 Keep these separate:
 
 ```text
-Requirement = what shall be true, allocated to items in the code   project_meta/requirements/*.yaml
+Requirement = what shall be true, declared by the code it governs  project_meta/requirements/*.yaml
 Procedure   = how a person verifies it on hardware                 project_meta/testing/targets/*.md
 Evidence    = what a run showed, on which code, with what result   project_meta/testing/evidence/runs/
 ```
 
 Each requirement lists its verification entries: a level, a target, a setup
 and a method, which is a host test or a procedure (`path#heading`). Status is
-computed by `reqtool` from the evidence records and fingerprints derived from
-the code; nobody writes it. A pass stands while its fingerprint matches, on
-any board, and goes `stale` when the code it covered changes.
+computed by `reqtool` from the evidence records and identities derived from
+the code; nobody writes it. A host pass stands while the files it exercised
+and their direct imports are unchanged, a board pass while its
+configuration is, and either goes `stale` when what it covered changes.
 
 A procedure owns its own steps, stop conditions and required evidence.
 Dated results, image hashes, logs, measurements and operator observations
@@ -62,8 +63,8 @@ procedure's checklist, which is a per-flight check, not evidence.
 
 When software changes:
 
-1. `reqtool check <item>` on what you are changing shows the requirements
-   allocated to it, inside it, or around it, and their status;
+1. `reqtool check <file>` on what you are changing shows the requirements
+   it declares and their status;
 2. run the software checks (`tools/run_tests.py`), then `reqtool test` to
    record the host evidence the requirements name;
 3. add or update a requirement when behaviour, risk, or the required
