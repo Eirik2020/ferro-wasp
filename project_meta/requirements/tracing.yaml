@@ -53,8 +53,8 @@ requirements:
     title: A configuration's identity includes its scheduling
     statement: >-
       A configuration's identity shall consist of its compiled-in source
-      files, its feature set, its external crate versions and each task's
-      priority and binding, excluding task names.
+      files, its feature set, its external crate versions, its toolchain and
+      each task's priority and binding, excluding task names.
     rationale: >-
       Timing faults come from scheduling as well as from code, so evidence
       for a configuration must notice a priority or binding change (W7).

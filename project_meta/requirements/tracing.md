@@ -24,9 +24,17 @@ in `tracing.yaml`.
 | Module | a source file that implements requirements | the file declares which |
 | Test | what verifies a requirement | independent of any one module |
 
-A module states in its own text which requirements it implements and whether
-it is safety-critical, so a crate is queried for its requirements by reading
-its files, and the declaration moves with the file. Two modules that
+A module states in its module doc comment which requirements it implements
+and whether it is safety-critical:
+
+```rust
+//! Requirements: SAFE-001, SAFE-002
+//! Safety-critical.
+```
+
+A crate is queried for its requirements by reading its files, the
+declaration moves with the file, and readers of the code and of its rustdoc
+see it first. Two modules that
 implement the same requirements are interchangeable: either one passing the
 requirements' tests is proof for that module.
 
@@ -73,6 +81,7 @@ configuration is identified by:
 - the source files compiled into it, read from the compiler's dep-info;
 - its Cargo feature set;
 - the versions of its external crates;
+- the Rust toolchain;
 - its RTIC scheduling table: each task's priority and binding, with task
   names excluded, so renaming a task in the app shell changes nothing.
 
@@ -85,8 +94,10 @@ identity: each evidence record lists the variant values it ran with, and
 owes.
 
 **Evidence records.** One record per run, holding what ran, the requirements
-it claims, the identity of every module and the external versions in the
-configuration it ran in, and the result. A unit run counts for any
+it claims, with their text, the identity of every module and the external
+versions in the configuration it ran in, and the result. Editing a
+requirement's statement or verification makes its evidence stale: the claim
+changed, so the old run no longer proves it. A unit run counts for any
 configuration where the module and its direct imports have the recorded
 identities. An integration run counts for any configuration whose identities
 all match those it recorded.
