@@ -47,6 +47,10 @@ pub struct Record {
     /// What board evidence ran in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration: Option<Configuration>,
+    /// For host evidence: the direct imports of every module a result
+    /// exercised.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub modules: BTreeMap<String, Vec<String>>,
     /// For host evidence: the identity of every module a result exercised
     /// and of everything those import, by import key.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -89,9 +93,10 @@ pub struct RunResult {
     /// For host evidence: the toolchain it ran on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain: Option<String>,
-    /// For host evidence: each module exercised, with its direct imports.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub exercised: BTreeMap<String, Vec<String>>,
+    /// For host evidence: each module exercised; the record holds their
+    /// imports.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exercised: Vec<String>,
     pub result: Outcome,
 }
 
@@ -197,10 +202,11 @@ fn same_coverage(old: &Record, before: &RunResult, new: &Record, after: &RunResu
         return old.configuration.as_ref().map(Configuration::identity)
             == new.configuration.as_ref().map(Configuration::identity);
     }
-    after.exercised.iter().all(|(module, imports)| {
-        std::iter::once(module)
-            .chain(imports)
-            .all(|key| old.identities.get(key) == new.identities.get(key))
+    after.exercised.iter().all(|module| {
+        old.modules.get(module) == new.modules.get(module)
+            && std::iter::once(module)
+                .chain(new.modules.get(module).into_iter().flatten())
+                .all(|key| old.identities.get(key) == new.identities.get(key))
     })
 }
 
@@ -308,7 +314,8 @@ impl Current<'_> {
         }
         let unchanged = |module: &str| {
             let imports = self.trace.imports(module);
-            result.exercised.get(module) == Some(&imports)
+            result.exercised.iter().any(|exercised| exercised == module)
+                && record.modules.get(module) == Some(&imports)
                 && std::iter::once(module)
                     .chain(imports.iter().map(String::as_str))
                     .all(|key| {
@@ -321,7 +328,7 @@ impl Current<'_> {
             // A run that exercised nothing proves nothing.
             None => {
                 !result.exercised.is_empty()
-                    && result.exercised.keys().all(|module| unchanged(module))
+                    && result.exercised.iter().all(|module| unchanged(module))
             }
         }
     }
@@ -488,6 +495,7 @@ pub fn build(
         return Err("nothing ran".into());
     }
     let mut results = Vec::new();
+    let mut modules = BTreeMap::new();
     let mut identities = BTreeMap::new();
     let mut configuration = None;
     let mut named = BTreeSet::new();
@@ -498,7 +506,7 @@ pub fn build(
                 if &entry.method != method {
                     continue;
                 }
-                let mut exercised = BTreeMap::new();
+                let mut exercised = Vec::new();
                 let mut toolchain = None;
                 if entry.level.on_target() {
                     let board = request.board.ok_or_else(|| {
@@ -526,8 +534,11 @@ pub fn build(
                                 identities.insert(key.clone(), identity);
                             }
                         }
-                        exercised.insert(module, imports);
+                        exercised.push(module.clone());
+                        modules.insert(module, imports);
                     }
+                    exercised.sort();
+                    exercised.dedup();
                 }
                 named.insert(requirement.id.as_str());
                 let outcome = if request.failed.contains(&requirement.id) {
@@ -584,6 +595,7 @@ pub fn build(
         revision,
         working_tree,
         configuration,
+        modules,
         identities,
         results,
         note: request.note.map(str::to_owned),

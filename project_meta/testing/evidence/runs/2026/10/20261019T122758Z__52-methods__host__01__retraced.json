@@ -5,6 +5,95 @@
   "board": null,
   "revision": "d51ba03c998dc30d37a4148985ed282b2db993fa",
   "working_tree": "clean",
+  "modules": {
+    "crates/ferrowasp-core/src/actuator.rs": [],
+    "crates/ferrowasp-core/src/blackbox.rs": [],
+    "crates/ferrowasp-core/src/config.rs": [],
+    "crates/ferrowasp-core/src/frames.rs": [],
+    "crates/ferrowasp-core/src/safety.rs": [
+      "extern:critical-section@1.2.0",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-drivers/src/blheli_telemetry.rs": [],
+    "crates/ferrowasp-drivers/src/crsf.rs": [],
+    "crates/ferrowasp-drivers/src/nor_storage.rs": [
+      "crates/ferrowasp-drivers/src/icm42688p.rs",
+      "crates/ferrowasp-drivers/src/spi_nor.rs",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-flight/src/accel_level.rs": [
+      "extern:libm@0.2.16"
+    ],
+    "crates/ferrowasp-flight/src/config_save.rs": [
+      "crates/ferrowasp-core/src/blackbox.rs",
+      "crates/ferrowasp-core/src/config.rs",
+      "crates/ferrowasp-drivers/src/nor_storage.rs",
+      "crates/ferrowasp-flight/src/flash_storage.rs",
+      "crates/ferrowasp-flight/src/test_nor.rs"
+    ],
+    "crates/ferrowasp-flight/src/drone_toolbox.rs": [
+      "crates/ferrowasp-core/src/actuator.rs",
+      "crates/ferrowasp-core/src/frames.rs",
+      "crates/ferrowasp-pid/src/lib.rs",
+      "extern:defmt@1.0.1",
+      "extern:libm@0.2.16"
+    ],
+    "crates/ferrowasp-flight/src/esc_manager.rs": [
+      "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-flight/src/flash_storage.rs": [
+      "crates/ferrowasp-core/src/actuator.rs",
+      "crates/ferrowasp-core/src/blackbox.rs",
+      "crates/ferrowasp-core/src/config.rs",
+      "crates/ferrowasp-core/src/safety.rs",
+      "crates/ferrowasp-flight/src/accel_level.rs",
+      "crates/ferrowasp-flight/src/drone_toolbox.rs",
+      "crates/ferrowasp-io-core/src/serial/binding.rs",
+      "crates/ferrowasp-io-core/src/serial/profile.rs",
+      "crates/ferrowasp-mspv2/src/rpc.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-flight/src/log_writer.rs": [
+      "crates/ferrowasp-core/src/blackbox.rs",
+      "crates/ferrowasp-drivers/src/nor_storage.rs",
+      "crates/ferrowasp-flight/src/flash_storage.rs",
+      "crates/ferrowasp-flight/src/test_nor.rs"
+    ],
+    "crates/ferrowasp-flight/src/rc_receiver.rs": [
+      "crates/ferrowasp-drivers/src/crsf.rs",
+      "extern:heapless@0.9.2",
+      "extern:sbus-rs@0.1.3"
+    ],
+    "crates/ferrowasp-flight/src/test_nor.rs": [
+      "crates/ferrowasp-drivers/src/nor_storage.rs",
+      "crates/ferrowasp-flight/src/flash_storage.rs"
+    ],
+    "crates/ferrowasp-io-core/src/serial/binding.rs": [
+      "crates/ferrowasp-io-core/src/serial/profile.rs",
+      "crates/ferrowasp-io-core/src/serial/routing.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-io-core/src/serial/profile.rs": [],
+    "crates/ferrowasp-mspv2/src/rpc.rs": [
+      "crates/ferrowasp-mspv2/src/packet.rs",
+      "extern:heapless@0.9.2",
+      "extern:postcard@1.1.3",
+      "extern:serde@1.0.229"
+    ],
+    "crates/ferrowasp-pid/src/lib.rs": [],
+    "crates/ferrowasp-stm32/src/spi1_imu.rs": [],
+    "crates/ferrowasp-stm32/src/system_reset.rs": [],
+    "firmware/foxeer-f405-v2/board/src/profiles.rs": [
+      "crates/ferrowasp-core/src/actuator.rs",
+      "crates/ferrowasp-core/src/frames.rs",
+      "crates/ferrowasp-flight/src/accel_level.rs",
+      "crates/ferrowasp-flight/src/drone_toolbox.rs",
+      "crates/ferrowasp-flight/src/flash_storage.rs",
+      "crates/ferrowasp-io-core/src/serial/binding.rs",
+      "crates/ferrowasp-stm32/src/spi1_imu.rs"
+    ]
+  },
   "identities": {
     "crates/ferrowasp-core/src/actuator.rs": "f484b7214c7e5c759cda568b887d03b7a3d9f2198fdc83f0eab3348a0f945212",
     "crates/ferrowasp-core/src/blackbox.rs": "f573c4f4c52b7d589297d759f381f7f2ae59693e936a11db95afddae054e3ce4",
@@ -53,47 +142,16 @@
       "setup": "none",
       "claim": "8426208b1f650505fd450177852927156a23eb8478497d87cf90f2c1dc36c9a9",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-stm32/src/spi1_imu.rs": [],
-        "firmware/foxeer-f405-v2/board/src/profiles.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-stm32/src/spi1_imu.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-stm32/src/spi1_imu.rs",
+        "firmware/foxeer-f405-v2/board/src/profiles.rs"
+      ],
       "result": "pass"
     },
     {
@@ -106,47 +164,16 @@
       "setup": "none",
       "claim": "91fc0f60929b00ffde94f798b883f9dc536b0bf218f16cffa66aea4bb65edabb",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-stm32/src/spi1_imu.rs": [],
-        "firmware/foxeer-f405-v2/board/src/profiles.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-stm32/src/spi1_imu.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-stm32/src/spi1_imu.rs",
+        "firmware/foxeer-f405-v2/board/src/profiles.rs"
+      ],
       "result": "pass"
     },
     {
@@ -159,47 +186,16 @@
       "setup": "none",
       "claim": "769d549751e6fd49030564696f295ba226710a9e3ad4c5a924cea62e3b945c0b",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-stm32/src/spi1_imu.rs": [],
-        "firmware/foxeer-f405-v2/board/src/profiles.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-stm32/src/spi1_imu.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-stm32/src/spi1_imu.rs",
+        "firmware/foxeer-f405-v2/board/src/profiles.rs"
+      ],
       "result": "pass"
     },
     {
@@ -212,47 +208,16 @@
       "setup": "none",
       "claim": "9fa44c2b6be51b2ef1a32b2acbd63053ed4cea95ed48317e8699acc36b79d216",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-stm32/src/spi1_imu.rs": [],
-        "firmware/foxeer-f405-v2/board/src/profiles.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-stm32/src/spi1_imu.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-stm32/src/spi1_imu.rs",
+        "firmware/foxeer-f405-v2/board/src/profiles.rs"
+      ],
       "result": "pass"
     },
     {
@@ -265,9 +230,9 @@
       "setup": "none",
       "claim": "a6873cb83113562b773e6c4a9b375cd255b7722e97c2c4031f27eb70f58532f7",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs"
+      ],
       "result": "pass"
     },
     {
@@ -280,9 +245,9 @@
       "setup": "none",
       "claim": "a0b6e4a3a76cb250540b8225abf2503673ba47078a92a17f8748b37b2c8e3c63",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/config.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/config.rs"
+      ],
       "result": "pass"
     },
     {
@@ -295,12 +260,9 @@
       "setup": "none",
       "claim": "ef9bc4db2118a0292610d1808c993952812b2a5522f5468eaf66d1c9d6ce3449",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -313,12 +275,9 @@
       "setup": "none",
       "claim": "b6d76b62ce07918f37ae27363b2b1fad131cfbdcb72f56e6d0e7921a8153974c",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -331,12 +290,9 @@
       "setup": "none",
       "claim": "ac5feba3112b773422e8cff0ad26d523888cef02d0f2913ccf496be0b8498f7b",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -349,12 +305,9 @@
       "setup": "none",
       "claim": "e08a883c472cc8ca735981bcc27ae0fb1a4ef70c791ee9b620984222a2496595",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -367,12 +320,9 @@
       "setup": "none",
       "claim": "7f91cebe8e471a6ca906bdbf7c5445f9aab9258fdd20ae453912ecdd6aa0ff51",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -385,12 +335,9 @@
       "setup": "none",
       "claim": "38999dd75fd729a2ceb57748a5f38af66f6d9a0705735aa04d80469b48573207",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -403,12 +350,9 @@
       "setup": "none",
       "claim": "4fe8d31fb9966e63fda8090e962a1a79fdcf9eb8ad3c1376c36ca0060fba9ab3",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -421,12 +365,9 @@
       "setup": "none",
       "claim": "5a67ece0673c680ce7fc165881c6a98667243e1eb4862130f4bc514045eb9075",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -439,12 +380,9 @@
       "setup": "none",
       "claim": "c5e2d727d2ac6b733b625bf7b3d7e14891de44ecffa6fc096468cfb220629c3b",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -457,12 +395,9 @@
       "setup": "none",
       "claim": "e41a803c7a4bf423f786a4d63c17a828b42171541d393fe365c909fbc7115a01",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -475,12 +410,9 @@
       "setup": "none",
       "claim": "84f052e4184f52fdaa651f5f73d68b72e92b14f4176ba74832dd8493955d2b70",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
       "result": "pass"
     },
     {
@@ -493,9 +425,9 @@
       "setup": "none",
       "claim": "6fcbf046214d24a123fef7011c3114938e345e01e11f7231c6a371f270dd18fd",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
       "result": "pass"
     },
     {
@@ -508,9 +440,9 @@
       "setup": "none",
       "claim": "1e6fcf2edc224a7b0339e1ec994511e8b8209abb092d16927f61e0db7cfc602a",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
       "result": "pass"
     },
     {
@@ -523,9 +455,9 @@
       "setup": "none",
       "claim": "9c112ead0bd64f8457b4d6f9558ed3bacfbec2afbd3f808e6c10c1975c3e9845",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
       "result": "pass"
     },
     {
@@ -538,9 +470,9 @@
       "setup": "none",
       "claim": "fafc46222d548f80cdfd5f61e6f332bf597a04c404dab93f7ea86e4da5a03563",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
       "result": "pass"
     },
     {
@@ -553,38 +485,14 @@
       "setup": "none",
       "claim": "c00d916fcb8201d33b1c9f5e8c63ac9793386f436b0c8a808721ab951444b499",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-core/src/config.rs": [],
-        "crates/ferrowasp-drivers/src/nor_storage.rs": [
-          "crates/ferrowasp-drivers/src/icm42688p.rs",
-          "crates/ferrowasp-drivers/src/spi_nor.rs",
-          "extern:embedded-hal@1.0.0"
-        ],
-        "crates/ferrowasp-flight/src/config_save.rs": [
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-flight/src/test_nor.rs"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/test_nor.rs": [
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-core/src/config.rs",
+        "crates/ferrowasp-drivers/src/nor_storage.rs",
+        "crates/ferrowasp-flight/src/config_save.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-flight/src/test_nor.rs"
+      ],
       "result": "pass"
     },
     {
@@ -597,38 +505,14 @@
       "setup": "none",
       "claim": "ee7677a38131dceaaaa84efa5f54e9fb49467f4ea4ced430799aea1b61e0bb3e",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-core/src/config.rs": [],
-        "crates/ferrowasp-drivers/src/nor_storage.rs": [
-          "crates/ferrowasp-drivers/src/icm42688p.rs",
-          "crates/ferrowasp-drivers/src/spi_nor.rs",
-          "extern:embedded-hal@1.0.0"
-        ],
-        "crates/ferrowasp-flight/src/config_save.rs": [
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-flight/src/test_nor.rs"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/test_nor.rs": [
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-core/src/config.rs",
+        "crates/ferrowasp-drivers/src/nor_storage.rs",
+        "crates/ferrowasp-flight/src/config_save.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-flight/src/test_nor.rs"
+      ],
       "result": "pass"
     },
     {
@@ -641,38 +525,14 @@
       "setup": "none",
       "claim": "7df8ec01bc0ea0011559954a640b9f0c01a629bc381b4f908a886099e8f132b5",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-core/src/config.rs": [],
-        "crates/ferrowasp-drivers/src/nor_storage.rs": [
-          "crates/ferrowasp-drivers/src/icm42688p.rs",
-          "crates/ferrowasp-drivers/src/spi_nor.rs",
-          "extern:embedded-hal@1.0.0"
-        ],
-        "crates/ferrowasp-flight/src/config_save.rs": [
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-flight/src/test_nor.rs"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/test_nor.rs": [
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-core/src/config.rs",
+        "crates/ferrowasp-drivers/src/nor_storage.rs",
+        "crates/ferrowasp-flight/src/config_save.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-flight/src/test_nor.rs"
+      ],
       "result": "pass"
     },
     {
@@ -685,18 +545,12 @@
       "setup": "none",
       "claim": "af8d534ac78b595bccfe0aa23d0b8141cdbd4a3da85d4de502d80fbd9cc90f4c",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -709,18 +563,12 @@
       "setup": "none",
       "claim": "2679c3f93823235536a808835a28fa1e64e06325c32a870746bd6d84fe69db94",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -733,18 +581,12 @@
       "setup": "none",
       "claim": "bbb6aecf4d2b9a147fbebf0aedf6d4dd362970b915536d96a982a7ccde062529",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -757,18 +599,12 @@
       "setup": "none",
       "claim": "3a49defcda9dcc24238a6e9b6d301d5d9a92368895eb3659ba9bb090aa5f7ec8",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -781,18 +617,12 @@
       "setup": "none",
       "claim": "56f8b6f3323b82f9e03bbe68c6bab5db8be0b10c35cace0e0ad079c5186f3e90",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -805,18 +635,12 @@
       "setup": "none",
       "claim": "a05a9866e4a76834d1c9d89d504b464d15cd3481ad720f4e609d0c0be1b0cf94",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -829,18 +653,12 @@
       "setup": "none",
       "claim": "ea320eaa658e6956a376e7a46f702e85931df6fcc947ea5d1353ad48c49a6f6c",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -853,18 +671,12 @@
       "setup": "none",
       "claim": "90098a62d8f385602a63796546e610a272b4abeabc819a8cd844960a2f3462b9",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -877,18 +689,12 @@
       "setup": "none",
       "claim": "6b6dbcb48cfdffb3a847f3c8df62f2250306fce5ef0a88dd00a3e80ce4cfbadb",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -901,18 +707,12 @@
       "setup": "none",
       "claim": "23d51c69ec36eae8d842d6d38ef85e2fbf442d9ed38af993db54b3e6b55a6e56",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -925,18 +725,12 @@
       "setup": "none",
       "claim": "e5a66fdee92303e359151c8d72516743536e0289318b9a58679c94416ff4d78a",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -949,18 +743,12 @@
       "setup": "none",
       "claim": "5986a928ebb03bf1d2a4fc1a1591c28f0f15827b5f10b9a8dddf4c6de89d9a3a",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/frames.rs": [],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-pid/src/lib.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
       "result": "pass"
     },
     {
@@ -973,13 +761,10 @@
       "setup": "none",
       "claim": "bb6aba024affa949165cdc46ef4e2edf08f04babb143c6dbe964995e339cec60",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/blheli_telemetry.rs": [],
-        "crates/ferrowasp-flight/src/esc_manager.rs": [
-          "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
+        "crates/ferrowasp-flight/src/esc_manager.rs"
+      ],
       "result": "pass"
     },
     {
@@ -992,13 +777,10 @@
       "setup": "none",
       "claim": "224734de7507f67ca6b1cc3295d6e2f131cc6b5e2c6b3f22935023e4d2938337",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/blheli_telemetry.rs": [],
-        "crates/ferrowasp-flight/src/esc_manager.rs": [
-          "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
+        "crates/ferrowasp-flight/src/esc_manager.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1011,13 +793,10 @@
       "setup": "none",
       "claim": "2c9a1bb196c780c97c2538f2e30bacf774405188c12d7a66a7072c2a392e654d",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/blheli_telemetry.rs": [],
-        "crates/ferrowasp-flight/src/esc_manager.rs": [
-          "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
+        "crates/ferrowasp-flight/src/esc_manager.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1030,13 +809,10 @@
       "setup": "none",
       "claim": "f8e8260e6467b08fb2e8e8f7aa69b9b001f023fd521a80cf0004f1773c6d5b72",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/blheli_telemetry.rs": [],
-        "crates/ferrowasp-flight/src/esc_manager.rs": [
-          "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
-          "extern:heapless@0.9.2"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/blheli_telemetry.rs",
+        "crates/ferrowasp-flight/src/esc_manager.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1049,49 +825,18 @@
       "setup": "none",
       "claim": "f6e1bb7eec6301c600b74ba551e13b00c6b10e6f8dc43b1f65dfb20e841cb21c",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-core/src/config.rs": [],
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/profile.rs": [],
-        "crates/ferrowasp-mspv2/src/rpc.rs": [
-          "crates/ferrowasp-mspv2/src/packet.rs",
-          "extern:heapless@0.9.2",
-          "extern:postcard@1.1.3",
-          "extern:serde@1.0.229"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-core/src/config.rs",
+        "crates/ferrowasp-core/src/safety.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-io-core/src/serial/profile.rs",
+        "crates/ferrowasp-mspv2/src/rpc.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1104,49 +849,18 @@
       "setup": "none",
       "claim": "21244fcdcab4684218ce8b5c203d9ce48a03137c280e8d769ac67d19e7f9ae78",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-core/src/config.rs": [],
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/profile.rs": [],
-        "crates/ferrowasp-mspv2/src/rpc.rs": [
-          "crates/ferrowasp-mspv2/src/packet.rs",
-          "extern:heapless@0.9.2",
-          "extern:postcard@1.1.3",
-          "extern:serde@1.0.229"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-core/src/config.rs",
+        "crates/ferrowasp-core/src/safety.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-io-core/src/serial/profile.rs",
+        "crates/ferrowasp-mspv2/src/rpc.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1159,49 +873,18 @@
       "setup": "none",
       "claim": "c9345db63b983b56d0a57cf7b510f9dc9dde332381f386e5bd05bb67f276f02a",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/actuator.rs": [],
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-core/src/config.rs": [],
-        "crates/ferrowasp-core/src/safety.rs": [
-          "extern:critical-section@1.2.0",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/accel_level.rs": [
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/drone_toolbox.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/frames.rs",
-          "crates/ferrowasp-pid/src/lib.rs",
-          "extern:defmt@1.0.1",
-          "extern:libm@0.2.16"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/binding.rs": [
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-io-core/src/serial/routing.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-io-core/src/serial/profile.rs": [],
-        "crates/ferrowasp-mspv2/src/rpc.rs": [
-          "crates/ferrowasp-mspv2/src/packet.rs",
-          "extern:heapless@0.9.2",
-          "extern:postcard@1.1.3",
-          "extern:serde@1.0.229"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-core/src/config.rs",
+        "crates/ferrowasp-core/src/safety.rs",
+        "crates/ferrowasp-flight/src/accel_level.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-io-core/src/serial/binding.rs",
+        "crates/ferrowasp-io-core/src/serial/profile.rs",
+        "crates/ferrowasp-mspv2/src/rpc.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1214,36 +897,13 @@
       "setup": "none",
       "claim": "660df9f4ec805976db6881f33d3cf86349e21e378fe12b937c7fc3b88beb0130",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-core/src/blackbox.rs": [],
-        "crates/ferrowasp-drivers/src/nor_storage.rs": [
-          "crates/ferrowasp-drivers/src/icm42688p.rs",
-          "crates/ferrowasp-drivers/src/spi_nor.rs",
-          "extern:embedded-hal@1.0.0"
-        ],
-        "crates/ferrowasp-flight/src/flash_storage.rs": [
-          "crates/ferrowasp-core/src/actuator.rs",
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-core/src/config.rs",
-          "crates/ferrowasp-core/src/safety.rs",
-          "crates/ferrowasp-flight/src/accel_level.rs",
-          "crates/ferrowasp-flight/src/drone_toolbox.rs",
-          "crates/ferrowasp-io-core/src/serial/binding.rs",
-          "crates/ferrowasp-io-core/src/serial/profile.rs",
-          "crates/ferrowasp-mspv2/src/rpc.rs",
-          "extern:heapless@0.9.2"
-        ],
-        "crates/ferrowasp-flight/src/log_writer.rs": [
-          "crates/ferrowasp-core/src/blackbox.rs",
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs",
-          "crates/ferrowasp-flight/src/test_nor.rs"
-        ],
-        "crates/ferrowasp-flight/src/test_nor.rs": [
-          "crates/ferrowasp-drivers/src/nor_storage.rs",
-          "crates/ferrowasp-flight/src/flash_storage.rs"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-core/src/blackbox.rs",
+        "crates/ferrowasp-drivers/src/nor_storage.rs",
+        "crates/ferrowasp-flight/src/flash_storage.rs",
+        "crates/ferrowasp-flight/src/log_writer.rs",
+        "crates/ferrowasp-flight/src/test_nor.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1256,14 +916,10 @@
       "setup": "none",
       "claim": "c42ffa7cf7a002083bdb52967c3ca158ed5d26ec1bb732b969adc9eaaae660c3",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1276,14 +932,10 @@
       "setup": "none",
       "claim": "1ea51055d6622b2b94823024443e1fe13c41288939784dc64607760dc774582f",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1296,14 +948,10 @@
       "setup": "none",
       "claim": "587db58ff4ee1d830a97edd8030e12b000838804f7294a51fa782e22a545b57f",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1316,14 +964,10 @@
       "setup": "none",
       "claim": "64f14550b663208f8c93a0789299277f4d1c41003540233b7e7a44aecc9c18ae",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1336,14 +980,10 @@
       "setup": "none",
       "claim": "58079aa0318ef4612a1a70da8b68695cb92815d23ae88b722d6a454d69271135",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1356,14 +996,10 @@
       "setup": "none",
       "claim": "d6fb114d9f6d710132e60231099c95bc1508ceb5d9d0ca75dc524c13b9d64505",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1376,14 +1012,10 @@
       "setup": "none",
       "claim": "e80a6a588e498025ef1bb1308210561f918dbc781b52f1bd1692aa91c07e0ac9",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1396,14 +1028,10 @@
       "setup": "none",
       "claim": "6b617c25b87481ac50d370ea118ca711cf83af7f09b1413184f88f78d4470f64",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-drivers/src/crsf.rs": [],
-        "crates/ferrowasp-flight/src/rc_receiver.rs": [
-          "crates/ferrowasp-drivers/src/crsf.rs",
-          "extern:heapless@0.9.2",
-          "extern:sbus-rs@0.1.3"
-        ]
-      },
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
       "result": "pass"
     },
     {
@@ -1416,9 +1044,9 @@
       "setup": "none",
       "claim": "514d2eae94473160a113cea842d5f8a441eb310300331098bb448729fca57169",
       "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
-      "exercised": {
-        "crates/ferrowasp-stm32/src/system_reset.rs": []
-      },
+      "exercised": [
+        "crates/ferrowasp-stm32/src/system_reset.rs"
+      ],
       "result": "pass"
     }
   ],
