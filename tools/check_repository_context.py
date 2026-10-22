@@ -39,26 +39,6 @@ AGENT_DISCOVERY_IGNORED_DIRS = {
     "venv",
 }
 SHA256_HEX = re.compile(r"^[0-9A-Fa-f]{64}$")
-ADR_INDEX_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS.md")
-# Retired and superseded decisions are indexed here, so the active index
-# stays bounded as decisions accumulate.
-ADR_HISTORY_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS_HISTORY.md")
-ADR_HISTORICAL_STATUS = re.compile(r"^(retired|superseded by)\b")
-ADR_PLANNED_PATH = PurePosixPath("project_meta/ARCHITECTURE_DECISIONS_PLANNED.md")
-ADR_PLANNED_STATUS = re.compile(r"^accepted, not yet implemented\b")
-ADR_DIRECTORY = PurePosixPath("project_meta/decisions")
-ADR_FILENAME = re.compile(r"^(ADR-\d{4})\.md$")
-ADR_H1 = re.compile(r"^# (.+?)\s*$", re.MULTILINE)
-ADR_STATUS_LINE = re.compile(r"^Status:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
-ADR_INDEX_ROW = re.compile(
-    r"^\| \[(ADR-\d{4})\]\(decisions/(ADR-\d{4}\.md)\) "
-    r"\| (.*?) \| (.*?) \|\s*$",
-    re.MULTILINE,
-)
-ADR_REFERENCE = re.compile(r"\bADR-\d{4}\b")
-ADR_SUPERSESSION = re.compile(r"\bsuperseded by (ADR-\d{4})\b", re.IGNORECASE)
-ADR_INDEX_MAX_BYTES = 8192
-ADR_RECORD_MAX_BYTES = 4096
 
 
 def _repository_path(root: Path, raw_path: str) -> tuple[Path | None, str | None]:
@@ -258,145 +238,6 @@ def _validate_immutable_archives(
                     )
 
 
-def validate_architecture_decisions(root: Path) -> list[str]:
-    """Validate the bounded ADR index and its standalone decision records."""
-
-    root = root.resolve()
-    errors: list[str] = []
-    index_path = root.joinpath(*ADR_INDEX_PATH.parts)
-    decisions_path = root.joinpath(*ADR_DIRECTORY.parts)
-
-    if not index_path.exists() and not decisions_path.exists():
-        return errors
-    if not index_path.is_file():
-        errors.append(f"ADR index does not exist: {ADR_INDEX_PATH.as_posix()}")
-        return errors
-    if not decisions_path.is_dir():
-        errors.append(f"ADR directory does not exist: {ADR_DIRECTORY.as_posix()}")
-        return errors
-
-    records: dict[str, tuple[str | None, str | None, str]] = {}
-    heading_ids: set[str] = set()
-    for path in sorted(decisions_path.glob("*.md")):
-        filename_match = ADR_FILENAME.fullmatch(path.name)
-        if filename_match is None:
-            errors.append(
-                f"unexpected ADR filename: {path.relative_to(root).as_posix()}"
-            )
-            continue
-
-        file_id = filename_match.group(1)
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            errors.append(f"cannot read {path.relative_to(root).as_posix()}: {error}")
-            continue
-
-        headings = ADR_H1.findall(text)
-        title: str | None = None
-        if len(headings) != 1:
-            errors.append(f"{file_id}: expected exactly one H1 heading")
-        else:
-            heading_match = re.fullmatch(r"(ADR-\d{4}):\s*(\S.*?)\s*", headings[0])
-            if heading_match is None:
-                errors.append(f"{file_id}: H1 must contain an ADR ID and title")
-            else:
-                heading_id, title = heading_match.groups()
-                if heading_id != file_id:
-                    errors.append(
-                        f"{file_id}: H1 ID {heading_id} does not match filename"
-                    )
-                if heading_id in heading_ids:
-                    errors.append(f"duplicate ADR H1 ID: {heading_id}")
-                heading_ids.add(heading_id)
-
-        status_lines = ADR_STATUS_LINE.findall(text)
-        status: str | None = None
-        if len(status_lines) != 1 or not status_lines[0].strip():
-            errors.append(f"{file_id}: expected exactly one non-empty Status line")
-        else:
-            status = status_lines[0].strip()
-
-        records[file_id] = (title, status, text)
-
-    try:
-        index_text = index_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
-        errors.append(f"cannot read {ADR_INDEX_PATH.as_posix()}: {error}")
-        return errors
-
-    other_texts: dict[PurePosixPath, str] = {}
-    for other_path in (ADR_HISTORY_PATH, ADR_PLANNED_PATH):
-        other_texts[other_path] = ""
-        resolved = root.joinpath(*other_path.parts)
-        if resolved.is_file():
-            try:
-                other_texts[other_path] = resolved.read_text(encoding="utf-8")
-            except (OSError, UnicodeError) as error:
-                errors.append(f"cannot read {other_path.as_posix()}: {error}")
-
-    def owning_index(status: str) -> PurePosixPath:
-        if ADR_HISTORICAL_STATUS.match(status) is not None:
-            return ADR_HISTORY_PATH
-        if ADR_PLANNED_STATUS.match(status) is not None:
-            return ADR_PLANNED_PATH
-        return ADR_INDEX_PATH
-
-    index_records: dict[str, tuple[str, str]] = {}
-    sources = (
-        (index_text, ADR_INDEX_PATH),
-        (other_texts[ADR_HISTORY_PATH], ADR_HISTORY_PATH),
-        (other_texts[ADR_PLANNED_PATH], ADR_PLANNED_PATH),
-    )
-    for text_source, source_path in sources:
-        for adr_id, filename, title, status in ADR_INDEX_ROW.findall(text_source):
-            if adr_id in index_records:
-                errors.append(f"duplicate ADR index entry: {adr_id}")
-                continue
-            expected_filename = f"{adr_id}.md"
-            if filename != expected_filename:
-                errors.append(
-                    f"{adr_id}: index link {filename} does not match {expected_filename}"
-                )
-            owner = owning_index(status.strip())
-            if owner != source_path:
-                errors.append(
-                    f"{adr_id} is {status.strip().split(';')[0]}; its row belongs in "
-                    f"{owner.as_posix()}"
-                )
-            index_records[adr_id] = (title.strip(), status.strip())
-
-    record_ids = set(records)
-    index_ids = set(index_records)
-    for adr_id in sorted(index_ids - record_ids):
-        errors.append(f"ADR index entry does not resolve: {adr_id}")
-    for adr_id in sorted(record_ids - index_ids):
-        errors.append(f"orphan ADR file missing from index: {adr_id}")
-
-    for adr_id in sorted(record_ids & index_ids):
-        title, status, text = records[adr_id]
-        index_title, index_status = index_records[adr_id]
-        if title is not None and index_title != title:
-            errors.append(
-                f"{adr_id}: index title {index_title!r} does not match {title!r}"
-            )
-        if status is not None and index_status != status:
-            errors.append(
-                f"{adr_id}: index status {index_status!r} does not match {status!r}"
-            )
-
-        for reference in sorted(set(ADR_REFERENCE.findall(text))):
-            if reference not in record_ids:
-                errors.append(f"{adr_id}: unknown ADR reference {reference}")
-        for successor in ADR_SUPERSESSION.findall(text):
-            if successor == adr_id:
-                errors.append(f"{adr_id}: supersession target must not be itself")
-            elif successor not in record_ids:
-                errors.append(f"{adr_id}: unknown supersession target {successor}")
-
-    return errors
-
-
 def validate_repository(root: Path) -> list[str]:
     """Return concise validation failures; an empty list means success."""
 
@@ -453,30 +294,6 @@ def validate_repository(root: Path) -> list[str]:
         if lifecycle == "historical" and context != "exclude":
             errors.append(f"{raw_path}: historical documents must use context 'exclude'")
 
-        is_adr_index = raw_path == ADR_INDEX_PATH.as_posix()
-        is_adr_record = (
-            PurePosixPath(raw_path).parent == ADR_DIRECTORY
-            and ADR_FILENAME.fullmatch(PurePosixPath(raw_path).name) is not None
-        )
-        if is_adr_index:
-            if role != "architecture-decision-index":
-                errors.append(f"{raw_path}: role must be 'architecture-decision-index'")
-            if lifecycle != "durable" or context != "targeted":
-                errors.append(f"{raw_path}: ADR index must be durable and targeted")
-            if entry.get("max_bytes") != ADR_INDEX_MAX_BYTES:
-                errors.append(
-                    f"{raw_path}: max_bytes must be {ADR_INDEX_MAX_BYTES}"
-                )
-        elif is_adr_record:
-            if role != "architecture-decision":
-                errors.append(f"{raw_path}: role must be 'architecture-decision'")
-            if lifecycle != "durable" or context != "targeted":
-                errors.append(f"{raw_path}: ADR records must be durable and targeted")
-            if entry.get("max_bytes") != ADR_RECORD_MAX_BYTES:
-                errors.append(
-                    f"{raw_path}: max_bytes must be {ADR_RECORD_MAX_BYTES}"
-                )
-
         if not path.is_file():
             errors.append(f"registered document does not exist: {raw_path}")
             continue
@@ -517,7 +334,6 @@ def validate_repository(root: Path) -> list[str]:
     for raw_path in sorted(registered - discovered):
         errors.append(f"registry entry is not a discovered project document: {raw_path}")
 
-    errors.extend(validate_architecture_decisions(root))
     errors.extend(validate_internal_book(root, registry))
 
     budget_paths: set[str] = set()

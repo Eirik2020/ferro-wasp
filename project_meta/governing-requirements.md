@@ -60,6 +60,5 @@ rather than editing around it. Implementation status does not change them.
    from evidence, never recorded by hand.
 
 Implementation details belong in the public book, `mdbook/`, what is left to
-build in [remaining work](remaining-work.md), and decisions in the
-[decision index](ARCHITECTURE_DECISIONS.md). Keep this page concise when
-updating it.
+build in [remaining work](remaining-work.md), and why an alternative lost in
+[the FAQ](faq.md). Keep this page concise when updating it.

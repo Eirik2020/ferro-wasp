@@ -28,16 +28,15 @@ statement of which tests apply or passed.
 - `tools/run_tests.py` runs every test suite, locally and in CI, and counts the
   tests each ran; `--list` shows what each suite runs and why it is separate.
 - `tools/check_repository_context.py` validates the document registry and byte
-  budgets, the always-loaded line limit, the internal book's summary, the ADR
-  index and records, the immutable archive hashes, and the app context
-  routes.
+  budgets, the always-loaded line limit, the internal book's summary, the
+  immutable archive hashes, and the app context routes.
 - `tools/reqtool` checks the requirements, gates and evidence records:
   `reqtool validate`, `reqtool check`, `reqtool gate`.
 - `tools/check_rtic_boundaries.py` enforces the thin-app rules mechanically:
   RTIC imports only through the app facade, only RTIC declarations in
   `main.rs`, shared board data models, no timer-register sequencing in board
   support, and no source copied verbatim between boards. It also enforces
-  ADR-0054's direction rule from the manifests: a crate marked
+  section 8's direction rule from the manifests: a crate marked
   `[package.metadata.ferrowasp] critical = true` depends, including for tests
   and builds, only on other safety-critical crates and on external crates
   pinned to one version (`=x.y.z`, or a git `rev`), and a `-critical` name
