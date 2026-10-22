@@ -46,4 +46,9 @@ statement of which tests apply or passed.
   `check_public_history.py` rejects oversized or prohibited files reachable from
   Git refs.
 
-All of them run in CI.
+All of them run in CI. A change that touches only `project_meta/`, `mdbook/`,
+`tools/reqtool/`, `AGENTS.md` or `CLAUDE.md` skips the firmware,
+FerroConfigurator and RTIC app builder jobs and the root workspace's Rust tests
+and lints, since none of those paths builds into them; the Python tools, the
+document and boundary checks, `reqtool`, the books and the publication scan
+still run. Tags and manual runs run everything.
