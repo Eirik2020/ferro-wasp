@@ -1,8 +1,11 @@
-//! The safety master's tasks (ADR-0060), target-only. The safety master is
+//! The safety master's tasks (design §16), target-only. The safety master is
 //! the only task that arms or disarms the system. It
 //! decides on arm requests, completes arming once the actuator reports idle,
 //! and disarms on request, on an aborted arming, or when the RC link is
 //! invalidated. It commands the actuator only by spawning `actuator_output`.
+//!
+//! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020
+//! Safety-critical.
 
 use crate::prearm::ImuPreArmReader;
 use crate::{self as safety, signals};

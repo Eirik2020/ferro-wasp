@@ -20,6 +20,9 @@
 //! against a 1.67 us bit. Every lane writes 32-bit compare words: TIM2 and
 //! TIM5 have 32-bit compare registers, and TIM3 and TIM4 ignore the upper
 //! half.
+//!
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
+//! Safety-critical.
 
 use core::marker::PhantomData;
 
@@ -375,7 +378,7 @@ where
     LC: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
     LD: IntoLane<TS, Lane: LaneDma<Buffer = DshotDmaBuffer>>,
 {
-    // H7 lanes do not receive replies yet (ADR-0045 leaves the Lucid's
+    // H7 lanes do not receive replies yet (design §21 leaves the Lucid's
     // receive path open), so an H7 bank is always unidirectional.
     build_bank(
         timers,

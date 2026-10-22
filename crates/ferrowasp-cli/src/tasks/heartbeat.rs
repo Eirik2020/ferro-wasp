@@ -1,6 +1,8 @@
 //! The Foxeer-shaped heartbeat: the USB status line's two-second wake, and
 //! the storage and optional IMU diagnostics logged beside it, all read from
 //! the observer's ledger.
+//!
+//! Requirements: BOOT-002, BOOT-004
 
 use super::prelude::*;
 use crate::tasks::usb::STATUS_LINE_DUE;

@@ -28,7 +28,7 @@ critical-section = { workspace = true, features = ["std"] }
 [features]
 default = []
 std = ["critical-section/std"]
-# The safety master's RTIC task definitions, target-only (ADR-0060).
+# The safety master's RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:ferrowasp-boundary-contracts",
     "dep:defmt",

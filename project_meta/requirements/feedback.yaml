@@ -1,20 +1,15 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: FEEDBACK-001
     title: BLHeli telemetry decodes only valid frames
     statement: >-
-      A BLHeli telemetry frame shall decode its big-endian fields in
-      their wire units only when its CRC is valid; the stream parser
-      shall resynchronize after a noise byte, and a reset shall discard
-      a partial frame.
+      A BLHeli telemetry frame shall decode, with its big-endian fields in
+      their wire units, only when its CRC is valid.
     rationale: >-
       Telemetry eRPM qualifies arming (ARM-001); a corrupt or misaligned
       frame must never read as a motor that is spinning.
     derived_from: [ARM-001]
-    allocated_to:
-      - ferrowasp_blheli_telemetry
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -26,11 +21,33 @@ requirements:
           setup: none
           method:
             test: ferrowasp_blheli_telemetry::tests::rejects_bad_crc
+
+  - id: FEEDBACK-003
+    title: The telemetry parser resynchronizes after noise
+    statement: >-
+      The BLHeli stream parser shall resynchronize after a noise byte.
+    rationale: >-
+      Telemetry eRPM qualifies arming (ARM-001); a corrupt or misaligned
+      frame must never read as a motor that is spinning.
+    derived_from: [ARM-001]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_blheli_telemetry::tests::stream_parser_recovers_after_one_noise_byte
+
+  - id: FEEDBACK-004
+    title: A telemetry parser reset discards a partial frame
+    statement: >-
+      A BLHeli parser reset shall discard any partial frame.
+    rationale: >-
+      Telemetry eRPM qualifies arming (ARM-001); a corrupt or misaligned
+      frame must never read as a motor that is spinning.
+    derived_from: [ARM-001]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -40,35 +57,70 @@ requirements:
   - id: FEEDBACK-002
     title: A telemetry sample is credited only to the output that was asked
     statement: >-
-      The ESC telemetry manager shall wait for the ESCs to boot and
-      never overlap two requests; a frame shall be credited only to the
-      output whose request the actuator acknowledged, a mismatched or
-      stale acknowledgement shall never relabel a response, and a frame
-      seen while a request was pre-empted shall wait for its matching
-      acknowledgement; an acknowledgement or response timeout shall stop
-      telemetry, which shall resume only while disarmed, after a quiet
-      window with no old sample in it, backing off while no frame comes
-      back and resetting on one.
+      A telemetry frame shall be credited only to the output whose request
+      the actuator acknowledged, never to another through a mismatched or
+      stale acknowledgement.
     rationale: >-
-      A BLHeli frame carries no motor identity, so a sample credited to
-      the wrong output could qualify a motor that is not spinning
-      (ARM-001).
+      A BLHeli frame carries no motor identity, so a sample credited to the
+      wrong output could qualify a motor that is not spinning (ARM-001).
     derived_from: [ARM-001]
-    allocated_to:
-      - ferrowasp_feedback::esc_manager
     verification:
-      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::actuator_ack_then_frame_associates_sample_with_requested_output
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_feedback::esc_manager::tests::mismatched_ack_cannot_relabel_a_response
+
+  - id: FEEDBACK-005
+    title: Telemetry requests wait for boot and never overlap
+    statement: >-
+      The ESC telemetry manager shall wait for the ESCs to boot before its
+      first request, and never have two requests outstanding.
+    rationale: >-
+      A BLHeli frame carries no motor identity, so a sample credited to the
+      wrong output could qualify a motor that is not spinning (ARM-001).
+    derived_from: [ARM-001]
+    verification:
       entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_feedback::esc_manager::tests::waits_for_boot_and_never_overlaps_requests
+
+  - id: FEEDBACK-006
+    title: A frame seen during pre-emption waits for its acknowledgement
+    statement: >-
+      A telemetry frame seen while its request was pre-empted shall be held
+      until the matching acknowledgement arrives.
+    rationale: >-
+      A BLHeli frame carries no motor identity, so a sample credited to the
+      wrong output could qualify a motor that is not spinning (ARM-001).
+    derived_from: [ARM-001]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_feedback::esc_manager::tests::actuator_ack_then_frame_associates_sample_with_requested_output
+            test: ferrowasp_feedback::esc_manager::tests::frame_seen_during_preemption_waits_for_matching_ack
+
+  - id: FEEDBACK-007
+    title: A telemetry timeout stops telemetry
+    statement: >-
+      An acknowledgement or response timeout shall stop ESC telemetry.
+    rationale: >-
+      A BLHeli frame carries no motor identity, so a sample credited to the
+      wrong output could qualify a motor that is not spinning (ARM-001).
+    derived_from: [ARM-001]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -79,6 +131,19 @@ requirements:
           setup: none
           method:
             test: ferrowasp_feedback::esc_manager::tests::telemetry_response_timeout_stops_telemetry
+
+  - id: FEEDBACK-008
+    title: Telemetry resumes only disarmed, after a quiet window
+    statement: >-
+      Stopped ESC telemetry shall resume only while disarmed, after a quiet
+      window with no old sample in it, that window backing off while no
+      frame comes back and resetting when one does.
+    rationale: >-
+      A BLHeli frame carries no motor identity, so a sample credited to the
+      wrong output could qualify a motor that is not spinning (ARM-001).
+    derived_from: [ARM-001]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -94,13 +159,3 @@ requirements:
           setup: none
           method:
             test: ferrowasp_feedback::esc_manager::tests::an_old_acknowledgement_keeps_the_quiet_window_open
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_feedback::esc_manager::tests::mismatched_ack_cannot_relabel_a_response
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_feedback::esc_manager::tests::frame_seen_during_preemption_waits_for_matching_ack

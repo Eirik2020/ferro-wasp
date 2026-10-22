@@ -5,6 +5,9 @@
 //! each timer type it can drive, and `LaneDma` for its DMA lanes. Lanes find
 //! their timer in the set by type, so a board names a lane once, as a timer,
 //! a channel, and a stream, and the backend derives everything else.
+//!
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
+//! Safety-critical.
 
 use core::any::Any;
 use core::marker::PhantomData;
@@ -17,7 +20,7 @@ use ferrowasp_output::dshot::{
 /// Which outputs of one timer the bank drives: bit n is channel n + 1, and
 /// a bit also set in `complementary` drives that channel's CHxN output
 /// instead of CHx. `inverted` drives them active low, idling high, for
-/// bidirectional DShot (ADR-0045).
+/// bidirectional DShot (dshot.md).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct LaneOutputs {
     pub channels: u8,
@@ -25,7 +28,7 @@ pub struct LaneOutputs {
     pub inverted: bool,
 }
 
-/// Whether a bank sends plain DShot or bidirectional DShot (ADR-0045), fixed
+/// Whether a bank sends plain DShot or bidirectional DShot (dshot.md), fixed
 /// when it is built.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DshotMode {
@@ -53,7 +56,7 @@ pub trait LaneTimer: Any {
     /// Stop, then hold the outputs inactive until the bank is rebuilt.
     fn force_inactive(&self, outputs: LaneOutputs);
 
-    /// For a reply window (ADR-0045): stop with the requests closed, release
+    /// For a reply window (dshot.md): stop with the requests closed, release
     /// the outputs so the pins' pull-ups hold the lines, and count at
     /// `sample_arr` with each channel's compare event once per period.
     /// Only backends whose lanes receive replies implement it.

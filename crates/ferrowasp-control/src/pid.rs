@@ -1,3 +1,6 @@
+//! Requirements: CTRL-004
+//! Safety-critical.
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ControlOutput {
     pub output: f32,

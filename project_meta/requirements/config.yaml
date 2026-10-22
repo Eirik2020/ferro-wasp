@@ -1,20 +1,15 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: CONFIG-001
-    title: An out-of-range value is refused and changes nothing
+    title: An out-of-range value is refused
     statement: >-
-      A configuration value outside its allowed range shall be refused
-      with a nonzero exit and a range message, and the stored value
-      shall stay as it was.
+      A configuration value outside its allowed range shall be refused with
+      a nonzero exit and a range message.
     rationale: >-
-      Gains, rates and RC settings fly the craft; an invalid one must
-      never be stored or applied.
+      Gains, rates and RC settings fly the craft; an invalid one must never
+      be stored or applied.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_config::keys
-      - ferrowasp_config::stored::StoredConfig
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -32,28 +27,98 @@ requirements:
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
-  - id: CONFIG-002
-    title: A configuration change applies at once and survives a cold boot
+  - id: CONFIG-006
+    title: A refused value leaves the stored one
     statement: >-
-      A disarmed configuration change shall take effect without a
-      reboot, be verified by complete readback, and still be in force
-      after a cold power cycle; a failed save shall leave the
-      configuration the board boots with untouched.
+      A refused configuration value shall leave the stored value as it was.
     rationale: >-
-      The pilot must be able to trust that what was set is what flies,
-      now and after the next power-up.
+      Gains, rates and RC settings fly the craft; an invalid one must never
+      be stored or applied.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_storage::config_save
-      - ferrowasp_config::stored::StoredConfig
     verification:
-      mode: direct
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-002
+    title: A configuration change applies without a reboot
+    statement: >-
+      A disarmed configuration change shall take effect without a reboot.
+    rationale: >-
+      The pilot must be able to trust that what was set is what flies, now
+      and after the next power-up.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-007
+    title: A save is verified by readback
+    statement: >-
+      A configuration save shall be verified by reading back the whole
+      configuration.
+    rationale: >-
+      The pilot must be able to trust that what was set is what flies, now
+      and after the next power-up.
+    derived_from: [W6]
+    verification:
       entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_storage::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-008
+    title: A saved configuration survives a cold boot
+    statement: >-
+      A saved configuration shall still be in force after a cold power
+      cycle.
+    rationale: >-
+      The pilot must be able to trust that what was set is what flies, now
+      and after the next power-up.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_storage::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
+
+  - id: CONFIG-009
+    title: A failed save leaves the booting configuration
+    statement: >-
+      A failed or cancelled save shall leave the configuration the board
+      boots with untouched.
+    rationale: >-
+      The pilot must be able to trust that what was set is what flies, now
+      and after the next power-up.
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -64,26 +129,32 @@ requirements:
           setup: none
           method:
             test: ferrowasp_storage::config_save::tests::a_cancelled_save_stops_and_the_active_slot_still_boots
+
+  - id: CONFIG-003
+    title: A complete baseline validates and applies as one change
+    statement: >-
+      A complete exported configuration shall validate offline and apply as
+      one change.
+    rationale: >-
+      Restoring a known-good tune is the recovery path after any experiment.
+    derived_from: [W6]
+    verification:
+      entries:
         - level: mcu
           target: fcu
           setup: none
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
-  - id: CONFIG-003
-    title: A complete baseline can be restored
+  - id: CONFIG-010
+    title: A restored baseline reads back as exported
     statement: >-
-      A complete exported configuration shall validate offline and apply
-      as one change, after which every value shall read back as
-      exported, before and after a cold boot.
+      After a baseline is restored, every value shall read back as exported,
+      before and after a cold boot.
     rationale: >-
-      Restoring a known-good tune is the recovery path after any
-      experiment.
+      Restoring a known-good tune is the recovery path after any experiment.
     derived_from: [W6]
-    allocated_to:
-      - ferrowasp_config::stored::StoredConfig
     verification:
-      mode: direct
       entries:
         - level: mcu
           target: fcu
@@ -94,19 +165,14 @@ requirements:
   - id: CONFIG-004
     title: A configuration slot decodes only when it is whole
     statement: >-
-      A configuration slot shall hold its payload in one flash page with
-      a magic, a version, the payload length, a sequence and a CRC-32
-      over the page; it shall refuse a payload too large to fit, and
-      decode only a page whose magic, version, length and CRC all check,
-      so a slot cut short by power loss never decodes.
+      A configuration slot shall decode only from a page whose magic,
+      version, payload length and CRC-32 all check, so that a slot cut short
+      by power loss never decodes.
     rationale: >-
-      Storage is untrusted input (ADR-0059); a torn slot read as valid
-      would fly whatever bytes it held.
+      Storage is untrusted input; a torn slot read as valid would fly
+      whatever bytes it held.
     derived_from: [W2, W6]
-    allocated_to:
-      - ferrowasp_config::page
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -119,30 +185,38 @@ requirements:
           method:
             test: ferrowasp_config::page::tests::crc_matches_standard_check_value
 
-  - id: CONFIG-005
-    title: Every older stored configuration migrates to the same meaning
+  - id: CONFIG-011
+    title: A configuration slot fits one page
     statement: >-
-      The stored configuration shall round-trip and refuse unsafe
-      values, and every older payload shall decode with its meaning
-      kept: a version 1 or 2 smoothing factor as the same filter corner,
-      a payload before bindings with the board's default bindings, one
-      before the channel map with AETR, the arm switch on channel 9 and
-      SBUS, one before the motor order with the board's wiring, and one
-      before the accelerometer level uncorrected.
+      A configuration slot shall hold its payload, magic, version, length,
+      sequence and CRC in one flash page, refusing a payload too large to
+      fit.
     rationale: >-
-      A firmware update must never move a pilot's arm switch, motor
-      order or filter (W6).
-    derived_from: [W6]
-    allocated_to:
-      - ferrowasp_config::stored
+      Storage is untrusted input; a torn slot read as valid would fly
+      whatever bytes it held.
+    derived_from: [W2, W6]
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
+            test: ferrowasp_config::page::tests::config_slots_round_trip_and_reject_corruption
+
+  - id: CONFIG-005
+    title: Every older stored configuration keeps its meaning
+    statement: >-
+      Every older stored payload shall decode with its meaning kept: a
+      version 1 or 2 smoothing factor as the same filter corner, and a
+      payload without bindings, channel map, motor order or accelerometer
+      level with the board's bindings, AETR with the arm switch on channel 9
+      and SBUS, the board's wiring, and no level correction.
+    rationale: >-
+      A firmware update must never move a pilot's arm switch, motor order or
+      filter (W6).
+    derived_from: [W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -183,3 +257,25 @@ requirements:
           setup: none
           method:
             test: ferrowasp_config::stored::tests::legacy_stored_config_migrates_with_current_rc_defaults
+
+  - id: CONFIG-012
+    title: The stored configuration round-trips and refuses unsafe values
+    statement: >-
+      The stored configuration shall round-trip through its encoding and
+      refuse an unsafe value.
+    rationale: >-
+      A configuration that does not read back as written, or that holds an
+      unsafe value, flies something nobody set (W6).
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::stored::tests::rc_map_and_protocol_are_configured_saved_and_validated

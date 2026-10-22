@@ -1,24 +1,16 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: IO-001
-    title: A serial chunk carries its bytes and their continuity
+    title: A received chunk carries its bytes and their continuity
     statement: >-
-      A received serial chunk shall carry its bytes in order, their
-      arrival time, the port generation and whether a UART error was
-      seen, and a constructed chunk shall never claim lost bytes before
-      it, which only the reader marks; an empty or oversized chunk, in
-      either direction, shall be refused; and every serial fault shall
-      map to an embedded-io error kind.
+      A received serial chunk shall carry its bytes in order, their arrival
+      time, the port generation and whether a UART error was seen.
     rationale: >-
-      This is the contract every serial consumer reads (ADR-0011,
-      ADR-0057): without the arrival time a consumer cannot judge a
-      frame's age, and without the generation and the discontinuity mark
-      it would join bytes across a gap.
+      This is the contract every serial consumer reads: without the arrival
+      time a consumer cannot judge a frame's age, and without the generation
+      and the discontinuity mark it would join bytes across a gap.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_io_contracts::serial
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -29,17 +21,60 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_io_contracts::serial::tests::the_stream_generation_advances_and_wraps
+
+  - id: IO-005
+    title: Only the reader marks lost bytes
+    statement: >-
+      A constructed serial chunk shall never claim lost bytes before it;
+      only the reader marks a discontinuity.
+    rationale: >-
+      This is the contract every serial consumer reads: without the arrival
+      time a consumer cannot judge a frame's age, and without the generation
+      and the discontinuity mark it would join bytes across a gap.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_io_contracts::serial::tests::a_received_chunk_keeps_its_bytes_arrival_and_continuity
+
+  - id: IO-006
+    title: An empty or oversized chunk is refused
+    statement: >-
+      An empty or oversized serial chunk, received or transmitted, shall be
+      refused.
+    rationale: >-
+      This is the contract every serial consumer reads: without the arrival
+      time a consumer cannot judge a frame's age, and without the generation
+      and the discontinuity mark it would join bytes across a gap.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_io_contracts::serial::tests::an_empty_or_oversized_chunk_is_refused
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_io_contracts::serial::tests::a_transmitted_chunk_round_trips
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_io_contracts::serial::tests::the_stream_generation_advances_and_wraps
+
+  - id: IO-007
+    title: Serial faults map to embedded-io kinds
+    statement: >-
+      Every serial fault shall map to an embedded-io error kind.
+    rationale: >-
+      This is the contract every serial consumer reads: without the arrival
+      time a consumer cannot judge a frame's age, and without the generation
+      and the discontinuity mark it would join bytes across a gap.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -47,21 +82,16 @@ requirements:
             test: ferrowasp_io_contracts::serial::tests::serial_faults_map_to_embedded_io_kinds
 
   - id: IO-002
-    title: Timestamps extend monotonically and deadlines expire on time
+    title: A wrapping counter extends monotonically
     statement: >-
-      A wrapping hardware counter shall extend into a monotonic 64-bit
-      count across its wrap, and a deadline shall expire exactly at its
-      start plus its timeout, saturating rather than wrapping at the end
-      of the range.
+      A wrapping hardware counter shall extend into a monotonic 64-bit count
+      across its wrap.
     rationale: >-
       Every message carries a timestamp, and every staleness decision
-      compares against one; a wrap read backwards would make stale data
-      look fresh.
+      compares against one; a wrap read backwards would make stale data look
+      fresh.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_io_contracts::time
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -73,6 +103,19 @@ requirements:
           setup: none
           method:
             test: ferrowasp_io_contracts::time::tests::wrapping_counter_tracks_large_32_bit_period
+
+  - id: IO-008
+    title: A deadline expires at its start plus its timeout
+    statement: >-
+      A deadline shall expire exactly at its start plus its timeout,
+      saturating rather than wrapping at the end of the range.
+    rationale: >-
+      Every message carries a timestamp, and every staleness decision
+      compares against one; a wrap read backwards would make stale data look
+      fresh.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -80,32 +123,38 @@ requirements:
             test: ferrowasp_io_contracts::time::tests::a_deadline_expires_at_its_timeout_and_saturates
 
   - id: IO-003
-    title: A link never blocks its producer and shows what it lost
+    title: A link never blocks its producer
     statement: >-
-      A link's producer shall never block: on a full queue it shall
-      refuse the new message, keep the queued ones and count the refusal.
-      It shall number every message it tries to send from 1, skipping 0
-      when the number wraps, so a consumer reads a refused message as a
-      gap in the sequence; a forwarded message shall keep its upstream
-      sequence and timestamp. A consumer shall read an `event` link in
-      order and a `state` link as its newest message, taking at most the
-      queue's capacity, and an empty link shall read as nothing new.
+      A link's producer shall never block: on a full queue it refuses the
+      new message, keeps the queued ones and counts the refusal.
     rationale: >-
-      Every link between safety-critical tasks, and to the observer, is
-      this queue (ADR-0055): a consumer that stalls must cost its
-      producer data, never time (W2), and the loss must be visible.
-      Staleness stays the consumer's decision.
+      Every link between safety-critical tasks, and to the observer, is this
+      queue: a consumer that stalls must cost its producer data, never time
+      (W2), and the loss must be visible. Staleness stays the consumer's
+      decision.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_io_contracts::link
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_io_contracts::link::tests::a_full_link_refuses_the_new_message_and_keeps_the_queued_ones
+
+  - id: IO-009
+    title: A refused message leaves a gap in the sequence
+    statement: >-
+      A link shall number every message it tries to send from 1, skipping 0
+      when the number wraps, so that a consumer reads a refused message as a
+      gap.
+    rationale: >-
+      Every link between safety-critical tasks, and to the observer, is this
+      queue: a consumer that stalls must cost its producer data, never time
+      (W2), and the loss must be visible. Staleness stays the consumer's
+      decision.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -115,17 +164,45 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_io_contracts::link::tests::newest_drains_to_the_latest_and_empty_means_nothing_new
+            test: ferrowasp_io_contracts::link::tests::the_sequence_skips_zero_when_it_wraps
+
+  - id: IO-010
+    title: A forwarded message keeps its upstream stamp
+    statement: >-
+      A forwarded message shall keep its upstream sequence and timestamp.
+    rationale: >-
+      Every link between safety-critical tasks, and to the observer, is this
+      queue: a consumer that stalls must cost its producer data, never time
+      (W2), and the loss must be visible. Staleness stays the consumer's
+      decision.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_io_contracts::link::tests::forward_keeps_the_upstream_stamp
+
+  - id: IO-011
+    title: A consumer reads each kind of link as declared
+    statement: >-
+      A consumer shall read an `event` link in order and a `state` link as
+      its newest message, taking at most the queue's capacity, with an empty
+      link reading as nothing new.
+    rationale: >-
+      Every link between safety-critical tasks, and to the observer, is this
+      queue: a consumer that stalls must cost its producer data, never time
+      (W2), and the loss must be visible. Staleness stays the consumer's
+      decision.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_io_contracts::link::tests::the_sequence_skips_zero_when_it_wraps
+            test: ferrowasp_io_contracts::link::tests::newest_drains_to_the_latest_and_empty_means_nothing_new
 
   - id: IO-004
     title: An IMU sample is one burst in one message
@@ -137,10 +214,7 @@ requirements:
     rationale: >-
       The control loop read its gyro as three atomics the parser wrote at a
       lower priority, and its accelerometer through a separate lock, so a
-      tick could mix two samples (section 9, ADR-0057).
+      tick could mix two samples (section 9).
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_io_contracts::imu
     verification:
-      mode: direct
       entries: []

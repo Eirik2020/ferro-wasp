@@ -3,6 +3,8 @@
 //! arm switch, and arm and disarm requests to the safety master. Any
 //! transport, parser or failsafe fault neutralizes the sticks and invalidates
 //! the RC link, so a lost receiver fails closed.
+//!
+//! Requirements: INPUT-006
 
 use crate::prelude::*;
 

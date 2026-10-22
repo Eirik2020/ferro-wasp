@@ -1,4 +1,4 @@
-//! Gates (ADR-0051): named checkpoints, each declaring which requirements,
+//! Gates (design §3): named checkpoints, each declaring which requirements,
 //! at which levels, must be verified before it opens. Only gates block.
 //!
 //! Gates live in `project_meta/requirements/gates.yaml`. A gate may include

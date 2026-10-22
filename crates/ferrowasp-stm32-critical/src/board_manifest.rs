@@ -1,3 +1,6 @@
+//! Requirements: HW-ROUTE-001, HW-ROUTE-002
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BoardIdentity {
     pub target_id: &'static str,

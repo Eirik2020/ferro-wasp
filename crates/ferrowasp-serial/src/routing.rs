@@ -1,3 +1,6 @@
+//! Requirements: SERIAL-002, SERIAL-008, SERIAL-009
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SerialRoute {
     pub logical: super::LogicalSerialPort,

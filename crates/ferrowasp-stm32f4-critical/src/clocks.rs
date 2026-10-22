@@ -1,3 +1,6 @@
+//! Requirements: HW-TIME-001
+//! Safety-critical.
+
 pub const SYSTEM_CLOCK_HZ: u32 = 168_000_000;
 pub const STM32F401_SYSTEM_CLOCK_HZ: u32 = 84_000_000;
 pub const CONTROL_SCHEDULER_HZ: u32 = 800;

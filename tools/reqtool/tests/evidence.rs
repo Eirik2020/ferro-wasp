@@ -4,8 +4,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use reqtool::evidence::{self, Outcome, Recorded, RunRequest, Timestamp};
-use reqtool::fingerprint::Fingerprinter;
+use reqtool::configuration::Cargo;
+use reqtool::evidence::{self, Current, Outcome, Recorded, RunRequest, Timestamp};
 use reqtool::project::Project;
 use reqtool::schema::Method;
 use reqtool::status::{self, Status};
@@ -77,6 +77,7 @@ fn request<'a>(method: Method, board: Option<&'a str>, outcome: Outcome) -> RunR
     RunRequest {
         runs: vec![(method, outcome)],
         board,
+        features: &[],
         failed: &[],
         note: None,
         supersedes: &[],
@@ -85,28 +86,52 @@ fn request<'a>(method: Method, board: Option<&'a str>, outcome: Outcome) -> RunR
     }
 }
 
+/// Builds a record against the repository as it is now.
+fn build(
+    repository: &Path,
+    request: &RunRequest<'_>,
+    now: Timestamp,
+) -> Result<evidence::Record, String> {
+    let project = load(repository);
+    let cargo = Cargo::new(&project.repository, &project.workspace);
+    let current = Current {
+        project: &project,
+        trace: &project.trace,
+        configurations: &cargo,
+    };
+    evidence::build(&current, request, now)
+}
+
 /// Records a run; each call gets its own second so run IDs and order are
 /// deterministic.
 fn record(repository: &Path, request: &RunRequest<'_>, second: u64) -> String {
-    let project = load(repository);
     let now = Timestamp::from_unix(1_792_195_200 + second);
-    let built = evidence::build(&project, request, now).unwrap();
+    let built = build(repository, request, now).unwrap();
     evidence::write(repository, &built, &now).unwrap();
     built.run_id
 }
 
-fn entry_status(repository: &Path, id: &str, entry: usize) -> Status {
+fn recorded(repository: &Path) -> (Project, Recorded) {
     let project = load(repository);
     let records = evidence::load(repository).unwrap();
-    let recorded = Recorded::new(&project, &records).unwrap();
+    let cargo = Cargo::new(&project.repository, &project.workspace);
+    let current = Current {
+        project: &project,
+        trace: &project.trace,
+        configurations: &cargo,
+    };
+    let recorded = Recorded::new(&current, &records, None).unwrap();
+    (project, recorded)
+}
+
+fn entry_status(repository: &Path, id: &str, entry: usize) -> Status {
+    let (project, recorded) = recorded(repository);
     use reqtool::status::Evidence;
     recorded.entry(&project.requirements[id], entry)
 }
 
 fn requirement_status(repository: &Path, id: &str) -> Status {
-    let project = load(repository);
-    let records = evidence::load(repository).unwrap();
-    let recorded = Recorded::new(&project, &records).unwrap();
+    let (project, recorded) = recorded(repository);
     status::compute(&project.requirements, &recorded)[id]
 }
 
@@ -118,7 +143,7 @@ fn edit(repository: &Path, file: &str, from: &str, to: &str) {
 }
 
 #[test]
-fn a_pass_verifies_until_the_covered_code_changes() {
+fn a_pass_verifies_until_the_module_or_a_direct_import_changes() {
     let repo = repository();
     let path = repo.path();
     assert_eq!(entry_status(path, "INPUT-001", 0), Status::Unverified);
@@ -131,14 +156,25 @@ fn a_pass_verifies_until_the_covered_code_changes() {
 
     edit(
         path,
-        "crates/beta/src/lib.rs",
-        "pub fn plain() {}",
-        "pub fn plain() { let _ = 1; }",
+        "crates/alpha/src/input.rs",
+        "pub fn validate() {}",
+        "/// Checks.\npub fn validate(  ) {\n}",
     );
     assert_eq!(
         entry_status(path, "INPUT-001", 0),
         Status::Verified,
-        "beta is outside the closure"
+        "comments and layout are not code"
+    );
+    edit(
+        path,
+        "crates/alpha/src/input/nested.rs",
+        "pub fn deep() {}",
+        "pub fn deep() { let _ = 1; }",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 0),
+        Status::Verified,
+        "a module of the same crate it does not import"
     );
 
     edit(
@@ -147,7 +183,40 @@ fn a_pass_verifies_until_the_covered_code_changes() {
         "pub struct Original;",
         "pub struct Original(u8);",
     );
-    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Stale);
+    assert_eq!(
+        entry_status(path, "INPUT-001", 0),
+        Status::Stale,
+        "a direct import changed"
+    );
+}
+
+#[test]
+fn evidence_stops_at_the_direct_imports() {
+    let repo = repository();
+    let path = repo.path();
+    edit(
+        path,
+        "crates/alpha/src/hidden.rs",
+        "pub struct Original;",
+        "pub struct Original;\n\npub fn deeper() { crate::input::nested::deep(); }",
+    );
+    git(path, &["commit", "-qam", "hidden imports nested"]);
+    record(
+        path,
+        &request(Method::Test(TEST.into()), None, Outcome::Pass),
+        1,
+    );
+    edit(
+        path,
+        "crates/alpha/src/input/nested.rs",
+        "pub fn deep() {}",
+        "pub fn deep() { let _ = 1; }",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 0),
+        Status::Verified,
+        "nested.rs is an import of an import of input.rs"
+    );
 }
 
 #[test]
@@ -223,16 +292,15 @@ fn one_run_can_fail_one_requirement_and_pass_another() {
 fn target_evidence_belongs_to_a_board() {
     let repo = repository();
     let path = repo.path();
-    let project = load(path);
     let now = Timestamp::from_unix(1_792_195_200);
-    let without = evidence::build(
-        &project,
+    let without = build(
+        path,
         &request(Method::Procedure(BENCH.into()), None, Outcome::Pass),
         now,
     );
     assert!(without.unwrap_err().contains("needs --board"));
-    let host_with_board = evidence::build(
-        &project,
+    let host_with_board = build(
+        path,
         &request(Method::Test(TEST.into()), Some("demo-board"), Outcome::Pass),
         now,
     );
@@ -252,8 +320,7 @@ fn target_evidence_belongs_to_a_board() {
         1,
     );
     assert_eq!(entry_status(path, "INPUT-001", 1), Status::Verified);
-    let project = load(path);
-    let recorded = Recorded::new(&project, &evidence::load(path).unwrap()).unwrap();
+    let (project, recorded) = recorded(path);
     use reqtool::status::Evidence;
     assert_eq!(
         recorded.boards(&project.requirements["INPUT-001"], 1),
@@ -262,20 +329,31 @@ fn target_evidence_belongs_to_a_board() {
 
     edit(
         path,
+        "crates/beta/src/lib.rs",
+        "pub fn plain()",
+        "pub fn plain_renamed()",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 1),
+        Status::Verified,
+        "beta is not compiled into the board's image"
+    );
+    edit(
+        path,
         "firmware/demo-board/src/lib.rs",
-        "pub fn wiring() {}",
-        "pub fn wiring() { let _ = 3; }",
+        "pub fn wiring() {",
+        "pub fn wiring() {\n    let _ = 3;",
     );
     assert_eq!(
         entry_status(path, "INPUT-001", 1),
         Status::Stale,
-        "the board's app is in the closure"
+        "the board's app is in its configuration"
     );
     assert_eq!(entry_status(path, "INPUT-001", 0), Status::Unverified);
 }
 
 #[test]
-fn the_procedure_section_and_the_requirement_text_are_fingerprinted() {
+fn the_procedure_section_and_the_requirement_text_are_part_of_the_claim() {
     let repo = repository();
     let path = repo.path();
     record(
@@ -339,10 +417,9 @@ fn the_procedure_section_and_the_requirement_text_are_fingerprinted() {
 }
 
 #[test]
-fn parents_and_children_follow_recorded_evidence() {
+fn a_parent_is_never_proved_by_its_children() {
     let repo = repository();
     let path = repo.path();
-    assert_eq!(requirement_status(path, "INPUT-003"), Status::Unverified);
     record(
         path,
         &request(Method::Test(TEST.into()), None, Outcome::Pass),
@@ -351,33 +428,22 @@ fn parents_and_children_follow_recorded_evidence() {
     assert_eq!(requirement_status(path, "INPUT-002"), Status::Verified);
     assert_eq!(
         requirement_status(path, "INPUT-003"),
-        Status::Verified,
-        "its only self-verifying child passed"
-    );
-    assert_eq!(
-        requirement_status(path, "INPUT-004"),
-        Status::Verified,
-        "covered by its parent"
+        Status::Unverified,
+        "it has no method of its own"
     );
 }
 
 #[test]
-fn fingerprints_cover_the_lockfile_and_toolchain() {
+fn the_toolchain_is_part_of_host_evidence() {
     let repo = repository();
     let path = repo.path();
-    let fingerprint = || {
-        let project = load(path);
-        let requirement = &project.requirements["INPUT-001"];
-        Fingerprinter::new(&project.repository, &project.workspace)
-            .entry(requirement, &requirement.verification.entries[0], None)
-            .unwrap()
-    };
-    let before = fingerprint();
-    edit(path, "Cargo.lock", "0bfb9eb6", "0bfb9eb7");
-    let after_lock = fingerprint();
-    assert_ne!(before, after_lock);
+    record(
+        path,
+        &request(Method::Test(TEST.into()), None, Outcome::Pass),
+        1,
+    );
     edit(path, "rust-toolchain.toml", "1.93.1", "1.94.0");
-    assert_ne!(after_lock, fingerprint());
+    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Stale);
 }
 
 #[test]
@@ -391,9 +457,8 @@ fn a_session_records_several_methods_and_repeats_add_nothing() {
         ],
         ..request(Method::Test(TEST.into()), Some("demo-board"), Outcome::Pass)
     };
-    let project = load(path);
     let now = Timestamp::from_unix(1_792_195_200);
-    let built = evidence::build(&project, &session, now).unwrap();
+    let built = build(path, &session, now).unwrap();
     assert!(
         built.run_id.contains("__2-methods__demo-board__"),
         "{}",
@@ -405,7 +470,7 @@ fn a_session_records_several_methods_and_repeats_add_nothing() {
     assert_eq!(entry_status(path, "INPUT-001", 1), Status::Verified);
 
     let existing = evidence::load(path).unwrap();
-    let mut again = evidence::build(&load(path), &session, now).unwrap();
+    let mut again = build(path, &session, now).unwrap();
     evidence::drop_repeats(&mut again, &existing);
     assert!(
         again.results.is_empty(),
@@ -419,12 +484,12 @@ fn a_session_records_several_methods_and_repeats_add_nothing() {
         "pub fn validate() { let _ = 4; }",
     );
     let existing = evidence::load(path).unwrap();
-    let mut changed = evidence::build(&load(path), &session, now).unwrap();
+    let mut changed = build(path, &session, now).unwrap();
     evidence::drop_repeats(&mut changed, &existing);
     assert!(!changed.results.is_empty(), "changed code is new evidence");
 
     let failing = request(Method::Test(TEST.into()), None, Outcome::Fail);
-    let mut fail = evidence::build(&load(path), &failing, now).unwrap();
+    let mut fail = build(path, &failing, now).unwrap();
     let before = fail.results.len();
     evidence::drop_repeats(&mut fail, &evidence::load(path).unwrap());
     assert_eq!(fail.results.len(), before, "a fail is always kept");
@@ -450,8 +515,7 @@ fn gate(
     name: &str,
     board: Option<&str>,
 ) -> Result<Vec<reqtool::gates::Missing>, String> {
-    let project = load(path);
-    let recorded = Recorded::new(&project, &evidence::load(path).unwrap()).unwrap();
+    let (project, recorded) = recorded(path);
     reqtool::gates::check(
         &project.gates,
         name,
@@ -553,7 +617,6 @@ gates:
 fn board_evidence_must_say_who_ran_it_on_which_image_in_what_conditions() {
     let repo = repository();
     let path = repo.path();
-    let project = load(path);
     let now = Timestamp::from_unix(1_792_195_200);
     let with = |details: Option<reqtool::details::Details>| {
         let request = RunRequest {
@@ -564,7 +627,7 @@ fn board_evidence_must_say_who_ran_it_on_which_image_in_what_conditions() {
                 Outcome::Pass,
             )
         };
-        evidence::build(&project, &request, now)
+        build(path, &request, now)
     };
     let parsed =
         |json: &str| Some(serde_json::from_str::<reqtool::details::Details>(json).unwrap());
@@ -631,9 +694,8 @@ fn artifacts_are_hashed_from_logs_and_checked_on_load() {
             Outcome::Pass,
         )
     };
-    let project = load(path);
     let now = Timestamp::from_unix(1_792_195_200);
-    let built = evidence::build(&project, &run, now).unwrap();
+    let built = build(path, &run, now).unwrap();
     let sealed = &built.details.as_ref().unwrap().artifacts[0];
     assert_eq!(sealed.bytes, Some(8));
     assert!(sealed.sha256.as_ref().is_some_and(|sha| sha.len() == 64));
@@ -658,7 +720,7 @@ fn artifacts_are_hashed_from_logs_and_checked_on_load() {
         )
     };
     assert!(
-        evidence::build(&project, &named_badly, now)
+        build(path, &named_badly, now)
             .unwrap_err()
             .contains("lowercase words")
     );
@@ -673,7 +735,7 @@ fn artifacts_are_hashed_from_logs_and_checked_on_load() {
         )
     };
     assert!(
-        evidence::build(&project, &outside, now)
+        build(path, &outside, now)
             .unwrap_err()
             .contains("under logs/")
     );

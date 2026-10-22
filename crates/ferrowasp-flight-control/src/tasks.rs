@@ -1,8 +1,11 @@
-//! The flight controller's tasks (ADR-0060), target-only. The control loop:
+//! The flight controller's tasks (design §16), target-only. The control loop:
 //! the rate controller, run from the control scheduler's
 //! timer interrupt. It turns the latest IMU sample and RC rates into motor
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
+//!
+//! Requirements: CTRL-013, CTRL-035, CTRL-036, CTRL-037, INPUT-010, INPUT-019, INPUT-020
+//! Safety-critical.
 
 // The equal-motor and physical-motor bench images mix nothing.
 #[allow(unused_imports)]

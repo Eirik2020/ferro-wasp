@@ -1,4 +1,7 @@
 //! STM32H743 clock tree for a flight board.
+//!
+//! Requirements: HW-TIME-001
+//! Safety-critical.
 
 use stm32h7xx_hal::{
     pac,

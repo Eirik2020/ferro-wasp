@@ -1,3 +1,6 @@
+//! Requirements: HW-TIME-001
+//! Safety-critical.
+
 use ferrowasp_io_contracts::time::TimestampMicros;
 
 pub const MICROSECOND_TIMEBASE_HZ: u32 = 1_000_000;

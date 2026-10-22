@@ -3,6 +3,8 @@
 //! qualification of every output - and applies fresh motor commands only
 //! while the system is armed. `ActuatorHardware` is the one place a motor
 //! command reaches the DShot bank.
+//!
+//! Requirements: ARM-002, BOOT-001, BOOT-003
 
 use crate::prelude::backend::dshot;
 use crate::prelude::backend::dshot::DshotMotors;
@@ -591,7 +593,7 @@ pub async fn actuator_output(mut cx: actuator_output::Context, cmd: safety::Actu
     if !actuator.apply(output, Mono::now().duration_since_epoch().to_millis()) {
         return;
     }
-    // Send it now, so frames follow the control loop (ADR-0046). A release
+    // Send it now, so frames follow the control loop (dshot.md). A release
     // already pending or running carries it; the fallback covers the rest.
     let _ = cx.spawn.dshot_service();
 }

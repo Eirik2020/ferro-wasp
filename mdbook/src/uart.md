@@ -6,7 +6,8 @@ flight image's legacy ESC telemetry.
 ## Current Implementation
 
 The reusable STM32F4 UART DMA mechanism lives in
-`crates/ferrowasp-stm32f4/src/uart_dma.rs`. Each board's UART routes are data
+`crates/ferrowasp-stm32f4-critical/src/uart_dma.rs`, over the family-neutral
+transport in `ferrowasp-stm32-critical`. Each board's UART routes are data
 in its board crate (`board/src/serial.rs`); peripheral construction is in the
 app's `src/board/`.
 
@@ -20,6 +21,18 @@ It provides:
 - split IRQ-side and parser-side ownership
 - IDLE interrupt handling
 - transfer-complete handling
+
+Transmit goes through one bounded channel split three ways: a writer, which
+implements `embedded_io_async::Write` and copies at most one fixed-capacity
+chunk per call; the port's transport task, which starts one chunk at a time
+and marks it in flight; and the DMA interrupt, which reports that chunk's
+completion or terminal fault. A write still waiting for queue space has
+changed nothing, so dropping it sends nothing partial, and `flush` completes
+only when the queue is empty and no chunk is in flight. A stale or duplicate
+interrupt cannot complete another chunk. Each transfer keeps the fixed 70-byte
+DMA length, zero-padding a shorter frame. On the STM32F4 a DMA FIFO-error flag
+is advisory on this path, as in the HAL's UART DMA policy: it is cleared and
+the transfer stays in flight; transfer and direct-mode errors are terminal.
 
 Current UART modes:
 

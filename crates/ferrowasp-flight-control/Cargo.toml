@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-# The flight controller's RTIC task definitions, target-only (ADR-0060).
+# The flight controller's RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:ferrowasp-border",
     "dep:ferrowasp-boundary-contracts",

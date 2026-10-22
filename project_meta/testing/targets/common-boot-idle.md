@@ -46,8 +46,8 @@ Stop immediately on:
 - uncertainty about the exact target or feature set.
 
 Retain the board identity, firmware image hash, exact feature set, power and
-propeller state, and boot/idle log; the record's fingerprint covers the code
-that ran.
+propeller state, and boot/idle log; the record's configuration covers the
+code that ran.
 
 ## Target Procedures
 

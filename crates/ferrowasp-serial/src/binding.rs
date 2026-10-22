@@ -8,6 +8,9 @@
 //! function claimed by two ports is dropped from both, so RC input is either
 //! on exactly one port or on none, and with none the RC link never becomes
 //! valid and the craft cannot arm.
+//!
+//! Requirements: SERIAL-001, SERIAL-005, SERIAL-006, SERIAL-007
+//! Safety-critical.
 
 use super::{LogicalSerialPort, SerialProfile, SerialRoute, SerialRouteError};
 

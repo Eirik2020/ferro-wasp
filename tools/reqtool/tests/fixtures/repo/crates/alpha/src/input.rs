@@ -1,6 +1,15 @@
+//! Requirements: INPUT-001, INPUT-002
+//! Safety-critical.
+
 pub mod nested;
 
+use crate::hidden::Original;
+
 pub fn validate() {}
+
+pub fn original() -> Original {
+    Original
+}
 
 pub struct Frame;
 

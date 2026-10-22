@@ -1,6 +1,8 @@
-//! The border roles' tasks (ADR-0060, ADR-0065), target-only: the
-//! observer's run every millisecond, publishing on the ledger (ADR-0056,
-//! ADR-0061).
+//! The border roles' tasks (design §16), target-only: the
+//! observer's run every millisecond, publishing on the ledger (design §10, §19).
+//!
+//! Requirements: BORDER-005, BORDER-011
+//! Safety-critical.
 
 use crate::observer::{Ledger, Observer};
 use ferrowasp_io_contracts::time::TimestampMicros;

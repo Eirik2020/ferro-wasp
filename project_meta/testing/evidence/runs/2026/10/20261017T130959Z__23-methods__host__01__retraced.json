@@ -1,0 +1,417 @@
+{
+  "schema_version": 4,
+  "run_id": "20261017T130959Z__23-methods__host__01",
+  "recorded_at_utc": "2026-10-17T13:09:59Z",
+  "board": null,
+  "revision": "1776a3e943d590199debccaf5641513ffdd6dcf8",
+  "working_tree": "clean",
+  "modules": {
+    "crates/ferrowasp-core/src/actuator.rs": [],
+    "crates/ferrowasp-core/src/frames.rs": [],
+    "crates/ferrowasp-core/src/safety.rs": [
+      "extern:critical-section@1.2.0",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-drivers/src/crsf.rs": [],
+    "crates/ferrowasp-flight/src/drone_toolbox.rs": [
+      "crates/ferrowasp-core/src/actuator.rs",
+      "crates/ferrowasp-core/src/frames.rs",
+      "crates/ferrowasp-pid/src/lib.rs",
+      "extern:defmt@1.0.1",
+      "extern:libm@0.2.16"
+    ],
+    "crates/ferrowasp-flight/src/rc_receiver.rs": [
+      "crates/ferrowasp-drivers/src/crsf.rs",
+      "extern:heapless@0.9.2",
+      "extern:sbus-rs@0.1.3"
+    ],
+    "crates/ferrowasp-pid/src/lib.rs": []
+  },
+  "identities": {
+    "crates/ferrowasp-core/src/actuator.rs": "f484b7214c7e5c759cda568b887d03b7a3d9f2198fdc83f0eab3348a0f945212",
+    "crates/ferrowasp-core/src/frames.rs": "a34c3d4aa580c2bc6164d9989fd284a7757f04a40df3b637f3baaf76fc637bbb",
+    "crates/ferrowasp-core/src/safety.rs": "6e0a5ee5476ffe65ea64fc5fa0fe099e3ac6a67003132c3731a7093f77a49b90",
+    "crates/ferrowasp-drivers/src/crsf.rs": "167c531110e43d27327ecbf11cbf2e9b6279e95c70b29ddb4b3f5c0a51477171",
+    "crates/ferrowasp-flight/src/drone_toolbox.rs": "59413fae9fad9106b2d8a2264af93d0ffdbd7fb5e24e949c4918b1ee964fed0d",
+    "crates/ferrowasp-flight/src/rc_receiver.rs": "6442a423f72445df69bc76b37b55029b971a1168b5c38047fdf78fc366047bab",
+    "crates/ferrowasp-pid/src/lib.rs": "34c4af6a97e1951e08bbb0348fc2b27702ee7e5733e148513e59b8284ff5c307",
+    "extern:critical-section@1.2.0": "1.2.0",
+    "extern:defmt@1.0.1": "1.0.1",
+    "extern:heapless@0.9.2": "0.9.2",
+    "extern:libm@0.2.16": "0.2.16",
+    "extern:sbus-rs@0.1.3": "0.1.3"
+  },
+  "results": [
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::an_arm_hold_straddling_the_old_u32_wrap_still_arms"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "ef9bc4db2118a0292610d1808c993952812b2a5522f5468eaf66d1c9d6ce3449",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "b6d76b62ce07918f37ae27363b2b1fad131cfbdcb72f56e6d0e7921a8153974c",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-003",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_frame_flags_reject_failsafe_and_lost_frames"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "4fe8d31fb9966e63fda8090e962a1a79fdcf9eb8ad3c1376c36ca0060fba9ab3",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-008",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "5a67ece0673c680ce7fc165881c6a98667243e1eb4862130f4bc514045eb9075",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-007",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "c5e2d727d2ac6b733b625bf7b3d7e14891de44ecffa6fc096468cfb220629c3b",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-002",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_requires_healthy_recovery_and_arm_switch_low"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "e41a803c7a4bf423f786a4d63c17a828b42171541d393fe365c909fbc7115a01",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-002",
+      "method": {
+        "test": "ferrowasp_core::safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "84f052e4184f52fdaa651f5f73d68b72e92b14f4176ba74832dd8493955d2b70",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/safety.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "6fcbf046214d24a123fef7011c3114938e345e01e11f7231c6a371f270dd18fd",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::impossible_length_is_rejected_without_buffering"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "1e6fcf2edc224a7b0339e1ec994511e8b8209abb092d16927f61e0db7cfc602a",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::rc_frame_decodes_after_leading_noise"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "9c112ead0bd64f8457b4d6f9558ed3bacfbec2afbd3f808e6c10c1975c3e9845",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_drivers::crsf::tests::short_rc_payload_is_an_error_not_a_frame"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "fafc46222d548f80cdfd5f61e6f332bf597a04c404dab93f7ea86e4da5a03563",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "2679c3f93823235536a808835a28fa1e64e06325c32a870746bd6d84fe69db94",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-007",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::channel_map_reads_taer_and_round_trips_its_config_values"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "bbb6aecf4d2b9a147fbebf0aedf6d4dd362970b915536d96a982a7ccde062529",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "23d51c69ec36eae8d842d6d38ef85e2fbf442d9ed38af993db54b3e6b55a6e56",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-009",
+      "method": {
+        "test": "ferrowasp_flight::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "5986a928ebb03bf1d2a4fc1a1591c28f0f15827b5f10b9a8dddf4c6de89d9a3a",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-core/src/actuator.rs",
+        "crates/ferrowasp-core/src/frames.rs",
+        "crates/ferrowasp-flight/src/drone_toolbox.rs",
+        "crates/ferrowasp-pid/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-005",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::crsf_crc_error_is_a_parse_error"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "c42ffa7cf7a002083bdb52967c3ca158ed5d26ec1bb732b969adc9eaaae660c3",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-003",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "1ea51055d6622b2b94823024443e1fe13c41288939784dc64607760dc774582f",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "587db58ff4ee1d830a97edd8030e12b000838804f7294a51fa782e22a545b57f",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "64f14550b663208f8c93a0789299277f4d1c41003540233b7e7a44aecc9c18ae",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_failsafe_and_frame_lost_flags_reach_the_frame"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "58079aa0318ef4612a1a70da8b68695cb92815d23ae88b722d6a454d69271135",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_out_of_range_channels_pass_through_unclamped"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "d6fb114d9f6d710132e60231099c95bc1508ceb5d9d0ca75dc524c13b9d64505",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_partial_frame_is_dropped_on_reset"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "e80a6a588e498025ef1bb1308210561f918dbc781b52f1bd1692aa91c07e0ac9",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "INPUT-004",
+      "method": {
+        "test": "ferrowasp_flight::rc_receiver::tests::sbus_skips_leading_noise_before_a_header"
+      },
+      "level": "unit",
+      "target": "host",
+      "setup": "none",
+      "claim": "6b617c25b87481ac50d370ea118ca711cf83af7f09b1413184f88f78d4470f64",
+      "toolchain": "78b06444cf1bc8a1c2da2bb4d4530870efa7107bd85eda1a3dce265c8d34c130",
+      "exercised": [
+        "crates/ferrowasp-drivers/src/crsf.rs",
+        "crates/ferrowasp-flight/src/rc_receiver.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null,
+  "retraced": {
+    "from": "project_meta/testing/evidence/runs/2026/10/20261017T130959Z__23-methods__host__01.json"
+  }
+}

@@ -1,3 +1,6 @@
+//! Requirements: HW-UART-001, HW-UART-002, HW-UART-003, HW-UART-004
+//! Safety-critical.
+
 use super::rx_state::{DetachedRxBuffer, RxDmaState, RxEventOutcome};
 use ferrowasp_serial::{SerialFault, StreamGeneration};
 

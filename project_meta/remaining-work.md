@@ -14,7 +14,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **DShot timing.** Pulse width, jitter, polarity margin, cross-timer phase, and
   physical stop latency need logic-analyzer measurement; a flight does not
   establish them.
-- **Bidirectional DShot and RPM filter** (ADR-0045 to ADR-0048), Foxeer
+- **Bidirectional DShot and RPM filter** ([section 21](requirements/hardware-and-loop.md#21-motor-speed-feedback)), Foxeer
   first. Pieces, in order:
   - the stored bidirectional-DShot setting, in place of the props-off
     `bench_bidirectional_dshot` feature, and FerroConfigurator's Motors tab
@@ -24,7 +24,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   - the qualification source moved to bidirectional eRPM;
   - extended telemetry: the enable command before guarded idle;
   - blackbox eRPM, reply-loss and extended-telemetry fields;
-  - `ferrowasp-flight-control::dynamic_idle` (ADR-0049) on a mixer output floor,
+  - `ferrowasp-flight-control::dynamic_idle` on a mixer output floor,
     enabled only after the RPM filter has target evidence. Its stale hold
     (provisionally 100 ms) and decay (500 ms) are set from logged reply-loss
     data.
@@ -48,7 +48,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   evidence shows every disarm, RC loss, aborted arm, and rearm starts with clean
   controller state. Roll P 3.0 stays withdrawn after a 10-13 Hz oscillation.
   Command tracking has never been evaluated.
-- **IMU calibration.** Accelerometer level calibration is built (ADR-0044);
+- **IMU calibration.** Accelerometer level calibration is built;
   the gyro still calibrates at every boot. Storing gyro bias, and whether boot
   calibration then becomes a check, remains open. A self-level mode should
   require a calibrated level.
@@ -65,7 +65,8 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Requirements and Architecture
 
-- **Safety-critical architecture** (ADR-0054 to ADR-0064): critical and
+- **Safety-critical architecture** (sections 8 to 19 of the
+  [requirements design](requirements/design.md)): critical and
   non-critical crates, SPSC links, the border roles in `ferrowasp-border` (the
   coordinator, the observer and its ledger, the Health Manager) with their
   heartbeats, the fault classes and the hard-fault latch, the Betaflight-style
@@ -83,7 +84,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
      fallback; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source, after which actuator
      output, the DShot service, the ESC manager and RC input move to their
-     crates (ADR-0065) and the `dt` and `flash_task` aliases go with them;
+     crates (section 16) and the `dt` and `flash_task` aliases go with them;
      the Health Manager and the border heartbeats; the fault classes and the
      failsafe stages; the independent watchdog; the gyro-synced loop;
   3. the per-family conformance suites behind HW-UART-001 to HW-ROUTE-001,
@@ -92,8 +93,16 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   Its scope and open items are in the
   [requirements design](requirements/design.md#17-order-of-work).
 - **The `app!` parser** in `ferroforge-contracts`, and a FerroForge release, so
-  board requirements fingerprint the tasks they name instead of the whole app
-  closure.
+  a configuration's scheduling table leaves task names out, and the other
+  analysis-level checks can run.
+- **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file)):
+  library catalogs (requirements and tests shipped with a crate's version,
+  and a project mapping its requirements onto them); `reqtool report` for
+  each board's configuration in release CI, reporting and not blocking;
+  tests for TRACE-001 to TRACE-007 named as their methods; reviewing the
+  requirements that existed only for mandatory linking; and folding crates
+  that exist only to keep evidence apart into modules where that reads
+  better.
 - **`reqtool`**: the analysis-level checks, and running tests behind opt-in
   features, so they can be evidence.
 
@@ -151,7 +160,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
   (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
   needs a board variant.
-- **Configurator flashing** (ADR-0043). The GUI's Firmware tab and Reboot
+- **Configurator flashing.** The GUI's Firmware tab and Reboot
   button have run only against the browser mock, not a desktop build on a
   board. Deferred with the Lucid: the H743's jump address (`0x1FF09800`, from
   AN2606) is unverified on hardware, and FerroConfigurator has no Lucid board

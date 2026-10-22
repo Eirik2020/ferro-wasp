@@ -30,7 +30,7 @@ pub fn dshot_dma_complete(mut cx: dshot_dma_complete::Context) {
     service_dshot_dma_irq(&mut cx.shared.dshot_motors, CONFIG::MOTOR, CONFIG::STREAM);
 }
 
-/// One release of the motor bank (ADR-0046): pass one ESC telemetry request
+/// One release of the motor bank (dshot.md): pass one ESC telemetry request
 /// to the bank, service it - which starts a frame set, and stops the motors
 /// itself when a command lease expires or the bank faults - acknowledge a
 /// sent request to the ESC manager, and ask the safety master to disarm after
@@ -244,7 +244,7 @@ pub async fn dshot_service(mut cx: dshot_service::Context) {
     }
 }
 
-/// Keeps frames going when no command releases them (ADR-0046): while
+/// Keeps frames going when no command releases them (dshot.md): while
 /// disarmed, during guarded idle, or after the control loop stops. Every
 /// `DSHOT_SERVICE_PERIOD_MS` it releases the service if no frame set has
 /// started in that time, so the ESCs always see frames and an unrenewed lease

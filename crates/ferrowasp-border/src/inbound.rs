@@ -1,8 +1,11 @@
 //! The values non-critical tasks hand the safety-critical side today, kept
 //! together beside the coordinator, which will take them in through its
-//! typed requests (ADR-0056, section 11, ADR-0065): the host-connected flags
+//! typed requests (design §11, §16): the host-connected flags
 //! the arming guard reads, and the stored accelerometer level the control
 //! loop subtracts.
+//!
+//! Requirements: ARM-003, BORDER-004, BORDER-010
+//! Safety-critical.
 
 use core::sync::atomic::{AtomicBool, AtomicI16, Ordering};
 

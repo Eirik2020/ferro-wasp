@@ -1,4 +1,7 @@
 //! Reusable asynchronous arming-hold validation.
+//!
+//! Requirements: ARM-001, ARM-004
+//! Safety-critical.
 
 use core::future::Future;
 

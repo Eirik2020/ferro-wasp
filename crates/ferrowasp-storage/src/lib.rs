@@ -1,4 +1,4 @@
-//! Flight-log and configuration storage, non-critical (ADR-0060): the SPI NOR
+//! Flight-log and configuration storage, non-critical (design §16): the SPI NOR
 //! driver and the `NorStorage` trait every storage backend implements, the
 //! storage layout and boot slot selection, and saving the configuration.
 

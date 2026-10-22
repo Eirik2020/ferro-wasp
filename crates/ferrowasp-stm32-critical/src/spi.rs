@@ -1,3 +1,6 @@
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
+//! Safety-critical.
+
 use ferrowasp_imu::spi::{SpiFault, TransactionId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

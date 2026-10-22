@@ -8,13 +8,16 @@
 //! `DshotLanes` over its own timers and DMA; the policy here is shared, so a
 //! board on either family runs the flight-tested sequencing.
 //!
-//! In bidirectional mode (ADR-0045) a frame set has two phases. Once every
+//! In bidirectional mode (dshot.md) a frame set has two phases. Once every
 //! lane has transmitted, the lanes turn around and sample their pins for the
 //! ESCs' replies; the set completes when every sample window has. The
 //! replies are decoded at the next `service`, outside the DMA interrupts. A
 //! missing or bad reply is counted, never a fault; a lane that cannot turn
 //! around, or a stream that never completes, faults the bank as a transmit
 //! fault does.
+//!
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
+//! Safety-critical.
 
 use ferrowasp_output::dshot::{
     DshotPacket, DshotTiming, command_lease_expired, four_motor_bidirectional_packets,
@@ -29,7 +32,7 @@ pub use ferrowasp_output::dshot_reply::{DshotReply, DshotReplyError, REPLY_WINDO
 
 pub const DSHOT_COMMAND_MAX: u16 = 2000;
 /// The longest the bank goes without a frame set. Each accepted motor command
-/// releases one at the control-loop rate (ADR-0046); without commands - while
+/// releases one at the control-loop rate (dshot.md); without commands - while
 /// disarmed, in guarded idle, or after the control loop stops - a fallback
 /// releases one at this period, so the ESCs always see frames and an
 /// unrenewed lease is always found.
@@ -185,7 +188,7 @@ pub struct DshotStats {
 /// One frame set's decoded replies, by physical lane.
 pub type DshotReplies = [Result<DshotReply, DshotReplyError>; 4];
 
-/// Each lane's bidirectional reply accounting (ADR-0047 logs it).
+/// Each lane's bidirectional reply accounting (the blackbox logs it, design §21).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DshotReplyStats {
     pub valid: [u32; 4],
@@ -376,7 +379,7 @@ where
     /// Special-command frames still to send, for one motor. Sent only while
     /// every throttle is zero; any throttle demand cancels it.
     command_sequence: Option<(DshotMotor, DshotCommandSequence)>,
-    /// Inverted checksums and a receive phase per frame set (ADR-0045).
+    /// Inverted checksums and a receive phase per frame set (dshot.md).
     bidirectional: bool,
     /// The current frame set has transmitted and is sampling replies.
     receiving: bool,

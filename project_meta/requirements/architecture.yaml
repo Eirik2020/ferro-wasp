@@ -1,0 +1,25 @@
+schema_version: 2
+requirements:
+  - id: ARCH-001
+    title: Non-critical tasks run below the safety-critical ones
+    statement: >-
+      Every non-critical task shall run at a lower priority than every
+      safety-critical task.
+    rationale: >-
+      A display, storage or host-link task must never preempt safety-critical
+      work, so its faults and its load cannot delay flight (W4).
+    derived_from: [W4]
+    verification:
+      entries: []
+
+  - id: ARCH-002
+    title: A safety-critical device has its bus to itself
+    statement: >-
+      A bus that carries a safety-critical device shall carry no non-critical
+      device.
+    rationale: >-
+      A non-critical device sharing the bus could hold it, or corrupt it on a
+      fault, while the safety-critical device needs it (W4).
+    derived_from: [W4]
+    verification:
+      entries: []

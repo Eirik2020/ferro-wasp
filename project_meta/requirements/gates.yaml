@@ -28,9 +28,16 @@ gates:
           - "ARM-*"
           - MOTOR-001
           - CTRL-001
+          - CTRL-014
           - CTRL-002
+          - CTRL-015
           - INPUT-008
+          - INPUT-018
           - INPUT-009
           - INPUT-010
+          - INPUT-019
+          - INPUT-020
           - LOG-001
+          - LOG-002
+          - LOG-003
         levels: [bench]

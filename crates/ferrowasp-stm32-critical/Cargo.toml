@@ -16,7 +16,7 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = []
 dshot = ["dep:ferrowasp-output"]
-# The hardware transports' RTIC task definitions, target-only (ADR-0065).
+# The hardware transports' RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:critical-section",
     "dep:embedded-hal-async",

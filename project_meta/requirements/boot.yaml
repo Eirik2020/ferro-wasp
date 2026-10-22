@@ -1,19 +1,32 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: BOOT-001
-    title: Motor outputs stay stopped through boot and reset
+    title: Motor outputs hold stop through boot and reset
     statement: >-
-      From cold power, a reset or a brownout, every motor output shall
-      hold its stop value until the actuator-output task runs, with no
-      pulse before it, and the system shall come up disarmed.
+      From cold power, a reset or a brownout, every motor output shall hold
+      its stop value, with no pulse, until the actuator-output task runs.
     rationale: >-
-      A boot or reset is the moment no task yet guards the motors;
-      nothing may move then.
+      A boot or reset is the moment no task yet guards the motors; nothing
+      may move then.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_stm32_app::actuator_output
     verification:
-      mode: direct
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
+
+  - id: BOOT-003
+    title: The system comes up disarmed
+    statement: >-
+      After cold power, a reset or a brownout, the system shall come up
+      disarmed.
+    rationale: >-
+      A boot or reset is the moment no task yet guards the motors; nothing
+      may move then.
+    derived_from: [W1, W2]
+    verification:
       entries:
         - level: mcu
           target: fcu
@@ -25,17 +38,29 @@ requirements:
     title: No RC at boot keeps the craft disarmed
     statement: >-
       With the RC receiver disconnected at boot, the firmware shall stay
-      disarmed, and the scheduler shall show it is alive through the
-      boot log and the LED heartbeat.
+      disarmed.
     rationale: >-
-      A missing receiver must fail closed and be visible, never leave
-      the craft in a guessed state.
+      A missing receiver must fail closed, never leave the craft in a
+      guessed state.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_safety::RcLinkState
-      - ferrowasp_cli::tasks::heartbeat::heartbeat
     verification:
-      mode: direct
+      entries:
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
+
+  - id: BOOT-004
+    title: A boot without RC shows the scheduler running
+    statement: >-
+      With the RC receiver disconnected at boot, the boot log and the LED
+      heartbeat shall show that the scheduler is running.
+    rationale: >-
+      A missing receiver must be visible, so a dead board is never mistaken
+      for a waiting one.
+    derived_from: [W2]
+    verification:
       entries:
         - level: mcu
           target: fcu

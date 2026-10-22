@@ -1,3 +1,5 @@
+//! Requirements: CTRL-002, CTRL-015, MOTOR-001
+
 use ferrowasp_config::stored::StoredConfig;
 use ferrowasp_control::calibration::accel_level::AccelLevel;
 use ferrowasp_control::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};

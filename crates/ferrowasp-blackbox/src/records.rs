@@ -1,6 +1,8 @@
 //! Flight records on their way to storage: the bounded queue from the control
 //! loop, page assembly, and finding the append point and each page's flight
 //! in an append-only log.
+//!
+//! Requirements: LOG-001, LOG-002, LOG-003
 
 use ferrowasp_boundary_contracts::messages::ControlTick;
 use ferrowasp_io_contracts::link::Stamped;

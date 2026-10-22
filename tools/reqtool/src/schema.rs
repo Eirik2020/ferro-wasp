@@ -2,12 +2,13 @@
 //!
 //! Every type refuses unknown fields, so a misspelt or invented field is an
 //! error rather than silently ignored. There is deliberately no `status`
-//! field anywhere: status is computed from evidence (ADR-0050).
+//! field anywhere: status is computed from evidence (design §2). Which code
+//! implements a requirement is declared in the code (design section 20).
 
 use serde::{Deserialize, Serialize};
 
 /// The only schema version this tool reads.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// One `project_meta/requirements/<subsystem>.yaml` file.
 #[derive(Debug, Deserialize)]
@@ -28,40 +29,16 @@ pub struct Requirement {
     pub rationale: String,
     /// Governing roots (`W1`..`W7`) or parent requirement IDs.
     pub derived_from: Vec<String>,
-    /// Crate-qualified paths of the items that implement this requirement.
-    #[serde(default)]
-    pub allocated_to: Vec<String>,
     pub verification: Verification,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+/// A requirement is verified by its own entries; none means nothing
+/// verifies it yet.
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Verification {
-    pub mode: Mode,
-    /// Why the children are jointly sufficient, or why the parent's run
-    /// covers this requirement.
-    #[serde(default)]
-    pub reason: Option<String>,
-    /// For `covered_by_parent`: what in the parent's run observes this
-    /// requirement, such as a counter that would show a failure.
-    #[serde(default)]
-    pub observed_by: Option<String>,
     #[serde(default)]
     pub entries: Vec<Entry>,
-}
-
-/// How a requirement is verified (ADR-0052).
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum Mode {
-    /// By its own entries.
-    Direct,
-    /// Up: by its children, which are jointly sufficient.
-    ViaChildren,
-    /// Down: by its parent's run, which observes this requirement.
-    CoveredByParent,
-    /// By its own entries or by its children.
-    Either,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -73,7 +50,7 @@ pub struct Entry {
     pub method: Method,
 }
 
-/// Verification levels, ordered by cost and risk (ADR-0051).
+/// Verification levels, ordered by cost and risk (design §3).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "snake_case")]
 pub enum Level {
@@ -144,17 +121,6 @@ impl Setup {
             Self::None => "none",
             Self::Sim => "sim",
             Self::PropsOff => "props-off",
-        }
-    }
-}
-
-impl Mode {
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Direct => "direct",
-            Self::ViaChildren => "via_children",
-            Self::CoveredByParent => "covered_by_parent",
-            Self::Either => "either",
         }
     }
 }

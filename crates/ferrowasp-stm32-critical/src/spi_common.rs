@@ -2,6 +2,9 @@
 //! request mailbox service, timeout recovery, and RX buffer rotation. Each
 //! family's backend supplies the DMA streams behind `SpiRxTransferExt` and
 //! `SpiTxFrameDma`, so a board on either family runs the same SPI policy.
+//!
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
+//! Safety-critical.
 
 pub use crate::memory::{SPI1_JOB_MAX_BYTES, SPI1_JOB_MAX_OPERATIONS};
 use crate::spi::{SpiRxIrqAction, SpiRxIrqFlags, SpiRxIrqPlanner};

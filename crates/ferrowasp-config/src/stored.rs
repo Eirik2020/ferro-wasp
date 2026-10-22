@@ -1,5 +1,8 @@
 //! The stored configuration: its schema versions, encoding, decoding and the
 //! migration of every older payload.
+//!
+//! Requirements: CONFIG-001, CONFIG-006, CONFIG-002, CONFIG-007, CONFIG-008, CONFIG-009, CONFIG-003, CONFIG-010, CONFIG-005, CONFIG-012
+//! Safety-critical.
 
 use ferrowasp_control::calibration::accel_level::AccelLevel;
 use ferrowasp_control::filter::gyro_lpf_corner_hz;

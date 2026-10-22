@@ -3,7 +3,8 @@ use std::process::ExitCode;
 
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 
-use reqtool::evidence::{self, Outcome, Recorded, RunRequest, Timestamp};
+use reqtool::configuration::{Cargo, Configurations};
+use reqtool::evidence::{self, Current, Outcome, Recorded, RunRequest, Timestamp};
 use reqtool::project::Project;
 use reqtool::report;
 use reqtool::runner::{self, Ran};
@@ -23,13 +24,27 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Check every requirement file against the schema, the roots, each other
-    /// and the code, and that every `pub` item of a safety-critical crate has
-    /// a requirement. Exits nonzero on any problem.
+    /// and the code; that the requirements source files declare exist; and
+    /// that every safety-critical file declares a requirement and imports
+    /// only safety-critical files and pinned external crates. Exits nonzero
+    /// on any problem, including requirement text or an FAQ entry that holds
+    /// what it may not.
     Validate,
     /// Show status: of everything, of one requirement by ID, of a governing
-    /// requirement, or of the requirements allocated to an item path such as
-    /// `ferrowasp_input::rc_receiver`.
+    /// requirement, or of a source file and the requirements it declares, by
+    /// path or by module path such as `ferrowasp_input::rc_receiver`.
     Check { target: Option<String> },
+    /// Report maturity for one configuration: every requirement the
+    /// safety-critical files it compiles in declare, with its status there.
+    /// Runs cargo check for the board.
+    Report {
+        /// The board, as named under firmware/.
+        #[arg(long)]
+        board: String,
+        /// Features beyond the board's defaults, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        features: Vec<String>,
+    },
     /// Record one run of a test or procedure: a result, at the current
     /// fingerprint, for every requirement entry that names it.
     #[command(group(ArgGroup::new("method").required(true).args(["test", "procedure"])))]
@@ -43,6 +58,10 @@ enum Command {
         /// The board, for mcu, bench and flight evidence.
         #[arg(long)]
         board: Option<String>,
+        /// The features the board's image was built with beyond its
+        /// defaults, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        features: Vec<String>,
         /// The run's result.
         #[arg(long, value_enum)]
         result: RunOutcome,
@@ -115,42 +134,64 @@ fn main() -> ExitCode {
         eprintln!("{} problem(s)", problems.len());
         return ExitCode::FAILURE;
     }
+    let configurations = Cargo::new(&project.repository, &project.workspace);
+    let current = Current {
+        project: &project,
+        trace: &project.trace,
+        configurations: &configurations,
+    };
     if let Command::Gate { name, board } = &cli.command {
-        return gate(&project, name.as_deref(), board.as_deref());
+        return gate(&current, name.as_deref(), board.as_deref());
     }
     if let Command::Test {
         requirements,
         dry_run,
     } = &cli.command
     {
-        return test(&project, requirements, *dry_run);
+        return test(&current, requirements, *dry_run);
     }
     let result = match cli.command {
         Command::Validate => {
-            let unlinked = project.unlinked_critical_items();
-            if unlinked.is_empty() {
+            let unlinked = project.trace_findings();
+            let findings = reqtool::lint::project(&project);
+            for finding in &findings {
+                eprintln!("{finding}");
+            }
+            if unlinked.is_empty() && findings.is_empty() {
                 Ok(format!(
                     "{} requirements valid\n",
                     project.requirements.len()
+                ))
+            } else if unlinked.is_empty() {
+                Err(format!(
+                    "{} text finding(s): requirement text and the FAQ break their rules",
+                    findings.len()
                 ))
             } else {
                 for problem in &unlinked {
                     eprintln!("{problem}");
                 }
                 Err(format!(
-                    "{} safety-critical item(s) without a requirement",
+                    "{} safety-critical file(s) break the tracing rules",
                     unlinked.len()
                 ))
             }
         }
-        Command::Check { target } => recorded(&project).and_then(|evidence| match target {
+        Command::Check { target } => recorded(&current, None).and_then(|evidence| match target {
             None => Ok(report::summary(&project, &evidence)),
             Some(target) => report::check(&project, &target, &evidence),
         }),
+        Command::Report { board, features } => configurations
+            .configuration(&board, &features)
+            .and_then(|configuration| {
+                recorded(&current, Some(&configuration))
+                    .map(|evidence| report::maturity(&project, &configuration, &evidence))
+            }),
         Command::Record {
             test,
             procedure,
             board,
+            features,
             result,
             failed,
             note,
@@ -175,6 +216,7 @@ fn main() -> ExitCode {
             let request = RunRequest {
                 runs: vec![(method, outcome)],
                 board: board.as_deref(),
+                features: &features,
                 failed: &failed,
                 note: note.as_deref(),
                 supersedes: &supersedes,
@@ -182,7 +224,7 @@ fn main() -> ExitCode {
                 details,
             };
             let now = Timestamp::now();
-            evidence::build(&project, &request, now).and_then(|record| {
+            evidence::build(&current, &request, now).and_then(|record| {
                 if dry_run {
                     serde_json::to_string_pretty(&record)
                         .map(|text| text + "\n")
@@ -214,7 +256,8 @@ fn main() -> ExitCode {
 /// Runs the named tests, then records the session: one record holding a
 /// result for every test that ran, minus passes already on record at the
 /// same fingerprint.
-fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
+fn test(current: &Current<'_>, requirements: &[String], dry_run: bool) -> ExitCode {
+    let project = current.project;
     let outcomes = match runner::named_tests(project, requirements)
         .and_then(|tests| runner::run(project, &tests))
     {
@@ -241,6 +284,7 @@ fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
     let request = RunRequest {
         runs,
         board: None,
+        features: &[],
         failed: &[],
         note: None,
         supersedes: &[],
@@ -249,7 +293,7 @@ fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
     };
     let now = Timestamp::now();
     let recorded = evidence::load(&project.repository).and_then(|existing| {
-        let mut record = evidence::build(project, &request, now)?;
+        let mut record = evidence::build(current, &request, now)?;
         evidence::drop_repeats(&mut record, &existing);
         if record.results.is_empty() {
             return Ok("nothing new to record: every pass is already on record".to_owned());
@@ -279,7 +323,8 @@ fn test(project: &Project, requirements: &[String], dry_run: bool) -> ExitCode {
 }
 
 /// Lists the gates, or checks one: exits zero only when it is open.
-fn gate(project: &Project, name: Option<&str>, board: Option<&str>) -> ExitCode {
+fn gate(current: &Current<'_>, name: Option<&str>, board: Option<&str>) -> ExitCode {
+    let project = current.project;
     let Some(name) = name else {
         for gate in &project.gates {
             println!("{:<16} {}", gate.name, gate.description);
@@ -291,7 +336,7 @@ fn gate(project: &Project, name: Option<&str>, board: Option<&str>) -> ExitCode 
     {
         return fail(&format!("no firmware app for board {board}"));
     }
-    let missing = recorded(project).and_then(|evidence| {
+    let missing = recorded(current, None).and_then(|evidence| {
         reqtool::gates::check(
             &project.gates,
             name,
@@ -333,9 +378,12 @@ fn read_details(path: &std::path::Path) -> Result<reqtool::details::Details, Str
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-fn recorded(project: &Project) -> Result<Recorded, String> {
-    let records = evidence::load(&project.repository)?;
-    Recorded::new(project, &records)
+fn recorded(
+    current: &Current<'_>,
+    scope: Option<&reqtool::configuration::Configuration>,
+) -> Result<Recorded, String> {
+    let records = evidence::load(&current.project.repository)?;
+    Recorded::new(current, &records, scope)
 }
 
 fn fail(message: &str) -> ExitCode {

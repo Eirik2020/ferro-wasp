@@ -1,5 +1,8 @@
 //! The STM32F4 periodic timer behind the control scheduler and the I/O
 //! watchdog.
+//!
+//! Requirements: HW-TIME-001
+//! Safety-critical.
 
 pub use ferrowasp_stm32_critical::timer_tick::TimerTick;
 use stm32f4xx_hal::timer::{CounterHz, Instance};

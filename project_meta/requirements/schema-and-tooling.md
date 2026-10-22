@@ -1,12 +1,9 @@
 # Requirements Design: Schema, Tooling and Governing Requirements
 
 Sections 6 to 7 of [the requirements design](design.md), which
-maps every section to its chapter. The ADRs it names are the binding
-records; this chapter carries the reasoning behind them.
+maps every section to its chapter.
 
 ## 6. Schema, tooling and the parser
-
-ADR-0053.
 
 **Parsing the firmware.** `main.rs` is a single `ferroforge::app! { … }`
 invocation. To `syn` it is one `ItemMacro` with opaque tokens, so plain `syn`
@@ -52,17 +49,13 @@ existence.
 - IDs are `<AREA>-<NNN>` (`SAFE-001`, `INPUT-012`, `CTRL-004`), stable, never
   reused, and not tied to crate names, so moving a crate does not rename a
   requirement. W1-W7 are the roots.
-- `allocated_to` uses crate-qualified paths: a task by its definition
-  (`ferrowasp_safety::safety_master`), a function or module by its path
-  (`ferrowasp_input::command_input::validate`). The tool resolves each by
-  parsing and reports dangling ones. The plan's idea of finding a
-  requirement by naming its file after the item was dropped: hundreds of tiny
-  files, and renames would pass silently instead of showing as dangling.
+- The code that implements a requirement declares it, in the module doc
+  comment of each source file ([section 20](tracing.md#20-tracing-per-source-file));
+  the tool reports a declaration of an unknown ID.
 - Requirement files live centrally, in
   `project_meta/requirements/<subsystem>.yaml`. Beside each crate was the
   alternative; it travels with a crate move, but every requirement edit would
-  then change the crate directory, and the fingerprint calculation would have
-  to exclude the file.
+  then change the crate directory.
 - Gates are declared in one file. Procedures stay Markdown, referenced as
   `path#heading`.
 - Evidence is schema 3 records under
@@ -82,65 +75,85 @@ existence.
   `flight` on the FCU. `unit` takes a test; `mcu`, `bench` and `flight` take a
   procedure.
 
+**What requirement text holds.** A requirement says what must hold and why
+it matters, nothing else:
+
+| Field | Holds | Never holds |
+|---|---|---|
+| `statement` | one testable claim ("shall"), saying what must hold, in at most 60 words | how it is built, a path into the code, history, a second claim |
+| `rationale` | why it matters: the hazard, or the governing requirement it serves, in at most 50 words | alternatives, who decided or when, evidence, plans |
+| `verification` | how it is verified: a test or a procedure | results, which are evidence records |
+
+A statement that needs two "shall" is two requirements. Where the rest goes:
+the current structure in the spec section that owns the topic; why a
+tempting alternative lost in [the FAQ](../faq.md); what is left in
+remaining work; results in the evidence records; who decided, and when, in
+git and the PR. `reqtool validate` lints requirement text and the FAQ
+against these rules and fails on any finding.
+
 The governance Markdown mirrors a requirement as prose: header, "shall"
-statement, rationale, verification method, derived-from. The plan's
-illustrative requirement:
+statement, rationale, verification method, derived-from. A requirement:
 
 ```yaml
-id: CMD-INPUT-001
-title: Reject stale RC input
-statement: >
-  Command Input shall treat RC frames older than <N> ms as invalid
-  and signal loss-of-link to the Safety Master.
+id: INPUT-002
+title: Stale RC input invalidates the link
+statement: >-
+  The RC link shall become invalid when no healthy frame has arrived for
+  more than RC_LINK_TIMEOUT_US (100 ms), and shall become valid again only
+  after RC_LINK_RECOVERY_FRAMES (3) consecutive healthy frames.
 rationale: Stale input must never be acted on as a live command.
-derived_from: [W2]
-allocated_to: [ferrowasp_input::command_input]
+derived_from: [INPUT-001]
 verification:
-  mode: direct
   entries:
     - level: unit
       target: host
       setup: none
-    - level: sitl
-      target: host
-      setup: sim
+      method:
+        test: ferrowasp_safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
+```
+
+Each file that implements it lists it, with any other requirements it
+implements, in its module doc comment:
+
+```rust
+//! Requirements: INPUT-002
+//! Safety-critical.
 ```
 
 **`reqtool`.**
-- `check`: a compact verdict for an item, component or board — allocated
-  requirements, status per level and variant, what is owed. Agents call it
+- `check`: a compact verdict for a requirement or a source file — declared
+  requirements, status per level and board, what is owed. Agents call it
   before editing.
 - `record`: writes evidence.
-- `report` and `graph`: views for people (a YAML tree or dependency graph,
-  e.g. through Graphviz).
-- Later: `analysis`-level checks (direction rule, priority rule, names versus
-  metadata, bus rule) once the parser lands.
+- `report`: maturity for one configuration (TRACE-006).
+- `validate` checks the per-file direction rule and that safety-critical
+  files declare requirements (TRACE-001, TRACE-002).
+- Later: `graph`, a view for people (a dependency graph, e.g. through
+  Graphviz), and the other `analysis`-level checks (priority rule, names
+  versus metadata, bus rule) once the parser lands.
 
 **Evidence as implemented.** These choices were made while building
 `record`, within the design above:
 - A record is one run of one method. It carries a result for every
-  requirement entry that names that method, each with its own fingerprint, so
-  one run can pass one requirement and fail another. An entry is identified by
+  requirement entry that names that method, each with its own claim and
+  coverage, so one run can pass one requirement and fail another. An entry is identified by
   requirement, level, target, setup and method, not by its position in the
   file.
 - A record also carries the git revision and whether tracked files had
-  uncommitted changes; the fingerprint covers the files as they were, so a
+  uncommitted changes; its identities cover the files as they were, so a
   dirty run is still exact.
-- The fingerprint is taken from the governing `Cargo.lock`, which lists every
-  crate in the closure, dev-dependencies included. Path crates contribute
-  every file git tracks or would track under their directory, leaving out
-  nested packages and build output; registry crates contribute their version
-  and checksum. The nearest `rust-toolchain.toml` is included.
-- Until the `app!` parser exists, board evidence takes the board's whole
-  firmware app as its closure. That is coarse but cannot miss a change, and
-  because fingerprints are derived, every such record can be re-fingerprinted
-  with the narrower path scope once it exists.
+- Coverage is derived as section 20 describes: host evidence from the files a
+  run exercised and their direct imports, with the toolchain; board evidence
+  from the configuration `cargo check` reports for the board and its
+  features.
 - A procedure contributes the text of its own section, so editing another
   section of the same file leaves the evidence standing.
 - Board evidence is reported per board, and an entry takes the worst board
   that has evidence, until gates name the boards they require.
-- `reqtool` reads only schema 3 records and leaves the schema 1 and 2 ones
-  beside them untouched.
+- `reqtool` reads only schema 4 records. Each schema 3 record was derived
+  into a schema 4 one at its own revision, named `__retraced`, which lists
+  what could not be derived; the schema 1, 2 and 3 records stay beside them
+  untouched.
 - A record carries `details`, what each procedure's "Required evidence" asks
   for: execution, candidate image, conditions, commands, artifacts,
   measurements, observations, limitations and triggered stop conditions.
@@ -153,8 +166,8 @@ verification:
   whenever the file is present.
 - `reqtool test` runs the host tests requirements name, per package in its
   own workspace and toolchain, and records one session; a test that fails or
-  does not run is never recorded as a pass, and passes already on record at
-  the same fingerprint are not recorded again.
+  does not run is never recorded as a pass, and passes already on record
+  with the same coverage are not recorded again.
 
 **Tooling transition.**
 
@@ -173,14 +186,12 @@ verification:
 Evidence is never recorded under two systems at once: the old one was
 retired as a whole, in one change, once `reqtool` could record, import and
 gate.
-Re-fingerprinting from git also covers the flown candidate: its record stays
+Deriving identities from git also covers the flown candidate: its record stays
 tag `foxeer-candidate-16f6e8ed` plus the preserved binaries, never a rebuild.
 
 ---
 
 ## 7. Governing requirements
-
-ADR-0053.
 
 Two readings of "update the governing document to the new format" were
 offered: (a) only reword W7, or (b) make W1-W7 the root requirements of the
@@ -189,19 +200,19 @@ new system. The user chose (b). W1-W7 stay prose Markdown in
 requirements reference them through `derived_from` (`CMD-INPUT-001`
 `derived_from: [W2]`) and never copy them, which keeps one owner per topic.
 
-W7 is reworded, because "evidence is tied to component IDs" named the retired
-mechanism. As landed with the first schema:
+W7 names no mechanism:
 
 > 7. **W7 - Evidence.** A compile does not establish target behaviour, a
 > target boot does not establish actuator behaviour, and props-off operation
 > does not establish flight readiness; each claim needs evidence at its own
 > level. Evidence verifies the requirements in `project_meta/requirements/`,
-> which derive from W1-W7, and carries a fingerprint the tooling derives from
-> the code they are allocated to, or from the path where behaviour depends on
-> timing or scheduling. A record stands while its fingerprint is unchanged,
-> and status is computed from evidence, never recorded by hand.
+> each derived from W1-W7 or from another requirement. A record stands while
+> the code and configuration it covered are unchanged, and status is computed
+> from evidence, never recorded by hand.
 
-W4 gains criticality as a layering dimension (section 8): "Each crate is
-safety-critical or not, and a safety-critical crate never depends on a
-non-critical one." `reqtool` reads W1-W7's IDs and titles from the governing
+How a record's coverage is established belongs to the requirements under it
+(section 4, and section 20 once `reqtool` implements it), so a change of
+method leaves W7 standing. W4 states criticality as a layering dimension
+(section 8) the same way: "Code is safety-critical or not, and
+safety-critical code never depends on non-critical code." `reqtool` reads W1-W7's IDs and titles from the governing
 document itself, so it stays their one owner.

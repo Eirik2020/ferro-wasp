@@ -10,7 +10,7 @@ code, manifests, and tests outrank every narrative document here.
 
 - [Governing requirements](governing-requirements.md): W1-W7.
 - [Remaining work](remaining-work.md): what is left to build.
-- [Architecture decisions](ARCHITECTURE_DECISIONS.md): the ADR index.
+- [FAQ](faq.md): why the tempting alternatives lost.
 - [Testing](testing/README.md): test selection, target procedures, and the
   evidence workflow.
 - [Logging format](LOGGING_FORMAT.md): what the blackbox must carry.
@@ -38,6 +38,6 @@ context. Run:
 python tools/check_repository_context.py
 ```
 
-It checks registration, lifecycle and context values, byte budgets, the ADR
-index, the test catalog and evidence records, and the always-loaded line limit.
+It checks registration, lifecycle and context values, byte budgets, the
+immutable archives, and the always-loaded line limit.
 It does not interpret prose, delete history, or authorize firmware behaviour.

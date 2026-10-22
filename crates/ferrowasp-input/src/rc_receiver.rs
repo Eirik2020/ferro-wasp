@@ -4,6 +4,9 @@
 //! RC task reads [`RcFrame`] and never needs to know which protocol the board
 //! wired. The firmware chooses the protocol when it builds the receiver, to
 //! match the UART configuration it selected for the receiver port.
+//!
+//! Requirements: INPUT-003, INPUT-004, INPUT-005, INPUT-016, INPUT-012
+//! Safety-critical.
 
 use ferrowasp_crsf as crsf;
 use sbus_rs::StreamingParser as SbusParser;

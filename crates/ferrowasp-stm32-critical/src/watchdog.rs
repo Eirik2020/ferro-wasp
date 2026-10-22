@@ -1,3 +1,6 @@
+//! Requirements: HW-TIME-001
+//! Safety-critical.
+
 pub const IO_WATCHDOG_HZ: u32 = 8_000;
 
 pub use crate::timer_tick::TimerTick;

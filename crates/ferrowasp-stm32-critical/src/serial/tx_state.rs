@@ -1,3 +1,6 @@
+//! Requirements: HW-UART-001, HW-UART-002, HW-UART-003, HW-UART-004
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TxDmaLifecycle {
     in_flight: bool,

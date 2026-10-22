@@ -1,4 +1,4 @@
-//! What tasks send the observer (ADR-0056): the safety-critical tasks, and
+//! What tasks send the observer (design §10): the safety-critical tasks, and
 //! the non-critical sources the ledger also carries. Each message travels
 //! [`Stamped`](ferrowasp_io_contracts::link::Stamped) over its producer's own
 //! link, so a change here changes that producer.
@@ -6,6 +6,9 @@
 //! The control tick travels over an `event` link, because the blackbox logs
 //! every tick marked for it; every other message over a `state` link, whose
 //! newest message is all the observer keeps.
+//!
+//! Requirements: BORDER-002, BORDER-008
+//! Safety-critical.
 
 /// One control-loop tick: what the loop measured, commanded and decided.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

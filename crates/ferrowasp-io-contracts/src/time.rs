@@ -1,3 +1,6 @@
+//! Requirements: IO-002, IO-008
+//! Safety-critical.
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct TimestampMicros(pub u64);
 

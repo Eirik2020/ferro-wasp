@@ -1,4 +1,4 @@
-//! Bidirectional DShot replies (ADR-0045): what an ESC answers on its motor
+//! Bidirectional DShot replies (dshot.md): what an ESC answers on its motor
 //! wire after each frame, from the sampled pin to eRPM or a telemetry reading.
 //!
 //! After a command frame with an inverted checksum, the ESC drives the line
@@ -17,6 +17,9 @@
 //!
 //! The sampling layer follows Betaflight's `drivers/dshot_bitbang_decode.c`,
 //! and the value layer its `drivers/dshot.c`, at commit `41a5b43`.
+//!
+//! Requirements: OUTPUT-003, OUTPUT-010, OUTPUT-011, OUTPUT-012, OUTPUT-013
+//! Safety-critical.
 
 /// Bits in a reply, the start edge included.
 pub const REPLY_BITS: u32 = 21;

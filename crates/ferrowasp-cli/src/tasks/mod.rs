@@ -1,4 +1,4 @@
-//! The command line's RTIC task definitions (ADR-0060, ADR-0065),
+//! The command line's RTIC task definitions (design §16),
 //! target-only: USB and its MSPv2 configurator path, the command line on a
 //! UART, the storage owner, and the heartbeat, with the reports they build
 //! from the observer's ledger.

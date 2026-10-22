@@ -1,0 +1,89 @@
+schema_version: 2
+requirements:
+  - id: TRACE-001
+    title: Every safety-critical module declares a requirement
+    statement: >-
+      Every safety-critical source file that defines code shall declare at
+      least one requirement that it implements.
+    rationale: >-
+      Code that serves no stated requirement has nothing its evidence could
+      prove, so it cannot be shown safe (W7).
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-002
+    title: Safety-critical modules import only verified code
+    statement: >-
+      A safety-critical source file shall import only other safety-critical
+      source files and external crates pinned to one version.
+    rationale: >-
+      Critical evidence must not rest on code that owes no evidence, nor on a
+      dependency that can change without an edit anyone sees (W4).
+    derived_from: [W4]
+    verification:
+      entries: []
+
+  - id: TRACE-003
+    title: A module's identity ignores layout and comments
+    statement: >-
+      A source file's identity shall be a hash of its tokens that ignores
+      whitespace and comments.
+    rationale: >-
+      Reformatting or documenting code changes no behaviour, and must not
+      re-owe the evidence for it (W7).
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-004
+    title: Evidence covers a module and its direct imports
+    statement: >-
+      Evidence for a source file shall stand exactly while the file's
+      identity and the identity of each file or external crate version it
+      directly imports are unchanged.
+    rationale: >-
+      A change re-owes only evidence for code that can observe it, so a fix
+      in one module does not reopen the whole image (W7).
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-005
+    title: A configuration's identity includes its scheduling
+    statement: >-
+      A configuration's identity shall consist of its compiled-in source
+      files, its feature set, its external crate versions, its toolchain and
+      each task's priority and binding, excluding task names.
+    rationale: >-
+      Timing faults come from scheduling as well as from code, so evidence
+      for a configuration must notice a priority or binding change (W7).
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-006
+    title: Maturity is reported per configuration
+    statement: >-
+      For each configuration, reqtool shall report the status of every
+      requirement declared by the safety-critical source files compiled into
+      it.
+    rationale: >-
+      A release must show what evidence covers the image it ships, including
+      modules a feature pulls in that have no evidence (W7).
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-007
+    title: Integration evidence counts for identical configurations
+    statement: >-
+      Evidence from a run that records the identity of every source file in
+      its configuration shall count for any configuration whose identities
+      all match.
+    rationale: >-
+      An integration run proves the whole that ran, and an identical whole
+      needs no new run (W7).
+    derived_from: [W7]
+    verification:
+      entries: []

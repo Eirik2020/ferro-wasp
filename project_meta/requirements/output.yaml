@@ -1,25 +1,16 @@
-schema_version: 1
+schema_version: 2
 requirements:
   - id: OUTPUT-001
-    title: DShot frames carry the commanded value at DShot600 timing
+    title: A DShot packet carries its value and checksum
     statement: >-
-      Each DShot packet shall carry its value with the standard
-      checksum, inverted only in the checksum for bidirectional DShot; a
-      four-motor packet set shall keep physical lane order and request
-      telemetry on at most the one selected lane; the encoder shall emit
-      one duty slot per bit and the reset tail across the full 16-bit
-      timer range; the timing shall match DShot600 for the timer clock
-      and refuse an invalid clock; and throttle shall map into the
-      bounded DShot throttle range.
+      Each DShot packet shall carry its value with the standard checksum,
+      inverted only in the checksum for bidirectional DShot.
     rationale: >-
       This is the motor output path (W1); DShot timing is controlled
       configuration (W6), and a wrong checksum, lane or throttle bound
       reaches a motor directly.
     derived_from: [W1, W6]
-    allocated_to:
-      - ferrowasp_output::dshot
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -31,6 +22,19 @@ requirements:
           setup: none
           method:
             test: ferrowasp_output::dshot::tests::bidirectional_packets_invert_only_the_checksum
+
+  - id: OUTPUT-004
+    title: A packet set keeps lane order and one telemetry lane
+    statement: >-
+      A four-motor DShot packet set shall keep physical lane order and
+      request telemetry on at most the one selected lane.
+    rationale: >-
+      This is the motor output path (W1); DShot timing is controlled
+      configuration (W6), and a wrong checksum, lane or throttle bound
+      reaches a motor directly.
+    derived_from: [W1, W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -50,6 +54,29 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_output::dshot::tests::unequal_bench_commands_have_distinct_expected_wire_values
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_output::dshot::tests::mixed_control_vector_preserves_physical_lane_order
+
+  - id: OUTPUT-005
+    title: The encoder emits one duty slot per bit
+    statement: >-
+      The DShot encoder shall emit one duty slot per bit and the reset tail,
+      across the full 16-bit timer range.
+    rationale: >-
+      This is the motor output path (W1); DShot timing is controlled
+      configuration (W6), and a wrong checksum, lane or throttle bound
+      reaches a motor directly.
+    derived_from: [W1, W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_output::dshot::tests::encoder_emits_duty_slots_and_reset_tail
         - level: unit
           target: host
@@ -60,51 +87,60 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_output::dshot::tests::compare_sequence_stages_first_bit_and_terminating_zero
+
+  - id: OUTPUT-006
+    title: DShot timing matches DShot600
+    statement: >-
+      DShot timing shall match DShot600 for the timer clock, refusing an
+      invalid clock.
+    rationale: >-
+      This is the motor output path (W1); DShot timing is controlled
+      configuration (W6), and a wrong checksum, lane or throttle bound
+      reaches a motor directly.
+    derived_from: [W1, W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_output::dshot::tests::dshot600_timing_matches_tim1_at_168_mhz
         - level: unit
           target: host
           setup: none
           method:
-            test: ferrowasp_output::dshot::tests::compare_sequence_stages_first_bit_and_terminating_zero
-        - level: unit
-          target: host
-          setup: none
-          method:
             test: ferrowasp_output::dshot::tests::timing_rejects_invalid_clock_inputs
+
+  - id: OUTPUT-007
+    title: Throttle maps into the DShot throttle range
+    statement: >-
+      Throttle shall map into the bounded DShot throttle range.
+    rationale: >-
+      This is the motor output path (W1); DShot timing is controlled
+      configuration (W6), and a wrong checksum, lane or throttle bound
+      reaches a motor directly.
+    derived_from: [W1, W6]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_output::dshot::tests::throttle_mapping_is_bounded
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_output::dshot::tests::unequal_bench_commands_have_distinct_expected_wire_values
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_output::dshot::tests::mixed_control_vector_preserves_physical_lane_order
 
   - id: OUTPUT-002
-    title: A command lease expires on time, and special commands are never throttle
+    title: A command lease expires on time
     statement: >-
       A motor command lease shall expire at its inclusive deadline, also
-      past the former 32-bit millisecond rollover, and a reading taken
-      before the lease started shall count as expired; a direction
-      change shall send each special command ten times and then stop,
-      and no special command shall be a throttle value.
+      across a 32-bit millisecond rollover, a reading taken before the lease
+      started counting as expired.
     rationale: >-
-      A lease that does not lapse leaves a motor commanded after its
-      source stopped (W1, W2); a special command mistaken for throttle
-      spins a motor.
+      A lease that does not lapse leaves a motor commanded after its source
+      stopped (W1, W2); a special command mistaken for throttle spins a
+      motor.
     derived_from: [W1, W2]
-    allocated_to:
-      - ferrowasp_output::dshot::command_lease_expired
-      - ferrowasp_output::dshot::DshotCommandSequence
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -126,11 +162,36 @@ requirements:
           setup: none
           method:
             test: ferrowasp_output::dshot::tests::periodically_renewed_command_lease_covers_a_long_guarded_hold
+
+  - id: OUTPUT-008
+    title: A direction change sends each command ten times
+    statement: >-
+      A spin-direction change shall send each special command ten times and
+      then stop.
+    rationale: >-
+      A lease that does not lapse leaves a motor commanded after its source
+      stopped (W1, W2); a special command mistaken for throttle spins a
+      motor.
+    derived_from: [W1, W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_output::dshot::tests::direction_sequence_sends_each_command_ten_times_then_stops
+
+  - id: OUTPUT-009
+    title: A special command is never throttle
+    statement: >-
+      No DShot special command shall be a throttle value.
+    rationale: >-
+      A lease that does not lapse leaves a motor commanded after its source
+      stopped (W1, W2); a special command mistaken for throttle spins a
+      motor.
+    derived_from: [W1, W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -138,26 +199,16 @@ requirements:
             test: ferrowasp_output::dshot::tests::direction_commands_are_not_throttle_values
 
   - id: OUTPUT-003
-    title: A bidirectional DShot reply decodes only when it is valid
+    title: A valid reply decodes across ESC clock error
     statement: >-
-      A sampled bidirectional reply shall decode to its value at the
-      nominal rate and with the ESC clock a tenth fast or slow; an idle
-      line, a line held low, a short buffer, a reply starting too late,
-      extra edges, a wrong checksum or a code that is not a GCR symbol
-      shall be no reply; eRPM shall decode from its period, and with
-      extended telemetry on, typed readings by their type, odd and zero
-      types staying eRPM; the EDT acknowledgement shall be recognised
-      only before EDT is on; and no line content shall panic the
-      decoder.
+      A sampled bidirectional DShot reply shall decode to its value at the
+      nominal rate and with the ESC clock a tenth fast or slow.
     rationale: >-
-      Reply eRPM becomes the arming qualification and the RPM filter
-      input (ADR-0045, ADR-0048); a corrupt reply read as a spinning
-      motor would qualify a motor that is not running.
+      Reply eRPM becomes the arming qualification and the RPM filter input;
+      a corrupt reply read as a spinning motor would qualify a motor that is
+      not running.
     derived_from: [W2]
-    allocated_to:
-      - ferrowasp_output::dshot_reply
     verification:
-      mode: direct
       entries:
         - level: unit
           target: host
@@ -169,6 +220,25 @@ requirements:
           setup: none
           method:
             test: ferrowasp_output::dshot_reply::tests::every_value_survives_a_tenth_fast_or_slow_esc_clock
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_output::dshot_reply::tests::a_sampled_reply_decodes_end_to_end
+
+  - id: OUTPUT-010
+    title: An invalid reply is no reply
+    statement: >-
+      An idle line, a line held low, a short buffer, a reply starting too
+      late, extra edges, a wrong checksum or a code that is not a GCR symbol
+      shall be no reply.
+    rationale: >-
+      Reply eRPM becomes the arming qualification and the RPM filter input;
+      a corrupt reply read as a spinning motor would qualify a motor that is
+      not running.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -199,6 +269,20 @@ requirements:
           setup: none
           method:
             test: ferrowasp_output::dshot_reply::tests::a_code_that_is_not_a_symbol_is_rejected
+
+  - id: OUTPUT-011
+    title: Reply values decode by their type
+    statement: >-
+      A reply shall decode as eRPM from its period, and with extended
+      telemetry on as a typed reading by its type, odd and zero types
+      staying eRPM.
+    rationale: >-
+      Reply eRPM becomes the arming qualification and the RPM filter input;
+      a corrupt reply read as a spinning motor would qualify a motor that is
+      not running.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
@@ -219,18 +303,38 @@ requirements:
           setup: none
           method:
             test: ferrowasp_output::dshot_reply::tests::with_extended_telemetry_odd_and_zero_types_stay_erpm
+
+  - id: OUTPUT-012
+    title: The EDT acknowledgement is recognised only before EDT
+    statement: >-
+      The EDT acknowledgement shall be recognised only before extended
+      telemetry is on.
+    rationale: >-
+      Reply eRPM becomes the arming qualification and the RPM filter input;
+      a corrupt reply read as a spinning motor would qualify a motor that is
+      not running.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_output::dshot_reply::tests::the_edt_acknowledgement_is_recognised_only_before_edt_is_on
+
+  - id: OUTPUT-013
+    title: No line content panics the reply decoder
+    statement: >-
+      No line content shall panic the reply decoder.
+    rationale: >-
+      Reply eRPM becomes the arming qualification and the RPM filter input;
+      a corrupt reply read as a spinning motor would qualify a motor that is
+      not running.
+    derived_from: [W2]
+    verification:
+      entries:
         - level: unit
           target: host
           setup: none
           method:
             test: ferrowasp_output::dshot_reply::tests::random_lines_never_panic_and_rarely_pass_the_checksum
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_output::dshot_reply::tests::a_sampled_reply_decodes_end_to_end

@@ -1,4 +1,4 @@
-//! The props-off ESC telemetry bench check over USB (ADR-0045): sample the
+//! The props-off ESC telemetry bench check over USB (dshot.md): sample the
 //! `esc` command over time, then report per physical output how well the
 //! bidirectional DShot reply eRPM agrees with the legacy UART eRPM, and how
 //! many replies were lost.

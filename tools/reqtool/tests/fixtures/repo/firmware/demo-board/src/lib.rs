@@ -1,1 +1,3 @@
-pub fn wiring() {}
+pub fn wiring() {
+    alpha::input::validate();
+}

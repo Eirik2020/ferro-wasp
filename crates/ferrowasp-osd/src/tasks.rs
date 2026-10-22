@@ -1,4 +1,4 @@
-//! The pilot-facing outputs' RTIC task definitions (ADR-0060, ADR-0065),
+//! The pilot-facing outputs' RTIC task definitions (design §16),
 //! target-only: the MSP DisplayPort OSD on the port config binds to it, its
 //! writer, and battery telemetry back through the RC receiver.
 

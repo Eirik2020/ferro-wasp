@@ -1,3 +1,6 @@
+//! Requirements: HW-TIME-001
+//! Safety-critical.
+
 pub use ferrowasp_stm32_critical::watchdog::*;
 
 use crate::timer_tick::PeriodicTimer;

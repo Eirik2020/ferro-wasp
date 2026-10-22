@@ -4,6 +4,9 @@
 //! The HAL configures the UART and is then released: the receive side keeps
 //! the UART for its idle-line flag, and both sides move bytes through a HAL
 //! `Transfer` over a data-register endpoint from `dma_endpoints`.
+//!
+//! Requirements: HW-UART-001, HW-UART-002, HW-UART-003, HW-UART-004
+//! Safety-critical.
 
 use crate::dma_endpoints::{
     StreamErrors, UartDmaPeripheral, UartRxEndpoint, UartTxEndpoint, uart_endpoints,

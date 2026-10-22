@@ -1,3 +1,6 @@
+//! Requirements: HW-TIME-001
+//! Safety-critical.
+
 use ferrowasp_io_contracts::time::{TimestampMicros, WrappingCounterExtender};
 pub use ferrowasp_stm32_critical::timebase::*;
 use stm32f4xx_hal::{

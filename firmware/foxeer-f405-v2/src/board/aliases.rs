@@ -1,3 +1,5 @@
+//! Requirements: BUILD-001
+
 use ferrowasp_stm32f4::hal_prelude::hal::gpio::{PB12, PB13, PC2, PC3, PC10, PC11};
 use ferrowasp_stm32f4::hal_prelude::hal::pac::{SPI2, TIM8, USART3};
 use ferrowasp_stm32f4::{adc, dshot, hal_prelude::*, spi_dma, uart_dma};

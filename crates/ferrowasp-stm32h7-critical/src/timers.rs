@@ -1,4 +1,7 @@
 //! The H7 timers under the shared timebase, scheduler, and watchdog traits.
+//!
+//! Requirements: HW-TIME-001
+//! Safety-critical.
 
 use ferrowasp_io_contracts::time::{TimestampMicros, WrappingCounterExtender};
 use ferrowasp_stm32_critical::timebase::{MICROSECOND_TIMEBASE_HZ, Timebase};

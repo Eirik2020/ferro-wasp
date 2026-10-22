@@ -20,6 +20,346 @@
       "path": "archive/project_meta/ARCHITECTURE_DECISIONS_FULL_BASELINE_2026-07-27.md",
       "bytes": 47486,
       "sha256": "0976CD2A8660BD8377F61D8DCBC1EA8AFD30D3C884E483F4798DD992EE869730"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0001.md",
+      "bytes": 708,
+      "sha256": "4FAB37D579D8DBD425364D3BDFD664332103E7CA34D7E809C552EC9C349BFBF8"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0002.md",
+      "bytes": 1492,
+      "sha256": "EA84CDB5A9462CA251B209D38B567D79BABAA4FE223DDDFF3123311B61E26193"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0003.md",
+      "bytes": 679,
+      "sha256": "38A5F12CCF480223E09D9DC77FD499275467BF6CE37F94DED51ED8786C0D5228"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0004.md",
+      "bytes": 762,
+      "sha256": "714F5DEF5B94A5568ED4DF1116EA7EFBC6D71F0C277AB790F5E5BB1A91E54024"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0005.md",
+      "bytes": 725,
+      "sha256": "6494B209E6B813DE8087E84F10C4B774B54061C92BF214A8FD56F4DC2BE842A1"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0006.md",
+      "bytes": 768,
+      "sha256": "C6175F72D8F00B39604F4988AAC922A4B0DF383A1725115FD5E45B53D3499EDE"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0007.md",
+      "bytes": 1209,
+      "sha256": "6A3924FF8C8E1E7299AFE240BD93227BCDB4DFE207888FB26F6CE9DD106B4862"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0008.md",
+      "bytes": 1539,
+      "sha256": "E8B357164BDDD90FD957E3C6A8B2336E4F4CDC221DB0701DD08AE9F224F9EAFB"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0009.md",
+      "bytes": 1596,
+      "sha256": "6450DCC5070D8387A6F8900DEF9CBB6C4D773DA1A1914CC613DE3EF1875945E2"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0010.md",
+      "bytes": 2190,
+      "sha256": "B93147A0087C342E59540B4AAA392533CBC4B497EE2E08B7C0A0318854D7533A"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0011.md",
+      "bytes": 1810,
+      "sha256": "F96D9F1268888740FC7697F46FF656A568BC4A4712B162AFF02BD7482B611DBD"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0012.md",
+      "bytes": 2063,
+      "sha256": "CA77E8CF925F48C73ECFB1E4A53A924DC56C6494CCCA3C10E7661D1C8360AD39"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0013.md",
+      "bytes": 1841,
+      "sha256": "B77CFE084CAF2243AF511579E80D3FF7685FF66E97EEF643AA5EC58026011CEE"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0014.md",
+      "bytes": 1439,
+      "sha256": "53AF9B101B87E821EC029EC45EC76C2DAD98C82067CE8ADAD2C2890B0729AAA0"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0015.md",
+      "bytes": 1691,
+      "sha256": "E2FCFC4C9828571E83E58826A8AE68936C189B21C321D059F7D18A36C2F3F17D"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0016.md",
+      "bytes": 1612,
+      "sha256": "159A887BA10A63411A37E286CEBD3207AB3DCB937A7B6612746F7651BD737EE2"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0017.md",
+      "bytes": 1745,
+      "sha256": "24C8C33B4AFC7E3F7CCED097CC99C6A86C16D36D1822752BA0FC41E8B32B2414"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0018.md",
+      "bytes": 1474,
+      "sha256": "87BC2A818EF5E7EC48F26E982F25C0C818C55FB2723DFB7F2A317E2667C0E206"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0019.md",
+      "bytes": 1354,
+      "sha256": "C3010378FE876D6FEECB7327E589A272D5BF3597EAF5BB9918AD1B94EFA00129"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0020.md",
+      "bytes": 3306,
+      "sha256": "9E72D31269361FE3EA549A9B5559975D7D291D85392393652F26B6ABEE4F8C78"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0021.md",
+      "bytes": 1418,
+      "sha256": "887C96BC63F600AEB1CB93DBA54875DA1D87998A5EA8DAA43B6E07490F2A50AB"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0022.md",
+      "bytes": 1579,
+      "sha256": "238F7F4A0DFF197E3DB10BE4FF8F7BE364C11A0C166584DC64A637776BD6F228"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0023.md",
+      "bytes": 2723,
+      "sha256": "CE6BF31C1FB7B1A08DD47F420A7CAF95774D1264AC9FD733A93972478341F1F8"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0024.md",
+      "bytes": 2859,
+      "sha256": "32E425F7C9752237FF57117BAA90651CB7223FADB8EC36C69DF2CFAD44C4FEA5"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0025.md",
+      "bytes": 2010,
+      "sha256": "2BAA53A615C0BB15C0EA2F9EF9C32C290D463CA13D1AB410A0E05B63BF1AEEBB"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0026.md",
+      "bytes": 1627,
+      "sha256": "4AE6A10A873368519BEAFECD235F5E489AD9FACC66E0B7B6BB35012997A670CF"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0027.md",
+      "bytes": 1723,
+      "sha256": "D99B9ED1D78F5C6BDCE8F15BF74D3C6ABEFB2A70F8585E9DEBF78C7D04BD35C0"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0028.md",
+      "bytes": 2218,
+      "sha256": "CE16B40CF78DB0E39A3DE8D4C5308A4870DCF8CFC1BF75437DD761AB81E84B4C"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0029.md",
+      "bytes": 2185,
+      "sha256": "26514EBBECB916EC69F7F53AB8A6BE5FC5A201EDD855C3BB866EC30202B524B0"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0030.md",
+      "bytes": 1707,
+      "sha256": "C47DF93AF96760A3D66B9032C6229D9B0E0008C23D9EA03ECECAB8232FE736E9"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0031.md",
+      "bytes": 2790,
+      "sha256": "BFE17A3EDAD4DF09A567A53E798293A0B4CFB0D3483D1629687BDF7772E1226B"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0032.md",
+      "bytes": 1670,
+      "sha256": "F0CC797F08B534C0B18FACBDB8DCA06045ACFEA7D79734F70518764390575377"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0033.md",
+      "bytes": 1791,
+      "sha256": "B752D6D5874BBEAA7F889FB8345FFF36AD453CA6DEAB8C664A32214DFDC0FE38"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0034.md",
+      "bytes": 1878,
+      "sha256": "27E2648C2B4FB37F0B7DD15343C794A7154C8F079239C44FDD43A58CC1EF80B5"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0035.md",
+      "bytes": 2841,
+      "sha256": "062F3524BE4C20D9F45AF6FBCC6CA39FD3D3D534BF5FAF7B5566C9B94EFCEE4B"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0036.md",
+      "bytes": 1372,
+      "sha256": "CF42F18270082406C80448B2F980DFFA7B52B782C64ABAFEFA92BE20345B6A2A"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0037.md",
+      "bytes": 1347,
+      "sha256": "97DEE5830AF5E2A7A7E54F4AB8B69216D793E5ACC9A476B75020F7C50B5503F2"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0038.md",
+      "bytes": 1238,
+      "sha256": "0AEF5B7B0E7C9A3CB20B19CA66F2E0982803A5B6F30F1B3AC775F79F4636BCB0"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0039.md",
+      "bytes": 2092,
+      "sha256": "EDE093F1529AC9ED24AA636832EE25764A17E1745016CBB3281242BC194C9C72"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0040.md",
+      "bytes": 2258,
+      "sha256": "8DAB0FC9556940AAA4743A305743098DDCD66FB76799D2E0DF1E64D4D65930D5"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0041.md",
+      "bytes": 1744,
+      "sha256": "89CB1B399DC66D59D5BDE7661589B5BA29D806E1170EA3FBCA02FE253203A739"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0042.md",
+      "bytes": 1556,
+      "sha256": "9B574DE084E42335C6800D4FC373FBD217F4B9D3822A55F6CE73B0A8EF50292F"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0043.md",
+      "bytes": 2210,
+      "sha256": "FD56A6F821D7C98D6B72232EEA57F9E787E3B626AD5A6B49EE5BCD87B779F4D5"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0044.md",
+      "bytes": 1706,
+      "sha256": "1FA217C7F4F8A1EBA3F9D933B95648C70A4E24CB2A53D09CCD0A9ABCBA83E6C6"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0045.md",
+      "bytes": 3931,
+      "sha256": "DFCEBE75051F179609B6B5A62C451BC1B8E89B804476DD6AB6D953F9F0D6AA4F"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0046.md",
+      "bytes": 1976,
+      "sha256": "CBFE7071D80582066FB70C2A6DD2EF7BF753587EE1B221A0DE1397F06C06F2F1"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0047.md",
+      "bytes": 2678,
+      "sha256": "FF6D5B6D24A67382DEE190CE93D5F4E647E73A026E52009A6C338C18042D8E0F"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0048.md",
+      "bytes": 3142,
+      "sha256": "532284B32888A1B47F78E852A73F3F5083076673E9D569A7D116111026F119F7"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0049.md",
+      "bytes": 2663,
+      "sha256": "4742BA88F1458F67CFC6003582F22EDD9587963483F298655C34F5D0572F3396"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0050.md",
+      "bytes": 2327,
+      "sha256": "D0E2E94695DEBAFB90538B8D1E5A5DE2A6B16050DC1A278219A6FBD0070DF353"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0051.md",
+      "bytes": 2212,
+      "sha256": "0C988F466D504E49D90DB6E47A29563CCA3160811F5EC07A137613E895ED25CC"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0052.md",
+      "bytes": 3304,
+      "sha256": "627EF602A96943744371BA9B8DA6CB3C49DB3B3B3E83C4880E43B4CA20C3D76C"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0053.md",
+      "bytes": 3089,
+      "sha256": "5E150562DE8FE3A37D3C92CB50C1C58A611AC747CD11FA094ED4E87DB5D97300"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0054.md",
+      "bytes": 2935,
+      "sha256": "AE225FBE187F5E81A6A1914F76CAEC9D8271A59FCE86BE5715F32CDCCEC0336D"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0055.md",
+      "bytes": 2659,
+      "sha256": "2E03BB296B27FE0B2B1DF599CE770523294A0ACB634C53A481A6A707594C0966"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0056.md",
+      "bytes": 3289,
+      "sha256": "FBCB501945BA5366135BADB56DAB22455EDAB2FAB9770909115ADDDE86525464"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0057.md",
+      "bytes": 3282,
+      "sha256": "47F3D8B12AFFD8BF61F32559C2F11C3166C854CE49B4687A6AA59D9AFF3A906F"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0058.md",
+      "bytes": 2132,
+      "sha256": "CC98BAEC5CB8587C498B493C611373872837FAA8667609EDBF5EA2ABB3D5DEF1"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0059.md",
+      "bytes": 2963,
+      "sha256": "6767993A1B90850CCF437E64F8A21A37A7CA158B613902D5FFB8332F5497078C"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0060.md",
+      "bytes": 3303,
+      "sha256": "11D42A24599ED172FFBB570B8805D76767CFE3E2DCF0C9E17AE889D06E9DD071"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0061.md",
+      "bytes": 3606,
+      "sha256": "8721FDB9A3A309501EF5E8516F84C3725FAD786489BDE103EA5EF22D1E52750D"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0062.md",
+      "bytes": 2372,
+      "sha256": "C88D5D15922670699E5A0908C78DF6C9F22D2DECDA6F6A0D1B415A3E68ABD163"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0063.md",
+      "bytes": 3269,
+      "sha256": "3C93734C2D8C5779477B81C36623BDCCBE2D3B7D27F96CE30E3E271A279A2FA4"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0064.md",
+      "bytes": 2570,
+      "sha256": "F0CB618DE2758B1B39544D117E0012FF3392B5FB7233B79618A2BAA33F7EB63B"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/decisions/ADR-0065.md",
+      "bytes": 3114,
+      "sha256": "4720D53AAED8721BC90AF1C2FF6AAD10267CAF3A08C604E0488A75B5718B4517"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/ARCHITECTURE_DECISIONS.md",
+      "bytes": 7073,
+      "sha256": "0D5BCC09560029C50FA0CA7A1B6A43B866EB4F4AA7BA4E0B83D13A1D8ECD9E50"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/ARCHITECTURE_DECISIONS_HISTORY.md",
+      "bytes": 3091,
+      "sha256": "9F54E0C61F9770F0F4E9619CB100DF1D36FFB357FC13E6830F55215B632C7602"
+    },
+    {
+      "path": "archive/2026-10-22/project_meta/ARCHITECTURE_DECISIONS_PLANNED.md",
+      "bytes": 3327,
+      "sha256": "EF7E7A52DB6668812D6435681D427329BB7780BE33DAEF8FD370BAC9E578F2F2"
     }
   ],
   "documents": [
@@ -29,6 +369,13 @@
       "lifecycle": "durable",
       "context": "default",
       "max_bytes": 6144
+    },
+    {
+      "path": "project_meta/faq.md",
+      "role": "rejected-alternatives",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 16000
     },
     {
       "path": "project_meta/remaining-work.md",
@@ -94,6 +441,13 @@
       "max_bytes": 32768
     },
     {
+      "path": "project_meta/requirements/tracing.md",
+      "role": "requirements-design",
+      "lifecycle": "durable",
+      "context": "targeted",
+      "max_bytes": 32768
+    },
+    {
       "path": "project_meta/tooling.md",
       "role": "repository-tooling",
       "lifecycle": "durable",
@@ -113,482 +467,6 @@
       "lifecycle": "durable",
       "context": "targeted",
       "max_bytes": 8192
-    },
-    {
-      "path": "project_meta/ARCHITECTURE_DECISIONS.md",
-      "role": "architecture-decision-index",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 8192
-    },
-    {
-      "path": "project_meta/ARCHITECTURE_DECISIONS_HISTORY.md",
-      "role": "architecture-decision-history",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 8192
-    },
-    {
-      "path": "project_meta/ARCHITECTURE_DECISIONS_PLANNED.md",
-      "role": "architecture-decision-planned",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 8192
-    },
-    {
-      "path": "project_meta/decisions/ADR-0001.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0002.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0003.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0004.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0005.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0006.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0007.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0008.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0009.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0010.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0011.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0012.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0013.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0014.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0015.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0016.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0017.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0018.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0019.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0020.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0021.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0022.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0023.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0024.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0025.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0026.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0027.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0028.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0029.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0030.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0031.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0032.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0033.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0034.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0035.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0036.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0037.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0038.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0039.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0040.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0041.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0042.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0043.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0044.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0045.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0046.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0047.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0048.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0049.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0050.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0051.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0052.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0053.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0054.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0055.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0056.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0057.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0058.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0059.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0060.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0061.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0062.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0063.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0064.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
-    },
-    {
-      "path": "project_meta/decisions/ADR-0065.md",
-      "role": "architecture-decision",
-      "lifecycle": "durable",
-      "context": "targeted",
-      "max_bytes": 4096
     },
     {
       "path": "project_meta/LOGGING_FORMAT.md",

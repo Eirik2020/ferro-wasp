@@ -99,6 +99,33 @@ edge before deferring the bounded SPI request; it performs no blocking bus
 work. RTT heartbeat diagnostics expose IRQ and rejected-trigger totals plus
 their two-second deltas.
 
+## SPI Transfers, Deadlines and Recovery
+
+The IMU tasks never touch SPI1. They hold one handle that copies a request's
+metadata and transmit bytes into a bounded mailbox and wakes the SPI1 owner
+service, at priority 13. The owner alone holds SPI1, both DMA halves, the chip
+select and the recovery buffers; the receive DMA interrupt copies the finished
+frame into the job and hands it to the parser. No lock is held across an
+`.await`, and a dropped request is cancelled by its generation, so a late
+completion cannot finish a reused slot. The backend accepts one transfer shape:
+the one-operation, 15-byte full-duplex burst every supported sensor uses.
+
+Deadlines are measured on TIM2, a pinless 32-bit timer at 1 MHz whose wrap,
+about every 71 minutes, is extended in software. A transfer has 250 us from
+submission, and the deadline restarts when the owner accepts it, so dispatch
+latency cannot use up time meant for the wire while a request that never
+reaches the owner stays bounded.
+
+The I/O watchdog, TIM6 at 8 kHz and priority 9, reads the timebase and checks
+the transfer's state but touches no peripheral. On expiry it posts recovery to
+a task at the owner's priority, 13, so recovery and receive completion never
+run at once. The owner cancels the transfer, pauses both DMA streams, releases
+chip select, swaps in a spare receive buffer, restarts receive DMA and recycles
+the job. If receive DMA cannot restart, the owner becomes unavailable and
+refuses every later transfer rather than run with unclear buffer ownership.
+This recovers DMA ownership, not the SPI peripheral: the HAL's split DMA
+handles give no safe way to reset it, and no unsafe code is added to get one.
+
 ## Axis And Rate Convention
 
 The drone body frame is forward/right/down: +X forward, +Y right, +Z down,
@@ -137,6 +164,23 @@ fields directly.
 
 See [Bench and Analysis Tools](./rtt_debug_tools.md) for the terminal logger and live
 IMU viewer.
+
+## Accelerometer Level
+
+`imu calibrate`, on either command line, while disarmed and with no flash
+maintenance running, averages 500 samples of drone-frame gravity. It refuses a
+craft that moves (any gravity axis wandering more than 0.05 g, or any gyro axis
+more than 10 degrees per second), one leaning more than 10 degrees, and a
+gravity magnitude more than 0.15 g from 1 g. The mean's offset from level, in
+milli-g per drone axis and at most 400 mg on each, is saved with the
+configuration through the same two-slot verified write as `config save`;
+`imu level` reports it.
+
+The offsets belong to one craft, so they are not configuration keys and do not
+travel with an exported tune. The control loop subtracts them from gravity
+before the attitude estimate only. The rate loop never reads the
+accelerometer, so a calibration changes the estimated attitude, not what flies
+the craft. The gyro bias is not stored; it is measured at every boot.
 
 ## Foxeer Bring-Up Checklist
 

@@ -1,11 +1,10 @@
 # Requirements Design: Fault Handling and the Border Roles
 
 Section 19 of [the requirements design](design.md), which maps every section
-to its chapter. ADR-0061 to ADR-0064 are the binding records; this chapter
-carries the reasoning behind them. The starting point was the user's
+to its chapter. The starting point was the user's
 "FerroWasp Safety Core Architecture" document, which describes the roles
 around the safety-critical core and the arm and disarm sequencing. It was
-taken case by case against ADR-0054 to ADR-0060; where the two differed, the
+taken case by case against sections 8 to 16; where the two differed, the
 outcome is recorded here.
 
 ## 19. Fault handling and the border roles
@@ -28,25 +27,25 @@ Unprivileged tasks        Non-critical readers         Sensor tasks
 ```
 
 Already consistent with the earlier decisions and the code: the observer as a
-one-way diode to a read-only ledger (ADR-0056); the safety master at the
+one-way diode to a read-only ledger (section 10); the safety master at the
 highest priority, already 16 on the Foxeer above `actuator_output` (15) and
 `control_loop` (14); the arming round trip, which today is `ArmRequested`,
 guarded idle and eRPM qualification, then `SafetyEvent::ActuatorIdling`;
 disarm immediate and unconditional (W2); SPSC links with compile-time
-ownership (ADR-0055); and a narrow safety-critical HAL beside the broad one,
-unverified by default in `reqtool`, which is the `-critical` backend crates
-with mandatory linking (ADR-0054).
+ownership (section 9); and a narrow safety-critical HAL beside the broad one,
+unverified by default in `reqtool`, which is the `-critical` backend crates,
+whose every file declares the requirements it implements (section 20).
 
 ### The coordinator
 
 The document called the coordinator a dumb pipe that forwards requests
 without judging them, with every request going to the safety master.
-ADR-0056's coordinator validates content, arbitrates between requesters and
-runs the arm-inhibit, stage and commit transaction. The user kept ADR-0056's,
+Section 11's coordinator validates content, arbitrates between requesters and
+runs the arm-inhibit, stage and commit transaction. The user kept section 11's,
 and stated its main purpose: to stop unprivileged tasks from stalling the
 system by spamming or stalling the safety master. "Does not judge" therefore
-means "never judges flight state", which ADR-0056 already said; routing every
-request through the safety master was the option ADR-0056 rejected, because
+means "never judges flight state", which section 11 already said; routing every
+request through the safety master was the option section 11 rejected, because
 the safety master would grow and re-owe its evidence with every request type.
 
 ### Two fault paths
@@ -58,7 +57,7 @@ it is not the Health Manager's job to determine an IMU fault.
 
 - **Direct.** A consuming task's gate detects its own input's failure and
   reports it straight to the safety master: a dead or stale IMU, RC loss, a
-  stopped control loop, an arm-state mismatch, a DShot bank fault. ADR-0055
+  stopped control loop, an arm-state mismatch, a DShot bank fault. Section 9
   already made staleness the consumer's decision.
 - **Aggregated.** Everything below that goes to the Health Manager: ESC
   temperature and voltage, reply-loss rate, RC link quality and CRC error
@@ -91,7 +90,7 @@ The safety master acts on the class, not on the source:
 
 Hard faults latch and only a reboot releases them: after a hard fault the
 board is not trusted until it restarts and passes its boot checks, as with
-ADR-0056's config-transaction latch. Disarm-and-rearm and an explicit
+section 11's config-transaction latch. Disarm-and-rearm and an explicit
 acknowledgement were the alternatives. Failsafe-level and lower faults do not
 latch.
 
@@ -123,7 +122,7 @@ path and the safety master and above every non-critical task, so a border
 role that hangs or faults cannot bring the system down. Its failure raises
 land immediately, never a hard fault.
 
-The observer was non-critical under ADR-0056, because the producers'
+The observer was non-critical under section 10, because the producers'
 never-block rule was the safety-critical part. With the Health Manager
 reading the ledger, a non-critical observer would break the direction rule,
 so it becomes safety-critical. A third, "border" class was considered and not
@@ -134,7 +133,7 @@ tasks depend on them.
 **Heartbeats.** Each border role sends a heartbeat (sequence, timestamp) to
 the safety master over a `state` link, beating even when idle; one older than
 its role's limit raises land immediately with the role's id. The ages are
-checked in the safety master's periodic check (ADR-0063). The control loop's
+checked in the safety master's periodic check (the independent watchdog, below). The control loop's
 tick was proposed first and rejected: it stops when the IMU does.
 
 **How the observer fails.** The user asked how likely the observer is to fail
@@ -182,7 +181,7 @@ way out; losing disarm authority is worse than a drop.
 No independent watchdog exists: `ferrowasp-stm32f4::watchdog` is a
 timer-driven I/O watchdog whose task (`io_watchdog`) expires overdue SPI1
 transactions. The design first assumed a hardware watchdog backed the core;
-checking the code showed none, so ADR-0063 adds the IWDG. The user delegated
+checking the code showed none, so the independent watchdog below adds the IWDG. The user delegated
 its details.
 
 - Only the safety master's own periodic check feeds it, on the monotonic at a
@@ -213,11 +212,11 @@ Actuator Output judges its own success, fresh in-range eRPM on every motor,
 from a link of its own from actuator feedback; letting the Health Manager
 judge qualification was the alternative, but then Actuator Output could not
 confirm its own physical state. Actuator Output also cross-checks its own
-armed state against the system-armed flag (ADR-0064).
+armed state against the system-armed flag.
 
 The document says Actuator Output retries disarm until it succeeds. DShot has
 no acknowledgement: the firmware knows what it sent, not what an ESC did. Two
-mechanisms already exist: while disarmed, ADR-0046's fallback keeps stop
+mechanisms already exist: while disarmed, the DShot fallback release keeps stop
 frames going at no less than 500 Hz, and a bank fault forces every output low,
 a signal loss on which an ESC stops its motor. So success means a stop frame
 set completed or the lines were forced low; stop is re-asserted every period
@@ -228,15 +227,15 @@ success condition, since it depends on the prop and its inertia.
 ### Readings of the document
 
 - **Byte streams.** The document puts the core's border at a byte stream in
-  and out, enforced by traits. ADR-0057 stands: `RxChunk` in, which carries
-  the discontinuities a bare byte stream would lose (ADR-0011), and
+  and out, enforced by traits. Section 12 stands: `RxChunk` in, which carries
+  the discontinuities a bare byte stream would lose, and
   `MotorCommand` out, so DShot or PWM encoding, bidirectional inversion and
   the turnaround stay in the output group. Traits live below the core, in the
   hardware groups over the narrow safety-critical HAL. The document's intent
   holds: the core never touches hardware, and moving it to another board
   proves only that board's contract implementation.
 - **Atomic flags.** The document calls flags simple state without
-  ownership semantics. ADR-0055 stands: no queue semantics, but one writer
+  ownership semantics. Section 9 stands: no queue semantics, but one writer
   enforced by the type system, single-word values, and trusted by a
   safety-critical reader only while the writer's liveness is covered, which
   for the safety master is the IWDG.

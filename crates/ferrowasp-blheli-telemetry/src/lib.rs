@@ -3,6 +3,9 @@
 //! The UART frame is ten bytes at 115_200 baud. It has no sync byte or motor
 //! identifier, so the caller must associate a validated frame with the DShot
 //! lane whose telemetry bit was most recently requested.
+//!
+//! Requirements: FEEDBACK-001, FEEDBACK-003, FEEDBACK-004
+//! Safety-critical.
 
 #![no_std]
 #![forbid(unsafe_code)]

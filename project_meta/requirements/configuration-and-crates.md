@@ -1,12 +1,9 @@
 # Requirements Design: Configuration, Classifications and Crates
 
 Sections 14 to 16 of [the requirements design](design.md), which
-maps every section to its chapter. The ADRs it names are the binding
-records; this chapter carries the reasoning behind them.
+maps every section to its chapter.
 
 ## 14. Stored configuration
-
-ADR-0059.
 
 Storage is untrusted input; validation is the trust boundary, the same pattern
 as the SBUS parser behind Command Input.
@@ -85,8 +82,6 @@ and `ferrowasp-protocol` depend on it.
 
 ## 15. Classifications
 
-ADR-0054.
-
 | Item | Class | Reason |
 |---|---|---|
 | actuator feedback (formerly ESC telemetry) | safety-critical | eRPM qualifies arming; the RPM filter and dynamic idle feed control |
@@ -105,7 +100,7 @@ when angle mode arrives) was proposed; the user chose safety-critical now,
 because stabilized mode is coming soon. Consequences: the estimator stays in
 the control loop with its own requirements; accelerometer calibration moves
 from the flash manager into the safety-critical core as a coordinator
-transaction (arm inhibit; the estimator's owner applies ADR-0044's stillness,
+transaction (arm inhibit; the estimator's owner applies the accelerometer level calibration's stillness,
 lean and magnitude checks to its own samples; stage the offsets; commit;
 release); `ImuSample`'s accel fields become safety-critical; the OSD reads
 attitude from the ledger. `gyro_bias_calibrator` was always safety-critical,
@@ -118,8 +113,6 @@ built; further detail now is scope creep.
 ---
 
 ## 16. Crate layout
-
-ADR-0060.
 
 **Splitting the core.** Bench evidence decides granularity, because unit
 evidence costs nothing to re-run.
@@ -208,7 +201,7 @@ Safety-critical (`critical = true`):
 | `ferrowasp-boundary-contracts` | `Request`, results, outbound messages | new |
 | `ferrowasp-config` | schema, `validate()`, page format, migration, motor map | `core::config`, part of `core::blackbox`, `flight::flash_storage` |
 | `ferrowasp-safety` | safety master, arming, actuator authority | `core::safety`, `flight::arming`, `flight::actuator` |
-| `ferrowasp-border` | the border roles, one module each: coordinator, observer and its ledger, Health Manager (section 19, ADR-0061) | new; the observer replaces `stm32-tasks::snapshots` |
+| `ferrowasp-border` | the border roles, one module each: coordinator, observer and its ledger, Health Manager (section 19) | new; the observer replaces `stm32-tasks::snapshots` |
 | `ferrowasp-control` | general control (above) | `pid`, parts of `flight::drone_toolbox`, `accel_level`, `rpm_filter`, `core::frames` |
 | `ferrowasp-flight-control` | flight-controller-specific (above) | the rest of `drone_toolbox`, `dynamic_idle`, `core::actuator` |
 | `ferrowasp-input` | Command Input, RC protocol trait, RC group | `flight::rc_receiver` |
@@ -236,6 +229,28 @@ non-critical `ferrowasp-stm32`, `-stm32f4`, `-stm32h7`.
 Dissolved: `ferrowasp-core`, `ferrowasp-io-core`, `ferrowasp-flight`,
 `ferrowasp-drivers`, `ferrowasp-pid`, `ferrowasp-waveform`.
 `ferrowasp-stm32-tasks` became `ferrowasp-stm32-app`, the application glue,
-and the flash manager went to `ferrowasp-cli` (ADR-0065).
+and the flash manager went to `ferrowasp-cli`.
+
+**Where tasks live.**
+- A task names hardware only through the hardware-neutral traits and types of
+  `ferrowasp-stm32-critical`, or of `ferrowasp-stm32` for a non-critical task,
+  as FerroForge `bounds`; the firmware binds the chip family's types. No
+  subsystem crate takes a chip feature: the IMU's data-ready pin is a trait,
+  and the USB wake a function the firmware supplies.
+- The hardware transports are the backend's mechanisms: the SPI1 IMU group,
+  the DShot service, its fallback and DMA completions, and the UART
+  transports live behind a `tasks` feature in `ferrowasp-stm32-critical`,
+  which depends on `ferrowasp-imu`, `-output` and `-serial`; those keep the
+  logic and the traits.
+- Application glue (the facade macro, the task groups, the channel
+  constructors, and the reports the command lines build from the ledger) is
+  one non-critical crate, `ferrowasp-stm32-app`, serving every board.
+- Actuator output, the DShot service, the ESC manager and RC input stay there
+  until the message contracts of section 12 remove the coupling that would
+  otherwise make two crates depend on each other.
+- The flash manager, the USB task, the configurator link and the heartbeat
+  are in `ferrowasp-cli`, since the flash manager uses the blackbox and
+  command-line crates and cannot sit below them; RC telemetry is in
+  `ferrowasp-osd`; the ADC tasks and status LEDs are in `ferrowasp-stm32`.
 
 Names are working names until each crate is created.

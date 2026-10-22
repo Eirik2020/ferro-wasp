@@ -1,4 +1,7 @@
 //! Reusable actuator-command queue publication.
+//!
+//! Requirements: SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008
+//! Safety-critical.
 
 use crate::{ActuatorCmd, MotorCmd, signals::MotorCmdWriter};
 

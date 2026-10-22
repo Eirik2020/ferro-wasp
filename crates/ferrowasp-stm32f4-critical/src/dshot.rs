@@ -19,7 +19,7 @@
 //!
 //! # Bidirectional replies
 //!
-//! Every lane names its motor pin, so a bank built bidirectional (ADR-0045)
+//! Every lane names its motor pin, so a bank built bidirectional (dshot.md)
 //! can hear each ESC's reply. After a frame set the lane's stream is released
 //! and rebuilt to read the pin's GPIO input register into the lane's sample
 //! buffer, paced by its own timer channel's compare request, three samples
@@ -49,6 +49,9 @@
 //! reads a port's pin levels, so it needs no ownership of the port. DMA
 //! buffer ownership, stream fencing, and buffer exchange remain delegated to
 //! `stm32f4xx-hal::dma::Transfer`.
+//!
+//! Requirements: HW-DSHOT-001, HW-DSHOT-002, HW-DSHOT-003, HW-DSHOT-004, HW-DSHOT-005, HW-DSHOT-006, HW-DSHOT-007
+//! Safety-critical.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

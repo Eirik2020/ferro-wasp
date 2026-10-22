@@ -1,12 +1,9 @@
 # Requirements Design: The Evidence Model
 
 Sections 2 to 5 of [the requirements design](design.md), which
-maps every section to its chapter. The ADRs it names are the binding
-records; this chapter carries the reasoning behind them.
+maps every section to its chapter.
 
 ## 2. The requirements and evidence model
-
-ADR-0050.
 
 **Primitives.**
 
@@ -22,15 +19,16 @@ A run can pass some requirements and fail others; old records carried one
 result per test.
 
 **Status is computed, never stored.** `reqtool` computes status for each
-requirement, verification entry and variant from the links, the evidence
-records, the current fingerprints and the verification mode.
+requirement, verification entry and board from the declarations in the code,
+the evidence records and the current identities
+([section 20](tracing.md#20-tracing-per-source-file)).
 
 | Status | Meaning |
 |---|---|
-| `verified` | a pass exists whose fingerprint matches the current code |
-| `stale` | a pass exists, but its fingerprint no longer matches |
+| `verified` | a pass exists whose coverage matches the current code |
+| `stale` | a pass exists, but what it covered has changed |
 | `unverified` | no evidence at all |
-| `failed` | the newest evidence at the current fingerprint is a fail |
+| `failed` | a fail exists whose coverage matches the current code |
 
 `stale` and `unverified` are kept apart because "re-run this, it passed
 before" is different work from "this has never been tested".
@@ -43,9 +41,9 @@ Why computed:
 - agents never edit status, so the plan's rule that agents edit YAML only with
   explicit per-instance permission no longer needs to cover status fields.
 
-**How a failure clears.** A fail at the current fingerprint is cleared only by
-a pass at a new fingerprint, or by a superseding record on the user's explicit
-ruling that cites the fail. A pass after a fail with nothing changed does not
+**How a failure clears.** A fail whose coverage matches the current code is
+cleared only by a pass after the code it covered changed, or by a superseding
+record on the user's explicit ruling that cites the fail. A pass after a fail with nothing changed does not
 clear it: a flaky result counts as failed. This keeps the existing evidence
 rule (never change a result to make a gate appear complete), and matches how
 the BENCH-FOX-001 scope change was handled: a superseding record on the user's
@@ -56,18 +54,16 @@ ruling, not an edited result.
 **Who writes what.** People and agents write requirements. `reqtool record`
 writes evidence. Nobody writes status. Gates read status.
 
-**Why ADR-0038's registry was replaced.** It tied evidence to hand-listed
+**Why the component registry was replaced.** It tied evidence to hand-listed
 components, and the person writing a run record listed which components the
 run exercised. That is unsound: a record for `driver-mpu6000` that does not
 also list `drivers/lib.rs` keeps passing after a change to `lib.rs`. Its goal
 stands — unchanged code is never re-owed, on any board — and the mechanism
-moves to derived fingerprints (section 4).
+moves to derived identities (section 20).
 
 ---
 
 ## 3. Verification levels and gates
-
-ADR-0051.
 
 The plan's levels (unit, SITL, MCU, bench, flight) did not match the old six
 tiers (software, embedded-build, bench-unpowered, bench-powered-props-off,
@@ -112,7 +108,8 @@ operation does not establish flight readiness.
 
 ## 4. Fingerprints
 
-ADR-0052.
+Superseded by [section 20](tracing.md#20-tracing-per-source-file);
+`reqtool` no longer fingerprints evidence this way.
 
 A fingerprint answers: which code has to stay the same for this evidence to
 still count? The tool derives it from what the evidence claims to verify:
@@ -209,7 +206,11 @@ reported for each variant a board can run.
 
 ## 5. Verification modes and timing
 
-ADR-0052.
+The verification modes are superseded by
+[section 20](tracing.md#20-tracing-per-source-file): a requirement is
+verified only by its own entries. A timing requirement names the bench or
+flight procedure of the path it is observed on, so one run records a result
+for each.
 
 The plan's cascade rule stands: a safety-critical parent is satisfied by its
 own requirement and test, or by full coverage from its children, never both

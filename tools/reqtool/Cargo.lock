@@ -339,6 +339,7 @@ name = "reqtool"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "proc-macro2",
  "serde",
  "serde-saphyr",
  "serde_json",

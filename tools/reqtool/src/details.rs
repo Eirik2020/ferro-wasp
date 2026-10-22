@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::evidence::{Outcome, RunResult};
-use crate::fingerprint::hex;
+use crate::identity::hex;
 use crate::schema::{Level, Setup};
 
 /// Artifacts live in the ignored `logs/` tree; records hold only their path,

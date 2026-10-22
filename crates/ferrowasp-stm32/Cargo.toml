@@ -18,7 +18,7 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = ["ferrowasp-stm32-critical/bench_spi_timeout_recovery"]
 dshot = ["ferrowasp-stm32-critical/dshot"]
-# The ADC and status-LED RTIC task definitions, target-only (ADR-0065).
+# The ADC and status-LED RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:ferrowasp-boundary-contracts",
     "dep:ferrowasp-io-contracts",

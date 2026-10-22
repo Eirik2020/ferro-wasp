@@ -1,8 +1,10 @@
-//! The serial transport every port shares, safety-critical (ADR-0060): which
+//! The serial transport every port shares, safety-critical (design §16): which
 //! function each port serves, its line settings, and the bounded reader and
 //! writer between a port's DMA and its consumer. A port's function is chosen
 //! at boot, and the same transport may carry RC, so it is safety-critical for
 //! every port.
+//!
+//! Safety-critical.
 
 #![no_std]
 #![forbid(unsafe_code)]

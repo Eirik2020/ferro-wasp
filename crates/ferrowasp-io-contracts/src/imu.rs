@@ -1,6 +1,9 @@
-//! The IMU sample the parser hands the control loop (ADR-0057), over a
+//! The IMU sample the parser hands the control loop (design §12), over a
 //! `state` link: gyro and accelerometer from one burst in one message, so
 //! the loop never mixes two samples.
+//!
+//! Requirements: IO-004
+//! Safety-critical.
 
 /// One decoded IMU burst, in the sensor's axes.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

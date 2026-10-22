@@ -6,6 +6,9 @@
 //! ends at once. A board binds the tasks of the ports it routes. All UART
 //! transports run at one priority, chosen by the firmware, since any port may
 //! serve any function.
+//!
+//! Requirements: HW-UART-001, HW-UART-002, HW-UART-003, HW-UART-004
+//! Safety-critical.
 
 use super::prelude::*;
 use crate::uart_port::{UartRxEvent, UartRxPortService};

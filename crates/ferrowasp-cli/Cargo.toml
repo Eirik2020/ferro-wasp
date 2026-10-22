@@ -39,7 +39,7 @@ rtic-monotonics = { version = "2.1.0", default-features = false, optional = true
 [features]
 default = []
 mspv2_configurator = ["dep:ferrowasp-mspv2"]
-# The command line's RTIC task definitions, target-only (ADR-0065).
+# The command line's RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:embedded-io-async",
     "dep:ferrowasp-border",

@@ -1,6 +1,9 @@
 //! An external-interrupt input, as the task that services its edge sees it:
 //! the chip family's backend wraps its HAL pin in a type that implements this,
 //! so the task names no HAL.
+//!
+//! Requirements: HW-SPI-001, HW-SPI-002, HW-SPI-003, HW-SPI-004
+//! Safety-critical.
 
 pub trait InterruptInput {
     /// Whether this input's edge raised the interrupt now being served.
