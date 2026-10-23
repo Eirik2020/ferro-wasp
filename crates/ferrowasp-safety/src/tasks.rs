@@ -319,9 +319,10 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
         // A config transaction holds arming off while it applies, granted
         // only disarmed and not arming; a lease that lapses unreleased
         // refuses arming until reboot (`config_gate`).
-        safety::SafetyEvent::InhibitArming { ticket } => {
+        safety::SafetyEvent::InhibitArming { ticket, lease } => {
             let decision = cx.local.config_gate.request(
                 ticket,
+                lease,
                 system_arm.is_armed(),
                 arm_permit.is_allowed(),
                 now_us / 1_000,

@@ -612,3 +612,61 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::observer::tests::a_config_change_is_on_the_ledger_once_its_result_is
+
+  - id: CONFIG-030
+    title: A calibration samples under the arm inhibit
+    statement: >-
+      The coordinator shall take an accelerometer calibration's samples
+      only while its arm inhibit is held, and apply the level it finds
+      as a live change.
+    rationale: >-
+      A craft that armed or moved mid-window would calibrate on
+      vibration; applying through the same path keeps the level checked
+      and confirmed.
+    derived_from: [CONFIG-020, CTRL-021]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_calibration_samples_under_the_inhibit_and_applies_its_level
+
+  - id: CONFIG-031
+    title: A failed calibration changes nothing
+    statement: >-
+      A calibration that fails, or gets too few samples in time, shall
+      leave the configuration unchanged and release its arm inhibit.
+    rationale: >-
+      Nothing was applied, so the craft may arm again; latching would
+      punish a pilot who moved the craft.
+    derived_from: [CONFIG-030]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_failed_calibration_changes_nothing_and_releases_its_inhibit
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_calibration_without_samples_gives_up_and_releases_its_inhibit
+
+  - id: CONFIG-032
+    title: A calibration's inhibit outlasts its window
+    statement: >-
+      A calibration's arm inhibit shall last its whole sampling window
+      and the change that follows it.
+    rationale: >-
+      A lease shorter than the window would lapse during sampling and
+      refuse arming until reboot.
+    derived_from: [CONFIG-030, CONFIG-018]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::a_calibrations_inhibit_lasts_its_sampling_window

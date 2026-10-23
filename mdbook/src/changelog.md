@@ -65,7 +65,9 @@ artifact is stable, airworthy, or production-ready.
   once, while disarmed: arming is held off until the control loop confirms it
   flies the new value, and a change it does not confirm refuses arming until
   the board reboots. `config save` keeps it across a reboot. The RC protocol
-  and port bindings still take effect after a save and a reboot.
+  and port bindings still take effect after a save and a reboot. `imu
+  calibrate` holds arming off while it samples, and applies the level the
+  same way.
 
 - A boot that cannot use the last saved configuration (a torn or refused
   slot, or a store that cannot be read) refuses arming until the pilot

@@ -126,6 +126,7 @@ pub enum SafetyEvent {
     /// answered by its ticket.
     InhibitArming {
         ticket: u32,
+        lease: config_gate::InhibitLease,
     },
     /// The config transaction `ticket` has applied its change.
     ReleaseInhibit {

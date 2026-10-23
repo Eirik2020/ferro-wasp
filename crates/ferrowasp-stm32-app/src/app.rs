@@ -29,6 +29,7 @@ pub mod prelude {
     #[cfg(not(feature = "mspv2_configurator"))]
     pub use ferrowasp_cli::usb_debug;
     pub use ferrowasp_config::boot::Fallback;
+    pub use ferrowasp_control::calibration::accel_level::LevelSample;
     pub use ferrowasp_feedback::esc_manager as esc;
     pub use ferrowasp_feedback::esc_manager::{
         DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_IDLE_THROTTLE_COMMAND, DSHOT_PREARM_STOP_HOLD_MS,

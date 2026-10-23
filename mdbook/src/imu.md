@@ -168,7 +168,8 @@ IMU viewer.
 ## Accelerometer Level
 
 `imu calibrate`, on either command line, while disarmed and with no flash
-maintenance running, averages 500 samples of drone-frame gravity. It refuses a
+maintenance running, averages 500 fresh samples of drone-frame gravity from
+the control loop, with arming held off until it ends. It refuses a
 craft that moves (any gravity axis wandering more than 0.05 g, or any gyro axis
 more than 10 degrees per second), one leaning more than 10 degrees, and a
 gravity magnitude more than 0.15 g from 1 g. The mean's offset from level, in

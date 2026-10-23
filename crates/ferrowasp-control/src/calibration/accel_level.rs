@@ -83,6 +83,14 @@ pub enum CalibrationError {
     BadGravity,
 }
 
+/// One fresh IMU sample, as the control loop hands it to a calibration:
+/// drone-frame gravity in g and the gyro in degrees per second.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LevelSample {
+    pub gravity_g: [f32; 3],
+    pub gyro_dps: [f32; 3],
+}
+
 /// One calibration in progress.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AccelLevelCalibration {

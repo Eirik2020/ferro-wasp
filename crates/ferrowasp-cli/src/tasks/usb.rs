@@ -212,12 +212,9 @@ const fn motor_reply(outcome: Outcome) -> &'static [u8] {
         }
         Outcome::Refused(Refusal::Invalid) => b"ERR motor must be 1-4\r\n",
         Outcome::Refused(Refusal::MotorMapUnavailable) => b"ERR motor map not ready\r\n",
-        // A motor test never waits for a reboot, and never takes the arm
-        // inhibit a config change holds.
-        Outcome::Pending
-        | Outcome::Refused(Refusal::NotPermitted | Refusal::Busy | Refusal::NotConfirmed) => {
-            b"ERR motor refused\r\n"
-        }
+        // The rest are a configuration change's or a calibration's, which a
+        // motor test never gets.
+        Outcome::Pending | Outcome::Refused(_) => b"ERR motor refused\r\n",
     }
 }
 #[cfg(not(feature = "mspv2_configurator"))]

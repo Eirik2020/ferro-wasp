@@ -7,7 +7,6 @@
 //! Requirements: BORDER-013, BORDER-014
 //! Safety-critical.
 
-use ferrowasp_control::calibration::accel_level::AccelLevel;
 use ferrowasp_serial::{LogicalSerialPort, SerialFunction};
 
 use crate::config_keys::ConfigKey;
@@ -59,8 +58,9 @@ pub enum Request {
     /// Restore the board's default configuration, keeping the craft's
     /// accelerometer level.
     ConfigDefaults,
-    /// Adopt a new accelerometer level, from a calibration.
-    SetAccelLevel(AccelLevel),
+    /// Calibrate the accelerometer's level on a still, level craft, and
+    /// adopt it.
+    CalibrateAccel,
     /// The pilot saw that the boot fell back from the last saved
     /// configuration; arming may follow once the craft is otherwise ready.
     AcknowledgeConfigFallback,
@@ -118,6 +118,14 @@ pub enum Refusal {
     ArmSwitchHigh,
     OutputDisabled,
     MotorMapUnavailable,
+    /// A calibration found the craft moving.
+    CalibrationMoving,
+    /// A calibration found the craft leaning more than 10 degrees.
+    CalibrationNotLevel,
+    /// A calibration found gravity too far from 1 g to trust.
+    CalibrationBadGravity,
+    /// A calibration got too few IMU samples in time.
+    CalibrationNoSamples,
 }
 
 /// A result on its way to the observer, with the requester it is for.

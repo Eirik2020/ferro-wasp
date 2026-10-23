@@ -22,7 +22,6 @@ use ferrowasp_blackbox::storage_maintenance::{
 };
 use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Refusal, Request, Requester};
 use ferrowasp_config::boot::{BootConfig, read_slot, select};
-use ferrowasp_control::calibration::accel_level::{AccelLevelCalibration, CalibrationError};
 use ferrowasp_io_contracts::link::Pushed;
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
@@ -46,6 +45,12 @@ pub const REBOOT_DECISION_MS: u64 = 100;
 /// How long a configuration change waits for its result: a whole
 /// transaction and ten coordinator runs.
 pub const CONFIG_DECISION_MS: u64 = ferrowasp_border::coordinator::CONFIG_TRANSACTION_MS + 100;
+
+/// How long a calibration waits for its result: the grant, the sampling
+/// window, the change that applies the level, and ten coordinator runs.
+pub const CALIBRATION_DECISION_MS: u64 = 2 * ferrowasp_border::coordinator::CONFIG_TRANSACTION_MS
+    + ferrowasp_border::coordinator::CALIBRATION_SAMPLING_MS
+    + 100;
 
 /// A commit or reset MSPv2 left for this task to carry out.
 #[cfg(feature = "mspv2_configurator")]
@@ -177,19 +182,6 @@ pub fn finish_config_rpc_error(
     queue_rpc_response(wake_usb, producer, mspv2::rpc::error(request_id, error))
 }
 
-/// The answer line for a calibration that produced nothing.
-fn calibration_failure(error: CalibrationError) -> &'static str {
-    match error {
-        CalibrationError::Moving => "ERR imu calibration failed; the craft moved\r\n",
-        CalibrationError::NotLevel => {
-            "ERR imu calibration failed; not level, more than 10 degrees\r\n"
-        }
-        CalibrationError::BadGravity => {
-            "ERR imu calibration failed; the accelerometer does not read 1 g\r\n"
-        }
-    }
-}
-
 /// What init found on the storage bus: whether the store is supported, its
 /// JEDEC manufacturer, memory type and capacity code, and its capacity.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -198,9 +190,6 @@ pub struct FlashProbe {
     pub jedec: [u8; 3],
     pub capacity_bytes: u32,
 }
-
-/// How long a calibration may wait for its IMU samples, in milliseconds.
-pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
 
 /// Own the store: recover the log and configuration, write the flight log,
 /// and answer every storage command, one bounded pass a millisecond. Lowest
@@ -236,9 +225,6 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         staged_rpc_config: Option<flash_task::StoredConfig> = None,
         config_rpc_completion: Option<ConfigRpcCompletion> = None,
         rpc_apply: FlashRpcApply = NO_RPC_APPLY,
-        accel_calibration: Option<AccelLevelCalibration> = None,
-        accel_calibration_seq: u32 = 0,
-        accel_calibration_deadline_ms: u64 = 0,
         // The link to the coordinator: configuration changes for both
         // command lines, and a reboot once the store is settled.
         storage_request_link: LinkProducer<'static, Request>,
@@ -248,7 +234,6 @@ pub const IMU_CALIBRATION_DEADLINE_MS: u64 = 3_000;
         wake_usb: fn(),
         default_serial_bindings: SerialBindings,
         serial_routes: &'static [SerialRoute],
-        imu_control_axis_profile: ferrowasp_control::frames::ImuControlAxisProfile,
     ],
     monotonic = Mono,
 )]
@@ -278,9 +263,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let staged_rpc_config = cx.local.staged_rpc_config;
     let config_rpc_completion = cx.local.config_rpc_completion;
     let rpc_apply = cx.local.rpc_apply;
-    let accel_calibration = cx.local.accel_calibration;
-    let accel_calibration_seq = cx.local.accel_calibration_seq;
-    let accel_calibration_deadline_ms = cx.local.accel_calibration_deadline_ms;
     let storage_request_link = cx.local.storage_request_link;
     #[cfg(not(feature = "mspv2_configurator"))]
     let _ = (
@@ -601,7 +583,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         fallback: config.fallback,
                         config_sequence: *config_sequence,
                         config_active_slot: *config_active_slot,
-                        calibrating: accel_calibration.is_some(),
                         jedec: [
                             flash_probe.jedec[0],
                             flash_probe.jedec[1],
@@ -628,20 +609,58 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             storage_commands::request_answer(request, outcome),
                         );
                     }
+                    // The coordinator calibrates, with arming held off, and
+                    // applies the level at once; it is then saved with the
+                    // next boot's configuration, like `config save`.
                     CommandAction::StartCalibration => {
-                        *accel_calibration = Some(AccelLevelCalibration::new());
-                        flash_responses.start_maintenance();
-                        *accel_calibration_seq = cx
-                            .shared
-                            .ledger
-                            .lock(|ledger| ledger.imu().value.sample_seq);
-                        *accel_calibration_deadline_ms =
-                            Mono::now().duration_since_epoch().to_millis()
-                                + IMU_CALIBRATION_DEADLINE_MS;
                         queue_storage_response(
                             flash_responses,
                             "OK imu calibration started; keep the craft still\r\n",
                         );
+                        let request = Request::CalibrateAccel;
+                        let outcome = ask(
+                            storage_request_link,
+                            &mut cx.shared.ledger,
+                            at(),
+                            request,
+                            CALIBRATION_DECISION_MS,
+                            || Mono::delay(1u64.millis()),
+                        )
+                        .await;
+                        let saved = match outcome {
+                            Some(Outcome::Accepted) => {
+                                let next_boot = cx
+                                    .shared
+                                    .ledger
+                                    .lock(|ledger| ledger.config().value.next_boot);
+                                if config_save.is_active() || maintenance.is_active() {
+                                    Err("ERR flash maintenance already active\r\n")
+                                } else {
+                                    storage_commands::begin_config_save(
+                                        config_save,
+                                        next_boot,
+                                        *config_sequence,
+                                        *config_active_slot,
+                                        flash_responses,
+                                    )
+                                    .map(|()| next_boot.accel_level)
+                                }
+                            }
+                            outcome => Err(storage_commands::request_answer(request, outcome)),
+                        };
+                        match saved {
+                            Ok(level) => {
+                                let [x, y, z] = level.offset_mg;
+                                let mut line = heapless::String::<
+                                    { flash_task::USB_RESPONSE_CAPACITY },
+                                >::new();
+                                let _ = write!(line, "OK imu calibrated x={x} y={y} z={z} mg\r\n");
+                                queue_storage_response(flash_responses, &line);
+                            }
+                            Err(answer) => {
+                                queue_storage_response(flash_responses, answer);
+                            }
+                        }
                     }
                     // The store is settled before restarting: written-back
                     // pages flushed, and the last program or erase finished.
@@ -719,7 +738,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         log: &*log,
                         maintenance: &*maintenance,
                         config_save: &mut *config_save,
-                        calibrating: accel_calibration.is_some(),
                         active_config: config.active,
                         stored_config: config.next_boot,
                         staged: &mut *staged_rpc_config,
@@ -802,86 +820,6 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     );
                 }
             }
-            // One IMU sample a pass into a level calibration, answered on the
-            // link that asked; a success is saved like `config save`.
-            if let Some(calibration) = accel_calibration.as_mut() {
-                let imu = cx.shared.ledger.lock(|ledger| ledger.imu().value);
-                let sequence = imu.sample_seq;
-                let outcome = if flash_safety_arm_reader.read() {
-                    Some(Err("ERR imu calibration aborted; the system armed\r\n"))
-                } else if Mono::now().duration_since_epoch().to_millis()
-                    > *accel_calibration_deadline_ms
-                {
-                    Some(Err("ERR imu calibration timed out; no IMU samples\r\n"))
-                } else if sequence != *accel_calibration_seq {
-                    *accel_calibration_seq = sequence;
-                    // One sample, both sensors, in g and degrees per second.
-                    let (sensor_accel, gyro_dps) = (imu.accel_g, imu.gyro_dps);
-                    let gravity = CONFIG::IMU_CONTROL_AXIS_PROFILE
-                        .sensor_accel_to_drone_gravity(sensor_accel);
-                    calibration
-                        .push(gravity, gyro_dps)
-                        .map(|result| result.map_err(calibration_failure))
-                } else {
-                    None
-                };
-                if let Some(outcome) = outcome {
-                    *accel_calibration = None;
-                    flash_responses.answer_maintenance();
-                    // The level is adopted through the coordinator, which
-                    // applies it at once, then saved with the next boot's
-                    // configuration.
-                    let adopted = match outcome {
-                        Ok(level) => {
-                            let request = Request::SetAccelLevel(level);
-                            match ask(
-                                storage_request_link,
-                                &mut cx.shared.ledger,
-                                at(),
-                                request,
-                                CONFIG_DECISION_MS,
-                                || Mono::delay(1u64.millis()),
-                            )
-                            .await
-                            {
-                                Some(Outcome::Accepted) => Ok(level),
-                                outcome => Err(storage_commands::request_answer(request, outcome)),
-                            }
-                        }
-                        Err(answer) => Err(answer),
-                    };
-                    let next_boot = cx
-                        .shared
-                        .ledger
-                        .lock(|ledger| ledger.config().value.next_boot);
-                    let saved = adopted.and_then(|level| {
-                        if config_save.is_active() || maintenance.is_active() {
-                            return Err("ERR flash maintenance already active\r\n");
-                        }
-                        storage_commands::begin_config_save(
-                            config_save,
-                            next_boot,
-                            *config_sequence,
-                            *config_active_slot,
-                            flash_responses,
-                        )
-                        .map(|()| level)
-                    });
-                    match saved {
-                        Ok(level) => {
-                            let [x, y, z] = level.offset_mg;
-                            let mut line =
-                                heapless::String::<{ flash_task::USB_RESPONSE_CAPACITY }>::new();
-                            let _ = write!(line, "OK imu calibrated x={x} y={y} z={z} mg\r\n");
-                            queue_storage_response(flash_responses, &line);
-                        }
-                        Err(answer) => {
-                            queue_storage_response(flash_responses, answer);
-                        }
-                    }
-                }
-            }
-
             match log.write_pending(flash_device, layout) {
                 PageWrite::Nothing => {}
                 PageWrite::Written => {

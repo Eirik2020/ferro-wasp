@@ -3,8 +3,8 @@
 //!
 //! The owner reads a command off a link, calls [`handle`] with what it owns,
 //! and does what the returned [`CommandAction`] asks. Three kinds end there:
-//! calibrating the accelerometer, which samples the IMU over later passes,
-//! rebooting, which waits for the store to settle, and a configuration
+//! calibrating the accelerometer, which the coordinator runs and the owner
+//! then saves, rebooting, which waits for the store to settle, and a configuration
 //! change, which the owner asks of the coordinator and answers with
 //! [`request_answer`] once the result arrives. The configuration the
 //! commands read and `config save` writes is the next boot's, from the
@@ -31,7 +31,8 @@ use ferrowasp_storage::layout::StorageLayout;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CommandAction {
     None,
-    /// Start sampling the IMU for a level calibration; nothing answered yet.
+    /// Ask the coordinator for a level calibration, then save it; nothing
+    /// answered yet.
     StartCalibration,
     /// Settle the store and restart; nothing answered yet.
     Reboot {
@@ -58,8 +59,6 @@ pub struct CommandContext<'a, F: NorStorage> {
     pub fallback: Option<Fallback>,
     pub config_sequence: u32,
     pub config_active_slot: u8,
-    /// An accelerometer calibration is sampling.
-    pub calibrating: bool,
     /// Manufacturer, memory type and capacity code, as the flash reported.
     pub jedec: [u8; 3],
     pub default_serial_bindings: SerialBindings,
@@ -102,8 +101,7 @@ pub fn handle<F: NorStorage>(
     ctx: &mut CommandContext<'_, F>,
 ) -> CommandAction {
     let mut response = heapless::String::<{ crate::commands::USB_RESPONSE_CAPACITY }>::new();
-    let maintenance_busy =
-        ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating;
+    let maintenance_busy = ctx.maintenance.is_active() || ctx.config_save.is_active();
     let unfinished_flight = ctx.log.unfinished_flight();
     match command {
         // The configurator link refuses these before queueing
@@ -177,8 +175,7 @@ pub fn handle<F: NorStorage>(
         crate::commands::StorageCommand::FlashTestConfirmed => {
             if ctx.armed {
                 answer(ctx.responses, "ERR flash test disabled while armed\r\n");
-            } else if ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating
-            {
+            } else if ctx.maintenance.is_active() || ctx.config_save.is_active() {
                 answer(ctx.responses, "ERR flash maintenance already active\r\n");
             } else {
                 *ctx.maintenance = Maintenance::scratch_test();
@@ -215,8 +212,7 @@ pub fn handle<F: NorStorage>(
         crate::commands::StorageCommand::LogsEraseConfirmed => {
             if ctx.armed {
                 answer(ctx.responses, "ERR log erase disabled while armed\r\n");
-            } else if ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating
-            {
+            } else if ctx.maintenance.is_active() || ctx.config_save.is_active() {
                 answer(ctx.responses, "ERR flash maintenance already active\r\n");
             } else {
                 *ctx.maintenance = Maintenance::erase_log();
@@ -351,8 +347,7 @@ pub fn handle<F: NorStorage>(
         crate::commands::StorageCommand::ConfigSave => {
             if ctx.armed {
                 answer(ctx.responses, "ERR config save disabled while armed\r\n");
-            } else if ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating
-            {
+            } else if ctx.maintenance.is_active() || ctx.config_save.is_active() {
                 answer(ctx.responses, "ERR flash maintenance already active\r\n");
             } else {
                 let reply = match begin_config_save(
@@ -420,6 +415,18 @@ pub fn request_answer(request: Request, outcome: Option<Outcome>) -> &'static st
         (_, Outcome::Refused(Refusal::NotConfirmed)) => {
             "ERR change not confirmed; arming refused until reboot\r\n"
         }
+        (_, Outcome::Refused(Refusal::CalibrationMoving)) => {
+            "ERR imu calibration failed; the craft moved\r\n"
+        }
+        (_, Outcome::Refused(Refusal::CalibrationNotLevel)) => {
+            "ERR imu calibration failed; not level, more than 10 degrees\r\n"
+        }
+        (_, Outcome::Refused(Refusal::CalibrationBadGravity)) => {
+            "ERR imu calibration failed; the accelerometer does not read 1 g\r\n"
+        }
+        (_, Outcome::Refused(Refusal::CalibrationNoSamples)) => {
+            "ERR imu calibration timed out; no IMU samples\r\n"
+        }
         (_, Outcome::Refused(_)) => "ERR config change refused\r\n",
     }
 }
@@ -471,7 +478,6 @@ mod tests {
         stored_config: StoredConfig,
         fallback: Option<Fallback>,
         armed: bool,
-        calibrating: bool,
     }
 
     impl Owner {
@@ -491,7 +497,6 @@ mod tests {
                 stored_config: StoredConfig::first_hop_default(),
                 fallback: None,
                 armed: false,
-                calibrating: false,
             }
         }
 
@@ -514,7 +519,6 @@ mod tests {
                     fallback: self.fallback,
                     config_sequence: 0,
                     config_active_slot: 1,
-                    calibrating: self.calibrating,
                     jedec: [0xef, 0x40, 0x18],
                     default_serial_bindings: SerialBindings::none(),
                     serial_routes: &ROUTES,
@@ -611,13 +615,6 @@ mod tests {
         let (action, lines) = owner.send_on(CommandLink::Usb, "reboot");
         assert_eq!(action, CommandAction::None);
         assert_eq!(lines, ["ERR flash maintenance already active\r\n"]);
-
-        let mut owner = Owner::new();
-        owner.calibrating = true;
-        assert_eq!(
-            owner.send("config save"),
-            ["ERR flash maintenance already active\r\n"]
-        );
     }
 
     #[test]
@@ -718,6 +715,13 @@ mod tests {
             "ERR change not confirmed; arming refused until reboot\r\n"
         );
         assert_eq!(request_answer(set, None), "ERR config change no answer\r\n");
+        assert_eq!(
+            request_answer(
+                Request::CalibrateAccel,
+                Some(Outcome::Refused(Refusal::CalibrationMoving))
+            ),
+            "ERR imu calibration failed; the craft moved\r\n"
+        );
         assert_eq!(
             request_answer(Request::AcknowledgeConfigFallback, Some(Outcome::Accepted)),
             "OK fallback acknowledged\r\n"

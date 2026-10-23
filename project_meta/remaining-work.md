@@ -77,9 +77,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   change at a time against `main`, one mechanism at a time:
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own);
-  2. the remaining SPSC links and typed flags; accelerometer calibration as
-     a coordinator transaction in the safety-critical core, replacing the
-     flash manager's calibration and its `SetAccelLevel` request; the board
+  2. the remaining SPSC links and typed flags; the board
      rules in `validate()` (section 14: the motor map, the loop rate, RC
      bound, no UART bound twice, the RC protocol on its port), which today
      checks each value's spec only; participants staging a change before it

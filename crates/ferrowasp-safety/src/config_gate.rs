@@ -9,7 +9,7 @@
 //! - A boot that fell back from the pilot's last save refuses arming until
 //!   the pilot acknowledges it, disarmed.
 //!
-//! Requirements: CONFIG-017, CONFIG-018, CONFIG-019, CONFIG-027
+//! Requirements: CONFIG-017, CONFIG-018, CONFIG-019, CONFIG-027, CONFIG-032
 //! Safety-critical.
 
 use crate::{ArmingAbortReason, Refusal};
@@ -17,6 +17,27 @@ use crate::{ArmingAbortReason, Refusal};
 /// How long a config transaction may hold its arm inhibit: fifty
 /// coordinator runs.
 pub const CONFIG_INHIBIT_LEASE_MS: u64 = 500;
+/// How long a calibration may: its sampling window, then the change.
+pub const CALIBRATION_INHIBIT_LEASE_MS: u64 = 4_000;
+
+/// What an arm inhibit is held for, which sets its lease.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InhibitLease {
+    /// A configuration change.
+    Change,
+    /// An accelerometer calibration: it samples a still craft, then
+    /// applies the level it found.
+    Calibration,
+}
+
+impl InhibitLease {
+    pub const fn ms(self) -> u64 {
+        match self {
+            Self::Change => CONFIG_INHIBIT_LEASE_MS,
+            Self::Calibration => CALIBRATION_INHIBIT_LEASE_MS,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ConfigGate {
@@ -38,10 +59,11 @@ impl ConfigGate {
         }
     }
 
-    /// Grant transaction `ticket` the arm inhibit at `now_ms`.
+    /// Grant transaction `ticket` the arm inhibit at `now_ms`, for `lease`.
     pub fn request(
         &mut self,
         ticket: u32,
+        lease: InhibitLease,
         armed: bool,
         arming: bool,
         now_ms: u64,
@@ -54,7 +76,7 @@ impl ConfigGate {
         } else if self.inhibit.is_some() {
             Err(Refusal::Busy)
         } else {
-            self.inhibit = Some((ticket, now_ms.saturating_add(CONFIG_INHIBIT_LEASE_MS)));
+            self.inhibit = Some((ticket, now_ms.saturating_add(lease.ms())));
             Ok(())
         }
     }
@@ -110,14 +132,20 @@ mod tests {
     #[test]
     fn an_inhibit_is_granted_only_disarmed_and_not_arming() {
         let mut gate = ConfigGate::new(false);
-        assert_eq!(gate.request(1, true, false, 0), Err(Refusal::Armed));
         assert_eq!(
-            gate.request(1, false, true, 0),
+            gate.request(1, InhibitLease::Change, true, false, 0),
+            Err(Refusal::Armed)
+        );
+        assert_eq!(
+            gate.request(1, InhibitLease::Change, false, true, 0),
             Err(Refusal::ArmingInProgress)
         );
-        assert_eq!(gate.request(1, false, false, 0), Ok(()));
         assert_eq!(
-            gate.request(2, false, false, 1),
+            gate.request(1, InhibitLease::Change, false, false, 0),
+            Ok(())
+        );
+        assert_eq!(
+            gate.request(2, InhibitLease::Change, false, false, 1),
             Err(Refusal::Busy),
             "one at a time"
         );
@@ -130,7 +158,8 @@ mod tests {
     #[test]
     fn a_released_inhibit_lets_the_craft_arm() {
         let mut gate = ConfigGate::new(false);
-        gate.request(7, false, false, 100).unwrap();
+        gate.request(7, InhibitLease::Change, false, false, 100)
+            .unwrap();
         gate.release(7, 120);
         assert_eq!(gate.arming_refusal(130), None);
     }
@@ -138,7 +167,8 @@ mod tests {
     #[test]
     fn a_lapsed_inhibit_latches_until_reboot() {
         let mut gate = ConfigGate::new(false);
-        gate.request(7, false, false, 100).unwrap();
+        gate.request(7, InhibitLease::Change, false, false, 100)
+            .unwrap();
         assert_eq!(
             gate.arming_refusal(100 + CONFIG_INHIBIT_LEASE_MS),
             Some(ArmingAbortReason::ConfigChangeIncomplete)
@@ -149,6 +179,20 @@ mod tests {
             Some(ArmingAbortReason::ConfigChangeIncomplete),
             "a late release does not clear it"
         );
+    }
+
+    #[test]
+    fn a_calibrations_inhibit_lasts_its_sampling_window() {
+        let mut gate = ConfigGate::new(false);
+        gate.request(3, InhibitLease::Calibration, false, false, 0)
+            .unwrap();
+        assert_eq!(
+            gate.arming_refusal(CONFIG_INHIBIT_LEASE_MS + 1),
+            Some(ArmingAbortReason::ConfigChanging),
+            "still held, not lapsed"
+        );
+        gate.release(3, CALIBRATION_INHIBIT_LEASE_MS - 1);
+        assert_eq!(gate.arming_refusal(CALIBRATION_INHIBIT_LEASE_MS), None);
     }
 
     #[test]

@@ -32,8 +32,6 @@ pub struct RpcContext<'a, F: NorStorage> {
     pub log: &'a LogWriter,
     pub maintenance: &'a Maintenance,
     pub config_save: &'a mut ConfigSave,
-    /// An accelerometer calibration is sampling.
-    pub calibrating: bool,
     /// What the craft flies, and what the next boot loads.
     pub active_config: StoredConfig,
     pub stored_config: StoredConfig,
@@ -124,10 +122,8 @@ pub fn handle<F: NorStorage>(
     ctx: &mut RpcContext<'_, F>,
 ) -> Option<rpc::RpcResponse> {
     let request_id = request.request_id;
-    let maintenance_busy = ctx.maintenance.is_active()
-        || ctx.config_save.is_active()
-        || ctx.calibrating
-        || ctx.apply.is_some();
+    let maintenance_busy =
+        ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.apply.is_some();
     let active_blackbox_id = ctx
         .log
         .recording()
@@ -370,7 +366,6 @@ mod tests {
                     log: &self.log,
                     maintenance: &self.maintenance,
                     config_save: &mut self.config_save,
-                    calibrating: false,
                     active_config: self.stored_config,
                     stored_config: self.stored_config,
                     staged: &mut self.staged,

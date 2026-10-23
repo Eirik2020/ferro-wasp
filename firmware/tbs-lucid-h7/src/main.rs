@@ -105,6 +105,7 @@ ferroforge::app! {
         flight_config: dt::FlightConfig,
         flight_config_link: FlightConfigConsumer,
         config_applied_link: ObserverLink<u32>,
+        level_sample_link: ObserverLink<LevelSample>,
         rc_flight_config: dt::FlightConfig,
         rc_flight_config_link: FlightConfigConsumer,
         osd_request_link: ObserverLink<requests::Request>,
@@ -445,6 +446,7 @@ ferroforge::app! {
             flight_config_link,
             rc_flight_config_link,
             config_applied_link,
+            level_sample_link,
             config_topic,
             usb_request_link,
             storage_request_link,
@@ -791,6 +793,7 @@ ferroforge::app! {
                 flight_config: config_boot.boot.config.flight(),
                 flight_config_link,
                 config_applied_link,
+                level_sample_link,
                 rc_flight_config: config_boot.boot.config.flight(),
                 rc_flight_config_link,
                 osd_request_link,
@@ -933,7 +936,7 @@ ferroforge::app! {
             control_arm_permit_reader, motor_cmd_writer, motor_cmd_seq, control_tick_link,
             imu_sample_consumer, safety_prearm_link, actuator_prearm_link, control_imu_ready,
             control_imu_kind, motor_map_writer, flight_config, flight_config_link,
-            config_applied_link,
+            config_applied_link, level_sample_link,
             // dshot_service
             esc_request_consumer, esc_ack_producer, output_status_link, dshot_release_writer,
             // dshot_fallback

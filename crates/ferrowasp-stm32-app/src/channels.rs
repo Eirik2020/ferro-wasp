@@ -100,6 +100,9 @@ const REQUEST_LINK_DEPTH: usize = 5;
 /// The safety master's replies and the coordinator's results: every
 /// request two requesters can have in flight.
 const RESULT_LINK_DEPTH: usize = 9;
+/// IMU samples for a calibration: two coordinator runs at 2 kHz, so a run
+/// that starts late loses none.
+const LEVEL_SAMPLE_LINK_DEPTH: usize = 41;
 
 /// The coordinator and the ends of its links (sections 11 and 14): each
 /// requester's own request link, the safety master's replies, the
@@ -116,6 +119,8 @@ pub struct CoordinatorChannels {
     pub flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
     pub rc_flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
     pub config_applied_link: LinkProducer<'static, u32>,
+    pub level_sample_link:
+        LinkProducer<'static, ferrowasp_control::calibration::accel_level::LevelSample>,
     pub request_results: LinkConsumer<'static, requests::RequesterResult>,
     pub config_topic: LinkConsumer<'static, ferrowasp_border::coordinator::ConfigTopic>,
 }
@@ -127,6 +132,7 @@ pub fn coordinator_channels(
     boot: ferrowasp_border::coordinator::ConfigBoot,
 ) -> CoordinatorChannels {
     use ferrowasp_border::coordinator::ConfigTopic;
+    use ferrowasp_control::calibration::accel_level::LevelSample;
     use ferrowasp_io_contracts::link::link;
     use heapless::spsc::Queue;
     use requests::{Request, RequesterResult};
@@ -172,6 +178,12 @@ pub fn coordinator_channels(
     let (rc_input, rc_flight_config_link) = state_link!(dt::FlightConfig);
     let (config_applied_link, applied) = state_link!(u32);
     let (topic, config_topic) = state_link!(ConfigTopic);
+    let (level_sample_link, level_samples) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<LevelSample>, LEVEL_SAMPLE_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
     CoordinatorChannels {
         coordinator: ferrowasp_border::coordinator::Coordinator::new(
             ferrowasp_border::coordinator::CoordinatorLinks {
@@ -185,6 +197,7 @@ pub fn coordinator_channels(
                 control,
                 rc_input,
                 applied,
+                level_samples,
                 topic,
             },
             boot,
@@ -198,6 +211,7 @@ pub fn coordinator_channels(
         flight_config_link,
         rc_flight_config_link,
         config_applied_link,
+        level_sample_link,
         request_results,
         config_topic,
     }

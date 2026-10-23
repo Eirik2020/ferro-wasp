@@ -15,13 +15,19 @@
 //! inhibit's lease lapses, which refuses arming until reboot. A change to a
 //! boot-only key waits in the next boot's image and needs no inhibit.
 //!
+//! An accelerometer calibration is a transaction too, with a longer lease:
+//! under the inhibit it takes each fresh sample the control loop sends, and
+//! the level it finds is applied like any live change. One that fails
+//! changed nothing, so its inhibit is released.
+//!
 //! The configuration topic is sent to the observer before the result of the
 //! change that moved it, and the observer takes it first, so a requester
 //! that sees its result on the ledger sees the configuration after it.
 //!
 //! Requirements: BORDER-012, BORDER-013, BORDER-014, BORDER-015, BORDER-016,
 //! BORDER-018, CONFIG-015, CONFIG-016, CONFIG-019, CONFIG-020, CONFIG-021,
-//! CONFIG-022, CONFIG-023, CONFIG-028, CONFIG-029
+//! CONFIG-022, CONFIG-023, CONFIG-028, CONFIG-029, CONFIG-030,
+//! CONFIG-031
 //! Safety-critical.
 
 use ferrowasp_boundary_contracts::config_keys::ConfigKey;
@@ -31,10 +37,13 @@ use ferrowasp_boundary_contracts::requests::{
 use ferrowasp_config::boot::{BootConfig, Fallback};
 use ferrowasp_config::owner::{Change, ConfigOwner};
 use ferrowasp_config::stored::StoredConfig;
-use ferrowasp_control::calibration::accel_level::AccelLevel;
+use ferrowasp_control::calibration::accel_level::{
+    AccelLevelCalibration, CalibrationError, LevelSample,
+};
 use ferrowasp_flight_control::drone_toolbox::FlightConfig;
 use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Pushed, Stamped};
 use ferrowasp_io_contracts::time::TimestampMicros;
+use ferrowasp_safety::config_gate::{CALIBRATION_INHIBIT_LEASE_MS, InhibitLease};
 use ferrowasp_safety::host::HostLink;
 use ferrowasp_safety::{BenchMotorRequest, SafetyEvent, SafetyReply};
 use ferrowasp_serial::{LogicalSerialPort, SerialBindings, SerialFunction};
@@ -49,6 +58,11 @@ const TICKETS: usize = 4;
 pub const CONFIG_TRANSACTION_MS: u64 = 300;
 const _: () =
     assert!(CONFIG_TRANSACTION_MS < ferrowasp_safety::config_gate::CONFIG_INHIBIT_LEASE_MS);
+/// How long a calibration may wait for its samples: 500 take half a second
+/// at 1 kHz. It and the change that follows stay inside its lease.
+pub const CALIBRATION_SAMPLING_MS: u64 = 3_000;
+const _: () =
+    assert!(CALIBRATION_SAMPLING_MS + CONFIG_TRANSACTION_MS < CALIBRATION_INHIBIT_LEASE_MS);
 
 /// The configuration on the ledger.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -95,6 +109,8 @@ pub struct ConfigLinks<'a> {
     pub rc_input: LinkProducer<'a, FlightConfig>,
     /// The sequence of the last configuration the control loop applied.
     pub applied: LinkConsumer<'a, u32>,
+    /// An `event` link: each fresh IMU sample, which a calibration takes.
+    pub level_samples: LinkConsumer<'a, LevelSample>,
     pub topic: LinkProducer<'a, ConfigTopic>,
 }
 
@@ -118,7 +134,7 @@ enum ConfigChange {
         function: SerialFunction,
     },
     Defaults,
-    Level(AccelLevel),
+    Calibrate,
 }
 
 /// What [`check`] found a request to be.
@@ -134,10 +150,13 @@ enum Checked {
 enum Phase {
     /// Waiting for the safety master to grant the arm inhibit.
     Granting,
+    /// A calibration, taking samples.
+    Sampling(AccelLevelCalibration),
     /// Committed and sent; waiting for the control loop to confirm it.
     Confirming { applied_seq: u32 },
-    /// Confirmed; the release waits for the safety master to take it.
-    Releasing,
+    /// Done, applied or changing nothing; the release, then `outcome`, wait
+    /// for the safety master to take the release.
+    Releasing { outcome: Outcome },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -145,7 +164,8 @@ struct Transaction {
     requester: Requester,
     request_seq: u32,
     ticket: u32,
-    change: Change,
+    /// The change to commit once granted; a calibration finds its own.
+    change: Option<Change>,
     until_ms: u64,
     phase: Phase,
 }
@@ -321,7 +341,15 @@ impl<'a> Coordinator<'a> {
                     .propose_binding(port, function, self.default_bindings))
             }
             ConfigChange::Defaults => self.owner.propose_replace(self.default_config),
-            ConfigChange::Level(level) => Ok(self.owner.propose_level(level)),
+            ConfigChange::Calibrate => {
+                return self.start(
+                    requester,
+                    request_seq,
+                    None,
+                    InhibitLease::Calibration,
+                    send,
+                );
+            }
         };
         let Ok(proposed) = proposed else {
             self.publish(requester, request_seq, Outcome::Refused(Refusal::Invalid));
@@ -335,8 +363,27 @@ impl<'a> Coordinator<'a> {
             self.publish(requester, request_seq, Outcome::Pending);
             return true;
         }
+        self.start(
+            requester,
+            request_seq,
+            Some(proposed),
+            InhibitLease::Change,
+            send,
+        )
+    }
+
+    /// Ask for the arm inhibit that starts a transaction; false when the
+    /// safety master cannot take the request yet.
+    fn start(
+        &mut self,
+        requester: Requester,
+        request_seq: u32,
+        change: Option<Change>,
+        lease: InhibitLease,
+        send: &mut impl FnMut(SafetyEvent) -> bool,
+    ) -> bool {
         let ticket = self.next_ticket;
-        if !send(SafetyEvent::InhibitArming { ticket }) {
+        if !send(SafetyEvent::InhibitArming { ticket, lease }) {
             return false;
         }
         self.next_ticket = next_ticket(ticket);
@@ -344,7 +391,7 @@ impl<'a> Coordinator<'a> {
             requester,
             request_seq,
             ticket,
-            change: proposed,
+            change,
             until_ms: self.now_ms.saturating_add(CONFIG_TRANSACTION_MS),
             phase: Phase::Granting,
         });
@@ -357,10 +404,19 @@ impl<'a> Coordinator<'a> {
         let Some(mut transaction) = self.transaction else {
             return;
         };
+        if let Phase::Sampling(calibration) = transaction.phase {
+            self.sample(transaction, calibration);
+            let Some(sampled) = self.transaction else {
+                return;
+            };
+            transaction = sampled;
+        }
         if let Phase::Confirming { applied_seq } = transaction.phase
             && self.applied_seq == applied_seq
         {
-            transaction.phase = Phase::Releasing;
+            transaction.phase = Phase::Releasing {
+                outcome: Outcome::Accepted,
+            };
         }
         if self.now_ms >= transaction.until_ms {
             // Unreleased, the inhibit's lease lapses and arming stays
@@ -374,7 +430,7 @@ impl<'a> Coordinator<'a> {
             );
             return;
         }
-        if transaction.phase == Phase::Releasing {
+        if let Phase::Releasing { outcome } = transaction.phase {
             if !send(SafetyEvent::ReleaseInhibit {
                 ticket: transaction.ticket,
             }) {
@@ -382,11 +438,7 @@ impl<'a> Coordinator<'a> {
                 return;
             }
             self.transaction = None;
-            self.publish(
-                transaction.requester,
-                transaction.request_seq,
-                Outcome::Accepted,
-            );
+            self.publish(transaction.requester, transaction.request_seq, outcome);
             return;
         }
         self.transaction = Some(transaction);
@@ -399,7 +451,62 @@ impl<'a> Coordinator<'a> {
             self.publish(transaction.requester, transaction.request_seq, outcome);
             return;
         }
-        self.owner.commit(transaction.change);
+        let Some(change) = transaction.change else {
+            // A calibration: samples from before the grant may come from a
+            // craft that was still being set down.
+            for _ in 0..self.config.level_samples.capacity() {
+                if self.config.level_samples.oldest().is_none() {
+                    break;
+                }
+            }
+            transaction.phase = Phase::Sampling(AccelLevelCalibration::new());
+            transaction.until_ms = self.now_ms.saturating_add(CALIBRATION_SAMPLING_MS);
+            self.transaction = Some(transaction);
+            return;
+        };
+        self.apply(transaction, change);
+    }
+
+    /// Feed a calibration this run's samples; once it has a level, apply it
+    /// like any live change, and once it fails, release what changed nothing.
+    fn sample(&mut self, mut transaction: Transaction, mut calibration: AccelLevelCalibration) {
+        let mut finished = None;
+        for _ in 0..self.config.level_samples.capacity() {
+            let Some(sample) = self.config.level_samples.oldest() else {
+                break;
+            };
+            finished = calibration.push(sample.value.gravity_g, sample.value.gyro_dps);
+            if finished.is_some() {
+                break;
+            }
+        }
+        let refusal = match finished {
+            None if self.now_ms < transaction.until_ms => {
+                transaction.phase = Phase::Sampling(calibration);
+                self.transaction = Some(transaction);
+                return;
+            }
+            None => Refusal::CalibrationNoSamples,
+            Some(Ok(level)) => {
+                transaction.until_ms = self.now_ms.saturating_add(CONFIG_TRANSACTION_MS);
+                let change = self.owner.propose_level(level);
+                self.apply(transaction, change);
+                return;
+            }
+            Some(Err(CalibrationError::Moving)) => Refusal::CalibrationMoving,
+            Some(Err(CalibrationError::NotLevel)) => Refusal::CalibrationNotLevel,
+            Some(Err(CalibrationError::BadGravity)) => Refusal::CalibrationBadGravity,
+        };
+        transaction.until_ms = self.now_ms.saturating_add(CONFIG_TRANSACTION_MS);
+        transaction.phase = Phase::Releasing {
+            outcome: Outcome::Refused(refusal),
+        };
+        self.transaction = Some(transaction);
+    }
+
+    /// Commit a granted change and send it to the tasks that fly it.
+    fn apply(&mut self, mut transaction: Transaction, change: Change) {
+        self.owner.commit(change);
         self.topic_due = true;
         self.rc_input_due = true;
         let at = self.at();
@@ -558,7 +665,7 @@ fn check(requester: Requester, request: Request) -> Result<Checked, Refusal> {
         },
         Request::ConfigBind { port, function } => config(ConfigChange::Bind { port, function }),
         Request::ConfigDefaults => config(ConfigChange::Defaults),
-        Request::SetAccelLevel(level) => config(ConfigChange::Level(level)),
+        Request::CalibrateAccel => config(ConfigChange::Calibrate),
         Request::AcknowledgeConfigFallback => match requester {
             Requester::Storage => Ok(Checked::Safety(SafetyEvent::AcknowledgeConfigFallback {
                 ticket: 0,
@@ -624,6 +731,7 @@ mod tests {
         rc_input: Queue<Stamped<FlightConfig>, 3>,
         applied: Queue<Stamped<u32>, 3>,
         topic: Queue<Stamped<ConfigTopic>, 3>,
+        level_samples: Queue<Stamped<LevelSample>, 65>,
     }
 
     impl Queues {
@@ -639,6 +747,7 @@ mod tests {
                 rc_input: Queue::new(),
                 applied: Queue::new(),
                 topic: Queue::new(),
+                level_samples: Queue::new(),
             }
         }
     }
@@ -654,6 +763,7 @@ mod tests {
         rc_input: LinkConsumer<'a, FlightConfig>,
         applied: LinkProducer<'a, u32>,
         topic: LinkConsumer<'a, ConfigTopic>,
+        level_samples: LinkProducer<'a, LevelSample>,
     }
 
     fn wire(queues: &mut Queues) -> (Coordinator<'_>, Ends<'_>) {
@@ -671,6 +781,7 @@ mod tests {
         let (rc_input_tx, rc_input) = link(&mut queues.rc_input);
         let (applied, applied_rx) = link(&mut queues.applied);
         let (topic_tx, topic) = link(&mut queues.topic);
+        let (level_samples, level_samples_rx) = link(&mut queues.level_samples);
         (
             Coordinator::new(
                 CoordinatorLinks {
@@ -684,6 +795,7 @@ mod tests {
                     control: control_tx,
                     rc_input: rc_input_tx,
                     applied: applied_rx,
+                    level_samples: level_samples_rx,
                     topic: topic_tx,
                 },
                 ConfigBoot {
@@ -709,6 +821,7 @@ mod tests {
                 rc_input,
                 applied,
                 topic,
+                level_samples,
             },
         )
     }
@@ -986,7 +1099,7 @@ mod tests {
         ends.topic.newest();
 
         ends.storage.push(TimestampMicros(0), roll_p(0.07));
-        let [SafetyEvent::InhibitArming { ticket }] = run(&mut coordinator, 10)[..] else {
+        let [SafetyEvent::InhibitArming { ticket, .. }] = run(&mut coordinator, 10)[..] else {
             panic!("expected an inhibit request");
         };
         assert!(
@@ -1020,7 +1133,7 @@ mod tests {
         let mut queues = Queues::new();
         let (mut coordinator, mut ends) = wire(&mut queues);
         ends.storage.push(TimestampMicros(0), roll_p(0.07));
-        let [SafetyEvent::InhibitArming { ticket }] = run(&mut coordinator, 10)[..] else {
+        let [SafetyEvent::InhibitArming { ticket, .. }] = run(&mut coordinator, 10)[..] else {
             panic!("expected an inhibit request");
         };
         reply(&mut ends, ticket, Outcome::Accepted);
@@ -1044,7 +1157,7 @@ mod tests {
         run(&mut coordinator, 0);
         ends.topic.newest();
         ends.storage.push(TimestampMicros(0), roll_p(0.07));
-        let [SafetyEvent::InhibitArming { ticket }] = run(&mut coordinator, 10)[..] else {
+        let [SafetyEvent::InhibitArming { ticket, .. }] = run(&mut coordinator, 10)[..] else {
             panic!("expected an inhibit request");
         };
         reply(&mut ends, ticket, Outcome::Refused(Refusal::Armed));
@@ -1108,7 +1221,7 @@ mod tests {
         ends.osd.push(TimestampMicros(0), roll_p(0.08));
         let sent = run(&mut coordinator, 10);
         assert_eq!(sent.len(), 1, "the second waits: {sent:?}");
-        let SafetyEvent::InhibitArming { ticket } = sent[0] else {
+        let SafetyEvent::InhibitArming { ticket, .. } = sent[0] else {
             panic!("expected an inhibit request");
         };
         reply(&mut ends, ticket, Outcome::Accepted);
@@ -1119,7 +1232,7 @@ mod tests {
         assert!(sent.contains(&SafetyEvent::ReleaseInhibit { ticket }));
         assert!(
             sent.iter()
-                .any(|event| matches!(event, SafetyEvent::InhibitArming { ticket: next } if *next != ticket)),
+                .any(|event| matches!(event, SafetyEvent::InhibitArming { ticket: next, .. } if *next != ticket)),
             "the waiting change starts once the first is released: {sent:?}"
         );
     }
@@ -1170,7 +1283,7 @@ mod tests {
             ends.storage.push(TimestampMicros(0), roll_p(value));
             now += 10;
             let sent = run(&mut coordinator, now);
-            let Some(SafetyEvent::InhibitArming { ticket }) = sent.first().copied() else {
+            let Some(SafetyEvent::InhibitArming { ticket, .. }) = sent.first().copied() else {
                 panic!("expected an inhibit request: {sent:?}");
             };
             reply(&mut ends, ticket, Outcome::Accepted);
@@ -1188,5 +1301,120 @@ mod tests {
         run(&mut coordinator, now + 10);
         newest = ends.rc_input.newest().unwrap().value;
         assert_eq!(newest.tuning.rate_gains.roll.p, 0.07);
+    }
+
+    /// Start a calibration and grant its inhibit; its ticket.
+    fn granted_calibration(coordinator: &mut Coordinator<'_>, ends: &mut Ends<'_>) -> u32 {
+        // Left from before the grant, from a craft still being set down.
+        ends.level_samples.push(
+            TimestampMicros(0),
+            LevelSample {
+                gravity_g: [0.5, 0.0, 0.8],
+                gyro_dps: [90.0; 3],
+            },
+        );
+        ends.storage
+            .push(TimestampMicros(0), Request::CalibrateAccel);
+        let [
+            SafetyEvent::InhibitArming {
+                ticket,
+                lease: InhibitLease::Calibration,
+            },
+        ] = run(coordinator, 10)[..]
+        else {
+            panic!("expected a calibration's inhibit request");
+        };
+        reply(ends, ticket, Outcome::Accepted);
+        run(coordinator, 20);
+        ticket
+    }
+
+    fn still(gravity_g: [f32; 3]) -> LevelSample {
+        LevelSample {
+            gravity_g,
+            gyro_dps: [0.5, -0.2, 0.1],
+        }
+    }
+
+    #[test]
+    fn a_calibration_samples_under_the_inhibit_and_applies_its_level() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        let ticket = granted_calibration(&mut coordinator, &mut ends);
+        let mut now = 20;
+        let mut fed = 0;
+        let mut applied = false;
+        while !applied && fed < 600 {
+            for _ in 0..40 {
+                ends.level_samples
+                    .push(TimestampMicros(0), still([0.02, 0.0, 0.999]));
+                fed += 1;
+            }
+            now += 10;
+            assert!(
+                !run(&mut coordinator, now).contains(&SafetyEvent::ReleaseInhibit { ticket }),
+                "held until the level is applied"
+            );
+            if let Some(sent) = ends.control.newest() {
+                assert_eq!(sent.value.accel_level.offset_mg, [20, 0, -1]);
+                ends.applied.push(TimestampMicros(0), sent.seq);
+                applied = true;
+            }
+        }
+        assert!(applied, "500 still samples give a level");
+        assert!(storage_outcomes(&mut ends).is_empty());
+        now += 10;
+        assert!(run(&mut coordinator, now).contains(&SafetyEvent::ReleaseInhibit { ticket }));
+        assert_eq!(storage_outcomes(&mut ends), [Outcome::Accepted]);
+        let topic = ends.topic.newest().unwrap().value;
+        assert_eq!(topic.active.accel_level.offset_mg, [20, 0, -1]);
+        assert_eq!(topic.next_boot.accel_level.offset_mg, [20, 0, -1]);
+    }
+
+    #[test]
+    fn a_failed_calibration_changes_nothing_and_releases_its_inhibit() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        let ticket = granted_calibration(&mut coordinator, &mut ends);
+        let mut now = 20;
+        let mut sent = Vec::new();
+        for round in 0..20 {
+            for sample in 0..40 {
+                let wobble = if (round * 40 + sample) % 2 == 0 {
+                    0.1
+                } else {
+                    0.0
+                };
+                ends.level_samples
+                    .push(TimestampMicros(0), still([wobble, 0.0, 1.0]));
+            }
+            now += 10;
+            sent = run(&mut coordinator, now);
+            if !sent.is_empty() {
+                break;
+            }
+        }
+        assert_eq!(sent, [SafetyEvent::ReleaseInhibit { ticket }]);
+        assert_eq!(
+            storage_outcomes(&mut ends),
+            [Outcome::Refused(Refusal::CalibrationMoving)]
+        );
+        assert!(ends.control.newest().is_none(), "nothing applied");
+    }
+
+    #[test]
+    fn a_calibration_without_samples_gives_up_and_releases_its_inhibit() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        let ticket = granted_calibration(&mut coordinator, &mut ends);
+        assert!(run(&mut coordinator, 20 + CALIBRATION_SAMPLING_MS - 10).is_empty());
+        assert_eq!(
+            run(&mut coordinator, 20 + CALIBRATION_SAMPLING_MS),
+            [SafetyEvent::ReleaseInhibit { ticket }]
+        );
+        assert_eq!(
+            storage_outcomes(&mut ends),
+            [Outcome::Refused(Refusal::CalibrationNoSamples)]
+        );
     }
 }

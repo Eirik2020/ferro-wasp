@@ -5,7 +5,7 @@
 //! motor itself.
 //!
 //! Requirements: CTRL-013, CTRL-035, CTRL-036, CTRL-037, INPUT-010, INPUT-019, INPUT-020,
-//! CONFIG-020
+//! CONFIG-020, CONFIG-030
 //! Safety-critical.
 
 // The equal-motor and physical-motor bench images mix nothing.
@@ -14,6 +14,7 @@ use crate::actuator::remap_motor_outputs;
 use crate::drone_toolbox as dt;
 use defmt::{info, warn};
 use ferrowasp_boundary_contracts::messages as observed;
+use ferrowasp_control::calibration::accel_level::LevelSample;
 use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
 use ferrowasp_io_contracts::time::TimestampMicros;
 use ferrowasp_mpu6500 as imu;
@@ -105,6 +106,9 @@ impl Drop for TickReport<'_> {
         flight_config_due: bool = true,
         flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
         config_applied_link: LinkProducer<'static, u32>,
+        // Each fresh sample while disarmed, for an accelerometer
+        // calibration the coordinator runs.
+        level_sample_link: LinkProducer<'static, LevelSample>,
         rc_rates_reader: signals::RcRatesReader,
         control_throttle_reader: signals::RcThrottleReader,
         control_safety_arm_reader: signals::SafetyArmReader,
@@ -305,6 +309,15 @@ pub fn control_loop(mut cx: control_loop::Context) {
             imu_yaw_filtered,
         ]);
         report.tick.raw_gyro_dps = [imu_roll_raw, imu_pitch_raw, imu_yaw_raw];
+        if imu_fresh && !control_armed {
+            cx.local.level_sample_link.push(
+                tick_at,
+                LevelSample {
+                    gravity_g: drone_gravity,
+                    gyro_dps: [imu_roll_raw, imu_pitch_raw, imu_yaw_raw],
+                },
+            );
+        }
         report.tick.filtered_gyro_dps = [imu_roll_filtered, imu_pitch_filtered, imu_yaw_filtered];
         report.tick.body_rates_dps = body_rates;
         // Bench-only: exercise the blackbox write path while disarmed.
