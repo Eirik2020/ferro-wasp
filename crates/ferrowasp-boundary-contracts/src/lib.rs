@@ -9,6 +9,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod config_keys;
 pub mod messages;
 pub mod requests;
 pub mod topics;

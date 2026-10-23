@@ -1,8 +1,9 @@
 //! The MSP OSD, non-critical (design §16): what the DJI goggles show, encoded
 //! from the observer's ledger. It reads the craft's state and never writes
-//! it, and says so when what it shows has stopped updating (section 19).
+//! it, and says so when what it shows has stopped updating (section 19). Its
+//! tuning menu edits a copy and asks the coordinator for each change.
 //!
-//! Requirements: OSD-001, OSD-002
+//! Requirements: OSD-001, OSD-002, OSD-003
 
 #![forbid(unsafe_code)]
 #![no_std]
@@ -10,6 +11,7 @@
 #[cfg(all(feature = "tasks", target_arch = "arm"))]
 pub mod tasks;
 
+use ferrowasp_boundary_contracts::config_keys::ConfigKey;
 use ferrowasp_boundary_contracts::messages::{BatteryStatus, ControlTick};
 use ferrowasp_boundary_contracts::topics::{ObserverStatus, TopicWatch};
 use ferrowasp_flight_control::drone_toolbox::TuningProfile;
@@ -555,6 +557,46 @@ fn adjust_menu_value(tuning: &mut TuningProfile, row: u8, direction: i8) {
     *tuning = tuning.sanitized();
 }
 
+/// The menu's rows, in order, by the key each edits.
+const MENU_KEYS: [ConfigKey; MENU_ITEMS as usize] = [
+    ConfigKey::RollP,
+    ConfigKey::RollI,
+    ConfigKey::RollD,
+    ConfigKey::PitchP,
+    ConfigKey::PitchI,
+    ConfigKey::PitchD,
+    ConfigKey::YawP,
+    ConfigKey::YawI,
+    ConfigKey::YawD,
+    ConfigKey::ImuLpfHz,
+];
+
+/// The value a menu edit changed, as the request that asks for it: the
+/// first row whose value differs between `before` and `after`.
+pub fn menu_change(before: &TuningProfile, after: &TuningProfile) -> Option<(ConfigKey, f32)> {
+    MENU_KEYS.into_iter().find_map(|key| {
+        let value = menu_value(after, key);
+        (value != menu_value(before, key)).then_some((key, value))
+    })
+}
+
+fn menu_value(tuning: &TuningProfile, key: ConfigKey) -> f32 {
+    let gains = &tuning.rate_gains;
+    match key {
+        ConfigKey::RollP => gains.roll.p,
+        ConfigKey::RollI => gains.roll.i,
+        ConfigKey::RollD => gains.roll.d,
+        ConfigKey::PitchP => gains.pitch.p,
+        ConfigKey::PitchI => gains.pitch.i,
+        ConfigKey::PitchD => gains.pitch.d,
+        ConfigKey::YawP => gains.yaw.p,
+        ConfigKey::YawI => gains.yaw.i,
+        ConfigKey::YawD => gains.yaw.d,
+        ConfigKey::ImuLpfHz => tuning.imu_lpf_hz,
+        _ => 0.0,
+    }
+}
+
 fn write_menu_item(output: &mut [u8], index: u8, tuning: &TuningProfile, selected: bool) {
     output[0] = if selected { b'>' } else { b' ' };
     output[1] = b' ';
@@ -680,6 +722,24 @@ fn write_u16(output: &mut [u8], value: u16) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_menu_edit_becomes_the_request_for_its_row() {
+        let before = TuningProfile::default_first_hop();
+        let mut after = before;
+        adjust_menu_value(&mut after, 4, 1);
+        assert_eq!(
+            menu_change(&before, &after),
+            Some((ConfigKey::PitchI, after.rate_gains.pitch.i))
+        );
+        let mut after = before;
+        adjust_menu_value(&mut after, 9, -1);
+        assert_eq!(
+            menu_change(&before, &after),
+            Some((ConfigKey::ImuLpfHz, before.imu_lpf_hz - 1.0))
+        );
+        assert_eq!(menu_change(&before, &before), None);
+    }
 
     #[test]
     fn rc_values_pack_to_msp_rc_range() {

@@ -169,24 +169,6 @@ requirements:
           method:
             test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count
 
-  - id: BORDER-004
-    title: The stored level reads back as published
-    statement: >-
-      Until the coordinator takes it in, the stored accelerometer level
-      shall read back as last published.
-    rationale: >-
-      The attitude estimate subtracts the level, which a non-critical task
-      hands the safety-critical side; kept beside the coordinator so the
-      control loop reads it from a safety-critical crate.
-    derived_from: [W2]
-    verification:
-      entries:
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_border::inbound::tests::the_level_reads_back_whole
-
   - id: BORDER-005
     title: The observer runs every millisecond
     statement: >-

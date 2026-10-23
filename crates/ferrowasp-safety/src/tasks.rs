@@ -4,9 +4,11 @@
 //! and disarms on request, on an aborted arming, or when the RC link is
 //! invalidated. It commands the actuator only by spawning `actuator_output`,
 //! and it alone restarts the board, on a reboot the coordinator passes it.
+//! It holds arming off while a configuration change applies, and after a
+//! boot that fell back until the pilot acknowledges it.
 //!
 //! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020,
-//! SAFETY-015
+//! SAFETY-015, CONFIG-017, CONFIG-018, CONFIG-019, CONFIG-027
 //! Safety-critical.
 
 use crate::prearm::ImuPreArmReader;
@@ -59,6 +61,15 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         safety::ArmingAbortReason::CompletionDeliveryFailed => {
             warn!("Arming aborted: idle completion delivery failed")
         }
+        safety::ArmingAbortReason::ConfigChanging => {
+            warn!("Arming refused: a configuration change is being applied")
+        }
+        safety::ArmingAbortReason::ConfigChangeIncomplete => {
+            warn!("Arming refused until reboot: a configuration change was not confirmed")
+        }
+        safety::ArmingAbortReason::ConfigFallback => {
+            warn!("Arming refused: the boot fell back from the saved configuration; acknowledge it")
+        }
     }
 }
 
@@ -102,6 +113,9 @@ fn report_arm_state(
         host_leases: safety::host::HostLeases = safety::host::HostLeases::new(),
         host_lease_writer: signals::HostLeaseWriter,
         safety_reply_link: LinkProducer<'static, safety::SafetyReply>,
+        // What a config change and the boot's configuration hold against
+        // arming; built from whether the boot fell back.
+        config_gate: safety::config_gate::ConfigGate,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
@@ -138,6 +152,12 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
             if !CONFIG::ACTUATOR_OUTPUT_ENABLED {
                 arm_permit.revoke();
                 warn!("Arming inhibited: {}", CONFIG::ACTUATOR_INHIBIT_REASON);
+                return;
+            }
+
+            if let Some(reason) = cx.local.config_gate.arming_refusal(now_us / 1_000) {
+                arm_permit.revoke();
+                warn_arming_abort(reason);
                 return;
             }
 
@@ -179,6 +199,11 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 )
                 .is_ok()
                 && actuator_done.read()
+                && cx
+                    .local
+                    .config_gate
+                    .arming_refusal(now_us / 1_000)
+                    .is_none()
             {
                 arm_permit.revoke();
                 system_arm.arm();
@@ -289,6 +314,49 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                     );
                 }
             }
+        }
+
+        // A config transaction holds arming off while it applies, granted
+        // only disarmed and not arming; a lease that lapses unreleased
+        // refuses arming until reboot (`config_gate`).
+        safety::SafetyEvent::InhibitArming { ticket } => {
+            let decision = cx.local.config_gate.request(
+                ticket,
+                system_arm.is_armed(),
+                arm_permit.is_allowed(),
+                now_us / 1_000,
+            );
+            cx.local.safety_reply_link.push(
+                TimestampMicros(now_us),
+                safety::SafetyReply {
+                    ticket,
+                    outcome: match decision {
+                        Ok(()) => safety::Outcome::Accepted,
+                        Err(refusal) => safety::Outcome::Refused(refusal),
+                    },
+                },
+            );
+        }
+
+        safety::SafetyEvent::ReleaseInhibit { ticket } => {
+            cx.local.config_gate.release(ticket, now_us / 1_000);
+        }
+
+        safety::SafetyEvent::AcknowledgeConfigFallback { ticket } => {
+            let decision = cx
+                .local
+                .config_gate
+                .acknowledge_fallback(system_arm.is_armed());
+            cx.local.safety_reply_link.push(
+                TimestampMicros(now_us),
+                safety::SafetyReply {
+                    ticket,
+                    outcome: match decision {
+                        Ok(()) => safety::Outcome::Accepted,
+                        Err(refusal) => safety::Outcome::Refused(refusal),
+                    },
+                },
+            );
         }
 
         safety::SafetyEvent::HostPresent(link) => {

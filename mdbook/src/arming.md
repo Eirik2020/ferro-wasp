@@ -41,6 +41,11 @@ An arm attempt requires:
   power does not count;
 - a supported IMU that has produced a sample;
 - completed stationary startup gyro-bias calibration;
+- no configuration change being applied, and none that failed to confirm
+  since boot: a change holds arming off until the control loop confirms it,
+  and one it never confirms refuses arming until reboot;
+- no unacknowledged configuration fallback: a boot that could not use the
+  last save refuses arming until `config fallback ack`, sent disarmed;
 - a fresh IMU sample in the control loop, where one isolated tick without a
   new sample is tolerated and two in a row are not;
 - no revoked actuator permit or other failed safety check.

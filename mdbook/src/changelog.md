@@ -61,6 +61,16 @@ artifact is stable, airworthy, or production-ready.
 
 ### Changed
 
+- A configuration value set on the command line or in the OSD menu applies at
+  once, while disarmed: arming is held off until the control loop confirms it
+  flies the new value, and a change it does not confirm refuses arming until
+  the board reboots. `config save` keeps it across a reboot. The RC protocol
+  and port bindings still take effect after a save and a reboot.
+
+- A boot that cannot use the last saved configuration (a torn or refused
+  slot, or a store that cannot be read) refuses arming until the pilot
+  acknowledges it with `config fallback ack`; `config fallback` says why.
+
 - FerroConfigurator is the one reader of the onboard log format.
   `tools/blackbox_analyzer.py` analyzes its `convert --csv` export, and the
   duplicate Python tools `tools/ferrowasp_storage.py` and

@@ -4,7 +4,8 @@
 //! outputs and publishes them for `actuator_output`; it never commands a
 //! motor itself.
 //!
-//! Requirements: CTRL-013, CTRL-035, CTRL-036, CTRL-037, INPUT-010, INPUT-019, INPUT-020
+//! Requirements: CTRL-013, CTRL-035, CTRL-036, CTRL-037, INPUT-010, INPUT-019, INPUT-020,
+//! CONFIG-020
 //! Safety-critical.
 
 // The equal-motor and physical-motor bench images mix nothing.
@@ -12,7 +13,6 @@
 use crate::actuator::remap_motor_outputs;
 use crate::drone_toolbox as dt;
 use defmt::{info, warn};
-use ferrowasp_border::inbound::accel_level;
 use ferrowasp_boundary_contracts::messages as observed;
 use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
 use ferrowasp_io_contracts::time::TimestampMicros;
@@ -98,7 +98,13 @@ impl Drop for TickReport<'_> {
         gyro_bias_calibrator: dt::GyroBiasCalibrator,
         imu_last_sequence: u32,
         imu_stale_ticks: u32,
-        applied_tuning_seq: u32,
+        // What the craft flies, from the coordinator: the boot's
+        // configuration, applied on the first disarmed tick, then each
+        // change, taken only while disarmed and confirmed back.
+        flight_config: dt::FlightConfig,
+        flight_config_due: bool = true,
+        flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
+        config_applied_link: LinkProducer<'static, u32>,
         rc_rates_reader: signals::RcRatesReader,
         control_throttle_reader: signals::RcThrottleReader,
         control_safety_arm_reader: signals::SafetyArmReader,
@@ -137,10 +143,6 @@ impl Drop for TickReport<'_> {
         rc_link_was_valid: bool = false,
         motor_order: crate::actuator::MotorOutputMap =
             crate::actuator::MotorOutputMap::IDENTITY,
-    ],
-    shared = [
-        tuning_profile: dt::TuningProfile,
-        tuning_request_seq: u32,
     ],
     spawn = [
         actuator_output(cmd: safety::ActuatorCmd),
@@ -335,9 +337,14 @@ pub fn control_loop(mut cx: control_loop::Context) {
             // PID/filter/setpoint/mixer state crosses an arming boundary.
             fc.reset_control_state();
 
-            let pending_seq = cx.shared.tuning_request_seq.lock(|seq| *seq);
-            if pending_seq != *cx.local.applied_tuning_seq {
-                let profile = cx.shared.tuning_profile.lock(|profile| *profile);
+            let update = cx.local.flight_config_link.newest();
+            if let Some(update) = update {
+                *cx.local.flight_config = update.value;
+                *cx.local.flight_config_due = true;
+            }
+            if *cx.local.flight_config_due {
+                *cx.local.flight_config_due = false;
+                let profile = cx.local.flight_config.tuning;
                 fc.apply_tuning_profile(profile);
                 // Like every tuning change, a new motor order takes effect
                 // only here, while disarmed.
@@ -348,8 +355,10 @@ pub fn control_loop(mut cx: control_loop::Context) {
                     profile.sanitized().imu_lpf_hz,
                     CONFIG::CONTROL_LOOP_RATE_HZ as f32,
                 ));
-                *cx.local.applied_tuning_seq = pending_seq;
-                info!("Applied disarmed OSD tuning profile {}", pending_seq);
+                if let Some(update) = update {
+                    cx.local.config_applied_link.push(tick_at, update.seq);
+                    info!("Applied disarmed configuration change {}", update.seq);
+                }
             }
         }
 
@@ -413,7 +422,7 @@ pub fn control_loop(mut cx: control_loop::Context) {
 
         let imu_angles = cx.local.imu_angle_integrator.update_with_accel(
             body_rates,
-            accel_level().apply(drone_gravity),
+            cx.local.flight_config.accel_level.apply(drone_gravity),
             1.0 / CONFIG::CONTROL_LOOP_RATE_HZ as f32,
         );
         *cx.local.attitude_deg = imu_angles;

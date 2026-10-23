@@ -2,9 +2,13 @@
 //! does, refuses, or starts.
 //!
 //! The owner reads a command off a link, calls [`handle`] with what it owns,
-//! and does what the returned [`CommandAction`] asks. Two commands end there:
+//! and does what the returned [`CommandAction`] asks. Three kinds end there:
 //! calibrating the accelerometer, which samples the IMU over later passes,
-//! and rebooting, which waits for the store to settle.
+//! rebooting, which waits for the store to settle, and a configuration
+//! change, which the owner asks of the coordinator and answers with
+//! [`request_answer`] once the result arrives. The configuration the
+//! commands read and `config save` writes is the next boot's, from the
+//! ledger.
 
 use core::fmt::Write as _;
 
@@ -17,12 +21,14 @@ use crate::commands::StorageCommand;
 use crate::log_sync;
 use ferrowasp_blackbox::log_writer::LogWriter;
 use ferrowasp_blackbox::storage_maintenance::Maintenance;
+use ferrowasp_boundary_contracts::requests::{Outcome, Refusal, Request};
+use ferrowasp_config::boot::Fallback;
 use ferrowasp_config::stored::StoredConfig;
 use ferrowasp_storage::config_save::ConfigSave;
 use ferrowasp_storage::layout::StorageLayout;
 
 /// What the owner does after [`handle`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CommandAction {
     None,
     /// Start sampling the IMU for a level calibration; nothing answered yet.
@@ -31,6 +37,8 @@ pub enum CommandAction {
     Reboot {
         rom_bootloader: bool,
     },
+    /// Ask the coordinator, then answer with [`request_answer`].
+    Request(Request),
 }
 
 /// What a command reads and may change.
@@ -44,7 +52,10 @@ pub struct CommandContext<'a, F: NorStorage> {
     pub log: &'a LogWriter,
     pub maintenance: &'a mut Maintenance,
     pub config_save: &'a mut ConfigSave,
-    pub stored_config: &'a mut StoredConfig,
+    /// The next boot's configuration.
+    pub stored_config: StoredConfig,
+    /// Why the boot fell back, until acknowledged.
+    pub fallback: Option<Fallback>,
     pub config_sequence: u32,
     pub config_active_slot: u8,
     /// An accelerometer calibration is sampling.
@@ -111,6 +122,10 @@ pub fn handle<F: NorStorage>(
             );
             answer(
                 ctx.responses,
+                "OK config fallback | config fallback ack\r\n",
+            );
+            answer(
+                ctx.responses,
                 "OK logs unsynced | logs ack FLIGHT PAGES\r\n",
             );
             answer(ctx.responses, "OK logs erase-synced CONFIRM\r\n");
@@ -148,13 +163,7 @@ pub fn handle<F: NorStorage>(
             if ctx.armed {
                 answer(ctx.responses, "ERR config changes disabled while armed\r\n");
             } else {
-                let mut bindings = ctx
-                    .stored_config
-                    .serial_bindings
-                    .unwrap_or(ctx.default_serial_bindings);
-                bindings.set(port, function);
-                ctx.stored_config.serial_bindings = Some(bindings);
-                answer(ctx.responses, "OK staged; use config save, then reboot\r\n");
+                return CommandAction::Request(Request::ConfigBind { port, function });
             }
         }
         crate::commands::StorageCommand::FlashInfo => {
@@ -311,10 +320,32 @@ pub fn handle<F: NorStorage>(
         crate::commands::StorageCommand::ConfigSet(key, value) => {
             if ctx.armed {
                 answer(ctx.responses, "ERR config changes disabled while armed\r\n");
-            } else if ctx.stored_config.set(key, value) {
-                answer(ctx.responses, "OK staged; use config save\r\n");
             } else {
-                answer(ctx.responses, "ERR value outside allowed range\r\n");
+                return CommandAction::Request(Request::ConfigSet { key, value });
+            }
+        }
+        crate::commands::StorageCommand::ConfigFallback => {
+            answer(
+                ctx.responses,
+                match ctx.fallback {
+                    None => "OK config fallback=none\r\n",
+                    Some(Fallback::Damaged) => {
+                        "OK config fallback=damaged; a saved slot is torn\r\n"
+                    }
+                    Some(Fallback::Invalid) => {
+                        "OK config fallback=invalid; a saved slot was refused\r\n"
+                    }
+                    Some(Fallback::Unreadable) => {
+                        "OK config fallback=unreadable; booted the board default\r\n"
+                    }
+                },
+            );
+        }
+        crate::commands::StorageCommand::ConfigFallbackAck => {
+            if ctx.armed {
+                answer(ctx.responses, "ERR config changes disabled while armed\r\n");
+            } else {
+                return CommandAction::Request(Request::AcknowledgeConfigFallback);
             }
         }
         crate::commands::StorageCommand::ConfigSave => {
@@ -326,7 +357,7 @@ pub fn handle<F: NorStorage>(
             } else {
                 let reply = match begin_config_save(
                     ctx.config_save,
-                    *ctx.stored_config,
+                    ctx.stored_config,
                     ctx.config_sequence,
                     ctx.config_active_slot,
                     ctx.responses,
@@ -370,6 +401,29 @@ pub fn handle<F: NorStorage>(
     CommandAction::None
 }
 
+/// The answer to a configuration request, given its outcome; `None` when
+/// none arrived in time.
+pub fn request_answer(request: Request, outcome: Option<Outcome>) -> &'static str {
+    let Some(outcome) = outcome else {
+        return "ERR config change no answer\r\n";
+    };
+    match (request, outcome) {
+        (Request::AcknowledgeConfigFallback, Outcome::Accepted) => "OK fallback acknowledged\r\n",
+        (_, Outcome::Accepted) => "OK applied; use config save to keep it\r\n",
+        (_, Outcome::Pending) => "OK staged; use config save, then reboot\r\n",
+        (_, Outcome::Refused(Refusal::Invalid)) => "ERR value outside allowed range\r\n",
+        (_, Outcome::Refused(Refusal::Armed)) => "ERR config changes disabled while armed\r\n",
+        (_, Outcome::Refused(Refusal::ArmingInProgress)) => {
+            "ERR config changes disabled while arming\r\n"
+        }
+        (_, Outcome::Refused(Refusal::Busy)) => "ERR another config change is under way\r\n",
+        (_, Outcome::Refused(Refusal::NotConfirmed)) => {
+            "ERR change not confirmed; arming refused until reboot\r\n"
+        }
+        (_, Outcome::Refused(_)) => "ERR config change refused\r\n",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;
@@ -378,6 +432,7 @@ mod tests {
     use crate::commands::ResponseConsumer;
     use crate::commands::ResponseQueue;
     use crate::commands::parse_command;
+    use ferrowasp_config::keys::ConfigKey;
     use ferrowasp_serial::{LogicalSerialPort, SerialCapabilities, SerialFunction, SerialProfile};
     use ferrowasp_storage::config_save::SaveStep;
     use ferrowasp_storage::test_nor::MemoryNor;
@@ -414,6 +469,7 @@ mod tests {
         maintenance: Maintenance,
         config_save: ConfigSave,
         stored_config: StoredConfig,
+        fallback: Option<Fallback>,
         armed: bool,
         calibrating: bool,
     }
@@ -433,6 +489,7 @@ mod tests {
                 maintenance: Maintenance::Idle,
                 config_save: ConfigSave::idle(),
                 stored_config: StoredConfig::first_hop_default(),
+                fallback: None,
                 armed: false,
                 calibrating: false,
             }
@@ -453,7 +510,8 @@ mod tests {
                     log: &self.log,
                     maintenance: &mut self.maintenance,
                     config_save: &mut self.config_save,
-                    stored_config: &mut self.stored_config,
+                    stored_config: self.stored_config,
+                    fallback: self.fallback,
                     config_sequence: 0,
                     config_active_slot: 1,
                     calibrating: self.calibrating,
@@ -563,13 +621,20 @@ mod tests {
     }
 
     #[test]
-    fn a_set_stages_and_a_save_persists() {
+    fn a_set_is_asked_of_the_coordinator_and_a_save_persists_the_next_boot() {
         let mut owner = Owner::new();
         assert_eq!(
-            owner.send("config set roll_p 3"),
-            ["OK staged; use config save\r\n"]
+            owner.send_on(CommandLink::Usb, "config set roll_p 3"),
+            (
+                CommandAction::Request(Request::ConfigSet {
+                    key: ConfigKey::RollP,
+                    value: 3.0
+                }),
+                Vec::new()
+            )
         );
-        assert!(!owner.config_save.is_active(), "staged, not saved");
+        assert!(!owner.config_save.is_active(), "asked, not saved");
+        owner.stored_config.set(ConfigKey::RollP, 3.0);
         assert_eq!(owner.send("config get roll_p"), ["OK roll_p=3.0000\r\n"]);
         assert_eq!(owner.send("config save"), ["OK config save started\r\n"]);
         let layout = StorageLayout::new(CAPACITY).unwrap();
@@ -593,13 +658,69 @@ mod tests {
             ]
         );
         assert_eq!(
-            owner.send("serial uart3 rc"),
-            ["OK staged; use config save, then reboot\r\n"]
+            owner.send_on(CommandLink::Usb, "serial uart3 rc"),
+            (
+                CommandAction::Request(Request::ConfigBind {
+                    port: LogicalSerialPort::Uart3,
+                    function: SerialFunction::RcInput
+                }),
+                Vec::new()
+            )
         );
-        let bindings = owner.stored_config.serial_bindings.unwrap();
+    }
+
+    #[test]
+    fn a_fallback_is_shown_and_acknowledged_through_the_coordinator() {
+        let mut owner = Owner::new();
         assert_eq!(
-            bindings.function(LogicalSerialPort::Uart3),
-            SerialFunction::RcInput
+            owner.send("config fallback"),
+            ["OK config fallback=none\r\n"]
+        );
+        owner.fallback = Some(Fallback::Damaged);
+        assert_eq!(
+            owner.send("config fallback"),
+            ["OK config fallback=damaged; a saved slot is torn\r\n"]
+        );
+        assert_eq!(
+            owner.send_on(CommandLink::Serial, "config fallback ack"),
+            (
+                CommandAction::Request(Request::AcknowledgeConfigFallback),
+                Vec::new()
+            )
+        );
+        owner.armed = true;
+        assert_eq!(
+            owner.send("config fallback ack"),
+            ["ERR config changes disabled while armed\r\n"]
+        );
+    }
+
+    #[test]
+    fn each_outcome_has_its_answer() {
+        let set = Request::ConfigSet {
+            key: ConfigKey::RollP,
+            value: 3.0,
+        };
+        assert_eq!(
+            request_answer(set, Some(Outcome::Accepted)),
+            "OK applied; use config save to keep it\r\n"
+        );
+        assert_eq!(
+            request_answer(set, Some(Outcome::Pending)),
+            "OK staged; use config save, then reboot\r\n"
+        );
+        assert_eq!(
+            request_answer(set, Some(Outcome::Refused(Refusal::Invalid))),
+            "ERR value outside allowed range\r\n"
+        );
+        assert_eq!(
+            request_answer(set, Some(Outcome::Refused(Refusal::NotConfirmed))),
+            "ERR change not confirmed; arming refused until reboot\r\n"
+        );
+        assert_eq!(request_answer(set, None), "ERR config change no answer\r\n");
+        assert_eq!(
+            request_answer(Request::AcknowledgeConfigFallback, Some(Outcome::Accepted)),
+            "OK fallback acknowledged\r\n"
         );
     }
 

@@ -92,7 +92,7 @@ pub use ferrowasp_border::tasks::observer_task;
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_cli::tasks::flash::{
     ConfigRpcCompletion, FlashProbe, FlashRpcCommandConsumer, FlashRpcResponseProducer,
-    RpcDeviceInfoFn, flash_manager_task, load_flash_config, scan_flash_log,
+    RpcDeviceInfoFn, boot_config, flash_manager_task, scan_flash_log,
 };
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_cli::tasks::heartbeat::heartbeat;

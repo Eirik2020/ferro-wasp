@@ -13,6 +13,7 @@
 
 pub mod actuator;
 pub mod arming;
+pub mod config_gate;
 pub mod host;
 pub mod prearm;
 #[cfg(all(feature = "tasks", target_arch = "arm"))]
@@ -119,6 +120,20 @@ pub enum SafetyEvent {
     /// ticket the safety master's reply names it by.
     Reboot {
         target: RebootTarget,
+        ticket: u32,
+    },
+    /// A config transaction asks to hold arming off while it applies;
+    /// answered by its ticket.
+    InhibitArming {
+        ticket: u32,
+    },
+    /// The config transaction `ticket` has applied its change.
+    ReleaseInhibit {
+        ticket: u32,
+    },
+    /// The pilot saw the boot's configuration fallback; answered by its
+    /// ticket.
+    AcknowledgeConfigFallback {
         ticket: u32,
     },
 }
@@ -287,6 +302,14 @@ pub enum ArmingAbortReason {
     EscIdleRpmOutOfRange,
     EscIdleQualificationInvalid,
     CompletionDeliveryFailed,
+    /// A configuration change holds the arm inhibit.
+    ConfigChanging,
+    /// A configuration change did not finish within its lease; refused
+    /// until reboot.
+    ConfigChangeIncomplete,
+    /// The boot fell back from the last saved configuration and the pilot
+    /// has not acknowledged it.
+    ConfigFallback,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

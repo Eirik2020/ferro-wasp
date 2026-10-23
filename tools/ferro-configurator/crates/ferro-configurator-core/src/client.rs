@@ -675,7 +675,11 @@ impl<T: LineTransport> FerroClient<T> {
             format!("config set {} {value:.4}", key.name())
         };
         let response = self.request(&operation, 1)?;
-        if response != "OK staged; use config save" {
+        // A live key applies at once; a boot-only one, the RC protocol,
+        // waits for a reboot. Either is kept only by `config save`.
+        if response != "OK applied; use config save to keep it"
+            && response != "OK staged; use config save, then reboot"
+        {
             return Err(FerroError::UnexpectedResponse {
                 operation,
                 response,
@@ -1667,7 +1671,8 @@ mod tests {
 
     #[test]
     fn apply_stages_saves_and_verifies() {
-        let staged = (0..STAGE_COMMAND_COUNT).map(|_| "OK staged; use config save".to_owned());
+        let staged =
+            (0..STAGE_COMMAND_COUNT).map(|_| "OK applied; use config save to keep it".to_owned());
         let responses = config_responses()
             .into_iter()
             .chain(staged)
@@ -1690,10 +1695,11 @@ mod tests {
 
     #[test]
     fn failed_partial_stage_attempts_to_restore_snapshot_without_saving() {
-        let rollback = (0..STAGE_COMMAND_COUNT).map(|_| "OK staged; use config save".to_owned());
+        let rollback =
+            (0..STAGE_COMMAND_COUNT).map(|_| "OK applied; use config save to keep it".to_owned());
         let responses = config_responses()
             .into_iter()
-            .chain((0..9).map(|_| "OK staged; use config save".to_owned()))
+            .chain((0..9).map(|_| "OK applied; use config save to keep it".to_owned()))
             .chain(["ERR simulated interruption".to_owned()])
             .chain(rollback);
         let mock = MockTransport::with_lines(responses);

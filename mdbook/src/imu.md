@@ -172,9 +172,9 @@ maintenance running, averages 500 samples of drone-frame gravity. It refuses a
 craft that moves (any gravity axis wandering more than 0.05 g, or any gyro axis
 more than 10 degrees per second), one leaning more than 10 degrees, and a
 gravity magnitude more than 0.15 g from 1 g. The mean's offset from level, in
-milli-g per drone axis and at most 400 mg on each, is saved with the
-configuration through the same two-slot verified write as `config save`;
-`imu level` reports it.
+milli-g per drone axis and at most 400 mg on each, applies at once and is
+saved with the configuration through the same two-slot verified write as
+`config save`; `imu level` reports it.
 
 The offsets belong to one craft, so they are not configuration keys and do not
 travel with an exported tune. The control loop subtracts them from gravity

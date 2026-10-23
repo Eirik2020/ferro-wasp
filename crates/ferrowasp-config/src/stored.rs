@@ -8,7 +8,8 @@ use ferrowasp_control::calibration::accel_level::AccelLevel;
 use ferrowasp_control::filter::gyro_lpf_corner_hz;
 use ferrowasp_flight_control::actuator::MotorOutputMap;
 use ferrowasp_flight_control::drone_toolbox::{
-    ActualRateAxis, PidGains, RC_RATE_PROFILE, RateControllerGains, RcRateProfile, TuningProfile,
+    ActualRateAxis, FlightConfig, PidGains, RC_RATE_PROFILE, RateControllerGains, RcRateProfile,
+    TuningProfile,
 };
 use ferrowasp_input::channel_map::RcChannelMap;
 use ferrowasp_serial::{RcProtocol, SERIAL_PORT_SLOTS, SerialBindings};
@@ -81,6 +82,14 @@ impl StoredConfig {
             serial_bindings: None,
             rc_protocol: RcProtocol::Sbus,
             accel_level: AccelLevel::ZERO,
+        }
+    }
+
+    /// What the control loop and RC input fly from this configuration.
+    pub const fn flight(&self) -> FlightConfig {
+        FlightConfig {
+            tuning: self.tuning,
+            accel_level: self.accel_level,
         }
     }
 

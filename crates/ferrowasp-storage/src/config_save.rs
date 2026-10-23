@@ -1,7 +1,7 @@
 //! Saving the configuration so that no failure loses the one that boots.
 //!
 //! The configuration lives in two flash slots; startup takes the valid one
-//! with the newer sequence (`flash_storage::load_config`). A save writes the
+//! with the newer sequence (`ferrowasp_config::boot`). A save writes the
 //! slot not in use, under the next sequence: erase it, program the page, read
 //! it back. Only a page that reads back exactly as written is adopted. A
 //! failure or a power loss at any step leaves the active slot, and so the

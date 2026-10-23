@@ -61,8 +61,9 @@ fn respond_to_fault(
 /// them itself, and a fault wakes this task even when no bytes follow, so it
 /// invalidates the link here as soon as the transport sees the fault.
 ///
-/// The channel map comes from the tuning profile, which a disarmed
-/// configuration change can replace. A changed map may read the arm switch
+/// The channel map and stick rates come from the configuration, which the
+/// coordinator sends on a change, with arming held off; RC input takes the
+/// newest before each frame. A changed map may read the arm switch
 /// from a channel that is already high, which would otherwise look like the
 /// pilot flipping it; so a change invalidates the link like a lost receiver,
 /// and arming needs the new arm channel seen low first.
@@ -82,6 +83,10 @@ fn respond_to_fault(
         rc_link_reported_valid: bool = false,
         rc_link_reported_invalidation_seq: u32 = 0,
         rc_status_link: LinkProducer<'static, observed::RcStatus>,
+        // What RC input flies: the boot's configuration, then each change
+        // the coordinator sends.
+        rc_flight_config: dt::FlightConfig,
+        rc_flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
         rc_status: observed::RcStatus = observed::RcStatus {
             channels_us: [0; 16],
             valid: false,
@@ -91,11 +96,10 @@ fn respond_to_fault(
             rates_dps: [0; 3],
         },
     ],
-    shared = [tuning_profile: dt::TuningProfile],
     spawn = [safety_master(event: safety::SafetyEvent)],
     monotonic = Mono,
 )]
-pub async fn rc_input(mut cx: rc_input::Context) {
+pub async fn rc_input(cx: rc_input::Context) {
     let Some(port) = cx.local.rc_port.as_mut() else {
         warn!("RC input has no serial port bound; the RC link stays invalid");
         return;
@@ -195,10 +199,13 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                 continue;
             }
 
-            let (rc_rate_profile, rc_map) = cx
-                .shared
-                .tuning_profile
-                .lock(|profile| (profile.rc_rates, profile.rc_map));
+            if let Some(update) = cx.local.rc_flight_config_link.newest() {
+                *cx.local.rc_flight_config = update.value;
+            }
+            let (rc_rate_profile, rc_map) = (
+                cx.local.rc_flight_config.tuning.rc_rates,
+                cx.local.rc_flight_config.tuning.rc_map,
+            );
             if dt::RcChannelMap::replaced(cx.local.rc_map_in_use, rc_map) {
                 respond_to_fault(
                     safety::RcInputFault::ChannelMapChanged,
@@ -272,7 +279,10 @@ pub async fn rc_input(mut cx: rc_input::Context) {
                     | safety::SafetyEvent::RcLinkInvalid(_)
                     | safety::SafetyEvent::BenchMotor { .. }
                     | safety::SafetyEvent::HostPresent(_)
-                    | safety::SafetyEvent::Reboot { .. } => {}
+                    | safety::SafetyEvent::Reboot { .. }
+                    | safety::SafetyEvent::InhibitArming { .. }
+                    | safety::SafetyEvent::ReleaseInhibit { .. }
+                    | safety::SafetyEvent::AcknowledgeConfigFallback { .. } => {}
                 }
 
                 cx.spawn.safety_master(event).ok();

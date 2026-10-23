@@ -7,6 +7,11 @@
 //! Requirements: BORDER-013, BORDER-014
 //! Safety-critical.
 
+use ferrowasp_control::calibration::accel_level::AccelLevel;
+use ferrowasp_serial::{LogicalSerialPort, SerialFunction};
+
+use crate::config_keys::ConfigKey;
+
 /// Who asked: known from the link a request arrived on, never from its
 /// content.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,7 +39,7 @@ impl Requester {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Request {
     /// A props-off motor test, decided by the safety master.
     MotorTest(MotorTest),
@@ -43,6 +48,22 @@ pub enum Request {
     HostPresent,
     /// Restart, into the firmware or the chip's ROM bootloader.
     Reboot(RebootTarget),
+    /// Set one configuration value: at once for a live key, after a reboot
+    /// for a boot-only one.
+    ConfigSet { key: ConfigKey, value: f32 },
+    /// Bind a serial port to a function, after a reboot.
+    ConfigBind {
+        port: LogicalSerialPort,
+        function: SerialFunction,
+    },
+    /// Restore the board's default configuration, keeping the craft's
+    /// accelerometer level.
+    ConfigDefaults,
+    /// Adopt a new accelerometer level, from a calibration.
+    SetAccelLevel(AccelLevel),
+    /// The pilot saw that the boot fell back from the last saved
+    /// configuration; arming may follow once the craft is otherwise ready.
+    AcknowledgeConfigFallback,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,6 +95,9 @@ pub struct RequestResult {
 pub enum Outcome {
     #[default]
     Accepted,
+    /// Accepted into the next boot's configuration; it applies after a
+    /// reboot.
+    Pending,
     Refused(Refusal),
 }
 
@@ -83,6 +107,11 @@ pub enum Refusal {
     NotPermitted,
     /// The request's content is out of range: a motor outside 1-4.
     Invalid,
+    /// Another change is under way; ask again.
+    Busy,
+    /// The change was applied, but its participants did not confirm it in
+    /// time; arming stays refused until reboot.
+    NotConfirmed,
     /// The safety master refused it in its present state.
     Armed,
     ArmingInProgress,

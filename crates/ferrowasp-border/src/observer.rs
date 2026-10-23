@@ -8,9 +8,10 @@
 //! below the core. Its readers can only copy a topic out; only this module
 //! publishes.
 //!
-//! Requirements: BORDER-001, BORDER-006, BORDER-007
+//! Requirements: BORDER-001, BORDER-006, BORDER-007, CONFIG-024
 //! Safety-critical.
 
+use crate::coordinator::ConfigTopic;
 use ferrowasp_boundary_contracts::messages::{
     BatteryStatus, ControlTick, DrdyStatus, EscStatus, ImuStatus, OutputStatus, RcStatus,
     SafetyStatus, StorageStatus,
@@ -35,11 +36,14 @@ pub struct Ledger {
     esc: Stamped<EscStatus>,
     battery: Stamped<BatteryStatus>,
     storage: Stamped<StorageStatus>,
+    config: Stamped<ConfigTopic>,
     results: [Stamped<RequestResult>; Requester::COUNT],
 }
 
 impl Ledger {
-    pub fn new(identity: Identity) -> Self {
+    /// `config` is the configuration the board booted with, which the
+    /// coordinator publishes again on its first run.
+    pub fn new(identity: Identity, config: ConfigTopic) -> Self {
         Self {
             identity,
             observer: Stamped::default(),
@@ -52,6 +56,10 @@ impl Ledger {
             esc: Stamped::default(),
             battery: Stamped::default(),
             storage: Stamped::default(),
+            config: Stamped {
+                value: config,
+                ..Stamped::default()
+            },
             results: [Stamped::default(); Requester::COUNT],
         }
     }
@@ -100,6 +108,11 @@ impl Ledger {
         self.storage
     }
 
+    /// The configuration the craft flies and the next boot loads.
+    pub fn config(&self) -> Stamped<ConfigTopic> {
+        self.config
+    }
+
     /// The coordinator's latest result for `requester`'s requests.
     pub fn result(&self, requester: Requester) -> Stamped<RequestResult> {
         self.results[requester.index()]
@@ -117,6 +130,7 @@ pub struct ObserverLinks<'a> {
     pub esc: LinkConsumer<'a, EscStatus>,
     pub battery: LinkConsumer<'a, BatteryStatus>,
     pub storage: LinkConsumer<'a, StorageStatus>,
+    pub config: LinkConsumer<'a, ConfigTopic>,
     pub results: LinkConsumer<'a, RequesterResult>,
 }
 
@@ -159,6 +173,11 @@ impl<'a> Observer<'a> {
             }
             ledger.control = tick;
         }
+
+        // The configuration before the results: the coordinator sends a
+        // change's topic before its result, so a reader that sees the result
+        // sees the configuration after it.
+        publish_newest(&mut self.links.config, &mut ledger.config);
 
         // Each result on its requester's topic: an `event` link, so none
         // is skipped, though a later one for the same requester replaces
@@ -234,6 +253,7 @@ mod tests {
         esc: Queue<Stamped<EscStatus>, 4>,
         battery: Queue<Stamped<BatteryStatus>, 4>,
         storage: Queue<Stamped<StorageStatus>, 4>,
+        config: Queue<Stamped<ConfigTopic>, 3>,
         results: Queue<Stamped<RequesterResult>, 4>,
         stream: Queue<Stamped<ControlTick>, 3>,
     }
@@ -250,6 +270,7 @@ mod tests {
                 esc: Queue::new(),
                 battery: Queue::new(),
                 storage: Queue::new(),
+                config: Queue::new(),
                 results: Queue::new(),
                 stream: Queue::new(),
             }
@@ -262,6 +283,7 @@ mod tests {
         rc: LinkProducer<'a, RcStatus>,
         safety: LinkProducer<'a, SafetyStatus>,
         battery: LinkProducer<'a, BatteryStatus>,
+        config: LinkProducer<'a, ConfigTopic>,
         results: LinkProducer<'a, RequesterResult>,
     }
 
@@ -275,6 +297,7 @@ mod tests {
         let (_, esc_rx) = link(&mut queues.esc);
         let (battery, battery_rx) = link(&mut queues.battery);
         let (_, storage_rx) = link(&mut queues.storage);
+        let (config, config_rx) = link(&mut queues.config);
         let (results, results_rx) = link(&mut queues.results);
         let (stream_tx, stream_rx) = link(&mut queues.stream);
         let observer = Observer::new(
@@ -288,6 +311,7 @@ mod tests {
                 esc: esc_rx,
                 battery: battery_rx,
                 storage: storage_rx,
+                config: config_rx,
                 results: results_rx,
             },
             stream_tx,
@@ -299,6 +323,7 @@ mod tests {
                 rc,
                 safety,
                 battery,
+                config,
                 results,
             },
             observer,
@@ -320,7 +345,7 @@ mod tests {
     fn every_state_link_publishes_its_newest_message_with_its_stamp() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, _stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         let imu = |sample_seq| ImuStatus {
             sample_seq,
@@ -365,7 +390,7 @@ mod tests {
         use ferrowasp_boundary_contracts::requests::{Outcome, Refusal};
         let mut queues = Queues::new();
         let (mut producers, mut observer, _stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         let result = |requester, request_seq, outcome| RequesterResult {
             requester,
@@ -397,10 +422,42 @@ mod tests {
     }
 
     #[test]
+    fn a_config_change_is_on_the_ledger_once_its_result_is() {
+        use ferrowasp_boundary_contracts::requests::Outcome;
+        let mut queues = Queues::new();
+        let (mut producers, mut observer, _stream) = wire(&mut queues);
+        let boot = ConfigTopic {
+            sequence: 1,
+            ..ConfigTopic::default()
+        };
+        let mut ledger = Ledger::new(Identity::default(), boot);
+        assert_eq!(ledger.config().value, boot, "the boot's, before any run");
+
+        let changed = ConfigTopic {
+            sequence: 2,
+            ..ConfigTopic::default()
+        };
+        producers.config.push(TimestampMicros(10), changed);
+        producers.results.push(
+            TimestampMicros(10),
+            RequesterResult {
+                requester: Requester::Storage,
+                result: RequestResult {
+                    request_seq: 1,
+                    outcome: Outcome::Accepted,
+                },
+            },
+        );
+        observer.run_once(TimestampMicros(100), &mut ledger);
+        assert_eq!(ledger.result(Requester::Storage).value.request_seq, 1);
+        assert_eq!(ledger.config().value.sequence, 2);
+    }
+
+    #[test]
     fn a_link_that_brought_nothing_keeps_its_topic() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, _stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         producers
             .safety
@@ -416,7 +473,7 @@ mod tests {
     fn every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, mut stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         for control_seq in 1..=2 {
             producers.control.push(
@@ -441,7 +498,7 @@ mod tests {
     fn a_tick_not_marked_for_the_log_is_published_but_not_streamed() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, mut stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         let disarmed = ControlTick {
             logged: false,
@@ -461,7 +518,7 @@ mod tests {
     fn one_run_takes_at_most_a_links_capacity() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, mut stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         for control_seq in 1..=4 {
             assert_eq!(
@@ -484,7 +541,7 @@ mod tests {
     fn lost_control_ticks_and_stream_refusals_are_counted() {
         let mut queues = Queues::new();
         let (mut producers, mut observer, mut stream) = wire(&mut queues);
-        let mut ledger = Ledger::new(Identity::default());
+        let mut ledger = Ledger::new(Identity::default(), ConfigTopic::default());
 
         for control_seq in 1..=6 {
             producers
@@ -513,7 +570,7 @@ mod tests {
             flash_jedec: [0xef, 0x40, 0x18],
             flash_capacity_bytes: 16 << 20,
         };
-        let mut ledger = Ledger::new(identity);
+        let mut ledger = Ledger::new(identity, ConfigTopic::default());
 
         observer.run_once(TimestampMicros(1_000), &mut ledger);
         observer.run_once(TimestampMicros(2_000), &mut ledger);

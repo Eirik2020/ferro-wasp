@@ -1,29 +1,162 @@
-//! The coordinator (design §11, §19): the one way in from tasks outside the
-//! safety-critical core. Each requester has its own link, so a requester
-//! that floods fills only its own queue; each run takes at most a few
-//! requests from each, in turn. The coordinator checks a request's content
-//! and who may send it, and passes what it accepts to the owner of the
-//! state, the safety master, which decides. Motor tests come only from USB,
-//! so there is no bench session to arbitrate yet, and a reboot only from the
-//! storage owner, once it has settled the store. It never applies anything
-//! itself, and never judges flight state.
+//! The coordinator (design §11, §14, §19): the one way in from tasks
+//! outside the safety-critical core. Each requester has its own link, so a
+//! requester that floods fills only its own queue; each run takes at most a
+//! few requests from each, in turn. The coordinator checks a request's
+//! content and who may send it, and passes what it accepts to the owner of
+//! the state. The safety master decides on motor tests, which come only from
+//! USB, and on a reboot, which comes only from the storage owner once it has
+//! settled the store. It never judges flight state.
+//!
+//! The configuration's owner runs here. A change to a live key is a
+//! transaction, one at a time: the safety master holds arming off, the
+//! change is committed and sent to the control loop and RC input, and the
+//! inhibit is released once the control loop confirms it applied it. A
+//! change it does not confirm in time is refused as unconfirmed, and the
+//! inhibit's lease lapses, which refuses arming until reboot. A change to a
+//! boot-only key waits in the next boot's image and needs no inhibit.
+//!
+//! The configuration topic is sent to the observer before the result of the
+//! change that moved it, and the observer takes it first, so a requester
+//! that sees its result on the ledger sees the configuration after it.
 //!
 //! Requirements: BORDER-012, BORDER-013, BORDER-014, BORDER-015, BORDER-016,
-//! BORDER-018
+//! BORDER-018, CONFIG-015, CONFIG-016, CONFIG-019, CONFIG-020, CONFIG-021,
+//! CONFIG-022, CONFIG-023, CONFIG-028, CONFIG-029
 //! Safety-critical.
 
+use ferrowasp_boundary_contracts::config_keys::ConfigKey;
 use ferrowasp_boundary_contracts::requests::{
     MotorTest, Outcome, Refusal, Request, RequestResult, Requester, RequesterResult,
 };
-use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Stamped};
+use ferrowasp_config::boot::{BootConfig, Fallback};
+use ferrowasp_config::owner::{Change, ConfigOwner};
+use ferrowasp_config::stored::StoredConfig;
+use ferrowasp_control::calibration::accel_level::AccelLevel;
+use ferrowasp_flight_control::drone_toolbox::FlightConfig;
+use ferrowasp_io_contracts::link::{LinkConsumer, LinkProducer, Pushed, Stamped};
 use ferrowasp_io_contracts::time::TimestampMicros;
 use ferrowasp_safety::host::HostLink;
 use ferrowasp_safety::{BenchMotorRequest, SafetyEvent, SafetyReply};
+use ferrowasp_serial::{LogicalSerialPort, SerialBindings, SerialFunction};
 
 /// Requests taken from one requester in one run.
 pub const REQUESTS_PER_RUN: usize = 2;
 /// Requests the safety master may hold unanswered at once.
 const TICKETS: usize = 4;
+/// How long a config transaction may take from its start to its release:
+/// thirty coordinator runs, inside the arm inhibit's lease, so a release
+/// sent in time always arrives before the lease lapses.
+pub const CONFIG_TRANSACTION_MS: u64 = 300;
+const _: () =
+    assert!(CONFIG_TRANSACTION_MS < ferrowasp_safety::config_gate::CONFIG_INHIBIT_LEASE_MS);
+
+/// The configuration on the ledger.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ConfigTopic {
+    /// What the craft flies.
+    pub active: StoredConfig,
+    /// What the next boot loads, and `config save` writes.
+    pub next_boot: StoredConfig,
+    /// Advances with every committed change.
+    pub sequence: u32,
+    /// Why the boot fell back, until the pilot acknowledges it.
+    pub fallback: Option<Fallback>,
+}
+
+impl ConfigTopic {
+    /// The topic as the board booted.
+    pub const fn boot(boot: &BootConfig) -> Self {
+        Self {
+            active: boot.config,
+            next_boot: boot.config,
+            sequence: 1,
+            fallback: boot.fallback,
+        }
+    }
+}
+
+impl Default for ConfigTopic {
+    fn default() -> Self {
+        Self {
+            active: StoredConfig::first_hop_default(),
+            next_boot: StoredConfig::first_hop_default(),
+            sequence: 0,
+            fallback: None,
+        }
+    }
+}
+
+/// The configuration's links: to the tasks that fly it, back from the
+/// control loop, and to the observer.
+pub struct ConfigLinks<'a> {
+    /// A `state` link: the control loop takes the newest while disarmed.
+    pub control: LinkProducer<'a, FlightConfig>,
+    /// A `state` link: RC input takes the newest before each frame.
+    pub rc_input: LinkProducer<'a, FlightConfig>,
+    /// The sequence of the last configuration the control loop applied.
+    pub applied: LinkConsumer<'a, u32>,
+    pub topic: LinkProducer<'a, ConfigTopic>,
+}
+
+/// What the owner starts from: the boot's choice and the board's defaults.
+#[derive(Clone, Copy, Debug)]
+pub struct ConfigBoot {
+    pub boot: BootConfig,
+    pub default: StoredConfig,
+    pub default_bindings: SerialBindings,
+}
+
+/// A config request that passed its checks.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ConfigChange {
+    Set {
+        key: ConfigKey,
+        value: f32,
+    },
+    Bind {
+        port: LogicalSerialPort,
+        function: SerialFunction,
+    },
+    Defaults,
+    Level(AccelLevel),
+}
+
+/// What [`check`] found a request to be.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Checked {
+    /// For the safety master to decide.
+    Safety(SafetyEvent),
+    /// A change for the owner.
+    Config(ConfigChange),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Phase {
+    /// Waiting for the safety master to grant the arm inhibit.
+    Granting,
+    /// Committed and sent; waiting for the control loop to confirm it.
+    Confirming { applied_seq: u32 },
+    /// Confirmed; the release waits for the safety master to take it.
+    Releasing,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Transaction {
+    requester: Requester,
+    request_seq: u32,
+    ticket: u32,
+    change: Change,
+    until_ms: u64,
+    phase: Phase,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum TicketKind {
+    /// The reply is the request's result.
+    Decision,
+    /// The reply is the result, and an acceptance clears the fallback.
+    FallbackAcknowledgement,
+}
 
 /// The consuming end of every requester's link, and of the safety master's
 /// replies.
@@ -40,14 +173,28 @@ struct Ticket {
     ticket: u32,
     requester: Requester,
     request_seq: u32,
+    kind: TicketKind,
 }
 
 pub struct Coordinator<'a> {
     links: CoordinatorLinks<'a>,
     results: LinkProducer<'a, RequesterResult>,
-    /// An accepted request the safety master could not take yet, by
-    /// requester: retried before that requester's queue is read again.
-    pending: [Option<(Stamped<Request>, SafetyEvent)>; Requester::COUNT],
+    config: ConfigLinks<'a>,
+    owner: ConfigOwner,
+    default_config: StoredConfig,
+    default_bindings: SerialBindings,
+    fallback: Option<Fallback>,
+    transaction: Option<Transaction>,
+    /// The last configuration the control loop confirmed applying.
+    applied_seq: u32,
+    /// The topic or RC input's copy changed and has not been taken yet:
+    /// both are `state` links, so a push a full link refused is sent again
+    /// next run rather than lost.
+    topic_due: bool,
+    rc_input_due: bool,
+    /// An accepted request its owner could not take yet, by requester:
+    /// retried before that requester's queue is read again.
+    pending: [Option<(Stamped<Request>, Checked)>; Requester::COUNT],
     tickets: [Option<Ticket>; TICKETS],
     next_ticket: u32,
     /// Which requester the next run serves first, so each leads in turn.
@@ -58,10 +205,24 @@ pub struct Coordinator<'a> {
 impl<'a> Coordinator<'a> {
     /// `results` is the link to the observer, which publishes each result on
     /// its requester's topic.
-    pub fn new(links: CoordinatorLinks<'a>, results: LinkProducer<'a, RequesterResult>) -> Self {
+    pub fn new(
+        links: CoordinatorLinks<'a>,
+        config: ConfigLinks<'a>,
+        boot: ConfigBoot,
+        results: LinkProducer<'a, RequesterResult>,
+    ) -> Self {
         Self {
             links,
             results,
+            config,
+            owner: ConfigOwner::new(boot.boot.config),
+            default_config: boot.default,
+            default_bindings: boot.default_bindings,
+            fallback: boot.boot.fallback,
+            transaction: None,
+            applied_seq: 0,
+            topic_due: true,
+            rc_input_due: false,
             pending: [None; Requester::COUNT],
             tickets: [None; TICKETS],
             next_ticket: 1,
@@ -81,18 +242,23 @@ impl<'a> Coordinator<'a> {
             };
             self.settle(reply.value);
         }
+        if let Some(applied) = self.config.applied.newest() {
+            self.applied_seq = applied.value;
+        }
+        self.progress(&mut send);
 
         for offset in 0..Requester::COUNT {
             let requester = Requester::ALL[(self.first + offset) % Requester::COUNT];
             self.serve(requester, &mut send);
         }
         self.first = (self.first + 1) % Requester::COUNT;
+        self.send_state();
     }
 
     fn serve(&mut self, requester: Requester, send: &mut impl FnMut(SafetyEvent) -> bool) {
         let mut taken = 0;
-        if let Some((request, event)) = self.pending[requester.index()] {
-            if !self.forward(requester, request, event, send) {
+        if let Some((request, checked)) = self.pending[requester.index()] {
+            if !self.act(requester, request, checked, send) {
                 return;
             }
             self.pending[requester.index()] = None;
@@ -110,15 +276,163 @@ impl<'a> Coordinator<'a> {
             };
             taken += 1;
             match check(requester, request.value) {
-                Ok(event) => {
-                    if !self.forward(requester, request, event, send) {
-                        self.pending[requester.index()] = Some((request, event));
+                Ok(checked) => {
+                    if !self.act(requester, request, checked, send) {
+                        self.pending[requester.index()] = Some((request, checked));
                         return;
                     }
                 }
                 Err(refusal) => self.publish(requester, request.seq, Outcome::Refused(refusal)),
             }
         }
+    }
+
+    /// Pass a checked request to its owner; false when it must wait.
+    fn act(
+        &mut self,
+        requester: Requester,
+        request: Stamped<Request>,
+        checked: Checked,
+        send: &mut impl FnMut(SafetyEvent) -> bool,
+    ) -> bool {
+        match checked {
+            Checked::Safety(event) => self.forward(requester, request, event, send),
+            Checked::Config(change) => self.begin(requester, request.seq, change, send),
+        }
+    }
+
+    /// Start a config change; false when one is already running or the
+    /// safety master cannot take the inhibit request yet.
+    fn begin(
+        &mut self,
+        requester: Requester,
+        request_seq: u32,
+        change: ConfigChange,
+        send: &mut impl FnMut(SafetyEvent) -> bool,
+    ) -> bool {
+        if self.transaction.is_some() {
+            return false;
+        }
+        let proposed = match change {
+            ConfigChange::Set { key, value } => self.owner.propose_set(key, value),
+            ConfigChange::Bind { port, function } => {
+                Ok(self
+                    .owner
+                    .propose_binding(port, function, self.default_bindings))
+            }
+            ConfigChange::Defaults => self.owner.propose_replace(self.default_config),
+            ConfigChange::Level(level) => Ok(self.owner.propose_level(level)),
+        };
+        let Ok(proposed) = proposed else {
+            self.publish(requester, request_seq, Outcome::Refused(Refusal::Invalid));
+            return true;
+        };
+        if proposed.active.is_none() {
+            // Only the next boot's image changes: nothing flying moves.
+            self.owner.commit(proposed);
+            self.topic_due = true;
+            self.send_state();
+            self.publish(requester, request_seq, Outcome::Pending);
+            return true;
+        }
+        let ticket = self.next_ticket;
+        if !send(SafetyEvent::InhibitArming { ticket }) {
+            return false;
+        }
+        self.next_ticket = next_ticket(ticket);
+        self.transaction = Some(Transaction {
+            requester,
+            request_seq,
+            ticket,
+            change: proposed,
+            until_ms: self.now_ms.saturating_add(CONFIG_TRANSACTION_MS),
+            phase: Phase::Granting,
+        });
+        true
+    }
+
+    /// Move the running transaction on: refuse it once its time is up,
+    /// release the inhibit once the control loop confirms.
+    fn progress(&mut self, send: &mut impl FnMut(SafetyEvent) -> bool) {
+        let Some(mut transaction) = self.transaction else {
+            return;
+        };
+        if let Phase::Confirming { applied_seq } = transaction.phase
+            && self.applied_seq == applied_seq
+        {
+            transaction.phase = Phase::Releasing;
+        }
+        if self.now_ms >= transaction.until_ms {
+            // Unreleased, the inhibit's lease lapses and arming stays
+            // refused until reboot: the change may be half applied.
+            // A grant whose reply never came holds the inhibit all the same.
+            self.transaction = None;
+            self.publish(
+                transaction.requester,
+                transaction.request_seq,
+                Outcome::Refused(Refusal::NotConfirmed),
+            );
+            return;
+        }
+        if transaction.phase == Phase::Releasing {
+            if !send(SafetyEvent::ReleaseInhibit {
+                ticket: transaction.ticket,
+            }) {
+                self.transaction = Some(transaction);
+                return;
+            }
+            self.transaction = None;
+            self.publish(
+                transaction.requester,
+                transaction.request_seq,
+                Outcome::Accepted,
+            );
+            return;
+        }
+        self.transaction = Some(transaction);
+    }
+
+    /// The safety master granted or refused a transaction's inhibit.
+    fn granted(&mut self, mut transaction: Transaction, outcome: Outcome) {
+        if outcome != Outcome::Accepted {
+            self.transaction = None;
+            self.publish(transaction.requester, transaction.request_seq, outcome);
+            return;
+        }
+        self.owner.commit(transaction.change);
+        self.topic_due = true;
+        self.rc_input_due = true;
+        let at = self.at();
+        // A push the control loop's link refuses is never confirmed, so the
+        // transaction ends unconfirmed.
+        self.config.control.push(at, self.owner.active().flight());
+        transaction.phase = Phase::Confirming {
+            applied_seq: self.config.control.sequence(),
+        };
+        self.transaction = Some(transaction);
+        self.send_state();
+    }
+
+    /// Send the topic and RC input's copy where they changed.
+    fn send_state(&mut self) {
+        let at = self.at();
+        if self.rc_input_due {
+            self.rc_input_due =
+                self.config.rc_input.push(at, self.owner.active().flight()) == Pushed::Refused;
+        }
+        if self.topic_due {
+            let topic = ConfigTopic {
+                active: self.owner.active(),
+                next_boot: self.owner.next_boot(),
+                sequence: self.owner.sequence(),
+                fallback: self.fallback,
+            };
+            self.topic_due = self.config.topic.push(at, topic) == Pushed::Refused;
+        }
+    }
+
+    const fn at(&self) -> TimestampMicros {
+        TimestampMicros(self.now_ms.saturating_mul(1_000))
     }
 
     /// Hand `event` to the safety master; false when it was not taken, or
@@ -131,13 +445,20 @@ impl<'a> Coordinator<'a> {
         send: &mut impl FnMut(SafetyEvent) -> bool,
     ) -> bool {
         let ticketed = |ticket| match event {
-            SafetyEvent::BenchMotor { request, .. } => {
-                Some(SafetyEvent::BenchMotor { request, ticket })
+            SafetyEvent::BenchMotor { request, .. } => Some((
+                SafetyEvent::BenchMotor { request, ticket },
+                TicketKind::Decision,
+            )),
+            SafetyEvent::Reboot { target, .. } => {
+                Some((SafetyEvent::Reboot { target, ticket }, TicketKind::Decision))
             }
-            SafetyEvent::Reboot { target, .. } => Some(SafetyEvent::Reboot { target, ticket }),
+            SafetyEvent::AcknowledgeConfigFallback { .. } => Some((
+                SafetyEvent::AcknowledgeConfigFallback { ticket },
+                TicketKind::FallbackAcknowledgement,
+            )),
             _ => None,
         };
-        let Some(with_ticket) = ticketed(self.next_ticket) else {
+        let Some((with_ticket, kind)) = ticketed(self.next_ticket) else {
             // A host renewal publishes no result: it arrives several times a
             // second and only extends a lease.
             return send(event);
@@ -152,12 +473,20 @@ impl<'a> Coordinator<'a> {
             ticket: self.next_ticket,
             requester,
             request_seq: request.seq,
+            kind,
         });
-        self.next_ticket = self.next_ticket.wrapping_add(1).max(1);
+        self.next_ticket = next_ticket(self.next_ticket);
         true
     }
 
     fn settle(&mut self, reply: SafetyReply) {
+        if let Some(transaction) = self.transaction
+            && transaction.ticket == reply.ticket
+            && transaction.phase == Phase::Granting
+        {
+            self.granted(transaction, reply.outcome);
+            return;
+        }
         let Some(slot) = self
             .tickets
             .iter()
@@ -168,12 +497,18 @@ impl<'a> Coordinator<'a> {
         let Some(ticket) = self.tickets[slot].take() else {
             return;
         };
+        if ticket.kind == TicketKind::FallbackAcknowledgement && reply.outcome == Outcome::Accepted
+        {
+            self.fallback = None;
+            self.topic_due = true;
+            self.send_state();
+        }
         self.publish(ticket.requester, ticket.request_seq, reply.outcome);
     }
 
     fn publish(&mut self, requester: Requester, request_seq: u32, outcome: Outcome) {
         self.results.push(
-            TimestampMicros(self.now_ms.saturating_mul(1_000)),
+            self.at(),
             RequesterResult {
                 requester,
                 result: RequestResult {
@@ -185,19 +520,49 @@ impl<'a> Coordinator<'a> {
     }
 }
 
+const fn next_ticket(ticket: u32) -> u32 {
+    match ticket.wrapping_add(1) {
+        0 => 1,
+        next => next,
+    }
+}
+
 /// The content and permission checks: what the coordinator decides before
 /// the owner sees a request.
-fn check(requester: Requester, request: Request) -> Result<SafetyEvent, Refusal> {
+fn check(requester: Requester, request: Request) -> Result<Checked, Refusal> {
+    // The storage owner speaks for both command lines on configuration; the
+    // OSD's menu sets values.
+    let config = |change| match requester {
+        Requester::Storage => Ok(Checked::Config(change)),
+        _ => Err(Refusal::NotPermitted),
+    };
     match request {
         Request::HostPresent => match requester {
-            Requester::Usb => Ok(SafetyEvent::HostPresent(HostLink::Usb)),
-            Requester::ConfiguratorLink => Ok(SafetyEvent::HostPresent(HostLink::ConfiguratorLink)),
+            Requester::Usb => Ok(Checked::Safety(SafetyEvent::HostPresent(HostLink::Usb))),
+            Requester::ConfiguratorLink => Ok(Checked::Safety(SafetyEvent::HostPresent(
+                HostLink::ConfiguratorLink,
+            ))),
             Requester::Osd | Requester::Storage => Err(Refusal::NotPermitted),
         },
         // Only the storage owner asks for a reboot, once the store is
         // settled; the command lines ask it, not the coordinator.
         Request::Reboot(target) => match requester {
-            Requester::Storage => Ok(SafetyEvent::Reboot { target, ticket: 0 }),
+            Requester::Storage => Ok(Checked::Safety(SafetyEvent::Reboot { target, ticket: 0 })),
+            _ => Err(Refusal::NotPermitted),
+        },
+        Request::ConfigSet { key, value } => match requester {
+            Requester::Storage | Requester::Osd => {
+                Ok(Checked::Config(ConfigChange::Set { key, value }))
+            }
+            Requester::Usb | Requester::ConfiguratorLink => Err(Refusal::NotPermitted),
+        },
+        Request::ConfigBind { port, function } => config(ConfigChange::Bind { port, function }),
+        Request::ConfigDefaults => config(ConfigChange::Defaults),
+        Request::SetAccelLevel(level) => config(ConfigChange::Level(level)),
+        Request::AcknowledgeConfigFallback => match requester {
+            Requester::Storage => Ok(Checked::Safety(SafetyEvent::AcknowledgeConfigFallback {
+                ticket: 0,
+            })),
             _ => Err(Refusal::NotPermitted),
         },
         Request::MotorTest(test) => {
@@ -223,7 +588,10 @@ fn check(requester: Requester, request: Request) -> Result<SafetyEvent, Refusal>
                 }
             };
             // The ticket is filled in when the request is forwarded.
-            Ok(SafetyEvent::BenchMotor { request, ticket: 0 })
+            Ok(Checked::Safety(SafetyEvent::BenchMotor {
+                request,
+                ticket: 0,
+            }))
         }
     }
 }
@@ -252,6 +620,10 @@ mod tests {
         storage: Queue<Stamped<Request>, 5>,
         replies: Queue<Stamped<SafetyReply>, 5>,
         results: Queue<Stamped<RequesterResult>, 9>,
+        control: Queue<Stamped<FlightConfig>, 3>,
+        rc_input: Queue<Stamped<FlightConfig>, 3>,
+        applied: Queue<Stamped<u32>, 3>,
+        topic: Queue<Stamped<ConfigTopic>, 3>,
     }
 
     impl Queues {
@@ -263,6 +635,10 @@ mod tests {
                 storage: Queue::new(),
                 replies: Queue::new(),
                 results: Queue::new(),
+                control: Queue::new(),
+                rc_input: Queue::new(),
+                applied: Queue::new(),
+                topic: Queue::new(),
             }
         }
     }
@@ -274,15 +650,27 @@ mod tests {
         storage: LinkProducer<'a, Request>,
         replies: LinkProducer<'a, SafetyReply>,
         results: LinkConsumer<'a, RequesterResult>,
+        control: LinkConsumer<'a, FlightConfig>,
+        rc_input: LinkConsumer<'a, FlightConfig>,
+        applied: LinkProducer<'a, u32>,
+        topic: LinkConsumer<'a, ConfigTopic>,
     }
 
     fn wire(queues: &mut Queues) -> (Coordinator<'_>, Ends<'_>) {
+        wire_from(queues, None)
+    }
+
+    fn wire_from(queues: &mut Queues, fallback: Option<Fallback>) -> (Coordinator<'_>, Ends<'_>) {
         let (usb, usb_rx) = link(&mut queues.usb);
         let (configurator_link, configurator_rx) = link(&mut queues.configurator_link);
         let (osd, osd_rx) = link(&mut queues.osd);
         let (storage, storage_rx) = link(&mut queues.storage);
         let (replies, replies_rx) = link(&mut queues.replies);
         let (results_tx, results) = link(&mut queues.results);
+        let (control_tx, control) = link(&mut queues.control);
+        let (rc_input_tx, rc_input) = link(&mut queues.rc_input);
+        let (applied, applied_rx) = link(&mut queues.applied);
+        let (topic_tx, topic) = link(&mut queues.topic);
         (
             Coordinator::new(
                 CoordinatorLinks {
@@ -291,6 +679,22 @@ mod tests {
                     osd: osd_rx,
                     storage: storage_rx,
                     safety_replies: replies_rx,
+                },
+                ConfigLinks {
+                    control: control_tx,
+                    rc_input: rc_input_tx,
+                    applied: applied_rx,
+                    topic: topic_tx,
+                },
+                ConfigBoot {
+                    boot: BootConfig {
+                        config: StoredConfig::first_hop_default(),
+                        sequence: 0,
+                        slot: 1,
+                        fallback,
+                    },
+                    default: StoredConfig::first_hop_default(),
+                    default_bindings: SerialBindings::none(),
                 },
                 results_tx,
             ),
@@ -301,6 +705,10 @@ mod tests {
                 storage,
                 replies,
                 results,
+                control,
+                rc_input,
+                applied,
+                topic,
             },
         )
     }
@@ -527,5 +935,258 @@ mod tests {
                 },
             }]
         );
+    }
+
+    fn roll_p(value: f32) -> Request {
+        Request::ConfigSet {
+            key: ConfigKey::RollP,
+            value,
+        }
+    }
+
+    fn reply(ends: &mut Ends<'_>, ticket: u32, outcome: Outcome) {
+        ends.replies
+            .push(TimestampMicros(0), SafetyReply { ticket, outcome });
+    }
+
+    fn storage_outcomes(ends: &mut Ends<'_>) -> Vec<Outcome> {
+        results(ends)
+            .into_iter()
+            .filter(|result| result.requester == Requester::Storage)
+            .map(|result| result.result.outcome)
+            .collect()
+    }
+
+    /// Run once, sending everything, and return what reached the safety
+    /// master.
+    fn run(coordinator: &mut Coordinator<'_>, now_ms: u64) -> Vec<SafetyEvent> {
+        let mut sent = Vec::new();
+        coordinator.run_once(now_ms, |event| {
+            sent.push(event);
+            true
+        });
+        sent
+    }
+
+    #[test]
+    fn the_boot_configuration_is_published_on_the_first_run() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire_from(&mut queues, Some(Fallback::Damaged));
+        run(&mut coordinator, 10);
+        let topic = ends.topic.newest().unwrap().value;
+        assert_eq!(topic.active, StoredConfig::first_hop_default());
+        assert_eq!(topic.sequence, 1);
+        assert_eq!(topic.fallback, Some(Fallback::Damaged));
+    }
+
+    #[test]
+    fn a_live_change_holds_arming_off_until_the_control_loop_applies_it() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        ends.topic.newest();
+
+        ends.storage.push(TimestampMicros(0), roll_p(0.07));
+        let [SafetyEvent::InhibitArming { ticket }] = run(&mut coordinator, 10)[..] else {
+            panic!("expected an inhibit request");
+        };
+        assert!(
+            ends.control.newest().is_none(),
+            "nothing applies before the grant"
+        );
+
+        reply(&mut ends, ticket, Outcome::Accepted);
+        assert!(run(&mut coordinator, 20).is_empty());
+        let sent = ends.control.newest().unwrap();
+        assert_eq!(sent.value.tuning.rate_gains.roll.p, 0.07);
+        assert_eq!(ends.rc_input.newest().unwrap().value, sent.value);
+        let topic = ends.topic.newest().unwrap().value;
+        assert_eq!(topic.active.tuning.rate_gains.roll.p, 0.07);
+        assert_eq!(topic.next_boot.tuning.rate_gains.roll.p, 0.07);
+        assert!(
+            storage_outcomes(&mut ends).is_empty(),
+            "not until confirmed"
+        );
+
+        ends.applied.push(TimestampMicros(0), sent.seq);
+        assert_eq!(
+            run(&mut coordinator, 30),
+            [SafetyEvent::ReleaseInhibit { ticket }]
+        );
+        assert_eq!(storage_outcomes(&mut ends), [Outcome::Accepted]);
+    }
+
+    #[test]
+    fn a_change_the_control_loop_never_confirms_is_refused_and_not_released() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        ends.storage.push(TimestampMicros(0), roll_p(0.07));
+        let [SafetyEvent::InhibitArming { ticket }] = run(&mut coordinator, 10)[..] else {
+            panic!("expected an inhibit request");
+        };
+        reply(&mut ends, ticket, Outcome::Accepted);
+        run(&mut coordinator, 20);
+
+        let sent = run(&mut coordinator, 10 + CONFIG_TRANSACTION_MS);
+        assert!(
+            !sent.contains(&SafetyEvent::ReleaseInhibit { ticket }),
+            "the lease lapses, so arming stays refused until reboot"
+        );
+        assert_eq!(
+            storage_outcomes(&mut ends),
+            [Outcome::Refused(Refusal::NotConfirmed)]
+        );
+    }
+
+    #[test]
+    fn a_refused_inhibit_changes_nothing() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        run(&mut coordinator, 0);
+        ends.topic.newest();
+        ends.storage.push(TimestampMicros(0), roll_p(0.07));
+        let [SafetyEvent::InhibitArming { ticket }] = run(&mut coordinator, 10)[..] else {
+            panic!("expected an inhibit request");
+        };
+        reply(&mut ends, ticket, Outcome::Refused(Refusal::Armed));
+        run(&mut coordinator, 20);
+        assert_eq!(
+            storage_outcomes(&mut ends),
+            [Outcome::Refused(Refusal::Armed)]
+        );
+        assert!(ends.control.newest().is_none());
+        assert!(
+            ends.topic.newest().is_none(),
+            "the configuration did not move"
+        );
+    }
+
+    #[test]
+    fn a_value_out_of_range_is_refused_without_asking_the_safety_master() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        ends.storage.push(TimestampMicros(0), roll_p(f32::NAN));
+        assert!(run(&mut coordinator, 10).is_empty());
+        assert_eq!(
+            storage_outcomes(&mut ends),
+            [Outcome::Refused(Refusal::Invalid)]
+        );
+    }
+
+    #[test]
+    fn a_boot_only_change_waits_for_a_reboot_without_an_inhibit() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        run(&mut coordinator, 0);
+        ends.topic.newest();
+        ends.storage.push(
+            TimestampMicros(0),
+            Request::ConfigBind {
+                port: LogicalSerialPort::Uart3,
+                function: SerialFunction::RcInput,
+            },
+        );
+        assert!(run(&mut coordinator, 10).is_empty());
+        assert_eq!(storage_outcomes(&mut ends), [Outcome::Pending]);
+        let topic = ends.topic.newest().unwrap().value;
+        assert_eq!(topic.active.serial_bindings, None);
+        assert_eq!(
+            topic
+                .next_boot
+                .serial_bindings
+                .unwrap()
+                .function(LogicalSerialPort::Uart3),
+            SerialFunction::RcInput
+        );
+        assert!(ends.control.newest().is_none(), "nothing flying moves");
+    }
+
+    #[test]
+    fn config_changes_run_one_at_a_time_and_the_next_waits_its_turn() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        ends.storage.push(TimestampMicros(0), roll_p(0.07));
+        ends.osd.push(TimestampMicros(0), roll_p(0.08));
+        let sent = run(&mut coordinator, 10);
+        assert_eq!(sent.len(), 1, "the second waits: {sent:?}");
+        let SafetyEvent::InhibitArming { ticket } = sent[0] else {
+            panic!("expected an inhibit request");
+        };
+        reply(&mut ends, ticket, Outcome::Accepted);
+        run(&mut coordinator, 20);
+        let applied = ends.control.newest().unwrap();
+        ends.applied.push(TimestampMicros(0), applied.seq);
+        let sent = run(&mut coordinator, 30);
+        assert!(sent.contains(&SafetyEvent::ReleaseInhibit { ticket }));
+        assert!(
+            sent.iter()
+                .any(|event| matches!(event, SafetyEvent::InhibitArming { ticket: next } if *next != ticket)),
+            "the waiting change starts once the first is released: {sent:?}"
+        );
+    }
+
+    #[test]
+    fn only_the_storage_owner_and_the_osd_change_the_configuration() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        ends.usb.push(TimestampMicros(0), roll_p(0.07));
+        ends.configurator_link
+            .push(TimestampMicros(0), roll_p(0.07));
+        ends.osd.push(TimestampMicros(0), Request::ConfigDefaults);
+        ends.osd
+            .push(TimestampMicros(0), Request::AcknowledgeConfigFallback);
+        assert!(run(&mut coordinator, 10).is_empty());
+        let all = results(&mut ends);
+        assert_eq!(all.len(), 4);
+        assert!(
+            all.iter()
+                .all(|result| result.result.outcome == Outcome::Refused(Refusal::NotPermitted))
+        );
+    }
+
+    #[test]
+    fn an_acknowledged_fallback_leaves_the_topic() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire_from(&mut queues, Some(Fallback::Invalid));
+        run(&mut coordinator, 0);
+        ends.topic.newest();
+        ends.storage
+            .push(TimestampMicros(0), Request::AcknowledgeConfigFallback);
+        let [SafetyEvent::AcknowledgeConfigFallback { ticket }] = run(&mut coordinator, 10)[..]
+        else {
+            panic!("expected the acknowledgement");
+        };
+        reply(&mut ends, ticket, Outcome::Accepted);
+        run(&mut coordinator, 20);
+        assert_eq!(ends.topic.newest().unwrap().value.fallback, None);
+        assert_eq!(storage_outcomes(&mut ends), [Outcome::Accepted]);
+    }
+
+    #[test]
+    fn rc_input_gets_the_newest_change_once_its_full_link_has_room() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        let mut now = 0;
+        for value in [0.05, 0.06, 0.07] {
+            ends.storage.push(TimestampMicros(0), roll_p(value));
+            now += 10;
+            let sent = run(&mut coordinator, now);
+            let Some(SafetyEvent::InhibitArming { ticket }) = sent.first().copied() else {
+                panic!("expected an inhibit request: {sent:?}");
+            };
+            reply(&mut ends, ticket, Outcome::Accepted);
+            now += 10;
+            run(&mut coordinator, now);
+            let applied = ends.control.newest().unwrap();
+            ends.applied.push(TimestampMicros(0), applied.seq);
+            now += 10;
+            run(&mut coordinator, now);
+        }
+        // RC input read nothing meanwhile: its link took two, refused the
+        // third, and gets it once it reads.
+        let mut newest = ends.rc_input.newest().unwrap().value;
+        assert_eq!(newest.tuning.rate_gains.roll.p, 0.06);
+        run(&mut coordinator, now + 10);
+        newest = ends.rc_input.newest().unwrap().value;
+        assert_eq!(newest.tuning.rate_gains.roll.p, 0.07);
     }
 }

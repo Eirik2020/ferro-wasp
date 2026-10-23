@@ -119,8 +119,14 @@ pub enum StorageCommand {
     /// Erase the log, refused while any flight is unacknowledged.
     LogsEraseSyncedConfirmed,
     ConfigGet(ConfigKey),
+    /// Set a value: at once, under an arm inhibit, for a live key; after
+    /// `config save` and a reboot for a boot-only one.
     ConfigSet(ConfigKey, f32),
     ConfigSave,
+    /// Whether the boot fell back from the saved configuration.
+    ConfigFallback,
+    /// Acknowledge the boot's fallback, so the craft may arm; disarmed only.
+    ConfigFallbackAck,
     /// Show each port's saved function.
     SerialShow,
     /// Stage a port's function; it applies after `config save` and a reboot.
@@ -309,6 +315,11 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
             Ok(StorageCommand::ConfigSet(key, value))
         }
         (Some("config"), Some("save")) if words.next().is_none() => Ok(StorageCommand::ConfigSave),
+        (Some("config"), Some("fallback")) => match (words.next(), words.next()) {
+            (None, _) => Ok(StorageCommand::ConfigFallback),
+            (Some("ack"), None) => Ok(StorageCommand::ConfigFallbackAck),
+            _ => Err(CommandParseError::InvalidArgument),
+        },
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
         (Some("live"), None) => Ok(StorageCommand::Live),
         (Some("rc"), None) => Ok(StorageCommand::Rc),

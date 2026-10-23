@@ -260,9 +260,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-boundary-contracts"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-control",
+ "ferrowasp-io-contracts",
+ "ferrowasp-serial",
+]
+
+[[package]]
 name = "ferrowasp-config"
 version = "0.1.0"
 dependencies = [
+ "ferrowasp-boundary-contracts",
  "ferrowasp-control",
  "ferrowasp-flight-control",
  "ferrowasp-input",
@@ -319,6 +329,7 @@ name = "ferrowasp-safety"
 version = "0.1.0"
 dependencies = [
  "critical-section",
+ "ferrowasp-boundary-contracts",
  "ferrowasp-io-contracts",
  "heapless",
 ]

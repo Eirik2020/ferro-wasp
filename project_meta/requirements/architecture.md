@@ -151,9 +151,10 @@ an RTIC shared resource locked by `control_loop` (14), `rc_input` (10),
 `osd_refresh` (3) and `flash_manager_task` (1). A non-critical task could hold
 a lock whose ceiling is 14 and stop the control loop for that time, and the
 OSD (through `tuning_request_seq`) and the flash manager could write any
-tuning into the control loop. Under this design `tuning_profile` is state
-owned by the control loop; the OSD and flash manager send requests and read
-the active profile from the ledger.
+tuning into the control loop. Under this design the configuration is state
+owned by the config owner, which the coordinator runs (section 14); the
+control loop and RC input take each change on a `state` link, and the OSD and
+flash manager send requests and read the configuration from the ledger.
 
 The SPI1 mailbox between the IMU tasks and the SPI owner
 (`critical-section::Mutex<RefCell<_>>`) becomes SPSC request and response
@@ -216,8 +217,8 @@ safety-critical tasks wrote directly and anyone read.
   since nothing yet covers the control loop's liveness; the motor map and
   the DShot release time, flags; IMU readiness and kind, init values.
   Values non-critical tasks share among themselves also go through the
-  observer. Inbound values (the accelerometer level, the host-connected
-  flags, `tuning_profile`) wait for the coordinator.
+  observer. Inbound values (the host leases, the configuration and the
+  accelerometer level) come through the coordinator.
 - **The link type** and the `Stamped` envelope (sequence, timestamp) live in
   `ferrowasp-io-contracts`, under every link, including the hardware ones
   section 12 plans. A refused message still takes a sequence number, so the
