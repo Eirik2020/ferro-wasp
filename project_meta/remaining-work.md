@@ -80,9 +80,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   2. the remaining SPSC links and typed flags; the loop-rate
      and actuator-feedback rules in `validate()` (section 14), once those are
      stored keys; FerroConfigurator showing and
-     acknowledging a boot fallback; the command lines' configuration commands
-     on a board whose store failed, which answer that storage is unavailable
-     though a change would apply; MSPv2's commit answering
+     acknowledging a boot fallback; MSPv2's commit answering
      `reboot_required` for a boot-only key; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source, after which actuator
      output, the DShot service, the ESC manager and RC input move to their

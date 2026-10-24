@@ -325,17 +325,85 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         ),
                     );
                 }
+                // A configuration change applies without the store; only
+                // keeping it needs one.
                 if let Some((command, link)) = flash_commands.take_next() {
                     flash_responses.answer(link);
-                    let response = flash_task::storage_unavailable_response(
-                        &command,
-                        [
-                            flash_probe.jedec[0],
-                            flash_probe.jedec[1],
-                            flash_probe.jedec[2],
-                        ],
+                    let config = cx.shared.ledger.lock(|ledger| ledger.config().value);
+                    let action = storage_commands::handle_config(
+                        command,
+                        &mut storage_commands::ConfigContext {
+                            responses: &mut *flash_responses,
+                            armed: flash_safety_arm_reader.read(),
+                            busy: false,
+                            stored_config: config.next_boot,
+                            fallback: config.fallback,
+                            default_serial_bindings: CONFIG::DEFAULT_SERIAL_BINDINGS,
+                            serial_routes: CONFIG::SERIAL_ROUTES,
+                        },
                     );
-                    queue_storage_response(flash_responses, response.as_str());
+                    match action {
+                        None => {
+                            let response = flash_task::storage_unavailable_response(
+                                &command,
+                                [
+                                    flash_probe.jedec[0],
+                                    flash_probe.jedec[1],
+                                    flash_probe.jedec[2],
+                                ],
+                            );
+                            queue_storage_response(flash_responses, response.as_str());
+                        }
+                        Some(CommandAction::Request(request)) => {
+                            let outcome = ask(
+                                storage_request_link,
+                                &mut cx.shared.ledger,
+                                at(),
+                                request,
+                                CONFIG_DECISION_MS,
+                                || Mono::delay(1u64.millis()),
+                            )
+                            .await;
+                            queue_storage_response(
+                                flash_responses,
+                                storage_commands::request_answer(request, outcome),
+                            );
+                        }
+                        Some(CommandAction::StartCalibration) => {
+                            queue_storage_response(
+                                flash_responses,
+                                "OK imu calibration started; keep the craft still\r\n",
+                            );
+                            let request = Request::CalibrateAccel;
+                            let outcome = ask(
+                                storage_request_link,
+                                &mut cx.shared.ledger,
+                                at(),
+                                request,
+                                CALIBRATION_DECISION_MS,
+                                || Mono::delay(1u64.millis()),
+                            )
+                            .await;
+                            if outcome == Some(Outcome::Accepted) {
+                                let level = cx
+                                    .shared
+                                    .ledger
+                                    .lock(|ledger| ledger.config().value.active.accel_level);
+                                let line = storage_commands::calibrated_answer(level.offset_mg);
+                                queue_storage_response(flash_responses, &line);
+                                queue_storage_response(
+                                    flash_responses,
+                                    "ERR storage unavailable; the level applies until reboot\r\n",
+                                );
+                            } else {
+                                queue_storage_response(
+                                    flash_responses,
+                                    storage_commands::request_answer(request, outcome),
+                                );
+                            }
+                        }
+                        Some(_) => {}
+                    }
                 }
                 Mono::delay(100u64.millis()).await;
                 continue;
@@ -652,11 +720,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                         };
                         match saved {
                             Ok(level) => {
-                                let [x, y, z] = level.offset_mg;
-                                let mut line = heapless::String::<
-                                    { flash_task::USB_RESPONSE_CAPACITY },
-                                >::new();
-                                let _ = write!(line, "OK imu calibrated x={x} y={y} z={z} mg\r\n");
+                                let line = storage_commands::calibrated_answer(level.offset_mg);
                                 queue_storage_response(flash_responses, &line);
                             }
                             Err(answer) => {
