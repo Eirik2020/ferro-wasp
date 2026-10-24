@@ -112,7 +112,9 @@ A value set with `config set` applies at once while disarmed, through the
 same checks the next boot applies, with arming held off until the control loop
 flies it; `config save` keeps it across a reboot. The RC protocol and port
 bindings are read only at boot, so a change to them waits for a save and a
-reboot. `config fallback` reports whether the boot fell back from the saved
+reboot. These commands, `imu level` and `imu calibrate` work while the
+flash is unavailable too; only keeping a change needs it, so `config save`
+then answers that storage is unavailable. `config fallback` reports whether the boot fell back from the saved
 configuration, and `config fallback ack` acknowledges it so the craft may arm
 (see [Arming](./arming.md#shared-arming-guards)).
 

@@ -95,6 +95,123 @@ pub fn begin_config_save(
     Ok(())
 }
 
+/// What a configuration command reads: none of it the store's, so these
+/// commands are answered while the store is unavailable too.
+pub struct ConfigContext<'a> {
+    /// Already answering the link that asked.
+    pub responses: &'a mut ResponseRouter,
+    pub armed: bool,
+    /// Flash maintenance or a save is running.
+    pub busy: bool,
+    /// The next boot's configuration.
+    pub stored_config: StoredConfig,
+    /// Why the boot fell back, until acknowledged.
+    pub fallback: Option<Fallback>,
+    pub default_serial_bindings: SerialBindings,
+    pub serial_routes: &'a [SerialRoute],
+}
+
+/// Answers a command that needs no store, or says what the owner must do;
+/// `None` for one that needs the store.
+pub fn handle_config(
+    command: StorageCommand,
+    cfg: &mut ConfigContext<'_>,
+) -> Option<CommandAction> {
+    let mut response = heapless::String::<{ crate::commands::USB_RESPONSE_CAPACITY }>::new();
+    match command {
+        crate::commands::StorageCommand::SerialShow => {
+            write_serial_bindings(
+                cfg.stored_config.serial_bindings,
+                cfg.default_serial_bindings,
+                cfg.serial_routes,
+                |line| {
+                    answer(cfg.responses, line);
+                },
+            );
+        }
+        crate::commands::StorageCommand::SerialSet(port, function) => {
+            if cfg.armed {
+                answer(cfg.responses, "ERR config changes disabled while armed\r\n");
+            } else {
+                return Some(CommandAction::Request(Request::ConfigBind {
+                    port,
+                    function,
+                }));
+            }
+        }
+        crate::commands::StorageCommand::ConfigGet(key) => {
+            let _ = write!(
+                response,
+                "OK {}={:.4}\r\n",
+                key.name(),
+                cfg.stored_config.get(key)
+            );
+            answer(cfg.responses, response.as_str());
+        }
+        crate::commands::StorageCommand::ConfigSet(key, value) => {
+            if cfg.armed {
+                answer(cfg.responses, "ERR config changes disabled while armed\r\n");
+            } else {
+                return Some(CommandAction::Request(Request::ConfigSet { key, value }));
+            }
+        }
+        crate::commands::StorageCommand::ConfigFallback => {
+            answer(
+                cfg.responses,
+                match cfg.fallback {
+                    None => "OK config fallback=none\r\n",
+                    Some(Fallback::Damaged) => {
+                        "OK config fallback=damaged; a saved slot is torn\r\n"
+                    }
+                    Some(Fallback::Invalid) => {
+                        "OK config fallback=invalid; a saved slot was refused\r\n"
+                    }
+                    Some(Fallback::Unreadable) => {
+                        "OK config fallback=unreadable; booted the board default\r\n"
+                    }
+                },
+            );
+        }
+        crate::commands::StorageCommand::ConfigFallbackAck => {
+            if cfg.armed {
+                answer(cfg.responses, "ERR config changes disabled while armed\r\n");
+            } else {
+                return Some(CommandAction::Request(Request::AcknowledgeConfigFallback));
+            }
+        }
+        crate::commands::StorageCommand::ImuLevel => {
+            let [x, y, z] = cfg.stored_config.accel_level.offset_mg;
+            let _ = write!(response, "OK imu level x={x} y={y} z={z} mg\r\n");
+            answer(cfg.responses, &response);
+        }
+        crate::commands::StorageCommand::ImuCalibrate => {
+            if cfg.armed {
+                answer(
+                    cfg.responses,
+                    "ERR imu calibration disabled while armed\r\n",
+                );
+            } else if cfg.busy {
+                answer(cfg.responses, "ERR flash maintenance already active\r\n");
+            } else {
+                return Some(CommandAction::StartCalibration);
+            }
+        }
+        _ => return None,
+    }
+    Some(CommandAction::None)
+}
+
+/// The answer to a calibration the coordinator accepted, with the level's
+/// offsets in milli-g.
+pub fn calibrated_answer(
+    offset_mg: [i16; 3],
+) -> heapless::String<{ crate::commands::USB_RESPONSE_CAPACITY }> {
+    let [x, y, z] = offset_mg;
+    let mut line = heapless::String::new();
+    let _ = write!(line, "OK imu calibrated x={x} y={y} z={z} mg\r\n");
+    line
+}
+
 /// Answers one storage command, or says what the owner must do.
 pub fn handle<F: NorStorage>(
     command: StorageCommand,
@@ -103,6 +220,22 @@ pub fn handle<F: NorStorage>(
     let mut response = heapless::String::<{ crate::commands::USB_RESPONSE_CAPACITY }>::new();
     let maintenance_busy = ctx.maintenance.is_active() || ctx.config_save.is_active();
     let unfinished_flight = ctx.log.unfinished_flight();
+    if !(ctx.link == CommandLink::Serial && command.usb_only())
+        && let Some(action) = handle_config(
+            command,
+            &mut ConfigContext {
+                responses: &mut *ctx.responses,
+                armed: ctx.armed,
+                busy: maintenance_busy,
+                stored_config: ctx.stored_config,
+                fallback: ctx.fallback,
+                default_serial_bindings: ctx.default_serial_bindings,
+                serial_routes: ctx.serial_routes,
+            },
+        )
+    {
+        return action;
+    }
     match command {
         // The configurator link refuses these before queueing
         // them; this is the second check.
@@ -142,28 +275,20 @@ pub fn handle<F: NorStorage>(
             answer(ctx.responses, "OK imu calibrate | imu level\r\n");
         }
         // Answered by the USB task; never queued here.
+        // Answered by `handle_config` above.
+        crate::commands::StorageCommand::SerialShow
+        | crate::commands::StorageCommand::SerialSet(..)
+        | crate::commands::StorageCommand::ConfigGet(_)
+        | crate::commands::StorageCommand::ConfigSet(..)
+        | crate::commands::StorageCommand::ConfigFallback
+        | crate::commands::StorageCommand::ConfigFallbackAck
+        | crate::commands::StorageCommand::ImuLevel
+        | crate::commands::StorageCommand::ImuCalibrate => {}
         crate::commands::StorageCommand::Live
         | crate::commands::StorageCommand::Rc
         | crate::commands::StorageCommand::Esc
         | crate::commands::StorageCommand::Build
         | crate::commands::StorageCommand::Motor(_) => {}
-        crate::commands::StorageCommand::SerialShow => {
-            write_serial_bindings(
-                ctx.stored_config.serial_bindings,
-                ctx.default_serial_bindings,
-                ctx.serial_routes,
-                |line| {
-                    answer(ctx.responses, line);
-                },
-            );
-        }
-        crate::commands::StorageCommand::SerialSet(port, function) => {
-            if ctx.armed {
-                answer(ctx.responses, "ERR config changes disabled while armed\r\n");
-            } else {
-                return CommandAction::Request(Request::ConfigBind { port, function });
-            }
-        }
         crate::commands::StorageCommand::FlashInfo => {
             let _ = write!(
                 response,
@@ -304,46 +429,6 @@ pub fn handle<F: NorStorage>(
                 }
             }
         }
-        crate::commands::StorageCommand::ConfigGet(key) => {
-            let _ = write!(
-                response,
-                "OK {}={:.4}\r\n",
-                key.name(),
-                ctx.stored_config.get(key)
-            );
-            answer(ctx.responses, response.as_str());
-        }
-        crate::commands::StorageCommand::ConfigSet(key, value) => {
-            if ctx.armed {
-                answer(ctx.responses, "ERR config changes disabled while armed\r\n");
-            } else {
-                return CommandAction::Request(Request::ConfigSet { key, value });
-            }
-        }
-        crate::commands::StorageCommand::ConfigFallback => {
-            answer(
-                ctx.responses,
-                match ctx.fallback {
-                    None => "OK config fallback=none\r\n",
-                    Some(Fallback::Damaged) => {
-                        "OK config fallback=damaged; a saved slot is torn\r\n"
-                    }
-                    Some(Fallback::Invalid) => {
-                        "OK config fallback=invalid; a saved slot was refused\r\n"
-                    }
-                    Some(Fallback::Unreadable) => {
-                        "OK config fallback=unreadable; booted the board default\r\n"
-                    }
-                },
-            );
-        }
-        crate::commands::StorageCommand::ConfigFallbackAck => {
-            if ctx.armed {
-                answer(ctx.responses, "ERR config changes disabled while armed\r\n");
-            } else {
-                return CommandAction::Request(Request::AcknowledgeConfigFallback);
-            }
-        }
         crate::commands::StorageCommand::ConfigSave => {
             if ctx.armed {
                 answer(ctx.responses, "ERR config save disabled while armed\r\n");
@@ -361,23 +446,6 @@ pub fn handle<F: NorStorage>(
                     Err(answer) => answer,
                 };
                 answer(ctx.responses, reply);
-            }
-        }
-        crate::commands::StorageCommand::ImuLevel => {
-            let [x, y, z] = ctx.stored_config.accel_level.offset_mg;
-            let _ = write!(response, "OK imu level x={x} y={y} z={z} mg\r\n");
-            answer(ctx.responses, &response);
-        }
-        crate::commands::StorageCommand::ImuCalibrate => {
-            if ctx.armed {
-                answer(
-                    ctx.responses,
-                    "ERR imu calibration disabled while armed\r\n",
-                );
-            } else if maintenance_busy {
-                answer(ctx.responses, "ERR flash maintenance already active\r\n");
-            } else {
-                return CommandAction::StartCalibration;
             }
         }
         // Restarting cuts the store off: only once disarmed, with no
@@ -406,6 +474,9 @@ pub fn request_answer(request: Request, outcome: Option<Outcome>) -> &'static st
         (Request::AcknowledgeConfigFallback, Outcome::Accepted) => "OK fallback acknowledged\r\n",
         (_, Outcome::Accepted) => "OK applied; use config save to keep it\r\n",
         (_, Outcome::Pending) => "OK staged; use config save, then reboot\r\n",
+        (Request::ConfigBind { .. }, Outcome::Refused(Refusal::Invalid)) => {
+            "ERR the port cannot carry that, or RC would be unbound\r\n"
+        }
         (_, Outcome::Refused(Refusal::Invalid)) => "ERR value outside allowed range\r\n",
         (_, Outcome::Refused(Refusal::Armed)) => "ERR config changes disabled while armed\r\n",
         (_, Outcome::Refused(Refusal::ArmingInProgress)) => {
@@ -443,7 +514,7 @@ mod tests {
     use ferrowasp_serial::{LogicalSerialPort, SerialCapabilities, SerialFunction, SerialProfile};
     use ferrowasp_storage::config_save::SaveStep;
     use ferrowasp_storage::test_nor::MemoryNor;
-    use std::{boxed::Box, string::String, vec::Vec};
+    use std::{boxed::Box, string::String, vec, vec::Vec};
 
     const CAPACITY: u32 = 64 * 1024;
 
@@ -689,6 +760,65 @@ mod tests {
         assert_eq!(
             owner.send("config fallback ack"),
             ["ERR config changes disabled while armed\r\n"]
+        );
+    }
+
+    #[test]
+    fn configuration_commands_need_no_store() {
+        let mut owner = Owner::new();
+        let send = |owner: &mut Owner, line: &str| {
+            owner.responses.answer(CommandLink::Usb);
+            let action = handle_config(
+                parse_command(line).unwrap(),
+                &mut ConfigContext {
+                    responses: &mut owner.responses,
+                    armed: false,
+                    busy: false,
+                    stored_config: StoredConfig::first_hop_default(),
+                    fallback: Some(Fallback::Unreadable),
+                    default_serial_bindings: SerialBindings::none(),
+                    serial_routes: &ROUTES,
+                },
+            );
+            let mut lines = Vec::new();
+            while let Some(frame) = owner.usb_out.dequeue() {
+                lines.push(String::from_utf8(frame.as_bytes().to_vec()).unwrap());
+            }
+            (action, lines)
+        };
+        assert_eq!(
+            send(&mut owner, "config set roll_p 3").0,
+            Some(CommandAction::Request(Request::ConfigSet {
+                key: ConfigKey::RollP,
+                value: 3.0
+            }))
+        );
+        assert_eq!(
+            send(&mut owner, "config fallback"),
+            (
+                Some(CommandAction::None),
+                vec![String::from(
+                    "OK config fallback=unreadable; booted the board default\r\n"
+                )]
+            )
+        );
+        assert_eq!(
+            send(&mut owner, "imu calibrate").0,
+            Some(CommandAction::StartCalibration)
+        );
+        assert_eq!(
+            send(&mut owner, "logs list"),
+            (None, Vec::new()),
+            "the store's"
+        );
+        assert_eq!(
+            send(&mut owner, "config save"),
+            (None, Vec::new()),
+            "the store's"
+        );
+        assert_eq!(
+            calibrated_answer([12, -3, 0]).as_str(),
+            "OK imu calibrated x=12 y=-3 z=0 mg\r\n"
         );
     }
 

@@ -1,5 +1,6 @@
-//! Requirements: CTRL-002, CTRL-015, MOTOR-001
+//! Requirements: CTRL-002, CTRL-015, MOTOR-001, CONFIG-033
 
+use ferrowasp_config::owner::BoardRules;
 use ferrowasp_config::stored::StoredConfig;
 use ferrowasp_control::calibration::accel_level::AccelLevel;
 use ferrowasp_control::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
@@ -137,6 +138,14 @@ pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
     accel_level: AccelLevel::ZERO,
 };
 
+/// What every configuration change, and every saved configuration at boot,
+/// is checked against: the ports this board routes and its default
+/// bindings.
+pub const BOARD_RULES: BoardRules = BoardRules {
+    routes: crate::serial::SERIAL_ROUTES,
+    default_bindings: crate::serial::DEFAULT_SERIAL_BINDINGS,
+};
+
 // The approved P-only baseline: changing it is a tuning change and re-gates
 // the next flight.
 const _: () = {
@@ -153,6 +162,14 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_default_configuration_passes_the_boards_rules() {
+        assert!(ferrowasp_config::owner::validate(
+            &DEFAULT_STORED_CONFIG,
+            &BOARD_RULES
+        ));
+    }
 
     #[test]
     fn documented_adc_baseline_uses_the_foxeer_betaflight_target_values() {

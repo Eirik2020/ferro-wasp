@@ -176,6 +176,16 @@ See: [the independent watchdog](requirements/fault-handling.md#the-independent-w
 
 ## Configuration
 
+### Why not stage a change in each participant before committing it?
+
+Under the arm inhibit nothing can arm while a change moves through the
+tasks that fly it, and a changed map invalidates the RC link, so the
+change is committed once; the control loop confirms applying it, and an
+unconfirmed one refuses arming until reboot. Staging would add a round trip,
+and RC input with no receiver could never acknowledge.
+
+See: [the coordinator](requirements/architecture.md#11-the-coordinator)
+
 ### Why not clamp a stored value that fails validation?
 
 Storage is untrusted input, and a clamped value is one nobody chose. A

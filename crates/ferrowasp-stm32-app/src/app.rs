@@ -244,7 +244,7 @@ macro_rules! flight_app_facade {
 
         pub use board::Spi1ImuKind;
         pub use board::profiles::{
-            ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, DEFAULT_STORED_CONFIG,
+            ADC_OBSERVATION_PROFILE, ARMING_INHIBIT_REASON, BOARD_RULES, DEFAULT_STORED_CONFIG,
             DEFAULT_TUNING, FLIGHT_ARMING_ENABLED, IMU_CONTROL_AXIS_PROFILE,
             imu_kind_flight_verified,
         };
@@ -390,7 +390,7 @@ macro_rules! flight_app_facade {
             flash: &mut FlashDevice,
             probe: &flight_tasks::FlashProbe,
         ) -> ConfigBoot {
-            let boot = flight_tasks::boot_config(flash, probe, DEFAULT_STORED_CONFIG);
+            let boot = flight_tasks::boot_config(flash, probe, DEFAULT_STORED_CONFIG, &BOARD_RULES);
             match boot.fallback {
                 None => {}
                 Some(Fallback::Damaged) => {
@@ -406,7 +406,7 @@ macro_rules! flight_app_facade {
             ConfigBoot {
                 boot,
                 default: DEFAULT_STORED_CONFIG,
-                default_bindings: board::serial::DEFAULT_SERIAL_BINDINGS,
+                board: BOARD_RULES,
             }
         }
 
