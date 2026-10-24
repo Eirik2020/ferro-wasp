@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
+            window.path_to_searchindex_js = "searchindex-cd749f37.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -199,9 +199,10 @@ can delay flight work.</p>
 <tr><td style="text-align: right">9</td><td><code>io_watchdog</code></td><td>HW (timer)</td><td>Recovers a stalled SPI transfer.</td></tr>
 <tr><td style="text-align: right">8</td><td><code>esc_manager_task</code></td><td>SW</td><td>Polls ESC telemetry over its return line.</td></tr>
 <tr><td style="text-align: right">7</td><td><code>observer_task</code></td><td>SW</td><td>Publishes the craft’s state on the read-only ledger the tasks below read, and streams logged control ticks to the blackbox.</td></tr>
+<tr><td style="text-align: right">6</td><td><code>coordinator_task</code></td><td>SW</td><td>Takes the command lines’ requests in every 10 ms, checks them, and passes them to the safety master.</td></tr>
 <tr><td style="text-align: right">5</td><td><code>usb_fs</code></td><td>HW</td><td>The USB command line and status.</td></tr>
 <tr><td style="text-align: right">3</td><td><code>osd_refresh</code>, <code>configurator_link</code></td><td>SW</td><td>The MSP OSD; the command line on a UART.</td></tr>
-<tr><td style="text-align: right">1</td><td><code>flash_manager_task</code>, <code>heartbeat</code>, <code>rc_telemetry</code>, ADC</td><td>SW, HW</td><td>Storage and the blackbox, diagnostics, receiver telemetry, battery sensing.</td></tr>
+<tr><td style="text-align: right">1</td><td><code>flash_manager_task</code>, <code>heartbeat</code>, <code>usb_keepalive</code>, <code>rc_telemetry</code>, ADC</td><td>SW, HW</td><td>Storage and the blackbox, diagnostics, the USB host lease’s wake, receiver telemetry, battery sensing.</td></tr>
 </tbody>
 </table>
 </div>

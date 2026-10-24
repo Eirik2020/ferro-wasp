@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
+            window.path_to_searchindex_js = "searchindex-cd749f37.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -249,8 +249,7 @@ or the radio remixed.</p>
 <p><code>rc_map</code> names the one-based channels for roll, pitch, throttle and yaw, in
 that order, so AETR is <code>1234</code> and TAER is <code>2314</code>. Each of channels 1-4 must be
 used once. <code>rc_arm_channel</code> accepts channels 5-16.</p>
-<p>A saved change to the map takes effect when the configuration is saved, while
-disarmed. Because the arm switch may now be read from a channel that is
+<p>A change to the map takes effect when it is set, while disarmed. Because the arm switch may now be read from a channel that is
 already high, the change invalidates the RC link like a lost receiver: the
 link must recover, and the new arm channel must read low, before the craft
 can arm.</p>
@@ -272,6 +271,13 @@ accepted only while disarmed with no flash maintenance or flight log open;
 <code>reboot dfu</code> restarts into the chip’s ROM USB DFU bootloader, from which
 FerroConfigurator flashes, and holding BOOT at power-on stays the recovery
 path.</p>
+<p>A value set with <code>config set</code> applies at once while disarmed, through the
+same checks the next boot applies, with arming held off until the control loop
+flies it; <code>config save</code> keeps it across a reboot. The RC protocol and port
+bindings are read only at boot, so a change to them waits for a save and a
+reboot. <code>config fallback</code> reports whether the boot fell back from the saved
+configuration, and <code>config fallback ack</code> acknowledges it so the craft may arm
+(see <a href="./arming.html#shared-arming-guards">Arming</a>).</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
 fixed-size buffers.</p>
 <h2 id="esc-telemetry"><a class="header" href="#esc-telemetry">ESC Telemetry</a></h2>

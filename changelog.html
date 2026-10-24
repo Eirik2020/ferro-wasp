@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
+            window.path_to_searchindex_js = "searchindex-cd749f37.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -233,6 +233,19 @@ lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>A configuration value set on the command line or in the OSD menu applies at
+once, while disarmed: arming is held off until the control loop confirms it
+flies the new value, and a change it does not confirm refuses arming until
+the board reboots. <code>config save</code> keeps it across a reboot. The RC protocol
+and port bindings still take effect after a save and a reboot. <code>imu calibrate</code> holds arming off while it samples, and applies the level the
+same way.</p>
+</li>
+<li>
+<p>A boot that cannot use the last saved configuration (a torn or refused
+slot, or a store that cannot be read) refuses arming until the pilot
+acknowledges it with <code>config fallback ack</code>; <code>config fallback</code> says why.</p>
+</li>
 <li>
 <p>FerroConfigurator is the one reader of the onboard log format.
 <code>tools/blackbox_analyzer.py</code> analyzes its <code>convert --csv</code> export, and the

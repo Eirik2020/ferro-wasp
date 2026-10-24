@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
+            window.path_to_searchindex_js = "searchindex-cd749f37.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -323,13 +323,14 @@ fields directly.</p>
 IMU viewer.</p>
 <h2 id="accelerometer-level"><a class="header" href="#accelerometer-level">Accelerometer Level</a></h2>
 <p><code>imu calibrate</code>, on either command line, while disarmed and with no flash
-maintenance running, averages 500 samples of drone-frame gravity. It refuses a
+maintenance running, averages 500 fresh samples of drone-frame gravity from
+the control loop, with arming held off until it ends. It refuses a
 craft that moves (any gravity axis wandering more than 0.05 g, or any gyro axis
 more than 10 degrees per second), one leaning more than 10 degrees, and a
 gravity magnitude more than 0.15 g from 1 g. The mean’s offset from level, in
-milli-g per drone axis and at most 400 mg on each, is saved with the
-configuration through the same two-slot verified write as <code>config save</code>;
-<code>imu level</code> reports it.</p>
+milli-g per drone axis and at most 400 mg on each, applies at once and is
+saved with the configuration through the same two-slot verified write as
+<code>config save</code>; <code>imu level</code> reports it.</p>
 <p>The offsets belong to one craft, so they are not configuration keys and do not
 travel with an exported tune. The control loop subtracts them from gravity
 before the attitude estimate only. The rate loop never reads the

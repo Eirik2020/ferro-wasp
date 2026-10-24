@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8acf7dce.js";
+            window.path_to_searchindex_js = "searchindex-cd749f37.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1125,13 +1125,14 @@ fields directly.</p>
 IMU viewer.</p>
 <h2 id="accelerometer-level"><a class="header" href="#accelerometer-level">Accelerometer Level</a></h2>
 <p><code>imu calibrate</code>, on either command line, while disarmed and with no flash
-maintenance running, averages 500 samples of drone-frame gravity. It refuses a
+maintenance running, averages 500 fresh samples of drone-frame gravity from
+the control loop, with arming held off until it ends. It refuses a
 craft that moves (any gravity axis wandering more than 0.05 g, or any gyro axis
 more than 10 degrees per second), one leaning more than 10 degrees, and a
 gravity magnitude more than 0.15 g from 1 g. The mean’s offset from level, in
-milli-g per drone axis and at most 400 mg on each, is saved with the
-configuration through the same two-slot verified write as <code>config save</code>;
-<code>imu level</code> reports it.</p>
+milli-g per drone axis and at most 400 mg on each, applies at once and is
+saved with the configuration through the same two-slot verified write as
+<code>config save</code>; <code>imu level</code> reports it.</p>
 <p>The offsets belong to one craft, so they are not configuration keys and do not
 travel with an exported tune. The control loop subtracts them from gravity
 before the attitude estimate only. The rate loop never reads the
@@ -1203,12 +1204,18 @@ motor authority.</p>
 <li>a newly observed low-to-high arm transition;</li>
 <li>arm high for the configured 200 ms hold;</li>
 <li>throttle at or below <code>ARMING_MAX_THROTTLE</code>, currently 65 command counts;</li>
-<li>no computer connected: a USB host has not configured the board, and the
-UART configurator link has sent no command in the last 2 seconds. The
-Foxeer has no VBUS sense pin, so a USB supply that only gives power does not
-count;</li>
+<li>no computer connected: no host lease stands. USB renews its lease every
+100 ms while a host has the board configured, and it lasts 500 ms; the UART
+configurator link renews its lease with each command, and it lasts 2
+seconds. The Foxeer has no VBUS sense pin, so a USB supply that only gives
+power does not count;</li>
 <li>a supported IMU that has produced a sample;</li>
 <li>completed stationary startup gyro-bias calibration;</li>
+<li>no configuration change being applied, and none that failed to confirm
+since boot: a change holds arming off until the control loop confirms it,
+and one it never confirms refuses arming until reboot;</li>
+<li>no unacknowledged configuration fallback: a boot that could not use the
+last save refuses arming until <code>config fallback ack</code>, sent disarmed;</li>
 <li>a fresh IMU sample in the control loop, where one isolated tick without a
 new sample is tolerated and two in a row are not;</li>
 <li>no revoked actuator permit or other failed safety check.</li>
@@ -1300,8 +1307,9 @@ data from the previous arm cycle.</p>
 deadline that detects complete absence of future control-loop wakes remains
 open.</p>
 <h2 id="bench-motor-test"><a class="header" href="#bench-motor-test">Bench Motor Test</a></h2>
-<p>FerroConfigurator’s motor test is a request over USB only, which the safety
-master accepts only while disarmed, not arming, with the arm switch low and
+<p>FerroConfigurator’s motor test is a request over USB only, which reaches the
+safety master through the coordinator, and which the safety master accepts
+only while disarmed, not arming, with the arm switch low and
 output enabled. An accepted request idles one logical motor for a 250 ms lease
 that the host renews while its button is held; a lapsed lease stops the motor.
 Arming is refused for 2 s after the last request. Bench images, and the
@@ -1555,9 +1563,10 @@ can delay flight work.</p>
 <tr><td style="text-align: right">9</td><td><code>io_watchdog</code></td><td>HW (timer)</td><td>Recovers a stalled SPI transfer.</td></tr>
 <tr><td style="text-align: right">8</td><td><code>esc_manager_task</code></td><td>SW</td><td>Polls ESC telemetry over its return line.</td></tr>
 <tr><td style="text-align: right">7</td><td><code>observer_task</code></td><td>SW</td><td>Publishes the craft’s state on the read-only ledger the tasks below read, and streams logged control ticks to the blackbox.</td></tr>
+<tr><td style="text-align: right">6</td><td><code>coordinator_task</code></td><td>SW</td><td>Takes the command lines’ requests in every 10 ms, checks them, and passes them to the safety master.</td></tr>
 <tr><td style="text-align: right">5</td><td><code>usb_fs</code></td><td>HW</td><td>The USB command line and status.</td></tr>
 <tr><td style="text-align: right">3</td><td><code>osd_refresh</code>, <code>configurator_link</code></td><td>SW</td><td>The MSP OSD; the command line on a UART.</td></tr>
-<tr><td style="text-align: right">1</td><td><code>flash_manager_task</code>, <code>heartbeat</code>, <code>rc_telemetry</code>, ADC</td><td>SW, HW</td><td>Storage and the blackbox, diagnostics, receiver telemetry, battery sensing.</td></tr>
+<tr><td style="text-align: right">1</td><td><code>flash_manager_task</code>, <code>heartbeat</code>, <code>usb_keepalive</code>, <code>rc_telemetry</code>, ADC</td><td>SW, HW</td><td>Storage and the blackbox, diagnostics, the USB host lease’s wake, receiver telemetry, battery sensing.</td></tr>
 </tbody>
 </table>
 </div>
@@ -1651,8 +1660,7 @@ or the radio remixed.</p>
 <p><code>rc_map</code> names the one-based channels for roll, pitch, throttle and yaw, in
 that order, so AETR is <code>1234</code> and TAER is <code>2314</code>. Each of channels 1-4 must be
 used once. <code>rc_arm_channel</code> accepts channels 5-16.</p>
-<p>A saved change to the map takes effect when the configuration is saved, while
-disarmed. Because the arm switch may now be read from a channel that is
+<p>A change to the map takes effect when it is set, while disarmed. Because the arm switch may now be read from a channel that is
 already high, the change invalidates the RC link like a lost receiver: the
 link must recover, and the new arm channel must read low, before the craft
 can arm.</p>
@@ -1674,6 +1682,13 @@ accepted only while disarmed with no flash maintenance or flight log open;
 <code>reboot dfu</code> restarts into the chip’s ROM USB DFU bootloader, from which
 FerroConfigurator flashes, and holding BOOT at power-on stays the recovery
 path.</p>
+<p>A value set with <code>config set</code> applies at once while disarmed, through the
+same checks the next boot applies, with arming held off until the control loop
+flies it; <code>config save</code> keeps it across a reboot. The RC protocol and port
+bindings are read only at boot, so a change to them waits for a save and a
+reboot. <code>config fallback</code> reports whether the boot fell back from the saved
+configuration, and <code>config fallback ack</code> acknowledges it so the craft may arm
+(see <a href="#shared-arming-guards">Arming</a>).</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
 fixed-size buffers.</p>
 <h2 id="esc-telemetry-1"><a class="header" href="#esc-telemetry-1">ESC Telemetry</a></h2>
@@ -2735,6 +2750,19 @@ lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>A configuration value set on the command line or in the OSD menu applies at
+once, while disarmed: arming is held off until the control loop confirms it
+flies the new value, and a change it does not confirm refuses arming until
+the board reboots. <code>config save</code> keeps it across a reboot. The RC protocol
+and port bindings still take effect after a save and a reboot. <code>imu calibrate</code> holds arming off while it samples, and applies the level the
+same way.</p>
+</li>
+<li>
+<p>A boot that cannot use the last saved configuration (a torn or refused
+slot, or a store that cannot be read) refuses arming until the pilot
+acknowledges it with <code>config fallback ack</code>; <code>config fallback</code> says why.</p>
+</li>
 <li>
 <p>FerroConfigurator is the one reader of the onboard log format.
 <code>tools/blackbox_analyzer.py</code> analyzes its <code>convert --csv</code> export, and the
