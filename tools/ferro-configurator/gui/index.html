@@ -52,6 +52,10 @@
              first. Rows come from the library, in the firmware's own order. -->
         <p id="prearm-empty" class="note">Connect a disarmed controller to see what stops it arming.</p>
         <ul id="prearm-checks" aria-label="Pre-arm checks"></ul>
+        <div id="fallback-row" class="row" hidden>
+          <button id="ack-fallback" type="button" disabled>Acknowledge fallback</button>
+          <span id="fallback-detail" class="note"></span>
+        </div>
         <h2>Attitude</h2>
         <div class="row">
           <button id="calibrate-accel" type="button" disabled>Calibrate accelerometer</button>

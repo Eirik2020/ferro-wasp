@@ -21,12 +21,13 @@
 use std::{path::Path, time::Duration};
 
 use ferro_configurator_core::{
-    AccelLevel, BoardProfile, CatalogEntry, DFU_ENTRY_TIMEOUT, DeviceSelector, DownloadSummary,
-    FerroClient, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightCatalog, FlightSelector,
-    LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck, RESTART_TIMEOUT, SerialBindings,
-    SerialTransport, StatusSnapshot, SyncedFlight, catalog_device, detect_dfu, discover_ports,
-    download_flight, find_bundled_firmware, flash_firmware, open_device, prearm_checks,
-    prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port, wait_for_dfu_device,
+    AccelLevel, BoardProfile, CatalogEntry, ConfigFallback, DFU_ENTRY_TIMEOUT, DeviceSelector,
+    DownloadSummary, FerroClient, FerroConfig, FerroError, FlashInfo, FlashProgress, FlightCatalog,
+    FlightSelector, LineTransport, LiveSnapshot, LogInfo, PortInfo, PrearmCheck, RESTART_TIMEOUT,
+    SerialBindings, SerialTransport, StatusSnapshot, SyncedFlight, catalog_device, detect_dfu,
+    discover_ports, download_flight, find_bundled_firmware, flash_firmware, open_device,
+    prearm_checks, prepare_elf, resolve_device_flight, sync_flights, wait_for_board_port,
+    wait_for_dfu_device,
 };
 use serde::Serialize;
 
@@ -88,6 +89,9 @@ pub struct Safety {
     pub writes_allowed: bool,
     /// Why the controller would or would not arm, first failure first.
     pub checks: Vec<PrearmCheck>,
+    /// Whether it booted without its last save; `None` when a firmware
+    /// that predates the question could not answer it.
+    pub config_fallback: Option<ConfigFallback>,
 }
 
 /// One step of a flash, for a front-end's progress line.
@@ -150,11 +154,25 @@ pub struct FlashReport {
 /// Only [`Session<SerialTransport>`] can open a real port.
 pub struct Session<T: LineTransport = SerialTransport> {
     client: Option<FerroClient<T>>,
+    fallback: FallbackRead,
+}
+
+/// What this session knows of the boot's fallback. It changes only when it
+/// is acknowledged or the controller reboots, so it is asked once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FallbackRead {
+    Unread,
+    Read(ConfigFallback),
+    /// The firmware does not know the question.
+    Unsupported,
 }
 
 impl<T: LineTransport> Default for Session<T> {
     fn default() -> Self {
-        Self { client: None }
+        Self {
+            client: None,
+            fallback: FallbackRead::Unread,
+        }
     }
 }
 
@@ -169,6 +187,7 @@ impl<T: LineTransport> Session<T> {
     pub fn from_client(client: FerroClient<T>) -> Self {
         Self {
             client: Some(client),
+            fallback: FallbackRead::Unread,
         }
     }
 
@@ -179,6 +198,32 @@ impl<T: LineTransport> Session<T> {
     /// Drops the client, which closes the port.
     pub fn disconnect(&mut self) {
         self.client = None;
+        self.fallback = FallbackRead::Unread;
+    }
+
+    /// Whether the controller booted without its last save, asked once per
+    /// connection; `None` when the firmware cannot say or did not answer.
+    fn config_fallback(&mut self) -> Result<Option<ConfigFallback>> {
+        if self.fallback == FallbackRead::Unread {
+            self.fallback = match self.client_mut()?.config_fallback() {
+                Ok(fallback) => FallbackRead::Read(fallback),
+                Err(FerroError::DeviceRejected { .. }) => FallbackRead::Unsupported,
+                Err(_) => return Ok(None),
+            };
+        }
+        Ok(match self.fallback {
+            FallbackRead::Read(fallback) => Some(fallback),
+            FallbackRead::Unread | FallbackRead::Unsupported => None,
+        })
+    }
+
+    /// Acknowledges the boot's fallback so the controller may arm. Refused
+    /// here while armed, and by the controller.
+    pub fn acknowledge_config_fallback(&mut self) -> Result<()> {
+        self.require_disarmed()?;
+        self.with_client(FerroClient::acknowledge_config_fallback)?;
+        self.fallback = FallbackRead::Read(ConfigFallback::None);
+        Ok(())
     }
 
     /// How the open device describes itself, for the title bar.
@@ -215,11 +260,13 @@ impl<T: LineTransport> Session<T> {
     /// The controller's live safety status, and whether this session would
     /// accept a write right now.
     pub fn safety(&mut self) -> Result<Safety> {
+        let config_fallback = self.config_fallback()?;
         let status = self.with_client(FerroClient::read_status_fresh)?;
         Ok(Safety {
             writes_allowed: !status.armed,
-            checks: prearm_checks(&status),
+            checks: prearm_checks(&status, config_fallback),
             status,
+            config_fallback,
         })
     }
 
@@ -288,11 +335,13 @@ impl<T: LineTransport> Session<T> {
     /// `live` polling that runs beside it reads those lines as they arrive,
     /// so the cache stays current.
     pub fn safety_display(&mut self) -> Result<Safety> {
+        let config_fallback = self.config_fallback()?;
         let status = self.with_client(FerroClient::read_status)?;
         Ok(Safety {
             writes_allowed: !status.armed,
-            checks: prearm_checks(&status),
+            checks: prearm_checks(&status, config_fallback),
             status,
+            config_fallback,
         })
     }
 
@@ -497,6 +546,7 @@ impl Session<SerialTransport> {
         // Drop the old client first so its port is closed before the new open,
         // which matters when reconnecting to the same port.
         self.client = None;
+        self.fallback = FallbackRead::Unread;
         let client = open_device(selector, timeout)?;
         let description = client.description().to_owned();
         self.client = Some(client);
@@ -523,6 +573,8 @@ mod tests {
 
     /// The firmware answers `status` with one bounded ASCII line. These are
     /// the two states the gate turns on.
+    use ferro_configurator_core::CheckState;
+
     fn status_line(armed: bool) -> String {
         format!(
             "FWDBG1 ms=1000 imu=icm42688p ready=1 rc=1 armable=1 thr=0 arm_sw=0 armed={} vbat_dV=251",
@@ -619,8 +671,35 @@ mod tests {
     }
 
     #[test]
+    fn a_fallback_is_asked_once_and_cleared_by_its_acknowledgement() {
+        let mut session = session_answering(&[
+            "OK config fallback=invalid; a saved slot was refused".to_owned(),
+            status_line(false),
+            status_line(false),
+            status_line(false),
+            "OK fallback acknowledged".to_owned(),
+            status_line(false),
+        ]);
+        let safety = session.safety().expect("status must parse");
+        assert_eq!(safety.config_fallback, Some(ConfigFallback::Invalid));
+        assert_eq!(safety.checks[0].state, CheckState::Fail);
+        assert_eq!(
+            session.safety().unwrap().config_fallback,
+            Some(ConfigFallback::Invalid),
+            "asked once"
+        );
+        session
+            .acknowledge_config_fallback()
+            .expect("disarmed, so acknowledged");
+        let safety = session.safety().unwrap();
+        assert_eq!(safety.config_fallback, Some(ConfigFallback::None));
+        assert_eq!(safety.checks[0].state, CheckState::Pass);
+    }
+
+    #[test]
     fn safety_reports_whether_writes_are_allowed() {
-        let mut session = session_answering(&[status_line(true)]);
+        let mut session =
+            session_answering(&["OK config fallback=none".to_owned(), status_line(true)]);
         let safety = session.safety().expect("status must parse");
         assert!(safety.status.armed);
         assert!(

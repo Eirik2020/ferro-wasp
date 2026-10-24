@@ -10,10 +10,11 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
-    BoardProfile, BuildIdentity, CatalogEntry, CheckState, ConfigKey, ConversionSummary,
-    DeviceSelector, DfuDetection, DownloadSummary, EscLane, FerroConfig, FerroError, FlashInfo,
-    FlashProgress, FlightSelector, PortInfo, PreparedImage, ProfileStore, RESTART_TIMEOUT,
-    SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, SyncedFlight, catalog_device,
+    BoardProfile, BuildIdentity, CatalogEntry, CheckState, ConfigFallback, ConfigKey,
+    ConversionSummary, DeviceSelector, DfuDetection, DownloadSummary, EscLane, FerroConfig,
+    FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo, PreparedImage, ProfileStore,
+    RESTART_TIMEOUT, SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, SyncedFlight,
+    catalog_device,
     config::lpf_alpha_for_corner,
     convert_fwbb_to_csv, convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight,
     enter_rom_bootloader,
@@ -388,9 +389,20 @@ enum ConfigCommand {
     Keys,
     /// Show which function each serial port is bound to.
     Ports,
+    /// Show whether the controller booted without its last saved
+    /// configuration, which refuses arming until it is acknowledged.
+    Fallback {
+        /// Acknowledge the fallback, so the controller may arm; disarmed
+        /// only. Check the settings first: it flies the previous save or the
+        /// board default.
+        #[arg(long)]
+        ack: bool,
+    },
     /// Bind a serial port to a function, persist, and verify by readback.
     ///
-    /// The controller applies bindings at boot, so reboot it afterwards.
+    /// A function serves one port, so binding it moves it from its old
+    /// port; the controller refuses a port that cannot carry it and leaving
+    /// RC unbound. It applies bindings at boot, so reboot it afterwards.
     Bind {
         /// The UART by its number on the chip, as `config ports` lists it.
         port: String,
@@ -416,6 +428,8 @@ struct DeviceReport {
     status: Option<StatusSnapshot>,
     /// `None` when the firmware predates the `esc` command.
     esc: Option<[EscLane; 4]>,
+    /// `None` when the firmware predates `config fallback`.
+    config_fallback: Option<ConfigFallback>,
 }
 
 #[derive(Debug, Serialize)]
@@ -513,6 +527,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                 let build = client.build_identity().ok();
                 let esc = client.esc_telemetry().ok();
                 let status = client.read_status().ok();
+                let config_fallback = client.config_fallback().ok();
                 let port = client.description().to_owned();
                 let board = board_of(&port);
                 let report = DeviceReport {
@@ -523,6 +538,7 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                     flash,
                     status,
                     esc,
+                    config_fallback,
                 };
                 emit(cli.format, "device.info", &report, || {
                     print_device_report(&report)
@@ -654,6 +670,31 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
             ConfigCommand::Keys => {
                 let keys = ConfigKey::ALL.map(|key| key.name());
                 emit(cli.format, "config.keys", &keys, print_keys)
+            }
+            ConfigCommand::Fallback { ack } => {
+                let mut client = connect(cli, timeout)?;
+                if *ack {
+                    client.acknowledge_config_fallback()?;
+                }
+                let fallback = client.config_fallback()?;
+                emit(cli.format, "config.fallback", &fallback, || {
+                    println!(
+                        "{}",
+                        match fallback {
+                            ConfigFallback::None =>
+                                "The controller flies its last saved configuration.",
+                            ConfigFallback::Damaged => {
+                                "A saved slot is torn: the controller flies the previous save or the board default. Check the settings, then `config fallback --ack`."
+                            }
+                            ConfigFallback::Invalid => {
+                                "A saved slot was refused: the controller flies the previous save or the board default. Check the settings, then `config fallback --ack`."
+                            }
+                            ConfigFallback::Unreadable => {
+                                "The store could not be read: the controller flies the board default. Check the settings, then `config fallback --ack`."
+                            }
+                        }
+                    );
+                })
             }
             ConfigCommand::Ports => {
                 let mut client = connect(cli, timeout)?;
@@ -1698,7 +1739,7 @@ fn print_device_report(report: &DeviceReport) {
             status.battery_decivolts as f32 / 10.0
         );
         if !status.armed {
-            print_prearm_checks(status);
+            print_prearm_checks(status, report.config_fallback);
         }
     } else {
         println!("Live status: unavailable within the configured timeout");
@@ -1918,9 +1959,9 @@ fn bench_esc(
     })
 }
 
-fn print_prearm_checks(status: &StatusSnapshot) {
+fn print_prearm_checks(status: &StatusSnapshot, fallback: Option<ConfigFallback>) {
     println!("Pre-arm checks:");
-    for check in prearm_checks(status) {
+    for check in prearm_checks(status, fallback) {
         let mark = match check.state {
             CheckState::Pass => "ok  ",
             CheckState::Fail => "FAIL",

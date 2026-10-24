@@ -13,7 +13,7 @@ BOOT     flash driver ─raw page─▶ init: decode → validate(config, board)
          (non-critical)                (safety-critical, HAL-free, host-tested)
 
 RUNTIME  CLI / configurator / OSD ─Request─▶ coordinator: validate(config', board)
-                                               → live keys: arm inhibit → participants stage/commit → release
+                                               → live keys: arm inhibit → commit → participants apply, control loop confirms → release
                                                → boot-only keys: stored as "pending until reboot"
          save ─▶ flash manager saves the config owner's next-boot image, read from the ledger
 ```

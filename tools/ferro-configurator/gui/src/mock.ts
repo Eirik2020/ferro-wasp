@@ -21,6 +21,7 @@ import {
   type SyncedFlight,
   type SyncProgress,
   type AccelLevel,
+  type ConfigFallback,
   type FlashReport,
   type FlashStage,
 } from "./api";
@@ -77,6 +78,8 @@ export class MockApi implements Api {
   private aux = 988;
   private connected = false;
   private level: AccelLevel = { x_mg: 0, y_mg: 0, z_mg: 0 };
+  /** A torn save, so the acknowledgement can be tried. */
+  private fallback: ConfigFallback = "damaged";
   private config = baselineConfig();
   // The Foxeer F405 V2's default wiring.
   private bindings: SerialBindings = {
@@ -144,7 +147,14 @@ export class MockApi implements Api {
         channels,
       },
       writes_allowed: !this.armed,
+      config_fallback: this.fallback,
       checks: [
+        check(
+          "config_saved",
+          "Saved configuration in use",
+          this.fallback === "none",
+          "The controller booted without your last save. Check the settings, then acknowledge it.",
+        ),
         check(
           "rc_link",
           "Receiver link",
@@ -409,6 +419,15 @@ export class MockApi implements Api {
   async accelLevel(): Promise<AccelLevel> {
     this.requireConnection();
     return { ...this.level };
+  }
+
+  async acknowledgeConfigFallback(): Promise<void> {
+    this.requireConnection();
+    if (this.armed) {
+      throw new BridgeError("refused", "the controller is armed; disarm it before changing configuration");
+    }
+    await sleep(40);
+    this.fallback = "none";
   }
 
   async calibrateAccelerometer(): Promise<AccelLevel> {

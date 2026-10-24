@@ -90,6 +90,21 @@ pub struct LogInfo {
     pub writable: bool,
 }
 
+/// Whether the controller booted with the configuration last saved, and if
+/// not, why. A fallback refuses arming until it is acknowledged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigFallback {
+    /// The last save is what it flies.
+    None,
+    /// A saved slot is torn; it flies the previous save or the default.
+    Damaged,
+    /// A saved slot was refused; it flies the previous save or the default.
+    Invalid,
+    /// The store could not be read; it flies the board default.
+    Unreadable,
+}
+
 /// Where the accelerometer reads level: the offset subtracted from gravity
 /// before the attitude estimate, in milli-g per drone axis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -296,7 +311,8 @@ impl<T: LineTransport> FerroClient<T> {
     /// Binds `port` to `function`, saves, and verifies the readback.
     ///
     /// The controller applies a binding only at boot, so the change takes
-    /// effect after it is rebooted. A port the board does not route, or a
+    /// effect after it is rebooted. Binding a function moves it from the
+    /// port it was on; the controller refuses leaving RC unbound. A port the board does not route, or a
     /// function the firmware does not know, is refused before anything is
     /// sent. `config save` also persists any other value already staged.
     pub fn apply_serial_binding(&mut self, port: &str, function: &str) -> Result<SerialBindings> {
@@ -704,6 +720,40 @@ impl<T: LineTransport> FerroClient<T> {
         })
         .and_then(|line| self.accept_response("config save", line))
         .map(|_| ())
+    }
+
+    /// Whether the controller booted without its last saved configuration.
+    pub fn config_fallback(&mut self) -> Result<ConfigFallback> {
+        const OPERATION: &str = "config fallback";
+        let response = self.request(OPERATION, 2)?;
+        let state = response
+            .strip_prefix("OK config fallback=")
+            .map(|rest| rest.split(';').next().unwrap_or(rest));
+        match state {
+            Some("none") => Ok(ConfigFallback::None),
+            Some("damaged") => Ok(ConfigFallback::Damaged),
+            Some("invalid") => Ok(ConfigFallback::Invalid),
+            Some("unreadable") => Ok(ConfigFallback::Unreadable),
+            _ => Err(FerroError::UnexpectedResponse {
+                operation: OPERATION.to_owned(),
+                response,
+            }),
+        }
+    }
+
+    /// Acknowledges the boot's fallback, so the controller may arm. The
+    /// controller refuses while armed.
+    pub fn acknowledge_config_fallback(&mut self) -> Result<()> {
+        const OPERATION: &str = "config fallback ack";
+        let response = self.request(OPERATION, 1)?;
+        if response == "OK fallback acknowledged" {
+            Ok(())
+        } else {
+            Err(FerroError::UnexpectedResponse {
+                operation: OPERATION.to_owned(),
+                response,
+            })
+        }
     }
 
     /// The stored accelerometer level.
@@ -1183,6 +1233,21 @@ mod tests {
         }
     }
     impl<T> Pipe for T {}
+
+    #[test]
+    fn a_fallback_reads_back_and_is_acknowledged() {
+        let mock = MockTransport::with_lines([
+            "OK config fallback=damaged; a saved slot is torn",
+            "OK fallback acknowledged",
+            "OK config fallback=none",
+        ]);
+        let mut client = FerroClient::new(mock, Duration::from_millis(20));
+        assert_eq!(client.config_fallback().unwrap(), ConfigFallback::Damaged);
+        client.acknowledge_config_fallback().unwrap();
+        assert_eq!(client.config_fallback().unwrap(), ConfigFallback::None);
+        let mock = client.into_transport();
+        assert_eq!(mock.writes[1], "config fallback ack");
+    }
 
     #[test]
     fn rc_channels_are_read_from_both_lines() {

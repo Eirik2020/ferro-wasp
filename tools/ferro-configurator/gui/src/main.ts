@@ -11,6 +11,7 @@ import {
   toBridgeError,
   type Api,
   type AccelLevel,
+  type ConfigFallback,
   type FerroConfig,
   type FlashStage,
   type PrearmCheck,
@@ -114,6 +115,7 @@ function renderSafety(): void {
     banner.dataset["state"] = lostMessage === null ? "unknown" : "lost";
     detail.textContent = lostMessage ?? "";
     element("prearm-checks").replaceChildren();
+    renderFallback(null);
     renderReceiver();
     updateWriteControls();
     return;
@@ -137,8 +139,26 @@ function renderSafety(): void {
     setStatusLine("Disarm the controller to change configuration.", "bad");
   }
   renderChecks(status.armed ? [] : safetyState.checks);
+  renderFallback(safetyState.config_fallback);
   renderReceiver();
   updateWriteControls();
+}
+
+/** What the controller flies after a boot that fell back. */
+const FALLBACK_DETAIL: Record<Exclude<ConfigFallback, "none">, string> = {
+  damaged: "A saved slot is torn: it flies the previous save or the board default.",
+  invalid: "A saved slot was refused: it flies the previous save or the board default.",
+  unreadable: "Its storage could not be read: it flies the board default.",
+};
+
+/**
+ * The acknowledgement a fallback needs before the controller arms, shown
+ * only while one is pending. Check the settings before acknowledging.
+ */
+function renderFallback(fallback: ConfigFallback | null): void {
+  const pending = connected && fallback !== null && fallback !== "none";
+  element("fallback-row").hidden = !pending;
+  element("fallback-detail").textContent = pending ? FALLBACK_DETAIL[fallback] : "";
 }
 
 /**
@@ -548,6 +568,12 @@ function updateWriteControls(): void {
     ? "Save and verify the changed ports; reboot the controller to apply them"
     : "Available when a disarmed controller is connected";
 
+  const acknowledge = element<HTMLButtonElement>("ack-fallback");
+  acknowledge.disabled = !writable || firmwareBusy;
+  acknowledge.title = writable
+    ? "Let the controller arm with the configuration it booted"
+    : "Available when a disarmed controller is connected";
+
   const calibrate = element<HTMLButtonElement>("calibrate-accel");
   calibrate.disabled = !writable || firmwareBusy;
   calibrate.title = writable
@@ -784,6 +810,21 @@ async function loadAccelLevel(): Promise<void> {
     renderAccelLevel(await api.accelLevel());
   } catch {
     renderAccelLevel(null);
+  }
+}
+
+async function acknowledgeFallback(): Promise<void> {
+  firmwareBusy = true;
+  updateWriteControls();
+  try {
+    await api.acknowledgeConfigFallback();
+    safetyState = await api.safety();
+    setStatusLine("Fallback acknowledged; the controller may arm.");
+  } catch (error) {
+    report(error);
+  } finally {
+    firmwareBusy = false;
+    renderSafety();
   }
 }
 
@@ -1082,6 +1123,7 @@ function wire(): void {
   addGainSliders();
   element("reboot").addEventListener("click", () => void reboot(false));
   element("calibrate-accel").addEventListener("click", () => void calibrateAccelerometer());
+  element("ack-fallback").addEventListener("click", () => void acknowledgeFallback());
   element("reboot-dfu").addEventListener("click", () => void reboot(true));
   element("flash").addEventListener("click", () => void flashFirmware());
   element("choose-firmware").addEventListener("click", () => void chooseFirmware());

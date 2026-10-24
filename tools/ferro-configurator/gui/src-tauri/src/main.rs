@@ -255,6 +255,13 @@ async fn calibrate_accelerometer(state: State<'_, AppState>) -> Result<AccelLeve
     blocking(&state.session, Session::calibrate_accelerometer).await
 }
 
+/// Acknowledges that the controller booted without its last save, so it may
+/// arm. Refused by the session while armed, and by the firmware.
+#[tauri::command]
+async fn acknowledge_config_fallback(state: State<'_, AppState>) -> Result<(), BridgeError> {
+    blocking(&state.session, Session::acknowledge_config_fallback).await
+}
+
 /// Restarts the controller, or into its ROM bootloader with `dfu`. Refused
 /// by the session while armed, and by the firmware while storage is busy.
 #[tauri::command]
@@ -312,6 +319,7 @@ fn main() {
             flash_firmware,
             accel_level,
             calibrate_accelerometer,
+            acknowledge_config_fallback,
         ])
         .run(tauri::generate_context!())
         .expect("the FerroConfigurator window failed to start");

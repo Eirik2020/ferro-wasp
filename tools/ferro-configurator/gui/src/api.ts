@@ -35,6 +35,9 @@ export interface PrearmCheck {
   hint: string;
 }
 
+/** Mirrors `ConfigFallback` in ferro-configurator-core. */
+export type ConfigFallback = "none" | "damaged" | "invalid" | "unreadable";
+
 /** Mirrors `Safety` in ferro-configurator-bridge. */
 export interface Safety {
   status: StatusSnapshot;
@@ -42,6 +45,8 @@ export interface Safety {
   writes_allowed: boolean;
   /** Arming preconditions, in the order the firmware evaluates them. */
   checks: PrearmCheck[];
+  /** Whether it booted without its last save; null when it cannot say. */
+  config_fallback: ConfigFallback | null;
 }
 
 export interface AxisPid {
@@ -285,4 +290,9 @@ export interface Api {
    * otherwise.
    */
   calibrateAccelerometer(): Promise<AccelLevel>;
+  /**
+   * Acknowledges that the controller booted without its last save, so it
+   * may arm. Refused unless disarmed.
+   */
+  acknowledgeConfigFallback(): Promise<void>;
 }

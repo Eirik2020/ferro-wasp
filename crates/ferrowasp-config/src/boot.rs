@@ -7,7 +7,7 @@
 //! Requirements: CONFIG-013, CONFIG-014, CONFIG-025
 //! Safety-critical.
 
-use crate::owner::validate;
+use crate::owner::{BoardRules, validate};
 use crate::page::{FLASH_PAGE_LEN, decode_config_page};
 use crate::stored::StoredConfig;
 
@@ -28,8 +28,8 @@ pub enum SlotRead {
     },
 }
 
-/// Read one slot's page.
-pub fn read_slot(page: &[u8; FLASH_PAGE_LEN]) -> SlotRead {
+/// Read one slot's page, checked against `board`.
+pub fn read_slot(page: &[u8; FLASH_PAGE_LEN], board: &BoardRules) -> SlotRead {
     if page.iter().all(|byte| *byte == 0xff) {
         return SlotRead::Erased;
     }
@@ -38,7 +38,7 @@ pub fn read_slot(page: &[u8; FLASH_PAGE_LEN]) -> SlotRead {
     };
     match StoredConfig::decode(payload) {
         None => SlotRead::Invalid,
-        Some(config) if !validate(&config) => SlotRead::Invalid,
+        Some(config) if !validate(&config, board) => SlotRead::Invalid,
         Some(config) => SlotRead::Valid { sequence, config },
     }
 }
@@ -117,6 +117,7 @@ pub const fn sequence_is_newer(candidate: u32, current: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::owner::tests::BOARD;
     use crate::page::encode_config_page;
 
     fn page_of(sequence: u32, config: StoredConfig) -> [u8; FLASH_PAGE_LEN] {
@@ -131,20 +132,23 @@ mod tests {
 
     #[test]
     fn a_slot_reads_as_erased_damaged_invalid_or_valid() {
-        assert_eq!(read_slot(&[0xff; FLASH_PAGE_LEN]), SlotRead::Erased);
+        assert_eq!(read_slot(&[0xff; FLASH_PAGE_LEN], &BOARD), SlotRead::Erased);
         let mut torn = page_of(3, tuned(0.05));
         torn[20] ^= 1;
-        assert_eq!(read_slot(&torn), SlotRead::Damaged);
-        assert_eq!(read_slot(&[0x00; FLASH_PAGE_LEN]), SlotRead::Damaged);
+        assert_eq!(read_slot(&torn, &BOARD), SlotRead::Damaged);
+        assert_eq!(
+            read_slot(&[0x00; FLASH_PAGE_LEN], &BOARD),
+            SlotRead::Damaged
+        );
         let mut out_of_range = tuned(0.05);
         out_of_range.tuning.rate_gains.roll.p = 1.0e6;
         assert_eq!(
-            read_slot(&page_of(4, out_of_range)),
+            read_slot(&page_of(4, out_of_range), &BOARD),
             SlotRead::Invalid,
             "a value outside its range rejects the slot, never clamped"
         );
         assert_eq!(
-            read_slot(&page_of(5, tuned(0.05))),
+            read_slot(&page_of(5, tuned(0.05)), &BOARD),
             SlotRead::Valid {
                 sequence: 5,
                 config: tuned(0.05)

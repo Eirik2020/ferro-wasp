@@ -1,3 +1,4 @@
+use ferrowasp_config::owner::BoardRules;
 use ferrowasp_config::stored::StoredConfig;
 use ferrowasp_control::calibration::accel_level::AccelLevel;
 use ferrowasp_control::frames::{DroneBodyFrame, FrameRotation, ImuControlAxisProfile};
@@ -137,9 +138,25 @@ pub const DEFAULT_STORED_CONFIG: StoredConfig = StoredConfig {
     accel_level: AccelLevel::ZERO,
 };
 
+/// What every configuration change, and every saved configuration at boot,
+/// is checked against: the ports this board routes and its default
+/// bindings.
+pub const BOARD_RULES: BoardRules = BoardRules {
+    routes: crate::serial::SERIAL_ROUTES,
+    default_bindings: crate::serial::DEFAULT_SERIAL_BINDINGS,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_default_configuration_passes_the_boards_rules() {
+        assert!(ferrowasp_config::owner::validate(
+            &DEFAULT_STORED_CONFIG,
+            &BOARD_RULES
+        ));
+    }
 
     #[test]
     fn arming_stays_disabled_until_the_board_is_bench_verified() {

@@ -11,7 +11,7 @@
 use ferrowasp_safety::ARMING_MAX_THROTTLE;
 use serde::Serialize;
 
-use crate::client::StatusSnapshot;
+use crate::client::{ConfigFallback, StatusSnapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -51,14 +51,24 @@ fn check(
     }
 }
 
-/// The arming preconditions, in the order the firmware evaluates them:
-/// `validate_arming_guard` (link, throttle), then `validate_prearm_health`
-/// (IMU ready, bias calibrated, fresh), then the ESC idle qualification.
+/// The arming preconditions, in the order the firmware evaluates them: the
+/// boot's configuration, then `validate_arming_guard` (link, throttle), then
+/// `validate_prearm_health` (IMU ready, bias calibrated, fresh), then the ESC
+/// idle qualification. `fallback` is `None` when it could not be read.
 ///
 /// The arm switch itself is not a row: it is the pilot's request, not a
 /// precondition, and a front-end shows it separately.
-pub fn prearm_checks(status: &StatusSnapshot) -> Vec<PrearmCheck> {
+pub fn prearm_checks(
+    status: &StatusSnapshot,
+    fallback: Option<ConfigFallback>,
+) -> Vec<PrearmCheck> {
     vec![
+        check(
+            "config_saved",
+            "Saved configuration in use",
+            fallback.map(|fallback| fallback == ConfigFallback::None),
+            "The controller booted without your last save. Check the settings, then acknowledge it.",
+        ),
         check(
             "rc_link",
             "Receiver link",
@@ -152,11 +162,23 @@ mod tests {
     }
 
     #[test]
+    fn a_fallback_fails_its_row_and_an_unread_one_is_unknown() {
+        let checks = prearm_checks(&ready(), Some(ConfigFallback::Invalid));
+        assert_eq!(state(&checks, "config_saved"), CheckState::Fail);
+        let checks = prearm_checks(&ready(), None);
+        assert_eq!(state(&checks, "config_saved"), CheckState::Unknown);
+    }
+
+    #[test]
     fn checks_follow_the_firmware_guard_order() {
-        let ids: Vec<_> = prearm_checks(&ready()).iter().map(|c| c.id).collect();
+        let ids: Vec<_> = prearm_checks(&ready(), Some(ConfigFallback::None))
+            .iter()
+            .map(|c| c.id)
+            .collect();
         assert_eq!(
             ids,
             [
+                "config_saved",
                 "rc_link",
                 "rc_armable",
                 "throttle_low",
@@ -173,7 +195,7 @@ mod tests {
 
     #[test]
     fn a_ready_controller_fails_only_on_the_usb_cable() {
-        let checks = prearm_checks(&ready());
+        let checks = prearm_checks(&ready(), Some(ConfigFallback::None));
         let failing: Vec<_> = checks
             .iter()
             .filter(|c| c.state == CheckState::Fail)
@@ -186,7 +208,7 @@ mod tests {
     fn unreported_conditions_are_unknown_not_passed() {
         let mut status = ready();
         status.imu_stale = None;
-        let checks = prearm_checks(&status);
+        let checks = prearm_checks(&status, Some(ConfigFallback::None));
         assert_eq!(state(&checks, "imu_fresh"), CheckState::Unknown);
         assert_eq!(state(&checks, "gyro_calibrated"), CheckState::Unknown);
         assert_eq!(state(&checks, "esc_idle"), CheckState::Unknown);
@@ -197,12 +219,18 @@ mod tests {
         let mut status = ready();
         status.throttle = ARMING_MAX_THROTTLE;
         assert_eq!(
-            state(&prearm_checks(&status), "throttle_low"),
+            state(
+                &prearm_checks(&status, Some(ConfigFallback::None)),
+                "throttle_low"
+            ),
             CheckState::Pass
         );
         status.throttle = ARMING_MAX_THROTTLE + 1;
         assert_eq!(
-            state(&prearm_checks(&status), "throttle_low"),
+            state(
+                &prearm_checks(&status, Some(ConfigFallback::None)),
+                "throttle_low"
+            ),
             CheckState::Fail
         );
     }
@@ -213,7 +241,7 @@ mod tests {
         status.imu = "none".to_owned();
         status.rc_valid = false;
         status.battery_decivolts = 0;
-        let checks = prearm_checks(&status);
+        let checks = prearm_checks(&status, Some(ConfigFallback::None));
         assert_eq!(state(&checks, "imu_detected"), CheckState::Fail);
         assert_eq!(state(&checks, "rc_link"), CheckState::Fail);
         assert_eq!(state(&checks, "battery"), CheckState::Fail);

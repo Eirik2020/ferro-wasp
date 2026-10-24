@@ -69,9 +69,15 @@ artifact is stable, airworthy, or production-ready.
   calibrate` holds arming off while it samples, and applies the level the
   same way.
 
+- Serial bindings are checked against the board when set: a function the
+  port cannot carry, a function on two ports, or RC left unbound is refused,
+  and binding a function moves it from its old port.
+
 - A boot that cannot use the last saved configuration (a torn or refused
   slot, or a store that cannot be read) refuses arming until the pilot
   acknowledges it with `config fallback ack`; `config fallback` says why.
+  FerroConfigurator shows it in the pre-arm checklist, with an Acknowledge
+  fallback button, and as `config fallback [--ack]`.
 
 - FerroConfigurator is the one reader of the onboard log format.
   `tools/blackbox_analyzer.py` analyzes its `convert --csv` export, and the

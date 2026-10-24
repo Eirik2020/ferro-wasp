@@ -23,8 +23,8 @@ pub use blackbox::{
     catalog_device, download_flight, resolve_device_flight, sync_file_name, sync_flights,
 };
 pub use client::{
-    AccelLevel, BuildIdentity, EscLane, FerroClient, FlashInfo, LiveSnapshot, LogInfo,
-    SERIAL_FUNCTIONS, SerialBindings, SerialPortBinding, StatusSnapshot, UnsyncedFlight,
+    AccelLevel, BuildIdentity, ConfigFallback, EscLane, FerroClient, FlashInfo, LiveSnapshot,
+    LogInfo, SERIAL_FUNCTIONS, SerialBindings, SerialPortBinding, StatusSnapshot, UnsyncedFlight,
     UnsyncedFlights,
 };
 pub use config::{AxisPid, ConfigKey, ConfigValidationError, FerroConfig, RcProtocol};
