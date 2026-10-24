@@ -18,7 +18,7 @@ use ferrowasp_blackbox::storage_maintenance::Maintenance;
 use ferrowasp_boundary_contracts::requests::Request;
 use ferrowasp_config::keys::ConfigKey;
 use ferrowasp_config::stored::StoredConfig;
-use ferrowasp_serial::{LogicalSerialPort, SerialBindings};
+use ferrowasp_serial::{LogicalSerialPort, SerialBindings, SerialFunction};
 use ferrowasp_storage::config_save::{ConfigRpcCompletion, ConfigSave};
 use ferrowasp_storage::layout::StorageLayout;
 
@@ -59,7 +59,9 @@ pub const MAX_COMMIT_REQUESTS: usize = ConfigKey::ALL.len() + LogicalSerialPort:
 
 /// The requests that take the next boot's configuration `from` to `to`:
 /// one per key whose value differs, and one per port bound differently.
-/// The accelerometer level is not a key, and stays.
+/// Ports that gain a function come first: a bind moves its function, so a
+/// port it leaves is then already unbound, and RC is never left unbound in
+/// between. The accelerometer level is not a key, and stays.
 pub fn requests_for(
     from: &StoredConfig,
     to: &StoredConfig,
@@ -74,10 +76,13 @@ pub fn requests_for(
     }
     let before = from.serial_bindings.unwrap_or(default_bindings);
     let after = to.serial_bindings.unwrap_or(default_bindings);
-    for port in LogicalSerialPort::ALL {
-        let function = after.function(port);
-        if function != before.function(port) {
-            let _ = requests.push(Request::ConfigBind { port, function });
+    for unbinding in [false, true] {
+        for port in LogicalSerialPort::ALL {
+            let function = after.function(port);
+            if function != before.function(port) && (function == SerialFunction::None) == unbinding
+            {
+                let _ = requests.push(Request::ConfigBind { port, function });
+            }
         }
     }
     requests
@@ -439,6 +444,35 @@ mod tests {
             error_code(owner.send(4, rpc::Request::ResetConfigToDefaults)),
             rpc::DeviceError::Busy,
             "one commit at a time"
+        );
+    }
+
+    #[test]
+    fn a_commit_moves_functions_before_it_unbinds_ports() {
+        let from = StoredConfig {
+            serial_bindings: Some(
+                SerialBindings::none().with(LogicalSerialPort::Uart3, SerialFunction::RcInput),
+            ),
+            ..StoredConfig::first_hop_default()
+        };
+        let to = StoredConfig {
+            serial_bindings: Some(
+                SerialBindings::none().with(LogicalSerialPort::Uart2, SerialFunction::RcInput),
+            ),
+            ..StoredConfig::first_hop_default()
+        };
+        assert_eq!(
+            requests_for(&from, &to, SerialBindings::none())[..],
+            [
+                Request::ConfigBind {
+                    port: LogicalSerialPort::Uart2,
+                    function: SerialFunction::RcInput
+                },
+                Request::ConfigBind {
+                    port: LogicalSerialPort::Uart3,
+                    function: SerialFunction::None
+                },
+            ]
         );
     }
 

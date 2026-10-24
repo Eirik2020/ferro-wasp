@@ -390,7 +390,9 @@ enum ConfigCommand {
     Ports,
     /// Bind a serial port to a function, persist, and verify by readback.
     ///
-    /// The controller applies bindings at boot, so reboot it afterwards.
+    /// A function serves one port, so binding it moves it from its old
+    /// port; the controller refuses a port that cannot carry it and leaving
+    /// RC unbound. It applies bindings at boot, so reboot it afterwards.
     Bind {
         /// The UART by its number on the chip, as `config ports` lists it.
         port: String,

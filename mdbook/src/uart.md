@@ -58,12 +58,16 @@ telemetry, configurator) is chosen at boot from that table:
   capabilities (`resolve_bindings` in `ferrowasp-serial`), starts every bound
   port with its function's line settings, and moves the port's stream into the
   function's task. A port with nothing bound is never enabled.
-- A binding the port cannot carry, or a function bound to two ports, is
-  dropped and logged; the rest still apply. With no RC port the RC link never
-  becomes valid, so the craft cannot arm.
+- A change is checked against the board before it is accepted: a binding the
+  port cannot carry in the configured RC protocol, a function on two ports,
+  or RC left unbound is refused, and binding a function moves it from the
+  port it was on. A saved configuration that fails the same check at boot is
+  not used: the board falls back and refuses arming until acknowledged. Init
+  still drops and logs a binding a port cannot carry, as a second line.
 - Until a pilot saves bindings the board's defaults apply. Over USB,
   `serial` shows them and `serial <port> <function>` stages a change, which
-  takes effect after `config save` and a reboot. Changes are refused while
+  takes effect after `config save` and a reboot; `serial <port> none` frees a
+  port, except the one RC is on. Changes are refused while
   armed. FerroConfigurator's `config ports` and `config bind` do the same and
   verify the saved table by readback.
 - Port transports are role-free and chip-neutral

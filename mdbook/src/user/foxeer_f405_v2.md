@@ -288,8 +288,9 @@ then bind one to a function (`none`, `rc`, `osd`, `esc_telemetry` or
 ```
 
 The change is saved and verified by readback, and takes effect when the
-controller reboots. A function the port cannot carry is dropped at boot and
-logged; with no port bound to `rc`, the craft cannot arm.
+controller reboots. Each function serves one port, so binding it moves it
+from the port it was on. The controller refuses a binding the port cannot
+carry, and refuses to leave `rc` unbound.
 
 ## List and download flights
 

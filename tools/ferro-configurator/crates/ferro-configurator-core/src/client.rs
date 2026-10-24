@@ -296,7 +296,8 @@ impl<T: LineTransport> FerroClient<T> {
     /// Binds `port` to `function`, saves, and verifies the readback.
     ///
     /// The controller applies a binding only at boot, so the change takes
-    /// effect after it is rebooted. A port the board does not route, or a
+    /// effect after it is rebooted. Binding a function moves it from the
+    /// port it was on; the controller refuses leaving RC unbound. A port the board does not route, or a
     /// function the firmware does not know, is refused before anything is
     /// sent. `config save` also persists any other value already staged.
     pub fn apply_serial_binding(&mut self, port: &str, function: &str) -> Result<SerialBindings> {

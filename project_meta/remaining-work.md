@@ -77,10 +77,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   change at a time against `main`, one mechanism at a time:
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own);
-  2. the remaining SPSC links and typed flags; the board
-     rules in `validate()` (section 14: the motor map, the loop rate, RC
-     bound, no UART bound twice, the RC protocol on its port), which today
-     checks each value's spec only; participants staging a change before it
+  2. the remaining SPSC links and typed flags; the loop-rate
+     and actuator-feedback rules in `validate()` (section 14), once those are
+     stored keys; participants staging a change before it
      commits, where today the control loop confirms after applying and RC
      input applies without confirming; FerroConfigurator showing and
      acknowledging a boot fallback; the command lines' configuration commands

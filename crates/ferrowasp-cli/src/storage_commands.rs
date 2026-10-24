@@ -406,6 +406,9 @@ pub fn request_answer(request: Request, outcome: Option<Outcome>) -> &'static st
         (Request::AcknowledgeConfigFallback, Outcome::Accepted) => "OK fallback acknowledged\r\n",
         (_, Outcome::Accepted) => "OK applied; use config save to keep it\r\n",
         (_, Outcome::Pending) => "OK staged; use config save, then reboot\r\n",
+        (Request::ConfigBind { .. }, Outcome::Refused(Refusal::Invalid)) => {
+            "ERR the port cannot carry that, or RC would be unbound\r\n"
+        }
         (_, Outcome::Refused(Refusal::Invalid)) => "ERR value outside allowed range\r\n",
         (_, Outcome::Refused(Refusal::Armed)) => "ERR config changes disabled while armed\r\n",
         (_, Outcome::Refused(Refusal::ArmingInProgress)) => {

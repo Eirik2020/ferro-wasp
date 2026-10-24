@@ -670,3 +670,58 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::config_gate::tests::a_calibrations_inhibit_lasts_its_sampling_window
+
+  - id: CONFIG-033
+    title: A configuration must suit the board
+    statement: >-
+      Validation shall refuse a configuration whose bindings put a
+      function on a port that cannot carry it, put one function on two
+      ports, or leave RC input unbound.
+    rationale: >-
+      A craft whose receiver port cannot open, or has no receiver at
+      all, cannot arm, and the pilot would learn it only at the field.
+    derived_from: [CONFIG-015, W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::bindings_the_board_cannot_carry_are_invalid
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::the_default_configuration_passes_the_boards_rules
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_board_tbs_lucid_h7::profiles::tests::the_default_configuration_passes_the_boards_rules
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_binding_the_board_refuses_is_invalid
+
+  - id: CONFIG-034
+    title: A bind moves its function
+    statement: >-
+      Binding a function to a port shall unbind it from the port it was
+      on.
+    rationale: >-
+      Each function serves one port; moving one in two steps would pass
+      through a state the board rules refuse.
+    derived_from: [CONFIG-033]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::a_bind_moves_its_function_and_rc_cannot_be_unbound
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_cli::rpc_commands::tests::a_commit_moves_functions_before_it_unbinds_ports

@@ -35,7 +35,7 @@ use ferrowasp_boundary_contracts::requests::{
     MotorTest, Outcome, Refusal, Request, RequestResult, Requester, RequesterResult,
 };
 use ferrowasp_config::boot::{BootConfig, Fallback};
-use ferrowasp_config::owner::{Change, ConfigOwner};
+use ferrowasp_config::owner::{BoardRules, Change, ConfigOwner};
 use ferrowasp_config::stored::StoredConfig;
 use ferrowasp_control::calibration::accel_level::{
     AccelLevelCalibration, CalibrationError, LevelSample,
@@ -46,7 +46,7 @@ use ferrowasp_io_contracts::time::TimestampMicros;
 use ferrowasp_safety::config_gate::{CALIBRATION_INHIBIT_LEASE_MS, InhibitLease};
 use ferrowasp_safety::host::HostLink;
 use ferrowasp_safety::{BenchMotorRequest, SafetyEvent, SafetyReply};
-use ferrowasp_serial::{LogicalSerialPort, SerialBindings, SerialFunction};
+use ferrowasp_serial::{LogicalSerialPort, SerialFunction};
 
 /// Requests taken from one requester in one run.
 pub const REQUESTS_PER_RUN: usize = 2;
@@ -119,7 +119,7 @@ pub struct ConfigLinks<'a> {
 pub struct ConfigBoot {
     pub boot: BootConfig,
     pub default: StoredConfig,
-    pub default_bindings: SerialBindings,
+    pub board: BoardRules,
 }
 
 /// A config request that passed its checks.
@@ -202,7 +202,6 @@ pub struct Coordinator<'a> {
     config: ConfigLinks<'a>,
     owner: ConfigOwner,
     default_config: StoredConfig,
-    default_bindings: SerialBindings,
     fallback: Option<Fallback>,
     transaction: Option<Transaction>,
     /// The last configuration the control loop confirmed applying.
@@ -235,9 +234,8 @@ impl<'a> Coordinator<'a> {
             links,
             results,
             config,
-            owner: ConfigOwner::new(boot.boot.config),
+            owner: ConfigOwner::new(boot.boot.config, boot.board),
             default_config: boot.default,
-            default_bindings: boot.default_bindings,
             fallback: boot.boot.fallback,
             transaction: None,
             applied_seq: 0,
@@ -335,11 +333,7 @@ impl<'a> Coordinator<'a> {
         }
         let proposed = match change {
             ConfigChange::Set { key, value } => self.owner.propose_set(key, value),
-            ConfigChange::Bind { port, function } => {
-                Ok(self
-                    .owner
-                    .propose_binding(port, function, self.default_bindings))
-            }
+            ConfigChange::Bind { port, function } => self.owner.propose_binding(port, function),
             ConfigChange::Defaults => self.owner.propose_replace(self.default_config),
             ConfigChange::Calibrate => {
                 return self.start(
@@ -766,6 +760,39 @@ mod tests {
         level_samples: LinkProducer<'a, LevelSample>,
     }
 
+    /// UART2 and UART3, both taking either receiver protocol; RC on UART2.
+    const BOARD: BoardRules = {
+        use ferrowasp_serial::{SerialBindings, SerialCapabilities, SerialProfile, SerialRoute};
+        const fn route(logical: LogicalSerialPort) -> SerialRoute {
+            SerialRoute {
+                logical,
+                peripheral: "test",
+                tx_pin: "test",
+                rx_pin: "test",
+                profile: SerialProfile::disabled(),
+                rx_dma: "test",
+                tx_dma: Some("test"),
+                capabilities: SerialCapabilities {
+                    sbus: true,
+                    crsf: true,
+                    mavlink: false,
+                    msp: true,
+                    esc_telemetry: true,
+                    cli: true,
+                    tx: true,
+                },
+            }
+        }
+        BoardRules {
+            routes: &[
+                route(LogicalSerialPort::Uart2),
+                route(LogicalSerialPort::Uart3),
+            ],
+            default_bindings: SerialBindings::none()
+                .with(LogicalSerialPort::Uart2, SerialFunction::RcInput),
+        }
+    };
+
     fn wire(queues: &mut Queues) -> (Coordinator<'_>, Ends<'_>) {
         wire_from(queues, None)
     }
@@ -806,7 +833,7 @@ mod tests {
                         fallback,
                     },
                     default: StoredConfig::first_hop_default(),
-                    default_bindings: SerialBindings::none(),
+                    board: BOARD,
                 },
                 results_tx,
             ),
@@ -1211,6 +1238,25 @@ mod tests {
             SerialFunction::RcInput
         );
         assert!(ends.control.newest().is_none(), "nothing flying moves");
+    }
+
+    #[test]
+    fn a_binding_the_board_refuses_is_invalid() {
+        let mut queues = Queues::new();
+        let (mut coordinator, mut ends) = wire(&mut queues);
+        ends.storage.push(
+            TimestampMicros(0),
+            Request::ConfigBind {
+                port: LogicalSerialPort::Uart2,
+                function: SerialFunction::None,
+            },
+        );
+        assert!(run(&mut coordinator, 10).is_empty());
+        assert_eq!(
+            storage_outcomes(&mut ends),
+            [Outcome::Refused(Refusal::Invalid)],
+            "RC stays bound"
+        );
     }
 
     #[test]

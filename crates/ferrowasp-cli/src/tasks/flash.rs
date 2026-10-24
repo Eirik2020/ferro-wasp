@@ -22,6 +22,7 @@ use ferrowasp_blackbox::storage_maintenance::{
 };
 use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Refusal, Request, Requester};
 use ferrowasp_config::boot::{BootConfig, read_slot, select};
+use ferrowasp_config::owner::BoardRules;
 use ferrowasp_io_contracts::link::Pushed;
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
@@ -94,6 +95,7 @@ pub fn boot_config<F: NorStorage>(
     flash: &mut F,
     probe: &FlashProbe,
     default: flash_task::StoredConfig,
+    board: &BoardRules,
 ) -> BootConfig {
     let layout = probe
         .ready
@@ -108,7 +110,7 @@ pub fn boot_config<F: NorStorage>(
         if flash.read(address, &mut page).is_err() {
             return BootConfig::unreadable(default);
         }
-        *slot = read_slot(&page);
+        *slot = read_slot(&page, board);
     }
     select(slots, default)
 }
