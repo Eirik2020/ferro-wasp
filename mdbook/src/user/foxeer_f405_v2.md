@@ -276,6 +276,22 @@ front-right, rear-left, front-left), which board output each drives. `1234`
 keeps the board wiring. A wrong order flips the craft on takeoff, so after
 any change hold each motor and check it is where the diagram says.
 
+## After a configuration fallback
+
+If the controller could not use its last saved configuration at boot (a
+torn or refused save, or storage it could not read), it flies the previous
+save or the board default and refuses to arm until you acknowledge it. The
+GUI's pre-arm list shows "Saved configuration in use" failing, with an
+Acknowledge fallback button. From the command line:
+
+```powershell
+.\ferro-configurator.exe --port $Port config fallback
+.\ferro-configurator.exe --port $Port config fallback --ack
+```
+
+Check the settings before acknowledging; saving the configuration again
+replaces the damaged slot.
+
 ## Change serial ports
 
 Each UART is named by its number on the chip. List what each port serves,

@@ -79,8 +79,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
      own);
   2. the remaining SPSC links and typed flags; the loop-rate
      and actuator-feedback rules in `validate()` (section 14), once those are
-     stored keys; FerroConfigurator showing and
-     acknowledging a boot fallback; `MotorCommand` and the output group's freshness check;
+     stored keys; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source, after which actuator
      output, the DShot service, the ESC manager and RC input move to their
      crates (section 16) and the `dt` and `flash_task` aliases go with them;

@@ -150,6 +150,10 @@ export class TauriApi implements Api {
     return call<AccelLevel>("calibrate_accelerometer");
   }
 
+  acknowledgeConfigFallback(): Promise<void> {
+    return call<void>("acknowledge_config_fallback");
+  }
+
   async flash(path: string | null, onStage: (stage: FlashStage) => void): Promise<FlashReport> {
     const stop = await listen<FlashStage>("flash-progress", (event) => {
       onStage(event.payload);
