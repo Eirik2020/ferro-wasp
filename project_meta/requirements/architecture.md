@@ -314,8 +314,11 @@ outweigh the risks):
    disarmed and not arming. A bug in the OSD menu can never disarm in flight;
 2. one transaction at a time;
 3. an inhibit carries a lease, as W1's motor test does;
-4. changes with several owners stage, ack, then commit; any failure aborts
-   with nothing applied;
+4. a change with several owners is committed once and sent to each, under
+   the inhibit: the control loop confirms applying it, and RC input takes
+   the newest before its next frame. Nothing can arm meanwhile, and a changed
+   map invalidates the RC link, so staging first buys nothing; a change the
+   control loop does not confirm keeps arming refused until reboot;
 5. owners still check "disarmed" when they apply, as cheap defence in depth.
 
 **Two kinds of inhibit.**
