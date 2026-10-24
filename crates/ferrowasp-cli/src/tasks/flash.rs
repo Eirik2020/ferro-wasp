@@ -227,6 +227,9 @@ pub struct FlashProbe {
         staged_rpc_config: Option<flash_task::StoredConfig> = None,
         config_rpc_completion: Option<ConfigRpcCompletion> = None,
         rpc_apply: FlashRpcApply = NO_RPC_APPLY,
+        // A boot-only change in the running commit, which applies after a
+        // reboot.
+        rpc_reboot_required: bool = false,
         // The link to the coordinator: configuration changes for both
         // command lines, and a reboot once the store is settled.
         storage_request_link: LinkProducer<'static, Request>,
@@ -265,6 +268,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
     let staged_rpc_config = cx.local.staged_rpc_config;
     let config_rpc_completion = cx.local.config_rpc_completion;
     let rpc_apply = cx.local.rpc_apply;
+    let rpc_reboot_required = cx.local.rpc_reboot_required;
     let storage_request_link = cx.local.storage_request_link;
     #[cfg(not(feature = "mspv2_configurator"))]
     let _ = (
@@ -274,6 +278,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
         staged_rpc_config,
         config_rpc_completion,
         rpc_apply,
+        rpc_reboot_required,
     );
     let at = || TimestampMicros(Mono::now().duration_since_epoch().to_micros());
     loop {
@@ -606,14 +611,14 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                 id,
                                 mspv2::rpc::Response::ConfigCommitted {
                                     persisted_crc32: crc,
-                                    reboot_required: false,
+                                    reboot_required: *rpc_reboot_required,
                                 },
                             ),
                             ConfigRpcCompletion::Defaults(id) => (
                                 id,
                                 mspv2::rpc::Response::DefaultsRestored {
                                     persisted_crc32: crc,
-                                    reboot_required: false,
+                                    reboot_required: *rpc_reboot_required,
                                 },
                             ),
                         };
@@ -867,10 +872,10 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                     }
                 }
                 *config_rpc_completion = Some(apply.completion);
-                let next_boot = cx
-                    .shared
-                    .ledger
-                    .lock(|ledger| ledger.config().value.next_boot);
+                let config = cx.shared.ledger.lock(|ledger| ledger.config().value);
+                let next_boot = config.next_boot;
+                *rpc_reboot_required =
+                    ferrowasp_config::owner::reboot_required(&config.active, &next_boot);
                 let refused = refused.or_else(|| {
                     config_save
                         .begin(next_boot, *config_sequence, *config_active_slot)

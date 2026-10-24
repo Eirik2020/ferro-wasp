@@ -164,7 +164,10 @@ pub fn handle<F: NorStorage>(
                             request_id,
                             mspv2::rpc::Response::ConfigStaged {
                                 staged_crc32: crc,
-                                reboot_required: false,
+                                reboot_required: ferrowasp_config::owner::reboot_required(
+                                    &ctx.active_config,
+                                    &candidate,
+                                ),
                             },
                         ))
                     }

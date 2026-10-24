@@ -55,6 +55,13 @@ pub enum KeyClass {
     BootOnly,
 }
 
+/// Whether the next boot differs from what flies in a setting read only at
+/// boot, so a reboot is needed for all of it to apply.
+pub fn reboot_required(active: &StoredConfig, next_boot: &StoredConfig) -> bool {
+    active.rc_protocol != next_boot.rc_protocol
+        || active.serial_bindings != next_boot.serial_bindings
+}
+
 pub const fn class(key: ConfigKey) -> KeyClass {
     match key {
         ConfigKey::RcProtocol => KeyClass::BootOnly,
@@ -348,6 +355,11 @@ pub(crate) mod tests {
         owner.commit(change);
         assert_eq!(owner.active().rc_protocol, RcProtocol::Sbus);
         assert_eq!(owner.next_boot().rc_protocol, RcProtocol::Crsf);
+        assert!(reboot_required(&owner.active(), &owner.next_boot()));
+        let mut fresh = ConfigOwner::new(StoredConfig::first_hop_default(), BOARD);
+        let live = fresh.propose_set(ConfigKey::RollP, 0.07).unwrap();
+        fresh.commit(live);
+        assert!(!reboot_required(&fresh.active(), &fresh.next_boot()));
     }
 
     #[test]
