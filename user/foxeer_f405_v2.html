@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-cd749f37.js";
+            window.path_to_searchindex_js = "../searchindex-fdefa211.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5109988b.js"></script>
@@ -370,6 +370,17 @@ setting; hold the motor afterwards to check it. The motor order is the
 front-right, rear-left, front-left), which board output each drives. <code>1234</code>
 keeps the board wiring. A wrong order flips the craft on takeoff, so after
 any change hold each motor and check it is where the diagram says.</p>
+<h2 id="after-a-configuration-fallback"><a class="header" href="#after-a-configuration-fallback">After a configuration fallback</a></h2>
+<p>If the controller could not use its last saved configuration at boot (a
+torn or refused save, or storage it could not read), it flies the previous
+save or the board default and refuses to arm until you acknowledge it. The
+GUI’s pre-arm list shows “Saved configuration in use” failing, with an
+Acknowledge fallback button. From the command line:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config fallback
+.\ferro-configurator.exe --port $Port config fallback --ack
+</code></pre>
+<p>Check the settings before acknowledging; saving the configuration again
+replaces the damaged slot.</p>
 <h2 id="change-serial-ports"><a class="header" href="#change-serial-ports">Change serial ports</a></h2>
 <p>Each UART is named by its number on the chip. List what each port serves,
 then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code>, <code>esc_telemetry</code> or
@@ -378,8 +389,9 @@ then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code
 .\ferro-configurator.exe --port $Port config bind uart4 esc_telemetry
 </code></pre>
 <p>The change is saved and verified by readback, and takes effect when the
-controller reboots. A function the port cannot carry is dropped at boot and
-logged; with no port bound to <code>rc</code>, the craft cannot arm.</p>
+controller reboots. Each function serves one port, so binding it moves it
+from the port it was on. The controller refuses a binding the port cannot
+carry, and refuses to leave <code>rc</code> unbound.</p>
 <h2 id="list-and-download-flights"><a class="header" href="#list-and-download-flights">List and download flights</a></h2>
 <p>After landing, disarm and leave the FCU powered for at least two seconds so the
 last partial flash page can be committed.</p>

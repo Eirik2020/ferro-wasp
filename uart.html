@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cd749f37.js";
+            window.path_to_searchindex_js = "searchindex-fdefa211.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -233,12 +233,16 @@ telemetry, configurator) is chosen at boot from that table:</p>
 capabilities (<code>resolve_bindings</code> in <code>ferrowasp-serial</code>), starts every bound
 port with its function’s line settings, and moves the port’s stream into the
 function’s task. A port with nothing bound is never enabled.</li>
-<li>A binding the port cannot carry, or a function bound to two ports, is
-dropped and logged; the rest still apply. With no RC port the RC link never
-becomes valid, so the craft cannot arm.</li>
+<li>A change is checked against the board before it is accepted: a binding the
+port cannot carry in the configured RC protocol, a function on two ports,
+or RC left unbound is refused, and binding a function moves it from the
+port it was on. A saved configuration that fails the same check at boot is
+not used: the board falls back and refuses arming until acknowledged. Init
+still drops and logs a binding a port cannot carry, as a second line.</li>
 <li>Until a pilot saves bindings the board’s defaults apply. Over USB,
 <code>serial</code> shows them and <code>serial &lt;port&gt; &lt;function&gt;</code> stages a change, which
-takes effect after <code>config save</code> and a reboot. Changes are refused while
+takes effect after <code>config save</code> and a reboot; <code>serial &lt;port&gt; none</code> frees a
+port, except the one RC is on. Changes are refused while
 armed. FerroConfigurator’s <code>config ports</code> and <code>config bind</code> do the same and
 verify the saved table by readback.</li>
 <li>Port transports are role-free and chip-neutral

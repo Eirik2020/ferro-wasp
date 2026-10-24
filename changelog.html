@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cd749f37.js";
+            window.path_to_searchindex_js = "searchindex-fdefa211.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -242,9 +242,16 @@ and port bindings still take effect after a save and a reboot. <code>imu calibra
 same way.</p>
 </li>
 <li>
+<p>Serial bindings are checked against the board when set: a function the
+port cannot carry, a function on two ports, or RC left unbound is refused,
+and binding a function moves it from its old port.</p>
+</li>
+<li>
 <p>A boot that cannot use the last saved configuration (a torn or refused
 slot, or a store that cannot be read) refuses arming until the pilot
-acknowledges it with <code>config fallback ack</code>; <code>config fallback</code> says why.</p>
+acknowledges it with <code>config fallback ack</code>; <code>config fallback</code> says why.
+FerroConfigurator shows it in the pre-arm checklist, with an Acknowledge
+fallback button, and as <code>config fallback [--ack]</code>.</p>
 </li>
 <li>
 <p>FerroConfigurator is the one reader of the onboard log format.

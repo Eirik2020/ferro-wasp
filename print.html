@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cd749f37.js";
+            window.path_to_searchindex_js = "searchindex-fdefa211.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -447,6 +447,17 @@ setting; hold the motor afterwards to check it. The motor order is the
 front-right, rear-left, front-left), which board output each drives. <code>1234</code>
 keeps the board wiring. A wrong order flips the craft on takeoff, so after
 any change hold each motor and check it is where the diagram says.</p>
+<h2 id="after-a-configuration-fallback"><a class="header" href="#after-a-configuration-fallback">After a configuration fallback</a></h2>
+<p>If the controller could not use its last saved configuration at boot (a
+torn or refused save, or storage it could not read), it flies the previous
+save or the board default and refuses to arm until you acknowledge it. The
+GUI’s pre-arm list shows “Saved configuration in use” failing, with an
+Acknowledge fallback button. From the command line:</p>
+<pre><code class="language-powershell">.\ferro-configurator.exe --port $Port config fallback
+.\ferro-configurator.exe --port $Port config fallback --ack
+</code></pre>
+<p>Check the settings before acknowledging; saving the configuration again
+replaces the damaged slot.</p>
 <h2 id="change-serial-ports"><a class="header" href="#change-serial-ports">Change serial ports</a></h2>
 <p>Each UART is named by its number on the chip. List what each port serves,
 then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code>, <code>esc_telemetry</code> or
@@ -455,8 +466,9 @@ then bind one to a function (<code>none</code>, <code>rc</code>, <code>osd</code
 .\ferro-configurator.exe --port $Port config bind uart4 esc_telemetry
 </code></pre>
 <p>The change is saved and verified by readback, and takes effect when the
-controller reboots. A function the port cannot carry is dropped at boot and
-logged; with no port bound to <code>rc</code>, the craft cannot arm.</p>
+controller reboots. Each function serves one port, so binding it moves it
+from the port it was on. The controller refuses a binding the port cannot
+carry, and refuses to leave <code>rc</code> unbound.</p>
 <h2 id="list-and-download-flights"><a class="header" href="#list-and-download-flights">List and download flights</a></h2>
 <p>After landing, disarm and leave the FCU powered for at least two seconds so the
 last partial flash page can be committed.</p>
@@ -1686,7 +1698,9 @@ path.</p>
 same checks the next boot applies, with arming held off until the control loop
 flies it; <code>config save</code> keeps it across a reboot. The RC protocol and port
 bindings are read only at boot, so a change to them waits for a save and a
-reboot. <code>config fallback</code> reports whether the boot fell back from the saved
+reboot. These commands, <code>imu level</code> and <code>imu calibrate</code> work while the
+flash is unavailable too; only keeping a change needs it, so <code>config save</code>
+then answers that storage is unavailable. <code>config fallback</code> reports whether the boot fell back from the saved
 configuration, and <code>config fallback ack</code> acknowledges it so the craft may arm
 (see <a href="#shared-arming-guards">Arming</a>).</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
@@ -1983,12 +1997,16 @@ telemetry, configurator) is chosen at boot from that table:</p>
 capabilities (<code>resolve_bindings</code> in <code>ferrowasp-serial</code>), starts every bound
 port with its function’s line settings, and moves the port’s stream into the
 function’s task. A port with nothing bound is never enabled.</li>
-<li>A binding the port cannot carry, or a function bound to two ports, is
-dropped and logged; the rest still apply. With no RC port the RC link never
-becomes valid, so the craft cannot arm.</li>
+<li>A change is checked against the board before it is accepted: a binding the
+port cannot carry in the configured RC protocol, a function on two ports,
+or RC left unbound is refused, and binding a function moves it from the
+port it was on. A saved configuration that fails the same check at boot is
+not used: the board falls back and refuses arming until acknowledged. Init
+still drops and logs a binding a port cannot carry, as a second line.</li>
 <li>Until a pilot saves bindings the board’s defaults apply. Over USB,
 <code>serial</code> shows them and <code>serial &lt;port&gt; &lt;function&gt;</code> stages a change, which
-takes effect after <code>config save</code> and a reboot. Changes are refused while
+takes effect after <code>config save</code> and a reboot; <code>serial &lt;port&gt; none</code> frees a
+port, except the one RC is on. Changes are refused while
 armed. FerroConfigurator’s <code>config ports</code> and <code>config bind</code> do the same and
 verify the saved table by readback.</li>
 <li>Port transports are role-free and chip-neutral
@@ -2759,9 +2777,16 @@ and port bindings still take effect after a save and a reboot. <code>imu calibra
 same way.</p>
 </li>
 <li>
+<p>Serial bindings are checked against the board when set: a function the
+port cannot carry, a function on two ports, or RC left unbound is refused,
+and binding a function moves it from its old port.</p>
+</li>
+<li>
 <p>A boot that cannot use the last saved configuration (a torn or refused
 slot, or a store that cannot be read) refuses arming until the pilot
-acknowledges it with <code>config fallback ack</code>; <code>config fallback</code> says why.</p>
+acknowledges it with <code>config fallback ack</code>; <code>config fallback</code> says why.
+FerroConfigurator shows it in the pre-arm checklist, with an Acknowledge
+fallback button, and as <code>config fallback [--ack]</code>.</p>
 </li>
 <li>
 <p>FerroConfigurator is the one reader of the onboard log format.

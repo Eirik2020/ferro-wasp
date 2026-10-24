@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-cd749f37.js";
+            window.path_to_searchindex_js = "searchindex-fdefa211.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -275,7 +275,9 @@ path.</p>
 same checks the next boot applies, with arming held off until the control loop
 flies it; <code>config save</code> keeps it across a reboot. The RC protocol and port
 bindings are read only at boot, so a change to them waits for a save and a
-reboot. <code>config fallback</code> reports whether the boot fell back from the saved
+reboot. These commands, <code>imu level</code> and <code>imu calibrate</code> work while the
+flash is unavailable too; only keeping a change needs it, so <code>config save</code>
+then answers that storage is unavailable. <code>config fallback</code> reports whether the boot fell back from the saved
 configuration, and <code>config fallback ack</code> acknowledges it so the craft may arm
 (see <a href="./arming.html#shared-arming-guards">Arming</a>).</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
