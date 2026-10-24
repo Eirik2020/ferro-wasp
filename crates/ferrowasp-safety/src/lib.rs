@@ -4,7 +4,7 @@
 //! master and actuator tasks join it later; making it domain-agnostic is
 //! deferred (design §19).
 //!
-//! Requirements: ARM-001, ARM-004, ARM-003, BOOT-002, BOOT-004, INPUT-002, INPUT-015, INPUT-003, INPUT-006, INPUT-007, INPUT-008, INPUT-017, INPUT-018, SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008, SAFETY-002, SAFETY-009, SAFETY-010, SAFETY-003, SAFETY-011, SAFETY-004, SAFETY-012, SAFETY-005, SAFETY-013
+//! Requirements: ARM-001, ARM-004, ARM-003, BOOT-002, BOOT-004, INPUT-002, INPUT-015, INPUT-003, INPUT-006, INPUT-007, INPUT-008, INPUT-017, INPUT-018, SAFETY-001, SAFETY-006, SAFETY-007, SAFETY-008, SAFETY-002, SAFETY-009, SAFETY-010, SAFETY-003, SAFETY-011, SAFETY-004, SAFETY-012, SAFETY-014, SAFETY-015, SAFETY-005, SAFETY-013
 //! Safety-critical.
 
 #![forbid(unsafe_code)]
@@ -13,14 +13,23 @@
 
 pub mod actuator;
 pub mod arming;
+pub mod config_gate;
+pub mod host;
 pub mod prearm;
 #[cfg(all(feature = "tasks", target_arch = "arm"))]
 pub mod tasks;
 
 /// The board's live arming guard: the arm permit, RC link, arm switch and
-/// throttle, then the control loop's IMU status (`None` once too old).
-pub type ArmingGuard =
-    fn(bool, bool, bool, u32, Option<prearm::ImuPreArmStatus>) -> Result<(), ArmingAbortReason>;
+/// throttle, whether a computer is attached, then the control loop's IMU
+/// status (`None` once too old).
+pub type ArmingGuard = fn(
+    bool,
+    bool,
+    bool,
+    u32,
+    bool,
+    Option<prearm::ImuPreArmStatus>,
+) -> Result<(), ArmingAbortReason>;
 
 pub const ARM_HOLD_US: u64 = 200_000;
 pub const ARM_THRESHOLD: u16 = 1500;
@@ -99,7 +108,69 @@ pub enum SafetyEvent {
     ArmingAborted(ArmingAbortReason),
     DisarmRequested,
     RcLinkInvalid(RcLinkInvalidation),
-    BenchMotor(BenchMotorRequest),
+    /// A bench motor request the coordinator accepted, with the ticket the
+    /// safety master's reply names it by.
+    BenchMotor {
+        request: BenchMotorRequest,
+        ticket: u32,
+    },
+    /// A computer is attached on this link: renew its lease.
+    HostPresent(host::HostLink),
+    /// A reboot the coordinator accepted from the storage owner, with the
+    /// ticket the safety master's reply names it by.
+    Reboot {
+        target: RebootTarget,
+        ticket: u32,
+    },
+    /// A config transaction asks to hold arming off while it applies;
+    /// answered by its ticket.
+    InhibitArming {
+        ticket: u32,
+        lease: config_gate::InhibitLease,
+    },
+    /// The config transaction `ticket` has applied its change.
+    ReleaseInhibit {
+        ticket: u32,
+    },
+    /// The pilot saw the boot's configuration fallback; answered by its
+    /// ticket.
+    AcknowledgeConfigFallback {
+        ticket: u32,
+    },
+}
+
+pub use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Refusal};
+
+/// The safety master's decision on one request the coordinator passed it
+/// by ticket, back to the coordinator.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SafetyReply {
+    pub ticket: u32,
+    pub outcome: Outcome,
+}
+
+/// Whether the safety master may restart the board now: only disarmed and
+/// not arming, since a reset ends the flight firmware.
+pub const fn validate_reboot(system_armed: bool, arming_in_progress: bool) -> Result<(), Refusal> {
+    if system_armed {
+        Err(Refusal::Armed)
+    } else if arming_in_progress {
+        Err(Refusal::ArmingInProgress)
+    } else {
+        Ok(())
+    }
+}
+
+/// A bench refusal as the requester sees it.
+pub const fn bench_refusal(refusal: BenchMotorRefusal) -> Refusal {
+    match refusal {
+        BenchMotorRefusal::Armed => Refusal::Armed,
+        BenchMotorRefusal::ArmingInProgress => Refusal::ArmingInProgress,
+        BenchMotorRefusal::ArmSwitchHigh => Refusal::ArmSwitchHigh,
+        BenchMotorRefusal::OutputDisabled => Refusal::OutputDisabled,
+        BenchMotorRefusal::InvalidMotor => Refusal::Invalid,
+        BenchMotorRefusal::MotorMapUnavailable => Refusal::MotorMapUnavailable,
+    }
 }
 
 /// A disarmed, props-off motor check requested over USB.
@@ -232,6 +303,14 @@ pub enum ArmingAbortReason {
     EscIdleRpmOutOfRange,
     EscIdleQualificationInvalid,
     CompletionDeliveryFailed,
+    /// A configuration change holds the arm inhibit.
+    ConfigChanging,
+    /// A configuration change did not finish within its lease; refused
+    /// until reboot.
+    ConfigChangeIncomplete,
+    /// The boot fell back from the last saved configuration and the pilot
+    /// has not acknowledged it.
+    ConfigFallback,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -551,6 +630,9 @@ pub mod signals {
     /// When the DShot service last started a frame set, in wrapping
     /// milliseconds.
     pub struct DshotReleaseWriter(&'static AtomicU32);
+    /// When the last host lease ends, in wrapping milliseconds since boot;
+    /// written by the safety master, `0` while no lease was ever taken.
+    pub struct HostLeaseWriter(&'static AtomicU32);
 
     pub struct MotorCmdWriter(MotorCmdProducer);
     pub struct MotorCmdReader(MotorCmdConsumer);
@@ -573,6 +655,32 @@ pub mod signals {
     pub struct MotorMapReader(&'static AtomicU16);
     #[derive(Clone, Copy)]
     pub struct DshotReleaseReader(&'static AtomicU32);
+    #[derive(Clone, Copy)]
+    pub struct HostLeaseReader(&'static AtomicU32);
+
+    pub fn split_host_lease(value: &'static AtomicU32) -> (HostLeaseWriter, HostLeaseReader) {
+        (HostLeaseWriter(value), HostLeaseReader(value))
+    }
+
+    impl HostLeaseWriter {
+        /// Publish when the last standing lease ends, `until_ms` since boot.
+        pub fn write(&self, until_ms: Option<u64>) {
+            // Zero means none, so a lease that would end at a multiple of
+            // 2^32 ms is published one millisecond later.
+            let value = until_ms.map_or(0, |until| (until as u32).max(1));
+            self.0.store(value, Ordering::Release);
+        }
+    }
+
+    impl HostLeaseReader {
+        /// Whether a lease stands at `now_ms` since boot. Leases are
+        /// seconds long, so the wrapping comparison never sees a lease more
+        /// than 2^31 ms away.
+        pub fn present(&self, now_ms: u64) -> bool {
+            let until = self.0.load(Ordering::Acquire);
+            until != 0 && (until.wrapping_sub(now_ms as u32) as i32) > 0
+        }
+    }
 
     pub fn split_motor_map(value: &'static AtomicU16) -> (MotorMapWriter, MotorMapReader) {
         (MotorMapWriter(value), MotorMapReader(value))
@@ -1344,6 +1452,14 @@ mod tests {
     }
 
     #[test]
+    fn a_reboot_is_allowed_only_disarmed_and_not_arming() {
+        assert_eq!(validate_reboot(false, false), Ok(()));
+        assert_eq!(validate_reboot(true, false), Err(Refusal::Armed));
+        assert_eq!(validate_reboot(true, true), Err(Refusal::Armed));
+        assert_eq!(validate_reboot(false, true), Err(Refusal::ArmingInProgress));
+    }
+
+    #[test]
     fn bench_motor_requests_are_refused_unless_disarmed_and_idle() {
         let spin = BenchMotorRequest::Spin { logical_motor: 1 };
         assert_eq!(
@@ -1452,5 +1568,18 @@ mod tests {
         let (release, release_reader) = signals::split_dshot_release(&RELEASE);
         release.write(u32::MAX);
         assert_eq!(release_reader.read(), u32::MAX);
+
+        static HOST: AtomicU32 = AtomicU32::new(0);
+        let (host, host_reader) = signals::split_host_lease(&HOST);
+        assert!(!host_reader.present(0));
+        host.write(Some(1_500));
+        assert!(host_reader.present(1_499));
+        assert!(!host_reader.present(1_500));
+        // Across the wrap of the 32-bit millisecond count.
+        host.write(Some((1 << 32) + 100));
+        assert!(host_reader.present((1 << 32) - 10));
+        assert!(!host_reader.present((1 << 32) + 100));
+        host.write(None);
+        assert!(!host_reader.present(0));
     }
 }

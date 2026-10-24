@@ -82,8 +82,7 @@ or the radio remixed.
 that order, so AETR is `1234` and TAER is `2314`. Each of channels 1-4 must be
 used once. `rc_arm_channel` accepts channels 5-16.
 
-A saved change to the map takes effect when the configuration is saved, while
-disarmed. Because the arm switch may now be read from a channel that is
+A change to the map takes effect when it is set, while disarmed. Because the arm switch may now be read from a channel that is
 already high, the change invalidates the RC link like a lost receiver: the
 link must recover, and the new arm channel must read low, before the craft
 can arm.
@@ -108,6 +107,14 @@ accepted only while disarmed with no flash maintenance or flight log open;
 `reboot dfu` restarts into the chip's ROM USB DFU bootloader, from which
 FerroConfigurator flashes, and holding BOOT at power-on stays the recovery
 path.
+
+A value set with `config set` applies at once while disarmed, through the
+same checks the next boot applies, with arming held off until the control loop
+flies it; `config save` keeps it across a reboot. The RC protocol and port
+bindings are read only at boot, so a change to them waits for a save and a
+reboot. `config fallback` reports whether the boot fell back from the saved
+configuration, and `config fallback ack` acknowledges it so the craft may arm
+(see [Arming](./arming.md#shared-arming-guards)).
 
 USB service runs below the control, IMU, RC, and safety priorities, with
 fixed-size buffers.

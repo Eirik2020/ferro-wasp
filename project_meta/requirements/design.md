@@ -121,12 +121,6 @@ keeps its own hardware list and never ingests imported targets.
 
 ## 18. Open items
 
-- **USB-host arming refusal.** ARM-003 refuses arming while a USB host is
-  connected or within 2 s of a configurator-link command, by reading flags
-  written by non-critical tasks (`USB_HOST_CONNECTED`,
-  `CONFIGURATOR_LINK_ACTIVE`). That breaks the flag rule. It moves either to
-  an inhibit lease each link holds through the coordinator or to a
-  safety-critical VBUS sense; decided during the redesign.
 - **Discontinuity handling in the RC group.** The RC group observes
   the serial reader's out-of-band discontinuity handle and calls the parser's `reset` (`rc_input`).
   Its fault decisions are host-tested functions

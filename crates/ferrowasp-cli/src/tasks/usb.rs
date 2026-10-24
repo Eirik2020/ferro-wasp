@@ -1,10 +1,14 @@
 //! The USB CDC port: the storage and configuration command line (or, with
-//! the MSPv2 configurator, its RPC), bench motor requests passed to the
-//! safety master, and the periodic `FWDBG1` status line.
+//! the MSPv2 configurator, its RPC), bench motor requests sent to the
+//! coordinator, and the periodic `FWDBG1` status line. While a host has the
+//! port configured, the task renews USB's host lease through the
+//! coordinator, so arming is refused.
 
 use super::prelude::*;
 use core::sync::atomic::AtomicBool;
-use ferrowasp_border::inbound::USB_HOST_CONNECTED;
+use ferrowasp_boundary_contracts::requests::Request;
+#[cfg(not(feature = "mspv2_configurator"))]
+use ferrowasp_boundary_contracts::requests::{MotorTest, Outcome, Refusal, Requester};
 #[cfg(feature = "mspv2_configurator")]
 use ferrowasp_mspv2 as mspv2;
 use ferrowasp_stm32::usb_serial::UsbCdcPort;
@@ -171,6 +175,48 @@ pub fn handle_msp_packet(
 /// The heartbeat sets it every two seconds, and the USB task writes a status
 /// line and clears it; both are non-critical.
 pub(crate) static STATUS_LINE_DUE: AtomicBool = AtomicBool::new(false);
+
+/// How often a configured port renews its host lease, a fifth of the
+/// lease, and how often the keepalive wakes the task to do it.
+const HOST_RENEW_MS: u64 = 100;
+/// How long a motor command waits for the safety master's decision.
+#[cfg(not(feature = "mspv2_configurator"))]
+const MOTOR_REPLY_TIMEOUT_MS: u64 = 500;
+
+/// The coordinator's request for a command-line motor test.
+#[cfg(not(feature = "mspv2_configurator"))]
+const fn motor_test(request: safety::BenchMotorRequest) -> MotorTest {
+    match request {
+        safety::BenchMotorRequest::Spin { logical_motor } => MotorTest::Spin { logical_motor },
+        safety::BenchMotorRequest::Stop => MotorTest::Stop,
+        safety::BenchMotorRequest::Direction {
+            logical_motor,
+            reversed,
+        } => MotorTest::Direction {
+            logical_motor,
+            reversed,
+        },
+    }
+}
+
+/// The command line's answer to a motor test's outcome.
+#[cfg(not(feature = "mspv2_configurator"))]
+const fn motor_reply(outcome: Outcome) -> &'static [u8] {
+    match outcome {
+        Outcome::Accepted => b"OK motor\r\n",
+        Outcome::Refused(Refusal::Armed) => b"ERR motor armed\r\n",
+        Outcome::Refused(Refusal::ArmingInProgress) => b"ERR motor arming in progress\r\n",
+        Outcome::Refused(Refusal::ArmSwitchHigh) => b"ERR motor arm switch is on\r\n",
+        Outcome::Refused(Refusal::OutputDisabled) => {
+            b"ERR motor output disabled in this firmware\r\n"
+        }
+        Outcome::Refused(Refusal::Invalid) => b"ERR motor must be 1-4\r\n",
+        Outcome::Refused(Refusal::MotorMapUnavailable) => b"ERR motor map not ready\r\n",
+        // The rest are a configuration change's or a calibration's, which a
+        // motor test never gets.
+        Outcome::Pending | Outcome::Refused(_) => b"ERR motor refused\r\n",
+    }
+}
 #[cfg(not(feature = "mspv2_configurator"))]
 use crate::usb_debug;
 
@@ -190,9 +236,13 @@ use crate::usb_debug;
         flash_command_parser: flash_task::CommandParser = flash_task::CommandParser::new(),
         flash_pending_response: Option<flash_task::ResponseFrame> = None,
         configurator_usb: ConfiguratorUsbState,
+        usb_request_link: LinkProducer<'static, Request>,
+        // The motor test waiting for its result: its request's sequence and
+        // when it was sent.
+        usb_pending_motor: Option<(u32, u64)> = None,
+        usb_host_renewed_ms: Option<u64> = None,
     ],
     shared = [ledger: Ledger],
-    spawn = [safety_master(event: safety::SafetyEvent)],
     config = [
         usb_debug_header: &'static [u8],
         actuator_output_enabled: bool,
@@ -250,40 +300,27 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
                     let _ = serial.write(line.as_bytes());
                 }
             }
-            // Bench motor requests go straight to the safety master, which
-            // outranks this task and decides before `spawn` returns. The
-            // check here only gives the host a reason; the safety master
-            // and the actuator each re-check before a motor moves.
+            // Bench motor requests go to the coordinator, which passes
+            // them to the safety master; the answer is written when its
+            // decision reaches the ledger. One waits at a time.
             Ok(flash_task::StorageCommand::Motor(request)) => {
-                let (armed, arm_high) = cx
-                    .shared
-                    .ledger
-                    .lock(|ledger| (ledger.safety().value.armed, ledger.rc().value.arm_high));
-                let precheck = safety::validate_bench_motor_request(
-                    request,
-                    armed,
-                    false,
-                    arm_high,
-                    CONFIG::ACTUATOR_OUTPUT_ENABLED,
-                );
-                let reply: &[u8] = match precheck {
-                    Ok(()) => match cx
-                        .spawn
-                        .safety_master(safety::SafetyEvent::BenchMotor(request))
-                    {
-                        Ok(()) => b"OK motor\r\n",
-                        Err(_) => b"ERR motor safety master busy\r\n",
-                    },
-                    Err(safety::BenchMotorRefusal::Armed) => b"ERR motor armed\r\n",
-                    Err(safety::BenchMotorRefusal::ArmSwitchHigh) => {
-                        b"ERR motor arm switch is on\r\n"
+                if cx.local.usb_pending_motor.is_some() {
+                    let _ = serial.write(b"ERR motor busy\r\n");
+                    continue;
+                }
+                let now = Mono::now().duration_since_epoch();
+                let link = &mut *cx.local.usb_request_link;
+                match link.push(
+                    TimestampMicros(now.to_micros()),
+                    Request::MotorTest(motor_test(request)),
+                ) {
+                    ferrowasp_io_contracts::link::Pushed::Sent => {
+                        *cx.local.usb_pending_motor = Some((link.sequence(), now.to_millis()));
                     }
-                    Err(safety::BenchMotorRefusal::OutputDisabled) => {
-                        b"ERR motor output disabled in this firmware\r\n"
+                    ferrowasp_io_contracts::link::Pushed::Refused => {
+                        let _ = serial.write(b"ERR motor request queue full\r\n");
                     }
-                    Err(_) => b"ERR motor refused\r\n",
-                };
-                let _ = serial.write(reply);
+                }
             }
             Ok(command) => {
                 if cx.local.flash_command_producer.enqueue(command).is_err() {
@@ -315,8 +352,40 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
         }
     }
 
-    // Arming is refused while a computer has the board configured.
-    USB_HOST_CONNECTED.store(serial.configured(), Ordering::Release);
+    #[cfg(not(feature = "mspv2_configurator"))]
+    if let Some((request_seq, sent_ms)) = *cx.local.usb_pending_motor {
+        let result = cx
+            .shared
+            .ledger
+            .lock(|ledger| ledger.result(Requester::Usb));
+        let now_ms = Mono::now().duration_since_epoch().to_millis();
+        if result.seq != 0 && result.value.request_seq == request_seq {
+            let _ = serial.write(motor_reply(result.value.outcome));
+            *cx.local.usb_pending_motor = None;
+        } else if now_ms.saturating_sub(sent_ms) >= MOTOR_REPLY_TIMEOUT_MS {
+            let _ = serial.write(b"ERR motor no answer\r\n");
+            *cx.local.usb_pending_motor = None;
+        }
+    }
+
+    // Arming is refused while a computer has the board configured: renew
+    // the lease through the coordinator while it does. A refused renewal
+    // is retried at the next wake.
+    if serial.configured() {
+        let now = Mono::now().duration_since_epoch();
+        if cx
+            .local
+            .usb_host_renewed_ms
+            .is_none_or(|renewed| now.to_millis().saturating_sub(renewed) >= HOST_RENEW_MS)
+            && cx
+                .local
+                .usb_request_link
+                .push(TimestampMicros(now.to_micros()), Request::HostPresent)
+                == ferrowasp_io_contracts::link::Pushed::Sent
+        {
+            *cx.local.usb_host_renewed_ms = Some(now.to_millis());
+        }
+    }
     if !serial.configured() {
         *cx.local.usb_header_sent = false;
         #[cfg(not(feature = "mspv2_configurator"))]
@@ -406,5 +475,15 @@ pub fn usb_fs(mut cx: usb_fs::Context) {
         Ok(written) if written == line.len()
     ) {
         STATUS_LINE_DUE.store(true, Ordering::Release);
+    }
+}
+
+/// Wake the USB task every [`HOST_RENEW_MS`], so it renews its host lease
+/// and answers a motor test between host transfers.
+#[ferroforge::task(config = [wake_usb: fn()], monotonic = Mono)]
+pub async fn usb_keepalive(_cx: usb_keepalive::Context) {
+    loop {
+        (CONFIG::WAKE_USB)();
+        Mono::delay(HOST_RENEW_MS.millis()).await;
     }
 }

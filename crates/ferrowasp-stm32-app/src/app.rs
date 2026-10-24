@@ -21,12 +21,15 @@ pub mod prelude {
     pub use embedded_hal_async::spi::SpiDevice;
     pub use embedded_io_async::Read as AsyncRead;
     pub use ferrowasp_blackbox::sync_ledger;
+    pub use ferrowasp_border::coordinator::{ConfigBoot, ConfigTopic};
     #[cfg(feature = "mspv2_configurator")]
     pub use ferrowasp_cli::blackbox_storage as blackbox_task;
     pub use ferrowasp_cli::command_link::{CommandLink, CommandSources, ResponseRouter};
     pub use ferrowasp_cli::log_sync;
     #[cfg(not(feature = "mspv2_configurator"))]
     pub use ferrowasp_cli::usb_debug;
+    pub use ferrowasp_config::boot::Fallback;
+    pub use ferrowasp_control::calibration::accel_level::LevelSample;
     pub use ferrowasp_feedback::esc_manager as esc;
     pub use ferrowasp_feedback::esc_manager::{
         DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_IDLE_THROTTLE_COMMAND, DSHOT_PREARM_STOP_HOLD_MS,
@@ -60,7 +63,6 @@ pub mod prelude {
 
     pub use crate as flight_tasks;
     pub use crate::{SPI1_MAILBOX, Spi1Device, Spi1Executor, Spi1Mailbox};
-    pub use ferrowasp_border::inbound::host_connected;
     pub use ferrowasp_cli::tasks::usb::{
         ConfiguratorUsbState, FlashRpcCommandProducer, FlashRpcResponseConsumer, MspCommonInfoFn,
     };
@@ -83,15 +85,21 @@ pub mod prelude {
     pub type UsbCdcLink = crate::prelude::backend::usb_serial::UsbCdcLink;
     pub use ferrowasp_border::observer::Ledger;
     pub use ferrowasp_boundary_contracts::messages as observed;
+    pub use ferrowasp_boundary_contracts::requests;
     pub use ferrowasp_boundary_contracts::topics::Identity;
     pub use ferrowasp_io_contracts::link::Stamped;
     pub use ferrowasp_stm32::system_reset::RebootTarget;
     /// The producing end of one task's link into the observer.
     pub type ObserverLink<T> = ferrowasp_io_contracts::link::LinkProducer<'static, T>;
     pub type ObserverState = ferrowasp_border::observer::Observer<'static>;
+    pub type CoordinatorState = ferrowasp_border::coordinator::Coordinator<'static>;
     pub use ferrowasp_io_contracts::imu::ImuSample;
     /// The control loop's end of the IMU sample link.
     pub type ImuSampleConsumer = ferrowasp_io_contracts::link::LinkConsumer<'static, ImuSample>;
+    /// The control loop's and RC input's end of the coordinator's
+    /// configuration link.
+    pub type FlightConfigConsumer =
+        ferrowasp_io_contracts::link::LinkConsumer<'static, crate::dt::FlightConfig>;
     /// The blackbox stream's consuming end, the flash manager's.
     pub type BlackboxStream =
         ferrowasp_io_contracts::link::LinkConsumer<'static, observed::ControlTick>;
@@ -270,6 +278,18 @@ macro_rules! flight_app_facade {
             Mutex::new(RefCell::new(safety::RcLinkState::new()));
         pub static ACTUATOR_ARM_DONE: AtomicBool = AtomicBool::new(false);
         pub static ACTUATOR_ARM_PERMIT: AtomicBool = AtomicBool::new(false);
+        /// Restart as the safety master decided: into the firmware, or into
+        /// the chip's ROM bootloader.
+        pub fn reboot_on_request(target: requests::RebootTarget) -> ! {
+            stm32_bootloader::reboot(match target {
+                requests::RebootTarget::Firmware => {
+                    RebootTarget::Firmware
+                }
+                requests::RebootTarget::RomBootloader => {
+                    RebootTarget::RomBootloader
+                }
+            })
+        }
         /// Wake the USB task, which serves its queues on its interrupt.
         pub fn wake_usb() {
             cortex_m::peripheral::NVIC::pend(pac::Interrupt::OTG_FS);
@@ -279,6 +299,8 @@ macro_rules! flight_app_facade {
         pub static SAFETY_ARMED: AtomicBool = AtomicBool::new(false);
         pub static MOTOR_OUTPUT_MAP: AtomicU16 = AtomicU16::new(0);
         pub static DSHOT_LAST_RELEASE: AtomicU32 = AtomicU32::new(0);
+        /// When the last host lease ends; the safety master writes it.
+        pub static HOST_LEASE_UNTIL: AtomicU32 = AtomicU32::new(0);
         pub const ADC_VBAT_DIVIDER_RATIO: f32 = ADC_OBSERVATION_PROFILE.vbat_divider_ratio;
         pub const ADC_CURRENT_BETAFLIGHT_SCALE: u32 =
             ADC_OBSERVATION_PROFILE.current_betaflight_scale;
@@ -361,29 +383,42 @@ macro_rules! flight_app_facade {
         #[cfg(not(feature = "mspv2_configurator"))]
         pub const RPC_DEVICE_INFO: flight_tasks::RpcDeviceInfoFn = ();
 
-        /// The serial bindings to start the ports with, and the RC protocol of
-        /// the port bound to RC input: the saved values when storage holds a
-        /// configuration, else the board's defaults. Read once in init, so a
-        /// changed binding or protocol applies after a reboot.
-        pub fn boot_serial_bindings(
+        /// The configuration this boot flies: the newest valid slot, or the
+        /// board's default, and whether that fell back from the last save.
+        /// Read once, in init.
+        pub fn boot_configuration(
             flash: &mut FlashDevice,
             probe: &flight_tasks::FlashProbe,
-        ) -> ResolvedBindings {
-            let saved = if probe.ready {
-                flash_task::StorageLayout::new(probe.capacity_bytes)
-                    .and_then(|layout| {
-                        flight_tasks::load_flash_config(flash, layout, DEFAULT_STORED_CONFIG).ok()
-                    })
-                    .map(|(config, _, _)| config)
-            } else {
-                None
-            };
-            let config = saved.unwrap_or(DEFAULT_STORED_CONFIG);
+        ) -> ConfigBoot {
+            let boot = flight_tasks::boot_config(flash, probe, DEFAULT_STORED_CONFIG);
+            match boot.fallback {
+                None => {}
+                Some(Fallback::Damaged) => {
+                    warn!("Config: a saved slot is torn; arming refused until acknowledged")
+                }
+                Some(Fallback::Invalid) => {
+                    warn!("Config: a saved slot was refused; arming refused until acknowledged")
+                }
+                Some(Fallback::Unreadable) => warn!(
+                    "Config: storage unreadable, board default; arming refused until acknowledged"
+                ),
+            }
+            ConfigBoot {
+                boot,
+                default: DEFAULT_STORED_CONFIG,
+                default_bindings: board::serial::DEFAULT_SERIAL_BINDINGS,
+            }
+        }
+
+        /// The serial bindings to start the ports with, and the RC protocol of
+        /// the port bound to RC input, from the boot's configuration, so a
+        /// changed binding or protocol applies after a reboot.
+        pub fn boot_serial_bindings(boot: &ConfigBoot) -> ResolvedBindings {
             stm32_port::resolve_boot_serial_bindings(
-                config.serial_bindings,
+                boot.boot.config.serial_bindings,
                 board::serial::DEFAULT_SERIAL_BINDINGS,
                 board::serial::SERIAL_ROUTES,
-                config.rc_protocol,
+                boot.boot.config.rc_protocol,
             )
         }
 
@@ -400,12 +435,13 @@ macro_rules! flight_app_facade {
             rc_link_armable: bool,
             arm_high: bool,
             throttle: u32,
+            host_connected: bool,
             imu: Option<safety::prearm::ImuPreArmStatus>,
         ) -> Result<(), safety::ArmingAbortReason> {
             safety::validate_arming_guard(permit, rc_link_armable, arm_high, throttle)?;
             safety::validate_prearm_health(safety::prearm::prearm_health(
                 imu,
-                host_connected(),
+                host_connected,
                 |kind| Spi1ImuKind::from_discriminant(kind).is_some_and(imu_kind_flight_verified),
                 cfg!(feature = "bench_prearm_imu_stale"),
             )?)

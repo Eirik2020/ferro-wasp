@@ -60,6 +60,7 @@ readback, power loss mid-save).
 | newest slot damaged (CRC or decode), older valid | older slot, the pilot's previous save | refused until acknowledged |
 | decodes but fails `validate()` (e.g. a firmware update lowered the tested loop rate) | older slot, then default; never a clamped value, which would be a guessed state (W2) | refused until acknowledged |
 | older schema version | migrates; new keys take defaults | allowed, reported |
+| store missing or unreadable | board default | refused until acknowledged |
 
 A silent fallback could fly different gains, or a different motor map (a flip
 on takeoff). Of three options (refuse on any fallback; refuse on damage or

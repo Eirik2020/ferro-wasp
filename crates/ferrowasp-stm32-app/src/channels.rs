@@ -94,6 +94,129 @@ pub fn imu_channels() -> ImuChannels {
     }
 }
 
+/// Each requester's link to the coordinator holds four requests, two runs'
+/// worth.
+const REQUEST_LINK_DEPTH: usize = 5;
+/// The safety master's replies and the coordinator's results: every
+/// request two requesters can have in flight.
+const RESULT_LINK_DEPTH: usize = 9;
+/// IMU samples for a calibration: two coordinator runs at 2 kHz, so a run
+/// that starts late loses none.
+const LEVEL_SAMPLE_LINK_DEPTH: usize = 41;
+
+/// The coordinator and the ends of its links (sections 11 and 14): each
+/// requester's own request link, the safety master's replies, the
+/// configuration's links to the control loop and RC input and the control
+/// loop's confirmations, and the results and configuration the observer
+/// publishes.
+pub struct CoordinatorChannels {
+    pub coordinator: ferrowasp_border::coordinator::Coordinator<'static>,
+    pub usb_request_link: LinkProducer<'static, requests::Request>,
+    pub configurator_request_link: LinkProducer<'static, requests::Request>,
+    pub osd_request_link: LinkProducer<'static, requests::Request>,
+    pub storage_request_link: LinkProducer<'static, requests::Request>,
+    pub safety_reply_link: LinkProducer<'static, safety::SafetyReply>,
+    pub flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
+    pub rc_flight_config_link: LinkConsumer<'static, dt::FlightConfig>,
+    pub config_applied_link: LinkProducer<'static, u32>,
+    pub level_sample_link:
+        LinkProducer<'static, ferrowasp_control::calibration::accel_level::LevelSample>,
+    pub request_results: LinkConsumer<'static, requests::RequesterResult>,
+    pub config_topic: LinkConsumer<'static, ferrowasp_border::coordinator::ConfigTopic>,
+}
+
+/// Create the coordinator's links around the boot's configuration. Call
+/// once, before the observer's, which takes `request_results` and
+/// `config_topic`.
+pub fn coordinator_channels(
+    boot: ferrowasp_border::coordinator::ConfigBoot,
+) -> CoordinatorChannels {
+    use ferrowasp_border::coordinator::ConfigTopic;
+    use ferrowasp_control::calibration::accel_level::LevelSample;
+    use ferrowasp_io_contracts::link::link;
+    use heapless::spsc::Queue;
+    use requests::{Request, RequesterResult};
+
+    macro_rules! state_link {
+        ($message:ty) => {
+            link(
+                cortex_m::singleton!(
+                    : Queue<Stamped<$message>, STATE_LINK_DEPTH> = Queue::new()
+                )
+                .unwrap(),
+            )
+        };
+    }
+
+    macro_rules! request_link {
+        () => {
+            link(
+                cortex_m::singleton!(
+                    : Queue<Stamped<Request>, REQUEST_LINK_DEPTH> = Queue::new()
+                )
+                .unwrap(),
+            )
+        };
+    }
+    let (usb_request_link, usb) = request_link!();
+    let (configurator_request_link, configurator_link) = request_link!();
+    let (osd_request_link, osd) = request_link!();
+    let (storage_request_link, storage) = request_link!();
+    let (safety_reply_link, safety_replies) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<safety::SafetyReply>, RESULT_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    let (results, request_results) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<RequesterResult>, RESULT_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    let (control, flight_config_link) = state_link!(dt::FlightConfig);
+    let (rc_input, rc_flight_config_link) = state_link!(dt::FlightConfig);
+    let (config_applied_link, applied) = state_link!(u32);
+    let (topic, config_topic) = state_link!(ConfigTopic);
+    let (level_sample_link, level_samples) = link(
+        cortex_m::singleton!(
+            : Queue<Stamped<LevelSample>, LEVEL_SAMPLE_LINK_DEPTH> = Queue::new()
+        )
+        .unwrap(),
+    );
+    CoordinatorChannels {
+        coordinator: ferrowasp_border::coordinator::Coordinator::new(
+            ferrowasp_border::coordinator::CoordinatorLinks {
+                usb,
+                configurator_link,
+                osd,
+                storage,
+                safety_replies,
+            },
+            ferrowasp_border::coordinator::ConfigLinks {
+                control,
+                rc_input,
+                applied,
+                level_samples,
+                topic,
+            },
+            boot,
+            results,
+        ),
+        usb_request_link,
+        configurator_request_link,
+        osd_request_link,
+        storage_request_link,
+        safety_reply_link,
+        flight_config_link,
+        rc_flight_config_link,
+        config_applied_link,
+        level_sample_link,
+        request_results,
+        config_topic,
+    }
+}
+
 /// The observer and the producing end of every link into it (section 10):
 /// each producer's end is a local resource of that task alone. The
 /// blackbox stream's consuming end is the flash manager's.
@@ -115,6 +238,8 @@ pub struct ObserverChannels {
 /// the board sizes to ride out its storage's longest write stall. Call once.
 pub fn observer_channels<const N: usize>(
     stream: &'static mut heapless::spsc::Queue<Stamped<observed::ControlTick>, N>,
+    results: LinkConsumer<'static, requests::RequesterResult>,
+    config: LinkConsumer<'static, ferrowasp_border::coordinator::ConfigTopic>,
 ) -> ObserverChannels {
     use ferrowasp_io_contracts::link::link;
     use heapless::spsc::Queue;
@@ -157,6 +282,8 @@ pub fn observer_channels<const N: usize>(
                 esc,
                 battery,
                 storage,
+                config,
+                results,
             },
             stream_producer,
         ),

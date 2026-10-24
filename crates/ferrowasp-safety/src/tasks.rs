@@ -2,9 +2,13 @@
 //! the only task that arms or disarms the system. It
 //! decides on arm requests, completes arming once the actuator reports idle,
 //! and disarms on request, on an aborted arming, or when the RC link is
-//! invalidated. It commands the actuator only by spawning `actuator_output`.
+//! invalidated. It commands the actuator only by spawning `actuator_output`,
+//! and it alone restarts the board, on a reboot the coordinator passes it.
+//! It holds arming off while a configuration change applies, and after a
+//! boot that fell back until the pilot acknowledges it.
 //!
-//! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020
+//! Requirements: ARM-001, ARM-004, ARM-002, INPUT-010, INPUT-019, INPUT-020,
+//! SAFETY-015, CONFIG-017, CONFIG-018, CONFIG-019, CONFIG-027
 //! Safety-critical.
 
 use crate::prearm::ImuPreArmReader;
@@ -57,6 +61,15 @@ pub fn warn_arming_abort(reason: safety::ArmingAbortReason) {
         safety::ArmingAbortReason::CompletionDeliveryFailed => {
             warn!("Arming aborted: idle completion delivery failed")
         }
+        safety::ArmingAbortReason::ConfigChanging => {
+            warn!("Arming refused: a configuration change is being applied")
+        }
+        safety::ArmingAbortReason::ConfigChangeIncomplete => {
+            warn!("Arming refused until reboot: a configuration change was not confirmed")
+        }
+        safety::ArmingAbortReason::ConfigFallback => {
+            warn!("Arming refused: the boot fell back from the saved configuration; acknowledge it")
+        }
     }
 }
 
@@ -95,6 +108,14 @@ fn report_arm_state(
         last_bench_request_ms: Option<u64> = None,
         safety_status_link: LinkProducer<'static, observed::SafetyStatus>,
         safety_imu_prearm: ImuPreArmReader<'static>,
+        // Each host link's lease, renewed through the coordinator; arming is
+        // refused while one stands, and actuator output reads the flag.
+        host_leases: safety::host::HostLeases = safety::host::HostLeases::new(),
+        host_lease_writer: signals::HostLeaseWriter,
+        safety_reply_link: LinkProducer<'static, safety::SafetyReply>,
+        // What a config change and the boot's configuration hold against
+        // arming; built from whether the boot fell back.
+        config_gate: safety::config_gate::ConfigGate,
     ],
     spawn = [actuator_output(cmd: safety::ActuatorCmd)],
     config = [
@@ -102,6 +123,7 @@ fn report_arm_state(
         actuator_inhibit_reason: &'static str,
         bench_actuator_validation_enabled: bool,
         validate_live_arming_guard: safety::ArmingGuard,
+        reboot: fn(safety::RebootTarget) -> !,
     ],
     monotonic = Mono,
 )]
@@ -133,11 +155,18 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 return;
             }
 
+            if let Some(reason) = cx.local.config_gate.arming_refusal(now_us / 1_000) {
+                arm_permit.revoke();
+                warn_arming_abort(reason);
+                return;
+            }
+
             let guard = CONFIG::VALIDATE_LIVE_ARMING_GUARD(
                 true,
                 rc_link.is_armable(now_us),
                 rc_arm_high.read(),
                 rc_throttle.read(),
+                cx.local.host_leases.present(now_us / 1_000),
                 cx.local.safety_imu_prearm.current(TimestampMicros(now_us)),
             );
             if guard.is_ok() {
@@ -165,10 +194,16 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                     rc_link.is_armable(now_us),
                     rc_arm_high.read(),
                     rc_throttle.read(),
+                    cx.local.host_leases.present(now_us / 1_000),
                     cx.local.safety_imu_prearm.current(TimestampMicros(now_us)),
                 )
                 .is_ok()
                 && actuator_done.read()
+                && cx
+                    .local
+                    .config_gate
+                    .arming_refusal(now_us / 1_000)
+                    .is_none()
             {
                 arm_permit.revoke();
                 system_arm.arm();
@@ -218,17 +253,30 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
             }
         }
 
-        // A props-off motor check from the configurator. Decided here, like
-        // every other request that can reach the motors, and refused unless
-        // the system is disarmed, not arming, and the arm switch is off.
-        safety::SafetyEvent::BenchMotor(request) => {
-            match safety::validate_bench_motor_request(
+        // A props-off motor check from the configurator, through the
+        // coordinator. Decided here, like every other request that can reach
+        // the motors, and refused unless the system is disarmed, not arming,
+        // and the arm switch is off; the decision goes back to the
+        // coordinator by its ticket.
+        safety::SafetyEvent::BenchMotor { request, ticket } => {
+            let decision = safety::validate_bench_motor_request(
                 request,
                 system_arm.is_armed(),
                 arm_permit.is_allowed(),
                 rc_arm_high.read(),
                 CONFIG::ACTUATOR_OUTPUT_ENABLED,
-            ) {
+            );
+            cx.local.safety_reply_link.push(
+                TimestampMicros(now_us),
+                safety::SafetyReply {
+                    ticket,
+                    outcome: match decision {
+                        Ok(()) => safety::Outcome::Accepted,
+                        Err(refusal) => safety::Outcome::Refused(safety::bench_refusal(refusal)),
+                    },
+                },
+            );
+            match decision {
                 Ok(()) => {
                     if request != safety::BenchMotorRequest::Stop {
                         *cx.local.last_bench_request_ms = Some(now_us / 1_000);
@@ -243,6 +291,80 @@ pub async fn safety_master(cx: safety_master::Context, event: safety::SafetyEven
                 }
                 Err(refusal) => warn!("Bench motor request refused: {}", refusal.as_str()),
             }
+        }
+
+        // A restart the storage owner asked for once its store was settled.
+        // Only disarmed and not arming: the reset ends the flight firmware,
+        // and nothing between the check and the reset can arm, since arming
+        // is this task's alone.
+        // An accepted reboot never returns, so only a refusal is answered.
+        safety::SafetyEvent::Reboot { target, ticket } => {
+            match safety::validate_reboot(system_arm.is_armed(), arm_permit.is_allowed()) {
+                Ok(()) => {
+                    warn!("Rebooting on request");
+                    (CONFIG::REBOOT)(target);
+                }
+                Err(refusal) => {
+                    cx.local.safety_reply_link.push(
+                        TimestampMicros(now_us),
+                        safety::SafetyReply {
+                            ticket,
+                            outcome: safety::Outcome::Refused(refusal),
+                        },
+                    );
+                }
+            }
+        }
+
+        // A config transaction holds arming off while it applies, granted
+        // only disarmed and not arming; a lease that lapses unreleased
+        // refuses arming until reboot (`config_gate`).
+        safety::SafetyEvent::InhibitArming { ticket, lease } => {
+            let decision = cx.local.config_gate.request(
+                ticket,
+                lease,
+                system_arm.is_armed(),
+                arm_permit.is_allowed(),
+                now_us / 1_000,
+            );
+            cx.local.safety_reply_link.push(
+                TimestampMicros(now_us),
+                safety::SafetyReply {
+                    ticket,
+                    outcome: match decision {
+                        Ok(()) => safety::Outcome::Accepted,
+                        Err(refusal) => safety::Outcome::Refused(refusal),
+                    },
+                },
+            );
+        }
+
+        safety::SafetyEvent::ReleaseInhibit { ticket } => {
+            cx.local.config_gate.release(ticket, now_us / 1_000);
+        }
+
+        safety::SafetyEvent::AcknowledgeConfigFallback { ticket } => {
+            let decision = cx
+                .local
+                .config_gate
+                .acknowledge_fallback(system_arm.is_armed());
+            cx.local.safety_reply_link.push(
+                TimestampMicros(now_us),
+                safety::SafetyReply {
+                    ticket,
+                    outcome: match decision {
+                        Ok(()) => safety::Outcome::Accepted,
+                        Err(refusal) => safety::Outcome::Refused(refusal),
+                    },
+                },
+            );
+        }
+
+        safety::SafetyEvent::HostPresent(link) => {
+            cx.local.host_leases.renew(link, now_us / 1_000);
+            cx.local
+                .host_lease_writer
+                .write(cx.local.host_leases.until_ms());
         }
 
         safety::SafetyEvent::RcLinkInvalid(reason) => {

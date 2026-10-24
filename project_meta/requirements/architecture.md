@@ -151,9 +151,10 @@ an RTIC shared resource locked by `control_loop` (14), `rc_input` (10),
 `osd_refresh` (3) and `flash_manager_task` (1). A non-critical task could hold
 a lock whose ceiling is 14 and stop the control loop for that time, and the
 OSD (through `tuning_request_seq`) and the flash manager could write any
-tuning into the control loop. Under this design `tuning_profile` is state
-owned by the control loop; the OSD and flash manager send requests and read
-the active profile from the ledger.
+tuning into the control loop. Under this design the configuration is state
+owned by the config owner, which the coordinator runs (section 14); the
+control loop and RC input take each change on a `state` link, and the OSD and
+flash manager send requests and read the configuration from the ledger.
 
 The SPI1 mailbox between the IMU tasks and the SPI owner
 (`critical-section::Mutex<RefCell<_>>`) becomes SPSC request and response
@@ -216,8 +217,8 @@ safety-critical tasks wrote directly and anyone read.
   since nothing yet covers the control loop's liveness; the motor map and
   the DShot release time, flags; IMU readiness and kind, init values.
   Values non-critical tasks share among themselves also go through the
-  observer. Inbound values (the accelerometer level, the host-connected
-  flags, `tuning_profile`) wait for the coordinator.
+  observer. Inbound values (the host leases, the configuration and the
+  accelerometer level) come through the coordinator.
 - **The link type** and the `Stamped` envelope (sequence, timestamp) live in
   `ferrowasp-io-contracts`, under every link, including the hardware ones
   section 12 plans. A refused message still takes a sequence number, so the
@@ -333,6 +334,15 @@ apply time from the owner. A requester never assumes success; with no result
 within its limit it shows a timeout. A full requester queue drops the request,
 and the requester times out.
 
+**Host leases.** Arming is refused while a computer is attached (ARM-003).
+Each link a computer can be attached by renews its own lease through the
+coordinator: USB every 100 ms while a host has the board configured, for
+500 ms, and the configurator link with each command, for 2 s. The safety
+master holds the leases and publishes when the last one ends, for Actuator
+Output's guard. A link that stops renewing releases arming by itself, so no
+non-critical task writes what the arming guard reads; the Foxeer has no VBUS
+sense pin, so a USB supply that only gives power does not count.
+
 **Worked example: the motor test.** Before, `usb_fs` (non-critical) put
 `SafetyEvent::BenchMotor` straight into the safety master's own event input,
 beside `ArmRequested`, `DisarmRequested` and `RcLinkInvalid`, and
@@ -360,18 +370,23 @@ priority 1) handled `reboot` and `reboot dfu`, read `SAFETY_ARMED`, and called
 `backend::system_bootloader::reboot` itself (`stm32-tasks/src/flash.rs`).
 That is check-then-act by non-critical code, and it checked only armed, not
 arming in progress, when motors already spin for idle qualification. Under
-the design:
+the design, the storage owner, which alone knows the store is settled, is
+the requester:
 
 ```
-CLI ─▶ flash manager: quiesce storage          (non-critical ↔ non-critical)
-CLI ─▶ coordinator: Request::Reboot(Firmware | RomBootloader)
+CLI ─▶ flash manager: reboot dfu                (non-critical ↔ non-critical)
+       flash manager: refuse while armed, maintaining or logging;
+                      settle the store; answer; wait for the answer to leave
+       flash manager ─▶ coordinator: Request::Reboot(RomBootloader)
+         coordinator: from the storage owner? → forward, ticketed
          coordinator ─▶ safety master (participant):
-             disarmed and not arming? → hold arm inhibit → reset
+             disarmed and not arming? → reset
              otherwise               → refused(Armed | ArmingInProgress)
 ```
 
 Only the safety master can end the flight firmware; non-critical crates
-cannot even name `reboot()`. A write cut by a reboot is covered by the
+cannot even name `reboot()`. No inhibit is needed: the check and the reset
+run in one safety-master run, and arming is that task's alone. A write cut by a reboot is covered by the
 two-slot scheme and boot validation (section 14).
 
 **Naming.** The task was first called "the gate". Candidates were checked for

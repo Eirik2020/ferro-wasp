@@ -34,12 +34,18 @@ An arm attempt requires:
 - a newly observed low-to-high arm transition;
 - arm high for the configured 200 ms hold;
 - throttle at or below `ARMING_MAX_THROTTLE`, currently 65 command counts;
-- no computer connected: a USB host has not configured the board, and the
-  UART configurator link has sent no command in the last 2 seconds. The
-  Foxeer has no VBUS sense pin, so a USB supply that only gives power does not
-  count;
+- no computer connected: no host lease stands. USB renews its lease every
+  100 ms while a host has the board configured, and it lasts 500 ms; the UART
+  configurator link renews its lease with each command, and it lasts 2
+  seconds. The Foxeer has no VBUS sense pin, so a USB supply that only gives
+  power does not count;
 - a supported IMU that has produced a sample;
 - completed stationary startup gyro-bias calibration;
+- no configuration change being applied, and none that failed to confirm
+  since boot: a change holds arming off until the control loop confirms it,
+  and one it never confirms refuses arming until reboot;
+- no unacknowledged configuration fallback: a boot that could not use the
+  last save refuses arming until `config fallback ack`, sent disarmed;
 - a fresh IMU sample in the control loop, where one isolated tick without a
   new sample is tolerated and two in a row are not;
 - no revoked actuator permit or other failed safety check.
@@ -149,8 +155,9 @@ open.
 
 ## Bench Motor Test
 
-FerroConfigurator's motor test is a request over USB only, which the safety
-master accepts only while disarmed, not arming, with the arm switch low and
+FerroConfigurator's motor test is a request over USB only, which reaches the
+safety master through the coordinator, and which the safety master accepts
+only while disarmed, not arming, with the arm switch low and
 output enabled. An accepted request idles one logical motor for a 250 ms lease
 that the host renews while its button is held; a lapsed lease stops the motor.
 Arming is refused for 2 s after the last request. Bench images, and the

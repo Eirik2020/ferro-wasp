@@ -19,6 +19,7 @@ pub use embedded_hal_async::spi::SpiDevice as _;
 pub use embedded_io_async::Read as _;
 pub use ferrowasp_border::observer::Ledger;
 pub use ferrowasp_boundary_contracts::messages as observed;
+pub use ferrowasp_boundary_contracts::requests;
 pub use ferrowasp_feedback::esc_manager as esc;
 pub use ferrowasp_feedback::esc_manager::{
     DSHOT_IDLE_QUALIFICATION_CONFIG, DSHOT_PREARM_STOP_HOLD_MS,

@@ -75,8 +75,9 @@ pub use actuator::{
 };
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub use channels::{
-    CommandLinkChannels, EscChannels, ImuChannels, ObserverChannels, StorageChannels,
-    command_link_channels, esc_channels, imu_channels, observer_channels, storage_channels,
+    CommandLinkChannels, CoordinatorChannels, EscChannels, ImuChannels, ObserverChannels,
+    StorageChannels, command_link_channels, coordinator_channels, esc_channels, imu_channels,
+    observer_channels, storage_channels,
 };
 #[cfg(all(
     target_arch = "arm",
@@ -91,7 +92,7 @@ pub use ferrowasp_border::tasks::observer_task;
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_cli::tasks::flash::{
     ConfigRpcCompletion, FlashProbe, FlashRpcCommandConsumer, FlashRpcResponseProducer,
-    RpcDeviceInfoFn, flash_manager_task, load_flash_config, scan_flash_log,
+    RpcDeviceInfoFn, boot_config, flash_manager_task, scan_flash_log,
 };
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_cli::tasks::heartbeat::heartbeat;

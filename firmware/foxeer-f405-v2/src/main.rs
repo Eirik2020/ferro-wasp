@@ -11,7 +11,7 @@ use ferrowasp_app_foxeer_f405_v2::internal::*;
 ferroforge::app! {
     device = pac,
     peripherals = true,
-    dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN, SDIO],
+    dispatchers = [CAN1_TX, CAN2_TX, CAN1_RX0, CAN1_RX1, CAN1_SCE, CAN2_RX0, CAN2_RX1, OTG_HS_EP1_OUT, OTG_HS_EP1_IN, SDIO, CAN2_SCE],
 
     use super::*; // Import everything from parent module
 
@@ -37,10 +37,6 @@ ferroforge::app! {
         #[lock_free]
         uart4_rx: Option<stm32_port::UartRxPort<board::aliases::Uart4RxIrq>>,
         uart4_tx_dma: Option<board::aliases::Uart4TxDmaSide>,
-
-        // IMU
-        tuning_profile: dt::TuningProfile,
-        tuning_request_seq: u32,
 
         // ADC
         adc1_transfer: AdcTransfer,
@@ -110,7 +106,21 @@ ferroforge::app! {
         io_watchdog: IoWatchdog,
         imu_last_sequence: u32,
         imu_stale_ticks: u32,
-        applied_tuning_seq: u32,
+        // What the control loop, RC input and the OSD menu start from: the
+        // boot's configuration, then each change the coordinator sends.
+        flight_config: dt::FlightConfig,
+        flight_config_link: FlightConfigConsumer,
+        config_applied_link: ObserverLink<u32>,
+        level_sample_link: ObserverLink<LevelSample>,
+        rc_flight_config: dt::FlightConfig,
+        rc_flight_config_link: FlightConfigConsumer,
+        osd_request_link: ObserverLink<requests::Request>,
+        osd_tuning: dt::TuningProfile,
+        // What the boot's configuration holds against arming, and where the
+        // next save goes.
+        config_gate: safety::config_gate::ConfigGate,
+        config_sequence: u32,
+        config_active_slot: u8,
 
         // Serial functions: each owns the port config bound to it, if any.
         rc_port: Option<SerialPortEndpoint>,
@@ -206,6 +216,17 @@ ferroforge::app! {
         usb_cdc: UsbCdcLink,
         usb_header_sent: bool,
         configurator_usb: ConfiguratorUsbState,
+
+        // The coordinator, each requester's link into it, the safety
+        // master's replies, and the host lease the safety master publishes
+        // for actuator output.
+        coordinator: CoordinatorState,
+        usb_request_link: ObserverLink<requests::Request>,
+        storage_request_link: ObserverLink<requests::Request>,
+        configurator_request_link: ObserverLink<requests::Request>,
+        safety_reply_link: ObserverLink<safety::SafetyReply>,
+        host_lease_writer: safety::signals::HostLeaseWriter,
+        actuator_host_lease_reader: safety::signals::HostLeaseReader,
     }
     #[init(local = [
         uart1_rx_buffers: stm32_storage::UartRxBufferBank =
@@ -418,6 +439,23 @@ ferroforge::app! {
             flash_rpc_response_producer,
             flash_rpc_response_consumer,
         } = flight_tasks::storage_channels();
+        // The configuration this boot flies, read once, here: a changed
+        // binding or protocol applies after a reboot.
+        let config_boot = boot_configuration(&mut flash_device, &flash_probe);
+        let flight_tasks::CoordinatorChannels {
+            coordinator,
+            osd_request_link,
+            flight_config_link,
+            rc_flight_config_link,
+            config_applied_link,
+            level_sample_link,
+            config_topic,
+            usb_request_link,
+            storage_request_link,
+            configurator_request_link,
+            safety_reply_link,
+            request_results,
+        } = flight_tasks::coordinator_channels(config_boot);
         let flight_tasks::ObserverChannels {
             observer,
             control_tick_link,
@@ -435,6 +473,8 @@ ferroforge::app! {
                 : BlackboxStreamQueue<BLACKBOX_STREAM_CAPACITY> = BlackboxStreamQueue::new()
             )
             .unwrap(),
+            request_results,
+            config_topic,
         );
         let flight_tasks::ImuChannels {
             imu_sample_link,
@@ -464,7 +504,7 @@ ferroforge::app! {
         // port's function and line settings; it is read once, here, so a
         // changed binding applies after a reboot.
         board::aliases::assert_uart1_esc_telemetry_route_compile();
-        let serial_bindings = boot_serial_bindings(&mut flash_device, &flash_probe);
+        let serial_bindings = boot_serial_bindings(&config_boot);
         let board::init::UartPorts {
             uart1_rx,
             uart2_rx,
@@ -609,6 +649,8 @@ ferroforge::app! {
         let (motor_map_writer, motor_map_reader) = signals::split_motor_map(&MOTOR_OUTPUT_MAP);
         let (dshot_release_writer, dshot_release_reader) =
             signals::split_dshot_release(&DSHOT_LAST_RELEASE);
+        let (host_lease_writer, actuator_host_lease_reader) =
+            signals::split_host_lease(&HOST_LEASE_UNTIL);
         let (rc_rates_writer, rc_rates_reader) = signals::split_rc_rates(&RC_RATES);
         let (rc_link_frame_writer, rc_link_invalidator, rc_link_reader) =
             signals::split_rc_link(&RC_LINK);
@@ -693,6 +735,8 @@ ferroforge::app! {
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         flight::heartbeat::spawn().unwrap();
         flight::observer_task::spawn().unwrap();
+        flight::coordinator_task::spawn().unwrap();
+        flight::usb_keepalive::spawn().unwrap();
         flight::adc1_polling::spawn().ok();
         uart2_tx_worker::spawn().unwrap();
         uart3_tx_worker::spawn().unwrap();
@@ -719,11 +763,7 @@ ferroforge::app! {
                 spi1_owner: spi1_imu.owner,
                 io_timebase,
                 dshot_motors,
-                ledger: Ledger::new(identity),
-
-                // IMU
-                tuning_profile,
-                tuning_request_seq: 0,
+                ledger: Ledger::new(identity, ConfigTopic::boot(&config_boot.boot)),
 
                 // ADC
                 adc1_transfer: adc1_battery.transfer,
@@ -789,7 +829,19 @@ ferroforge::app! {
                 io_watchdog,
                 imu_last_sequence: 0,
                 imu_stale_ticks: 0,
-                applied_tuning_seq: 0,
+                flight_config: config_boot.boot.config.flight(),
+                flight_config_link,
+                config_applied_link,
+                level_sample_link,
+                rc_flight_config: config_boot.boot.config.flight(),
+                rc_flight_config_link,
+                osd_request_link,
+                osd_tuning: config_boot.boot.config.tuning,
+                config_gate: safety::config_gate::ConfigGate::new(
+                    config_boot.boot.fallback.is_some(),
+                ),
+                config_sequence: config_boot.boot.sequence,
+                config_active_slot: config_boot.boot.slot,
 
                 // Parser
                 rc_port,
@@ -883,6 +935,15 @@ ferroforge::app! {
                 usb_cdc,
                 usb_header_sent: false,
                 configurator_usb: ConfiguratorUsbState::new(),
+
+                // Coordinator
+                coordinator,
+                usb_request_link,
+                storage_request_link,
+                configurator_request_link,
+                safety_reply_link,
+                host_lease_writer,
+                actuator_host_lease_reader,
             },
         )
     }
@@ -896,24 +957,28 @@ ferroforge::app! {
             // safety_master
             safety_rc_arm_high_reader, safety_rc_throttle_reader, safety_rc_link_reader,
             safety_arm_writer, rc_link_invalidator, actuator_arm_permit_writer,
-            actuator_arm_done_reader, safety_status_link, safety_imu_prearm,
+            actuator_arm_done_reader, safety_status_link, safety_imu_prearm, host_lease_writer,
+            safety_reply_link, config_gate,
             // usb_fs
             usb_cdc, usb_header_sent, flash_command_producer, flash_response_consumer,
             flash_rpc_command_producer, flash_rpc_response_consumer, configurator_usb,
+            usb_request_link,
             // flash_manager_task
             flash_device, flash_record_producer, flash_record_consumer, blackbox_stream,
             storage_status_link, flash_safety_arm_reader, flash_probe, flash_commands,
             flash_responses,
             flash_rpc_command_consumer, flash_rpc_response_producer, flash_rpc_device_info,
-            stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
+            storage_request_link,
+            config_sequence, config_active_slot,
             // control_loop
             control_loop_cnt, samples_per_control_loop, flight_controller, control_loop_scheduler,
             imu_rate_filter, imu_angle_integrator, gyro_axis_map, gyro_bias_calibrator,
-            imu_last_sequence, imu_stale_ticks, applied_tuning_seq, rc_rates_reader,
+            imu_last_sequence, imu_stale_ticks, rc_rates_reader,
             control_throttle_reader, control_safety_arm_reader, control_rc_link_reader,
             control_arm_permit_reader, motor_cmd_writer, motor_cmd_seq, control_tick_link,
             imu_sample_consumer, safety_prearm_link, actuator_prearm_link, control_imu_ready,
-            control_imu_kind, motor_map_writer,
+            control_imu_kind, motor_map_writer, flight_config, flight_config_link,
+            config_applied_link, level_sample_link,
             // dshot_service
             esc_request_consumer, esc_ack_producer, output_status_link, dshot_release_writer,
             // dshot_fallback
@@ -925,15 +990,16 @@ ferroforge::app! {
             actuator_safety_arm_reader, actuator_arm_permit_reader, actuator_rc_arm_high_reader,
             actuator_rc_throttle_reader, actuator_rc_link_reader, actuator_arm_done_writer,
             motor_cmd_reader, esc_telemetry_update_consumer, actuator_imu_prearm,
-            actuator_motor_map_reader,
+            actuator_motor_map_reader, actuator_host_lease_reader,
             // rc_input
             rc_port, rc_receiver, arm_qualifier, rc_rates_writer, rc_throttle_writer,
-            rc_arm_high_writer, rc_link_frame_writer, rc_status_link,
+            rc_arm_high_writer, rc_link_frame_writer, rc_status_link, rc_flight_config,
+            rc_flight_config_link,
             // rc_telemetry
             rc_telemetry_writer,
             // osd_refresh
             osd_port, osd_tx_healthy, osd_task, osd_tx_buffer, osd_refresh_tick,
-            osd_safety_arm_reader,
+            osd_safety_arm_reader, osd_request_link, osd_tuning,
             // dma_adc1
             adc1_buffer, battery_status_link,
             battery_cell_detector: osd::BatteryCellDetector = osd::BatteryCellDetector::new(
@@ -942,11 +1008,11 @@ ferroforge::app! {
                 BATTERY_MAX_CELLS,
             ),
             // observer_task
-            observer
+            observer,
+            // coordinator_task
+            coordinator
         ],
         shared = [
-            tuning_profile,
-            tuning_request_seq,
             dshot_motors,
             ledger,
             adc1_transfer
@@ -958,7 +1024,7 @@ ferroforge::app! {
             validate_live_arming_guard: flight_tasks::ArmingGuard = validate_live_arming_guard,
             usb_debug_header: &'static [u8] = USB_DEBUG_HEADER,
             wake_usb: fn() = wake_usb,
-            reboot: fn(RebootTarget) -> ! = stm32_bootloader::reboot,
+            reboot: fn(requests::RebootTarget) -> ! = reboot_on_request,
             control_loop_hz: u32 = board::profiles::CONTROL_LOOP_RATE_HZ,
             msp_common_info: MspCommonInfoFn = MSP_COMMON_INFO,
             rpc_device_info: flight_tasks::RpcDeviceInfoFn = RPC_DEVICE_INFO,
@@ -967,7 +1033,6 @@ ferroforge::app! {
                 IMU_CONTROL_AXIS_PROFILE.imu_to_drone_rotation(),
             control_imu_to_rate_controller_map: dt::FrameRotation =
                 IMU_CONTROL_AXIS_PROFILE.imu_to_rate_controller_map(),
-            default_stored_config: flash_task::StoredConfig = DEFAULT_STORED_CONFIG,
             default_serial_bindings: SerialBindings = board::serial::DEFAULT_SERIAL_BINDINGS,
             serial_routes: &'static [SerialRoute] = board::serial::SERIAL_ROUTES,
             imu_control_axis_profile: ferrowasp_control::frames::ImuControlAxisProfile =
@@ -1002,6 +1067,13 @@ ferroforge::app! {
         // is not safety-critical. One bounded run a millisecond.
         #[task(priority = 7)]
         async fn observer_task;
+        // Below the observer: requests from the command lines, a bounded
+        // number from each every 10 ms.
+        #[task(priority = 6)]
+        async fn coordinator_task;
+        // Wakes USB every 100 ms to renew its host lease.
+        #[task(priority = 1)]
+        async fn usb_keepalive;
         // Lowest priority: storage never preempts flight work.
         #[task(priority = 1)]
         async fn flash_manager_task;
@@ -1184,7 +1256,12 @@ ferroforge::app! {
     #[task(
         from = flight_tasks::configurator_link,
         priority = 3,
-        local = [configurator_port, configurator_commands, configurator_responses],
+        local = [
+            configurator_port,
+            configurator_commands,
+            configurator_responses,
+            configurator_request_link
+        ],
         shared = [ledger],
         config = [build_identity: flight_tasks::BuildIdentity = BUILD_IDENTITY]
     )]

@@ -279,3 +279,394 @@ requirements:
           setup: none
           method:
             test: ferrowasp_config::stored::tests::rc_map_and_protocol_are_configured_saved_and_validated
+
+
+  - id: CONFIG-013
+    title: The boot flies the newest valid save
+    statement: >-
+      At boot, the configuration shall be the newest slot whose page is
+      whole and whose every value passes validation, or the board
+      default when no slot is.
+    rationale: >-
+      Storage is untrusted input; a partly read save flies something the
+      pilot never set (W6).
+    derived_from: [W6, W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::boot::tests::a_fresh_board_boots_its_default_and_may_arm
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::boot::tests::the_newest_valid_slot_wins_across_the_sequence_wrap
+
+  - id: CONFIG-025
+    title: A value that fails validation rejects its slot
+    statement: >-
+      A stored value that fails validation shall reject its whole slot
+      at boot, never be clamped into range.
+    rationale: >-
+      A clamped value is one the pilot never set, flown without anyone
+      knowing (W6).
+    derived_from: [CONFIG-013]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::boot::tests::a_slot_reads_as_erased_damaged_invalid_or_valid
+
+  - id: CONFIG-014
+    title: A boot that fell back says so
+    statement: >-
+      A boot shall report a fallback when any slot was written but is
+      not valid, or when the store cannot be read.
+    rationale: >-
+      The pilot's last save is then not what the craft flies, and only a
+      report lets the arming refusal follow it.
+    derived_from: [CONFIG-013]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::boot::tests::a_damaged_or_invalid_slot_falls_back_and_must_be_acknowledged
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::boot::tests::an_unreadable_store_boots_the_default_and_must_be_acknowledged
+
+  - id: CONFIG-015
+    title: A change passes the boot's validation
+    statement: >-
+      The config owner shall accept a change only when the resulting
+      configuration passes the validation a boot applies.
+    rationale: >-
+      A change accepted at run time and then refused at boot would make
+      the next boot fall back unexpectedly.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::the_board_default_is_valid_and_a_value_out_of_range_is_not
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_value_out_of_range_is_refused_without_asking_the_safety_master
+
+  - id: CONFIG-026
+    title: A refused change changes nothing
+    statement: >-
+      A change the config owner refuses shall leave both the active and
+      the next boot's configuration as they were.
+    rationale: >-
+      A refusal that moved either image would apply part of a value the
+      checks rejected.
+    derived_from: [CONFIG-015]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::a_refused_change_changes_nothing
+
+  - id: CONFIG-016
+    title: A boot-only change waits for a reboot
+    statement: >-
+      A change to a key or binding that sets how a port is opened shall
+      change only the next boot's configuration.
+    rationale: >-
+      A port's protocol and function are set when it opens; changing
+      them under a running port would half apply them.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::a_boot_only_key_waits_for_a_reboot
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::a_replacement_keeps_the_crafts_level_and_waits_for_boot_only_keys
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_boot_only_change_waits_for_a_reboot_without_an_inhibit
+
+  - id: CONFIG-017
+    title: An arm inhibit is granted only disarmed
+    statement: >-
+      The safety master shall grant a configuration change's arm inhibit
+      only while disarmed, not arming, and holding no other.
+    rationale: >-
+      Gains, rates and maps must never change under a craft that is
+      arming or flying.
+    derived_from: [W1, W2]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::an_inhibit_is_granted_only_disarmed_and_not_arming
+
+  - id: CONFIG-027
+    title: A held inhibit refuses arming
+    statement: >-
+      The safety master shall refuse arming while a configuration change
+      holds the arm inhibit.
+    rationale: >-
+      A craft that armed during a change could fly a half applied one.
+    derived_from: [CONFIG-017]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::an_inhibit_is_granted_only_disarmed_and_not_arming
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::a_released_inhibit_lets_the_craft_arm
+
+  - id: CONFIG-018
+    title: An unreleased inhibit refuses arming until reboot
+    statement: >-
+      An arm inhibit whose lease lapses before its release shall refuse
+      arming until the board reboots.
+    rationale: >-
+      A lapsed lease means the change may be half applied, and nothing
+      can tell which half.
+    derived_from: [CONFIG-017]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::a_lapsed_inhibit_latches_until_reboot
+
+  - id: CONFIG-019
+    title: A fallback refuses arming until acknowledged
+    statement: >-
+      After a boot that fell back, arming shall be refused until the
+      pilot acknowledges the fallback while the craft is disarmed.
+    rationale: >-
+      The craft would otherwise fly an older or default tune the pilot
+      did not choose, without the pilot knowing.
+    derived_from: [CONFIG-014]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::a_fallback_refuses_arming_until_acknowledged_disarmed
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::an_acknowledged_fallback_leaves_the_topic
+
+  - id: CONFIG-020
+    title: A live change applies once arming is held off
+    statement: >-
+      The coordinator shall commit a live change and send it to the
+      control loop and RC input only after its arm inhibit is granted,
+      and release the inhibit only after the control loop confirms
+      applying it.
+    rationale: >-
+      The inhibit covers the whole time the change is moving through the
+      tasks that fly it (section 14).
+    derived_from: [CONFIG-017]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_live_change_holds_arming_off_until_the_control_loop_applies_it
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_refused_inhibit_changes_nothing
+
+  - id: CONFIG-021
+    title: An unconfirmed change is refused
+    statement: >-
+      A live change the control loop has not confirmed within its
+      transaction time shall be answered as unconfirmed.
+    rationale: >-
+      The requester must not report a change as applied when the control
+      loop may not fly it.
+    derived_from: [CONFIG-020]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_change_the_control_loop_never_confirms_is_refused_and_not_released
+
+  - id: CONFIG-028
+    title: An unconfirmed change keeps arming refused
+    statement: >-
+      The coordinator shall not release the arm inhibit of a change the
+      control loop did not confirm in time.
+    rationale: >-
+      Leaving the inhibit to lapse refuses arming until reboot, the only
+      safe state after a half applied change.
+    derived_from: [CONFIG-018, CONFIG-021]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_change_the_control_loop_never_confirms_is_refused_and_not_released
+
+  - id: CONFIG-022
+    title: Changes run one at a time
+    statement: >-
+      The coordinator shall run one configuration change at a time,
+      holding the next in its requester's queue until the first ends.
+    rationale: >-
+      Two changes in flight could interleave in the tasks that fly them.
+    derived_from: [CONFIG-020]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::config_changes_run_one_at_a_time_and_the_next_waits_its_turn
+
+  - id: CONFIG-029
+    title: RC input gets the newest configuration
+    statement: >-
+      The coordinator shall send RC input the newest configuration again
+      each run until RC input's link takes it.
+    rationale: >-
+      RC input reads its link only when frames arrive, so a full link
+      would otherwise keep an older map.
+    derived_from: [CONFIG-020]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::rc_input_gets_the_newest_change_once_its_full_link_has_room
+
+  - id: CONFIG-023
+    title: Only the storage owner and the OSD change the configuration
+    statement: >-
+      The coordinator shall refuse a configuration request from any
+      requester but the storage owner, which speaks for both command
+      lines, and the OSD, which may only set values.
+    rationale: >-
+      One path per source keeps every change checked once, and keeps a
+      host link from restoring defaults behind the command line's
+      checks.
+    derived_from: [W1, W6]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::only_the_storage_owner_and_the_osd_change_the_configuration
+
+  - id: CONFIG-024
+    title: A change's result follows its configuration
+    statement: >-
+      A reader that sees a configuration change's result on the ledger
+      shall see the configuration after that change.
+    rationale: >-
+      The command line saves the next boot's configuration right after a
+      change; an older copy would save without it.
+    derived_from: [CONFIG-020]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::observer::tests::a_config_change_is_on_the_ledger_once_its_result_is
+
+  - id: CONFIG-030
+    title: A calibration samples under the arm inhibit
+    statement: >-
+      The coordinator shall take an accelerometer calibration's samples
+      only while its arm inhibit is held, and apply the level it finds
+      as a live change.
+    rationale: >-
+      A craft that armed or moved mid-window would calibrate on
+      vibration; applying through the same path keeps the level checked
+      and confirmed.
+    derived_from: [CONFIG-020, CTRL-021]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_calibration_samples_under_the_inhibit_and_applies_its_level
+
+  - id: CONFIG-031
+    title: A failed calibration changes nothing
+    statement: >-
+      A calibration that fails, or gets too few samples in time, shall
+      leave the configuration unchanged and release its arm inhibit.
+    rationale: >-
+      Nothing was applied, so the craft may arm again; latching would
+      punish a pilot who moved the craft.
+    derived_from: [CONFIG-030]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_failed_calibration_changes_nothing_and_releases_its_inhibit
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_border::coordinator::tests::a_calibration_without_samples_gives_up_and_releases_its_inhibit
+
+  - id: CONFIG-032
+    title: A calibration's inhibit outlasts its window
+    statement: >-
+      A calibration's arm inhibit shall last its whole sampling window
+      and the change that follows it.
+    rationale: >-
+      A lease shorter than the window would lapse during sampling and
+      refuse arming until reboot.
+    derived_from: [CONFIG-030, CONFIG-018]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::config_gate::tests::a_calibrations_inhibit_lasts_its_sampling_window

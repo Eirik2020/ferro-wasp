@@ -413,6 +413,24 @@ pub struct PidGains {
     pub d: f32,
 }
 
+/// What the configuration owner hands the flight tasks each time the active
+/// configuration changes: the tuning the control loop and RC input fly, and
+/// the accelerometer level the attitude estimate subtracts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FlightConfig {
+    pub tuning: TuningProfile,
+    pub accel_level: ferrowasp_control::calibration::accel_level::AccelLevel,
+}
+
+impl Default for FlightConfig {
+    fn default() -> Self {
+        Self {
+            tuning: TuningProfile::default_first_hop(),
+            accel_level: ferrowasp_control::calibration::accel_level::AccelLevel::ZERO,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TuningProfile {
     pub rate_gains: RateControllerGains,

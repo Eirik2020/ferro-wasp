@@ -77,11 +77,16 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   change at a time against `main`, one mechanism at a time:
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own);
-  2. the remaining SPSC links and typed flags; the coordinator, taking the
-     values in `ferrowasp-border::inbound` (the host-connected flags and
-     the accelerometer level) and the OSD's `tuning_profile`, then reboot,
-     config transactions and accelerometer calibration through it; the boot
-     fallback; `MotorCommand` and the output group's freshness check;
+  2. the remaining SPSC links and typed flags; the board
+     rules in `validate()` (section 14: the motor map, the loop rate, RC
+     bound, no UART bound twice, the RC protocol on its port), which today
+     checks each value's spec only; participants staging a change before it
+     commits, where today the control loop confirms after applying and RC
+     input applies without confirming; FerroConfigurator showing and
+     acknowledging a boot fallback; the command lines' configuration commands
+     on a board whose store failed, which answer that storage is unavailable
+     though a change would apply; MSPv2's commit answering
+     `reboot_required` for a boot-only key; `MotorCommand` and the output group's freshness check;
      `ActuatorFeedback` with its boot-selected source, after which actuator
      output, the DShot service, the ESC manager and RC input move to their
      crates (section 16) and the `dt` and `flash_task` aliases go with them;

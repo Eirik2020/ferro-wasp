@@ -3,8 +3,10 @@
 //!
 //! MSPv2 is an opt-in feature, not expanded without approval; this is the
 //! same handling the text command line has, over its own wire format. A
-//! commit or reset starts a [`ConfigSave`] and answers when it completes,
-//! through [`ConfigRpcCompletion`].
+//! commit or reset becomes an [`RpcApply`]: the owner asks the coordinator
+//! for each change ([`requests_for`]), then starts a [`ConfigSave`] of the
+//! next boot's configuration and answers when it completes, through
+//! [`ConfigRpcCompletion`].
 
 use ferrowasp_mspv2::rpc;
 use ferrowasp_storage::nor_storage::NorStorage;
@@ -13,7 +15,10 @@ use crate::blackbox_storage as blackbox_task;
 use crate::commands::StoredConfigRpc;
 use ferrowasp_blackbox::log_writer::LogWriter;
 use ferrowasp_blackbox::storage_maintenance::Maintenance;
+use ferrowasp_boundary_contracts::requests::Request;
+use ferrowasp_config::keys::ConfigKey;
 use ferrowasp_config::stored::StoredConfig;
+use ferrowasp_serial::{LogicalSerialPort, SerialBindings};
 use ferrowasp_storage::config_save::{ConfigRpcCompletion, ConfigSave};
 use ferrowasp_storage::layout::StorageLayout;
 
@@ -27,18 +32,55 @@ pub struct RpcContext<'a, F: NorStorage> {
     pub log: &'a LogWriter,
     pub maintenance: &'a Maintenance,
     pub config_save: &'a mut ConfigSave,
-    /// An accelerometer calibration is sampling.
-    pub calibrating: bool,
-    pub stored_config: &'a StoredConfig,
+    /// What the craft flies, and what the next boot loads.
+    pub active_config: StoredConfig,
+    pub stored_config: StoredConfig,
     /// A configuration staged by an earlier request, awaiting commit.
     pub staged: &'a mut Option<StoredConfig>,
     /// The request a running save answers when it completes.
     pub completion: &'a mut Option<ConfigRpcCompletion>,
-    pub config_sequence: u32,
-    pub config_active_slot: u8,
+    /// A commit or reset for the owner to carry out.
+    pub apply: &'a mut Option<RpcApply>,
     /// The board's hello, given the arm state.
     pub device_info: fn(bool) -> rpc::DeviceInfo,
-    pub default_config: StoredConfig,
+}
+
+/// A commit or reset: ask the coordinator for the changes, then save the
+/// next boot's configuration and answer `completion` when it completes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RpcApply {
+    pub completion: ConfigRpcCompletion,
+    /// The configuration to reach; `None` restores the board's defaults.
+    pub target: Option<StoredConfig>,
+}
+
+/// Every key and port binding the most requests one commit makes.
+pub const MAX_COMMIT_REQUESTS: usize = ConfigKey::ALL.len() + LogicalSerialPort::ALL.len();
+
+/// The requests that take the next boot's configuration `from` to `to`:
+/// one per key whose value differs, and one per port bound differently.
+/// The accelerometer level is not a key, and stays.
+pub fn requests_for(
+    from: &StoredConfig,
+    to: &StoredConfig,
+    default_bindings: SerialBindings,
+) -> heapless::Vec<Request, MAX_COMMIT_REQUESTS> {
+    let mut requests = heapless::Vec::new();
+    for key in ConfigKey::ALL {
+        let value = to.get(key);
+        if value != from.get(key) {
+            let _ = requests.push(Request::ConfigSet { key, value });
+        }
+    }
+    let before = from.serial_bindings.unwrap_or(default_bindings);
+    let after = to.serial_bindings.unwrap_or(default_bindings);
+    for port in LogicalSerialPort::ALL {
+        let function = after.function(port);
+        if function != before.function(port) {
+            let _ = requests.push(Request::ConfigBind { port, function });
+        }
+    }
+    requests
 }
 
 fn blackbox_info<F: NorStorage>(
@@ -81,7 +123,7 @@ pub fn handle<F: NorStorage>(
 ) -> Option<rpc::RpcResponse> {
     let request_id = request.request_id;
     let maintenance_busy =
-        ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.calibrating;
+        ctx.maintenance.is_active() || ctx.config_save.is_active() || ctx.apply.is_some();
     let active_blackbox_id = ctx
         .log
         .recording()
@@ -91,18 +133,15 @@ pub fn handle<F: NorStorage>(
             request_id,
             mspv2::rpc::Response::Hello((ctx.device_info)(ctx.armed)),
         )),
-        mspv2::rpc::Request::GetConfig => {
-            let crc = ctx.stored_config.crc32();
-            Some(mspv2::rpc::ok(
-                request_id,
-                mspv2::rpc::Response::Config(mspv2::rpc::ConfigSnapshot {
-                    schema_version: mspv2::rpc::CONFIG_SCHEMA_VERSION,
-                    active_crc32: crc,
-                    persisted_crc32: crc,
-                    config: ctx.stored_config.to_rpc(),
-                }),
-            ))
-        }
+        mspv2::rpc::Request::GetConfig => Some(mspv2::rpc::ok(
+            request_id,
+            mspv2::rpc::Response::Config(mspv2::rpc::ConfigSnapshot {
+                schema_version: mspv2::rpc::CONFIG_SCHEMA_VERSION,
+                active_crc32: ctx.active_config.crc32(),
+                persisted_crc32: ctx.stored_config.crc32(),
+                config: ctx.stored_config.to_rpc(),
+            }),
+        )),
         mspv2::rpc::Request::StageConfig(config) => {
             if ctx.armed {
                 Some(mspv2::rpc::error(
@@ -153,21 +192,12 @@ pub fn handle<F: NorStorage>(
                         mspv2::rpc::DeviceError::ConfigurationConflict,
                     ))
                 } else {
-                    match ctx.config_save.begin(
-                        candidate,
-                        ctx.config_sequence,
-                        ctx.config_active_slot,
-                    ) {
-                        Ok(()) => {
-                            *ctx.completion = Some(ConfigRpcCompletion::Commit(request_id));
-                            *ctx.staged = None;
-                            None
-                        }
-                        Err(_) => Some(mspv2::rpc::error(
-                            request_id,
-                            mspv2::rpc::DeviceError::Internal,
-                        )),
-                    }
+                    *ctx.apply = Some(RpcApply {
+                        completion: ConfigRpcCompletion::Commit(request_id),
+                        target: Some(candidate),
+                    });
+                    *ctx.staged = None;
+                    None
                 }
             } else {
                 Some(mspv2::rpc::error(
@@ -185,21 +215,12 @@ pub fn handle<F: NorStorage>(
             } else if maintenance_busy {
                 Some(mspv2::rpc::error(request_id, mspv2::rpc::DeviceError::Busy))
             } else {
-                match ctx.config_save.begin(
-                    ctx.default_config,
-                    ctx.config_sequence,
-                    ctx.config_active_slot,
-                ) {
-                    Ok(()) => {
-                        *ctx.completion = Some(ConfigRpcCompletion::Defaults(request_id));
-                        *ctx.staged = None;
-                        None
-                    }
-                    Err(_) => Some(mspv2::rpc::error(
-                        request_id,
-                        mspv2::rpc::DeviceError::Internal,
-                    )),
-                }
+                *ctx.apply = Some(RpcApply {
+                    completion: ConfigRpcCompletion::Defaults(request_id),
+                    target: None,
+                });
+                *ctx.staged = None;
+                None
             }
         }
         mspv2::rpc::Request::ListBlackboxes => {
@@ -310,6 +331,7 @@ mod tests {
         stored_config: StoredConfig,
         staged: Option<StoredConfig>,
         completion: Option<ConfigRpcCompletion>,
+        apply: Option<RpcApply>,
         armed: bool,
     }
 
@@ -325,6 +347,7 @@ mod tests {
                 stored_config: StoredConfig::first_hop_default(),
                 staged: None,
                 completion: None,
+                apply: None,
                 armed: false,
             }
         }
@@ -343,14 +366,12 @@ mod tests {
                     log: &self.log,
                     maintenance: &self.maintenance,
                     config_save: &mut self.config_save,
-                    calibrating: false,
-                    stored_config: &self.stored_config,
+                    active_config: self.stored_config,
+                    stored_config: self.stored_config,
                     staged: &mut self.staged,
                     completion: &mut self.completion,
-                    config_sequence: 0,
-                    config_active_slot: 1,
+                    apply: &mut self.apply,
                     device_info: hello,
-                    default_config: StoredConfig::first_hop_default(),
                 },
             )
         }
@@ -400,9 +421,25 @@ mod tests {
             None,
             "answered when the save completes"
         );
-        assert!(owner.config_save.is_active());
-        assert_eq!(owner.completion, Some(ConfigRpcCompletion::Commit(3)));
+        let apply = owner.apply.expect("left to the owner");
+        assert_eq!(apply.completion, ConfigRpcCompletion::Commit(3));
+        assert_eq!(
+            requests_for(
+                &owner.stored_config,
+                &apply.target.unwrap(),
+                SerialBindings::none()
+            )[..],
+            [Request::ConfigSet {
+                key: ConfigKey::RollP,
+                value: 3.0
+            }]
+        );
         assert_eq!(owner.staged, None);
+        assert_eq!(
+            error_code(owner.send(4, rpc::Request::ResetConfigToDefaults)),
+            rpc::DeviceError::Busy,
+            "one commit at a time"
+        );
     }
 
     #[test]
@@ -445,12 +482,17 @@ mod tests {
     }
 
     #[test]
-    fn resetting_to_defaults_saves_them_and_answers_on_completion() {
+    fn resetting_to_defaults_is_left_to_the_owner() {
         let mut owner = Owner::new();
         owner.staged = Some(StoredConfig::first_hop_default());
         assert_eq!(owner.send(7, rpc::Request::ResetConfigToDefaults), None);
-        assert!(owner.config_save.is_active());
-        assert_eq!(owner.completion, Some(ConfigRpcCompletion::Defaults(7)));
+        assert_eq!(
+            owner.apply,
+            Some(RpcApply {
+                completion: ConfigRpcCompletion::Defaults(7),
+                target: None
+            })
+        );
         assert_eq!(owner.staged, None);
     }
 

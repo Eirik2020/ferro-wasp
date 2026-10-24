@@ -12,7 +12,6 @@ path = "src/lib.rs"
 default = []
 # The flight controller's RTIC task definitions, target-only (design §16).
 tasks = [
-    "dep:ferrowasp-border",
     "dep:ferrowasp-boundary-contracts",
     "dep:ferrowasp-io-contracts",
     "dep:ferrowasp-mpu6500",
@@ -39,7 +38,6 @@ bench_logical_motor3_only = []
 bench_logical_motor4_only = []
 
 [dependencies]
-ferrowasp-border = { path = "../ferrowasp-border", optional = true }
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
 ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-input = { path = "../ferrowasp-input" }

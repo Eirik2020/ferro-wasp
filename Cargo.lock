@@ -342,8 +342,12 @@ version = "0.1.0"
 dependencies = [
  "ferroforge",
  "ferrowasp-boundary-contracts",
+ "ferrowasp-config",
  "ferrowasp-control",
+ "ferrowasp-flight-control",
  "ferrowasp-io-contracts",
+ "ferrowasp-safety",
+ "ferrowasp-serial",
  "fugit",
  "heapless 0.9.2",
  "rtic",
@@ -354,7 +358,9 @@ dependencies = [
 name = "ferrowasp-boundary-contracts"
 version = "0.1.0"
 dependencies = [
+ "ferrowasp-control",
  "ferrowasp-io-contracts",
+ "ferrowasp-serial",
 ]
 
 [[package]]
@@ -392,6 +398,7 @@ dependencies = [
 name = "ferrowasp-config"
 version = "0.1.0"
 dependencies = [
+ "ferrowasp-boundary-contracts",
  "ferrowasp-control",
  "ferrowasp-flight-control",
  "ferrowasp-input",
@@ -423,7 +430,6 @@ version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
  "ferroforge",
- "ferrowasp-border",
  "ferrowasp-boundary-contracts",
  "ferrowasp-control",
  "ferrowasp-input",

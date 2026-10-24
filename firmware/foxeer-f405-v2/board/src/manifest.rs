@@ -170,6 +170,8 @@ pub const DISPATCHER_IRQS: &[&str] = &[
     "CAN2_RX1",
     "OTG_HS_EP1_OUT",
     "OTG_HS_EP1_IN",
+    "SDIO",
+    "CAN2_SCE",
 ];
 
 pub const HARDWARE_IRQS: &[&str] = &[
@@ -377,6 +379,8 @@ pub const CLAIMS: &[ResourceClaim] = &[
         "OTG_HS_EP1_IN",
         "RTIC software dispatcher",
     ),
+    ResourceClaim::new(ResourceKind::Irq, "SDIO", "RTIC software dispatcher"),
+    ResourceClaim::new(ResourceKind::Irq, "CAN2_SCE", "RTIC software dispatcher"),
 ];
 
 pub const USB_CDC_CLAIMS: &[ResourceClaim] = &[

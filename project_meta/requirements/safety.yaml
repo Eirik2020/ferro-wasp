@@ -273,3 +273,50 @@ requirements:
           setup: none
           method:
             test: ferrowasp_safety::prearm::tests::each_status_field_maps_to_its_refusal
+
+  - id: SAFETY-014
+    title: A host lease lapses unless renewed
+    statement: >-
+      A host lease shall stand from its renewal for its link's length and
+      lapse unless renewed, read correctly across the 32-bit millisecond
+      wrap.
+    rationale: >-
+      A lease, not a flag a non-critical task writes, decides that a
+      computer is attached, so a link that stops renewing releases arming by
+      itself (section 11).
+    derived_from: [ARM-003]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::host::tests::no_lease_means_no_host
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::host::tests::a_lease_stands_until_its_length_and_renewal_extends_it
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
+
+  - id: SAFETY-015
+    title: Only the safety master restarts the board, and only disarmed
+    statement: >-
+      The safety master shall restart the board on a reboot request only
+      while the craft is disarmed and not arming, and otherwise refuse it
+      with the reason.
+    rationale: >-
+      A reset ends the flight firmware; deciding it where arming is decided
+      leaves no gap between the check and the reset (W1).
+    derived_from: [REBOOT-001]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_safety::tests::a_reboot_is_allowed_only_disarmed_and_not_arming

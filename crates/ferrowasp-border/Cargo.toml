@@ -15,8 +15,12 @@ tasks = ["dep:ferroforge", "dep:rtic", "dep:rtic-monotonics", "dep:fugit"]
 
 [dependencies]
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts" }
+ferrowasp-config = { path = "../ferrowasp-config" }
 ferrowasp-control = { path = "../ferrowasp-control" }
+ferrowasp-flight-control = { path = "../ferrowasp-flight-control" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-safety = { path = "../ferrowasp-safety" }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 ferroforge = { version = "=0.4.0", optional = true }

@@ -198,6 +198,8 @@ pub const DISPATCHER_IRQS: &[&str] = &[
     "SAI2",
     "LTDC",
     "DMA2D",
+    "CEC",
+    "SAI3",
 ];
 
 pub const HARDWARE_IRQS: &[&str] = &[
@@ -421,6 +423,8 @@ pub const CLAIMS: &[ResourceClaim] = &[
     ResourceClaim::new(ResourceKind::Irq, "SAI2", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "LTDC", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "DMA2D", "RTIC software dispatcher"),
+    ResourceClaim::new(ResourceKind::Irq, "CEC", "RTIC software dispatcher"),
+    ResourceClaim::new(ResourceKind::Irq, "SAI3", "RTIC software dispatcher"),
 ];
 
 pub const USB_CDC_CLAIMS: &[ResourceClaim] = &[

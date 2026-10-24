@@ -9,7 +9,9 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+ferrowasp-control = { path = "../ferrowasp-control" }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
 
 [package.metadata.ferrowasp]
 critical = true

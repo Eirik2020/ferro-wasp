@@ -46,3 +46,21 @@ requirements:
           setup: none
           method:
             test: ferrowasp_osd::tests::stale_data_blinks_a_warning_row_and_stale_battery_shows_dashes
+
+  - id: OSD-003
+    title: The OSD menu asks for each change
+    statement: >-
+      The OSD's tuning menu shall turn each edit into a request for the
+      value it changed, and show the active configuration once the
+      request's result arrives.
+    rationale: >-
+      The OSD is not safety-critical; a change it makes reaches the craft
+      only through the coordinator's checks (CONFIG-023).
+    derived_from: [CONFIG-023]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_osd::tests::a_menu_edit_becomes_the_request_for_its_row

@@ -5,7 +5,9 @@
 use crate as osd;
 use defmt::warn;
 use ferrowasp_border::observer::Ledger;
+use ferrowasp_boundary_contracts::requests::{Request, Requester};
 use ferrowasp_flight_control::drone_toolbox as dt;
+use ferrowasp_io_contracts::link::{LinkProducer, Pushed};
 use ferrowasp_io_contracts::time::TimestampMicros;
 use ferrowasp_mspv1 as mspv1;
 use ferrowasp_safety as safety;
@@ -47,10 +49,11 @@ pub async fn osd_write(
 }
 
 /// Answer the OSD's requests and push the overlay or tuning menu, every
-/// 10 ms. Reads RC, battery, IMU and control state from the ledger; never
-/// writes any of it except the tuning profile, through the menu, which it
-/// opens only while the arm-state flag reads disarmed. With no port bound the
-/// task ends at once.
+/// 10 ms. Reads RC, battery, IMU, control state and the configuration from
+/// the ledger, and writes none of it. The menu, which it opens only while the
+/// arm-state flag reads disarmed, edits a copy of the active tuning and asks
+/// the coordinator for each change; the copy follows the ledger again once
+/// the change's result arrives. With no port bound the task ends at once.
 #[ferroforge::task(
     local = [
         osd_port: Option<ferrowasp_stm32_critical::uart_port::SerialPortEndpoint>,
@@ -60,12 +63,12 @@ pub async fn osd_write(
         osd_refresh_tick: u8,
         osd_safety_arm_reader: signals::SafetyArmReader,
         osd_stall_watch: osd::StallWatch = osd::StallWatch::new(),
+        osd_request_link: LinkProducer<'static, Request>,
+        // The menu's copy, and the change it awaits a result for; 0 for none.
+        osd_tuning: dt::TuningProfile,
+        osd_awaited_request: u32 = 0,
     ],
-    shared = [
-        ledger: Ledger,
-        tuning_profile: dt::TuningProfile,
-        tuning_request_seq: u32,
-    ],
+    shared = [ledger: Ledger],
     monotonic = Mono,
 )]
 pub async fn osd_refresh(mut cx: osd_refresh::Context) {
@@ -73,15 +76,18 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
         return;
     };
     loop {
-        let (observer, control, imu, rc, battery) = cx.shared.ledger.lock(|ledger| {
-            (
-                ledger.observer(),
-                ledger.control(),
-                ledger.imu().value,
-                ledger.rc().value,
-                ledger.battery(),
-            )
-        });
+        let (observer, control, imu, rc, battery, active_tuning, result) =
+            cx.shared.ledger.lock(|ledger| {
+                (
+                    ledger.observer(),
+                    ledger.control(),
+                    ledger.imu().value,
+                    ledger.rc().value,
+                    ledger.battery(),
+                    ledger.config().value.active.tuning,
+                    ledger.result(Requester::Osd),
+                )
+            });
         let stale = cx.local.osd_stall_watch.observe(
             &observer,
             &control,
@@ -135,29 +141,36 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
         };
 
         let menu_active = {
-            let mut changed = false;
-            let active = cx.shared.tuning_profile.lock(|profile| {
-                let before = *profile;
-                let active = cx.local.osd_task.update_menu(
-                    armed,
-                    osd::OsdStickRates {
-                        roll: rates.roll,
-                        pitch: rates.pitch,
-                        yaw: rates.yaw,
-                    },
-                    throttle,
-                    profile,
-                );
-                changed = before != *profile;
-                active
-            });
-
-            if changed {
-                cx.shared.tuning_request_seq.lock(|seq| {
-                    *seq = seq.wrapping_add(1);
-                });
+            let awaited = &mut *cx.local.osd_awaited_request;
+            if *awaited != 0 && result.seq != 0 && result.value.request_seq == *awaited {
+                *awaited = 0;
             }
-
+            if *awaited == 0 {
+                *cx.local.osd_tuning = active_tuning;
+            }
+            let before = *cx.local.osd_tuning;
+            let active = cx.local.osd_task.update_menu(
+                armed,
+                osd::OsdStickRates {
+                    roll: rates.roll,
+                    pitch: rates.pitch,
+                    yaw: rates.yaw,
+                },
+                throttle,
+                cx.local.osd_tuning,
+            );
+            if let Some((key, value)) = osd::menu_change(&before, cx.local.osd_tuning) {
+                let link = &mut *cx.local.osd_request_link;
+                let pushed = link.push(
+                    TimestampMicros(Mono::now().duration_since_epoch().to_micros()),
+                    Request::ConfigSet { key, value },
+                );
+                *awaited = match pushed {
+                    Pushed::Sent => link.sequence(),
+                    // Not asked: the copy follows the ledger again.
+                    Pushed::Refused => 0,
+                };
+            }
             active
         };
 
@@ -204,11 +217,10 @@ pub async fn osd_refresh(mut cx: osd_refresh::Context) {
             }
 
             if menu_active {
-                let tuning = cx.shared.tuning_profile.lock(|profile| *profile);
                 if let Some(frame_len) = cx
                     .local
                     .osd_task
-                    .next_menu_frame(&tuning, cx.local.osd_tx_buffer)
+                    .next_menu_frame(cx.local.osd_tuning, cx.local.osd_tx_buffer)
                 {
                     osd_write(
                         &mut port.writer,

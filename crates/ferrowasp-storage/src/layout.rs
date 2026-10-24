@@ -20,7 +20,9 @@ pub enum StorageReadError<E> {
     Device(E),
 }
 
-/// Loads the newest valid copy-on-write configuration slot.
+/// Loads the newest decodable copy-on-write configuration slot: what a save
+/// left, as the save tests read it back. The boot's choice, which also
+/// validates every value and reports a fallback, is `ferrowasp_config::boot`.
 pub fn load_config<E, Read>(
     layout: StorageLayout,
     default: StoredConfig,
