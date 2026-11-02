@@ -16,6 +16,11 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_safety::actuator::tests::a_published_command_carries_the_next_sequence_and_wakes_the_actuator
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_safety::tests::motor_command_freshness_holds_past_the_old_u32_wrap
         - level: unit
           target: host

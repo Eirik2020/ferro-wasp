@@ -45,6 +45,11 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_blackbox::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_blackbox::records::tests::a_flight_is_unfinished_until_its_last_page_is_written
         - level: bench
           target: fcu
@@ -68,6 +73,11 @@ requirements:
     derived_from: [W7]
     verification:
       entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_blackbox::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
         - level: unit
           target: host
           setup: none

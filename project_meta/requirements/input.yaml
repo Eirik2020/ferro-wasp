@@ -176,6 +176,16 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_input::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_input::rc_receiver::tests::sbus_skips_leading_noise_before_a_header
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
         - level: unit
           target: host

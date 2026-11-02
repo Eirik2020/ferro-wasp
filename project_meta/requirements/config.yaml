@@ -15,7 +15,12 @@ requirements:
           target: host
           setup: none
           method:
-            test: ferrowasp_config::keys::tests::scalar_ranges_match_the_public_usb_contract
+            test: ferrowasp_config::owner::tests::a_refused_change_changes_nothing
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_boundary_contracts::config_keys::tests::scalar_ranges_match_the_public_usb_contract
         - level: unit
           target: host
           setup: none
@@ -37,6 +42,11 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::owner::tests::a_refused_change_changes_nothing
         - level: unit
           target: host
           setup: none
@@ -750,11 +760,6 @@ requirements:
           setup: none
           method:
             test: ferrowasp_config::owner::tests::a_bind_moves_its_function_and_rc_cannot_be_unbound
-        - level: unit
-          target: host
-          setup: none
-          method:
-            test: ferrowasp_cli::rpc_commands::tests::a_commit_moves_functions_before_it_unbinds_ports
         - level: mcu
           target: fcu
           setup: none

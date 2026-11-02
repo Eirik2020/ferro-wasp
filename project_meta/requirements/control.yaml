@@ -58,6 +58,11 @@ requirements:
           target: host
           setup: none
           method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_up_rate_maps_negative_for_the_golden_controller
+        - level: unit
+          target: host
+          setup: none
+          method:
             test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
         - level: unit
           target: host
