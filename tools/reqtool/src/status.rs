@@ -37,6 +37,18 @@ pub trait Evidence {
     fn boards(&self, _requirement: &Requirement, _entry: usize) -> Vec<(String, Status)> {
         Vec::new()
     }
+
+    /// Host-buildable files declaring this requirement that no test passing
+    /// now has exercised.
+    fn owed_files(&self, _requirement: &Requirement) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Files declaring this requirement that no host test can reach, so only
+    /// target-level evidence can judge them.
+    fn target_only_files(&self, _requirement: &Requirement) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 pub struct NoEvidence;

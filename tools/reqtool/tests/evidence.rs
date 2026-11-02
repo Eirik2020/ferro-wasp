@@ -181,12 +181,115 @@ fn a_pass_verifies_until_the_module_or_a_direct_import_changes() {
         path,
         "crates/alpha/src/hidden.rs",
         "pub struct Original;",
-        "pub struct Original(u8);",
+        "pub struct Original;\n\npub fn added() {}",
     );
     assert_eq!(
         entry_status(path, "INPUT-001", 0),
         Status::Stale,
         "a direct import changed"
+    );
+}
+
+/// Evidence for INPUT-001 after one pass, with another file declaring it.
+fn with_second_declaring_file(
+    setup: impl Fn(&Path),
+) -> (tempfile::TempDir, Status, Vec<String>, Vec<String>) {
+    use reqtool::status::Evidence;
+    let repo = repository();
+    let path = repo.path();
+    setup(path);
+    git(path, &["add", "-A"]);
+    git(path, &["commit", "-qm", "another file declares INPUT-001"]);
+    record(
+        path,
+        &request(Method::Test(TEST.into()), None, Outcome::Pass),
+        1,
+    );
+    let (project, recorded) = recorded(path);
+    let requirement = &project.requirements["INPUT-001"];
+    let (status, owed, target_only) = (
+        recorded.entry(requirement, 0),
+        recorded.owed_files(requirement),
+        recorded.target_only_files(requirement),
+    );
+    (repo, status, owed, target_only)
+}
+
+#[test]
+fn a_host_buildable_declaring_file_needs_a_test_that_exercises_it() {
+    let (_repo, status, owed, target_only) = with_second_declaring_file(|path| {
+        let file = path.join("crates/beta/src/lib.rs");
+        let text = std::fs::read_to_string(&file).unwrap();
+        std::fs::write(file, format!("//! Requirements: INPUT-001\n{text}")).unwrap();
+    });
+    assert_eq!(status, Status::Unverified, "no test reaches beta");
+    assert_eq!(owed, ["crates/beta/src/lib.rs"]);
+    assert!(target_only.is_empty());
+}
+
+#[test]
+fn a_target_only_declaring_file_does_not_hold_host_evidence_back() {
+    let (_repo, status, owed, target_only) = with_second_declaring_file(|path| {
+        std::fs::write(
+            path.join("crates/alpha/src/arm_only.rs"),
+            "//! Requirements: INPUT-001\n//! Safety-critical.\n\npub fn on_target() {}\n",
+        )
+        .unwrap();
+        let lib = path.join("crates/alpha/src/lib.rs");
+        let text = std::fs::read_to_string(&lib).unwrap();
+        std::fs::write(
+            lib,
+            format!("{text}\n#[cfg(target_arch = \"arm\")]\npub mod arm_only;\n"),
+        )
+        .unwrap();
+    });
+    assert_eq!(status, Status::Verified);
+    assert!(owed.is_empty(), "{owed:?}");
+    assert_eq!(target_only, ["crates/alpha/src/arm_only.rs"]);
+}
+
+#[test]
+fn a_change_to_one_declaring_file_owes_only_that_file_again() {
+    use reqtool::status::Evidence;
+    let repo = repository();
+    let path = repo.path();
+    // hidden.rs is a direct import of the test's file, so one pass reaches both.
+    let hidden = path.join("crates/alpha/src/hidden.rs");
+    let text = std::fs::read_to_string(&hidden).unwrap();
+    let declared = text.replacen("//! Requirements: ", "//! Requirements: INPUT-001, ", 1);
+    std::fs::write(
+        &hidden,
+        if declared == text {
+            format!("//! Requirements: INPUT-001\n{text}")
+        } else {
+            declared
+        },
+    )
+    .unwrap();
+    git(path, &["commit", "-qam", "hidden declares INPUT-001"]);
+    record(
+        path,
+        &request(Method::Test(TEST.into()), None, Outcome::Pass),
+        1,
+    );
+    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Verified);
+    edit(
+        path,
+        "crates/alpha/src/hidden.rs",
+        "pub struct Original;",
+        "pub struct Original;\n\npub fn added() {}",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 0),
+        Status::Stale,
+        "input.rs imports hidden.rs, so both are owed"
+    );
+    let (project, recorded) = recorded(path);
+    assert!(
+        recorded
+            .owed_files(&project.requirements["INPUT-001"])
+            .iter()
+            .any(|file| file == "crates/alpha/src/hidden.rs")
     );
 }
 

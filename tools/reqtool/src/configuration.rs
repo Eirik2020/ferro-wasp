@@ -79,6 +79,10 @@ impl Configuration {
 /// tests.
 pub trait Configurations {
     fn configuration(&self, board: &str, features: &[String]) -> Result<Rc<Configuration>, String>;
+
+    /// The repository's source files a host test build compiles: those a host
+    /// test can reach. The rest, such as task definitions, are target-only.
+    fn host_files(&self) -> Result<Rc<BTreeSet<String>>, String>;
 }
 
 /// A board and its sorted features.
@@ -89,6 +93,7 @@ pub struct Cargo<'a> {
     repository: &'a Path,
     workspace: &'a Workspace,
     cache: RefCell<HashMap<Key, Rc<Configuration>>>,
+    host_files: RefCell<Option<Rc<BTreeSet<String>>>>,
 }
 
 impl<'a> Cargo<'a> {
@@ -97,11 +102,49 @@ impl<'a> Cargo<'a> {
             repository,
             workspace,
             cache: RefCell::new(HashMap::new()),
+            host_files: RefCell::new(None),
         }
     }
 }
 
 impl Configurations for Cargo<'_> {
+    fn host_files(&self) -> Result<Rc<BTreeSet<String>>, String> {
+        if let Some(found) = self.host_files.borrow().as_ref() {
+            return Ok(Rc::clone(found));
+        }
+        let output = Command::new("cargo")
+            .args([
+                "check",
+                "--workspace",
+                "--tests",
+                "--locked",
+                "--quiet",
+                "--message-format=json",
+            ])
+            .env_remove("RUSTUP_TOOLCHAIN")
+            .env_remove("RUSTC")
+            .env_remove("CARGO")
+            .current_dir(self.repository)
+            .output()
+            .map_err(|error| format!("host test build: cannot run cargo: {error}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "host test build: cargo check failed, so what host tests can reach is unknown:\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        let compiled = from_messages(&String::from_utf8_lossy(&output.stdout), self.repository)?;
+        let files: BTreeSet<String> = compiled
+            .files
+            .iter()
+            .filter(|source| source.starts_with(self.repository))
+            .map(|source| relative(self.repository, source))
+            .collect();
+        let files = Rc::new(files);
+        *self.host_files.borrow_mut() = Some(Rc::clone(&files));
+        Ok(files)
+    }
+
     fn configuration(&self, board: &str, features: &[String]) -> Result<Rc<Configuration>, String> {
         let mut features = features.to_vec();
         features.sort();

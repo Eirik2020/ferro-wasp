@@ -112,6 +112,12 @@ configuration where the module and its direct imports have the recorded
 identities. An integration run counts for any configuration whose identities
 all match those it recorded.
 
+**Which files a requirement's host evidence covers.** No one test has to reach
+every file that declares its requirement. Host evidence stands when each
+declaring file a host test build compiles is exercised by at least one of the
+requirement's passing tests. A declaring file that build does not compile, such
+as a task definition, is judged by target-level evidence alone.
+
 **Maturity per configuration.** For each configuration, `reqtool` reports
 every requirement declared by its compiled-in safety-critical modules as
 `verified`, `stale`, `failed` or `unverified`. A Cargo feature that pulls in

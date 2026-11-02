@@ -152,6 +152,14 @@ fn detail(
     if !declaring.is_empty() {
         let _ = writeln!(out, "  declared by: {}", declaring.join(", "));
     }
+    let owed = evidence.owed_files(requirement);
+    if !owed.is_empty() {
+        let _ = writeln!(out, "  no passing test exercises: {}", owed.join(", "));
+    }
+    let target_only = evidence.target_only_files(requirement);
+    if !target_only.is_empty() {
+        let _ = writeln!(out, "  judged on target only: {}", target_only.join(", "));
+    }
     let children: Vec<&str> = project
         .children(&requirement.id)
         .iter()

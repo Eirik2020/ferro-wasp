@@ -49,6 +49,20 @@ requirements:
     verification:
       entries: []
 
+  - id: TRACE-008
+    title: Host evidence covers every file a host test can reach
+    statement: >-
+      A requirement's host evidence shall stand only while each declaring file
+      a host test build compiles is exercised by at least one of its passing
+      tests.
+    rationale: >-
+      One test rarely reaches every file that implements a requirement, and a
+      task definition cannot be reached from the host at all, so target-level
+      evidence judges those files (W7).
+    derived_from: [W7, TRACE-004]
+    verification:
+      entries: []
+
   - id: TRACE-005
     title: A configuration's identity includes its scheduling
     statement: >-

@@ -298,47 +298,30 @@ impl Current<'_> {
         })
     }
 
-    /// Whether a host result still counts for `module`; with no module, for
-    /// a requirement no file declares, whether its claim and every module
-    /// it exercised are unchanged.
-    fn host_counts(
-        &self,
-        record: &Record,
-        result: &RunResult,
-        claim: &str,
-        toolchain: &str,
-        module: Option<&str>,
-    ) -> bool {
-        if result.claim != claim || result.toolchain.as_deref() != Some(toolchain) {
-            return false;
-        }
-        let unchanged = |module: &str| {
-            let imports = self.trace.imports(module);
-            result.exercised.iter().any(|exercised| exercised == module)
-                && record.modules.get(module) == Some(&imports)
-                && std::iter::once(module)
-                    .chain(imports.iter().map(String::as_str))
-                    .all(|key| {
-                        record.identities.contains_key(key)
-                            && record.identities.get(key).cloned() == self.trace.identity(key)
-                    })
-        };
-        match module {
-            Some(module) => unchanged(module),
-            // A run that exercised nothing proves nothing.
-            None => {
-                !result.exercised.is_empty()
-                    && result.exercised.iter().all(|module| unchanged(module))
-            }
-        }
+    /// Whether `module`, exercised by this result, is unchanged since: its
+    /// identity and those of its direct imports (TRACE-004).
+    fn module_unchanged(&self, record: &Record, module: &str) -> bool {
+        let imports = self.trace.imports(module);
+        record.modules.get(module) == Some(&imports)
+            && std::iter::once(module)
+                .chain(imports.iter().map(String::as_str))
+                .all(|key| {
+                    record.identities.contains_key(key)
+                        && record.identities.get(key).cloned() == self.trace.identity(key)
+                })
     }
 }
 
 /// Statuses from the records and the current code.
 ///
-/// A host entry takes the worst of the modules that declare its requirement,
-/// or, when no module declares it, of what its runs exercised. A pass counts
-/// for a module only if it exercised that module. A board entry
+/// A host pass counts for a file that declares its requirement if it exercised
+/// that file and the file and its direct imports are unchanged; if it reached
+/// no declaring file, while everything it exercised is unchanged. An entry
+/// stands on a pass that counts for any file. A requirement's files are covered
+/// together: each host-buildable declaring file needs a pass that counts for it,
+/// or its entries fall to `stale`, or to `unverified` if no test ever reached
+/// that file. A file no host test can reach is judged by target-level evidence
+/// alone. A board entry
 /// is per board, and its overall status is the worst board with evidence,
 /// until gates name the boards they require. With a configuration in scope,
 /// only the modules it compiles in count, and only board evidence from that
@@ -346,6 +329,8 @@ impl Current<'_> {
 pub struct Recorded {
     statuses: BTreeMap<(String, usize), Status>,
     boards: BTreeMap<(String, usize), Vec<(String, Status)>>,
+    owed_files: BTreeMap<String, Vec<String>>,
+    target_only_files: BTreeMap<String, Vec<String>>,
 }
 
 impl Recorded {
@@ -357,7 +342,21 @@ impl Recorded {
         let project = current.project;
         let mut statuses = BTreeMap::new();
         let mut boards = BTreeMap::new();
+        let mut owed_files = BTreeMap::new();
+        let mut target_only_files = BTreeMap::new();
+        let host_files = current.configurations.host_files()?;
         for requirement in project.requirements.values() {
+            let declaring: BTreeSet<&str> = current
+                .trace
+                .declaring(&requirement.id)
+                .into_iter()
+                .filter(|module| {
+                    scope.is_none_or(|configuration| configuration.files.contains_key(*module))
+                })
+                .collect();
+            let mut exercised: BTreeSet<&str> = BTreeSet::new();
+            let mut ever_exercised: BTreeSet<&str> = BTreeSet::new();
+            let mut host_entries = Vec::new();
             for (index, entry) in requirement.verification.entries.iter().enumerate() {
                 let key = (requirement.id.clone(), index);
                 let relevant: Vec<(&Record, &RunResult)> = records
@@ -368,39 +367,42 @@ impl Recorded {
                 let claim = current.claim(requirement, entry)?;
                 if !entry.level.on_target() {
                     let toolchain = current.host_toolchain(&entry.method)?;
-                    let mut modules: Vec<Option<String>> = current
-                        .trace
-                        .declaring(&requirement.id)
-                        .into_iter()
-                        .filter(|module| {
-                            scope.is_none_or(|configuration| {
-                                configuration.files.contains_key(*module)
-                            })
-                        })
-                        .map(|module| Some(module.to_owned()))
-                        .collect();
-                    if modules.is_empty() {
-                        modules.push(None);
+                    let mut judged = Vec::new();
+                    for (record, result) in &relevant {
+                        let current_claim = result.claim == claim
+                            && result.toolchain.as_deref() == Some(&toolchain);
+                        let reached: Vec<&str> = result
+                            .exercised
+                            .iter()
+                            .map(String::as_str)
+                            .filter(|module| declaring.contains(module))
+                            .collect();
+                        let unchanged: Vec<&str> = reached
+                            .iter()
+                            .copied()
+                            .filter(|module| current.module_unchanged(record, module))
+                            .collect();
+                        let counts = current_claim
+                            && if reached.is_empty() {
+                                // A run that exercised nothing proves nothing.
+                                !result.exercised.is_empty()
+                                    && result
+                                        .exercised
+                                        .iter()
+                                        .all(|module| current.module_unchanged(record, module))
+                            } else {
+                                !unchanged.is_empty()
+                            };
+                        if result.result == Outcome::Pass {
+                            ever_exercised.extend(reached.iter().copied());
+                            if current_claim {
+                                exercised.extend(unchanged.iter().copied());
+                            }
+                        }
+                        judged.push((counts, result.result));
                     }
-                    // A pass that does not count for a module, because it
-                    // exercised other code or the code changed, leaves it
-                    // stale: it passed before, and needs running again.
-                    let status = modules
-                        .iter()
-                        .map(|module| {
-                            entry_status(relevant.iter().map(|(record, result)| {
-                                let counts = current.host_counts(
-                                    record,
-                                    result,
-                                    &claim,
-                                    &toolchain,
-                                    module.as_deref(),
-                                );
-                                (counts, result.result)
-                            }))
-                        })
-                        .max()
-                        .unwrap_or(Status::Unverified);
+                    let status = entry_status(judged.into_iter());
+                    host_entries.push(key.clone());
                     statuses.insert(key, status);
                     continue;
                 }
@@ -441,8 +443,46 @@ impl Recorded {
                 statuses.insert(key.clone(), overall);
                 boards.insert(key, per_board);
             }
+            let (reachable, target_only): (Vec<&str>, Vec<&str>) = declaring
+                .iter()
+                .copied()
+                .partition(|module| host_files.contains(*module));
+            let owed: Vec<&str> = reachable
+                .into_iter()
+                .filter(|module| !exercised.contains(module))
+                .collect();
+            if !owed.is_empty() {
+                let fallen = if owed.iter().all(|module| ever_exercised.contains(module)) {
+                    Status::Stale
+                } else {
+                    Status::Unverified
+                };
+                for key in host_entries {
+                    if let Some(status) = statuses
+                        .get_mut(&key)
+                        .filter(|status| **status == Status::Verified)
+                    {
+                        *status = fallen;
+                    }
+                }
+                owed_files.insert(
+                    requirement.id.clone(),
+                    owed.into_iter().map(str::to_owned).collect(),
+                );
+            }
+            if !target_only.is_empty() {
+                target_only_files.insert(
+                    requirement.id.clone(),
+                    target_only.into_iter().map(str::to_owned).collect(),
+                );
+            }
         }
-        Ok(Self { statuses, boards })
+        Ok(Self {
+            statuses,
+            boards,
+            owed_files,
+            target_only_files,
+        })
     }
 }
 
@@ -457,6 +497,20 @@ impl Evidence for Recorded {
     fn boards(&self, requirement: &Requirement, entry: usize) -> Vec<(String, Status)> {
         self.boards
             .get(&(requirement.id.clone(), entry))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn owed_files(&self, requirement: &Requirement) -> Vec<String> {
+        self.owed_files
+            .get(&requirement.id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn target_only_files(&self, requirement: &Requirement) -> Vec<String> {
+        self.target_only_files
+            .get(&requirement.id)
             .cloned()
             .unwrap_or_default()
     }

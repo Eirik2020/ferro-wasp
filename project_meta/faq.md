@@ -44,6 +44,15 @@ where a path is unclear, so they never miss a change.
 
 See: [tracing per source file](requirements/tracing.md#20-tracing-per-source-file)
 
+### Why not require each test to exercise every declaring file?
+
+One test rarely reaches every file that implements a requirement, and no host
+test reaches a task definition, so that rule could never be met and stale would
+stop meaning changed. Each host-buildable file needs one passing test instead,
+and target-only files are judged on target.
+
+See: [tracing per source file](requirements/tracing.md#20-tracing-per-source-file)
+
 ### Why not list each module's requirements in a manifest?
 
 A manifest beside the code drifts from it: a moved or renamed file leaves its
