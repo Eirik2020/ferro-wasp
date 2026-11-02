@@ -10,6 +10,7 @@
   - [Evidence Index](testing/EVIDENCE_INDEX.md)
   - [Common Boot and Idle](testing/targets/common-boot-idle.md)
   - [Foxeer F405 V2 Procedure](testing/targets/foxeer-f405-v2.md)
+  - [USB Session Procedure](testing/targets/foxeer-usb-session.md)
 - [Logging Format](LOGGING_FORMAT.md)
 - [Releasing](releasing.md)
 - [Requirements, Evidence and Safety Architecture: Design](requirements/design.md)

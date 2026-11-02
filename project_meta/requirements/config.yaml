@@ -320,6 +320,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_config::boot::tests::a_slot_reads_as_erased_damaged_invalid_or_valid
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
   - id: CONFIG-014
     title: A boot that fell back says so
@@ -347,6 +352,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_config::boot::tests::the_next_save_overwrites_a_bad_slot
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
   - id: CONFIG-015
     title: A change passes the boot's validation
@@ -636,6 +646,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::coordinator::tests::a_calibration_samples_under_the_inhibit_and_applies_its_level
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
   - id: CONFIG-031
     title: A failed calibration changes nothing
@@ -658,6 +673,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::coordinator::tests::a_calibration_without_samples_gives_up_and_releases_its_inhibit
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
   - id: CONFIG-032
     title: A calibration's inhibit outlasts its window
@@ -708,6 +728,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::coordinator::tests::a_binding_the_board_refuses_is_invalid
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
   - id: CONFIG-034
     title: A bind moves its function
@@ -730,3 +755,8 @@ requirements:
           setup: none
           method:
             test: ferrowasp_cli::rpc_commands::tests::a_commit_moves_functions_before_it_unbinds_ports
+        - level: mcu
+          target: fcu
+          setup: none
+          method:
+            procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session

@@ -91,8 +91,9 @@ power cycle, are the user's.
 - Host tests: `reqtool test` runs the tests requirements name and records
   the session; a test that fails or does not run is never recorded as a pass.
 - The boot and idle gate and the Foxeer USB configuration gate record
-  themselves: `tools/bench_rig.py boot-idle` and
-  `tools/foxeer_bench_gates.py usb-config` hand their run to `reqtool record`.
+  themselves: `tools/bench_rig.py boot-idle`,
+  `tools/foxeer_bench_gates.py usb-config` and `tools/usb_bench.py session` hand
+  their run to `reqtool record`.
 - Any other procedure: `reqtool record --procedure <path#heading> --board
   <board> --result pass|fail --details <file>`, where the details file says
   who ran it, on which image, in what conditions, with which artifacts and

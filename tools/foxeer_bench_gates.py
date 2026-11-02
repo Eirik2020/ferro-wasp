@@ -316,7 +316,8 @@ def run_usb_config(args: argparse.Namespace) -> int:
     confirm_bench_state()
     if not ask_yes_no("Has the board been flashed with this candidate since it was built?"):
         raise GateStop(
-            "flash the candidate first: tools/bench_rig.py boot-idle --board foxeer-f405-v2"
+            "flash the candidate first: tools/bench_rig.py boot-idle --board foxeer-f405-v2, "
+            "or tools/usb_bench.py session without a probe"
         )
     started = utc_now()
     capture = new_capture_dir("usb-config", started)
@@ -381,7 +382,7 @@ def run_usb_config(args: argparse.Namespace) -> int:
         target_triple=TARGET_TRIPLE,
         propellers="removed",
         actuator_power="disconnected",
-        equipment=["SWD probe", "USB host power", "no oscilloscope or logic analyzer"],
+        equipment=["USB host power", "no oscilloscope or logic analyzer"],
         environment=["bench", "battery disconnected", "no RC link"],
         commands=log.commands,
         artifacts=artifacts,

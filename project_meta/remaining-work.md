@@ -161,6 +161,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   bought for it; FerroWasp has not run on the replacement. A V3 (ArduPilot
   TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1) would need a board
   variant.
+- **No probe on the flight boards.** `tools/usb_bench.py` covers what USB can
+  show. The first second of a boot, the motor pins and arming-refusal reasons need
+  SWD and RTT, so the BOOT requirements' `mcu` entries stay open until there is
+  one.
 - **Configurator flashing.** The GUI's Firmware tab and Reboot
   button have run only against the browser mock, not a desktop build on a
   board. Deferred with the Lucid: the H743's jump address (`0x1FF09800`, from
