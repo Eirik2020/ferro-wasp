@@ -1,7 +1,14 @@
+import os
+import threading
+import tempfile
 import unittest
+from pathlib import Path
 
 from tools.usb_bench import (
     BOARDS,
+    Link,
+    StepFailed,
+    Transcript,
     config_value,
     control_rate,
     dfu_serial,
@@ -95,6 +102,51 @@ class JudgingIdle(unittest.TestCase):
 
     def test_too_few_lines_do_not_pass(self) -> None:
         self.assertTrue(idle_failures([status()]))
+
+
+@unittest.skipUnless(hasattr(os, "openpty"), "needs a pty")
+class TalkingToABoard(unittest.TestCase):
+    """The link against a fake board on a pty, which answers as firmware does."""
+
+    def setUp(self) -> None:
+        self.board, port = os.openpty()
+        self.addCleanup(os.close, self.board)
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.transcript = Path(directory.name) / "session.log"
+        self.link = Link(os.ttyname(port), Transcript(self.transcript))
+        self.addCleanup(self.link.port.close)
+        os.close(port)
+
+    def answer_with(self, *lines: bytes) -> None:
+        def answer() -> None:
+            os.read(self.board, 256)
+            for line in lines:
+                os.write(self.board, line)
+
+        threading.Thread(target=answer, daemon=True).start()
+
+    def test_an_answer_is_found_past_a_status_line_spliced_into_it(self) -> None:
+        self.answer_with(b"FWDBG1 ms=1 armed=0\r\nOK roll_p=2.5000FWDBG1 ms=2 armed=0\r\n")
+        self.assertEqual(self.link.expect("config get roll_p", "OK roll_p="), "OK roll_p=2.5000")
+        self.assertIn("> config get roll_p", self.transcript.read_text())
+
+    def test_a_refusal_fails_the_step_with_what_it_said(self) -> None:
+        self.answer_with(b"ERR storage unavailable\r\n")
+        with self.assertRaisesRegex(StepFailed, "ERR storage unavailable"):
+            self.link.expect("config save", "OK config save started")
+
+    def test_silence_fails_the_step(self) -> None:
+        with self.assertRaisesRegex(StepFailed, "no answer"):
+            self.link.ask("live", seconds=0.2)
+
+    def test_status_lines_are_collected(self) -> None:
+        self.answer_with(b"FWDBG1 ms=1 armed=0\r\nFWDBG1 ms=2 armed=0\r\n")
+        self.link.send("wake")
+        self.assertEqual(
+            [status["ms"] for status in self.link.collect_statuses(0.3)],
+            ["1", "2"],
+        )
 
 
 class TheCommandLine(unittest.TestCase):
