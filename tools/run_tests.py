@@ -70,10 +70,12 @@ def suites() -> list[Suite]:
             "rust-features",
             "tests a workspace-wide run compiles out: the H7 backend turns on "
             "ferrowasp-stm32/dshot, replacing its non-DShot timer DMA test, and "
-            "nothing in the workspace turns on mspv2_configurator's RPC test",
+            "nothing in the workspace turns on mspv2_configurator's RPC test or "
+            "bench_config_fault's",
             [
                 Step([*host_test, "-p", "ferrowasp-stm32"]),
                 Step([*host_test, "-p", "ferrowasp-cli", "--features", "mspv2_configurator"]),
+                Step([*host_test, "-p", "ferrowasp-cli", "--features", "bench_config_fault"]),
             ],
         ),
         Suite(

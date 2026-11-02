@@ -201,6 +201,46 @@ pub fn handle_config(
     Some(CommandAction::None)
 }
 
+/// Breaks the saved configuration for a bench test of the boot's fallback.
+#[cfg(feature = "bench_config_fault")]
+fn bench_config_fault<F: NorStorage>(
+    fault: crate::commands::BenchConfigFault,
+    ctx: &mut CommandContext<'_, F>,
+) {
+    use crate::commands::BenchConfigFault;
+    match fault {
+        // Zeros over the page's start: NOR programs bits only to zero, so
+        // the page stays written and its check no longer passes.
+        BenchConfigFault::Damage => {
+            let reply = if ctx.config_sequence == 0 {
+                "ERR no saved slot to damage; use config save first\r\n"
+            } else {
+                let address = ctx.layout.config_slot_addresses[ctx.config_active_slot as usize];
+                match ctx.flash.page_program(address, &[0; 16]) {
+                    Ok(()) => "OK config slot damaged; reboot to see the fallback\r\n",
+                    Err(_) => "ERR config page program failed\r\n",
+                }
+            };
+            answer(ctx.responses, reply);
+        }
+        BenchConfigFault::Invalid => {
+            let mut config = ctx.stored_config;
+            config.tuning.rate_gains.roll.p = 1.0e6;
+            let reply = match begin_config_save(
+                ctx.config_save,
+                config,
+                ctx.config_sequence,
+                ctx.config_active_slot,
+                ctx.responses,
+            ) {
+                Ok(()) => "OK invalid config save started\r\n",
+                Err(answer) => answer,
+            };
+            answer(ctx.responses, reply);
+        }
+    }
+}
+
 /// Answers a command while the store is down: what needs no store, and a
 /// reboot, so a board whose store failed can still be flashed without its
 /// BOOT button. `None` for a command that needs the store.
@@ -483,6 +523,16 @@ pub fn handle<F: NorStorage>(
                     Err(answer) => answer,
                 };
                 answer(ctx.responses, reply);
+            }
+        }
+        #[cfg(feature = "bench_config_fault")]
+        crate::commands::StorageCommand::BenchConfigFault(fault) => {
+            if ctx.armed {
+                answer(ctx.responses, "ERR config changes disabled while armed\r\n");
+            } else if maintenance_busy {
+                answer(ctx.responses, "ERR flash maintenance already active\r\n");
+            } else {
+                bench_config_fault(fault, ctx);
             }
         }
         // Restarting cuts the store off: only once disarmed, with no
@@ -903,6 +953,74 @@ mod tests {
             reboot_answer(Some(Outcome::Refused(Refusal::Armed))),
             "ERR reboot cancelled; system armed\r\n"
         );
+    }
+
+    #[cfg(feature = "bench_config_fault")]
+    #[test]
+    fn a_bench_image_breaks_the_saved_configuration_as_asked() {
+        use ferrowasp_config::boot::{SlotRead, read_slot};
+        use ferrowasp_config::owner::BoardRules;
+        use ferrowasp_serial::{RcProtocol, SerialBindings};
+
+        const RULES: BoardRules = BoardRules {
+            routes: &ROUTES,
+            default_bindings: SerialBindings::none()
+                .with(LogicalSerialPort::Uart3, SerialFunction::RcInput),
+        };
+        let layout = StorageLayout::new(CAPACITY).unwrap();
+        let mut owner = Owner::new();
+        owner.stored_config.rc_protocol = RcProtocol::Crsf;
+
+        let (action, lines) = owner.send_on(CommandLink::Serial, "bench damage-config CONFIRM");
+        assert_eq!(action, CommandAction::None);
+        assert_eq!(lines, ["ERR USB only for this command\r\n"]);
+
+        assert_eq!(
+            owner.send("bench invalid-config CONFIRM"),
+            ["OK invalid config save started\r\n"]
+        );
+        let (slot, sequence) = loop {
+            match owner.config_save.step(&mut owner.nor, layout) {
+                SaveStep::Running => continue,
+                SaveStep::Saved { slot, sequence, .. } => break (slot, sequence),
+                other => panic!("{other:?}"),
+            }
+        };
+        let read = |nor: &mut MemoryNor| {
+            let mut page = [0xff; ferrowasp_config::page::FLASH_PAGE_LEN];
+            nor.read(layout.config_slot_addresses[slot as usize], &mut page)
+                .unwrap();
+            read_slot(&page, &RULES)
+        };
+        assert_eq!(read(&mut owner.nor), SlotRead::Invalid);
+
+        assert_eq!(
+            owner.send("bench damage-config CONFIRM"),
+            ["ERR no saved slot to damage; use config save first\r\n"],
+            "this owner was told of no saved slot"
+        );
+        let action = handle(
+            parse_command("bench damage-config CONFIRM").unwrap(),
+            &mut CommandContext {
+                flash: &mut owner.nor,
+                layout,
+                responses: &mut owner.responses,
+                link: CommandLink::Usb,
+                armed: false,
+                log: &owner.log,
+                maintenance: &mut owner.maintenance,
+                config_save: &mut owner.config_save,
+                stored_config: owner.stored_config,
+                fallback: None,
+                config_sequence: sequence,
+                config_active_slot: slot,
+                jedec: [0xef, 0x40, 0x18],
+                default_serial_bindings: SerialBindings::none(),
+                serial_routes: &ROUTES,
+            },
+        );
+        assert_eq!(action, CommandAction::None);
+        assert_eq!(read(&mut owner.nor), SlotRead::Damaged);
     }
 
     #[test]

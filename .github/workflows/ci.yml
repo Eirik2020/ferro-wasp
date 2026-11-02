@@ -128,6 +128,12 @@ jobs:
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
           --features "bench_spi_timeout_recovery"
 
+      - name: Check Foxeer config-fault bench image
+        working-directory: firmware/foxeer-f405-v2
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_config_fault"
+
       - name: Check Foxeer equal-motor bench path
         working-directory: firmware/foxeer-f405-v2
         run: >

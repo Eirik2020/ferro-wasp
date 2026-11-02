@@ -22,6 +22,10 @@ impl StorageCommand {
     /// flights no host has stored, or restart the controller, and a serial
     /// link may be a Bluetooth module anyone in range can pair with.
     pub const fn usb_only(&self) -> bool {
+        #[cfg(feature = "bench_config_fault")]
+        if matches!(self, Self::BenchConfigFault(_)) {
+            return true;
+        }
         matches!(
             self,
             Self::Motor(_)

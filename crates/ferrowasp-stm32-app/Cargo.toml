@@ -36,6 +36,7 @@ bench_logical_motor2_only = ["ferrowasp-safety/bench_logical_motor2_only", "ferr
 bench_logical_motor3_only = ["ferrowasp-safety/bench_logical_motor3_only", "ferrowasp-flight-control/bench_logical_motor3_only"]
 bench_logical_motor4_only = ["ferrowasp-safety/bench_logical_motor4_only", "ferrowasp-flight-control/bench_logical_motor4_only"]
 bench_blackbox = ["ferrowasp-flight-control/bench_blackbox", "ferrowasp-cli/bench_blackbox"]
+bench_config_fault = ["ferrowasp-cli/bench_config_fault"]
 bench_dshot_idle_output1_not_running = []
 bench_equal_motors = ["ferrowasp-flight-control/bench_equal_motors"]
 bench_motor_cmd_stale_rejection = ["ferrowasp-flight-control/bench_motor_cmd_stale_rejection"]
