@@ -315,3 +315,20 @@ requirements:
           setup: none
           method:
             test: ferrowasp_border::coordinator::tests::a_reboot_comes_only_from_the_storage_owner_and_its_decision_comes_back
+
+  - id: BORDER-019
+    title: The status line marks a stalled battery reading
+    statement: >-
+      The USB status line shall mark the battery reading as stale while the
+      battery's topic has not been published for 500 ms.
+    rationale: >-
+      An ADC stopped by a DMA error otherwise reads as a steady voltage, and a
+      host reading the line has no other way to tell.
+    derived_from: [BORDER-003]
+    verification:
+      entries:
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_cli::usb_debug::tests::a_battery_reading_goes_stale_when_its_topic_holds_still

@@ -92,7 +92,8 @@ can arm.
 Each flight board presents a USB CDC serial port. Every two seconds or so it
 sends a self-describing ASCII `FWDBG1` status line: the selected IMU, sample
 and control sequences, raw gyro, stale state, RC qualification, throttle and
-arm switch, arm state, pack voltage, and current.
+arm switch, arm state, pack voltage and whether that reading has gone stale, and
+current.
 
 The same port accepts a bounded ASCII command line, which FerroConfigurator
 drives: configuration get,

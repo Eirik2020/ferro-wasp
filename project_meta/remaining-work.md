@@ -56,9 +56,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   the rate-command and controller-reset changes are flight-verified, keeping
   the safety and actuator boundary.
 - **ADC after a DMA error.** `dma_adc1` logs a DMA fault and returns without
-  restarting the transfer, so battery voltage freezes at its last value with
-  no fault raised. It was seen frozen on the Foxeer's bidirectional DShot
-  bench image. The fix (restart, or a stale-voltage fault) is a user decision.
+  restarting the transfer, so battery voltage freezes at its last value; the
+  OSD and the USB status line mark it stale. It was seen frozen on the Foxeer's
+  bidirectional DShot bench image. Two things are decided and not built: restart
+  the transfer, in the FerroHAL port, and raise a stale-voltage fault through
+  the Health Manager.
 - **Battery current** reads a constant 0.1 A on Foxeer. The firmware matches
   Betaflight's FOXEERF405V2 target (PC1, scale 70, offset 0), so the sense
   wiring is next; current is not a safety input until calibrated.
@@ -155,9 +157,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   test; a `bench_blackbox` run needs the BOOT button to leave.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
-- **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
-  (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
-  needs a board variant.
+- **TBS Lucid H7.** The first bench board died and has been replaced, and an ESC
+  bought for it; FerroWasp has not run on the replacement. A V3 (ArduPilot
+  TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1) would need a board
+  variant.
 - **Configurator flashing.** The GUI's Firmware tab and Reboot
   button have run only against the browser mock, not a desktop build on a
   board. Deferred with the Lucid: the H743's jump address (`0x1FF09800`, from

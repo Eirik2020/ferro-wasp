@@ -61,6 +61,10 @@ artifact is stable, airworthy, or production-ready.
 
 ### Changed
 
+- The USB status line gains `vbat_stale`, set when the battery reading has not
+  updated for 500 ms, as after an ADC DMA error, and FerroConfigurator's pre-arm
+  checklist shows it.
+
 - A configuration value set on the command line or in the OSD menu applies at
   once, while disarmed: arming is held off until the control loop confirms it
   flies the new value, and a change it does not confirm refuses arming until

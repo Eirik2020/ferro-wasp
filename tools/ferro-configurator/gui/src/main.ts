@@ -132,7 +132,7 @@ function renderSafety(): void {
     `arm switch ${status.arm_switch ? "high" : "low"}`,
     `${status.armable ? "armable" : "not armable"}`,
     `throttle ${String(status.throttle)}`,
-    `${volts} V`,
+    status.battery_stale ? `${volts} V (stale)` : `${volts} V`,
   ].join(" · ");
 
   if (!writes_allowed) {

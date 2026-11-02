@@ -21,6 +21,8 @@ export interface StatusSnapshot {
   arm_switch: boolean;
   armed: boolean;
   battery_decivolts: number;
+  /** The battery reading stopped updating; null from older firmware. */
+  battery_stale?: boolean | null;
   /** Absent or null on firmware that does not report it. */
   imu_stale?: boolean | null;
   /** Raw receiver channels; null until the firmware reports them. */

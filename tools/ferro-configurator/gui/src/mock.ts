@@ -143,6 +143,7 @@ export class MockApi implements Api {
         arm_switch: this.armed || this.armSwitch,
         armed: this.armed,
         battery_decivolts: 251,
+        battery_stale: false,
         imu_stale: false,
         channels,
       },
