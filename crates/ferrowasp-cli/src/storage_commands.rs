@@ -201,6 +201,43 @@ pub fn handle_config(
     Some(CommandAction::None)
 }
 
+/// Answers a command while the store is down: what needs no store, and a
+/// reboot, so a board whose store failed can still be flashed without its
+/// BOOT button. `None` for a command that needs the store.
+pub fn handle_without_store(
+    command: StorageCommand,
+    link: CommandLink,
+    cfg: &mut ConfigContext<'_>,
+) -> Option<CommandAction> {
+    if link == CommandLink::Serial && command.usb_only() {
+        answer(cfg.responses, "ERR USB only for this command\r\n");
+        return Some(CommandAction::None);
+    }
+    if let StorageCommand::Reboot { rom_bootloader } = command {
+        return Some(match reboot_refusal(cfg.armed, false, false) {
+            Some(refusal) => {
+                answer(cfg.responses, refusal);
+                CommandAction::None
+            }
+            None => CommandAction::Reboot { rom_bootloader },
+        });
+    }
+    handle_config(command, cfg)
+}
+
+/// The answer to a reboot the safety master did not carry out: an accepted
+/// one does not come back.
+pub const fn reboot_answer(outcome: Option<Outcome>) -> &'static str {
+    match outcome {
+        Some(Outcome::Refused(Refusal::Armed)) => "ERR reboot cancelled; system armed\r\n",
+        Some(Outcome::Refused(Refusal::ArmingInProgress)) => {
+            "ERR reboot cancelled; arming in progress\r\n"
+        }
+        Some(_) => "ERR reboot refused\r\n",
+        None => "ERR reboot no answer\r\n",
+    }
+}
+
 /// The answer to a calibration the coordinator accepted, with the level's
 /// offsets in milli-g.
 pub fn calibrated_answer(
@@ -819,6 +856,52 @@ mod tests {
         assert_eq!(
             calibrated_answer([12, -3, 0]).as_str(),
             "OK imu calibrated x=12 y=-3 z=0 mg\r\n"
+        );
+    }
+
+    #[test]
+    fn a_board_whose_store_failed_can_still_reboot() {
+        let mut owner = Owner::new();
+        let send = |owner: &mut Owner, link, line: &str, armed| {
+            owner.responses.answer(link);
+            handle_without_store(
+                parse_command(line).unwrap(),
+                link,
+                &mut ConfigContext {
+                    responses: &mut owner.responses,
+                    armed,
+                    busy: false,
+                    stored_config: StoredConfig::first_hop_default(),
+                    fallback: None,
+                    default_serial_bindings: SerialBindings::none(),
+                    serial_routes: &ROUTES,
+                },
+            )
+        };
+        assert_eq!(
+            send(&mut owner, CommandLink::Usb, "reboot dfu", false),
+            Some(CommandAction::Reboot {
+                rom_bootloader: true
+            })
+        );
+        assert_eq!(
+            send(&mut owner, CommandLink::Usb, "reboot", true),
+            Some(CommandAction::None),
+            "refused while armed"
+        );
+        assert_eq!(
+            send(&mut owner, CommandLink::Serial, "reboot", false),
+            Some(CommandAction::None),
+            "USB only"
+        );
+        assert_eq!(
+            send(&mut owner, CommandLink::Usb, "logs list", false),
+            None,
+            "the store's"
+        );
+        assert_eq!(
+            reboot_answer(Some(Outcome::Refused(Refusal::Armed))),
+            "ERR reboot cancelled; system armed\r\n"
         );
     }
 

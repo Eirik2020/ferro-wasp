@@ -342,6 +342,11 @@ requirements:
           setup: none
           method:
             test: ferrowasp_config::boot::tests::an_unreadable_store_boots_the_default_and_must_be_acknowledged
+        - level: unit
+          target: host
+          setup: none
+          method:
+            test: ferrowasp_config::boot::tests::the_next_save_overwrites_a_bad_slot
 
   - id: CONFIG-015
     title: A change passes the boot's validation

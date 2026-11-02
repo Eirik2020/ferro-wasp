@@ -69,7 +69,7 @@ chosen. The safety master owns the refusal; the pilot clears it with
 `AcknowledgeConfigFallback` through the coordinator, disarmed only. It recurs
 on every boot until a good save overwrites the damaged slot; the two-slot
 scheme writes the slot not in use, which is the damaged one, so one save fixes
-it.
+it. With both slots bad it takes two saves.
 
 **`ferrowasp-config`** is its own safety-critical, HAL-free crate: schema,
 value specs, `validate()`, page encode and decode, migration, and the

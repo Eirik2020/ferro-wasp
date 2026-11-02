@@ -6,7 +6,7 @@
 //! request this task makes for both command lines, and `config save` writes
 //! the next boot's configuration as the ledger shows it.
 //!
-//! Requirements: REBOOT-001, REBOOT-004
+//! Requirements: REBOOT-001, REBOOT-004, REBOOT-008
 
 use super::prelude::*;
 use crate::command_link::{CommandLink, CommandSources, ResponseRouter};
@@ -20,7 +20,9 @@ use ferrowasp_blackbox::log_writer::{LogWriter, PageWrite};
 use ferrowasp_blackbox::storage_maintenance::{
     Maintenance, MaintenanceDone, MaintenanceFailure, MaintenanceStep,
 };
-use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Refusal, Request, Requester};
+#[cfg(feature = "mspv2_configurator")]
+use ferrowasp_boundary_contracts::requests::Refusal;
+use ferrowasp_boundary_contracts::requests::{Outcome, RebootTarget, Request, Requester};
 use ferrowasp_config::boot::{BootConfig, read_slot, select};
 use ferrowasp_config::owner::BoardRules;
 use ferrowasp_io_contracts::link::Pushed;
@@ -335,8 +337,9 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                 if let Some((command, link)) = flash_commands.take_next() {
                     flash_responses.answer(link);
                     let config = cx.shared.ledger.lock(|ledger| ledger.config().value);
-                    let action = storage_commands::handle_config(
+                    let action = storage_commands::handle_without_store(
                         command,
+                        link,
                         &mut storage_commands::ConfigContext {
                             responses: &mut *flash_responses,
                             armed: flash_safety_arm_reader.read(),
@@ -406,6 +409,36 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                                     storage_commands::request_answer(request, outcome),
                                 );
                             }
+                        }
+                        // Nothing to settle: the store is already down.
+                        Some(CommandAction::Reboot { rom_bootloader }) => {
+                            queue_storage_response(
+                                flash_responses,
+                                if rom_bootloader {
+                                    "OK rebooting to DFU\r\n"
+                                } else {
+                                    "OK rebooting\r\n"
+                                },
+                            );
+                            Mono::delay(REBOOT_ANSWER_MS.millis()).await;
+                            let target = if rom_bootloader {
+                                RebootTarget::RomBootloader
+                            } else {
+                                RebootTarget::Firmware
+                            };
+                            let outcome = ask(
+                                storage_request_link,
+                                &mut cx.shared.ledger,
+                                at(),
+                                Request::Reboot(target),
+                                REBOOT_DECISION_MS,
+                                || Mono::delay(1u64.millis()),
+                            )
+                            .await;
+                            queue_storage_response(
+                                flash_responses,
+                                storage_commands::reboot_answer(outcome),
+                            );
                         }
                         Some(_) => {}
                     }
@@ -781,16 +814,7 @@ pub async fn flash_manager_task(mut cx: flash_manager_task::Context) {
                             .await;
                             queue_storage_response(
                                 flash_responses,
-                                match outcome {
-                                    Some(Outcome::Refused(Refusal::Armed)) => {
-                                        "ERR reboot cancelled; system armed\r\n"
-                                    }
-                                    Some(Outcome::Refused(Refusal::ArmingInProgress)) => {
-                                        "ERR reboot cancelled; arming in progress\r\n"
-                                    }
-                                    Some(_) => "ERR reboot refused\r\n",
-                                    None => "ERR reboot no answer\r\n",
-                                },
+                                storage_commands::reboot_answer(outcome),
                             );
                         }
                     }

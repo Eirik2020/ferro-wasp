@@ -61,7 +61,7 @@ pub struct BootConfig {
     /// The chosen slot's sequence, 0 for the board default.
     pub sequence: u32,
     /// The chosen slot; the next save writes the other. 1 for the default,
-    /// so the first save writes slot 0.
+    /// so the first save writes slot 0, unless slot 1 is the bad one.
     pub slot: u8,
     /// `Some` when arming must wait for the pilot's acknowledgement.
     pub fallback: Option<Fallback>,
@@ -100,7 +100,10 @@ pub fn select(slots: [SlotRead; 2], default: StoredConfig) -> BootConfig {
             }
         }
     }
-    let (config, sequence, slot) = chosen.unwrap_or((default, 0, 1));
+    // With nothing valid, the next save overwrites a slot that was written and
+    // is bad, so it clears the fallback; if both are bad, it takes two saves.
+    let bad = |read| matches!(read, SlotRead::Damaged | SlotRead::Invalid);
+    let (config, sequence, slot) = chosen.unwrap_or((default, 0, u8::from(!bad(slots[1]))));
     BootConfig {
         config,
         sequence,
@@ -197,6 +200,20 @@ mod tests {
         let boot = select([SlotRead::Invalid, SlotRead::Damaged], tuned(0.01));
         assert_eq!(boot.config, tuned(0.01), "then the default");
         assert_eq!(boot.fallback, Some(Fallback::Invalid));
+    }
+
+    #[test]
+    fn the_next_save_overwrites_a_bad_slot() {
+        let next_save = |slots| 1 - select(slots, tuned(0.01)).slot;
+        assert_eq!(next_save([SlotRead::Erased, SlotRead::Damaged]), 1);
+        assert_eq!(next_save([SlotRead::Invalid, SlotRead::Erased]), 0);
+        assert_eq!(next_save([SlotRead::Erased, SlotRead::Erased]), 0);
+        let valid = SlotRead::Valid {
+            sequence: 7,
+            config: tuned(0.02),
+        };
+        assert_eq!(next_save([valid, SlotRead::Damaged]), 1);
+        assert_eq!(next_save([SlotRead::Invalid, valid]), 0);
     }
 
     #[test]
