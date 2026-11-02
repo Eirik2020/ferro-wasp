@@ -143,7 +143,7 @@ fn edit(repository: &Path, file: &str, from: &str, to: &str) {
 }
 
 #[test]
-fn a_pass_verifies_until_the_module_or_a_direct_import_changes() {
+fn a_pass_verifies_until_its_file_changes() {
     let repo = repository();
     let path = repo.path();
     assert_eq!(entry_status(path, "INPUT-001", 0), Status::Unverified);
@@ -185,9 +185,104 @@ fn a_pass_verifies_until_the_module_or_a_direct_import_changes() {
     );
     assert_eq!(
         entry_status(path, "INPUT-001", 0),
-        Status::Stale,
-        "a direct import changed"
+        Status::Verified,
+        "a part it imports has its own evidence"
     );
+    edit(
+        path,
+        "crates/alpha/src/input.rs",
+        "pub struct Frame;",
+        "pub struct Frame;\n\npub fn added() {}",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 0),
+        Status::Stale,
+        "the file itself changed"
+    );
+}
+
+#[test]
+fn changing_what_a_requirement_sets_below_re_owes_it() {
+    let repo = repository();
+    let path = repo.path();
+    let requirements = "project_meta/requirements/input.yaml";
+    edit(
+        path,
+        requirements,
+        "derived_from: [INPUT-003]",
+        "derived_from: [INPUT-001]",
+    );
+    git(path, &["commit", "-qam", "INPUT-001 sets INPUT-002"]);
+    record(
+        path,
+        &request(Method::Test(TEST.into()), None, Outcome::Pass),
+        1,
+    );
+    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Verified);
+    edit(
+        path,
+        requirements,
+        "shall decode every valid frame",
+        "shall decode every valid CRSF frame",
+    );
+    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Stale);
+}
+
+#[test]
+fn board_evidence_follows_the_configuration_and_its_own_parts() {
+    let repo = repository();
+    let path = repo.path();
+    let bench = request(
+        Method::Procedure(BENCH.into()),
+        Some("demo-board"),
+        Outcome::Pass,
+    );
+    record(path, &bench, 1);
+    assert_eq!(entry_status(path, "INPUT-001", 1), Status::Verified);
+    edit(
+        path,
+        "crates/alpha/src/hidden.rs",
+        "pub struct Original;",
+        "pub struct Original;\n\npub fn added() {}",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 1),
+        Status::Verified,
+        "another part changed, in the same car"
+    );
+    edit(
+        path,
+        "firmware/demo-board/src/lib.rs",
+        "pub fn wiring() {",
+        "pub fn wiring() {\n    let _ = 3;",
+    );
+    assert_eq!(
+        entry_status(path, "INPUT-001", 1),
+        Status::Stale,
+        "the app that assembles the parts changed"
+    );
+}
+
+#[test]
+fn board_evidence_goes_when_a_declaring_part_changes() {
+    let repo = repository();
+    let path = repo.path();
+    record(
+        path,
+        &request(
+            Method::Procedure(BENCH.into()),
+            Some("demo-board"),
+            Outcome::Pass,
+        ),
+        1,
+    );
+    edit(
+        path,
+        "crates/alpha/src/input.rs",
+        "pub struct Frame;",
+        "pub struct Frame;\n\npub fn added() {}",
+    );
+    assert_eq!(entry_status(path, "INPUT-001", 1), Status::Stale);
 }
 
 /// Evidence for INPUT-001 after one pass, with another file declaring it.
@@ -294,7 +389,7 @@ fn a_change_to_one_declaring_file_owes_only_that_file_again() {
 }
 
 #[test]
-fn evidence_stops_at_the_direct_imports() {
+fn evidence_stops_at_its_own_file() {
     let repo = repository();
     let path = repo.path();
     edit(
@@ -318,7 +413,7 @@ fn evidence_stops_at_the_direct_imports() {
     assert_eq!(
         entry_status(path, "INPUT-001", 0),
         Status::Verified,
-        "nested.rs is an import of an import of input.rs"
+        "nested.rs is another file"
     );
 }
 
@@ -537,7 +632,7 @@ fn a_parent_is_never_proved_by_its_children() {
 }
 
 #[test]
-fn the_toolchain_is_part_of_host_evidence() {
+fn the_compiler_is_not_part_of_evidence() {
     let repo = repository();
     let path = repo.path();
     record(
@@ -546,7 +641,7 @@ fn the_toolchain_is_part_of_host_evidence() {
         1,
     );
     edit(path, "rust-toolchain.toml", "1.93.1", "1.94.0");
-    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Stale);
+    assert_eq!(entry_status(path, "INPUT-001", 0), Status::Verified);
 }
 
 #[test]

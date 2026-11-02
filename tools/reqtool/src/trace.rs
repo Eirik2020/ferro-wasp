@@ -40,7 +40,7 @@ pub const REQUIREMENTS_LINE: &str = "Requirements:";
 pub const CRITICAL_LINE: &str = "Safety-critical.";
 
 /// Crates every Rust program can name without a dependency; they belong to
-/// the toolchain, which a record covers on its own.
+/// the compiler, which evidence does not cover.
 const TOOLCHAIN_CRATES: [&str; 5] = ["std", "core", "alloc", "proc_macro", "test"];
 
 /// How deep glob re-exports are followed.

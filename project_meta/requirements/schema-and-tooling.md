@@ -143,7 +143,7 @@ implements, in its module doc comment:
   uncommitted changes; its identities cover the files as they were, so a
   dirty run is still exact.
 - Coverage is derived as section 20 describes: host evidence from the files a
-  run exercised and their direct imports, with the toolchain; board evidence
+  run exercised and their pinned crates; board evidence
   from the configuration `cargo check` reports for the board and its
   features.
 - A procedure contributes the text of its own section, so editing another

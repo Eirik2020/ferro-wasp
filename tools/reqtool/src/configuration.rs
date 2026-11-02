@@ -1,19 +1,23 @@
-//! Configurations (design section 20): what one board image is built from.
+//! Configurations (design section 20): the parts one board's image is built
+//! from, and how they are put together.
 //!
 //! A configuration is a board's firmware app with a feature set. Its identity
-//! covers:
-//! - every repository file the compiler read for it, from the dep-info cargo
-//!   writes for each crate, and every file a build script reruns on, except
-//!   under `.git`;
+//! says which car this is, not what state each part is in:
+//! - which source files are compiled in, by path, from the dep-info cargo writes
+//!   for each crate, and every file a build script reruns on, except under
+//!   `.git`;
+//! - the content of everything that assembles the parts: the app's own source,
+//!   which holds its scheduling table (priorities and bindings), and every
+//!   file that is not Rust source, such as its manifest, `.cargo/config.toml`
+//!   and linker map;
 //! - every environment variable the compiler read, such as `DEFMT_LOG`,
 //!   except those a build script sets, such as the git revision;
-//! - the app's manifest and its `.cargo/config.toml`;
-//! - the version of every external crate compiled in;
-//! - the toolchain.
+//! - the version of every external crate compiled in.
 //!
-//! The app shell's source is among those files, so its scheduling table
-//! (priorities and bindings) is covered, task names included until the
-//! `app!` parser can leave them out.
+//! A part's content is not in the identity: evidence names the requirements a
+//! run covered, and stands while the files declaring them are unchanged. The
+//! compiler is deliberately left out: differences between compiler versions are
+//! negligible outside safety assurance, which this project does not claim.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -40,7 +44,9 @@ pub struct Configuration {
     /// Environment variables the compiler read, to their values.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub environment: BTreeMap<String, String>,
-    pub toolchain: String,
+    /// Older records only: the compiler is no longer part of a configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain: Option<String>,
 }
 
 impl Configuration {
@@ -50,8 +56,13 @@ impl Configuration {
         for feature in &self.features {
             let _ = writeln!(text, "feature {feature}");
         }
+        let app_source = format!("firmware/{}/src/", self.board);
         for (path, identity) in &self.files {
-            let _ = writeln!(text, "file {path} {identity}");
+            if path.ends_with(".rs") && !path.starts_with(&app_source) {
+                let _ = writeln!(text, "part {path}");
+            } else {
+                let _ = writeln!(text, "file {path} {identity}");
+            }
         }
         for (package, version) in &self.externals {
             let _ = writeln!(text, "extern {package} {version}");
@@ -59,7 +70,6 @@ impl Configuration {
         for (name, value) in &self.environment {
             let _ = writeln!(text, "env {name}={value}");
         }
-        let _ = writeln!(text, "toolchain {}", self.toolchain);
         identity::sha256(text.as_bytes())
     }
 
@@ -206,7 +216,7 @@ impl Configurations for Cargo<'_> {
             files,
             externals: compiled.externals,
             environment: compiled.environment,
-            toolchain: identity::toolchain(self.repository, &app.directory)?,
+            toolchain: None,
         });
         self.cache
             .borrow_mut()
@@ -412,21 +422,46 @@ mod tests {
     }
 
     #[test]
-    fn a_configuration_identity_changes_with_any_part() {
+    fn a_configuration_names_its_parts_and_holds_what_assembles_them() {
         let base = Configuration {
             board: "b".into(),
             features: vec![],
-            files: [("a.rs".to_owned(), "1".to_owned())].into(),
+            files: [
+                ("crates/a.rs".to_owned(), "1".to_owned()),
+                ("firmware/b/src/main.rs".to_owned(), "1".to_owned()),
+                ("firmware/b/memory.x".to_owned(), "1".to_owned()),
+            ]
+            .into(),
             externals: BTreeMap::new(),
             environment: BTreeMap::new(),
-            toolchain: "t".into(),
+            toolchain: None,
         };
-        let mut other = base.clone();
-        other.files.insert("a.rs".into(), "2".into());
-        assert_ne!(base.identity(), other.identity());
-        assert_eq!(base.differences(&other), ["a.rs"]);
+        let with_file = |path: &str| {
+            let mut other = base.clone();
+            other.files.insert(path.into(), "2".into());
+            other
+        };
+        let new_part_content = with_file("crates/a.rs");
+        assert_eq!(base.identity(), new_part_content.identity(), "the same car");
+        assert_eq!(base.differences(&new_part_content), ["crates/a.rs"]);
+        assert_ne!(
+            base.identity(),
+            with_file("crates/added.rs").identity(),
+            "another part"
+        );
+        assert_ne!(
+            base.identity(),
+            with_file("firmware/b/src/main.rs").identity()
+        );
+        assert_ne!(base.identity(), with_file("firmware/b/memory.x").identity());
         let mut featured = base.clone();
         featured.features.push("x".into());
         assert_ne!(base.identity(), featured.identity());
+        let mut bumped = base.clone();
+        bumped.externals.insert("heapless".into(), "0.9.0".into());
+        assert_ne!(base.identity(), bumped.identity());
+        let mut compiler = base.clone();
+        compiler.toolchain = Some("1.94.0".into());
+        assert_eq!(base.identity(), compiler.identity());
     }
 }

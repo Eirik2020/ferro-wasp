@@ -19,9 +19,10 @@ Evidence    = what a run showed, on which code, with what result   project_meta/
 Each requirement lists its verification entries: a level, a target, a setup
 and a method, which is a host test or a procedure (`path#heading`). Status is
 computed by `reqtool` from the evidence records and identities derived from
-the code; nobody writes it. A host pass stands while the files it exercised
-and their direct imports are unchanged, a board pass while its
-configuration is, and either goes `stale` when what it covered changes. Each
+the code; nobody writes it. A host pass stands while the file it covers and its
+pinned crates are unchanged, a board pass while its configuration and the
+files declaring its requirement are, and either goes `stale` when what it covered
+changes. The compiler is not part of this. Each
 host-buildable file that declares a requirement needs one of its passing tests
 to exercise it; a target-only file is judged at `mcu` or `bench` level.
 

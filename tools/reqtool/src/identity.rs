@@ -7,7 +7,6 @@
 //! - A claim is what one verification entry asserts: the requirement's ID and
 //!   statement, the entry's level, target, setup and method, and for a
 //!   procedure the text of its section.
-//! - The toolchain is the nearest `rust-toolchain.toml`.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -103,12 +102,18 @@ fn doc_attribute(trees: &[TokenTree]) -> Option<usize> {
 pub fn claim(
     repository: &Path,
     requirement: &Requirement,
+    sets: &[&Requirement],
     entry: &Entry,
 ) -> Result<String, String> {
     let squash = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut text = String::new();
     let _ = writeln!(text, "id {}", requirement.id);
     let _ = writeln!(text, "statement {}", squash(&requirement.statement));
+    // What this requirement sets on the layers below: changing that re-owes
+    // the layer that set it, as changing a part does not.
+    for set in sets {
+        let _ = writeln!(text, "sets {} {}", set.id, squash(&set.statement));
+    }
     let method = match &entry.method {
         Method::Test(path) => format!("test {path}"),
         Method::Procedure(reference) => format!(
@@ -155,27 +160,6 @@ pub fn procedure_section(repository: &Path, reference: &str) -> Result<String, S
         return Err(format!("procedure {path} has no heading {heading:?}"));
     }
     Ok(section)
-}
-
-/// The nearest `rust-toolchain.toml` at or above `directory`, up to the
-/// repository root, or `none`.
-pub fn toolchain(repository: &Path, directory: &Path) -> Result<String, String> {
-    for candidate in directory.ancestors() {
-        let file = candidate.join("rust-toolchain.toml");
-        if file.is_file() {
-            return file_bytes(&file);
-        }
-        if candidate == repository {
-            break;
-        }
-    }
-    Ok("none".to_owned())
-}
-
-fn file_bytes(path: &Path) -> Result<String, String> {
-    std::fs::read(path)
-        .map(|bytes| sha256(&bytes))
-        .map_err(|e| format!("{}: {e}", path.display()))
 }
 
 pub fn sha256(bytes: &[u8]) -> String {

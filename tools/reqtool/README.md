@@ -86,28 +86,29 @@ A fail clears only when the code changes and a run passes, or when a record
 board; an entry takes the worst board with evidence.
 
 Every result carries its claim: the requirement's ID and statement
-(whitespace-insensitive), the entry, and a procedure's own section.
+(whitespace-insensitive), the statements of everything derived from it, the entry,
+and a procedure's own section.
 
 - **Host evidence** covers the modules a run exercised: a test's file and the
-  files it imports directly, each with its own direct imports, at their
-  identities, and the toolchain. A source file's identity ignores whitespace
-  and comments; an external crate's is its locked version. A host pass
-  counts for a file that declares its requirement while the claim, the
-  file, its direct imports and their identities are unchanged; a pass that
-  reached no declaring file, or a requirement no file declares, takes what the
-  run exercised. An entry stands on a pass that counts for any file, and a
-  requirement's files are covered together: each file a host test build
-  compiles (`cargo check --workspace --tests`) needs a pass that counts for it,
-  or the requirement's host entries fall to `stale`, or to `unverified` if no
-  test ever reached it. A file that build does not compile, such as a task
-  definition, is judged by target-level evidence alone. `check` names both
-  kinds of file.
-- **Board evidence** carries the configuration it ran in: every repository
-  file `cargo check` reports compiled in (dep-info and build-script reruns),
-  the app's manifest and `.cargo/config.toml`, external crate versions,
-  compiler-read environment variables other than those a build script sets,
-  and the toolchain. It counts for a configuration whose identity is the
-  same.
+  files it imports directly. A source file's identity ignores whitespace and
+  comments; an external crate's is its locked version. A host pass counts for a
+  file that declares its requirement while the claim, the file and the external
+  crates it imports are unchanged; another local file is a part with its own
+  evidence. A pass that reached no declaring file, or a requirement no file
+  declares, takes what the run exercised. An entry stands on a pass that counts
+  for any file, and a requirement's files are covered together: each file a host
+  test build compiles (`cargo check --workspace --tests`) needs a pass that counts
+  for it, or the requirement's host entries fall to `stale`, or to `unverified` if
+  no test ever reached it. A file that build does not compile, such as a task
+  definition, is judged by target-level evidence alone. `check` names both kinds
+  of file. The compiler is not part of evidence.
+- **Board evidence** carries the configuration it ran in. Its identity says which
+  car this is: which repository files `cargo check` reports compiled in (dep-info
+  and build-script reruns), by path; the content of the app's own source and of
+  every file that is not Rust source, including the manifest and
+  `.cargo/config.toml`; external crate versions; and compiler-read environment
+  variables other than those a build script sets. It counts while that identity
+  is the one recorded and the files declaring its requirement are unchanged.
 
 Records are JSON, schema 4, in `project_meta/testing/evidence/runs/`: one
 record per session, each result naming its own method. Schema 4 records

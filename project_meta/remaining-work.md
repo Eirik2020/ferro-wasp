@@ -96,8 +96,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   a configuration's scheduling table leaves task names out, and the other
   analysis-level checks can run.
 - **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file)):
-  library catalogs (requirements and tests shipped with a crate's version,
-  and a project mapping its requirements onto them); `reqtool report` for
+  library catalogs, named by crate (`ferrohal-stm32:FH-UART-012`): requirements
+  and evidence shipped with a crate's version, a project's requirements mapped
+  onto them and inheriting that evidence; recording a dependency's reviewed diff
+  analysis; `reqtool report` for
   each board's configuration in release CI, reporting and not blocking;
   tests for TRACE-001 to TRACE-007 named as their methods; reviewing the
   requirements that existed only for mandatory linking; and folding crates

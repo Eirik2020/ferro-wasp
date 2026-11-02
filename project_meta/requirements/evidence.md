@@ -90,7 +90,7 @@ chip, so "verify once per chip" savings do not apply until a devboard stage
 exists.
 
 **Preflight is a gate, not a level.** A level says how a requirement was
-verified. Preflight says whether this exact image and configuration may fly
+verified. Preflight says whether this configuration may fly
 now: the readback matches, the required path evidence is current, the
 variants are covered. It consumes evidence; it does not verify requirements.
 

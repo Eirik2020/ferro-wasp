@@ -5,7 +5,7 @@ small multirotors, built on FerroForge, and a prototype research platform. It
 puts auditability, timing determinism, fault containment, and evidence before
 feature count.
 
-Agreed direction, updated 2026-10-22. This document is limited to two pages
+Agreed direction, updated 2026-11-03. This document is limited to two pages
 maximum.
 
 **Authority.** `AGENTS.md` in the repository root defines the authority order and
@@ -56,8 +56,11 @@ rather than editing around it. Implementation status does not change them.
    establish flight readiness; each claim needs evidence at its own level.
    Evidence verifies the requirements in `project_meta/requirements/`, each
    derived from W1-W7 or from another requirement. A record stands while the
-   code and configuration it covered are unchanged, and status is computed
-   from evidence, never recorded by hand.
+   file it covered is unchanged. A part replaced by one that fulfils the same
+   requirements owes only its own evidence. A pinned dependency's bump needs a
+   reviewed diff analysis or reverification. A requirement mapped to a library's
+   requirement inherits that library's evidence. Status is computed from
+   evidence, never recorded by hand.
 
 Implementation details belong in the public book, `mdbook/`, what is left to
 build in [remaining work](remaining-work.md), and why an alternative lost in

@@ -71,14 +71,23 @@ call, and that call is the link.
 
 See: [tracing per source file](requirements/tracing.md#20-tracing-per-source-file)
 
-### Why not let evidence depend on every transitive import?
+### Why not let evidence depend on what a file imports?
 
-A change deep in the tree would re-owe every module above it, which is the
-crate closure again. A module's evidence covers its own code and the identity
-of what it imports directly; each imported module's own evidence keeps
-proving the requirements the importer relies on.
+A change to one part would re-owe every module above it, which is the crate
+closure again. A module's evidence covers its own code and pinned crates; the
+requirements are its interface to other parts, so a part that fulfils the same
+requirements owes only its own evidence.
 
 See: TRACE-004
+
+### Why not tie board evidence to the exact image?
+
+Any change would then reverify the whole craft. Board evidence follows the
+configuration instead: which parts it holds and how they are assembled, with
+each part's evidence standing while that part is unchanged. Changing what
+assembles them, or a part's own files, still owes the run again.
+
+See: TRACE-007
 
 ## Flashing
 

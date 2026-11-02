@@ -9,10 +9,13 @@
 //! imports, and the record holds the identity of every one of those. Board
 //! evidence carries the whole configuration it ran in.
 //!
-//! A host result counts for a module while the claim, the toolchain, the
-//! module, its direct imports and their identities are all as recorded. A
-//! board result counts for a configuration whose identity is the one
-//! recorded. Records of earlier schemas are left beside these untouched.
+//! A host result counts for a module while the claim, the module and the
+//! versions of the external crates it imports are as recorded; another local
+//! file is a part with its own evidence. A board result counts while its
+//! configuration's identity is the one recorded and the files declaring its
+//! requirement are unchanged. The compiler is not part of any of this, and an
+//! older record's toolchain is ignored. Records of earlier schemas are left
+//! beside these untouched.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -90,7 +93,7 @@ pub struct RunResult {
     pub setup: Setup,
     /// What the entry claimed when it ran ([`identity::claim`]).
     pub claim: String,
-    /// For host evidence: the toolchain it ran on.
+    /// Older records only: the compiler is no longer part of evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain: Option<String>,
     /// For host evidence: each module exercised; the record holds their
@@ -192,10 +195,7 @@ pub fn drop_repeats(record: &mut Record, existing: &[Record]) {
 }
 
 fn same_coverage(old: &Record, before: &RunResult, new: &Record, after: &RunResult) -> bool {
-    if before.claim != after.claim
-        || before.toolchain != after.toolchain
-        || before.exercised != after.exercised
-    {
+    if before.claim != after.claim || before.exercised != after.exercised {
         return false;
     }
     if after.level.on_target() {
@@ -243,25 +243,18 @@ pub struct Current<'a> {
 
 impl Current<'_> {
     fn claim(&self, requirement: &Requirement, entry: &Entry) -> Result<String, String> {
-        identity::claim(&self.project.repository, requirement, entry)
-    }
-
-    /// The toolchain host evidence for a method runs on: the test crate's
-    /// workspace's, or the repository's for a procedure.
-    fn host_toolchain(&self, method: &Method) -> Result<String, String> {
-        let directory = match method {
-            Method::Test(path) => {
-                let crate_name = path.split("::").next().unwrap_or(path);
-                self.project
-                    .workspace
-                    .crates
-                    .get(crate_name)
-                    .and_then(|found| found.lockfile.parent())
-                    .map_or_else(|| self.project.repository.clone(), Path::to_path_buf)
+        // Everything derived from this requirement, however deep, in ID order.
+        let mut sets: BTreeMap<&str, &Requirement> = BTreeMap::new();
+        let mut waiting = vec![requirement.id.as_str()];
+        while let Some(id) = waiting.pop() {
+            for child in self.project.children(id) {
+                if sets.insert(child.id.as_str(), child).is_none() {
+                    waiting.push(child.id.as_str());
+                }
             }
-            Method::Procedure(_) => self.project.repository.clone(),
-        };
-        identity::toolchain(&self.project.repository, &directory)
+        }
+        let sets: Vec<&Requirement> = sets.into_values().collect();
+        identity::claim(&self.project.repository, requirement, &sets, entry)
     }
 
     /// The file a test is defined in.
@@ -299,12 +292,23 @@ impl Current<'_> {
     }
 
     /// Whether `module`, exercised by this result, is unchanged since: its
-    /// identity and those of its direct imports (TRACE-004).
+    /// identity and the versions of the external crates it imports (TRACE-004).
+    /// Another local file is a part with its own evidence, so it is not here.
     fn module_unchanged(&self, record: &Record, module: &str) -> bool {
-        let imports = self.trace.imports(module);
-        record.modules.get(module) == Some(&imports)
+        let externals = |imports: &[String]| -> Vec<String> {
+            imports
+                .iter()
+                .filter(|key| key.starts_with("extern:"))
+                .cloned()
+                .collect()
+        };
+        let now = externals(&self.trace.imports(module));
+        record
+            .modules
+            .get(module)
+            .is_some_and(|recorded| externals(recorded) == now)
             && std::iter::once(module)
-                .chain(imports.iter().map(String::as_str))
+                .chain(now.iter().map(String::as_str))
                 .all(|key| {
                     record.identities.contains_key(key)
                         && record.identities.get(key).cloned() == self.trace.identity(key)
@@ -325,7 +329,7 @@ impl Current<'_> {
 /// is per board, and its overall status is the worst board with evidence,
 /// until gates name the boards they require. With a configuration in scope,
 /// only the modules it compiles in count, and only board evidence from that
-/// exact configuration.
+/// configuration whose declaring files are unchanged.
 pub struct Recorded {
     statuses: BTreeMap<(String, usize), Status>,
     boards: BTreeMap<(String, usize), Vec<(String, Status)>>,
@@ -354,6 +358,7 @@ impl Recorded {
                     scope.is_none_or(|configuration| configuration.files.contains_key(*module))
                 })
                 .collect();
+            let all_declaring = current.trace.declaring(&requirement.id);
             let mut exercised: BTreeSet<&str> = BTreeSet::new();
             let mut ever_exercised: BTreeSet<&str> = BTreeSet::new();
             let mut host_entries = Vec::new();
@@ -366,11 +371,9 @@ impl Recorded {
                     .collect();
                 let claim = current.claim(requirement, entry)?;
                 if !entry.level.on_target() {
-                    let toolchain = current.host_toolchain(&entry.method)?;
                     let mut judged = Vec::new();
                     for (record, result) in &relevant {
-                        let current_claim = result.claim == claim
-                            && result.toolchain.as_deref() == Some(&toolchain);
+                        let current_claim = result.claim == claim;
                         let reached: Vec<&str> = result
                             .exercised
                             .iter()
@@ -429,6 +432,7 @@ impl Recorded {
                                             .configuration(board, &ran.features)?,
                                     };
                                     ran.identity() == now.identity()
+                                        && covered_unchanged(ran, &now, &all_declaring)
                                 }
                             };
                         judged.push((counts, result.result));
@@ -483,6 +487,23 @@ impl Recorded {
             owed_files,
             target_only_files,
         })
+    }
+}
+
+/// Whether the parts a board run covered are unchanged: the files declaring its
+/// requirement that the configuration compiles in, or, with none, all of them.
+fn covered_unchanged(ran: &Configuration, now: &Configuration, declaring: &[&str]) -> bool {
+    let compiled_in: Vec<&str> = declaring
+        .iter()
+        .copied()
+        .filter(|file| ran.files.contains_key(*file))
+        .collect();
+    if compiled_in.is_empty() {
+        ran.files == now.files
+    } else {
+        compiled_in
+            .iter()
+            .all(|file| ran.files.get(*file) == now.files.get(*file))
     }
 }
 
@@ -561,7 +582,6 @@ pub fn build(
                     continue;
                 }
                 let mut exercised = Vec::new();
-                let mut toolchain = None;
                 if entry.level.on_target() {
                     let board = request.board.ok_or_else(|| {
                         format!(
@@ -580,7 +600,6 @@ pub fn build(
                         );
                     }
                 } else {
-                    toolchain = Some(current.host_toolchain(method)?);
                     for module in current.exercised(requirement, entry)? {
                         let imports = current.trace.imports(&module);
                         for key in std::iter::once(&module).chain(&imports) {
@@ -607,7 +626,7 @@ pub fn build(
                     target: entry.target,
                     setup: entry.setup,
                     claim: current.claim(requirement, entry)?,
-                    toolchain,
+                    toolchain: None,
                     exercised,
                     result: outcome,
                 });
