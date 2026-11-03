@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fdefa211.js";
+            window.path_to_searchindex_js = "searchindex-bb5a2f42.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -233,6 +233,11 @@ lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>The USB status line gains <code>vbat_stale</code>, set when the battery reading has not
+updated for 500 ms, as after an ADC DMA error, and FerroConfigurator’s pre-arm
+checklist shows it.</p>
+</li>
 <li>
 <p>A configuration value set on the command line or in the OSD menu applies at
 once, while disarmed: arming is held off until the control loop confirms it

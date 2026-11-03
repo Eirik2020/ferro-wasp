@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fdefa211.js";
+            window.path_to_searchindex_js = "searchindex-bb5a2f42.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1680,7 +1680,8 @@ can arm.</p>
 <p>Each flight board presents a USB CDC serial port. Every two seconds or so it
 sends a self-describing ASCII <code>FWDBG1</code> status line: the selected IMU, sample
 and control sequences, raw gyro, stale state, RC qualification, throttle and
-arm switch, arm state, pack voltage, and current.</p>
+arm switch, arm state, pack voltage and whether that reading has gone stale, and
+current.</p>
 <p>The same port accepts a bounded ASCII command line, which FerroConfigurator
 drives: configuration get,
 set, and save; serial port bindings; flash information and the scratch-sector
@@ -1700,7 +1701,8 @@ flies it; <code>config save</code> keeps it across a reboot. The RC protocol and
 bindings are read only at boot, so a change to them waits for a save and a
 reboot. These commands, <code>imu level</code> and <code>imu calibrate</code> work while the
 flash is unavailable too; only keeping a change needs it, so <code>config save</code>
-then answers that storage is unavailable. <code>config fallback</code> reports whether the boot fell back from the saved
+then answers that storage is unavailable, and <code>reboot</code> and <code>reboot dfu</code> still
+work. <code>config fallback</code> reports whether the boot fell back from the saved
 configuration, and <code>config fallback ack</code> acknowledges it so the craft may arm
 (see <a href="#shared-arming-guards">Arming</a>).</p>
 <p>USB service runs below the control, IMU, RC, and safety priorities, with
@@ -2768,6 +2770,11 @@ lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>The USB status line gains <code>vbat_stale</code>, set when the battery reading has not
+updated for 500 ms, as after an ADC DMA error, and FerroConfigurator’s pre-arm
+checklist shows it.</p>
+</li>
 <li>
 <p>A configuration value set on the command line or in the OSD menu applies at
 once, while disarmed: arming is held off until the control loop confirms it
