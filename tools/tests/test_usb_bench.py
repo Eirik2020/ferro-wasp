@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 
 from tools.usb_bench import (
+    compare_baselines,
+    refused_by_board,
     BOARDS,
     Link,
     StepFailed,
@@ -105,6 +107,24 @@ class JudgingIdle(unittest.TestCase):
 
 
 @unittest.skipUnless(hasattr(os, "openpty"), "needs a pty")
+class JudgingAResult(unittest.TestCase):
+    def test_a_refusal_counts_only_when_the_board_said_it(self) -> None:
+        self.assertTrue(refused_by_board("error: device rejected `serial uart3 rc`: the port cannot carry that"))
+        self.assertFalse(refused_by_board("error: could not open serial port uart3"))
+
+    def test_a_missing_baseline_fails_the_step_rather_than_ending_the_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            before, after = Path(directory) / "before", Path(directory) / "after"
+            after.write_text("a")
+            with self.assertRaisesRegex(StepFailed, "nothing to compare"):
+                compare_baselines(before, after)
+            before.write_text("b")
+            with self.assertRaisesRegex(StepFailed, "differs"):
+                compare_baselines(before, after)
+            before.write_text("a")
+            compare_baselines(before, after)
+
+
 class TalkingToABoard(unittest.TestCase):
     """The link against a fake board on a pty, which answers as firmware does."""
 
@@ -117,6 +137,7 @@ class TalkingToABoard(unittest.TestCase):
         self.link = Link(os.ttyname(port), Transcript(self.transcript))
         self.addCleanup(self.link.port.close)
         os.close(port)
+        self.assertEqual(os.read(self.board, 256), b"\r\n")
 
     def answer_with(self, *lines: bytes) -> None:
         def answer() -> None:
@@ -135,6 +156,15 @@ class TalkingToABoard(unittest.TestCase):
         self.answer_with(b"ERR storage unavailable\r\n")
         with self.assertRaisesRegex(StepFailed, "ERR storage unavailable"):
             self.link.expect("config save", "OK config save started")
+
+    def test_opening_the_port_ends_and_drops_what_the_board_had_half_read(self) -> None:
+        # Spoiled by the echo of a port fresh from enumeration, the board answers
+        # the blank line with a refusal; the command after it must not see that.
+        os.write(self.board, b"ERR invalid command; type help\r\n")
+        self.link.settle()
+        self.assertEqual(os.read(self.board, 256), b"\r\n")
+        self.answer_with(b"OK build rev=abc\r\n")
+        self.assertEqual(self.link.expect("build", "OK build"), "OK build rev=abc")
 
     def test_silence_fails_the_step(self) -> None:
         with self.assertRaisesRegex(StepFailed, "no answer"):

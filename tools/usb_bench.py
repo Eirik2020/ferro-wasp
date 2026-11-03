@@ -48,6 +48,7 @@ TARGET_TRIPLE = "thumbv7em-none-eabihf"
 USB_VID = 0x16C0
 USB_PID = 0x27DD
 DFU_DEVICE = "0483:df11"
+SETTLE_QUIET_S = 0.3
 PROCEDURE = "project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session"
 BENCH_FEATURE = "bench_config_fault"
 # How long a board takes to enumerate after leaving the ROM or restarting.
@@ -196,6 +197,19 @@ class Transcript:
             log.write(f"{stamp} {text}\n")
 
 
+def refused_by_board(output: str) -> bool:
+    """Whether a failed configurator command failed by the board's own refusal,
+    rather than for not reaching the board at all."""
+    return "device rejected" in output
+
+
+def compare_baselines(before: Path, after: Path) -> None:
+    if not before.is_file():
+        raise StepFailed("no configuration was exported at the start, so there is nothing to compare")
+    if after.read_text() != before.read_text():
+        raise StepFailed("the configuration at the end differs from the one at the start")
+
+
 def find_port(usb_serial: str) -> str | None:
     from serial.tools import list_ports
 
@@ -225,6 +239,17 @@ class Link:
         self.transcript = transcript
         self.buffer = ""
         self.statuses: list[dict[str, str]] = []
+        self.settle()
+
+    def settle(self) -> None:
+        """Ends whatever the board has half-read, and drops what that says. A port
+        fresh from enumeration echoes what the board sends until it is raw, and the
+        board reads the echo as the start of the next command, which then fails."""
+        self.port.write(b"\r\n")
+        quiet_from = time.monotonic()
+        while time.monotonic() - quiet_from < SETTLE_QUIET_S:
+            if self.port.read(512):
+                quiet_from = time.monotonic()
 
     def __enter__(self) -> Link:
         return self
@@ -514,8 +539,11 @@ def foxeer_session(session: Session, candidate: Path, bench: Path, allow_dirty: 
             ("uart3", "rc", "SBUS needs an inverter this port does not have"),
             ("uart2", "none", "RC would be left unbound"),
         ):
-            if session.configurator("config", "bind", port, function).returncode == 0:
+            refused = session.configurator("config", "bind", port, function)
+            if refused.returncode == 0:
                 raise StepFailed(f"`config bind {port} {function}` was accepted: {why}")
+            if not refused_by_board(refused.stdout + refused.stderr):
+                raise StepFailed(f"`config bind {port} {function}` failed, but not by the board's refusal: {refused.stderr.strip()}")
         if table() != before:
             raise StepFailed("a refused bind changed the table")
         session.configurator_ok("config", "bind", "uart4", "esc_telemetry")
@@ -611,8 +639,7 @@ def foxeer_session(session: Session, candidate: Path, bench: Path, allow_dirty: 
     def configuration_kept() -> None:
         after = session.capture / "baseline-after.toml"
         session.configurator_ok("config", "export", str(after))
-        if after.read_text() != baseline.read_text():
-            raise StepFailed("the configuration at the end differs from the one at the start")
+        compare_baselines(baseline, after)
 
     session.step("Flash the candidate over DFU; USB returns on its own", lambda: session.flash(candidate))
     session.step("Identity, configuration export and flight list", identity)
@@ -736,6 +763,9 @@ def record_foxeer(session: Session, candidate: Path, bench: Path, notes: str, su
 
 def run_session(args: argparse.Namespace) -> int:
     board = BOARDS[args.board]
+    if args.operator_confirmed_state and board.has_store:
+        print("SESSION STOPPED: this board's session needs an operator at the terminal, to move the board")
+        return 1
     before = reqtool_bridge.source_state()
     if before[1] and not args.allow_dirty:
         print("SESSION STOPPED: the checkout has uncommitted changes; commit them or pass --allow-dirty")
@@ -755,15 +785,20 @@ def run_session(args: argparse.Namespace) -> int:
             raise SessionStop(f"the configurator did not build:\n{built.stderr[-2000:]}")
         candidate = build(board, capture, "candidate", ())
         bench = build(board, capture, "bench", (BENCH_FEATURE,)) if board.has_store else None
-        gates.confirm_bench_state()
+        if args.operator_confirmed_state:
+            print("\nThe operator confirmed the bench state and that the SD card is out.")
+            session.transcript.write("operator confirmed the bench state and the card out, ahead of the run")
+        else:
+            gates.confirm_bench_state()
         if board.has_store:
             assert bench is not None
             foxeer_session(session, candidate, bench, args.allow_dirty)
         else:
-            if not gates.ask_yes_no("Is this board's SD card out?"):
+            if not args.operator_confirmed_state and not gates.ask_yes_no("Is this board's SD card out?"):
                 raise SessionStop("this session expects the card out, for the no-store checks")
             lucid_session(session, candidate)
-        notes = gates.operator_notes()
+        # An agent running this for the operator asks them afterwards.
+        notes = "" if args.operator_confirmed_state else gates.operator_notes()
         if reqtool_bridge.source_state() != before:
             raise SessionStop("the source changed during the run")
     except (SessionStop, gates.GateStop) as stop:
@@ -791,6 +826,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     commands = parser.add_subparsers(dest="command", required=True)
     session = commands.add_parser("session", help="Run the USB session on the connected board.")
     session.add_argument("--board", choices=sorted(BOARDS), required=True)
+    session.add_argument(
+        "--operator-confirmed-state",
+        action="store_true",
+        help="The operator has already confirmed the bench state and the card out, so nobody is asked. "
+        "Only for a session with no physical steps; a step that then needs hands stops it.",
+    )
     session.add_argument("--allow-dirty", action="store_true", help="Run from a checkout with uncommitted changes.")
     return parser.parse_args(argv)
 

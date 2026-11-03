@@ -405,7 +405,10 @@ enum ConfigCommand {
     /// RC unbound. It applies bindings at boot, so reboot it afterwards.
     Bind {
         /// The UART by its number on the chip, as `config ports` lists it.
-        port: String,
+        /// Named apart from the global `--port`, which clap would otherwise
+        /// fill from this argument.
+        #[arg(value_name = "PORT")]
+        uart: String,
         #[arg(value_parser = clap::builder::PossibleValuesParser::new(SERIAL_FUNCTIONS))]
         function: String,
     },
@@ -703,7 +706,10 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                     print_serial_bindings(&bindings)
                 })
             }
-            ConfigCommand::Bind { port, function } => {
+            ConfigCommand::Bind {
+                uart: port,
+                function,
+            } => {
                 let mut client = connect(cli, timeout)?;
                 let readback = client.apply_serial_binding(port, function)?;
                 emit(cli.format, "config.bind", &readback, || {
@@ -2206,7 +2212,31 @@ fn yes_no(value: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser as _;
+
     use super::*;
+
+    #[test]
+    fn config_bind_keeps_its_uart_apart_from_the_global_port() {
+        let cli = Cli::try_parse_from([
+            "ferro-configurator",
+            "--port",
+            "/dev/ttyACM2",
+            "config",
+            "bind",
+            "uart3",
+            "rc",
+        ])
+        .unwrap();
+        assert_eq!(cli.port.as_deref(), Some("/dev/ttyACM2"));
+        let Command::Config(args) = cli.command else {
+            panic!("not config");
+        };
+        let ConfigCommand::Bind { uart, function } = args.command else {
+            panic!("not config bind");
+        };
+        assert_eq!((uart.as_str(), function.as_str()), ("uart3", "rc"));
+    }
 
     #[test]
     fn flash_wizard_titles_are_ascii_for_windows_consoles() {
