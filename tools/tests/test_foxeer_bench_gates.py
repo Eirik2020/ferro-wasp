@@ -10,7 +10,9 @@ from tools.foxeer_bench_gates import (
     operator_notes,
     repository_relative,
     mismatches,
+    find_port,
     parse_snapshot,
+    stable_comports,
 )
 from tools.reqtool_bridge import ARTIFACT_ID, artifact_id
 
@@ -144,6 +146,11 @@ class RecordTests(unittest.TestCase):
             mismatches(flat, {**flat, "rc_protocol": "crsf"}),
             ["rc_protocol is crsf, expected sbus"],
         )
+
+    def test_a_port_vanishing_as_it_is_read_is_no_port_yet(self) -> None:
+        with mock.patch("serial.tools.list_ports.comports", side_effect=TypeError("gone")):
+            self.assertEqual(stable_comports(), [])
+            self.assertIsNone(find_port())
 
 
 if __name__ == "__main__":

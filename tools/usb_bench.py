@@ -219,9 +219,7 @@ def compare_baselines(before: Path, after: Path) -> None:
 
 
 def find_port(usb_serial: str) -> str | None:
-    from serial.tools import list_ports
-
-    for port in list_ports.comports():
+    for port in gates.stable_comports():
         if port.vid == USB_VID and port.pid == USB_PID and port.serial_number == usb_serial:
             return port.device
     return None
@@ -544,6 +542,8 @@ def foxeer_session(
         ]
         if allow_dirty:
             argv.append("--allow-dirty")
+        if hands_free:
+            argv.append("--soft-reboot")
         code = subprocess.run(argv, cwd=REPO_ROOT).returncode
         session.commands.append({"command": "foxeer_bench_gates.py usb-config", "exit_code": code})
         if code != 0:
@@ -672,7 +672,7 @@ def foxeer_session(
         else:
             session.step(name, action)
 
-    needs_hands("USB configuration gate", config_gate)
+    session.step("USB configuration gate", config_gate)
     session.step("A live change lasts until a reboot unless saved", session.live_change_lasts_until_reboot)
     session.step("Bindings: refused, moved and restored", bindings)
     session.step("Reboot, and reboot to DFU", reboot_and_dfu)

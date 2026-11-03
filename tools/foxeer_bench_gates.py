@@ -218,10 +218,19 @@ def operator_notes() -> str:
     return description
 
 
-def find_port() -> str | None:
+def stable_comports() -> list[Any]:
+    """The serial ports, or none for now if one vanishes as it is being read:
+    pyserial raises reading a device's files while it is being unplugged."""
     from serial.tools import list_ports
 
-    for port in list_ports.comports():
+    try:
+        return list(list_ports.comports())
+    except (TypeError, OSError):
+        return []
+
+
+def find_port() -> str | None:
+    for port in stable_comports():
         if port.vid == USB_VID and port.pid == USB_PID and port.serial_number == USB_SERIAL:
             return port.device
     return None
@@ -236,6 +245,17 @@ def wait_for_port(present: bool, timeout_s: float) -> str | None:
         time.sleep(0.2)
     state = "appear" if present else "disappear"
     raise GateStop(f"the board's USB port did not {state} within {timeout_s:.0f} s")
+
+
+def software_reboot(tool: Configurator, settle_s: float) -> str:
+    """A reboot by command, for running the gate with nobody there to pull USB."""
+    tool.require("device", "reboot")
+    wait_for_port(False, 20)
+    port = wait_for_port(True, 30)
+    print(f"Back on {port} after a software reboot; settling ({settle_s:.0f} s).")
+    time.sleep(settle_s)
+    assert port is not None
+    return port
 
 
 def power_cycle(settle_s: float) -> str:
@@ -306,6 +326,18 @@ def new_capture_dir(label: str, started: datetime) -> Path:
 # --- The gates -----------------------------------------------------------------
 
 
+def restore_baseline(tool: Configurator, baseline: Path) -> None:
+    """Undoes the gate's saved change after it stopped partway, so a stopped run
+    never leaves the board with the temporary profile."""
+    print("Restoring the configuration from before the gate; plug the board in if it is out.")
+    try:
+        tool.port = wait_for_port(True, 60)
+        tool.require("config", "apply", str(baseline))
+        print("Restored.")
+    except Exception as failure:
+        print(f"NOT RESTORED ({failure!r}): apply {baseline.relative_to(REPO_ROOT)} by hand.")
+
+
 def run_usb_config(args: argparse.Namespace) -> int:
     if not args.elf.is_file():
         raise GateStop(f"no candidate ELF at {args.elf}; build the Foxeer release image first")
@@ -331,6 +363,10 @@ def run_usb_config(args: argparse.Namespace) -> int:
     capture = new_capture_dir("usb-config", started)
     log = CommandLog()
     tool = Configurator(port, log)
+    changed = False
+
+    def restart() -> str:
+        return software_reboot(tool, 3) if args.soft_reboot else power_cycle(settle_s=3)
 
     def snapshot(step: str, prefix: str = "") -> dict[str, float]:
         output = tool.require("config", "show")
@@ -346,27 +382,34 @@ def run_usb_config(args: argparse.Namespace) -> int:
         rejected = tool.run("config", "set", *INVALID_SETTING)
         (capture / "3-reject-stderr.txt").write_text(rejected.stderr)
         snapshot("reject", prefix=f"exit {rejected.returncode}\n")
+        changed = True
         for key, value in TEMPORARY_ROLL.items():
             tool.require("config", "set", key.replace("_", "-"), f"{value:g}")
         snapshot("same_boot")
-        tool.port = power_cycle(settle_s=3)
+        tool.port = restart()
         snapshot("cold_boot_temporary")
         tool.require("config", "validate", str(capture / BASELINE_EXPORT))
         tool.require("config", "apply", str(capture / BASELINE_EXPORT))
+        changed = False
         snapshot("restored")
-        tool.port = power_cycle(settle_s=3)
+        tool.port = restart()
         snapshot("restored_cold_boot")
         failures = check_usb_snapshots(load_usb_snapshots(capture))
         if failures:
             raise GateStop("; ".join(failures))
         if tool.status().get("armed"):
             raise GateStop("the controller reports armed")
+        if args.soft_reboot:
+            print(f"\nUSB configuration gate passed with software reboots. Captures only, in {capture.relative_to(REPO_ROOT)}.")
+            return 0
         notes = operator_notes()
         if reqtool_bridge.source_state() != before:
             raise GateStop("the source changed during the run")
-    except GateStop as stop:
-        print(f"\nGATE STOPPED: {stop}")
-        print(f"Captures kept in {capture.relative_to(REPO_ROOT)}; restore from its baseline export.")
+    except Exception as stop:
+        print(f"\nGATE STOPPED: {stop!r}" if not isinstance(stop, GateStop) else f"\nGATE STOPPED: {stop}")
+        print(f"Captures kept in {capture.relative_to(REPO_ROOT)}.")
+        if changed:
+            restore_baseline(tool, capture / BASELINE_EXPORT)
         return 1
     result = "pass" if not notes else "inconclusive"
     initial = load_usb_snapshots(capture)["initial"][1]
@@ -436,6 +479,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="*",
         default=["board-foxeer-f405-v2"],
         help="The candidate's cargo features.",
+    )
+    usb.add_argument(
+        "--soft-reboot",
+        action="store_true",
+        help="Reboot by command instead of asking for USB to be pulled, for a run with nobody there. "
+        "Captures only: it is not the procedure's cold boot, and records nothing.",
     )
     usb.add_argument(
         "--state-confirmed",
