@@ -96,7 +96,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   a configuration's scheduling table leaves task names out, and the other
   analysis-level checks can run.
 - **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file)):
-  library catalogs, named by crate (`ferrohal-stm32:FH-UART-012`): requirements
+  library catalogs, named by crate (`ferrohal-stm32:UART-012`): requirements
   and evidence shipped with a crate's version, a project's requirements mapped
   onto them and inheriting that evidence; recording a dependency's reviewed diff
   analysis; `reqtool report` for
