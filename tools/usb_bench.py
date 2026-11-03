@@ -197,6 +197,12 @@ class Transcript:
             log.write(f"{stamp} {text}\n")
 
 
+def runs_revision(answer: str, head: str) -> bool:
+    """Whether a `build` answer names this commit. An image carries a short hash."""
+    reported = re.search(r"rev=([0-9a-f]{7,40})\b", answer)
+    return reported is not None and head.startswith(reported.group(1))
+
+
 def refused_by_board(output: str) -> bool:
     """Whether a failed configurator command failed by the board's own refusal,
     rather than for not reaching the board at all."""
@@ -459,7 +465,7 @@ class Session:
     def require_identity(self, features: tuple[str, ...]) -> None:
         """The board runs this commit, built with exactly these features. An
         image lists its features other than its board and the default."""
-        head = reqtool_bridge.git("rev-parse", "HEAD")[:12]
+        head = reqtool_bridge.git("rev-parse", "HEAD")
         with self.link() as link:
             answer = link.expect("build", "OK build", seconds=3.0)
             listed = re.search(r"features=(\d+)", answer)
@@ -467,8 +473,8 @@ class Session:
                 link.wait_prefix("OK feature ", 2.0, "`build`'s features").removeprefix("OK feature ")
                 for _ in range(int(listed.group(1)) if listed else 0)
             ]
-        if f"rev={head}" not in answer:
-            raise StepFailed(f"the board reports `{answer}`, not revision {head}")
+        if not runs_revision(answer, head):
+            raise StepFailed(f"the board reports `{answer}`, not revision {head[:12]}")
         if sorted(reported) != sorted(features):
             raise StepFailed(f"the board reports features {reported}, not {list(features)}")
 

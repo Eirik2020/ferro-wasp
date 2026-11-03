@@ -6,6 +6,7 @@ from pathlib import Path
 
 from tools.usb_bench import (
     compare_baselines,
+    runs_revision,
     refused_by_board,
     BOARDS,
     Link,
@@ -111,6 +112,13 @@ class JudgingAResult(unittest.TestCase):
     def test_a_refusal_counts_only_when_the_board_said_it(self) -> None:
         self.assertTrue(refused_by_board("error: device rejected `serial uart3 rc`: the port cannot carry that"))
         self.assertFalse(refused_by_board("error: could not open serial port uart3"))
+
+    def test_a_short_hash_names_the_commit_it_starts(self) -> None:
+        head = "41297c6c772a0000000000000000000000000000"
+        self.assertTrue(runs_revision("OK build rev=41297c6 dirty=0 features=0", head))
+        self.assertTrue(runs_revision(f"OK build rev={head} dirty=0", head))
+        self.assertFalse(runs_revision("OK build rev=2da2374 dirty=0 features=0", head))
+        self.assertFalse(runs_revision("OK build rev=unknown dirty=0", head))
 
     def test_a_missing_baseline_fails_the_step_rather_than_ending_the_session(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
