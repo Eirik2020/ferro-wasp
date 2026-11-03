@@ -1,0 +1,13 @@
+# gitleaks' default rules, with one narrow exception.
+[extend]
+useDefault = true
+
+# An evidence record maps each source file to its hash, and a file called `keys.rs`
+# makes that line read like an API key. Only a quoted 64-hex value in a record is
+# exempt, so any other secret in a record is still reported.
+[[allowlists]]
+description = "SHA-256 file hashes in evidence records"
+condition = "AND"
+paths = ['''^project_meta/testing/evidence/runs/.*\.json$''']
+regexTarget = "match"
+regexes = ['''"[0-9a-f]{64}"$''']
