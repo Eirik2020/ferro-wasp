@@ -73,24 +73,23 @@ preflight, flight). They merge into one enum, ordered by cost and risk:
 |---|---|---|
 | `analysis` | tool checks on source and images: dependency direction, the priority rule, stack, RAM and flash, the image building for its board and features | `embedded-build`, part of `software` |
 | `unit` | host tests, including conformance suites against mocks and golden fixtures | `software` |
-| `sitl` | software-in-the-loop on the host, once a harness exists | none |
-| `mcu` | on the flight controller, nothing actuating (the plan's MCU: the FCU itself, not a generic devboard) | `bench-unpowered` |
-| `bench` | the full drone, ESCs powered, propellers removed (not peripheral simulators) | `bench-powered-props-off` |
-| `flight` | in flight | `flight` |
+| `simulation` | software-in-the-loop on the host, once a harness exists | none |
+| `target` | on the flight controller, nothing actuating (the FCU itself, not a generic devboard) | `bench-unpowered` |
+| `system` | the full drone, ESCs powered, propellers removed (not peripheral simulators) | `bench-powered-props-off` |
+| `field` | in flight | `flight` |
 
 A level is a field on each verification entry, not a separate document
 hierarchy. One requirement can need several levels: arming-timeout logic at
-`unit` and `sitl`, real ESC timing at `bench`.
+`unit` and `simulation`, real ESC timing at `system`.
 
-`target` (`host`, `fcu`, later `devboard`) and `setup` (`none`, `sim`,
-`props-off`, later rigs) exist from the start, even with few valid values, so
-devboard and peripheral-simulator stages are added as new values, not as a
-migration. With MCU meaning the FCU only, MCU evidence is per board, not per
-chip, so "verify once per chip" savings do not apply until a devboard stage
-exists.
+An entry's `environment` (`host`, `product`, `development`) says where it runs, and
+its `hazard` and `preconditions` say who may run it and what must hold, so
+development boards and new rigs need no new fields. With `target` meaning the FCU
+only, its evidence is per board, not per chip, so "verify once per chip" savings do
+not apply until a development board stage exists.
 
 **Preflight is a gate, not a level.** A level says how a requirement was
-verified. Preflight says whether this exact image and configuration may fly
+verified. Preflight says whether this configuration may fly
 now: the readback matches, the required path evidence is current, the
 variants are covered. It consumes evidence; it does not verify requirements.
 

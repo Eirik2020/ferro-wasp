@@ -1,0 +1,8 @@
+name = "ferro-wasp"
+requirements = "project_meta/requirements"
+roots = "project_meta/governing-requirements.md"
+root_prefix = "W"
+evidence = "project_meta/testing/evidence/runs"
+boards = "firmware"
+critical_metadata = "ferrowasp"
+retired = ["archive", "tools/rtic-app-builder/docs/archive"]

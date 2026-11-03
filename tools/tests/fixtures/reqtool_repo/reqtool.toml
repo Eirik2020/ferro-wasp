@@ -1,0 +1,7 @@
+name = "fixture"
+requirements = "project_meta/requirements"
+roots = "project_meta/governing-requirements.md"
+root_prefix = "R"
+evidence = "project_meta/testing/evidence/runs"
+boards = "firmware"
+retired = ["archive"]

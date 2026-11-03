@@ -128,6 +128,12 @@ jobs:
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
           --features "bench_spi_timeout_recovery"
 
+      - name: Check Foxeer config-fault bench image
+        working-directory: firmware/foxeer-f405-v2
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_config_fault"
+
       - name: Check Foxeer equal-motor bench path
         working-directory: firmware/foxeer-f405-v2
         run: >
@@ -355,11 +361,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   reqtool:
-    name: Requirements tool
+    name: Requirements
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: tools/reqtool
     steps:
       - uses: actions/checkout@v4
 
@@ -367,21 +370,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.HOST_RUST_TOOLCHAIN }}
-          components: clippy,rustfmt
 
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: tools/reqtool
-
-      - name: Check formatting
-        run: cargo fmt --all --check
-
-      - name: Test the tool and validate every requirement file
-        run: python ../../tools/run_tests.py reqtool
-
-      - name: Lint
-        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Install reqtool at its pinned revision and check every requirement file and the FAQ
+        run: python tools/run_tests.py reqtool
 
   configurator-gui:
     name: FerroConfigurator GUI

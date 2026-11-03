@@ -511,6 +511,13 @@
       "max_bytes": 4096
     },
     {
+      "path": "project_meta/testing/targets/foxeer-usb-session.md",
+      "role": "target-test-procedure",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 8192
+    },
+    {
       "path": "project_meta/testing/targets/foxeer-f405-v2.md",
       "role": "target-test-procedure",
       "lifecycle": "live",

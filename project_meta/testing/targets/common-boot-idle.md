@@ -52,7 +52,10 @@ code that ran.
 ## Target Procedures
 
 - Foxeer F405 V2: `project_meta/testing/targets/foxeer-f405-v2.md`
-- TBS Lucid H7: this common gate only; the board cannot arm yet.
+- TBS Lucid H7: this common gate only; the board cannot arm yet. With its card out
+  and no probe, `python3 tools/usb_bench.py session --board tbs-lucid-h7` checks
+  that it flashes, idles, falls back from an unreadable store, keeps answering its
+  commands and restarts into its ROM. That run leaves captures and records nothing.
 
 The gates in `project_meta/requirements/gates.yaml` keep the steps in order.
 A pass stands until the code it covered changes; then rerun the gate.

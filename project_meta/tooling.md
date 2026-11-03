@@ -30,8 +30,9 @@ statement of which tests apply or passed.
 - `tools/check_repository_context.py` validates the document registry and byte
   budgets, the always-loaded line limit, the internal book's summary, the
   immutable archive hashes, and the app context routes.
-- `tools/reqtool` checks the requirements, gates and evidence records:
+- `reqtool`, pinned in `tools/reqtool/`, checks the requirements, gates and evidence records:
   `reqtool validate`, `reqtool check`, `reqtool gate`.
+- `tools/check_faq.py` checks the FAQ's format and references.
 - `tools/check_rtic_boundaries.py` enforces the thin-app rules mechanically:
   RTIC imports only through the app facade, only RTIC declarations in
   `main.rs`, shared board data models, no timer-register sequencing in board

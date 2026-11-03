@@ -37,8 +37,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
 
@@ -53,13 +52,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::rc_link_requires_healthy_recovery_and_arm_switch_low
 
@@ -76,13 +73,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::rc_frame_flags_reject_failsafe_and_lost_frames
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::crsf_zero_uplink_quality_marks_frames_lost_until_it_recovers
 
@@ -100,33 +95,27 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_failsafe_and_frame_lost_flags_reach_the_frame
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_out_of_range_channels_pass_through_unclamped
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_partial_frame_is_dropped_on_reset
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_skips_leading_noise_before_a_header
 
@@ -142,23 +131,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::crsf_crc_error_is_a_parse_error
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::impossible_length_is_rejected_without_buffering
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::short_rc_payload_is_an_error_not_a_frame
 
@@ -173,13 +158,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
+          method:
+            test: ferrowasp_input::rc_receiver::tests::sbus_bad_footer_is_an_error_and_no_wrong_frame_follows
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_input::rc_receiver::tests::sbus_skips_leading_noise_before_a_header
+        - level: unit
+          environment: host
           method:
             test: ferrowasp_crsf::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::rc_frame_decodes_after_leading_noise
 
@@ -199,23 +190,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::every_rc_fault_invalidates_with_its_own_reason
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::only_lost_bytes_reset_the_parser_and_only_a_stopped_stream_stops
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::neutralizing_centres_the_sticks_drops_the_switch_and_cancels_an_arm_hold
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::a_channel_map_change_is_seen_once_and_the_first_map_is_not_one
 
@@ -232,13 +219,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::rc_link_invalidation_requires_fresh_frames_and_new_low_switch_observation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::channel_map_reads_taer_and_round_trips_its_config_values
 
@@ -253,18 +238,18 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::an_arm_hold_straddling_the_old_u32_wrap_still_arms
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -279,8 +264,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::rc_link_ignores_arm_low_transients_before_recovery_completes
 
@@ -295,13 +279,14 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::arm_qualifier_debounces_arm_and_emits_disarm_on_falling_edge
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -317,23 +302,22 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -348,9 +332,11 @@ requirements:
     derived_from: [INPUT-001, W2]
     verification:
       entries:
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -365,9 +351,11 @@ requirements:
     derived_from: [INPUT-001, W2]
     verification:
       entries:
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -382,9 +370,11 @@ requirements:
     derived_from: [INPUT-001, W2]
     verification:
       entries:
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -404,38 +394,31 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::crc_matches_the_dvb_s2_check_value
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::channels_round_trip_through_the_packed_payload
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::first_channel_occupies_the_low_bits_of_the_first_byte
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::link_statistics_expose_uplink_quality
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::unknown_types_pass_through_as_other
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::a_battery_frame_is_big_endian_and_round_trips_through_the_parser
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_crsf::tests::battery_fields_saturate_at_what_crsf_carries
 
@@ -455,18 +438,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::channels_convert_to_the_microseconds_radios_show
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::sbus_and_crsf_deliver_the_same_channels
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::rc_receiver::tests::crsf_crc_error_is_a_parse_error
 
@@ -483,18 +463,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::stock_edgetx_map_reads_aetr_with_the_arm_switch_on_channel_five
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::channel_map_reads_taer_and_round_trips_its_config_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::a_map_that_repeats_a_channel_or_misplaces_the_arm_switch_is_refused
 
@@ -510,12 +487,10 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::a_channel_map_change_is_seen_once_and_the_first_map_is_not_one
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_input::channel_map::tests::channel_map_reads_taer_and_round_trips_its_config_values

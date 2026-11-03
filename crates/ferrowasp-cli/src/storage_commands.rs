@@ -201,6 +201,83 @@ pub fn handle_config(
     Some(CommandAction::None)
 }
 
+/// Breaks the saved configuration for a bench test of the boot's fallback.
+#[cfg(feature = "bench_config_fault")]
+fn bench_config_fault<F: NorStorage>(
+    fault: crate::commands::BenchConfigFault,
+    ctx: &mut CommandContext<'_, F>,
+) {
+    use crate::commands::BenchConfigFault;
+    match fault {
+        // Zeros over the page's start: NOR programs bits only to zero, so
+        // the page stays written and its check no longer passes.
+        BenchConfigFault::Damage => {
+            let reply = if ctx.config_sequence == 0 {
+                "ERR no saved slot to damage; use config save first\r\n"
+            } else {
+                let address = ctx.layout.config_slot_addresses[ctx.config_active_slot as usize];
+                match ctx.flash.page_program(address, &[0; 16]) {
+                    Ok(()) => "OK config slot damaged; reboot to see the fallback\r\n",
+                    Err(_) => "ERR config page program failed\r\n",
+                }
+            };
+            answer(ctx.responses, reply);
+        }
+        BenchConfigFault::Invalid => {
+            let mut config = ctx.stored_config;
+            config.tuning.rate_gains.roll.p = 1.0e6;
+            let reply = match begin_config_save(
+                ctx.config_save,
+                config,
+                ctx.config_sequence,
+                ctx.config_active_slot,
+                ctx.responses,
+            ) {
+                Ok(()) => "OK invalid config save started\r\n",
+                Err(answer) => answer,
+            };
+            answer(ctx.responses, reply);
+        }
+    }
+}
+
+/// Answers a command while the store is down: what needs no store, and a
+/// reboot, so a board whose store failed can still be flashed without its
+/// BOOT button. `None` for a command that needs the store.
+pub fn handle_without_store(
+    command: StorageCommand,
+    link: CommandLink,
+    cfg: &mut ConfigContext<'_>,
+) -> Option<CommandAction> {
+    if link == CommandLink::Serial && command.usb_only() {
+        answer(cfg.responses, "ERR USB only for this command\r\n");
+        return Some(CommandAction::None);
+    }
+    if let StorageCommand::Reboot { rom_bootloader } = command {
+        return Some(match reboot_refusal(cfg.armed, false, false) {
+            Some(refusal) => {
+                answer(cfg.responses, refusal);
+                CommandAction::None
+            }
+            None => CommandAction::Reboot { rom_bootloader },
+        });
+    }
+    handle_config(command, cfg)
+}
+
+/// The answer to a reboot the safety master did not carry out: an accepted
+/// one does not come back.
+pub const fn reboot_answer(outcome: Option<Outcome>) -> &'static str {
+    match outcome {
+        Some(Outcome::Refused(Refusal::Armed)) => "ERR reboot cancelled; system armed\r\n",
+        Some(Outcome::Refused(Refusal::ArmingInProgress)) => {
+            "ERR reboot cancelled; arming in progress\r\n"
+        }
+        Some(_) => "ERR reboot refused\r\n",
+        None => "ERR reboot no answer\r\n",
+    }
+}
+
 /// The answer to a calibration the coordinator accepted, with the level's
 /// offsets in milli-g.
 pub fn calibrated_answer(
@@ -446,6 +523,16 @@ pub fn handle<F: NorStorage>(
                     Err(answer) => answer,
                 };
                 answer(ctx.responses, reply);
+            }
+        }
+        #[cfg(feature = "bench_config_fault")]
+        crate::commands::StorageCommand::BenchConfigFault(fault) => {
+            if ctx.armed {
+                answer(ctx.responses, "ERR config changes disabled while armed\r\n");
+            } else if maintenance_busy {
+                answer(ctx.responses, "ERR flash maintenance already active\r\n");
+            } else {
+                bench_config_fault(fault, ctx);
             }
         }
         // Restarting cuts the store off: only once disarmed, with no
@@ -820,6 +907,120 @@ mod tests {
             calibrated_answer([12, -3, 0]).as_str(),
             "OK imu calibrated x=12 y=-3 z=0 mg\r\n"
         );
+    }
+
+    #[test]
+    fn a_board_whose_store_failed_can_still_reboot() {
+        let mut owner = Owner::new();
+        let send = |owner: &mut Owner, link, line: &str, armed| {
+            owner.responses.answer(link);
+            handle_without_store(
+                parse_command(line).unwrap(),
+                link,
+                &mut ConfigContext {
+                    responses: &mut owner.responses,
+                    armed,
+                    busy: false,
+                    stored_config: StoredConfig::first_hop_default(),
+                    fallback: None,
+                    default_serial_bindings: SerialBindings::none(),
+                    serial_routes: &ROUTES,
+                },
+            )
+        };
+        assert_eq!(
+            send(&mut owner, CommandLink::Usb, "reboot dfu", false),
+            Some(CommandAction::Reboot {
+                rom_bootloader: true
+            })
+        );
+        assert_eq!(
+            send(&mut owner, CommandLink::Usb, "reboot", true),
+            Some(CommandAction::None),
+            "refused while armed"
+        );
+        assert_eq!(
+            send(&mut owner, CommandLink::Serial, "reboot", false),
+            Some(CommandAction::None),
+            "USB only"
+        );
+        assert_eq!(
+            send(&mut owner, CommandLink::Usb, "logs list", false),
+            None,
+            "the store's"
+        );
+        assert_eq!(
+            reboot_answer(Some(Outcome::Refused(Refusal::Armed))),
+            "ERR reboot cancelled; system armed\r\n"
+        );
+    }
+
+    #[cfg(feature = "bench_config_fault")]
+    #[test]
+    fn a_bench_image_breaks_the_saved_configuration_as_asked() {
+        use ferrowasp_config::boot::{SlotRead, read_slot};
+        use ferrowasp_config::owner::BoardRules;
+        use ferrowasp_serial::{RcProtocol, SerialBindings};
+
+        const RULES: BoardRules = BoardRules {
+            routes: &ROUTES,
+            default_bindings: SerialBindings::none()
+                .with(LogicalSerialPort::Uart3, SerialFunction::RcInput),
+        };
+        let layout = StorageLayout::new(CAPACITY).unwrap();
+        let mut owner = Owner::new();
+        owner.stored_config.rc_protocol = RcProtocol::Crsf;
+
+        let (action, lines) = owner.send_on(CommandLink::Serial, "bench damage-config CONFIRM");
+        assert_eq!(action, CommandAction::None);
+        assert_eq!(lines, ["ERR USB only for this command\r\n"]);
+
+        assert_eq!(
+            owner.send("bench invalid-config CONFIRM"),
+            ["OK invalid config save started\r\n"]
+        );
+        let (slot, sequence) = loop {
+            match owner.config_save.step(&mut owner.nor, layout) {
+                SaveStep::Running => continue,
+                SaveStep::Saved { slot, sequence, .. } => break (slot, sequence),
+                other => panic!("{other:?}"),
+            }
+        };
+        let read = |nor: &mut MemoryNor| {
+            let mut page = [0xff; ferrowasp_config::page::FLASH_PAGE_LEN];
+            nor.read(layout.config_slot_addresses[slot as usize], &mut page)
+                .unwrap();
+            read_slot(&page, &RULES)
+        };
+        assert_eq!(read(&mut owner.nor), SlotRead::Invalid);
+
+        assert_eq!(
+            owner.send("bench damage-config CONFIRM"),
+            ["ERR no saved slot to damage; use config save first\r\n"],
+            "this owner was told of no saved slot"
+        );
+        let action = handle(
+            parse_command("bench damage-config CONFIRM").unwrap(),
+            &mut CommandContext {
+                flash: &mut owner.nor,
+                layout,
+                responses: &mut owner.responses,
+                link: CommandLink::Usb,
+                armed: false,
+                log: &owner.log,
+                maintenance: &mut owner.maintenance,
+                config_save: &mut owner.config_save,
+                stored_config: owner.stored_config,
+                fallback: None,
+                config_sequence: sequence,
+                config_active_slot: slot,
+                jedec: [0xef, 0x40, 0x18],
+                default_serial_bindings: SerialBindings::none(),
+                serial_routes: &ROUTES,
+            },
+        );
+        assert_eq!(action, CommandAction::None);
+        assert_eq!(read(&mut owner.nor), SlotRead::Damaged);
     }
 
     #[test]

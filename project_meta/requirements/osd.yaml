@@ -13,13 +13,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_osd::tests::data_stalls_when_the_observer_or_the_control_topic_holds
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_osd::tests::stale_data_blinks_a_warning_row_and_stale_battery_shows_dashes
 
@@ -37,13 +35,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_osd::tests::the_battery_stalls_on_its_own_longer_limit
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_osd::tests::stale_data_blinks_a_warning_row_and_stale_battery_shows_dashes
 
@@ -60,7 +56,6 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_osd::tests::a_menu_edit_becomes_the_request_for_its_row

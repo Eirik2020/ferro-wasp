@@ -1,0 +1,33 @@
+{
+  "schema_version": 5,
+  "run_id": "20261103T221904Z__dshot-feature-reports-the-four-motor-bench-state__host__01",
+  "recorded_at_utc": "2026-11-03T22:19:04Z",
+  "board": null,
+  "revision": "aab071eb3bf451e62df0dd029d264df5528dfc05",
+  "working_tree": "clean",
+  "modules": {
+    "crates/ferrowasp-stm32-critical/src/timer_dma.rs": []
+  },
+  "identities": {
+    "crates/ferrowasp-stm32-critical/src/timer_dma.rs": "995fa319e0c47222c78d2c4bb9f322de8485d6e7cba31930efed5c9f113c9bcc"
+  },
+  "results": [
+    {
+      "requirement": "HW-DSHOT-001",
+      "method": {
+        "test": "ferrowasp_stm32_critical::timer_dma::tests::dshot_feature_reports_the_four_motor_bench_state"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "e1d61765b47f819da931931b8fe8acf51486c97acb19d20e46402aba7ded3713",
+      "exercised": [
+        "crates/ferrowasp-stm32-critical/src/timer_dma.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": "Run by hand with --features dshot: reqtool test runs default features only.",
+  "supersedes": [],
+  "ruling": null
+}

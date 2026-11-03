@@ -49,18 +49,21 @@ implementation's test module is the link.
 whitespace and comments, doc comments included. Reformatting or documenting a
 file leaves its evidence standing.
 
-**What evidence covers.** Evidence for a module covers its own identity and
-the identity of each thing it imports directly:
+**What evidence covers.** A car has its own requirements and sets requirements
+on its parts. A first pass verifies the car; later, wheels that fulfil the wheel
+requirements can replace the old ones without reverifying the car. So evidence
+for a module covers its own identity and the pinned version of each external
+crate it imports:
 
-- another module: that module's identity;
-- an external crate: its pinned version.
-
-Nothing propagates past that one level. When a module that A imports
-changes, A's evidence goes stale; what that module itself imports does not
-matter to A, because the imported module's own evidence re-proves it. A
-change to an import that only A uses re-owes only A. A module that imports a
-third-party crate is that crate's verification boundary: bumping the version
-re-owes the modules that import it, and nothing else.
+- another module is a part with its own evidence, and is not covered. When a
+  module that A imports changes, that module is owed again and A is not;
+- changing what a requirement sets on the layers below re-owes that requirement,
+  since the requirements are the interface between them;
+- an external crate is a verification boundary: bumping its version re-owes the
+  modules that import it, and nothing else, until a maintainer has reviewed a diff
+  analysis or the modules are reverified. Contributors may do that analysis;
+- the compiler is not covered. Differences between compiler versions are
+  negligible outside safety assurance, which FerroWasp does not claim.
 
 **What an import is.** A `use` declaration or a path in the file, resolved to
 the file that defines what it names, or to an external crate at its locked
@@ -80,16 +83,18 @@ other safety-critical modules and external crates pinned to one version
 imports, declares at least one requirement. `reqtool` checks both for each
 file, at the `analysis` level.
 
-**Configurations.** A firmware image is a collection of module identities. A
-configuration is identified by:
+**Configurations.** Board evidence follows the configuration, not the exact
+image: which car this is, not the state of each part. A configuration is
+identified by:
 
-- the source files compiled into it, read from the compiler's dep-info, and
-  the files its build scripts rerun on, such as the linker's memory map;
+- which source files are compiled into it, by path, read from the compiler's
+  dep-info, and the content of what assembles them: the app's own source and
+  every file that is not Rust source, including those its build scripts rerun on,
+  such as the linker's memory map;
 - the environment variables the compiler read, other than those a build
   script sets, such as the git revision;
 - its Cargo feature set;
 - the versions of its external crates;
-- the Rust toolchain;
 - its RTIC scheduling table: each task's priority and binding, with task
   names excluded, so renaming a task in the app shell changes nothing. Until
   the `app!` parser exists, the app shell's whole source stands in for the
@@ -108,9 +113,15 @@ it claims, with their text, the identity of every module and the external
 versions in the configuration it ran in, and the result. Editing a
 requirement's statement or verification makes its evidence stale: the claim
 changed, so the old run no longer proves it. A unit run counts for any
-configuration where the module and its direct imports have the recorded
-identities. An integration run counts for any configuration whose identities
-all match those it recorded.
+configuration where the module and its external crates have the recorded
+identities. An integration run counts while its configuration's identity is the
+one recorded and the files that declare the requirement are unchanged.
+
+**Which files a requirement's host evidence covers.** No one test has to reach
+every file that declares its requirement. Host evidence stands when each
+declaring file a host test build compiles is exercised by at least one of the
+requirement's passing tests. A declaring file that build does not compile, such
+as a task definition, is judged by target-level evidence alone.
 
 **Maturity per configuration.** For each configuration, `reqtool` reports
 every requirement declared by its compiled-in safety-critical modules as

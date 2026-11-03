@@ -62,6 +62,7 @@ tasks = [
 imu_transport_rtt = []
 imu_orientation_rtt = ["imu_transport_rtt"]
 bench_blackbox = []
+bench_config_fault = []
 
 [dev-dependencies]
 critical-section = { workspace = true, features = ["std"] }

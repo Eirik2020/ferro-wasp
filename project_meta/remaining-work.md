@@ -56,9 +56,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   the rate-command and controller-reset changes are flight-verified, keeping
   the safety and actuator boundary.
 - **ADC after a DMA error.** `dma_adc1` logs a DMA fault and returns without
-  restarting the transfer, so battery voltage freezes at its last value with
-  no fault raised. It was seen frozen on the Foxeer's bidirectional DShot
-  bench image. The fix (restart, or a stale-voltage fault) is a user decision.
+  restarting the transfer, so battery voltage freezes at its last value; the
+  OSD and the USB status line mark it stale. It was seen frozen on the Foxeer's
+  bidirectional DShot bench image. Two things are decided and not built: restart
+  the transfer, in the FerroHAL port, and raise a stale-voltage fault through
+  the Health Manager.
 - **Battery current** reads a constant 0.1 A on Foxeer. The firmware matches
   Betaflight's FOXEERF405V2 target (PC1, scale 70, offset 0), so the sense
   wiring is next; current is not a safety input until calibrated.
@@ -94,8 +96,10 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   a configuration's scheduling table leaves task names out, and the other
   analysis-level checks can run.
 - **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file)):
-  library catalogs (requirements and tests shipped with a crate's version,
-  and a project mapping its requirements onto them); `reqtool report` for
+  library catalogs, named by crate (`ferrohal-stm32:UART-012`): requirements
+  and evidence shipped with a crate's version, a project's requirements mapped
+  onto them and inheriting that evidence; recording a dependency's reviewed diff
+  analysis; `reqtool report` for
   each board's configuration in release CI, reporting and not blocking;
   tests for TRACE-001 to TRACE-007 named as their methods; reviewing the
   requirements that existed only for mandatory linking; and folding crates
@@ -155,9 +159,14 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   test; a `bench_blackbox` run needs the BOOT button to leave.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
-- **TBS Lucid H7.** The bench board is dead. A replacement sold now may be V3
-  (ArduPilot TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1), which
-  needs a board variant.
+- **TBS Lucid H7.** The first bench board died and has been replaced, and an ESC
+  bought for it; FerroWasp has not run on the replacement. A V3 (ArduPilot
+  TBS_LUCID_H7V3: motors on TIM2/TIM5, RC on UART4, no USART1) would need a board
+  variant.
+- **No probe on the flight boards.** `tools/usb_bench.py` covers what USB can
+  show. The first second of a boot, the motor pins and arming-refusal reasons need
+  SWD and RTT, so the BOOT requirements' `target` entries stay open until there is
+  one.
 - **Configurator flashing.** The GUI's Firmware tab and Reboot
   button have run only against the browser mock, not a desktop build on a
   board. Deferred with the Lucid: the H743's jump address (`0x1FF09800`, from

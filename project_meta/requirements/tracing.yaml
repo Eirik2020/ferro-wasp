@@ -37,27 +37,65 @@ requirements:
       entries: []
 
   - id: TRACE-004
-    title: Evidence covers a module and its direct imports
+    title: Evidence covers a file and its pinned crates
     statement: >-
-      Evidence for a source file shall stand exactly while the file's
-      identity and the identity of each file or external crate version it
-      directly imports are unchanged.
+      Evidence for a source file shall stand exactly while the file's identity
+      and the version of each external crate it directly imports are unchanged.
     rationale: >-
-      A change re-owes only evidence for code that can observe it, so a fix
-      in one module does not reopen the whole image (W7).
+      A part that fulfils the same requirements owes only its own evidence, so a
+      fix in one module does not reopen the modules above it (W7).
     derived_from: [W7]
     verification:
       entries: []
 
-  - id: TRACE-005
-    title: A configuration's identity includes its scheduling
+  - id: TRACE-009
+    title: Changing what a requirement sets re-owes it
     statement: >-
-      A configuration's identity shall consist of its compiled-in source
-      files, its feature set, its external crate versions, its toolchain and
-      each task's priority and binding, excluding task names.
+      A requirement's evidence shall go stale when the statement of a requirement
+      derived from it changes.
     rationale: >-
-      Timing faults come from scheduling as well as from code, so evidence
-      for a configuration must notice a priority or binding change (W7).
+      The requirements a layer sets are its interface to the layer below, so
+      changing that interface is the one change that climbs upward (W7).
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-010
+    title: Evidence does not depend on the compiler
+    statement: >-
+      Evidence shall not depend on the compiler version.
+    rationale: >-
+      Differences between compiler versions are negligible outside safety
+      assurance, which this project does not claim, and a compiler bump must not
+      reopen everything.
+    derived_from: [W7]
+    verification:
+      entries: []
+
+  - id: TRACE-008
+    title: Host evidence covers every file a host test can reach
+    statement: >-
+      A requirement's host evidence shall stand only while each declaring file
+      a host test build compiles is exercised by at least one of its passing
+      tests.
+    rationale: >-
+      One test rarely reaches every file that implements a requirement, and a
+      task definition cannot be reached from the host at all, so target-level
+      evidence judges those files (W7).
+    derived_from: [W7, TRACE-004]
+    verification:
+      entries: []
+
+  - id: TRACE-005
+    title: A configuration's identity is which car it is
+    statement: >-
+      A configuration's identity shall consist of the paths of its compiled-in
+      source files, the content of its app shell and of its files that are not
+      Rust source, its feature set and its external crate versions.
+    rationale: >-
+      Timing faults come from scheduling as well as from code, so evidence for a
+      configuration must notice a priority or binding change, and the shell holds
+      them; a part's content has its own evidence (W7).
     derived_from: [W7]
     verification:
       entries: []
@@ -76,14 +114,13 @@ requirements:
       entries: []
 
   - id: TRACE-007
-    title: Integration evidence counts for identical configurations
+    title: Board evidence follows the configuration and its own parts
     statement: >-
-      Evidence from a run that records the identity of every source file in
-      its configuration shall count for any configuration whose identities
-      all match.
+      Board evidence shall count while its configuration's identity is the one
+      recorded and the files declaring its requirement are unchanged.
     rationale: >-
-      An integration run proves the whole that ran, and an identical whole
-      needs no new run (W7).
+      A run proves the car that ran; replacing a part owes that part's evidence,
+      not the whole car's (W7).
     derived_from: [W7]
     verification:
       entries: []

@@ -70,10 +70,12 @@ def suites() -> list[Suite]:
             "rust-features",
             "tests a workspace-wide run compiles out: the H7 backend turns on "
             "ferrowasp-stm32/dshot, replacing its non-DShot timer DMA test, and "
-            "nothing in the workspace turns on mspv2_configurator's RPC test",
+            "nothing in the workspace turns on mspv2_configurator's RPC test or "
+            "bench_config_fault's",
             [
                 Step([*host_test, "-p", "ferrowasp-stm32"]),
                 Step([*host_test, "-p", "ferrowasp-cli", "--features", "mspv2_configurator"]),
+                Step([*host_test, "-p", "ferrowasp-cli", "--features", "bench_config_fault"]),
             ],
         ),
         Suite(
@@ -88,9 +90,26 @@ def suites() -> list[Suite]:
         ),
         Suite(
             "reqtool",
-            "the requirements tool, its own workspace, including a check that "
-            "every requirement file in the repository is valid",
-            [Step(["cargo", "test", "--locked"], "tools/reqtool")],
+            "installs reqtool at its pinned revision, and checks every requirement "
+            "file and the FAQ",
+            [
+                Step(
+                    [
+                        "cargo",
+                        "install",
+                        "--locked",
+                        "--git",
+                        "https://github.com/Eirik2020/reqtool",
+                        "--rev",
+                        (ROOT / "tools/reqtool/revision").read_text().strip(),
+                        "--root",
+                        ".",
+                    ],
+                    "tools/reqtool",
+                ),
+                Step(["tools/reqtool/bin/reqtool", "validate"], "."),
+                Step([sys.executable, "tools/check_faq.py"], "."),
+            ],
         ),
         Suite(
             "gui",

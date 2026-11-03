@@ -15,7 +15,7 @@ gates:
     includes: [mcu-session]
     requires:
       - requirements: ["BOOT-*", "CONFIG-*"]
-        levels: [mcu]
+        levels: [target]
 
   - name: preflight
     description: >-
@@ -40,4 +40,4 @@ gates:
           - LOG-001
           - LOG-002
           - LOG-003
-        levels: [bench]
+        levels: [system]

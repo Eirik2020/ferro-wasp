@@ -4,7 +4,7 @@ This directory is the entry point for verifying FerroWasp: choosing what to
 test, running it, and recording the evidence. Start here when the user asks to
 test firmware, prepare a target, run a bench procedure, or perform a flight.
 
-The design is [the requirements design](../requirements/design.md); the tool is `tools/reqtool`, described in its README.
+The design is [the requirements design](../requirements/design.md); the tool is `reqtool`, pinned in [`tools/reqtool`](../../tools/reqtool/README.md).
 
 ## Requirements, Procedures and Evidence
 
@@ -16,12 +16,15 @@ Procedure   = how a person verifies it on hardware                 project_meta/
 Evidence    = what a run showed, on which code, with what result   project_meta/testing/evidence/runs/
 ```
 
-Each requirement lists its verification entries: a level, a target, a setup
-and a method, which is a host test or a procedure (`path#heading`). Status is
+Each requirement lists its verification entries: a level, an environment, any
+hazard and preconditions, and a method, which is a host test or a procedure (`path#heading`). Status is
 computed by `reqtool` from the evidence records and identities derived from
-the code; nobody writes it. A host pass stands while the files it exercised
-and their direct imports are unchanged, a board pass while its
-configuration is, and either goes `stale` when what it covered changes.
+the code; nobody writes it. A host pass stands while the file it covers and its
+pinned crates are unchanged, a board pass while its configuration and the
+files declaring its requirement are, and either goes `stale` when what it covered
+changes. The compiler is not part of this. Each
+host-buildable file that declares a requirement needs one of its passing tests
+to exercise it; a target-only file is judged at `target` or `system` level.
 
 A procedure owns its own steps, stop conditions and required evidence.
 Dated results, image hashes, logs, measurements and operator observations
@@ -34,10 +37,10 @@ Verification moves from lower-risk evidence toward flight:
 1. `analysis` — tool checks on source and images: the image builds, and
    repository rules hold;
 2. `unit` — host tests, including conformance suites;
-3. `sitl` — software in the loop, once a harness exists;
-4. `mcu` — on the flight controller, nothing actuating;
-5. `bench` — the full drone, ESCs powered, propellers removed;
-6. `flight` — in flight.
+3. `simulation` — software in the loop, once a harness exists;
+4. `target` — on the flight controller, nothing actuating;
+5. `system` — the full drone, ESCs powered, propellers removed;
+6. `field` — in flight.
 
 Host evidence does not establish target behaviour; props-off evidence does not
 establish flight readiness (W7).
@@ -82,17 +85,18 @@ When the user requests bench or flight testing:
 5. record the run (below).
 
 Who may run what on hardware is set by the Operating Rules in the root
-`AGENTS.md`: an agent may run `mcu` procedures while disarmed with nothing
-actuating; `bench` and `flight` procedures, and every physical step such as a
-power cycle, are the user's.
+`AGENTS.md`: an agent may run `target` procedures while disarmed with nothing
+actuating; `system` and `field` procedures, whose entries state a hazard, and every
+physical step such as a power cycle, are the user's.
 
 ## Recording Results
 
 - Host tests: `reqtool test` runs the tests requirements name and records
   the session; a test that fails or does not run is never recorded as a pass.
 - The boot and idle gate and the Foxeer USB configuration gate record
-  themselves: `tools/bench_rig.py boot-idle` and
-  `tools/foxeer_bench_gates.py usb-config` hand their run to `reqtool record`.
+  themselves: `tools/bench_rig.py boot-idle`,
+  `tools/foxeer_bench_gates.py usb-config` and `tools/usb_bench.py session` hand
+  their run to `reqtool record`.
 - Any other procedure: `reqtool record --procedure <path#heading> --board
   <board> --result pass|fail --details <file>`, where the details file says
   who ran it, on which image, in what conditions, with which artifacts and
@@ -110,7 +114,7 @@ to every test. In addition:
 - powered and flight tests fail closed when their target, image, feature set,
   prerequisites, or evidence capture cannot be established;
 - stop conditions take priority over test completion or evidence collection;
-- host, mcu, bench and flight evidence are reported as distinct levels.
+- host, target, system and field evidence are reported as distinct levels.
 
 ## Adding a Test
 

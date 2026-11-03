@@ -13,13 +13,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::packet_crc_matches_known_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::bidirectional_packets_invert_only_the_checksum
 
@@ -36,28 +34,23 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::bidirectional_packet_set_keeps_lane_order_and_telemetry_lane
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::four_motor_packet_set_requests_exactly_one_selected_lane
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::out_of_range_telemetry_lane_requests_none
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::unequal_bench_commands_have_distinct_expected_wire_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::mixed_control_vector_preserves_physical_lane_order
 
@@ -74,18 +67,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::encoder_emits_duty_slots_and_reset_tail
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::encoder_accepts_the_full_u16_timer_range_without_overflow
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::compare_sequence_stages_first_bit_and_terminating_zero
 
@@ -102,13 +92,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::dshot600_timing_matches_tim1_at_168_mhz
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::timing_rejects_invalid_clock_inputs
 
@@ -124,8 +112,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::throttle_mapping_is_bounded
 
@@ -143,23 +130,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::command_lease_expires_after_the_inclusive_deadline
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::command_lease_expiry_holds_past_the_old_u32_rollover
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::a_reading_before_the_lease_started_counts_as_expired
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::periodically_renewed_command_lease_covers_a_long_guarded_hold
 
@@ -176,8 +159,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::direction_sequence_sends_each_command_ten_times_then_stops
 
@@ -193,8 +175,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot::tests::direction_commands_are_not_throttle_values
 
@@ -211,18 +192,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::every_value_survives_the_wire_at_the_nominal_rate
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::every_value_survives_a_tenth_fast_or_slow_esc_clock
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::a_sampled_reply_decodes_end_to_end
 
@@ -240,33 +218,27 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::an_idle_line_or_a_short_buffer_is_no_reply
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::a_line_held_low_is_no_reply
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::a_reply_starting_too_late_in_the_buffer_is_no_reply
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::extra_edges_after_a_reply_are_overlong
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::a_wrong_checksum_is_rejected
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::a_code_that_is_not_a_symbol_is_rejected
 
@@ -284,23 +256,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::erpm_values_decode_from_their_period
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::without_extended_telemetry_every_value_is_erpm
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::extended_telemetry_values_decode_by_type
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::with_extended_telemetry_odd_and_zero_types_stay_erpm
 
@@ -317,8 +285,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::the_edt_acknowledgement_is_recognised_only_before_edt_is_on
 
@@ -334,7 +301,6 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_output::dshot_reply::tests::random_lines_never_panic_and_rarely_pass_the_checksum

@@ -13,13 +13,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::serial::tests::a_received_chunk_keeps_its_bytes_arrival_and_continuity
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::serial::tests::the_stream_generation_advances_and_wraps
 
@@ -36,8 +34,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::serial::tests::a_received_chunk_keeps_its_bytes_arrival_and_continuity
 
@@ -54,13 +51,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::serial::tests::an_empty_or_oversized_chunk_is_refused
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::serial::tests::a_transmitted_chunk_round_trips
 
@@ -76,8 +71,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::serial::tests::serial_faults_map_to_embedded_io_kinds
 
@@ -94,13 +88,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::time::tests::wrapping_counter_extends_monotonic_ticks
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::time::tests::wrapping_counter_tracks_large_32_bit_period
 
@@ -117,8 +109,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::time::tests::a_deadline_expires_at_its_timeout_and_saturates
 
@@ -136,8 +127,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::link::tests::a_full_link_refuses_the_new_message_and_keeps_the_queued_ones
 
@@ -156,13 +146,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::link::tests::a_refused_message_leaves_a_gap_in_the_sequence
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::link::tests::the_sequence_skips_zero_when_it_wraps
 
@@ -179,8 +167,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::link::tests::forward_keeps_the_upstream_stamp
 
@@ -199,8 +186,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_io_contracts::link::tests::newest_drains_to_the_latest_and_empty_means_nothing_new
 

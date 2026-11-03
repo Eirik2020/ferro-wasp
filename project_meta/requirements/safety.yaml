@@ -13,13 +13,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
+          method:
+            test: ferrowasp_safety::actuator::tests::a_published_command_carries_the_next_sequence_and_wakes_the_actuator
+        - level: unit
+          environment: host
           method:
             test: ferrowasp_safety::tests::motor_command_freshness_holds_past_the_old_u32_wrap
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::motor_command_from_the_future_is_stale
 
@@ -35,13 +37,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::motor_command_reader_takes_latest_and_drops_stale_queue_entries
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::motor_command_reader_rejects_missing_and_expired_latest_commands
 
@@ -58,23 +58,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::active_motor_output_validation_floors_and_clamps_finite_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::active_motor_output_validation_rejects_non_finite_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::active_motor_output_validation_accepts_a_protocol_specific_idle
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::active_motor_output_validation_rejects_invalid_idle_configuration
 
@@ -90,18 +86,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::actuator::tests::a_published_command_carries_the_next_sequence_and_wakes_the_actuator
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::actuator::tests::a_full_queue_publishes_nothing_and_keeps_the_sequence
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::actuator::tests::a_rejected_wake_is_reported_after_the_command_is_queued
 
@@ -118,8 +111,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::bench_motor_requests_are_refused_unless_disarmed_and_idle
 
@@ -135,8 +127,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::bench_stop_never_reaches_an_armed_aircraft
 
@@ -152,8 +143,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::a_recent_bench_request_blocks_arming_then_expires
 
@@ -168,8 +158,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::prearm_health_requires_ready_calibrated_fresh_imu
 
@@ -184,8 +173,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::one_stale_tick_is_tolerated_and_two_in_a_row_are_not
 
@@ -201,8 +189,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
 
@@ -217,8 +204,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
 
@@ -235,18 +221,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::prearm::tests::no_status_before_the_first_arrives
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::prearm::tests::the_newest_status_stands_until_it_is_too_old
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::prearm::tests::no_status_refuses_arming_and_a_status_gives_its_health
 
@@ -264,13 +247,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::prearm::tests::no_status_refuses_arming_and_a_status_gives_its_health
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::prearm::tests::each_status_field_maps_to_its_refusal
 
@@ -288,18 +269,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::host::tests::no_lease_means_no_host
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::host::tests::a_lease_stands_until_its_length_and_renewal_extends_it
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::each_flag_writer_is_seen_by_its_readers
 
@@ -316,7 +294,6 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::a_reboot_is_allowed_only_disarmed_and_not_arming

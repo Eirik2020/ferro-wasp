@@ -11,13 +11,14 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -33,13 +34,14 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -55,23 +57,26 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
+          method:
+            test: ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_up_rate_maps_negative_for_the_golden_controller
+        - level: unit
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -87,28 +92,26 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_board_foxeer_f405_v2::profiles::tests::imu_frame_profile_matches_the_measured_foxeer_orientation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_up_rate_maps_negative_for_the_golden_controller
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_board_foxeer_f405_v2::profiles::tests::measured_nose_down_rate_maps_positive_for_the_golden_controller
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -125,13 +128,14 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds
-        - level: flight
-          target: fcu
-          setup: none
+        - level: field
+          environment: product
+          hazard: personnel
+          preconditions:
+            propellers: installed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test
 
@@ -151,68 +155,55 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::proportional_output_tracks_error
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::total_output_is_clamped_symmetrically
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::integral_accumulates_and_respects_limit
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::integral_scales_with_dt_seconds
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::anti_windup_freezes_integral_when_output_is_saturated
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::anti_windup_allows_integral_to_unwind
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::derivative_is_zero_until_previous_error_exists
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::derivative_uses_measurement_not_setpoint
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::feedforward_tracks_setpoint_rate
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::i_term_relax_freezes_growth_during_fast_setpoint_changes
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::derivative_filter_smooths_d_term
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::reset_clears_derivative_history
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::pid::tests::non_finite_values_do_not_escape_to_output
 
@@ -228,23 +219,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::identity_preserves_axes
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::signed_axis_permutation_maps_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::composition_applies_second_rotation_after_first
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::imu_profile_composes_board_and_controller_frames
 
@@ -260,18 +247,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::body_frame_names_the_control_convention
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::controller_compatibility_only_inverts_physical_pitch_rate
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::frames::tests::imu_profile_composes_board_and_controller_frames
 
@@ -290,13 +274,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::filter::tests::low_pass_filter_initializes_to_first_sample_then_smooths
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::filter::tests::imu_rate_filter_tracks_axes_independently
 
@@ -314,8 +296,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::the_default_corner_survives_the_current_loop_rate
 
@@ -333,8 +314,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::filter::tests::a_non_finite_or_non_positive_corner_or_rate_gives_no_filtering
 
@@ -352,13 +332,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::each_harmonic_of_the_motor_is_notched
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::stick_frequencies_pass_through
 
@@ -375,8 +353,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::attitude::tests::gyro_integrator_accumulates_rates_and_uses_accel_correction
 
@@ -392,8 +369,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::attitude::tests::accelerometer_roll_pitch_have_expected_static_orientations
 
@@ -423,13 +399,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::calibration::tests::gyro_bias_calibrator_resets_on_motion_and_subtracts_bias
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::calibration::tests::stale_samples_do_not_advance_gyro_bias_calibration
 
@@ -445,13 +419,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::calibration::accel_level::tests::a_still_board_mounted_slightly_off_is_corrected_to_level
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::calibration::accel_level::tests::movement_tilt_and_a_wrong_scale_are_refused
 
@@ -466,8 +438,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_control::calibration::accel_level::tests::stored_offsets_are_bounded
 
@@ -483,18 +454,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::actual_rates_keep_center_sensitivity_and_max_rate_independent
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::rc_mapping_clamps_deadbands_and_uses_axis_profiles
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::runtime_rc_profile_changes_deadband_sensitivity_and_axis_limits
 
@@ -510,28 +478,23 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::gyro_axis_map_preserves_current_control_convention
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::first_hop_profile_disables_integral_during_p_only_tuning
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::pid_zero_error_keeps_all_motors_at_throttle
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::pid_contributions_are_exposed_per_axis
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::feedforward_and_blackbox_sample_track_rate_setpoint_changes
 
@@ -547,23 +510,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::pid_roll_correction_mixes_to_opposite_motor_pairs
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_up_pitch_rate_commands_rear_motors_up
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::measured_nose_down_pitch_rate_commands_front_motors_up
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::mixer_rescales_axes_to_preserve_actuator_bounds
 
@@ -579,18 +538,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::rc_stick_commands_drive_expected_physical_motor_pairs
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::motor_output_map_matches_measured_bench_order
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::dshot_unequal_bench_pattern_is_bounded_remapped_and_triggered
 
@@ -606,8 +562,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::reset_control_state_clears_pid_history_setpoints_and_outputs
 
@@ -623,13 +578,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::the_divider_check_rejects_an_inexact_pair
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::the_default_corner_survives_the_current_loop_rate
 
@@ -644,18 +597,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::off_by_default
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::invalid_settings_are_refused
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::reset_starts_over
 
@@ -672,28 +622,23 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::gains_scale_as_betaflights
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::the_loop_brings_the_slowest_motor_to_its_target
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::motors_above_target_need_no_increase
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::the_i_term_rises_fast_and_falls_slowly
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::a_falling_motor_speed_pushes_through_the_d_term
 
@@ -709,13 +654,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::before_throttle_is_raised_the_floor_stops_at_static_idle
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::after_throttle_is_raised_the_floor_stops_at_the_maximum
 
@@ -733,23 +676,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::stale_erpm_holds_the_increase_without_integrating
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::stale_erpm_then_decays_the_increase_to_static_idle
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::stale_erpm_never_winds_the_floor_up_from_below_static_idle_past_it
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::dynamic_idle::tests::fresh_erpm_resumes_from_where_the_decay_left_off
 
@@ -765,13 +704,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::defaults_are_betaflights_and_valid
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::invalid_settings_are_refused
 
@@ -787,18 +724,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::erpm_becomes_mechanical_hertz_through_the_pole_pairs
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::motor_frequency_is_smoothed_by_a_150_hz_pt1
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::a_held_erpm_holds_the_frequency
 
@@ -814,23 +748,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::with_no_harmonics_the_gyro_passes_unchanged
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::each_harmonic_of_the_motor_is_notched
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::stick_frequencies_pass_through
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::the_settled_motor_frequency_notches_its_own_noise
 
@@ -846,18 +776,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::notches_below_the_minimum_fade_out
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::notches_are_half_deep_halfway_through_the_fade
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::notches_stop_short_of_nyquist
 
@@ -873,13 +800,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::every_notch_is_refreshed_within_a_millisecond
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::rpm_filter::tests::a_zero_weight_harmonic_is_neither_refreshed_nor_applied
 

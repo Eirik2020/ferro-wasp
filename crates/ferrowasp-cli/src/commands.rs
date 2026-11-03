@@ -156,6 +156,20 @@ pub enum StorageCommand {
     ImuCalibrate,
     /// Show the stored accelerometer level offsets.
     ImuLevel,
+    /// Bench image only: break the saved configuration, so a test can see
+    /// the next boot fall back.
+    #[cfg(feature = "bench_config_fault")]
+    BenchConfigFault(BenchConfigFault),
+}
+
+/// How a bench image breaks the saved configuration.
+#[cfg(feature = "bench_config_fault")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BenchConfigFault {
+    /// Tear the slot in use, so its page is no longer whole.
+    Damage,
+    /// Save a whole page holding a value outside its range.
+    Invalid,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -320,6 +334,19 @@ pub fn parse_command(line: &str) -> Result<StorageCommand, CommandParseError> {
             (Some("ack"), None) => Ok(StorageCommand::ConfigFallbackAck),
             _ => Err(CommandParseError::InvalidArgument),
         },
+        #[cfg(feature = "bench_config_fault")]
+        (Some("bench"), Some(fault @ ("damage-config" | "invalid-config"))) => {
+            match (words.next(), words.next()) {
+                (Some("CONFIRM"), None) => Ok(StorageCommand::BenchConfigFault(
+                    if fault == "damage-config" {
+                        BenchConfigFault::Damage
+                    } else {
+                        BenchConfigFault::Invalid
+                    },
+                )),
+                _ => Err(CommandParseError::ConfirmationRequired),
+            }
+        }
         (Some("serial"), None) => Ok(StorageCommand::SerialShow),
         (Some("live"), None) => Ok(StorageCommand::Live),
         (Some("rc"), None) => Ok(StorageCommand::Rc),

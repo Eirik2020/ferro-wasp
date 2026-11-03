@@ -127,6 +127,12 @@ pub fn prearm_checks(
             "Running on USB power only. Connect a battery: arming waits for all four ESCs to report idle.",
         ),
         check(
+            "battery_fresh",
+            "Battery reading updating",
+            status.battery_stale.map(|stale| !stale),
+            "The battery reading stopped, so the voltage shown is old. Power-cycle; if it repeats, the board needs checking.",
+        ),
+        check(
             "esc_idle",
             "ESCs report idle",
             None,
@@ -152,6 +158,7 @@ mod tests {
             arm_switch: false,
             armed: false,
             battery_decivolts: 168,
+            battery_stale: Some(false),
             imu_stale: Some(false),
             channels: None,
         }
@@ -188,6 +195,7 @@ mod tests {
                 "gyro_calibrated",
                 "imu_fresh",
                 "battery",
+                "battery_fresh",
                 "esc_idle",
             ]
         );

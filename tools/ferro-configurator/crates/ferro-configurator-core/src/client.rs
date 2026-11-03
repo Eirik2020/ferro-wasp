@@ -36,6 +36,9 @@ pub struct StatusSnapshot {
     pub arm_switch: bool,
     pub armed: bool,
     pub battery_decivolts: u32,
+    /// The firmware says the battery reading has stopped updating; `None`
+    /// from firmware that predates the field.
+    pub battery_stale: Option<bool>,
     /// Whether the IMU stream has gone stale. `None` on firmware that does
     /// not report it.
     pub imu_stale: Option<bool>,
@@ -1185,6 +1188,7 @@ fn parse_status(line: &str) -> Option<StatusSnapshot> {
         arm_switch: boolean("arm_sw")?,
         armed: boolean("armed")?,
         battery_decivolts: get("vbat_dV")?.parse().ok()?,
+        battery_stale: boolean("vbat_stale"),
         imu_stale: boolean("stale"),
         channels: get("ch").and_then(|v| v.split(',').map(|c| c.parse().ok()).collect()),
     })

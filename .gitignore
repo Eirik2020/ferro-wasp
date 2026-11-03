@@ -46,3 +46,6 @@ __pycache__/
 *.uf2
 *.map
 *.dmp
+/tools/reqtool/bin
+/tools/reqtool/.crates.toml
+/tools/reqtool/.crates2.json

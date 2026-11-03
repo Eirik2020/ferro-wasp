@@ -69,11 +69,10 @@ existence.
   Evidence records stay JSON, since only the tool writes them.
 - A method is `test: <crate-qualified path>` (a `#[test]` function, found by
   parsing) or `procedure: <path>#<heading>` (a Markdown heading that must
-  exist). Each level fixes its target and setup: `analysis` and `unit` run on
-  the host with no setup, `sitl` on the host in simulation, `mcu` on the FCU
-  or a devboard with no setup, `bench` on the FCU or a devboard props-off, and
-  `flight` on the FCU. `unit` takes a test; `mcu`, `bench` and `flight` take a
-  procedure.
+  exist). Each level fixes its environment: `analysis`, `unit` and `simulation`
+  run on the host, `target` and `system` on the product or a development board,
+  and `field` on the product. `unit` takes a test; `target`, `system` and `field`
+  take a procedure. An entry with a hazard states its preconditions.
 
 **What requirement text holds.** A requirement says what must hold and why
 it matters, nothing else:
@@ -88,8 +87,8 @@ A statement that needs two "shall" is two requirements. Where the rest goes:
 the current structure in the spec section that owns the topic; why a
 tempting alternative lost in [the FAQ](../faq.md); what is left in
 remaining work; results in the evidence records; who decided, and when, in
-git and the PR. `reqtool validate` lints requirement text and the FAQ
-against these rules and fails on any finding.
+git and the PR. `reqtool validate` lints requirement text, and
+`tools/check_faq.py` the FAQ, against these rules; either fails on any finding.
 
 The governance Markdown mirrors a requirement as prose: header, "shall"
 statement, rationale, verification method, derived-from. A requirement:
@@ -106,8 +105,7 @@ derived_from: [INPUT-001]
 verification:
   entries:
     - level: unit
-      target: host
-      setup: none
+      environment: host
       method:
         test: ferrowasp_safety::tests::rc_link_timeout_holds_past_the_old_u32_wrap_and_forces_requalification
 ```
@@ -137,31 +135,29 @@ implements, in its module doc comment:
 - A record is one run of one method. It carries a result for every
   requirement entry that names that method, each with its own claim and
   coverage, so one run can pass one requirement and fail another. An entry is identified by
-  requirement, level, target, setup and method, not by its position in the
+  requirement, level, environment, hazard, preconditions and method, not by its position in the
   file.
 - A record also carries the git revision and whether tracked files had
   uncommitted changes; its identities cover the files as they were, so a
   dirty run is still exact.
 - Coverage is derived as section 20 describes: host evidence from the files a
-  run exercised and their direct imports, with the toolchain; board evidence
+  run exercised and their pinned crates; board evidence
   from the configuration `cargo check` reports for the board and its
   features.
 - A procedure contributes the text of its own section, so editing another
   section of the same file leaves the evidence standing.
 - Board evidence is reported per board, and an entry takes the worst board
   that has evidence, until gates name the boards they require.
-- `reqtool` reads only schema 4 records. Each schema 3 record was derived
-  into a schema 4 one at its own revision, named `__retraced`, which lists
-  what could not be derived; the schema 1, 2 and 3 records stay beside them
-  untouched.
+- `reqtool` reads only schema 5 records. Earlier records stay beside them
+  untouched and are not read; schema 4 went when the level, target and setup names
+  became generic, and each entry's evidence is recorded again as it is reverified.
 - A record carries `details`, what each procedure's "Required evidence" asks
   for: execution, candidate image, conditions, commands, artifacts,
   measurements, observations, limitations and triggered stop conditions.
-  The old run-record validator's hardware rules apply to it, checked when
-  recording and when reading: no pass with a triggered stop condition; board
-  evidence user-confirmed, not agent-only, with the image's SHA-256 and a
-  known power and propeller state. Two rules follow from the setups: a
-  props-off pass needs propellers removed, a flight pass installed.
+  Its rules are checked when recording and when reading: no pass with a triggered
+  stop condition; evidence on hardware names who ran it and the image's SHA-256; an
+  entry with a hazard is run and confirmed by a person, never an agent alone; and a
+  pass shows each of its entry's preconditions held.
   Artifacts live under `logs/`; `reqtool` hashes them and re-checks the hash
   whenever the file is present.
 - `reqtool test` runs the host tests requirements name, per package in its

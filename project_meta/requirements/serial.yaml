@@ -14,23 +14,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::rc_input_takes_the_configured_protocol_and_crsf_needs_a_transmit_path
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::the_configurator_needs_a_port_that_carries_the_command_line_and_transmits
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::valid_bindings_resolve_to_their_profiles
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::slots_take_one_endpoint_per_function
 
@@ -47,8 +43,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::a_port_that_cannot_carry_the_protocol_is_dropped
 
@@ -64,8 +59,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::a_function_on_two_ports_is_on_neither
 
@@ -82,13 +76,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::bindings_round_trip_and_reject_unknown_functions
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::binding::tests::names_parse_back
 
@@ -105,8 +97,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::routing::tests::each_protocol_uses_its_line_settings
 
@@ -122,8 +113,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::routing::tests::only_protocols_that_answer_need_a_transmit_path
 
@@ -138,8 +128,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::routing::tests::a_port_refuses_what_its_wiring_cannot_carry
 
@@ -156,28 +145,23 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::owned_chunk_validates_and_copies_input
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::reads_split_one_owned_chunk_without_losing_bytes
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::one_read_does_not_treat_adjacent_chunks_as_one_frame
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::try_read_returns_queued_bytes_and_zero_when_empty
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::serial_reader_implements_workspace_async_read
 
@@ -193,13 +177,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::overflow_records_discontinuity_and_marks_next_chunk
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::discontinuity_wakes_a_waiting_reader_with_no_data
 
@@ -214,8 +196,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::dropping_pending_read_does_not_consume_future_data
 
@@ -230,8 +211,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::reader::tests::disabled_empty_stream_returns_structured_error
 
@@ -250,52 +230,42 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::write_copies_at_most_one_owned_chunk
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::write_all_splits_bytes_into_ordered_bounded_chunks
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::full_queue_write_waits_for_owner_capacity
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::flush_waits_for_queue_and_hardware_completion
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::irq_completion_wakes_owner_waiting_for_hardware
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::dropping_pending_write_does_not_enqueue_its_bytes
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::owner_fault_wakes_flush_and_clears_queued_chunks
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::owner_waiter_is_woken_when_writer_enqueues
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::empty_write_is_immediately_successful
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_serial::writer::tests::serial_writer_implements_workspace_async_write

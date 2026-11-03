@@ -92,7 +92,8 @@ can arm.
 Each flight board presents a USB CDC serial port. Every two seconds or so it
 sends a self-describing ASCII `FWDBG1` status line: the selected IMU, sample
 and control sequences, raw gyro, stale state, RC qualification, throttle and
-arm switch, arm state, pack voltage, and current.
+arm switch, arm state, pack voltage and whether that reading has gone stale, and
+current.
 
 The same port accepts a bounded ASCII command line, which FerroConfigurator
 drives: configuration get,
@@ -114,7 +115,8 @@ flies it; `config save` keeps it across a reboot. The RC protocol and port
 bindings are read only at boot, so a change to them waits for a save and a
 reboot. These commands, `imu level` and `imu calibrate` work while the
 flash is unavailable too; only keeping a change needs it, so `config save`
-then answers that storage is unavailable. `config fallback` reports whether the boot fell back from the saved
+then answers that storage is unavailable, and `reboot` and `reboot dfu` still
+work. `config fallback` reports whether the boot fell back from the saved
 configuration, and `config fallback ack` acknowledges it so the craft may arm
 (see [Arming](./arming.md#shared-arming-guards)).
 

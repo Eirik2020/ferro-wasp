@@ -4,7 +4,7 @@ use heapless::String;
 
 /// Bounds one status frame.
 ///
-/// The worst case - every numeric field at its extreme - is 270 bytes with the
+/// The worst case - every numeric field at its extreme - is 283 bytes with the
 /// terminator, which the test below pins. Only this crate's stack buffer is
 /// sized from it, so the headroom is cheap.
 pub const STATUS_LINE_CAPACITY: usize = 400;
@@ -50,6 +50,9 @@ pub struct StatusSnapshot {
     pub rc_arm_high: bool,
     pub system_armed: bool,
     pub battery_voltage_decivolts: u32,
+    /// The battery reading has stopped updating, so the values beside it are
+    /// its last ([`battery_stale`]).
+    pub battery_stale: bool,
     pub battery_current_centiamps: i32,
     pub adc_voltage_mv: u32,
     pub adc_current_mv: u32,
@@ -57,11 +60,22 @@ pub struct StatusSnapshot {
     pub rc_channels_us: [u16; 16],
 }
 
+/// How long the battery's topic may hold still before the status line calls
+/// its reading stale: twice its 10 Hz period, as the OSD allows.
+pub const BATTERY_STALE_US: u64 = 500_000;
+
+/// Whether the battery reading is stale: never published, or last published
+/// `age_us` ago, past the limit. It also catches an ADC that stopped after a
+/// DMA error, which would otherwise read as a steady voltage.
+pub const fn battery_stale(published: bool, age_us: u64) -> bool {
+    !published || age_us > BATTERY_STALE_US
+}
+
 pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPACITY>, fmt::Error> {
     let mut line = String::new();
     write!(
         line,
-        "FWDBG1 ms={} imu={} ready={} seq={} gyro={},{},{} stale={} ctl={} ctl_hz={} rc={} armable={} thr={} arm_sw={} armed={} vbat_dV={} current_cA={} adc_v_mV={} adc_i_mV={} ch=",
+        "FWDBG1 ms={} imu={} ready={} seq={} gyro={},{},{} stale={} ctl={} ctl_hz={} rc={} armable={} thr={} arm_sw={} armed={} vbat_dV={} vbat_stale={} current_cA={} adc_v_mV={} adc_i_mV={} ch=",
         snapshot.uptime_ms,
         snapshot.imu_kind.as_str(),
         u8::from(snapshot.imu_ready),
@@ -78,6 +92,7 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
         u8::from(snapshot.rc_arm_high),
         u8::from(snapshot.system_armed),
         snapshot.battery_voltage_decivolts,
+        u8::from(snapshot.battery_stale),
         snapshot.battery_current_centiamps,
         snapshot.adc_voltage_mv,
         snapshot.adc_current_mv,
@@ -258,6 +273,7 @@ mod tests {
             rc_arm_high: false,
             system_armed: false,
             battery_voltage_decivolts: 230,
+            battery_stale: false,
             battery_current_centiamps: -12,
             adc_voltage_mv: 2_091,
             adc_current_mv: 1_234,
@@ -268,12 +284,26 @@ mod tests {
     }
 
     #[test]
+    fn a_battery_reading_goes_stale_when_its_topic_holds_still() {
+        assert!(battery_stale(false, 0), "never published");
+        assert!(!battery_stale(true, BATTERY_STALE_US));
+        assert!(battery_stale(true, BATTERY_STALE_US + 1));
+        let mut snapshot = representative_snapshot();
+        snapshot.battery_stale = true;
+        assert!(
+            format_status(snapshot)
+                .unwrap()
+                .contains(" vbat_dV=230 vbat_stale=1 ")
+        );
+    }
+
+    #[test]
     fn status_frame_is_versioned_self_describing_ascii() {
         let line = format_status(representative_snapshot()).unwrap();
 
         assert_eq!(
             line.as_str(),
-            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988\r\n"
+            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 vbat_stale=0 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988\r\n"
         );
         assert!(line.is_ascii());
     }
@@ -310,6 +340,7 @@ mod tests {
             rc_arm_high: true,
             system_armed: true,
             battery_voltage_decivolts: u32::MAX,
+            battery_stale: true,
             battery_current_centiamps: i32::MIN,
             adc_voltage_mv: u32::MAX,
             adc_current_mv: u32::MAX,

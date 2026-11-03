@@ -11,9 +11,8 @@ requirements:
     derived_from: [W1, W7]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
 
@@ -28,9 +27,8 @@ requirements:
     derived_from: [W1, W7]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
 
@@ -45,13 +43,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
 
@@ -66,8 +62,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
 
@@ -82,9 +77,8 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
 
@@ -99,9 +93,8 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
 
@@ -117,8 +110,23 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+
+  - id: REBOOT-008
+    title: A board whose store failed can still restart
+    statement: >-
+      While the store is unavailable, the storage owner shall still pass a
+      disarmed USB reboot request to the safety master.
+    rationale: >-
+      A board that could not restart into its ROM bootloader would need its
+      BOOT button to be flashed, and a store that failed is when that matters.
+    derived_from: [REBOOT-001]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_cli::storage_commands::tests::a_board_whose_store_failed_can_still_reboot

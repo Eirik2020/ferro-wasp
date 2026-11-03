@@ -12,7 +12,6 @@ requirements:
     verification:
       entries:
         - level: analysis
-          target: host
-          setup: none
+          environment: host
           method:
             procedure: firmware/foxeer-f405-v2/README.md#Build

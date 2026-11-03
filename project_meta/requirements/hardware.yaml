@@ -14,38 +14,31 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::full_buffer_detaches_and_advances_generation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::idle_detaches_partial_buffer_and_suppresses_late_full_irq
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::empty_idle_does_not_advance_generation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::partial_idle_len_is_clamped_to_capacity
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::irq_plan::tests::no_flags_produce_no_action
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::irq_plan::tests::dma_full_is_delivered_before_idle_when_both_flags_are_seen
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::irq_plan::tests::idle_partial_delivery_records_received_length
 
@@ -63,33 +56,27 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::full_buffer_detaches_and_advances_generation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::idle_detaches_partial_buffer_and_suppresses_late_full_irq
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::full_irq_suppresses_late_idle_for_old_generation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::empty_idle_does_not_advance_generation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::rx_state::tests::abort_generation_suppresses_late_events_without_flipping_active_buffer
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::irq_plan::tests::dma_error_advances_generation_and_reports_fault
 
@@ -107,33 +94,27 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::one_transfer_has_one_terminal_completion
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::overlapping_transfer_is_rejected
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::stale_error_is_ignored_and_does_not_poison_next_transfer
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::fifo_error_is_recoverable_and_does_not_finish_transfer
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::fifo_flag_does_not_hide_simultaneous_completion
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::transfer_error_preempts_completion
 
@@ -148,9 +129,11 @@ requirements:
     derived_from: [W2]
     verification:
       entries:
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -167,13 +150,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::spi::tests::no_flags_have_no_action
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::spi::tests::transfer_complete_delivers_and_advances_transaction
 
@@ -190,8 +171,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::spi::tests::dma_error_reports_fault_without_advancing_transaction
 
@@ -207,8 +187,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::memory::tests::static_storage_budget_matches_current_firmware_buffers
 
@@ -224,9 +203,11 @@ requirements:
     derived_from: [W2]
     verification:
       entries:
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -244,43 +225,35 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::configures_each_timer_for_its_lane_channels_and_wires_the_trigger
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::a_frame_stages_every_used_timer_and_starts_all_but_the_triggered_one
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::software_start_starts_every_used_timer
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::refuses_two_lanes_on_one_channel
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::refuses_lane_timers_on_different_clocks
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::refuses_a_lane_on_a_timer_the_bank_was_not_given
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::timer_dma::tests::default_timer_dma_state_remains_static_pwm
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::timer_dma::tests::dshot_feature_reports_the_four_motor_bench_state
 
@@ -298,38 +271,31 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::bidirectional_needs_lanes_that_receive
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::bidirectional_frames_invert_every_checksum
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_bidirectional_frame_set_completes_only_after_its_receive_window
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_unidirectional_bank_never_receives
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::bidirectional_needs_every_lane_to_receive
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::bidirectional_lanes_are_configured_inverted
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_lanes::tests::the_turnaround_closes_requests_before_streams_switch_and_opens_them_after
 
@@ -346,13 +312,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::replies_are_decoded_at_the_next_service_and_taken_once
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::missing_replies_are_counted_never_a_fault
 
@@ -369,18 +333,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_lane_that_cannot_turn_around_faults_the_bank
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_lane_that_cannot_turn_back_faults_the_bank
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_receive_window_that_never_closes_times_out_as_a_frame
 
@@ -397,28 +358,23 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_direction_run_sends_each_command_ten_times_on_its_lane_with_telemetry
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_command_run_is_refused_while_any_motor_runs_or_a_lease_holds
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_throttle_demand_cancels_a_command_run
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_telemetry_request_waits_for_the_command_run
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::a_withdrawn_telemetry_request_is_never_sent
 
@@ -434,18 +390,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::the_fallback_waits_out_one_service_period_after_any_release
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::commands_at_the_control_rate_hold_the_fallback_off
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::dshot_bank::tests::the_fallback_survives_the_millisecond_counter_wrap
 
@@ -461,14 +414,15 @@ requirements:
     derived_from: [W1, W2, W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -486,9 +440,8 @@ requirements:
     derived_from: [W2, W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
 
@@ -504,8 +457,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::board_routes::tests::dma_route_matches_full_manifest_claim
 
@@ -522,7 +474,6 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_stm32_critical::board_routes::tests::channel_zero_route_accepts_legacy_claim_without_channel_suffix

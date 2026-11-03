@@ -79,7 +79,8 @@ pub fn status(
     let control = ledger.control().value;
     let imu = ledger.imu().value;
     let rc = ledger.rc().value;
-    let battery = ledger.battery().value;
+    let battery_topic = ledger.battery();
+    let battery = battery_topic.value;
     let (rc_valid, rc_armable) = rc_link(ledger, now_us);
     StatusSnapshot {
         uptime_ms,
@@ -96,6 +97,10 @@ pub fn status(
         rc_arm_high: rc.arm_high,
         system_armed: ledger.safety().value.armed,
         battery_voltage_decivolts: u32::from(battery.voltage_dv),
+        battery_stale: crate::usb_debug::battery_stale(
+            battery_topic.seq != 0,
+            now_us.saturating_sub(battery_topic.at.0),
+        ),
         battery_current_centiamps: i32::from(battery.current_ca),
         adc_voltage_mv: battery.voltage_pin_mv,
         adc_current_mv: battery.current_pin_mv,

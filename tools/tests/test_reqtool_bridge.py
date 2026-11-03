@@ -7,7 +7,7 @@ from pathlib import Path
 
 from tools import reqtool_bridge
 
-FIXTURE = Path(__file__).resolve().parents[1] / "reqtool/tests/fixtures/repo"
+FIXTURE = Path(__file__).resolve().parents[1] / "tests/fixtures/reqtool_repo"
 BENCH = "project_meta/testing/procedures.md#Bench Gate"
 
 
@@ -60,7 +60,7 @@ class BridgeTests(unittest.TestCase):
     def test_a_props_off_pass_with_propellers_installed_is_refused(self) -> None:
         done = self.record("installed")
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn("propellers removed", done.stderr)
+        self.assertIn("propellers to be removed", done.stderr)
 
 
 if __name__ == "__main__":

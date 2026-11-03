@@ -9,7 +9,10 @@ from tools.foxeer_bench_gates import (
     check_usb_snapshots,
     operator_notes,
     repository_relative,
+    mismatches,
+    find_port,
     parse_snapshot,
+    stable_comports,
 )
 from tools.reqtool_bridge import ARTIFACT_ID, artifact_id
 
@@ -134,6 +137,21 @@ class RecordTests(unittest.TestCase):
     def test_an_unclear_answer_is_asked_again(self) -> None:
         self.assertEqual(self.notes_for("none", "", "no"), "")
         self.assertEqual(self.notes_for("maybe", "y", "", "smell near M2"), "smell near M2")
+
+    def test_a_setting_that_is_not_a_number_is_compared_as_written(self) -> None:
+        _, flat = parse_snapshot('rc_protocol = "sbus"\nroll_center_rate = 70.0\n')
+        self.assertEqual(flat["rc_protocol"], "sbus")
+        self.assertEqual(mismatches(flat, dict(flat)), [])
+        self.assertEqual(
+            mismatches(flat, {**flat, "rc_protocol": "crsf"}),
+            ["rc_protocol is crsf, expected sbus"],
+        )
+
+    def test_a_port_vanishing_as_it_is_read_is_no_port_yet(self) -> None:
+        with mock.patch("serial.tools.list_ports.comports", side_effect=TypeError("gone")):
+            self.assertEqual(stable_comports(), [])
+            self.assertIsNone(find_port())
+
 
 if __name__ == "__main__":
     unittest.main()
