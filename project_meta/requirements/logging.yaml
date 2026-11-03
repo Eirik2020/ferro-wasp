@@ -11,23 +11,25 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::records::tests::a_torn_page_ends_its_flight_and_logging_carries_on_after_it
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
-        - level: flight
-          target: fcu
-          setup: none
+        - level: field
+          environment: product
+          hazard: personnel
+          preconditions:
+            propellers: installed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test
 
@@ -42,23 +44,25 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::records::tests::a_flight_is_unfinished_until_its_last_page_is_written
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
-        - level: flight
-          target: fcu
-          setup: none
+        - level: field
+          environment: product
+          hazard: personnel
+          preconditions:
+            propellers: installed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test
 
@@ -74,27 +78,28 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::log_writer::tests::an_arming_is_one_flight_of_pages_in_order_and_disarming_closes_it
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::records::tests::a_streamed_tick_becomes_the_record_the_control_loop_built
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_blackbox::records::tests::the_divisor_keeps_ticks_whose_sequence_it_divides
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
-        - level: flight
-          target: fcu
-          setup: none
+        - level: field
+          environment: product
+          hazard: personnel
+          preconditions:
+            propellers: installed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Conservative Logged-Hop Flight Test

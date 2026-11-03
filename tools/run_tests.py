@@ -90,9 +90,26 @@ def suites() -> list[Suite]:
         ),
         Suite(
             "reqtool",
-            "the requirements tool, its own workspace, including a check that "
-            "every requirement file in the repository is valid",
-            [Step(["cargo", "test", "--locked"], "tools/reqtool")],
+            "installs reqtool at its pinned revision, and checks every requirement "
+            "file and the FAQ",
+            [
+                Step(
+                    [
+                        "cargo",
+                        "install",
+                        "--locked",
+                        "--git",
+                        "https://github.com/Eirik2020/reqtool",
+                        "--rev",
+                        (ROOT / "tools/reqtool/revision").read_text().strip(),
+                        "--root",
+                        ".",
+                    ],
+                    "tools/reqtool",
+                ),
+                Step(["tools/reqtool/bin/reqtool", "validate"], "."),
+                Step([sys.executable, "tools/check_faq.py"], "."),
+            ],
         ),
         Suite(
             "gui",

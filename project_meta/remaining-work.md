@@ -165,7 +165,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   variant.
 - **No probe on the flight boards.** `tools/usb_bench.py` covers what USB can
   show. The first second of a boot, the motor pins and arming-refusal reasons need
-  SWD and RTT, so the BOOT requirements' `mcu` entries stay open until there is
+  SWD and RTT, so the BOOT requirements' `target` entries stay open until there is
   one.
 - **Configurator flashing.** The GUI's Firmware tab and Reboot
   button have run only against the browser mock, not a desktop build on a

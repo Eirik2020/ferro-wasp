@@ -14,33 +14,30 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::arming::tests::the_guard_is_checked_through_the_whole_hold_and_once_at_its_end
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::arming::tests::a_guard_that_fails_during_the_hold_ends_it_at_once
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::arming::tests::a_zero_poll_interval_still_makes_progress
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::arming_guard_requires_permission_link_arm_switch_and_low_throttle
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_feedback::esc_manager::tests::idle_qualification_requires_fresh_consecutive_samples_from_every_output
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -56,23 +53,22 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_feedback::esc_manager::tests::zero_erpm_never_qualifies_and_times_out
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_feedback::esc_manager::tests::idle_overspeed_fails_immediately_after_spinup_grace
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_feedback::esc_manager::tests::stale_output_sample_prevents_idle_qualification
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -86,9 +82,11 @@ requirements:
     derived_from: [W1, W2]
     verification:
       entries:
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -105,12 +103,10 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::tests::prearm_health_requires_ready_calibrated_fresh_imu
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::host::tests::either_link_holds_the_host_present

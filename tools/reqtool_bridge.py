@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REQTOOL = REPO_ROOT / "tools/reqtool/target/release/reqtool"
+REQTOOL = REPO_ROOT / "tools/reqtool/bin/reqtool"
 DETAILS_FILE = "reqtool-details.json"
 
 # What reqtool accepts as an artifact ID: lowercase words joined by hyphens,
@@ -121,7 +121,7 @@ def record(procedure: str, board: str, result: str, run_details: dict[str, Any],
     details_path.write_text(json.dumps(run_details, indent=2) + "\n")
     if not REQTOOL.is_file():
         raise RecordError(
-            "build reqtool first (cargo build --release in tools/reqtool); the details are kept in "
+            "install reqtool first (python tools/run_tests.py reqtool); the details are kept in "
             f"{details_path.relative_to(REPO_ROOT)}"
         )
     done = subprocess.run(

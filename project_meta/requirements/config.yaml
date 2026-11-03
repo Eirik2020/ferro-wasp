@@ -12,23 +12,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::a_refused_change_changes_nothing
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_boundary_contracts::config_keys::tests::scalar_ranges_match_the_public_usb_contract
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -43,18 +39,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::a_refused_change_changes_nothing
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -68,9 +61,8 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -86,13 +78,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_storage::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -108,13 +98,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_storage::config_save::tests::a_save_writes_the_other_slot_and_boots_with_it_after_verifying
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -130,13 +118,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_storage::config_save::tests::every_failure_leaves_the_booting_configuration_untouched
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_storage::config_save::tests::a_cancelled_save_stops_and_the_active_slot_still_boots
 
@@ -150,9 +136,8 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -166,9 +151,8 @@ requirements:
     derived_from: [W6]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB RC Configuration Gate
 
@@ -185,13 +169,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::page::tests::config_slots_round_trip_and_reject_corruption
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::page::tests::crc_matches_standard_check_value
 
@@ -208,8 +190,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::page::tests::config_slots_round_trip_and_reject_corruption
 
@@ -228,43 +209,35 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::a_version_two_coefficient_survives_as_the_same_filter
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::a_stored_corner_holds_its_meaning_across_loop_rates
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::serial_bindings_round_trip_and_older_payloads_use_board_defaults
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::a_version_four_config_keeps_its_bindings_the_channel_nine_arm_switch_and_sbus
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::rc_map_and_protocol_are_configured_saved_and_validated
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::motor_order_is_saved_and_older_payloads_keep_the_board_wiring
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::accelerometer_level_is_saved_and_older_payloads_are_uncorrected
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::legacy_stored_config_migrates_with_current_rc_defaults
 
@@ -280,13 +253,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::stored_config_round_trips_and_rejects_unsafe_values
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::stored::tests::rc_map_and_protocol_are_configured_saved_and_validated
 
@@ -304,13 +275,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::boot::tests::a_fresh_board_boots_its_default_and_may_arm
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::boot::tests::the_newest_valid_slot_wins_across_the_sequence_wrap
 
@@ -326,13 +295,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::boot::tests::a_slot_reads_as_erased_damaged_invalid_or_valid
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
@@ -348,23 +315,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::boot::tests::a_damaged_or_invalid_slot_falls_back_and_must_be_acknowledged
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::boot::tests::an_unreadable_store_boots_the_default_and_must_be_acknowledged
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::boot::tests::the_next_save_overwrites_a_bad_slot
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
@@ -380,13 +343,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::the_board_default_is_valid_and_a_value_out_of_range_is_not
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_value_out_of_range_is_refused_without_asking_the_safety_master
 
@@ -402,8 +363,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::a_refused_change_changes_nothing
 
@@ -419,18 +379,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::a_boot_only_key_waits_for_a_reboot
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::a_replacement_keeps_the_crafts_level_and_waits_for_boot_only_keys
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_boot_only_change_waits_for_a_reboot_without_an_inhibit
 
@@ -446,8 +403,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::config_gate::tests::an_inhibit_is_granted_only_disarmed_and_not_arming
 
@@ -462,13 +418,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::config_gate::tests::an_inhibit_is_granted_only_disarmed_and_not_arming
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::config_gate::tests::a_released_inhibit_lets_the_craft_arm
 
@@ -484,8 +438,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::config_gate::tests::a_lapsed_inhibit_latches_until_reboot
 
@@ -501,13 +454,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::config_gate::tests::a_fallback_refuses_arming_until_acknowledged_disarmed
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::an_acknowledged_fallback_leaves_the_topic
 
@@ -525,13 +476,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_live_change_holds_arming_off_until_the_control_loop_applies_it
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_refused_inhibit_changes_nothing
 
@@ -547,8 +496,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_change_the_control_loop_never_confirms_is_refused_and_not_released
 
@@ -564,8 +512,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_change_the_control_loop_never_confirms_is_refused_and_not_released
 
@@ -580,8 +527,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::config_changes_run_one_at_a_time_and_the_next_waits_its_turn
 
@@ -597,8 +543,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::rc_input_gets_the_newest_change_once_its_full_link_has_room
 
@@ -616,8 +561,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::only_the_storage_owner_and_the_osd_change_the_configuration
 
@@ -633,8 +577,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::a_config_change_is_on_the_ledger_once_its_result_is
 
@@ -652,13 +595,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_calibration_samples_under_the_inhibit_and_applies_its_level
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
@@ -674,18 +615,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_failed_calibration_changes_nothing_and_releases_its_inhibit
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_calibration_without_samples_gives_up_and_releases_its_inhibit
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
@@ -701,8 +639,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_safety::config_gate::tests::a_calibrations_inhibit_lasts_its_sampling_window
 
@@ -719,28 +656,23 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::bindings_the_board_cannot_carry_are_invalid
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_board_foxeer_f405_v2::profiles::tests::the_default_configuration_passes_the_boards_rules
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_board_tbs_lucid_h7::profiles::tests::the_default_configuration_passes_the_boards_rules
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_binding_the_board_refuses_is_invalid
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session
 
@@ -756,12 +688,10 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_config::owner::tests::a_bind_moves_its_function_and_rc_cannot_be_unbound
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session

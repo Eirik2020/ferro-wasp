@@ -1,162 +1,38 @@
 # reqtool
 
-FerroWasp's requirements and verification tool. Requirements are YAML in
-`project_meta/requirements/`, derived from the governing requirements W1-W7.
-Source files declare the requirements they implement. Status is computed,
-never written. The design is
-[`project_meta/requirements/design.md`](../../project_meta/requirements/design.md);
-[section 20](../../project_meta/requirements/tracing.md#20-tracing-per-source-file)
-is the tracing model.
+FerroWasp's requirements, gates and evidence records are checked by
+[reqtool](https://github.com/Eirik2020/reqtool), a separate project whose README
+holds its rules and commands. `revision` here pins the exact commit FerroWasp uses;
+`reqtool.toml` at the repository root holds FerroWasp's settings.
 
-Requirements are defined, validated, declared by the code, checked, and
-verified by evidence records that carry derived identities. Gates say what must be
-verified before each step toward flight. The testing chapter,
-[`project_meta/testing/README.md`](../../project_meta/testing/README.md), owns
-the workflow.
-
-## Commands
-
-Run from anywhere inside the repository, or pass `--repository`:
+Install it at that revision, then run it from anywhere in the repository:
 
 ```text
-cargo run --release -- validate
-cargo run --release -- check
-cargo run --release -- check INPUT-001
-cargo run --release -- check ferrowasp_input::rc_receiver
-cargo run --release -- check crates/ferrowasp-input/src/rc_receiver.rs
-cargo run --release -- report --board foxeer-f405-v2
+python tools/run_tests.py reqtool
+tools/reqtool/bin/reqtool check
 ```
 
-- `validate` exits nonzero on any problem: schema, IDs, references, tests
-  that do not resolve or are not `#[test]`, missing procedure headings, and
-  declarations of unknown requirements. It also checks every
-  safety-critical file: one that defines code declares a requirement
-  (TRACE-001), and it imports only safety-critical files and external crates
-  its manifest pins to one version (TRACE-002). It lints requirement text and `project_meta/faq.md` against
-  [what requirement text holds](../../project_meta/requirements/schema-and-tooling.md#6-schema-tooling-and-the-parser)
-  and fails on any finding.
-- `check` with no target summarizes every requirement. With an ID it shows
-  that requirement and the files that declare it; with `W1`-`W7` the
-  requirements derived from it; with a file, by path or by module path, the
-  requirements it declares. Agents run `check` on a file before changing it.
-- `report --board <board> [--features a,b]` reports maturity for one
-  configuration (TRACE-006): every requirement the safety-critical files it
-  compiles in declare, with its status there, and the safety-critical files
-  that declare nothing. It runs `cargo check` for the board to find what is
-  compiled in.
-- `test` runs the host tests that requirements name (all, or those of the
-  requirements given) with cargo, in each package's own workspace, and
-  records the session. Tests that fail or do not run exit nonzero; passes
-  already on record with the same coverage are not recorded again.
-- `gate` lists the gates in `project_meta/requirements/gates.yaml`;
-  `gate <name> --board <board>` says whether one is open and lists every
-  entry in its way. It exits zero only when the gate is open. A gate names
-  requirements (an ID, a prefix ending in `*`, or `*`) and the levels they
-  must be verified at, and may include other gates.
-- `record` writes one run of a test or procedure: a result, at the current
-  code, for every requirement entry that names that method. `mcu`,
-  `bench` and `flight` evidence needs `--board`. `--failed REQ` fails one
-  requirement in a run that otherwise passed; `--dry-run` prints the record.
-  `--details FILE` adds how the run was done (JSON): `execution`
-  (`performed_by`, `user_confirmed`), `candidate` (`firmware_sha256`,
-  `features`, ...), `conditions` (`propellers`, `actuator_power`,
-  `equipment`, `environment`), `commands`, `artifacts` (paths under `logs/`;
-  `reqtool` hashes them), `measurements`, `observations`, `limitations` and
-  `stop_conditions_triggered`. Board evidence must have it: user-confirmed,
-  not agent-only, with the image's SHA-256 and a known power and propeller
-  state; a props-off pass needs propellers removed and a flight pass needs
-  them installed; and no pass may include a triggered stop condition.
+Moving to a newer revision is a change to `revision` alone, and it may turn evidence
+stale, as any change to what records are judged by would.
 
-```text
-cargo run --release -- record --test ferrowasp_input::rc_receiver::tests::name --result pass
-cargo run --release -- record --procedure "project_meta/testing/targets/foxeer-f405-v2.md#Heading" --board foxeer-f405-v2 --result pass
-```
+## What FerroWasp uses
 
-## Status
+reqtool's terms are generic. Here they mean:
 
-| Status | Meaning |
-|---|---|
-| `verified` | a pass whose coverage matches the current code |
-| `stale` | a pass, but what it covered has changed since |
-| `unverified` | no pass at all |
-| `failed` | a fail whose coverage matches; a later pass with nothing changed does not clear it |
+| Level | In FerroWasp | Hazard and preconditions |
+|---|---|---|
+| `analysis` | tool checks on source and images | none |
+| `unit` | host tests, including conformance suites | none |
+| `simulation` | software in the loop, once a harness exists | none |
+| `target` | on the flight controller, nothing actuating | none |
+| `system` | the full drone, ESCs powered, propellers removed | `equipment`, `propellers: removed` |
+| `field` | in flight | `personnel`, `propellers: installed` |
 
-A fail clears only when the code changes and a run passes, or when a record
-`--supersedes` it with the user's `--ruling`. Board evidence is reported per
-board; an entry takes the worst board with evidence.
+An environment of `product` is a flight controller, and `development` a development
+board. A person runs and confirms anything with a hazard; an agent may run the rest
+while the system is disarmed. A `target` step that needs hands, such as moving a
+board, still needs a person there, and the record says who did what.
 
-Every result carries its claim: the requirement's ID and statement
-(whitespace-insensitive), the statements of everything derived from it, the entry,
-and a procedure's own section.
-
-- **Host evidence** covers the modules a run exercised: a test's file and the
-  files it imports directly. A source file's identity ignores whitespace and
-  comments; an external crate's is its locked version. A host pass counts for a
-  file that declares its requirement while the claim, the file and the external
-  crates it imports are unchanged; another local file is a part with its own
-  evidence. A pass that reached no declaring file, or a requirement no file
-  declares, takes what the run exercised. An entry stands on a pass that counts
-  for any file, and a requirement's files are covered together: each file a host
-  test build compiles (`cargo check --workspace --tests`) needs a pass that counts
-  for it, or the requirement's host entries fall to `stale`, or to `unverified` if
-  no test ever reached it. A file that build does not compile, such as a task
-  definition, is judged by target-level evidence alone. `check` names both kinds
-  of file. The compiler is not part of evidence.
-- **Board evidence** carries the configuration it ran in. Its identity says which
-  car this is: which repository files `cargo check` reports compiled in (dep-info
-  and build-script reruns), by path; the content of the app's own source and of
-  every file that is not Rust source, including the manifest and
-  `.cargo/config.toml`; external crate versions; and compiler-read environment
-  variables other than those a build script sets. It counts while that identity
-  is the one recorded and the files declaring its requirement are unchanged.
-
-Records are JSON, schema 4, in `project_meta/testing/evidence/runs/`: one
-record per session, each result naming its own method. Schema 4 records
-ending `__retraced` were derived from schema 3 ones at their own revisions,
-and list what could not be derived.
-
-## A requirement
-
-```yaml
-schema_version: 2
-requirements:
-  - id: INPUT-001                 # <AREA>-<NNN>, stable, never reused
-    title: Reject stale RC input
-    statement: >-
-      Command Input shall treat RC frames older than the link's limit as
-      invalid and signal loss of link to the safety master.
-    rationale: Stale input must never be acted on as a live command.
-    derived_from: [W2]            # W1-W7 or parent requirement IDs
-    verification:
-      entries:
-        - level: unit             # analysis | unit | sitl | mcu | bench | flight
-          target: host            # host | fcu | devboard
-          setup: none             # none | sim | props-off
-          method:
-            test: ferrowasp_input::rc_receiver::tests::name
-        - level: bench
-          target: fcu
-          setup: props-off
-          method:
-            procedure: project_meta/testing/targets/foxeer-f405-v2.md#Heading
-```
-
-A requirement is verified by its own entries only; a parent is never proved
-through its children. Unknown fields are refused, and there is no `status`
-field. A requirement with no entries is valid: nothing verifies it yet, and
-`check` reports it as a gap.
-
-The code that implements it says so in its module doc comment, and a
-safety-critical file says that too:
-
-```rust
-//! Requirements: INPUT-001
-//! Safety-critical.
-```
-
-Paths resolve through modules, `use` re-exports and globs, plus one segment
-after a type for an enum variant or a method in an `impl` in the type's own
-module. An import that does not resolve to one file widens: a glob to every
-file it re-exports, a macro to the files defining it, a type or trait to the
-files implementing it. Paths inside macro invocations are read from their
-tokens. Items made by macros are invisible; `#[cfg]` is ignored.
+FerroWasp also turns on reqtool's safety-critical tracing, marking crates with
+`[package.metadata.ferrowasp] critical = true`. Its FAQ's format is checked separately,
+by `tools/check_faq.py`.

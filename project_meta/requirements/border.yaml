@@ -15,18 +15,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::every_state_link_publishes_its_newest_message_with_its_stamp
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::a_link_that_brought_nothing_keeps_its_topic
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::one_run_takes_at_most_a_links_capacity
 
@@ -43,13 +40,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::a_tick_not_marked_for_the_log_is_published_but_not_streamed
 
@@ -67,18 +62,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::lost_control_ticks_and_stream_refusals_are_counted
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::messages_lost_counts_gaps_across_the_wrap
 
@@ -98,8 +90,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::every_logged_tick_reaches_the_stream_in_order_and_the_last_is_published
 
@@ -117,8 +108,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::every_state_link_publishes_its_newest_message_with_its_stamp
 
@@ -137,18 +127,15 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_boundary_contracts::topics::tests::a_topic_that_keeps_advancing_is_not_stalled
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_boundary_contracts::topics::tests::a_topic_stalls_once_its_sequence_holds_past_the_limit
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_boundary_contracts::topics::tests::a_topic_never_published_stalls_after_the_limit
 
@@ -164,8 +151,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::the_observer_stamps_its_own_topic_with_its_run_count
 
@@ -205,8 +191,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::one_run_takes_a_bounded_number_from_each_requester_in_turn
 
@@ -224,8 +209,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::content_and_permission_are_refused_before_the_safety_master_sees_them
 
@@ -242,13 +226,11 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_motor_test_reaches_the_safety_master_and_its_decision_comes_back
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::observer::tests::each_result_lands_on_its_requesters_topic
 
@@ -264,8 +246,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_request_the_safety_master_cannot_take_waits_and_holds_its_queue
 
@@ -281,8 +262,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_host_renewal_names_its_link_and_publishes_nothing
 
@@ -311,8 +291,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_border::coordinator::tests::a_reboot_comes_only_from_the_storage_owner_and_its_decision_comes_back
 
@@ -328,7 +307,6 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_cli::usb_debug::tests::a_battery_reading_goes_stale_when_its_topic_holds_still

@@ -8,7 +8,7 @@ place as the design changes; binding rules that can be checked are
 requirements, and why a tempting alternative lost is in [the FAQ](../faq.md).
 
 The requirements and evidence system (sections 2 to 7) is implemented in
-`tools/reqtool`, except the `app!` parser and the analysis-level checks; the
+`reqtool`, except the `app!` parser and the analysis-level checks; the
 architecture (sections 8 to 16 and 19) is being built one mechanism at a
 time, and [remaining work](../remaining-work.md) lists what is left. The code findings
 quoted in the chapters describe the code the design was made against, as

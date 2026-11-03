@@ -12,23 +12,22 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_board_foxeer_f405_v2::profiles::tests::foxeer_motor_order_uses_the_standard_betaflight_quad_x_numbering
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::drone_toolbox::tests::motor_output_map_matches_measured_bench_order
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::motor_map_accepts_only_permutations
-        - level: bench
-          target: fcu
-          setup: props-off
+        - level: system
+          environment: product
+          hazard: equipment
+          preconditions:
+            propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
 
@@ -45,23 +44,19 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::motor_outputs_follow_a_one_based_permutation
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::motor_map_accepts_only_permutations
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::identity_order_keeps_the_board_map
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::a_swap_moves_board_outputs_between_logical_motors
 
@@ -76,8 +71,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::logical_motor_lookup_rejects_out_of_range
 
@@ -93,8 +87,7 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::packed_maps_round_trip_and_zero_is_unpublished
 
@@ -110,7 +103,6 @@ requirements:
     verification:
       entries:
         - level: unit
-          target: host
-          setup: none
+          environment: host
           method:
             test: ferrowasp_flight_control::actuator::tests::throttle_to_u16_saturates_and_rejects_non_finite_values

@@ -11,9 +11,8 @@ requirements:
     derived_from: [W1, W2]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
 
@@ -28,9 +27,8 @@ requirements:
     derived_from: [W1, W2]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
 
@@ -45,9 +43,8 @@ requirements:
     derived_from: [W2]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
 
@@ -62,8 +59,7 @@ requirements:
     derived_from: [W2]
     verification:
       entries:
-        - level: mcu
-          target: fcu
-          setup: none
+        - level: target
+          environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State

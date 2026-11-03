@@ -272,7 +272,7 @@ propeller, or airframe change invalidates the affected evidence and requires
 the relevant lower gate again.
 
 1. Confirm the preflight gate is open for the recorded commit/working tree
-   and feature set: host evidence, build, mcu and bench evidence current.
+   and feature set: host evidence, build, target and system evidence current.
 2. Confirm the props-off gate's evidence is for the exact image and is
    available. A prior historical pass is not enough.
 3. Verify the persisted P-only and RC-rate baseline in this file. I and D must
