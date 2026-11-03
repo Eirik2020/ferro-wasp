@@ -174,6 +174,14 @@ class TalkingToABoard(unittest.TestCase):
         self.answer_with(b"OK build rev=abc\r\n")
         self.assertEqual(self.link.expect("build", "OK build"), "OK build rev=abc")
 
+    def test_a_second_line_in_the_same_read_is_the_next_answer(self) -> None:
+        self.answer_with(b"OK build rev=abc features=1\r\nOK feature bench_config_fault\r\n")
+        self.assertIn("features=1", self.link.expect("build", "OK build"))
+        self.assertEqual(
+            self.link.wait_prefix("OK feature ", 1.0, "the feature"),
+            "OK feature bench_config_fault",
+        )
+
     def test_silence_fails_the_step(self) -> None:
         with self.assertRaisesRegex(StepFailed, "no answer"):
             self.link.ask("live", seconds=0.2)

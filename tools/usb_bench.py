@@ -23,6 +23,7 @@ go to RTT. `boot-idle` in `tools/bench_rig.py` needs a probe and is not replaced
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import json
 import re
 import shutil
@@ -49,6 +50,7 @@ USB_VID = 0x16C0
 USB_PID = 0x27DD
 DFU_DEVICE = "0483:df11"
 SETTLE_QUIET_S = 0.3
+HANDS_OFF_S = 3.0
 PROCEDURE = "project_meta/testing/targets/foxeer-usb-session.md#Foxeer USB Session"
 BENCH_FEATURE = "bench_config_fault"
 # How long a board takes to enumerate after leaving the ROM or restarting.
@@ -245,6 +247,7 @@ class Link:
         self.transcript = transcript
         self.buffer = ""
         self.statuses: list[dict[str, str]] = []
+        self.pending: deque[str] = deque()
         self.settle()
 
     def settle(self) -> None:
@@ -278,15 +281,21 @@ class Link:
 
     def send(self, command: str) -> None:
         self.transcript.write(f"> {command}")
+        self.pending.clear()
         self.port.write(f"{command}\r\n".encode("ascii"))
 
     def wait_for(self, done: Callable[[str], bool], seconds: float, what: str) -> str:
+        # A read can hold several lines, and the rest of them are the next answer.
         deadline = time.monotonic() + seconds
-        while time.monotonic() < deadline:
-            for line in self._lines(deadline - time.monotonic()):
+        while True:
+            while self.pending:
+                line = self.pending.popleft()
                 if done(line):
                     return line
-        raise StepFailed(f"no answer to {what} within {seconds:.0f} s")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise StepFailed(f"no answer to {what} within {seconds:.0f} s")
+            self.pending.extend(self._lines(remaining))
 
     def ask(self, command: str, seconds: float = 3.0) -> str:
         """Sends one command and gives its first answer line."""
@@ -514,7 +523,9 @@ class Session:
 # --- The Foxeer ----------------------------------------------------------------
 
 
-def foxeer_session(session: Session, candidate: Path, bench: Path, allow_dirty: bool) -> None:
+def foxeer_session(
+    session: Session, candidate: Path, bench: Path, allow_dirty: bool, hands_free: bool
+) -> None:
     def storage() -> None:
         with session.link() as link:
             link.expect("flash info", "OK jedec=")
@@ -529,6 +540,7 @@ def foxeer_session(session: Session, candidate: Path, bench: Path, allow_dirty: 
             "usb-config",
             "--elf",
             str(candidate),
+            "--state-confirmed",
         ]
         if allow_dirty:
             argv.append("--allow-dirty")
@@ -577,6 +589,8 @@ def foxeer_session(session: Session, candidate: Path, bench: Path, allow_dirty: 
             "on a bench board."
         )
         gates.ask("Set the board flat and still, then press Enter:")
+        print(f"Hands off: calibrating in {HANDS_OFF_S:.0f} s.")
+        time.sleep(HANDS_OFF_S)
         with session.link() as link:
             link.expect("imu calibrate", "OK imu calibration started")
             result = link.wait_prefix("OK imu calibrated", 5.0, "the calibration")
@@ -651,11 +665,18 @@ def foxeer_session(session: Session, candidate: Path, bench: Path, allow_dirty: 
     session.step("Identity, configuration export and flight list", identity)
     session.step("Idle for 30 s, disarmed, with the loop at rate", session.idle)
     session.step("Storage: flash info, log list, scratch test", storage)
-    session.step("USB configuration gate", config_gate)
+    def needs_hands(name: str, action: Callable[[], None]) -> None:
+        if hands_free:
+            print(f"\n--- {name}\nnot run: it needs hands")
+            session.measurements.setdefault("not_run", []).append(name)
+        else:
+            session.step(name, action)
+
+    needs_hands("USB configuration gate", config_gate)
     session.step("A live change lasts until a reboot unless saved", session.live_change_lasts_until_reboot)
     session.step("Bindings: refused, moved and restored", bindings)
     session.step("Reboot, and reboot to DFU", reboot_and_dfu)
-    session.step("Calibration: a still board passes, a moving one is refused", calibration)
+    needs_hands("Calibration: a still board passes, a moving one is refused", calibration)
     session.step("Fallback: invalid and damaged saves, acknowledged and repaired", fallback)
     session.step("The configuration is as the session found it", configuration_kept)
 
@@ -769,9 +790,6 @@ def record_foxeer(session: Session, candidate: Path, bench: Path, notes: str, su
 
 def run_session(args: argparse.Namespace) -> int:
     board = BOARDS[args.board]
-    if args.operator_confirmed_state and board.has_store:
-        print("SESSION STOPPED: this board's session needs an operator at the terminal, to move the board")
-        return 1
     before = reqtool_bridge.source_state()
     if before[1] and not args.allow_dirty:
         print("SESSION STOPPED: the checkout has uncommitted changes; commit them or pass --allow-dirty")
@@ -792,13 +810,13 @@ def run_session(args: argparse.Namespace) -> int:
         candidate = build(board, capture, "candidate", ())
         bench = build(board, capture, "bench", (BENCH_FEATURE,)) if board.has_store else None
         if args.operator_confirmed_state:
-            print("\nThe operator confirmed the bench state and that the SD card is out.")
-            session.transcript.write("operator confirmed the bench state and the card out, ahead of the run")
+            print("\nThe operator confirmed the bench state ahead of the run.")
+            session.transcript.write("operator confirmed the bench state ahead of the run")
         else:
             gates.confirm_bench_state()
         if board.has_store:
             assert bench is not None
-            foxeer_session(session, candidate, bench, args.allow_dirty)
+            foxeer_session(session, candidate, bench, args.allow_dirty, args.operator_confirmed_state)
         else:
             if not args.operator_confirmed_state and not gates.ask_yes_no("Is this board's SD card out?"):
                 raise SessionStop("this session expects the card out, for the no-store checks")
@@ -824,6 +842,9 @@ def run_session(args: argparse.Namespace) -> int:
     if bench is None:
         print("\nSession passed. A Lucid session is captures only: nothing recorded.")
         return 0 if not notes else 1
+    if args.operator_confirmed_state:
+        print("\nSession passed without the steps that need hands: captures only, nothing recorded.")
+        return 0
     return record_foxeer(session, candidate, bench, notes, summary)
 
 
@@ -835,8 +856,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     session.add_argument(
         "--operator-confirmed-state",
         action="store_true",
-        help="The operator has already confirmed the bench state and the card out, so nobody is asked. "
-        "Only for a session with no physical steps; a step that then needs hands stops it.",
+        help="The operator has already confirmed the bench state, and for a Lucid that its card is out, "
+        "so nobody is asked. A Foxeer leaves out the steps that need hands and records nothing.",
     )
     session.add_argument("--allow-dirty", action="store_true", help="Run from a checkout with uncommitted changes.")
     return parser.parse_args(argv)

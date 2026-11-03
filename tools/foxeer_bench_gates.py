@@ -91,15 +91,17 @@ class GateStop(Exception):
 # --- Configuration snapshots -------------------------------------------------
 
 
-def flatten_config(document: dict[str, Any]) -> dict[str, float]:
+def flatten_config(document: dict[str, Any]) -> dict[str, Any]:
     """One flat `key -> value` map, keyed as the firmware names settings."""
-    flat: dict[str, float] = {}
+    flat: dict[str, Any] = {}
     for key, value in document.items():
         if key == "schema_version":
             continue
         if isinstance(value, dict):
             for term, gain in value.items():
                 flat[f"{key}_{term}"] = float(gain)
+        elif isinstance(value, str):
+            flat[key] = value
         else:
             flat[key] = float(value)
     return flat
@@ -116,12 +118,15 @@ def parse_snapshot(text: str) -> tuple[int | None, dict[str, float]]:
     return exit_code, flatten_config(tomllib.loads(text))
 
 
-def mismatches(expected: dict[str, float], actual: dict[str, float]) -> list[str]:
+def mismatches(expected: dict[str, Any], actual: dict[str, Any]) -> list[str]:
     problems = []
     for key, want in expected.items():
         have = actual.get(key)
         if have is None:
             problems.append(f"{key} missing")
+        elif isinstance(want, str) or isinstance(have, str):
+            if have != want:
+                problems.append(f"{key} is {have}, expected {want}")
         elif abs(have - want) > VALUE_TOLERANCE:
             problems.append(f"{key} is {have:g}, expected {want:g}")
     for key in actual.keys() - expected.keys():
@@ -313,8 +318,11 @@ def run_usb_config(args: argparse.Namespace) -> int:
     port = find_port()
     if port is None:
         raise GateStop("no Foxeer on USB; plug it in and wait for it to enumerate")
-    confirm_bench_state()
-    if not ask_yes_no("Has the board been flashed with this candidate since it was built?"):
+    if args.state_confirmed:
+        print("\nThe session confirmed the bench state and flashed this candidate.")
+    else:
+        confirm_bench_state()
+    if not args.state_confirmed and not ask_yes_no("Has the board been flashed with this candidate since it was built?"):
         raise GateStop(
             "flash the candidate first: tools/bench_rig.py boot-idle --board foxeer-f405-v2, "
             "or tools/usb_bench.py session without a probe"
@@ -428,6 +436,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="*",
         default=["board-foxeer-f405-v2"],
         help="The candidate's cargo features.",
+    )
+    usb.add_argument(
+        "--state-confirmed",
+        action="store_true",
+        help="Run from tools/usb_bench.py, which already confirmed the bench state and flashed this candidate.",
     )
     usb.add_argument("--allow-dirty", action="store_true", help="Run from a checkout with uncommitted changes.")
     usb.set_defaults(handler=run_usb_config)
