@@ -40,6 +40,9 @@ REQUIRED_CSV_COLUMNS = (
     "motor3",
     "motor4",
 )
+# Columns the analyzer leaves empty when the log had no value for them.
+OPTIONAL_CSV_COLUMNS = ("flight_id", "raw_roll_dps", "raw_pitch_dps", "raw_yaw_dps")
+U32_LIMIT = 1 << 32
 
 BB_RE = re.compile(
     r"BB(?P<version>[12]) seq (?P<seq>\d+) imu (?P<imu_seq>\d+) flags (?P<flags>\d+) "
@@ -163,8 +166,35 @@ def load_log(path: Path) -> list[dict[str, float]]:
     return rows
 
 
+def csv_value(key: str, value: str) -> float | None:
+    """One analyzer CSV field; `None` for an empty optional field or timestamp,
+    which the analyzer writes when the log had no value."""
+    if value == "" and (key in OPTIONAL_CSV_COLUMNS or key == TIMESTAMP_COLUMN):
+        return None
+    shown = value if len(value) <= 40 else f"{value[:40]}..."
+    if value == "":
+        raise ValueError(f"{key} is empty")
+    if key in ("seq", TIMESTAMP_COLUMN):
+        try:
+            whole = int(value)
+        except ValueError:
+            raise ValueError(f"{key} {shown!r} is not a whole number") from None
+        limit = U32_LIMIT if key == TIMESTAMP_COLUMN else None
+        if whole < 0 or (limit is not None and whole >= limit):
+            raise ValueError(f"{key} {shown} is out of range")
+        return float(whole)
+    try:
+        number = float(value)
+    except ValueError:
+        raise ValueError(f"{key} {shown!r} is not a number") from None
+    if not math.isfinite(number):
+        raise ValueError(f"{key} {shown} is not finite")
+    return number
+
+
 def load_csv(path: Path) -> list[dict[str, float]]:
-    """An analyzer CSV; an empty `timestamp_us` is no time, not time zero."""
+    """An analyzer CSV. An empty `timestamp_us` is no time, not time zero; an
+    empty optional field reads as zero; anything else malformed is refused."""
     rows: list[dict[str, float]] = []
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
@@ -173,20 +203,23 @@ def load_csv(path: Path) -> list[dict[str, float]]:
             raise ValueError(
                 f"{path} is not a `blackbox_analyzer.py --csv` export: missing {', '.join(missing)}"
             )
-        for line, row in enumerate(reader, start=2):
-            if None in row or None in row.values():
-                raise ValueError(f"{path}:{line}: wrong number of fields")
-            parsed: dict[str, float] = {}
-            try:
+        try:
+            for row in reader:
+                if None in row or None in row.values():
+                    raise ValueError("wrong number of fields")
+                parsed: dict[str, float] = {}
                 for key, value in row.items():
-                    if key == TIMESTAMP_COLUMN:
-                        if value != "":
-                            parsed[key] = float(int(value))
-                    else:
-                        parsed[key] = float(value) if value != "" else 0.0
-            except ValueError as error:
-                raise ValueError(f"{path}:{line}: {error}") from None
-            rows.append(parsed)
+                    number = csv_value(key, value)
+                    if number is not None:
+                        parsed[key] = number
+                    elif key != TIMESTAMP_COLUMN:
+                        parsed[key] = 0.0
+                rows.append(parsed)
+        except csv.Error as error:
+            # The reader stops inside the record it could not read.
+            raise ValueError(f"{path}: after line {reader.line_num}: {error}") from None
+        except (ValueError, OverflowError) as error:
+            raise ValueError(f"{path}:{reader.line_num}: {error}") from None
     return rows
 
 
@@ -224,8 +257,12 @@ def sample_rate(rows: list[dict[str, float]], override: float | None) -> SampleR
 def prepare_rows(
     rows: list[dict[str, float]], sample_rate: float, trim_start: float, trim_end: float
 ) -> list[dict[str, float]]:
-    start = max(0, int(round(trim_start * sample_rate)))
-    end = len(rows) - max(0, int(round(trim_end * sample_rate)))
+    for option, seconds in (("--trim-start", trim_start), ("--trim-end", trim_end)):
+        if not (math.isfinite(seconds) and seconds >= 0):
+            raise ValueError(f"{option} must be a finite, non-negative number of seconds, not {seconds}")
+    # Capped before rounding, so a huge rate or trim cannot overflow.
+    start = round(min(trim_start * sample_rate, len(rows)))
+    end = len(rows) - round(min(trim_end * sample_rate, len(rows)))
     if start >= end:
         raise ValueError("trim would remove all samples")
     trimmed = rows[start:end]
@@ -454,8 +491,13 @@ def main() -> int:
             raise ValueError(f"no BB1/BB2 samples found in {source}")
         rate = sample_rate(rows, args.sample_rate)
         rows = prepare_rows(rows, rate.hz, args.trim_start, args.trim_end)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, OverflowError, csv.Error) as error:
         print(f"error: {error}", file=sys.stderr)
+        return 1
+    try:
+        import matplotlib.pyplot  # noqa: F401
+    except ImportError as error:
+        print(f"error: the plots need matplotlib: {error}", file=sys.stderr)
         return 1
     print(f"Sample rate: {rate.hz:.1f} Hz, {rate.source}")
     out_dir = args.out_dir or DEFAULT_REPORT_DIR / source.stem

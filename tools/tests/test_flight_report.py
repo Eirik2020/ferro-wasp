@@ -1,3 +1,4 @@
+import csv
 import re
 import subprocess
 import sys
@@ -54,6 +55,45 @@ def analyzer_csv(directory: str, samples: list[BlackboxSample]) -> Path:
     path = Path(directory) / "flight.csv"
     write_csv(path, samples)
     return path
+
+
+def with_field(path: Path, record: int, column: str, value: str) -> Path:
+    """Set one field of the `record`th data row (0-based) of an analyzer CSV."""
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.reader(handle))
+    rows[record + 1][rows[0].index(column)] = value
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        csv.writer(handle).writerows(rows)
+    return path
+
+
+# Runs the tool as a script, with matplotlib unimportable when asked.
+RUNNER = """
+import runpy, sys
+if sys.argv.pop(1) == "block":
+    sys.modules["matplotlib"] = None
+    sys.modules["matplotlib.pyplot"] = None
+sys.path.insert(0, sys.argv[1].rsplit("/", 1)[0])
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+
+
+def run_report(*args: str, block_matplotlib: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            RUNNER,
+            "block" if block_matplotlib else "allow",
+            FLIGHT_REPORT.as_posix(),
+            *args,
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
 
 
 def bb2_line(seq: int) -> str:
@@ -201,6 +241,105 @@ class CsvInputTests(unittest.TestCase):
             path.write_text("\n".join(text) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, ":3:"):
                 load_samples(path)
+
+    def test_a_malformed_value_the_report_reads_is_refused_with_its_line(self) -> None:
+        cases = (
+            ("seq", ""),
+            ("seq", "inf"),
+            ("seq", "nan"),
+            ("seq", "-1"),
+            ("seq", "1.5"),
+            ("armed", ""),
+            ("throttle", "inf"),
+            ("gyro_roll_dps", "nan"),
+            ("cmd_yaw_dps", ""),
+            ("pid_pitch", "-inf"),
+            ("motor4", ""),
+            ("imu_seq", ""),
+            ("timestamp_us", "-1"),
+            ("timestamp_us", str(2**32)),
+        )
+        for column, value in cases:
+            with self.subTest(column=column, value=value):
+                with tempfile.TemporaryDirectory() as directory:
+                    path = with_field(analyzer_csv(directory, flight(400, 0.05)), 4, column, value)
+                    with self.assertRaisesRegex(ValueError, f":6: {column} "):
+                        load_samples(path)
+
+    def test_the_analyzers_empty_optional_fields_and_a_wrapping_timestamp_are_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = analyzer_csv(directory, flight(400, 0.05))
+            for column in ("flight_id", "raw_roll_dps", "raw_pitch_dps", "raw_yaw_dps", "timestamp_us"):
+                with_field(path, 4, column, "")
+            with_field(path, 5, "timestamp_us", str(2**32 - 1))
+            rows = load_samples(path)
+
+        self.assertEqual(rows[4]["raw_roll_dps"], 0.0)
+        self.assertNotIn("timestamp_us", rows[4])
+        self.assertEqual(rows[5]["timestamp_us"], float(2**32 - 1))
+
+    def test_an_oversized_field_is_refused_with_its_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = with_field(analyzer_csv(directory, flight(400, 0.05)), 2, "flight_id", "9" * 200_000)
+            with self.assertRaisesRegex(ValueError, ": after line 3: field larger than field limit"):
+                load_samples(path)
+
+
+class TrimTests(unittest.TestCase):
+    def rows(self) -> list[dict[str, float]]:
+        with tempfile.TemporaryDirectory() as directory:
+            return load_samples(analyzer_csv(directory, flight(400, 0.5)))
+
+    def test_a_trim_must_be_finite_and_non_negative(self) -> None:
+        for option, start, end in (
+            ("--trim-start", float("inf"), 0.0),
+            ("--trim-start", float("nan"), 0.0),
+            ("--trim-end", 0.0, -1.0),
+            ("--trim-end", 0.0, float("inf")),
+        ):
+            with self.subTest(start=start, end=end):
+                with self.assertRaisesRegex(ValueError, option):
+                    prepare_rows(self.rows(), 400.0, start, end)
+
+    def test_a_huge_rate_and_trim_remove_everything_rather_than_overflow(self) -> None:
+        with self.assertRaisesRegex(ValueError, "trim would remove all samples"):
+            prepare_rows(self.rows(), 1e308, 10.0, 0.0)
+
+
+class CommandErrorTests(unittest.TestCase):
+    """Each refusal is an `error:` line and exit 1, never a traceback, and
+    writes nothing."""
+
+    def assert_refused(self, result: subprocess.CompletedProcess[str], out_dir: Path, says: str) -> None:
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("error:", result.stderr)
+        self.assertIn(says, result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse(out_dir.exists())
+
+    def test_malformed_input_and_options(self) -> None:
+        cases = (
+            ("seq", "inf", (), "seq 'inf' is not a whole number"),
+            ("flight_id", "9" * 200_000, (), "field larger than field limit"),
+            (None, None, ("--trim-start", "inf"), "--trim-start"),
+            (None, None, ("--sample-rate", "1e308", "--trim-start", "10"), "trim would remove all samples"),
+        )
+        for column, value, options, says in cases:
+            with self.subTest(column=column, options=options):
+                with tempfile.TemporaryDirectory() as directory:
+                    source = analyzer_csv(directory, flight(400, 1.5))
+                    if column is not None:
+                        with_field(source, 4, column, value)
+                    out_dir = Path(directory) / "report"
+                    result = run_report(str(source), "--out-dir", str(out_dir), *options)
+                    self.assert_refused(result, out_dir, says)
+
+    def test_without_matplotlib_nothing_is_written(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = analyzer_csv(directory, flight(400, 1.5))
+            out_dir = Path(directory) / "report"
+            result = run_report(str(source), "--out-dir", str(out_dir), block_matplotlib=True)
+            self.assert_refused(result, out_dir, "matplotlib")
 
 
 if __name__ == "__main__":
