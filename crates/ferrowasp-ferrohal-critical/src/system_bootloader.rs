@@ -22,10 +22,5 @@ pub fn reboot(target: RebootTarget) -> ! {
 /// bootloader expects the chip as reset left it, and the motor pins are still in
 /// their reset state, as at power-on.
 pub fn enter_rom_bootloader_if_requested() {
-    if reset::bootloader_requested() {
-        // SAFETY: this runs first in `init`, before clocks or any peripheral is
-        // configured, so the chip is as reset left it. RTIC's `init` holds interrupts
-        // masked, which FerroHAL's entry undoes itself; nothing else has run.
-        unsafe { reset::enter_bootloader() };
-    }
+    reset::enter_bootloader_if_requested();
 }

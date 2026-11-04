@@ -25,7 +25,6 @@ pub mod exti;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod spi_dma;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
-#[allow(unsafe_code)]
 pub mod system_bootloader;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod uart_dma;

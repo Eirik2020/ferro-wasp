@@ -71,7 +71,7 @@ nb = "1.1"
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 rtic = { version = "2.4.0", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick", "systick-64bit"] }
-ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "1006697a00b506ef04e6d82e9c6a9da2ffa9b879", features = ["stm32f405rg", "rt", "defmt", "usb"] }
+ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "0914234e8c7f5eb5fc0618e620ea18de75de09c0", features = ["stm32f405rg", "rt", "defmt", "usb"] }
 
 
 [profile.dev.package."*"]
