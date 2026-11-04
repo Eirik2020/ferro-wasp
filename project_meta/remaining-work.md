@@ -44,6 +44,12 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   quiet window. Cycling only ESC power while USB powers the board is untested
   with it; until a props-off run shows the first arm fails closed and a later
   arm qualifies on fresh eRPM from every ESC, do not do it.
+- **CRSF through `crsf-wire`.** Switch RC input in `ferrowasp-input` and the RC
+  telemetry in `ferrowasp-osd` to the `crsf-wire` driver, with the adapter to
+  FerroWasp's RC protocol trait in `ferrowasp-input`; move the `ferrowasp-crsf`
+  entries of INPUT-005, INPUT-011 and INPUT-016 onto CRSF-001 to CRSF-010; then
+  retire `crates/ferrowasp-crsf`. The switch re-owes the RC path's evidence on
+  hardware, Foxeer first.
 - **I-term.** Foxeer stays P-only (2.5/2.5/2.0) and I stays zero until target
   evidence shows every disarm, RC loss, aborted arm, and rearm starts with clean
   controller state. Roll P 3.0 stays withdrawn after a 10-13 Hz oscillation.
