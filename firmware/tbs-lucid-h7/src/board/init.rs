@@ -12,7 +12,7 @@ use ferrowasp_ferrohal::hal::{
     chip::{ADC1, SDMMC1, SPI1, TIM2, TIM3, TIM4, TIM5, TIM6, UART8, USART1, USART3, USART6},
     dma::Stream,
     exti::{self, Edge},
-    gpio::{Alternate, Analog, Output, Pin},
+    gpio::{Alternate, Analog, Input, Output, Pin},
     rcc::{
         AhbPrescaler, ApbPrescaler, Clocks, Config as ClockConfig, Hse, HseMode, Pll, PllSource,
         Rcc, Supply, Sysclk, VoltageScale,
@@ -215,8 +215,10 @@ pub fn init_spi1_imu(
     })
 }
 
-/// The IMU's data-ready line on PB2. Its pin stays the input reset leaves it.
+/// The IMU's data-ready line on PB2. The pin has to be an input: an H7 pin resets to
+/// analog, whose input buffer is off, and EXTI would never see an edge.
 pub fn init_imu_data_ready(
+    _pin: Pin<'B', 2, Input>,
     line: exti::Line<2>,
     ctrl: &mut exti::Ctrl,
 ) -> super::aliases::ImuDataReadyPin {

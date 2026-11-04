@@ -399,7 +399,11 @@ ferroforge::app! {
             .unwrap()
         };
         let mut exti = dp.EXTI.split(dp.SYSCFG, &mut rcc);
-        let imu_data_ready = board::init::init_imu_data_ready(exti.l4, &mut exti.ctrl);
+        let imu_data_ready = board::init::init_imu_data_ready(
+            gpioc.p4.into_input(&mut gpioc.ctrl),
+            exti.l4,
+            &mut exti.ctrl,
+        );
         let spi1_device = AsyncSpiDevice::new(CriticalSectionSpiExecutor::new(
             &SPI1_MAILBOX,
             SpiDeadlineUs(SPI1_IMU_DEADLINE_US),

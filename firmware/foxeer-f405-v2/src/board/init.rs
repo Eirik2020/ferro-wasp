@@ -11,7 +11,7 @@ use ferrowasp_ferrohal::hal::{
     chip::{ADC1, SPI1, SPI2, TIM1, TIM2, TIM4, TIM6, TIM8, UART4, USART1, USART2, USART3},
     dma::Stream,
     exti::{self, Edge},
-    gpio::{Alternate, Analog, Pin},
+    gpio::{Alternate, Analog, Input, Pin},
     rcc::{
         AhbPrescaler, ApbPrescaler, Clocks, Config as ClockConfig, Hse, HseMode, Pll, PllP,
         PllSource, Rcc, Supply, Sysclk,
@@ -135,8 +135,9 @@ pub fn init_spi2_flash(
     Some(ferrowasp_storage::spi_nor::SpiNor::new(bus, cs))
 }
 
-/// The IMU's data-ready line on PC4. Its pin stays the input reset leaves it.
+/// The IMU's data-ready line on PC4, which has to be an input.
 pub fn init_imu_data_ready(
+    _pin: Pin<'C', 4, Input>,
     line: exti::Line<4>,
     ctrl: &mut exti::Ctrl,
 ) -> super::aliases::ImuDataReadyPin {
