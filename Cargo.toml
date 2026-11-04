@@ -26,6 +26,7 @@ members = [
     "crates/ferrowasp-protocol",
     "crates/ferrowasp-safety",
     "crates/ferrowasp-sensor-traits",
+    "crates/ferrowasp-sensors",
     "crates/ferrowasp-serial",
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-critical",

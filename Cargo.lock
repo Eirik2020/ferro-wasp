@@ -563,6 +563,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-sensors"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+ "ferrowasp-io-contracts",
+ "ferrowasp-sensor-traits",
+ "uf-dps3xx",
+]
+
+[[package]]
 name = "ferrowasp-serial"
 version = "0.1.0"
 dependencies = [
@@ -1248,6 +1258,15 @@ name = "time-core"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
+
+[[package]]
+name = "uf-dps3xx"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c9657a8238ee29f7f29f267a70afbe27cd9a932eefdf8be2bfad50ccfea2776"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
 
 [[package]]
 name = "unicode-ident"

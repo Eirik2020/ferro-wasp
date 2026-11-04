@@ -225,8 +225,9 @@ Non-critical: `ferrowasp-protocol`, `ferrowasp-blackbox` (log
 writer, blackbox storage, sync ledger, storage maintenance),
 `ferrowasp-storage` (flash manager, config save, NOR storage, SPI NOR),
 `ferrowasp-cli` (command link, RPC, storage commands, USB debug),
-`ferrowasp-osd`, `ferrowasp-mspv1`, `ferrowasp-mspv2`, `rc-pwm`, and the
-non-critical `ferrowasp-stm32`, `-stm32f4`, `-stm32h7`.
+`ferrowasp-osd`, `ferrowasp-mspv1`, `ferrowasp-mspv2`, `rc-pwm`,
+`ferrowasp-sensors` (adapters from external sensor drivers to the sensor
+classes), and the non-critical `ferrowasp-stm32`, `-stm32f4`, `-stm32h7`.
 
 Dissolved: `ferrowasp-core`, `ferrowasp-io-core`, `ferrowasp-flight`,
 `ferrowasp-drivers`, `ferrowasp-pid`, `ferrowasp-waveform`.

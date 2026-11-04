@@ -141,6 +141,15 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Foxeer status LEDs.** The shared `status_leds` task (green heartbeat, blue
   armed) runs on the TBS Lucid H7 only; wire it on Foxeer to bring the golden
   app level.
+- **Sensor classes on Foxeer**, Foxeer first:
+  - wire the barometer into Foxeer: a low-priority task owning the
+    `ferrowasp-sensors` DPS310 adapter over an `embedded-hal-bus` I2C device
+    whose bus bounds each transfer, publishing through the observer;
+  - move the IMU drivers onto `ferrowasp-sensor-traits::imu::Imu`: each
+    driver implements it and calls `check_refuses_malformed_bursts` in its
+    tests, and the SPI1 parser decodes through it;
+  - the u-blox M10 adapter to `ferrowasp-sensor-traits::gnss::Gnss`, in
+    `ferrowasp-sensors`.
 - **Chip-family backends.** Board assembly has left both backends, and DShot
   lanes are named by each board. What remains is added when a board needs it:
   F4 DShot covers only the advanced timers (TIM1, TIM8) and the Foxeer's four

@@ -19,6 +19,7 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-crsf`, `ferrowasp-blheli-telemetry` | The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each |
 | `ferrowasp-icm42688p`, `ferrowasp-mpu6000`, `ferrowasp-mpu6500` | The IMU drivers over `embedded-hal`, safety-critical, one crate per sensor |
 | `ferrowasp-sensor-traits` | The sensor classes, safety-critical: one trait each for the IMU, the barometer and GNSS, their samples in integer units, the stamped envelope and sequence every class shares, the common error kinds, and the freshness judgement |
+| `ferrowasp-sensors` | Adapters from self-contained `embedded-hal` sensor drivers to the sensor classes, owning their units, plausibility limits, deadlines and freshness: the DPS310 barometer, over `uf-dps3xx` |
 | `ferrowasp-storage` | The SPI NOR flash driver and the `NorStorage` trait, the storage layout and boot slot selection, and configuration saving |
 | `ferrowasp-blackbox` | The onboard flight log: records from the observer's stream of logged control ticks, page assembly, the log writer, the sync ledger, and log maintenance |
 | `ferrowasp-cli` | The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC |
