@@ -1,21 +1,45 @@
 #!/usr/bin/env python3
-"""Create a compact FerroWasp BB2 flight report with plots and event slices."""
+"""Create a compact FerroWasp BB2 flight report with plots and event slices.
+
+Rows are timed at the log's sample rate, measured from the `timestamp_us`
+column of a `blackbox_analyzer.py --csv` export. An RTT `.log`'s BB lines carry
+no time, so it needs `--sample-rate`; without a measurable rate or that
+override the report is refused.
+"""
 
 from __future__ import annotations
 
 import argparse
 import csv
+import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, pstdev
 
-import matplotlib.pyplot as plt
+if __package__:
+    from .blackbox_analyzer import timed_span
+else:
+    from blackbox_analyzer import timed_span
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOG_DIR = REPO_ROOT / "logs" / "terminal_embed"
 DEFAULT_REPORT_DIR = DEFAULT_LOG_DIR / "reports"
-CONTROL_RATE_HZ = 400.0
+TIMESTAMP_COLUMN = "timestamp_us"
+# What the report reads from each row of an analyzer CSV.
+REQUIRED_CSV_COLUMNS = (
+    "seq",
+    "armed",
+    "throttle",
+    *(f"gyro_{axis}_dps" for axis in ("roll", "pitch", "yaw")),
+    *(f"cmd_{axis}_dps" for axis in ("roll", "pitch", "yaw")),
+    *(f"pid_{axis}" for axis in ("roll", "pitch", "yaw")),
+    "motor1",
+    "motor2",
+    "motor3",
+    "motor4",
+)
 
 BB_RE = re.compile(
     r"BB(?P<version>[12]) seq (?P<seq>\d+) imu (?P<imu_seq>\d+) flags (?P<flags>\d+) "
@@ -29,6 +53,12 @@ BB_RE = re.compile(
 
 AXES = ("roll", "pitch", "yaw")
 COLORS = {"roll": "tab:red", "pitch": "tab:green", "yaw": "tab:blue"}
+
+
+@dataclass(frozen=True)
+class SampleRate:
+    hz: float
+    source: str
 
 
 @dataclass
@@ -69,7 +99,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sample-rate",
         type=float,
-        help="Override estimated sample rate in Hz.",
+        help=(
+            "Logged samples per second. Default: measured from a CSV's timestamp_us "
+            "column; required for an RTT .log, whose BB lines carry no time."
+        ),
     )
     parser.add_argument(
         "--zoom",
@@ -131,10 +164,29 @@ def load_log(path: Path) -> list[dict[str, float]]:
 
 
 def load_csv(path: Path) -> list[dict[str, float]]:
+    """An analyzer CSV; an empty `timestamp_us` is no time, not time zero."""
     rows: list[dict[str, float]] = []
     with path.open(newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
-            rows.append({key: float(value) if value != "" else 0.0 for key, value in row.items()})
+        reader = csv.DictReader(handle)
+        missing = [column for column in REQUIRED_CSV_COLUMNS if column not in (reader.fieldnames or ())]
+        if missing:
+            raise ValueError(
+                f"{path} is not a `blackbox_analyzer.py --csv` export: missing {', '.join(missing)}"
+            )
+        for line, row in enumerate(reader, start=2):
+            if None in row or None in row.values():
+                raise ValueError(f"{path}:{line}: wrong number of fields")
+            parsed: dict[str, float] = {}
+            try:
+                for key, value in row.items():
+                    if key == TIMESTAMP_COLUMN:
+                        if value != "":
+                            parsed[key] = float(int(value))
+                    else:
+                        parsed[key] = float(value) if value != "" else 0.0
+            except ValueError as error:
+                raise ValueError(f"{path}:{line}: {error}") from None
+            rows.append(parsed)
     return rows
 
 
@@ -144,14 +196,29 @@ def load_samples(path: Path) -> list[dict[str, float]]:
     return load_log(path)
 
 
-def estimate_sample_rate(rows: list[dict[str, float]], override: float | None) -> float:
-    if override and override > 0:
-        return override
-    if len(rows) < 2:
-        return CONTROL_RATE_HZ
-    seq_span = max(1.0, rows[-1]["seq"] - rows[0]["seq"])
-    duration = seq_span / CONTROL_RATE_HZ
-    return (len(rows) - 1) / duration
+def sample_rate(rows: list[dict[str, float]], override: float | None) -> SampleRate:
+    """The override, or the rate measured from the rows' timestamps as
+    `blackbox_analyzer.py` measures the control rate. Never assumed."""
+    if override is not None:
+        if not (math.isfinite(override) and override > 0):
+            raise ValueError(f"--sample-rate must be a positive number of hertz, not {override}")
+        return SampleRate(override, "given with `--sample-rate`")
+    span = timed_span(
+        [
+            (int(row["seq"]), int(row[TIMESTAMP_COLUMN]) if TIMESTAMP_COLUMN in row else None)
+            for row in rows
+        ]
+    )
+    if span is None:
+        raise ValueError(
+            f"under a second of {TIMESTAMP_COLUMN} time to measure the sample rate from "
+            "(an RTT .log carries none); pass --sample-rate with the rate the log was recorded at"
+        )
+    return SampleRate(
+        span.sample_rate_hz,
+        f"measured from `{TIMESTAMP_COLUMN}`: {span.pairs} sample intervals over "
+        f"{span.elapsed_us / 1_000_000:.2f} s, control loop {span.control_rate_hz:.1f} Hz",
+    )
 
 
 def prepare_rows(
@@ -218,6 +285,8 @@ def find_events(rows: list[dict[str, float]]) -> list[Event]:
 
 
 def plot_setpoint_vs_measured(rows: list[dict[str, float]], out_dir: Path) -> Path:
+    import matplotlib.pyplot as plt
+
     fig, axs = plt.subplots(4, 1, figsize=(15, 11), sharex=True)
     fig.suptitle("Setpoint vs measured rate")
     for ax, axis in zip(axs[:3], AXES):
@@ -237,6 +306,8 @@ def plot_setpoint_vs_measured(rows: list[dict[str, float]], out_dir: Path) -> Pa
 
 
 def plot_error_pid(rows: list[dict[str, float]], out_dir: Path) -> Path:
+    import matplotlib.pyplot as plt
+
     fig, axs = plt.subplots(3, 1, figsize=(15, 9), sharex=True)
     fig.suptitle("Rate tracking error and PID output")
     for axis in AXES:
@@ -260,6 +331,8 @@ def plot_error_pid(rows: list[dict[str, float]], out_dir: Path) -> Path:
 
 
 def plot_event_zoom(rows: list[dict[str, float]], event: Event, out_dir: Path, zoom_s: float) -> Path:
+    import matplotlib.pyplot as plt
+
     center_t = rows[event.index]["t"]
     zoom_rows = subset(rows, lambda row: center_t - zoom_s <= row["t"] <= center_t + zoom_s)
     fig, axs = plt.subplots(4, 1, figsize=(15, 11), sharex=True)
@@ -307,7 +380,7 @@ def write_summary(
     path: Path,
     source: Path,
     rows: list[dict[str, float]],
-    sample_rate: float,
+    rate: SampleRate,
     plots: list[Path],
     events: list[Event],
 ) -> None:
@@ -323,7 +396,7 @@ def write_summary(
         f"# Flight Report: {source.name}",
         "",
         f"- samples: `{len(rows)}`",
-        f"- estimated sample rate: `{sample_rate:.1f} Hz`",
+        f"- sample rate: `{rate.hz:.1f} Hz`, {rate.source}",
         f"- armed samples: `{len(armed)}`",
         f"- throttle-on samples (`thr >= 500`): `{len(throttle_on)}`",
         f"- centered-yaw throttle-on samples: `{len(centered_yaw)}`",
@@ -374,12 +447,17 @@ def write_summary(
 
 def main() -> int:
     args = parse_args()
-    source = args.source or latest_source()
-    rows = load_samples(source)
-    if not rows:
-        raise SystemExit(f"No BB1/BB2 samples found in {source}")
-    sample_rate = estimate_sample_rate(rows, args.sample_rate)
-    rows = prepare_rows(rows, sample_rate, args.trim_start, args.trim_end)
+    try:
+        source = args.source or latest_source()
+        rows = load_samples(source)
+        if not rows:
+            raise ValueError(f"no BB1/BB2 samples found in {source}")
+        rate = sample_rate(rows, args.sample_rate)
+        rows = prepare_rows(rows, rate.hz, args.trim_start, args.trim_end)
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"Sample rate: {rate.hz:.1f} Hz, {rate.source}")
     out_dir = args.out_dir or DEFAULT_REPORT_DIR / source.stem
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -393,7 +471,7 @@ def main() -> int:
         plots.append(plot_event_zoom(rows, event, out_dir, args.zoom))
 
     summary = out_dir / "report.md"
-    write_summary(summary, source, rows, sample_rate, plots, events)
+    write_summary(summary, source, rows, rate, plots, events)
     print(f"Report: {summary}")
     for plot in plots:
         print(f"Plot:   {plot}")
