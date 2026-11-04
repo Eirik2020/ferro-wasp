@@ -211,7 +211,6 @@ compatible in one Cargo dependency graph:
 ```text
 firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
 firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, bench only
-firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 ```
 
 Run embedded commands from the selected application directory. Do not use one

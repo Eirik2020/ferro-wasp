@@ -83,10 +83,6 @@ jobs:
       - name: Check reusable-crate formatting
         run: cargo fmt --all --check
 
-      - name: Check STM32F401 bring-up formatting
-        working-directory: firmware/stm32f401-bringup
-        run: cargo fmt --manifest-path Cargo.toml --check
-
       - name: Check Foxeer F405 V2 formatting
         working-directory: firmware/foxeer-f405-v2
         run: cargo fmt --manifest-path Cargo.toml --check
@@ -98,21 +94,13 @@ jobs:
       - name: Check embedded workspace
         run: >
           cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
+          --features ferrowasp-ferrohal/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
 
       - name: Lint embedded workspace
         run: >
           cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32f4/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
+          --features ferrowasp-ferrohal/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
           -- -D warnings
-
-      - name: Check STM32F401 bring-up firmware
-        working-directory: firmware/stm32f401-bringup
-        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-
-      - name: Lint STM32F401 bring-up firmware
-        working-directory: firmware/stm32f401-bringup
-        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
 
       - name: Check Foxeer F405 V2 firmware
         working-directory: firmware/foxeer-f405-v2
@@ -140,26 +128,20 @@ jobs:
           cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
           --features "bench_actuator_validation bench_equal_motors"
 
-      - name: Check Foxeer bidirectional DShot bench image
-        working-directory: firmware/foxeer-f405-v2
-        run: >
-          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features "bench_actuator_validation bench_equal_motors bench_bidirectional_dshot"
-
       - name: Build Foxeer F405 V2 release firmware
         working-directory: firmware/foxeer-f405-v2
         run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
 
       - name: Check embedded workspace for STM32H743
         run: >
-          cargo check -p ferrowasp-stm32h7 -p ferrowasp-stm32-app --locked
+          cargo check -p ferrowasp-ferrohal -p ferrowasp-stm32-app --locked
           --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32h7/stm32h743,ferrowasp-stm32-app/stm32h743,ferrowasp-stm32-app/dshot
+          --features ferrowasp-ferrohal/stm32h743,ferrowasp-stm32-app/stm32h743,ferrowasp-stm32-app/dshot
 
-      - name: Lint STM32H7 backend
+      - name: Lint the backend for STM32H743
         run: >
-          cargo clippy -p ferrowasp-stm32h7 --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-stm32h7/stm32h743
+          cargo clippy -p ferrowasp-ferrohal --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features ferrowasp-ferrohal/stm32h743
           -- -D warnings
 
       - name: Check TBS Lucid H7 firmware
@@ -208,9 +190,9 @@ jobs:
       # tests its feature unification compiles out, the bring-up app's board
       # manifest, and the Python tools. The Python tools read the documents,
       # so they run for every change.
-      - name: Test reusable crates, feature-gated tests and bring-up
+      - name: Test reusable crates and feature-gated tests
         if: needs.changes.outputs.code == 'true'
-        run: python tools/run_tests.py rust rust-features bringup
+        run: python tools/run_tests.py rust rust-features
 
       - name: Test Python tools
         run: python tools/run_tests.py python
@@ -241,57 +223,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ripgrep
 
-      - name: Enforce isolated DShot, STM32H7 DMA and ROM bootloader unsafe boundaries
+      - name: Enforce that FerroWasp has no unsafe code of its own
         shell: bash
         run: |
-          # A missing directory must fail the audit, not shrink it: rg reports
-          # a missing path and exits 2, which `|| true` below would swallow.
-          # `apps/` became `firmware/` and was scanned for nothing until this.
-          for scanned in crates firmware; do
-            test -d "$scanned" || { echo "the unsafe audit expects ./$scanned"; exit 1; }
-          done
+          # rg exits 1 when nothing matches. Anything above that means it didn't
+          # scan: a missing path, or no rg at all. That fails the audit.
+          rg_status=0
           unsafe_matches="$(
             rg --line-number \
-              '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)|expect\(unsafe_code\)' \
-              crates firmware --glob '*.rs' --glob '!**/target/**' || true
-          )"
-          unexpected="$(
-            printf '%s\n' "$unsafe_matches" |
-              rg --invert-match \
-                '^(crates[/\\]ferrowasp-stm32f4-critical[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32f4-critical[/\\]src[/\\]dshot.rs:[0-9]+:[[:space:]]*unsafe impl(<[^>]*>)? (PeriAddress|DMASet)|crates[/\\]ferrowasp-stm32(f4|h7)-critical[/\\]src[/\\]system_bootloader.rs:[0-9]+:|crates[/\\]ferrowasp-stm32h7-critical[/\\]src[/\\]lib.rs:[0-9]+:#\[allow\(unsafe_code\)\]|crates[/\\]ferrowasp-stm32h7-critical[/\\]src[/\\]dma_endpoints.rs:[0-9]+:(unsafe impl(<[^>]*>)? TargetAddress<|[[:space:]]+let dma = unsafe \{ &\*I::ptr\(\) \};$))' ||
-              true
-          )"
-
-          if [[ -n "$unexpected" ]]; then
-            printf '%s\n' "$unexpected"
-            echo "unexpected workspace-owned unsafe source requires explicit review"
+              '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)' \
+              crates firmware --glob '*.rs' --glob '!**/target/**'
+          )" || rg_status=$?
+          if [[ "$rg_status" -gt 1 ]]; then
+            echo "the unsafe audit did not run: rg exited $rg_status"
             exit 1
           fi
-
-          # 5 for the F4 DShot boundary (the module allow, the compare and
-          # reply endpoints' PeriAddress impls, and the compare and reply
-          # DMASet route declarations); 7 for the H7 DMA endpoints (the
-          # module allow, five TargetAddress impls, one status-register read);
-          # 5 per chip for the ROM bootloader reboot (the module allow, the
-          # request word's write and read, the reset-flag read, the jump).
-          if [[ "$(printf '%s\n' "$unsafe_matches" | rg --count '.')" -ne 22 ]]; then
+          if [[ -n "$unsafe_matches" ]]; then
             printf '%s\n' "$unsafe_matches"
-            echo "the reviewed DShot, STM32H7 DMA or ROM bootloader unsafe boundary changed"
+            echo "FerroWasp has no unsafe code; a chip's unsafe belongs in FerroHAL, or needs review"
             exit 1
           fi
 
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32/src/lib.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32-critical/src/lib.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4-critical/src/lib.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32h7-critical/src/lib.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32f4/src/lib.rs
-          rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32f4-critical/src/dshot.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/foxeer-f405-v2/src/main.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/stm32f401-bringup/src/main.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' crates/ferrowasp-stm32h7/src/lib.rs
-          rg --quiet '^#!\[deny\(unsafe_op_in_unsafe_fn\)\]$' crates/ferrowasp-stm32h7-critical/src/dma_endpoints.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/tbs-lucid-h7/src/main.rs
-          rg --quiet '^#!\[deny\(unsafe_code\)\]$' firmware/tbs-lucid-h7/src/lib.rs
+          for crate in \
+            crates/ferrowasp-stm32/src/lib.rs \
+            crates/ferrowasp-stm32-critical/src/lib.rs \
+            crates/ferrowasp-ferrohal/src/lib.rs \
+            crates/ferrowasp-ferrohal-critical/src/lib.rs \
+            firmware/foxeer-f405-v2/src/main.rs \
+            firmware/tbs-lucid-h7/src/main.rs \
+            firmware/tbs-lucid-h7/src/lib.rs; do
+            rg --quiet '^#!\[deny\(unsafe_code\)\]$' "$crate"
+          done
 
   publication-security:
     name: Publication security

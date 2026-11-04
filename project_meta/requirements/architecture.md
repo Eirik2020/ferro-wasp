@@ -64,7 +64,7 @@ unmarked crates are the default. Three conventions were weighed:
 
 | Option | Shape |
 |---|---|
-| A. suffix only on split pairs, criticality declared in `Cargo.toml` metadata (chosen) | `ferrowasp-stm32f4-critical` beside `ferrowasp-stm32f4`, but `ferrowasp-safety` keeps its name; `[package.metadata.ferrowasp] critical = true` is the source of truth; the tool checks names and metadata agree |
+| A. suffix only on split pairs, criticality declared in `Cargo.toml` metadata (chosen) | `ferrowasp-ferrohal-critical` beside `ferrowasp-ferrohal`, but `ferrowasp-safety` keeps its name; `[package.metadata.ferrowasp] critical = true` is the source of truth; the tool checks names and metadata agree |
 | B. suffix on every critical crate | `ferrowasp-safety-critical`; long names |
 | C. the name as the only source | renaming a crate would silently reclassify it |
 

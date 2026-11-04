@@ -165,7 +165,7 @@ def _validate_board_sources(root: Path, errors: list[str]) -> None:
         for match in DIRECT_TIMER_REGISTER_ACCESS.finditer(text):
             errors.append(
                 f"{label}:{_line_number(text, match.start())}: "
-                "direct STM32 timer register sequencing belongs in ferrowasp-stm32f4"
+                "direct STM32 timer register sequencing belongs in FerroHAL"
             )
 
         normalized = re.sub(r"\s+", "", text)
@@ -217,7 +217,7 @@ def _validate_foxeer_required_usb(root: Path, errors: list[str]) -> None:
     if "stm32_usb::init_usb_cdc_serial(" not in main_text:
         errors.append(
             f"{_relative(main, root)}: Foxeer must initialize mandatory USB "
-            "through ferrowasp-stm32f4"
+            "through ferrowasp-ferrohal"
         )
 
 

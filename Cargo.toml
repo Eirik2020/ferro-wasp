@@ -31,16 +31,11 @@ members = [
     "crates/ferrowasp-stm32-app",
     "crates/ferrowasp-ferrohal",
     "crates/ferrowasp-ferrohal-critical",
-    "crates/ferrowasp-stm32f4",
-    "crates/ferrowasp-stm32f4-critical",
-    "crates/ferrowasp-stm32h7",
-    "crates/ferrowasp-stm32h7-critical",
     "crates/ferrowasp-storage",
     "crates/rc-pwm",
 ]
 exclude = [
     "firmware/foxeer-f405-v2",
-    "firmware/stm32f401-bringup",
     "firmware/tbs-lucid-h7",
     "tools/ferro-configurator",
 ]

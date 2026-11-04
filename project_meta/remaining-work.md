@@ -16,8 +16,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   establish them.
 - **Bidirectional DShot and RPM filter** ([section 21](requirements/hardware-and-loop.md#21-motor-speed-feedback)), Foxeer
   first. Pieces, in order:
-  - the stored bidirectional-DShot setting, in place of the props-off
-    `bench_bidirectional_dshot` feature, and FerroConfigurator's Motors tab
+  - DShot replies on FerroHAL's waveform generator, which can read a lane's pin,
+    keeping them apart from anything else on DMA2 (ES0182 2.2.19);
+  - the stored bidirectional-DShot setting, and FerroConfigurator's Motors tab
     for it and the motor pole count;
   - `ferrowasp-flight-control::rpm_filter` in the control loop, with its stored
     configuration;

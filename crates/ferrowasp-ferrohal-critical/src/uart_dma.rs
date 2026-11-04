@@ -304,6 +304,7 @@ where
 }
 
 /// Start a receive-only port, if `bindings` gives it a function.
+#[allow(clippy::too_many_arguments)]
 pub fn start_rx_port<U, RxP, RxD>(
     logical: LogicalSerialPort,
     wiring: RxWiring<U, RxP, RxD>,

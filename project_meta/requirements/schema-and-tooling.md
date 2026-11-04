@@ -34,7 +34,7 @@ What the parse yields:
   `motor4` are four instances of `dshot_dma_complete` with different config.
   Requirements attach to the definition; the instance carries the board's
   binding;
-- tasks exist only under some features (`bench_bidirectional_dshot`; `flight`
+- tasks exist only under some features (`bench_config_fault`; `flight`
   itself under `dshot`), so the parse keeps `#[cfg]` information, or coverage
   would be reported against tasks a flight image does not contain;
 - every link and flag handle is a declared local resource (section 9), so the

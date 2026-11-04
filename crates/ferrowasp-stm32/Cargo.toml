@@ -7,9 +7,9 @@ publish = false
 
 # The STM32 mechanisms that do not depend on a chip family's HAL: UART and SPI
 # DMA state machines, serial port binding, the DShot bank, ADC sample
-# planning, and the shared memory and board-description types. Each family's
-# backend (ferrowasp-stm32f4, ferrowasp-stm32h7) puts its HAL under them, so
-# every board runs the same policy. Host-testable.
+# planning, and the shared memory and board-description types. The backend,
+# ferrowasp-ferrohal, puts FerroHAL under them, so every board runs the same
+# policy. Host-testable.
 
 [lib]
 path = "src/lib.rs"

@@ -1,3 +1,5 @@
+<!-- Archived 2026-11-04 from firmware/stm32f401-bringup/README.md. The app was retired when FerroWasp moved to FerroHAL, whose F401 bench covers it. Nothing here still binds. -->
+
 # STM32F401 Bring-Up App
 
 This is the deliberately minimal STM32F401 bring-up runtime contract. It

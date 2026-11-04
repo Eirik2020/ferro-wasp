@@ -174,8 +174,8 @@ to `ferrowasp-protocol` and moved to `ferrowasp-config` (section 14).
 reader and writer, over 500 lines each, the SPI mailbox and async device), so
 neither was a contract crate as it stood.
 
-**Chip backends.** Each of `ferrowasp-stm32` (shared), `ferrowasp-stm32f4`
-and `ferrowasp-stm32h7` mixed critical and non-critical hardware.
+**Chip backends.** Each of `ferrowasp-stm32` (shared) and the backend,
+`ferrowasp-ferrohal`, mixes critical and non-critical hardware.
 
 | Critical hardware | Non-critical hardware |
 |---|---|

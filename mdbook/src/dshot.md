@@ -94,13 +94,10 @@ control loop
 No control, RC, USB, OSD, configurator, or experimental task owns a motor
 timer, pin, or DShot DMA stream.
 
-Each app is `#![deny(unsafe_code)]`. The unsafe code under DShot is limited to
-the DMA endpoint declarations of each chip backend's safety-critical half:
-`ferrowasp-stm32f4-critical::dshot` and `ferrowasp-stm32h7-critical::dma_endpoints`. Each proves that an endpoint addresses
-the compare register of a timer the bank owns exclusively, with the right
-transfer width and a valid stream mapping. HAL transfers own the active
-buffers; there is no project `static mut` and no aliasing of a buffer that DMA
-is using.
+FerroWasp has no unsafe code. Each frame is encoded as samples and played on
+FerroHAL's waveform generator, and the DMA and timer boundaries are FerroHAL's.
+FerroHAL's generator holds each frame's own copy, and the shared `DshotBank`
+holds its buffers, so no buffer DMA is using is aliased.
 
 ## ESC Telemetry
 
@@ -183,11 +180,6 @@ cargo build --release --locked --features "bench_actuator_validation bench_equal
 - `bench_logical_motorN_only`, added to it, spins only logical motor N, to
   confirm the logical-to-physical map and each motor's direction. Selecting
   two is a compile error.
-- `bench_bidirectional_dshot` (Foxeer) builds the bank bidirectional and adds
-  each lane's latest reply eRPM and its valid and invalid reply counts to the
-  periodic DShot log, beside the legacy UART telemetry, which still qualifies
-  arming. It needs the props-off gate and a capped motor feature, and prints
-  `BENCH: bidirectional DShot active` at startup.
 - `bench_dshot_idle_output1_not_running` reports zero eRPM for physical output
   1 at the qualification input only, to prove that a missing motor aborts
   arming. It prints `FAULT INJECTION ACTIVE` at startup and must never be used

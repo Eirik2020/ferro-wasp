@@ -3,7 +3,7 @@
 //! The UART, SPI, ADC and DShot state machines, serial port binding, and the
 //! shared memory and board-description types live here. Each family's
 //! backend implements the small traits these define over its own HAL:
-//! `ferrowasp-stm32f4` for the STM32F4, `ferrowasp-stm32h7` for the H743.
+//! `ferrowasp-ferrohal`, for every chip.
 
 #![deny(unsafe_code)]
 #![no_std]
