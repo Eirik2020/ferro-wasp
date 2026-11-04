@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bb5a2f42.js";
+            window.path_to_searchindex_js = "searchindex-bb21bfbd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -274,11 +274,19 @@ export is refused, and its ULog keeps the records’ millisecond timestamps.</p>
 <h2 id="flight-reports"><a class="header" href="#flight-reports">Flight Reports</a></h2>
 <p><code>tools/flight_report.py</code> writes a Markdown summary and plots of
 setpoint against measured rate, tracking error, PID output, motor output, and
-the worst tracking-error events, under <code>logs\terminal_embed\reports\</code>:</p>
-<pre><code class="language-powershell">python tools\flight_report.py --trim-start 3 --trim-end 3
+the worst tracking-error events, under <code>logs\terminal_embed\reports\</code>. It
+reads the samples the analyzer writes with <code>--csv</code>, or an RTT capture carrying
+<code>BB1</code> or <code>BB2</code> frames:</p>
+<pre><code class="language-powershell">python tools\blackbox_analyzer.py logs\foxeer-latest.csv --csv logs\foxeer-latest-samples.csv
+python tools\flight_report.py logs\foxeer-latest-samples.csv --trim-start 3 --trim-end 3
 </code></pre>
-<p>With no source it uses the newest log. It assumes a 400 Hz control rate, so on
-a faster loop pass the real rate with <code>--sample-rate</code>.</p>
+<p>With no source it uses the newest <code>.log</code> or <code>.csv</code> in <code>logs\terminal_embed\</code>.
+It times samples, and <code>--trim-start</code> and <code>--trim-end</code>, at the rate the log
+was recorded at, measured from the CSV’s <code>timestamp_us</code> column as the analyzer
+measures the control rate, and the summary states the rate and where it came
+from. <code>BB</code> frames carry no time, so an RTT capture, or a CSV the analyzer
+wrote from one, needs <code>--sample-rate</code> in logged samples per second; without a
+measurable rate or that option the report is refused.</p>
 <h2 id="safety-notes"><a class="header" href="#safety-notes">Safety Notes</a></h2>
 <ul>
 <li><code>terminal_embed.py</code> flashes, resets, and starts firmware. Put the ESCs in the
