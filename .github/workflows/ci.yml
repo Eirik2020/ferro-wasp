@@ -247,13 +247,13 @@ jobs:
           # A missing directory must fail the audit, not shrink it: rg reports
           # a missing path and exits 2, which `|| true` below would swallow.
           # `apps/` became `firmware/` and was scanned for nothing until this.
-          for scanned in crates firmware; do
+          for scanned in crates drivers firmware; do
             test -d "$scanned" || { echo "the unsafe audit expects ./$scanned"; exit 1; }
           done
           unsafe_matches="$(
             rg --line-number \
               '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)|expect\(unsafe_code\)' \
-              crates firmware --glob '*.rs' --glob '!**/target/**' || true
+              crates drivers firmware --glob '*.rs' --glob '!**/target/**' || true
           )"
           unexpected="$(
             printf '%s\n' "$unsafe_matches" |
