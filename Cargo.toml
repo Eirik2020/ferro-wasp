@@ -35,6 +35,7 @@ members = [
     "crates/ferrowasp-stm32h7-critical",
     "crates/ferrowasp-storage",
     "crates/rc-pwm",
+    "drivers/crsf-wire",
 ]
 exclude = [
     "firmware/foxeer-f405-v2",

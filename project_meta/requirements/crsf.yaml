@@ -1,0 +1,366 @@
+schema_version: 2
+requirements:
+  - id: CRSF-001
+    title: A CRSF frame starts only at a link address
+    statement: >-
+      The CRSF parser shall begin a frame only at the flight controller,
+      receiver or transmitter address byte, and discard every other byte
+      while it searches for one.
+    rationale: >-
+      Every extra start byte, zero included, lets line noise open a false
+      frame that the 8-bit CRC must then catch; the flight-controller link
+      carries only these three.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::frame::tests::only_the_three_link_addresses_start_a_frame
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::only_the_three_link_addresses_start_a_frame
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::rc_frame_decodes_after_leading_noise
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::frames_at_other_addresses_are_ignored_here_and_accepted_by_uf_crsf
+
+  - id: CRSF-002
+    title: A corrupt CRSF frame is an error, never a frame
+    statement: >-
+      The CRSF parser shall report a length byte outside 2 to 62, a
+      CRC-8/DVB-S2 mismatch over type and payload, or a known frame type with
+      the wrong payload length as an error, and never deliver that frame.
+    rationale: >-
+      A corrupt RC frame delivered as valid commands the wrong stick;
+      reporting it lets the consumer count the error and judge the link.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::frame::tests::crc_matches_the_dvb_s2_check_value
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::impossible_length_is_rejected_without_buffering
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::short_rc_payload_is_an_error_not_a_frame
+
+  - id: CRSF-003
+    title: The CRSF parser resynchronizes after an error
+    statement: >-
+      After any error it reports, and after a reset, the CRSF parser shall
+      return to address search, so the next valid frame decodes.
+    rationale: >-
+      A single bad frame or a gap in the stream must not leave the parser
+      stuck or misaligned for the frames after it.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::impossible_length_is_rejected_without_buffering
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::a_reset_drops_the_partial_frame
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::valid_frames_after_noise_and_a_reset_always_decode
+
+  - id: CRSF-004
+    title: The CRSF parser is bounded for any input
+    statement: >-
+      The CRSF parser shall accept any byte sequence without panicking or
+      allocating, holding at most one 64-byte frame and doing a bounded
+      amount of work for each byte.
+    rationale: >-
+      It runs on the RC path in allocation-free firmware; a panic or an
+      unbounded step on noise or hostile input would stall the flight
+      firmware.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::random_bytes_never_panic_and_the_state_stays_bounded
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::noise_dense_with_address_bytes_never_panics
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::the_longest_and_shortest_frames_decode
+
+  - id: CRSF-005
+    title: CRSF frame contents decode as the protocol defines
+    statement: >-
+      The CRSF parser shall unpack RC channels as sixteen 11-bit values
+      least-significant bit first, expose every link statistics field, and
+      pass other well-formed frame types through as other.
+    rationale: >-
+      A channel unpacked at the wrong bit offset commands the wrong stick,
+      and the uplink link quality is the receiver's explicit loss signal.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::channels::tests::channels_round_trip_through_the_packed_payload
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::channels::tests::first_channel_occupies_the_low_bits_of_the_first_byte
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::channels::tests::the_last_channel_occupies_the_high_bits_of_the_last_byte
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::channels::tests::bits_above_eleven_are_dropped_when_packing
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::link_statistics_expose_every_field
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::parser::tests::unknown_types_pass_through_as_other
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::rc_channel_frames_from_uf_crsf_decode_to_the_same_channels
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::link_statistics_from_uf_crsf_decode_to_the_same_fields
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::telemetry_frames_from_uf_crsf_pass_through_as_other
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::a_stream_of_valid_frames_gives_the_same_frames_to_both_parsers
+
+  - id: CRSF-006
+    title: CRSF telemetry frames follow the specification's layout
+    statement: >-
+      Each CRSF telemetry encoder shall emit one frame of the flight
+      controller's sync byte, the length, the frame type, the payload fields
+      in the specification's order, units and big-endian byte order, and a
+      CRC-8/DVB-S2 over type and payload.
+    rationale: >-
+      Radios decode telemetry by the specification; a field in the wrong
+      order, unit or byte order shows the pilot a wrong battery, position,
+      altitude or attitude.
+    derived_from: [W6]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::frame::tests::a_sealed_frame_is_well_formed_and_any_corruption_is_not
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::a_battery_frame_is_big_endian_and_round_trips_through_the_parser
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::a_gps_frame_carries_each_field_big_endian_in_its_unit
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::a_vario_frame_carries_signed_centimetres_per_second
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::baro_altitude_packs_decimetres_then_metres_and_saturates
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::vertical_speed_packing_matches_the_specification_formula_everywhere
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::attitude_angles_wrap_into_one_turn
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::a_flight_mode_frame_is_its_name_and_a_terminator
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::battery_frames_parse_in_uf_crsf_with_the_same_fields
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::gps_frames_parse_in_uf_crsf_with_the_same_fields
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::vario_frames_parse_in_uf_crsf_with_the_same_speed
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::baro_altitude_frames_parse_in_uf_crsf_and_pack_as_it_packs
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::vertical_speed_packing_agrees_with_uf_crsf
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::attitude_frames_parse_in_uf_crsf_with_the_same_angles
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::cross_check::flight_mode_frames_parse_in_uf_crsf_with_the_same_name
+
+  - id: CRSF-007
+    title: Out-of-range CRSF telemetry is bounded, never wrapped
+    statement: >-
+      The CRSF telemetry encoding shall saturate each number at the nearest
+      value its field carries, wrap each angle into one turn, and refuse to
+      construct a latitude past a pole, a longitude past the antimeridian, or
+      a flight-mode name a frame cannot carry.
+    rationale: >-
+      A value wrapped by truncation shows the pilot a plausible but wrong
+      reading, such as a full battery or ground level, when the real one is
+      out of range.
+    derived_from: [W2, W6]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::battery_fields_saturate_at_what_crsf_carries
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::gps_fields_saturate_or_wrap_and_a_position_past_a_pole_is_refused
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::a_vario_frame_carries_signed_centimetres_per_second
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::baro_altitude_packs_decimetres_then_metres_and_saturates
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::vertical_speed_packing_matches_the_specification_formula_everywhere
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::attitude_angles_wrap_into_one_turn
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::telemetry::tests::a_flight_mode_name_a_frame_cannot_carry_is_refused
+
+  - id: CRSF-008
+    title: The CRSF reader keeps every byte in order, one read per call
+    statement: >-
+      The CRSF reader shall feed the bytes an embedded-io source returns to
+      the parser in order, making at most one read per call and keeping the
+      bytes after a completed frame for the next call.
+    rationale: >-
+      One read per call bounds each call's work, and a byte dropped or
+      reordered between reads corrupts the frame it belongs to.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::the_reader_delivers_every_frame_in_order_whatever_the_chunking
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::bytes_after_a_frame_stay_buffered_for_the_next_call
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::a_source_claiming_more_than_the_buffer_is_held_to_the_buffer
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::poll_ready_does_not_read_a_source_that_is_not_ready
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::the_reader_reports_corrupt_frames_as_the_parser_does
+
+  - id: CRSF-009
+    title: A CRSF source fault is an error, never silence
+    statement: >-
+      The CRSF reader shall return a source error or the end of the stream
+      as a read error, never as a frame or as no data, and drop the partial
+      frame it interrupted.
+    rationale: >-
+      A receiver port that faulted or closed must be visible to the consumer
+      judging the link, and bytes lost around a fault must not be joined to
+      the next frame.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::a_source_error_or_end_of_stream_is_an_error_and_resets_the_parser
+
+  - id: CRSF-010
+    title: The CRSF writer sends only whole, checked frames
+    statement: >-
+      The CRSF writer shall pass a frame to an embedded-io sink only after
+      checking its address, length and CRC, and report a sink error or a
+      write that accepts nothing as an error, never as a sent frame.
+    rationale: >-
+      A malformed frame can confuse the receiver, and a stalled sink must be
+      reported rather than looped on or panicked over, as the embedded-io
+      write-all helper does.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::frame::tests::a_sealed_frame_is_well_formed_and_any_corruption_is_not
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::the_writer_sends_a_frame_whole_across_short_writes
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::a_stalled_or_failing_sink_is_an_error_not_a_sent_frame
+        - level: unit
+          environment: host
+          method:
+            test: crsf_wire::io::tests::a_malformed_frame_never_reaches_the_sink
