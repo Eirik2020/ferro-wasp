@@ -58,6 +58,17 @@ A safety-critical crate declares `[package.metadata.ferrowasp] critical =
 true` and never depends on a crate that does not; its external dependencies
 are pinned to one version.
 
+## Drivers
+
+Under `drivers/`, members of the root workspace and host-tested there. A
+driver crate depends on nothing from FerroWasp and names no project, so it can
+be used outside it; the adapters that turn its output into FerroWasp's types
+live in FerroWasp's own crates.
+
+| Crate | Owns |
+|---|---|
+| `ubx-wire` | The u-blox UBX protocol for an M10 GNSS receiver: framing with resynchronisation inside dropped frames, configuration through `CFG-VALSET` and `CFG-VALGET` with their acknowledgements, `NAV-PVT` decoding that exposes a position only for a valid 3D fix, and transports over `embedded-io` serial and `embedded-hal` I2C |
+
 ## Firmware Applications
 
 Under `firmware/`, each its own Cargo workspace:
