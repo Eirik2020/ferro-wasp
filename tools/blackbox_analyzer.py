@@ -588,29 +588,58 @@ def u32_forward_delta(previous: int, current: int) -> int:
     return (current - previous) & 0xFFFF_FFFF
 
 
-def measured_control_rate_hz(samples: list[BlackboxSample]) -> float | None:
-    """Control ticks per second, from the control sequence and timestamp
-    spans of consecutive samples; `None` without a second of timestamps.
+@dataclass(frozen=True)
+class TimedSpan:
+    """What the timed consecutive-sample pairs of a log add up to."""
 
-    Timestamps tick in whole milliseconds, so the rate comes from long spans
+    pairs: int
+    control_ticks: int
+    elapsed_us: int
+
+    @property
+    def control_rate_hz(self) -> float:
+        return self.control_ticks * 1_000_000 / self.elapsed_us
+
+    @property
+    def sample_rate_hz(self) -> float:
+        """Logged samples per second, below the control rate when the log
+        keeps every Nth tick or drops frames."""
+        return self.pairs * 1_000_000 / self.elapsed_us
+
+
+def timed_span(points: list[tuple[int, int | None]]) -> TimedSpan | None:
+    """Sum the `(seq, timestamp_us)` pairs of consecutive samples; `None`
+    without a second of timestamps.
+
+    Timestamps tick in whole milliseconds, so a rate comes from long spans
     rather than single intervals. A pair with a backwards or implausibly
     large step, such as a reboot, is left out.
     """
 
+    pairs = 0
     ticks = 0
     elapsed_us = 0
-    for previous, current in zip(samples, samples[1:]):
-        if previous.timestamp_us is None or current.timestamp_us is None:
+    for (previous_seq, previous_us), (current_seq, current_us) in zip(points, points[1:]):
+        if previous_us is None or current_us is None:
             continue
-        control_delta = current.seq - previous.seq
-        interval_us = u32_forward_delta(previous.timestamp_us, current.timestamp_us)
+        control_delta = current_seq - previous_seq
+        interval_us = u32_forward_delta(previous_us, current_us)
         if control_delta <= 0 or interval_us > 1_000_000:
             continue
+        pairs += 1
         ticks += control_delta
         elapsed_us += interval_us
     if elapsed_us < 1_000_000:
         return None
-    return ticks * 1_000_000 / elapsed_us
+    return TimedSpan(pairs, ticks, elapsed_us)
+
+
+def measured_control_rate_hz(samples: list[BlackboxSample]) -> float | None:
+    """Control ticks per second, from the control sequence and timestamp
+    spans of consecutive samples; `None` without a second of timestamps."""
+
+    span = timed_span([(sample.seq, sample.timestamp_us) for sample in samples])
+    return None if span is None else span.control_rate_hz
 
 
 def sequence_stats(samples: list[BlackboxSample]) -> SequenceStats:
