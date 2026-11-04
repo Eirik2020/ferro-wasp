@@ -556,6 +556,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-sensor-traits"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-io-contracts",
+]
+
+[[package]]
 name = "ferrowasp-serial"
 version = "0.1.0"
 dependencies = [

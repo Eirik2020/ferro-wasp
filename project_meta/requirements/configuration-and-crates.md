@@ -209,6 +209,7 @@ Safety-critical (`critical = true`):
 | `ferrowasp-feedback` | actuator feedback core, ESC-telemetry trait and group | `flight::esc_manager` |
 | `ferrowasp-imu` | IMU trait and group | `stm32-tasks::spi1`, `io-core::spi` |
 | per-sensor IMU crates | one embedded-hal driver each | `drivers::mpu6000`, `mpu6500`, `icm42688p` |
+| `ferrowasp-sensor-traits` | the sensor-class traits (IMU, barometer, GNSS), their samples, the shared envelope and error kinds | new |
 | CRSF, SBUS, BLHeli-telemetry crates | standalone embedded-hal/io protocol crates | `drivers::crsf`, `drivers::blheli_telemetry`, `sbus-rs` (external) |
 | `ferrowasp-output` | DShot and PWM output groups, waveform encode, bidirectional decode | `waveform`, `stm32-tasks::dshot` |
 | `ferrowasp-serial` | UART transport group, RX reader, TX writer | `io-core::serial`, `stm32-tasks::uart_port` |
