@@ -5,7 +5,7 @@
 /// is named through it: the HAL's own interrupt and pin types, and the motor
 /// bank over the family's timers.
 #[cfg(feature = "stm32f405")]
-pub use ferrowasp_stm32f4 as backend;
+pub use ferrowasp_ferrohal as backend;
 #[cfg(feature = "stm32h743")]
 pub use ferrowasp_stm32h7 as backend;
 

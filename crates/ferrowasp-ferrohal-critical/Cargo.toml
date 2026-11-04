@@ -1,0 +1,34 @@
+[package]
+name = "ferrowasp-ferrohal-critical"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+bench_spi_timeout_recovery = ["ferrowasp-stm32-critical/bench_spi_timeout_recovery"]
+dshot = ["dep:ferrowasp-output", "ferrowasp-stm32-critical/dshot"]
+# Each chip feature selects FerroHAL's chip; without one nothing builds.
+stm32f405 = ["dep:ferrohal-stm32", "ferrohal-stm32/stm32f405rg"]
+stm32h743 = ["dep:ferrohal-stm32", "ferrohal-stm32/stm32h743vi"]
+
+[dependencies]
+defmt = "=1.2.0"
+embedded-hal = { workspace = true }
+ferrowasp-imu = { path = "../ferrowasp-imu" }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-output = { path = "../ferrowasp-output", optional = true }
+ferrowasp-serial = { path = "../ferrowasp-serial" }
+ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical" }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "=0.7.10", features = ["critical-section-single-core"] }
+critical-section = { version = "=1.2.0" }
+ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "1006697a00b506ef04e6d82e9c6a9da2ffa9b879", optional = true, features = ["rt", "defmt"] }
+
+[package.metadata.ferrowasp]
+critical = true

@@ -1,9 +1,27 @@
 //! Requirements: BUILD-001
 
-use super::aliases::{Adc1ObservationParts, Spi1ImuOwner, Spi1RxTransfer, Spi1TxTransfer};
+use super::aliases::{Adc1ObservationTransfer, Spi1ImuOwner};
 use super::manifest::Spi1ImuKind;
-use backend::dshot::channel::{Ch1, Ch3, Ch3N, Ch4};
-use backend::dshot::{GpioA, GpioB, GpioC, ReplyPin};
+use core::cell::RefCell;
+use critical_section::Mutex;
+use ferrowasp_ferrohal as backend;
+use ferrowasp_ferrohal::chip_time::CycleDelay;
+use ferrowasp_ferrohal::hal::{
+    adc::{Adc, Config as AdcConfig},
+    chip::{ADC1, SPI1, SPI2, TIM1, TIM2, TIM4, TIM6, TIM8, UART4, USART1, USART2, USART3},
+    dma::Stream,
+    exti::{self, Edge},
+    gpio::{Alternate, Analog, Pin},
+    rcc::{
+        AhbPrescaler, ApbPrescaler, Clocks, Config as ClockConfig, Hse, HseMode, Pll, PllP,
+        PllSource, Rcc, Supply, Sysclk,
+    },
+    spi::{self, BlockingSpi, BlockingWiring, Spi, Wiring as SpiWiring},
+    time::Hertz,
+    timer::{Awg, Pwm, Tick, Timebase},
+    uart::{RxWiring, Wiring as UartWiring},
+};
+use ferrowasp_ferrohal::uart_dma::{self, PortMemory};
 use ferrowasp_icm42688p as icm42688p;
 use ferrowasp_mpu6000 as mpu6000;
 use ferrowasp_mpu6500 as mpu6500;
@@ -12,10 +30,43 @@ use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
-use ferrowasp_stm32f4 as backend;
-use ferrowasp_stm32f4::hal_prelude::hal::gpio::Speed;
-use ferrowasp_stm32f4::hal_prelude::*;
-use ferrowasp_stm32f4::uart_dma;
+
+/// The board's 8 MHz crystal to 168 MHz, with 48 MHz on PLLQ for USB. The same tree
+/// the old HAL worked out, stated, and checked against the F405's limits as it builds.
+pub const CLOCK_CONFIG: ClockConfig = ClockConfig {
+    hse: Some(Hse {
+        freq: Hertz::mhz(8),
+        mode: HseMode::Oscillator,
+    }),
+    pll: Some(Pll {
+        source: PllSource::Hse,
+        prediv: 8,
+        mul: 336,
+        divp: PllP::Div2,
+        divq: Some(7),
+    }),
+    sys: Sysclk::PllP,
+    ahb_pre: AhbPrescaler::Div1,
+    apb1_pre: ApbPrescaler::Div4,
+    apb2_pre: ApbPrescaler::Div2,
+    supply: Supply::V2_7To3_6,
+};
+pub const CLOCKS: Clocks = match CLOCK_CONFIG.validate() {
+    Ok(clocks) => clocks,
+    Err(_) => panic!("CLOCK_CONFIG breaks the F405's limits"),
+};
+const _: () = assert!(CLOCKS.sysclk.0 == backend::clocks::SYSTEM_CLOCK_HZ);
+const _: () =
+    assert!(Tick::check::<TIM4>(&CLOCKS, Hertz(super::profiles::SCHEDULER_TICK_RATE_HZ)).is_ok());
+const _: () =
+    assert!(Tick::check::<TIM6>(&CLOCKS, Hertz(ferrowasp_stm32::watchdog::IO_WATCHDOG_HZ)).is_ok());
+const _: () = assert!(
+    Timebase::check::<TIM2>(
+        &CLOCKS,
+        Hertz(ferrowasp_stm32::timebase::MICROSECOND_TIMEBASE_HZ)
+    )
+    .is_ok()
+);
 
 const _: () = {
     assert!(Spi1ImuKind::MPU6500_WHO_AM_I == mpu6500::WHO_AM_I_EXPECTED);
@@ -28,34 +79,26 @@ const _: () = {
 
 pub use backend::dshot::{
     DSHOT_FRAME_TIMEOUT_MS, DSHOT_SERVICE_PERIOD_MS, DshotCommandError, DshotDmaBuffer,
-    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMode, DshotMotor, DshotReplyStorage,
-    DshotServiceEvent, DshotTelemetryRequestError,
+    DshotDmaStorage, DshotInitError, DshotInterruptEvent, DshotMotor, DshotServiceEvent,
+    DshotTelemetryRequestError,
 };
 
-#[cfg(all(
-    feature = "bench_bidirectional_dshot",
-    not(feature = "bench_actuator_validation")
-))]
-compile_error!(
-    "Foxeer bidirectional DShot is props-off only until a stored setting selects it: add `bench_actuator_validation` and a capped motor feature."
-);
+/// The IMU bus: the rate and mode the targets validated, in FerroHAL's terms.
+const IMU_SPI: spi::Config = spi::Config::new(Hertz::mhz(1)).with_mode(spi::MODE_3);
+/// The flash bus: FerroHAL takes the fastest rate at or below this, 10.5 MHz.
+const FLASH_SPI: spi::Config = spi::Config::new(Hertz::mhz(11));
 
-/// Plain DShot, or bidirectional DShot (dshot.md) in the props-off
-/// `bench_bidirectional_dshot` image until a stored setting selects it.
-pub const DSHOT_MODE: DshotMode = if cfg!(feature = "bench_bidirectional_dshot") {
-    DshotMode::Bidirectional
-} else {
-    DshotMode::Unidirectional
-};
+const _: () = assert!(Spi::check::<SPI1>(&CLOCKS, &IMU_SPI).is_ok());
+const _: () = assert!(Spi::check::<SPI2>(&CLOCKS, &FLASH_SPI).is_ok());
 
 pub struct Spi1ImuResources {
-    pub cs_pin: PA4<Input>,
-    pub sck_pin: PA5<Input>,
-    pub miso_pin: PA6<Input>,
-    pub mosi_pin: PA7<Input>,
+    pub cs_pin: super::aliases::Spi1ImuCs,
+    pub sck_pin: Pin<'A', 5, Alternate<5>>,
+    pub miso_pin: Pin<'A', 6, Alternate<5>>,
+    pub mosi_pin: Pin<'A', 7, Alternate<5>>,
     pub spi: SPI1,
-    pub rx_dma: Stream0<DMA2>,
-    pub tx_dma: Stream3<DMA2>,
+    pub rx_dma: Stream<2, 0>,
+    pub tx_dma: Stream<2, 3>,
 }
 
 pub struct Spi1ImuParts {
@@ -65,43 +108,42 @@ pub struct Spi1ImuParts {
 }
 
 pub struct Spi2FlashResources {
-    pub cs_pin: super::aliases::Spi2FlashCsPin,
-    pub sck_pin: super::aliases::Spi2FlashSckPin,
-    pub miso_pin: super::aliases::Spi2FlashMisoPin,
-    pub mosi_pin: super::aliases::Spi2FlashMosiPin,
-    pub spi: pac::SPI2,
+    pub cs_pin: super::aliases::Spi2FlashCs,
+    pub sck_pin: Pin<'B', 13, Alternate<5>>,
+    pub miso_pin: Pin<'C', 2, Alternate<5>>,
+    pub mosi_pin: Pin<'C', 3, Alternate<5>>,
+    pub spi: SPI2,
 }
 
 pub fn init_spi2_flash(
     resources: Spi2FlashResources,
-    clocks: &mut Rcc,
-) -> super::aliases::Spi2Flash {
-    let mut cs = resources.cs_pin.into_push_pull_output();
+    rcc: &mut Rcc,
+) -> Option<super::aliases::Spi2Flash> {
+    let mut cs = resources.cs_pin;
     cs.set_high();
-    let mode = spi::Mode {
-        polarity: spi::Polarity::IdleLow,
-        phase: spi::Phase::CaptureOnFirstTransition,
-    };
-    let bus = Spi::new(
-        resources.spi,
-        (
-            Some(resources.sck_pin.into_alternate()),
-            Some(resources.miso_pin.into_alternate()),
-            Some(resources.mosi_pin.into_alternate()),
-        ),
-        mode,
-        10_000_000.Hz(),
-        clocks,
-    );
-    ferrowasp_storage::spi_nor::SpiNor::new(bus, cs)
+    let bus = BlockingSpi::new(
+        rcc,
+        BlockingWiring {
+            spi: resources.spi,
+            sck: resources.sck_pin,
+            miso: resources.miso_pin,
+            mosi: resources.mosi_pin,
+        },
+        &FLASH_SPI,
+    )
+    .ok()?;
+    Some(ferrowasp_storage::spi_nor::SpiNor::new(bus, cs))
 }
 
+/// The IMU's data-ready line on PC4. Its pin stays the input reset leaves it.
 pub fn init_imu_data_ready(
-    pin: hal::gpio::PC4<hal::gpio::Input>,
-    syscfg: &mut hal::syscfg::SysCfg,
-    exti: &mut pac::EXTI,
+    line: exti::Line<4>,
+    ctrl: &mut exti::Ctrl,
 ) -> super::aliases::ImuDataReadyPin {
-    backend::exti::init_input(pin, syscfg, exti, Edge::Rising)
+    let mut routed = line.route::<'C'>(ctrl, Edge::Rising);
+    routed.clear();
+    routed.listen(ctrl);
+    backend::exti::ExtiInput(routed.handle())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -127,22 +169,20 @@ impl Spi1ImuBringupStatus {
 
 pub struct Adc1BatteryResourcesFoxeer {
     pub adc: ADC1,
-    pub voltage_pin: PC0<Input>,
-    pub current_pin: PC1<Input>,
-    pub dma: Stream4<DMA2>,
+    pub voltage_pin: Pin<'C', 0, Analog>,
+    pub current_pin: Pin<'C', 1, Analog>,
+    pub dma: Stream<2, 4>,
 }
 
-pub fn init_spi1_imu<D>(
+pub fn init_spi1_imu(
     resources: Spi1ImuResources,
-    clocks: &mut Rcc,
-    delay: &mut D,
+    rcc: &mut Rcc,
+    delay: &mut CycleDelay,
     storage: SpiDmaStorageResources,
-) -> Spi1ImuParts
-where
-    D: hal::hal::delay::DelayNs,
-{
+    memory: Spi1Memory,
+) -> Option<Spi1ImuParts> {
     let Spi1ImuResources {
-        cs_pin,
+        mut cs_pin,
         sck_pin,
         miso_pin,
         mosi_pin,
@@ -151,32 +191,34 @@ where
         tx_dma,
     } = resources;
 
-    let mut cs = cs_pin.into_push_pull_output();
-    cs.set_high();
-    let mode = spi::Mode {
-        polarity: spi::Polarity::IdleHigh,
-        phase: spi::Phase::CaptureOnSecondTransition,
-    };
+    cs_pin.set_high();
     let mut spi = Spi::new(
-        spi,
-        (
-            Some(sck_pin.into_alternate()),
-            Some(miso_pin.into_alternate()),
-            Some(mosi_pin.into_alternate()),
-        ),
-        mode,
-        1_000_000.Hz(),
-        clocks,
-    );
+        rcc,
+        SpiWiring {
+            spi,
+            sck: sck_pin,
+            miso: miso_pin,
+            mosi: mosi_pin,
+            tx_dma,
+            rx_dma,
+        },
+        &IMU_SPI,
+        spi::Buffers {
+            tx: memory.tx,
+            rx: memory.rx,
+        },
+    )
+    .ok()?;
 
-    delay.delay_ms(10);
-    let bringup = match icm42688p::read_who_am_i(&mut spi, &mut cs) {
+    embedded_hal::delay::DelayNs::delay_ms(delay, 10);
+    let cs = &mut cs_pin;
+    let bringup = match icm42688p::read_who_am_i(&mut spi, cs) {
         Ok(who_am_i) => match Spi1ImuKind::from_who_am_i(who_am_i) {
             Some(kind) => {
                 let configured = match kind {
-                    Spi1ImuKind::Mpu6500 => mpu6500::init(&mut spi, &mut cs, delay).is_ok(),
-                    Spi1ImuKind::Icm42688P => icm42688p::init(&mut spi, &mut cs, delay).is_ok(),
-                    Spi1ImuKind::Mpu6000 => mpu6000::init(&mut spi, &mut cs, delay).is_ok(),
+                    Spi1ImuKind::Mpu6500 => mpu6500::init(&mut spi, cs, delay).is_ok(),
+                    Spi1ImuKind::Icm42688P => icm42688p::init(&mut spi, cs, delay).is_ok(),
+                    Spi1ImuKind::Mpu6000 => mpu6000::init(&mut spi, cs, delay).is_ok(),
                 };
 
                 if configured {
@@ -190,155 +232,122 @@ where
         Err(_) => Spi1ImuBringupStatus::ProbeFailed,
     };
 
-    let dma = backend::spi_dma::init_spi_dma::<_, _, _, 3, 3>(
-        spi,
-        rx_dma,
-        tx_dma,
-        storage.into_backend(),
-    );
-    let backend::spi_dma::SpiDmaParts {
-        irq,
-        poller,
-        parser,
-        recovery_rx_buffer,
-    }: backend::spi_dma::SpiDmaParts<Spi1RxTransfer, Spi1TxTransfer> = dma;
-    let owner = backend::spi_dma::SpiDmaOwner::new(irq, poller, recovery_rx_buffer, cs);
-
-    Spi1ImuParts {
+    let parts = backend::spi_dma::init_spi_dma(spi, memory.core, storage.into_backend());
+    let (owner, parser) = backend::spi_dma::owner(parts, cs_pin);
+    Some(Spi1ImuParts {
         owner,
         parser,
         bringup,
-    }
+    })
 }
 
+/// The IMU driver's own memory, beside FerroWasp's rotating buffers.
+pub struct Spi1Memory {
+    pub core: backend::spi_dma::SharedSpi,
+    pub tx: &'static mut [u8],
+    pub rx: &'static mut [u8],
+}
+
+/// ADC1 reading the temperature sensor, then the battery's voltage and current.
 pub fn init_adc1_battery(
     resources: Adc1BatteryResourcesFoxeer,
     rcc: &mut Rcc,
     storage: AdcStorageResources,
-) -> Adc1ObservationParts {
+) -> Option<(Adc1ObservationTransfer, &'static mut [u16; 3])> {
     let (primary, spare) = storage.split();
-
-    backend::adc::init_adc1_observation_for::<_, _, _, 0>(
-        resources.adc,
-        resources.voltage_pin.into_analog(),
-        resources.current_pin.into_analog(),
-        resources.dma,
-        rcc,
-        primary,
+    let mut adc = Adc::new(rcc, resources.adc, &AdcConfig::slow_source()).ok()?;
+    let vdda_mv = adc.vdda_millivolts().unwrap_or(3300);
+    let max_sample = adc.max_sample();
+    let channels = [
+        adc.temperature_channel(),
+        adc.channel(&resources.voltage_pin),
+        adc.channel(&resources.current_pin),
+    ];
+    let scan = adc
+        .into_scan(resources.dma, &channels, &mut primary[..])
+        .ok()?;
+    Some((
+        Adc1ObservationTransfer::new(scan, 1, 2, vdda_mv, max_sample),
         spare,
-    )
+    ))
 }
 
 pub struct DshotMotorBankResources {
-    pub tim1: Timer<TIM1>,
-    pub tim8: Timer<TIM8>,
-    pub motor1_pin: super::aliases::Motor1Pin,
-    pub motor2_pin: super::aliases::Motor2Pin,
-    pub motor3_pin: super::aliases::Motor3Pin,
-    pub motor4_pin: super::aliases::Motor4Pin,
-    pub motor1_dma: Stream1<DMA2>,
-    pub motor2_dma: Stream7<DMA2>,
-    pub motor3_dma: Stream2<DMA2>,
-    pub motor4_dma: Stream6<DMA2>,
+    pub tim1: Pwm<TIM1>,
+    pub tim8: Pwm<TIM8>,
+    pub motor1_pin: Pin<'A', 8, Alternate<1>>,
+    pub motor2_pin: Pin<'C', 9, Alternate<3>>,
+    pub motor3_pin: Pin<'C', 8, Alternate<3>>,
+    pub motor4_pin: Pin<'B', 15, Alternate<1>>,
+    pub motor1_dma: Stream<2, 1>,
+    pub motor2_dma: Stream<2, 7>,
+    pub motor3_dma: Stream<2, 2>,
+    pub motor4_dma: Stream<2, 6>,
 }
 
-/// Build the four-motor bank. The pads are latched low as GPIO until both
-/// timers are configured with their outputs parked, then connected. TIM1
-/// starts TIM8 through its trigger output, so all four lanes begin on the
-/// same edge. Each lane names its pad, so a bidirectional bank can sample
-/// it for replies; bidirectional pads get pull-ups to hold the idle-high
-/// line while the timers release it.
+/// Lane storage, for the generator's own copies of each frame.
+pub struct MotorLaneMemory {
+    pub motor1: &'static mut [u32],
+    pub motor2: &'static mut [u32],
+    pub motor3: &'static mut [u32],
+    pub motor4: &'static mut [u32],
+}
+
+/// Build the four-motor bank on the waveform generator. Every channel comes up at
+/// duty 0 with its timer stopped, so no pad sees a pulse, and TIM1 starts TIM8
+/// through its trigger output, so all four lanes begin on one edge.
 pub fn init_dshot_motor_bank(
     resources: DshotMotorBankResources,
-    clocks: &hal::rcc::Clocks,
+    memory: MotorLaneMemory,
+    clocks: &Clocks,
     storage: &'static mut DshotDmaStorage,
-    replies: &'static mut DshotReplyStorage,
 ) -> Result<super::aliases::DshotMotorBank, DshotInitError> {
-    let r = resources;
-    let [
-        motor1_replies,
-        motor2_replies,
-        motor3_replies,
-        motor4_replies,
-    ] = replies.buffers();
-    let mut motor1_pin = r.motor1_pin.into_push_pull_output();
-    let mut motor2_pin = r.motor2_pin.into_push_pull_output();
-    let mut motor3_pin = r.motor3_pin.into_push_pull_output();
-    let mut motor4_pin = r.motor4_pin.into_push_pull_output();
-    motor1_pin.set_low();
-    motor2_pin.set_low();
-    motor3_pin.set_low();
-    motor4_pin.set_low();
-
-    let bank = backend::dshot::init_dshot_motor_bank(
-        (
-            backend::dshot::DshotTimer(r.tim1.release()),
-            backend::dshot::DshotTimer(r.tim8.release()),
-        ),
-        (
-            backend::dshot::lane::<TIM1, Ch1, 6, ReplyPin<GpioA, 8>, _>(
-                r.motor1_dma,
-                motor1_replies,
-            ),
-            backend::dshot::lane::<TIM8, Ch4, 7, ReplyPin<GpioC, 9>, _>(
-                r.motor2_dma,
-                motor2_replies,
-            ),
-            backend::dshot::lane::<TIM8, Ch3, 0, ReplyPin<GpioC, 8>, _>(
-                r.motor3_dma,
-                motor3_replies,
-            ),
-            backend::dshot::lane::<TIM1, Ch3N, 6, ReplyPin<GpioB, 15>, _>(
-                r.motor4_dma,
-                motor4_replies,
-            ),
-        ),
-        backend::dshot::TriggeredStart::<TIM1, TIM8>::new(),
-        DSHOT_MODE,
-        clocks,
+    let mut r = resources;
+    let channel1 = r.tim1.channel::<1, _>(r.motor1_pin);
+    let channel3n = r.tim1.complementary::<3, _>(r.motor4_pin);
+    let channel4 = r.tim8.channel::<4, _>(r.motor2_pin);
+    let channel3 = r.tim8.channel::<3, _>(r.motor3_pin);
+    let (Ok(lane1), Ok(lane4), Ok(lane2), Ok(lane3)) = (
+        channel1.into_lane(r.motor1_dma, memory.motor1),
+        channel3n.into_lane(r.motor4_dma, memory.motor4),
+        channel4.into_lane(r.motor2_dma, memory.motor2),
+        channel3.into_lane(r.motor3_dma, memory.motor3),
+    ) else {
+        return Err(DshotInitError::LaneTimerMissing);
+    };
+    let awg = Awg::linked(r.tim1, r.tim8, (lane1, lane4), (lane2, lane3))
+        .map_err(|_| DshotInitError::LaneClocksDiffer)?;
+    // APB2 timers, both: twice the bus clock.
+    backend::dshot::init_dshot_motor_bank(
+        awg,
+        super::aliases::MOTOR_LANES,
+        clocks.pclk2.0 * 2,
         storage,
-    )?;
-
-    let pull_up = DSHOT_MODE == DshotMode::Bidirectional;
-    motor1_pin
-        .into_alternate::<1>()
-        .speed(Speed::VeryHigh)
-        .internal_pull_up(pull_up);
-    motor2_pin
-        .into_alternate::<3>()
-        .speed(Speed::VeryHigh)
-        .internal_pull_up(pull_up);
-    motor3_pin
-        .into_alternate::<3>()
-        .speed(Speed::VeryHigh)
-        .internal_pull_up(pull_up);
-    motor4_pin
-        .into_alternate::<1>()
-        .speed(Speed::VeryHigh)
-        .internal_pull_up(pull_up);
-    Ok(bank)
+    )
 }
 
 /// Every UART this board routes, by logical port.
 pub struct UartPortResources {
-    pub uart1_rx_pin: super::aliases::Usart1EscTelemetryRxPin,
+    pub uart1_rx_pin: Pin<'A', 10, Alternate<7>>,
     pub uart1: USART1,
-    pub uart1_rx_dma: Stream5<DMA2>,
-    pub uart2_tx_pin: super::aliases::Usart2TxPin,
-    pub uart2_rx_pin: super::aliases::Usart2RxPin,
+    pub uart1_rx_dma: Stream<2, 5>,
+    pub uart2_tx_pin: Pin<'A', 2, Alternate<7>>,
+    pub uart2_rx_pin: Pin<'A', 3, Alternate<7>>,
     pub uart2: USART2,
-    pub uart2_rx_dma: Stream5<DMA1>,
-    pub uart2_tx_dma: Stream6<DMA1>,
-    pub uart3_tx_pin: super::aliases::Usart3TxPin,
-    pub uart3_rx_pin: super::aliases::Usart3RxPin,
-    pub uart3: pac::USART3,
-    pub uart3_rx_dma: Stream1<DMA1>,
-    pub uart3_tx_dma: Stream3<DMA1>,
-    pub uart4_tx_pin: super::aliases::Uart4TxPin,
-    pub uart4_rx_pin: super::aliases::Uart4RxPin,
+    pub uart2_rx_dma: Stream<1, 5>,
+    pub uart2_tx_dma: Stream<1, 6>,
+    pub uart3_tx_pin: Pin<'C', 10, Alternate<7>>,
+    /// Often nothing is plugged into R3; a pull-up holds an open line idle instead of
+    /// letting noise reach the command line.
+    pub uart3_rx_pin: Pin<'C', 11, Alternate<7>>,
+    pub uart3: USART3,
+    pub uart3_rx_dma: Stream<1, 1>,
+    pub uart3_tx_dma: Stream<1, 3>,
+    pub uart4_tx_pin: Pin<'A', 0, Alternate<8>>,
+    pub uart4_rx_pin: Pin<'A', 1, Alternate<8>>,
     pub uart4: UART4,
-    pub uart4_rx_dma: Stream2<DMA1>,
-    pub uart4_tx_dma: Stream4<DMA1>,
+    pub uart4_rx_dma: Stream<1, 2>,
+    pub uart4_tx_dma: Stream<1, 4>,
 }
 
 /// Static buffers and stream owners for each port.
@@ -347,6 +356,14 @@ pub struct UartPortStorage {
     pub uart2: UartRxTxPortStorage,
     pub uart3: UartRxTxPortStorage,
     pub uart4: UartRxTxPortStorage,
+}
+
+/// Each port's driver cell and receive ring.
+pub struct UartPortMemory {
+    pub uart1: PortMemory,
+    pub uart2: PortMemory,
+    pub uart3: PortMemory,
+    pub uart4: PortMemory,
 }
 
 /// The started ports. A port left unbound stays `None`: its peripheral is
@@ -363,62 +380,75 @@ pub struct UartPorts {
 }
 
 /// Start every bound port with its function's line settings and give each
-/// function its endpoint.
+/// function its endpoint. The Foxeer inverts SBUS in hardware, so nothing here does.
 pub fn init_uart_ports(
     resources: UartPortResources,
     rcc: &mut Rcc,
     storage: UartPortStorage,
+    memory: UartPortMemory,
     bindings: &ResolvedBindings,
 ) -> UartPorts {
     let mut functions = SerialFunctionSlots::empty();
-    let uart1_rx = uart_dma::start_rx_port::<_, _, _, 4>(
+    let r = resources;
+    let uart1_rx = uart_dma::start_rx_port(
         LogicalSerialPort::Uart1,
-        resources.uart1_rx_pin.into_alternate::<7>(),
-        resources.uart1,
-        resources.uart1_rx_dma,
+        RxWiring {
+            uart: r.uart1,
+            rx: r.uart1_rx_pin,
+            rx_dma: r.uart1_rx_dma,
+        },
         rcc,
         storage.uart1,
+        memory.uart1,
+        false,
         bindings,
         &mut functions,
     );
-    let (uart2_rx, uart2_tx) = uart_dma::start_rx_tx_port::<_, _, _, _, _, 4, 4>(
+    let (uart2_rx, uart2_tx) = uart_dma::start_rx_tx_port(
         LogicalSerialPort::Uart2,
-        resources.uart2_tx_pin.into_alternate::<7>(),
-        resources.uart2_rx_pin.into_alternate::<7>(),
-        resources.uart2,
-        resources.uart2_rx_dma,
-        resources.uart2_tx_dma,
+        UartWiring {
+            uart: r.uart2,
+            tx: r.uart2_tx_pin,
+            rx: r.uart2_rx_pin,
+            tx_dma: r.uart2_tx_dma,
+            rx_dma: r.uart2_rx_dma,
+        },
         rcc,
         storage.uart2,
+        memory.uart2,
+        false,
         bindings,
         &mut functions,
     );
-    // Often nothing is plugged into R3; the pull-up holds an open line idle
-    // instead of letting noise reach the command line.
-    let (uart3_rx, uart3_tx) = uart_dma::start_rx_tx_port::<_, _, _, _, _, 4, 4>(
+    let (uart3_rx, uart3_tx) = uart_dma::start_rx_tx_port(
         LogicalSerialPort::Uart3,
-        resources.uart3_tx_pin.into_alternate::<7>(),
-        resources
-            .uart3_rx_pin
-            .into_alternate::<7>()
-            .internal_pull_up(true),
-        resources.uart3,
-        resources.uart3_rx_dma,
-        resources.uart3_tx_dma,
+        UartWiring {
+            uart: r.uart3,
+            tx: r.uart3_tx_pin,
+            rx: r.uart3_rx_pin,
+            tx_dma: r.uart3_tx_dma,
+            rx_dma: r.uart3_rx_dma,
+        },
         rcc,
         storage.uart3,
+        memory.uart3,
+        false,
         bindings,
         &mut functions,
     );
-    let (uart4_rx, uart4_tx) = uart_dma::start_rx_tx_port::<_, _, _, _, _, 4, 4>(
+    let (uart4_rx, uart4_tx) = uart_dma::start_rx_tx_port(
         LogicalSerialPort::Uart4,
-        resources.uart4_tx_pin.into_alternate::<8>(),
-        resources.uart4_rx_pin.into_alternate::<8>(),
-        resources.uart4,
-        resources.uart4_rx_dma,
-        resources.uart4_tx_dma,
+        UartWiring {
+            uart: r.uart4,
+            tx: r.uart4_tx_pin,
+            rx: r.uart4_rx_pin,
+            tx_dma: r.uart4_tx_dma,
+            rx_dma: r.uart4_rx_dma,
+        },
         rcc,
         storage.uart4,
+        memory.uart4,
+        false,
         bindings,
         &mut functions,
     );
@@ -431,5 +461,56 @@ pub fn init_uart_ports(
         uart4_rx,
         uart4_tx,
         functions,
+    }
+}
+
+static UART1: Mutex<RefCell<Option<uart_dma::UartCore>>> = Mutex::new(RefCell::new(None));
+static UART2: Mutex<RefCell<Option<uart_dma::UartCore>>> = Mutex::new(RefCell::new(None));
+static UART3: Mutex<RefCell<Option<uart_dma::UartCore>>> = Mutex::new(RefCell::new(None));
+static UART4_CORE: Mutex<RefCell<Option<uart_dma::UartCore>>> = Mutex::new(RefCell::new(None));
+static SPI1_CORE: Mutex<RefCell<Option<backend::spi_dma::SpiCore>>> =
+    Mutex::new(RefCell::new(None));
+
+/// Each port's driver cell and receive ring. Call it once, from `init`.
+pub fn uart_port_memory() -> UartPortMemory {
+    const RING: usize = uart_dma::RX_RING_BYTES;
+    UartPortMemory {
+        uart1: PortMemory {
+            core: &UART1,
+            ring: cortex_m::singleton!(: [u8; RING] = [0; RING]).unwrap(),
+        },
+        uart2: PortMemory {
+            core: &UART2,
+            ring: cortex_m::singleton!(: [u8; RING] = [0; RING]).unwrap(),
+        },
+        uart3: PortMemory {
+            core: &UART3,
+            ring: cortex_m::singleton!(: [u8; RING] = [0; RING]).unwrap(),
+        },
+        uart4: PortMemory {
+            core: &UART4_CORE,
+            ring: cortex_m::singleton!(: [u8; RING] = [0; RING]).unwrap(),
+        },
+    }
+}
+
+/// The IMU driver's cell and buffers. Call it once, from `init`.
+pub fn spi1_memory() -> Spi1Memory {
+    const LEN: usize = backend::spi_dma::SPI_BUFFER_SIZE;
+    Spi1Memory {
+        core: &SPI1_CORE,
+        tx: cortex_m::singleton!(: [u8; LEN] = [0; LEN]).unwrap(),
+        rx: cortex_m::singleton!(: [u8; LEN] = [0; LEN]).unwrap(),
+    }
+}
+
+/// Each motor lane's own copy of a frame. Call it once, from `init`.
+pub fn motor_lane_memory() -> MotorLaneMemory {
+    const LEN: usize = core::mem::size_of::<DshotDmaBuffer>() / 2;
+    MotorLaneMemory {
+        motor1: cortex_m::singleton!(: [u32; LEN] = [0; LEN]).unwrap(),
+        motor2: cortex_m::singleton!(: [u32; LEN] = [0; LEN]).unwrap(),
+        motor3: cortex_m::singleton!(: [u32; LEN] = [0; LEN]).unwrap(),
+        motor4: cortex_m::singleton!(: [u32; LEN] = [0; LEN]).unwrap(),
     }
 }

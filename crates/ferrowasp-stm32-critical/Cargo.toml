@@ -32,7 +32,7 @@ tasks = [
 
 [dependencies]
 critical-section = { workspace = true, optional = true }
-defmt = "=1.0.1"
+defmt = "=1.2.0"
 embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true, optional = true }
 ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optional = true }
@@ -48,7 +48,7 @@ heapless = { workspace = true }
 [target.'cfg(target_arch = "arm")'.dependencies]
 ferroforge = { version = "=0.4.0", optional = true }
 fugit = { version = "=0.3.9", optional = true }
-rtic = { version = "=2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic = { version = "=2.4.0", default-features = false, features = ["thumbv7-backend"], optional = true }
 rtic-monotonics = { version = "=2.1.0", default-features = false, optional = true }
 
 [dev-dependencies]

@@ -266,71 +266,65 @@ ferroforge::app! {
             stm32_storage::new_adc_buffer_bank(),
         dshot_dma_storage: board::init::DshotDmaStorage =
             board::init::DshotDmaStorage::new(),
-        dshot_reply_storage: board::init::DshotReplyStorage =
-            board::init::DshotReplyStorage::new(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         // Before anything is configured: a `reboot dfu` request ends here.
         stm32_bootloader::enter_rom_bootloader_if_requested();
         info!("Begin system init..");
         // Take ownership of peripherals and configure RCC
-        let dp: hal::pac::Peripherals = cx.device;
-        let mut rcc = dp.RCC.constrain();
+        let dp = cx.device;
+        // The crystal and the clock tree are board facts, checked as it builds.
+        let mut rcc = dp.RCC.freeze(&board::init::CLOCK_CONFIG).unwrap();
 
         // Assign peripherals
-        let dma1 = StreamsTuple::new(dp.DMA1, &mut rcc);
-        let dma2 = StreamsTuple::new(dp.DMA2, &mut rcc);
-        let gpioa = dp.GPIOA.split(&mut rcc);
-        let gpiob = dp.GPIOB.split(&mut rcc);
-        let gpioc = dp.GPIOC.split(&mut rcc);
+        let dma1 = dp.DMA1.split(&mut rcc);
+        let dma2 = dp.DMA2.split(&mut rcc);
+        let mut gpioa = dp.GPIOA.split(&mut rcc);
+        let mut gpiob = dp.GPIOB.split(&mut rcc);
+        let mut gpioc = dp.GPIOC.split(&mut rcc);
 
         // 1 kHz scheduler and 1 kHz PID/motor cadence, matching the IMU's ODR.
         // IMU sampling itself is independently triggered by PC4/EXTI4.
-        let scheduler_rate = board::profiles::SCHEDULER_TICK_RATE_HZ.Hz();
-        let control_loop_rate: Rate<u32, 1, 1> = board::profiles::CONTROL_LOOP_RATE_HZ.Hz();
-        let samples_per_control_loop = scheduler_rate.to_Hz() / control_loop_rate.to_Hz();
+        let samples_per_control_loop =
+            board::profiles::SCHEDULER_TICK_RATE_HZ / board::profiles::CONTROL_LOOP_RATE_HZ;
 
-        let adc1_battery = board::init::init_adc1_battery(
+        let (adc1_transfer, adc1_spare) = board::init::init_adc1_battery(
             board::init::Adc1BatteryResourcesFoxeer {
                 adc: dp.ADC1,
-                voltage_pin: gpioc.pc0,
-                current_pin: gpioc.pc1,
-                dma: dma2.4,
+                voltage_pin: gpioc.p0.into_analog(&mut gpioc.ctrl),
+                current_pin: gpioc.p1.into_analog(&mut gpioc.ctrl),
+                dma: dma2.s4,
             },
             &mut rcc,
             stm32_storage::AdcStorageResources {
                 buffers: cx.local.adc1_buffers,
             },
-        );
-
-        // Configure clocks through the shared STM32F4 mechanism; HSE remains a board fact.
-        let mut clocks = stm32_clocks::freeze_hse(
-            rcc,
-            board::HSE_FREQUENCY_HZ,
-            stm32_clocks::SYSTEM_CLOCK_HZ,
-            true,
-        );
-        info!(
-            "PLL48 valid: {}, PLL48: {} Hz",
-            clocks.clocks.is_pll48clk_valid(),
-            clocks.clocks.pll48clk().map(|clk| clk.raw()).unwrap_or(0)
-        );
-        Mono::start(cx.core.SYST, stm32_clocks::SYSTEM_CLOCK_HZ);
-        let mut delay = dp.TIM5.delay::<DELAY_TIMER_HZ>(&mut clocks);
-        //let mut syscfg = dp.SYSCFG.constrain(&mut clocks);
-
-        let control_loop_scheduler =
-            stm32_scheduler::init_control_scheduler(dp.TIM4, &mut clocks, scheduler_rate).unwrap();
-        let io_timebase = stm32_timebase::MicrosecondTimebase::new(dp.TIM2, &mut clocks).unwrap();
-        let io_watchdog = stm32_watchdog::init_io_watchdog(dp.TIM6, &mut clocks).unwrap();
-
-        let usb_cdc = stm32_usb::init_usb_cdc_serial(
-            (dp.OTG_FS_GLOBAL, dp.OTG_FS_DEVICE, dp.OTG_FS_PWRCLK),
-            (gpioa.pa11, gpioa.pa12),
-            &clocks.clocks,
-            board::USB_CDC_IDENTITY,
         )
         .unwrap();
+
+        Mono::start(cx.core.SYST, stm32_clocks::SYSTEM_CLOCK_HZ);
+        let mut delay = stm32_timebase::CycleDelay::new(stm32_clocks::SYSTEM_CLOCK_HZ);
+
+        let control_loop_scheduler = stm32_scheduler::PeriodicTimer::new(
+            &mut rcc,
+            dp.TIM4,
+            hal::time::Hertz(board::profiles::SCHEDULER_TICK_RATE_HZ),
+        )
+        .unwrap();
+        let io_timebase = stm32_timebase::MicrosecondTimebase::new(&mut rcc, dp.TIM2).unwrap();
+        let io_watchdog = stm32_watchdog::init_io_watchdog(&mut rcc, dp.TIM6).unwrap();
+
+        let usb_cdc = {
+            let mut dm = gpioa.p11.into_alternate::<10>(&mut gpioa.ctrl);
+            dm.set_speed(&mut gpioa.ctrl, hal::gpio::Speed::VeryHigh);
+            let mut dp_pin = gpioa.p12.into_alternate::<10>(&mut gpioa.ctrl);
+            dp_pin.set_speed(&mut gpioa.ctrl, hal::gpio::Speed::VeryHigh);
+            stm32_usb::init_usb_cdc_serial(
+                hal::usb::UsbFs::new(&mut rcc, dp.USB_OTG_FS, dm, dp_pin).unwrap(),
+                board::USB_CDC_IDENTITY,
+            )
+            .unwrap()
+        };
 
         let flight_tasks::EscChannels {
             esc_manager_state,
@@ -343,24 +337,32 @@ ferroforge::app! {
         } = flight_tasks::esc_channels();
 
         let dshot_motors = {
-            let tim1 = Timer::new(dp.TIM1, &mut clocks);
-            let tim8 = Timer::new(dp.TIM8, &mut clocks);
+            let tim1 = hal::timer::Pwm::new(&mut rcc, dp.TIM1, hal::time::Hertz::khz(600)).unwrap();
+            let tim8 = hal::timer::Pwm::new(&mut rcc, dp.TIM8, hal::time::Hertz::khz(600)).unwrap();
+            let mut motor1_pin = gpioa.p8.into_alternate::<1>(&mut gpioa.ctrl);
+            motor1_pin.set_speed(&mut gpioa.ctrl, hal::gpio::Speed::VeryHigh);
+            let mut motor2_pin = gpioc.p9.into_alternate::<3>(&mut gpioc.ctrl);
+            motor2_pin.set_speed(&mut gpioc.ctrl, hal::gpio::Speed::VeryHigh);
+            let mut motor3_pin = gpioc.p8.into_alternate::<3>(&mut gpioc.ctrl);
+            motor3_pin.set_speed(&mut gpioc.ctrl, hal::gpio::Speed::VeryHigh);
+            let mut motor4_pin = gpiob.p15.into_alternate::<1>(&mut gpiob.ctrl);
+            motor4_pin.set_speed(&mut gpiob.ctrl, hal::gpio::Speed::VeryHigh);
             board::init::init_dshot_motor_bank(
                 board::init::DshotMotorBankResources {
                     tim1,
                     tim8,
-                    motor1_pin: gpioa.pa8,
-                    motor2_pin: gpioc.pc9,
-                    motor3_pin: gpioc.pc8,
-                    motor4_pin: gpiob.pb15,
-                    motor1_dma: dma2.1,
-                    motor2_dma: dma2.7,
-                    motor3_dma: dma2.2,
-                    motor4_dma: dma2.6,
+                    motor1_pin,
+                    motor2_pin,
+                    motor3_pin,
+                    motor4_pin,
+                    motor1_dma: dma2.s1,
+                    motor2_dma: dma2.s7,
+                    motor3_dma: dma2.s2,
+                    motor4_dma: dma2.s6,
                 },
-                &clocks.clocks,
+                board::init::motor_lane_memory(),
+                &board::init::CLOCKS,
                 cx.local.dshot_dma_storage,
-                cx.local.dshot_reply_storage,
             )
             .expect("Foxeer DShot600 timing must be valid")
         };
@@ -368,27 +370,36 @@ ferroforge::app! {
         // Minimum Throttle
         // SBUS 1175
 
-        let spi1_imu = board::init::init_spi1_imu(
-            board::init::Spi1ImuResources {
-                cs_pin: gpioa.pa4,
-                sck_pin: gpioa.pa5,
-                miso_pin: gpioa.pa6,
-                mosi_pin: gpioa.pa7,
-                spi: dp.SPI1,
-                rx_dma: dma2.0,
-                tx_dma: dma2.3,
-            },
-            &mut clocks,
-            &mut delay,
-            stm32_storage::SpiDmaStorageResources {
-                buffers: cx.local.spi1_dma_buffers,
-                free_queue: cx.local.spi1_free_queue,
-                filled_queue: cx.local.spi1_filled_queue,
-            },
-        );
-        let mut syscfg = dp.SYSCFG.constrain(&mut clocks);
-        let mut exti = dp.EXTI;
-        let imu_data_ready = board::init::init_imu_data_ready(gpioc.pc4, &mut syscfg, &mut exti);
+        let spi1_imu = {
+            let mut sck_pin = gpioa.p5.into_alternate::<5>(&mut gpioa.ctrl);
+            sck_pin.set_speed(&mut gpioa.ctrl, hal::gpio::Speed::High);
+            let mut miso_pin = gpioa.p6.into_alternate::<5>(&mut gpioa.ctrl);
+            miso_pin.set_pull(&mut gpioa.ctrl, hal::gpio::Pull::Down);
+            let mut mosi_pin = gpioa.p7.into_alternate::<5>(&mut gpioa.ctrl);
+            mosi_pin.set_speed(&mut gpioa.ctrl, hal::gpio::Speed::High);
+            board::init::init_spi1_imu(
+                board::init::Spi1ImuResources {
+                    cs_pin: gpioa.p4.into_push_pull_output(&mut gpioa.ctrl),
+                    sck_pin,
+                    miso_pin,
+                    mosi_pin,
+                    spi: dp.SPI1,
+                    rx_dma: dma2.s0,
+                    tx_dma: dma2.s3,
+                },
+                &mut rcc,
+                &mut delay,
+                stm32_storage::SpiDmaStorageResources {
+                    buffers: cx.local.spi1_dma_buffers,
+                    free_queue: cx.local.spi1_free_queue,
+                    filled_queue: cx.local.spi1_filled_queue,
+                },
+                board::init::spi1_memory(),
+            )
+            .unwrap()
+        };
+        let mut exti = dp.EXTI.split(dp.SYSCFG, &mut rcc);
+        let imu_data_ready = board::init::init_imu_data_ready(exti.l4, &mut exti.ctrl);
         let spi1_device = AsyncSpiDevice::new(CriticalSectionSpiExecutor::new(
             &SPI1_MAILBOX,
             SpiDeadlineUs(SPI1_IMU_DEADLINE_US),
@@ -398,16 +409,23 @@ ferroforge::app! {
         ));
         let mut flash_probe = flight_tasks::FlashProbe::default();
         let mut flash_device = {
+            let mut sck_pin = gpiob.p13.into_alternate::<5>(&mut gpiob.ctrl);
+            sck_pin.set_speed(&mut gpiob.ctrl, hal::gpio::Speed::High);
+            let mut miso_pin = gpioc.p2.into_alternate::<5>(&mut gpioc.ctrl);
+            miso_pin.set_pull(&mut gpioc.ctrl, hal::gpio::Pull::Down);
+            let mut mosi_pin = gpioc.p3.into_alternate::<5>(&mut gpioc.ctrl);
+            mosi_pin.set_speed(&mut gpioc.ctrl, hal::gpio::Speed::High);
             let mut flash = board::init::init_spi2_flash(
                 board::init::Spi2FlashResources {
-                    cs_pin: gpiob.pb12,
-                    sck_pin: gpiob.pb13,
-                    miso_pin: gpioc.pc2,
-                    mosi_pin: gpioc.pc3,
+                    cs_pin: gpiob.p12.into_push_pull_output(&mut gpiob.ctrl),
+                    sck_pin,
+                    miso_pin,
+                    mosi_pin,
                     spi: dp.SPI2,
                 },
-                &mut clocks,
-            );
+                &mut rcc,
+            )
+            .unwrap();
             match flash.read_jedec_id() {
                 Ok(id) => {
                     let capacity = id.capacity_bytes().unwrap_or(0);
@@ -503,7 +521,6 @@ ferroforge::app! {
         // Pins and DMA streams are fixed per port. Saved config chooses each
         // port's function and line settings; it is read once, here, so a
         // changed binding applies after a reboot.
-        board::aliases::assert_uart1_esc_telemetry_route_compile();
         let serial_bindings = boot_serial_bindings(&config_boot);
         let board::init::UartPorts {
             uart1_rx,
@@ -531,26 +548,30 @@ ferroforge::app! {
             functions: serial_functions,
         } = board::init::init_uart_ports(
             board::init::UartPortResources {
-                uart1_rx_pin: gpioa.pa10,
+                uart1_rx_pin: gpioa.p10.into_alternate::<7>(&mut gpioa.ctrl),
                 uart1: dp.USART1,
-                uart1_rx_dma: dma2.5,
-                uart2_tx_pin: gpioa.pa2,
-                uart2_rx_pin: gpioa.pa3,
+                uart1_rx_dma: dma2.s5,
+                uart2_tx_pin: gpioa.p2.into_alternate::<7>(&mut gpioa.ctrl),
+                uart2_rx_pin: gpioa.p3.into_alternate::<7>(&mut gpioa.ctrl),
                 uart2: dp.USART2,
-                uart2_rx_dma: dma1.5,
-                uart2_tx_dma: dma1.6,
-                uart3_tx_pin: gpioc.pc10,
-                uart3_rx_pin: gpioc.pc11,
+                uart2_rx_dma: dma1.s5,
+                uart2_tx_dma: dma1.s6,
+                uart3_tx_pin: gpioc.p10.into_alternate::<7>(&mut gpioc.ctrl),
+                uart3_rx_pin: {
+                    let mut pin = gpioc.p11.into_alternate::<7>(&mut gpioc.ctrl);
+                    pin.set_pull(&mut gpioc.ctrl, hal::gpio::Pull::Up);
+                    pin
+                },
                 uart3: dp.USART3,
-                uart3_rx_dma: dma1.1,
-                uart3_tx_dma: dma1.3,
-                uart4_tx_pin: gpioa.pa0,
-                uart4_rx_pin: gpioa.pa1,
+                uart3_rx_dma: dma1.s1,
+                uart3_tx_dma: dma1.s3,
+                uart4_tx_pin: gpioa.p0.into_alternate::<8>(&mut gpioa.ctrl),
+                uart4_rx_pin: gpioa.p1.into_alternate::<8>(&mut gpioa.ctrl),
                 uart4: dp.UART4,
-                uart4_rx_dma: dma1.2,
-                uart4_tx_dma: dma1.4,
+                uart4_rx_dma: dma1.s2,
+                uart4_tx_dma: dma1.s4,
             },
-            &mut clocks,
+            &mut rcc,
             board::init::UartPortStorage {
                 uart1: stm32_port::UartRxPortStorage {
                     rx: stm32_storage::UartRxStorageResources {
@@ -612,6 +633,7 @@ ferroforge::app! {
                     .unwrap(),
                 },
             },
+            board::init::uart_port_memory(),
             &serial_bindings,
         );
         // RC input reads the receiver; battery telemetry back to it, when the
@@ -729,8 +751,6 @@ ferroforge::app! {
         warn!(
             "FAULT INJECTION ACTIVE: Foxeer physical ESC output 1 (logical M1/rear-right) idle qualification eRPM forced to zero; arming must fail"
         );
-        #[cfg(feature = "bench_bidirectional_dshot")]
-        warn!("BENCH: bidirectional DShot active; props-off only, never a flight image");
         #[cfg(feature = "bench_prearm_imu_stale")]
         warn!("FAULT INJECTION ACTIVE: pre-arm IMU freshness forced stale; arming must fail");
         flight::heartbeat::spawn().unwrap();
@@ -766,7 +786,7 @@ ferroforge::app! {
                 ledger: Ledger::new(identity, ConfigTopic::boot(&config_boot.boot)),
 
                 // ADC
-                adc1_transfer: adc1_battery.transfer,
+                adc1_transfer,
                 // SAFETY
             },
             Local {
@@ -809,7 +829,7 @@ ferroforge::app! {
                 flash_rpc_device_info: (),
 
                 // ADC
-                adc1_buffer: Some(adc1_battery.spare_buffer),
+                adc1_buffer: Some(adc1_spare),
 
                 // Control Loop
                 control_loop_cnt: 0,

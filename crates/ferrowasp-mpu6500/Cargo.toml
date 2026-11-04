@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 embedded-hal = { workspace = true }
-defmt = { version = "=1.0.1", optional = true }
+defmt = { version = "=1.2.0", optional = true }
 
 [features]
 default = []
