@@ -18,6 +18,7 @@ stm32h743 = ["dep:ferrohal-stm32", "ferrohal-stm32/stm32h743vi", "ferrowasp-ferr
 [dependencies]
 ferrowasp-ferrohal-critical = { path = "../ferrowasp-ferrohal-critical" }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
+ferrowasp-storage = { path = "../ferrowasp-storage" }
 usb-device = "=0.3.2"
 usbd-serial = "0.2.2"
 

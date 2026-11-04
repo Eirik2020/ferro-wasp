@@ -293,7 +293,7 @@ def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
             manifest_text,
             re.MULTILINE | re.DOTALL,
         )
-        dshot_feature = contract.get("dshot_feature", "ferrowasp-stm32f4/dshot")
+        dshot_feature = contract.get("dshot_feature", "ferrowasp-ferrohal/dshot")
         if board_feature is None or dshot_feature not in board_feature.group(1):
             errors.append(
                 f"{_relative(manifest, root)}: the board feature must enable "

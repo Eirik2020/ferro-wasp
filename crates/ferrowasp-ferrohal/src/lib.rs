@@ -7,6 +7,7 @@
 
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod adc;
+pub mod sd_storage;
 #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
 pub mod usb_serial;
 

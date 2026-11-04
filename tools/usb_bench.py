@@ -684,7 +684,30 @@ def foxeer_session(
 # --- The Lucid ------------------------------------------------------------------
 
 
-def lucid_session(session: Session, candidate: Path) -> None:
+def lucid_session(session: Session, candidate: Path, card_in: bool) -> None:
+    def with_card() -> None:
+        with session.link() as link:
+            link.expect("flash info", "OK jedec=")
+            link.expect("logs list", "OK u=")
+            state = fallback_state(link.expect("config fallback", "OK config fallback="))
+            if state == "unreadable":
+                raise StepFailed("with a card in, the boot reports its store unreadable")
+            before = config_value(link.expect("config get roll_p", "OK roll_p="), "roll_p")
+            if before is None:
+                raise StepFailed("`config get roll_p` gave no value")
+            changed = before + 0.1
+            link.expect(f"config set roll_p {changed:.4f}", "OK applied")
+            link.expect("config save", "OK config save started")
+            link.wait_prefix("OK config saved", 10.0, "the save")
+        session.reboot()
+        with session.link() as link:
+            kept = config_value(link.expect("config get roll_p", "OK roll_p="), "roll_p")
+            if kept is None or abs(kept - changed) > gates.VALUE_TOLERANCE:
+                raise StepFailed(f"a saved change read {kept} after a reboot, not {changed:.4f}")
+            link.expect(f"config set roll_p {before:.4f}", "OK applied")
+            link.expect("config save", "OK config save started")
+            link.wait_prefix("OK config saved", 10.0, "the restoring save")
+
     def no_store() -> None:
         with session.link() as link:
             state = fallback_state(link.expect("config fallback", "OK config fallback="))
@@ -708,7 +731,10 @@ def lucid_session(session: Session, candidate: Path) -> None:
     session.step("Flash the candidate over DFU; USB returns on its own", lambda: session.flash(candidate))
     session.step("Identity", lambda: session.require_identity(()))
     session.step("Idle for 30 s, disarmed, with the loop at rate", session.idle)
-    session.step("No card: an unreadable store falls back, and commands still answer", no_store)
+    if card_in:
+        session.step("Card: storage answers, and a saved change survives a reboot", with_card)
+    else:
+        session.step("No card: an unreadable store falls back, and commands still answer", no_store)
     session.step("Reboot to DFU, with no store", reboot_to_dfu)
 
 
@@ -818,9 +844,9 @@ def run_session(args: argparse.Namespace) -> int:
             assert bench is not None
             foxeer_session(session, candidate, bench, args.allow_dirty, args.operator_confirmed_state)
         else:
-            if not args.operator_confirmed_state and not gates.ask_yes_no("Is this board's SD card out?"):
+            if not args.card_in and not args.operator_confirmed_state and not gates.ask_yes_no("Is this board's SD card out?"):
                 raise SessionStop("this session expects the card out, for the no-store checks")
-            lucid_session(session, candidate)
+            lucid_session(session, candidate, args.card_in)
         # An agent running this for the operator asks them afterwards.
         notes = "" if args.operator_confirmed_state else gates.operator_notes()
         if reqtool_bridge.source_state() != before:
@@ -858,6 +884,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="The operator has already confirmed the bench state, and for a Lucid that its card is out, "
         "so nobody is asked. A Foxeer leaves out the steps that need hands and records nothing.",
+    )
+    session.add_argument(
+        "--card-in",
+        action="store_true",
+        help="A Lucid session with a card in the slot: checks storage instead of the empty slot.",
     )
     session.add_argument("--allow-dirty", action="store_true", help="Run from a checkout with uncommitted changes.")
     return parser.parse_args(argv)

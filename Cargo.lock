@@ -313,7 +313,7 @@ dependencies = [
 [[package]]
 name = "ferrohal-stm32"
 version = "0.1.0"
-source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=1006697a00b506ef04e6d82e9c6a9da2ffa9b879#1006697a00b506ef04e6d82e9c6a9da2ffa9b879"
+source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=0914234e8c7f5eb5fc0618e620ea18de75de09c0#0914234e8c7f5eb5fc0618e620ea18de75de09c0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -459,6 +459,7 @@ dependencies = [
  "ferrohal-stm32",
  "ferrowasp-ferrohal-critical",
  "ferrowasp-stm32",
+ "ferrowasp-storage",
  "usb-device",
  "usbd-serial",
 ]
@@ -677,7 +678,6 @@ dependencies = [
  "ferrowasp-serial",
  "ferrowasp-stm32",
  "ferrowasp-stm32-critical",
- "ferrowasp-stm32h7",
  "ferrowasp-storage",
  "fugit",
  "heapless 0.9.2",

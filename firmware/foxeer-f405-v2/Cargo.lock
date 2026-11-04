@@ -401,6 +401,7 @@ dependencies = [
  "ferrohal-stm32",
  "ferrowasp-ferrohal-critical",
  "ferrowasp-stm32",
+ "ferrowasp-storage",
  "usb-device",
  "usbd-serial",
 ]

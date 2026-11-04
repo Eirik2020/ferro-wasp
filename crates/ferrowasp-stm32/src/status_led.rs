@@ -12,13 +12,16 @@ pub enum LedPolarity {
 }
 
 pub struct StatusLed {
-    pin: &'static mut dyn OutputPin<Error = Infallible>,
+    pin: &'static mut (dyn OutputPin<Error = Infallible> + Send),
     polarity: LedPolarity,
 }
 
 impl StatusLed {
     /// Take the pin and turn the LED off.
-    pub fn new(pin: &'static mut dyn OutputPin<Error = Infallible>, polarity: LedPolarity) -> Self {
+    pub fn new(
+        pin: &'static mut (dyn OutputPin<Error = Infallible> + Send),
+        polarity: LedPolarity,
+    ) -> Self {
         let mut led = Self { pin, polarity };
         led.set(false);
         led
@@ -38,12 +41,14 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use core::cell::Cell;
     use embedded_hal::digital::ErrorType;
-    use std::{boxed::Box, rc::Rc};
+    use std::{
+        boxed::Box,
+        sync::{Arc, Mutex},
+    };
 
     /// The pin's last level, shared with the test.
-    struct Level(Rc<Cell<Option<bool>>>);
+    struct Level(Arc<Mutex<Option<bool>>>);
 
     impl ErrorType for Level {
         type Error = Infallible;
@@ -51,18 +56,18 @@ mod tests {
 
     impl OutputPin for Level {
         fn set_low(&mut self) -> Result<(), Infallible> {
-            self.0.set(Some(false));
+            *self.0.lock().unwrap() = Some(false);
             Ok(())
         }
 
         fn set_high(&mut self) -> Result<(), Infallible> {
-            self.0.set(Some(true));
+            *self.0.lock().unwrap() = Some(true);
             Ok(())
         }
     }
 
-    fn led(polarity: LedPolarity) -> (StatusLed, Rc<Cell<Option<bool>>>) {
-        let level = Rc::new(Cell::new(None));
+    fn led(polarity: LedPolarity) -> (StatusLed, Arc<Mutex<Option<bool>>>) {
+        let level = Arc::new(Mutex::new(None));
         let pin: &'static mut Level = Box::leak(Box::new(Level(level.clone())));
         (StatusLed::new(pin, polarity), level)
     }
@@ -70,16 +75,16 @@ mod tests {
     #[test]
     fn an_active_low_led_starts_off_with_its_pin_high_and_lights_low() {
         let (mut led, level) = led(LedPolarity::ActiveLow);
-        assert_eq!(level.get(), Some(true));
+        assert_eq!(*level.lock().unwrap(), Some(true));
         led.set(true);
-        assert_eq!(level.get(), Some(false));
+        assert_eq!(*level.lock().unwrap(), Some(false));
     }
 
     #[test]
     fn an_active_high_led_starts_off_with_its_pin_low_and_lights_high() {
         let (mut led, level) = led(LedPolarity::ActiveHigh);
-        assert_eq!(level.get(), Some(false));
+        assert_eq!(*level.lock().unwrap(), Some(false));
         led.set(true);
-        assert_eq!(level.get(), Some(true));
+        assert_eq!(*level.lock().unwrap(), Some(true));
     }
 }
