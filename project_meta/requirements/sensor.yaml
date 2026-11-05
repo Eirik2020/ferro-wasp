@@ -1,0 +1,284 @@
+schema_version: 2
+requirements:
+  - id: SENSOR-001
+    title: A measurement at or past its age limit is stale
+    statement: >-
+      A sensor measurement shall be judged stale once its age at the
+      consumer's time reaches the consumer's limit, and unusable when it is
+      stamped later than that time.
+    rationale: >-
+      Stale sensor data is a high-priority defect. A stamp later than the
+      consumer's time can only come from a clock or stamping fault, so it
+      must not pass as fresh either.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::class::tests::a_measurement_is_stale_at_its_age_limit_and_future_when_stamped_ahead
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::class::tests::a_measurement_stamped_near_the_end_of_time_never_wraps_fresh
+
+  - id: SENSOR-002
+    title: A sensor numbers its measurements
+    statement: >-
+      A sensor shall number the measurements it returns from 1, one more for
+      each, skipping 0 when the count wraps.
+    rationale: >-
+      A consumer then reads a repeated number as nothing new and a gap as
+      measurements lost, as it does on a link, and 0 stays free to mean
+      that nothing was measured yet.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::class::tests::measurement_sequences_start_at_one_and_skip_zero_when_they_wrap
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_good_sample_is_compensated_stamped_and_numbered
+
+  - id: SENSOR-003
+    title: A barometer sample outside its part's limits is refused
+    statement: >-
+      A barometer sample shall be refused as out of range when its pressure
+      or its temperature lies outside the limits its part declares.
+    rationale: >-
+      A value outside the part's operating range is not a measurement to
+      believe; refusing it, rather than clamping it, keeps a faulty reading
+      from passing as a plausible one.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::barometer::tests::a_barometer_sample_outside_its_limits_is_refused
+
+  - id: SENSOR-004
+    title: A floating-point barometer value never saturates
+    statement: >-
+      Converting a floating-point pressure or temperature into a barometer
+      sample shall refuse a value that is not finite or does not fit the
+      integer unit, never saturating or wrapping it.
+    rationale: >-
+      Drivers compute in floating point and release builds do not check
+      overflow; a saturated or wrapped integer would turn a failed
+      computation into a value that looks like a measurement.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::barometer::tests::floating_point_pressure_rounds_and_never_saturates
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::barometer::tests::floating_point_temperature_rounds_both_ways_and_never_saturates
+
+  - id: SENSOR-005
+    title: An IMU decoder refuses short and stuck-bus bursts
+    statement: >-
+      An IMU decoder shall refuse a burst shorter than its declared length as
+      a bus error, and a burst whose payload is all zero or all one bits as
+      out of range.
+    rationale: >-
+      A short transfer, or a stuck or absent bus, would otherwise decode into
+      rates and accelerations the control loop would trust.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::imu::tests::an_imu_refuses_short_and_stuck_bus_bursts
+
+  - id: SENSOR-006
+    title: Only a valid fix carries a position
+    statement: >-
+      A GNSS solution shall expose a position and velocity only for a
+      two-dimensional, three-dimensional or combined GNSS and dead-reckoning
+      fix that its source marks valid.
+    rationale: >-
+      No fix, a dead-reckoning-only or time-only fix, or a fix its source
+      does not mark valid must never be read as a position.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::gnss::tests::only_a_valid_position_fix_exposes_a_position
+
+  - id: SENSOR-007
+    title: A GNSS value outside its physical range is refused
+    statement: >-
+      A GNSS latitude, longitude, ground speed, heading of motion or UTC time
+      outside its physical range shall be refused as out of range.
+    rationale: >-
+      Such a value can only come from a corrupt or misdecoded message, and
+      must not reach navigation as a plausible one.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::gnss::tests::a_gnss_value_outside_its_physical_range_is_refused
+
+  - id: SENSOR-008
+    title: Only a valid UTC time is carried
+    statement: >-
+      A GNSS solution shall carry a UTC time only when its source marks the
+      date and the time valid and fully resolved.
+    rationale: >-
+      A receiver reports date and time fields before it has resolved them;
+      an unresolved time must not be logged or used as the real one.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::gnss::tests::a_utc_time_exists_only_when_marked_valid_and_resolved
+
+  - id: SENSOR-009
+    title: A part with the wrong identity is refused
+    statement: >-
+      A sensor implementation shall refuse a part whose identity differs from
+      the one it expects, reporting the identity it found.
+    rationale: >-
+      A different part, or no part, answers with registers of another
+      meaning; reporting what was found tells a wrongly populated board from
+      a dead bus.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::class::tests::an_identity_other_than_the_expected_one_is_a_mismatch
+
+  - id: SENSOR-010
+    title: The DPS310 adapter never repeats a sample
+    statement: >-
+      The DPS310 adapter shall return a barometer sample only for a pressure
+      and temperature result the part flagged new since the previous read,
+      and report no new sample otherwise.
+    rationale: >-
+      No barometer driver signals freshness robustly, so the adapter owns
+      it: an old value offered again would pass as a fresh measurement.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::without_a_new_result_a_read_is_never_the_previous_sample
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_good_sample_is_compensated_stamped_and_numbered
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_raw_zero_reads_back_the_offset_coefficients_exactly
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_read_before_bring_up_is_refused_and_the_bus_is_given_back
+
+  - id: SENSOR-011
+    title: The DPS310 adapter bounds bring-up, reads and measurement gaps
+    statement: >-
+      The DPS310 adapter shall report a timeout when bring-up outlasts its
+      clock budget or the driver's wait budget, when a read outlasts its
+      budget, or when no new result arrives within its stall limit.
+    rationale: >-
+      Unbounded work is a defect, and a sensor that stops measuring must be
+      told apart from the normal gap between measurements.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::bring_up_that_never_completes_times_out
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::the_drivers_wait_budget_ends_bring_up_before_the_clock_does
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_read_that_overruns_its_budget_is_a_timeout_and_its_result_discarded
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_sensor_that_never_measures_after_bring_up_times_out
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::without_a_new_result_a_read_is_never_the_previous_sample
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::time_near_the_end_of_the_clock_fails_closed
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::the_stall_limit_follows_the_slower_rate_and_saturates
+
+  - id: SENSOR-012
+    title: The DPS310 adapter checks the whole product ID
+    statement: >-
+      The DPS310 adapter shall refuse a part whose product ID register reads
+      other than 0x10.
+    rationale: >-
+      The driver compares only the revision nibble, so another product of the
+      same revision would pass it.
+    derived_from: [SENSOR-009]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_product_id_other_than_the_dps310s_is_refused
+
+  - id: SENSOR-013
+    title: The DPS310 adapter refuses values outside the operating range
+    statement: >-
+      The DPS310 adapter shall refuse a pressure outside 300 to 1200 hPa or a
+      temperature outside -40 to 85 degrees Celsius as out of range.
+    rationale: >-
+      These are the part's operating range; outside it the part does not
+      claim a valid measurement.
+    derived_from: [SENSOR-003]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_value_outside_the_operating_range_is_refused
+
+  - id: SENSOR-014
+    title: A DPS310 bus failure is a bus error
+    statement: >-
+      The DPS310 adapter shall report a failed transfer at any step as a bus
+      error and return no sample from that call.
+    rationale: >-
+      A bus fault must be told apart from a missing or implausible result,
+      and must never let a partly read or earlier result through.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::dps310::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample

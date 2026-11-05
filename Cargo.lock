@@ -554,6 +554,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-sensor-traits"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-io-contracts",
+]
+
+[[package]]
+name = "ferrowasp-sensors"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+ "ferrowasp-io-contracts",
+ "ferrowasp-sensor-traits",
+ "uf-dps3xx",
+]
+
+[[package]]
 name = "ferrowasp-serial"
 version = "0.1.0"
 dependencies = [
@@ -1052,6 +1069,15 @@ dependencies = [
  "heapless 0.9.2",
  "libm",
  "num_enum",
+]
+
+[[package]]
+name = "uf-dps3xx"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c9657a8238ee29f7f29f267a70afbe27cd9a932eefdf8be2bfad50ccfea2776"
+dependencies = [
+ "embedded-hal 1.0.0",
 ]
 
 [[package]]

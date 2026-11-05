@@ -1,0 +1,15 @@
+[package]
+name = "ferrowasp-sensors"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+embedded-hal = { workspace = true }
+ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
+ferrowasp-sensor-traits = { path = "../ferrowasp-sensor-traits" }
+uf-dps3xx = { version = "=0.2.0", default-features = false }
