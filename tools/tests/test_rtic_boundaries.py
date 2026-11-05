@@ -289,3 +289,23 @@ class CriticalCrateTests(unittest.TestCase):
         self.assertTrue(any("libm" in e for e in errors))
         self.assertTrue(any("sbus" in e and "rev" in e for e in errors))
         self.assertTrue(any("stm32-critical is named -critical" in e for e in errors))
+
+    def test_device_drivers_are_held_to_the_same_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write(root / "Cargo.toml", "[workspace]\nmembers = []\n")
+            _write(
+                root / "crates" / "plain" / "Cargo.toml",
+                '[package]\nname = "plain"\nversion = "0.1.0"\n',
+            )
+            _write(
+                root / "drivers" / "radio" / "Cargo.toml",
+                '[package]\nname = "radio"\nversion = "0.1.0"\n\n'
+                + CRITICAL
+                + '[dependencies]\nplain = { path = "../../crates/plain" }\n'
+                + '[dev-dependencies]\noracle = "0.7"\n',
+            )
+            errors = validate_rtic_boundaries(root)
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(any("radio is safety-critical and must not depend on plain" in e for e in errors))
+        self.assertTrue(any("oracle" in e and "=x.y.z" in e for e in errors))

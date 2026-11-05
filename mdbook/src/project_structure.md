@@ -56,6 +56,19 @@ A safety-critical crate declares `[package.metadata.ferrowasp] critical =
 true` and never depends on a crate that does not; its external dependencies
 are pinned to one version.
 
+## Device Drivers
+
+Under `drivers/`, also members of the root workspace and host-tested there.
+A device driver is a standalone crate over `embedded-hal`, `embedded-io` or
+`embedded-hal-bus` that depends on no FerroWasp crate and carries no project
+name, so it is usable outside FerroWasp. FerroWasp implements its own traits
+for a driver in the subsystem crate that uses it. The same safety-critical
+marking and pinning rules apply.
+
+| Crate | Owns |
+|---|---|
+| `crsf-proto` | The CRSF receiver protocol, safety-critical: the bounded streaming frame parser, the battery, GPS, vario, barometric altitude, attitude and flight-mode telemetry encoders, and a frame reader and telemetry writer over `embedded-io`. No firmware image links it; RC input decodes CRSF through `ferrowasp-crsf` |
+
 ## Firmware Applications
 
 Under `firmware/`, each its own Cargo workspace:

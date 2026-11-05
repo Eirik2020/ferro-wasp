@@ -372,7 +372,12 @@ def _validate_shared_snapshots(root: Path, errors: list[str]) -> None:
                 )
 
 
-CRATE_MANIFEST_GLOBS = ("crates/*/Cargo.toml", "firmware/*/Cargo.toml", "firmware/*/board/Cargo.toml")
+CRATE_MANIFEST_GLOBS = (
+    "crates/*/Cargo.toml",
+    "drivers/*/Cargo.toml",
+    "firmware/*/Cargo.toml",
+    "firmware/*/board/Cargo.toml",
+)
 DEPENDENCY_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
 
 

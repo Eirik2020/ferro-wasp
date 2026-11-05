@@ -231,8 +231,8 @@ jobs:
           rg_status=0
           unsafe_matches="$(
             rg --line-number \
-              '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)' \
-              crates firmware --glob '*.rs' --glob '!**/target/**'
+              '\bunsafe[[:space:]]+(impl|fn|trait|extern)|\bunsafe[[:space:]]*\{|allow\(unsafe_code\)|expect\(unsafe_code\)' \
+              crates drivers firmware --glob '*.rs' --glob '!**/target/**'
           )" || rg_status=$?
           if [[ "$rg_status" -gt 1 ]]; then
             echo "the unsafe audit did not run: rg exited $rg_status"

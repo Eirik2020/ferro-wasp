@@ -1,0 +1,27 @@
+[package]
+name = "crsf-proto"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "A bounded, allocation-free CRSF frame parser and telemetry encoder for no_std flight controllers"
+keywords = ["crsf", "expresslrs", "crossfire", "no-std", "embedded"]
+categories = ["embedded", "no-std", "parser-implementations"]
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["io"]
+# The reader and writer over embedded-io; the push-a-byte parser and the
+# encoders need nothing.
+io = ["dep:embedded-io"]
+
+[dependencies]
+embedded-io = { workspace = true, optional = true }
+
+[dev-dependencies]
+uf-crsf = "=0.7.0"
+
+[package.metadata.ferrowasp]
+critical = true

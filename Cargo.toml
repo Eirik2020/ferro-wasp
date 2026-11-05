@@ -33,6 +33,7 @@ members = [
     "crates/ferrowasp-ferrohal-critical",
     "crates/ferrowasp-storage",
     "crates/rc-pwm",
+    "drivers/crsf-proto",
 ]
 exclude = [
     "firmware/foxeer-f405-v2",
