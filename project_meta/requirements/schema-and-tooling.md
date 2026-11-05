@@ -68,11 +68,15 @@ existence.
   and `serde_norway` keeps `serde_yaml`'s C-translated `unsafe-libyaml`.
   Evidence records stay JSON, since only the tool writes them.
 - A method is `test: <crate-qualified path>` (a `#[test]` function, found by
-  parsing) or `procedure: <path>#<heading>` (a Markdown heading that must
-  exist). Each level fixes its environment: `analysis`, `unit` and `simulation`
+  parsing), `procedure: <path>#<heading>` (a Markdown heading that must
+  exist) or `library: <crate>:<ID>` (a requirement a pinned library crate
+  declares and verifies). Each level fixes its environment: `analysis`, `unit` and `simulation`
   run on the host, `target` and `system` on the product or a development board,
   and `field` on the product. `unit` takes a test; `target`, `system` and `field`
-  take a procedure. An entry with a hazard states its preconditions.
+  take a procedure. A `library:` entry takes the library requirement's status,
+  computed on the copy Cargo builds at the level claimed, and covers only the
+  library's part: the requirement's other entries still need this project's own
+  evidence. An entry with a hazard states its preconditions.
 
 **What requirement text holds.** A requirement says what must hold and why
 it matters, nothing else:
