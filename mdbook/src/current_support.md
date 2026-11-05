@@ -3,27 +3,26 @@
 Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. TBS Lucid H7 carries the Foxeer feature set on the
 STM32H743; it has passed bench checks but has never driven motors or flown.
-NUCLEO-F401RE is a non-actuating development target.
 
 The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.
 
-| Capability | Foxeer F405 V2 | NUCLEO-F401RE |
-|---|---|---|
-| Role | Golden flight target | Non-actuating bring-up target |
-| MCU / runtime | STM32F405, RTIC 2 | STM32F401, RTIC 2 |
-| RC input | SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config | None |
-| IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling | None |
-| Control | 2 kHz rate controller and Quad X mixer | None |
-| ESC output | Four-lane DShot600 | None |
-| ESC telemetry | Standard BLHeli legacy UART eRPM path | None |
-| Arming qualification | Fresh idle eRPM from all four motors | Not applicable |
-| USB | Standard USB CDC | None |
-| Configuration | Persistent onboard configuration through FerroConfigurator | None |
-| Blackbox | Standard onboard SPI-NOR FWBB logging and download | None |
-| Pilot display | DJI O4 MSP DisplayPort OSD | None |
-| ADC | Battery voltage and current inputs | None |
-| Current evidence | Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight | Build and target smoke checks |
+| Capability | Foxeer F405 V2 |
+|---|---|
+| Role | Golden flight target |
+| MCU / runtime | STM32F405, RTIC 2 |
+| RC input | SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config |
+| IMU | Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling |
+| Control | 2 kHz rate controller and Quad X mixer |
+| ESC output | Four-lane DShot600 |
+| ESC telemetry | Standard BLHeli legacy UART eRPM path |
+| Arming qualification | Fresh idle eRPM from all four motors |
+| USB | Standard USB CDC |
+| Configuration | Persistent onboard configuration through FerroConfigurator |
+| Blackbox | Standard onboard SPI-NOR FWBB logging and download |
+| Pilot display | DJI O4 MSP DisplayPort OSD |
+| ADC | Battery voltage and current inputs |
+| Current evidence | Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight |
 
 ## Foxeer F405 V2
 

@@ -42,9 +42,9 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-ferrohal` | The backend's non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half |
 | `ferrowasp-stm32-app` | What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks |
 
-Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
-safety-critical halves hold unsafe code: their DMA endpoint declarations and
-their jump into the chip's ROM bootloader.
+Only the `ferrowasp-ferrohal` pair names a HAL: FerroHAL, one backend pair
+covering both chips. FerroWasp holds no unsafe code of its own — a chip's
+unsafe belongs to FerroHAL, and CI fails the audit on any appearing here.
 
 Task definitions live in their subsystem's crate, behind a target-only
 `tasks` feature, so the logic beside them stays host-tested: the safety

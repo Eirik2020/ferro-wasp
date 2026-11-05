@@ -20,17 +20,16 @@ board-specific limitations live in the
 |---|---|
 | Status | Golden flight app; boots, arms, controls, logs, and has completed controlled prototype flights |
 | Platform | STM32F405, allocation-free embedded Rust, RTIC 2 |
-| RC and sensing | SBUS, MPU6500 or ICM42688-P, data-ready IMU sampling, voltage/current ADC |
-| Flight control | 400 Hz rate controller, filtering, gyro calibration, Quad X mixer |
+| RC and sensing | SBUS or CRSF, MPU-6000, MPU6500 or ICM42688-P, data-ready IMU sampling, voltage/current ADC |
+| Flight control | 2 kHz rate controller, filtering, gyro calibration, Quad X mixer |
 | Motors | Four-lane DShot600 with guarded arming and fresh-command containment |
 | ESC feedback | BLHeli legacy UART telemetry with four-motor eRPM qualification |
 | Pilot interfaces | DJI O4 MSP DisplayPort OSD and USB CDC |
 | Configuration and logging | Persistent tuning plus onboard SPI-NOR blackbox access through FerroConfigurator |
 
-FerroWasp FCU3 remains a supported secondary STM32F405 flight target. TBS
-Lucid H7 is an unverified STM32H743 port of the Foxeer feature set.
-NUCLEO-F401RE is a non-actuating development target. Additional boards can be
-added to the matrix as their support becomes meaningful.
+TBS Lucid H7 is an unverified STM32H743 port of the Foxeer feature set,
+bench-tested only. Additional boards can be added to the matrix as their
+support becomes meaningful.
 
 ## Getting Started
 
