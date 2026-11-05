@@ -5,7 +5,7 @@ small multirotors, built on FerroForge, and a prototype research platform. It
 puts auditability, timing determinism, fault containment, and evidence before
 feature count.
 
-Agreed direction, updated 2026-11-03. This document is limited to two pages
+Agreed direction, updated 2026-11-06. This document is limited to two pages
 maximum.
 
 **Authority.** `AGENTS.md` in the repository root defines the authority order and
@@ -36,8 +36,9 @@ rather than editing around it. Implementation status does not change them.
    type, task, or failure response has one owning layer. Code is
    safety-critical or not, and safety-critical code never depends on
    non-critical code. Firmware is `no_std`,
-   allocation-free, and uses bounded queues. Unsafe code lives only at
-   chip-backend peripheral and DMA boundaries, and is documented. The crate map
+   allocation-free, and uses bounded queues. FerroWasp holds no unsafe code of
+   its own: a chip's unsafe belongs to FerroHAL, and the audit fails on any
+   appearing here. The crate map
    is `mdbook/src/project_structure.md`.
 5. **W5 - Golden app.** `foxeer-f405-v2` is the behavioural reference. A feature
    lands there first or in the same change. Where another board leads, the

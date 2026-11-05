@@ -85,7 +85,7 @@ eRPM qualifies arming):
 | transport | a separate wire | the DShot wire, reversed after each frame |
 | rate | round robin, one motor per request over the telemetry bit | every frame, every motor |
 | delivers | eRPM, temperature, voltage, current, consumption | eRPM; temperature, voltage, current only with EDT, interleaved |
-| decoder | `drivers::blheli_telemetry` | `waveform::dshot_reply` (GCR) |
+| decoder | `ferrowasp-blheli-telemetry` | `ferrowasp-output::dshot_reply` (GCR) |
 
 No trait: bidirectional decode must live in the DShot output group, which
 owns the pin and turns it around; BLHeli decode lives in an ESC-telemetry
