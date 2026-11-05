@@ -173,6 +173,14 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   calibration and reboot glue as wiring. None of these has run on hardware
   since its extraction except the configuration save, maintenance and scratch
   test; a `bench_blackbox` run needs the BOOT button to leave.
+- **GNSS (u-blox M10).** Nothing uses the `ubx-wire` driver yet. In order:
+  - GNSS traits and adapters in `ferrowasp-sensors`, once it has landed:
+    `NAV-PVT` into FerroWasp's types, freshness and timeouts.
+  - Wire GPS into Foxeer first (W5): port, acknowledged configuration, task.
+  - Decide whether the GNSS path is safety-critical, with requirements,
+    before a flight mode depends on it.
+  - Check on a receiver what the crate marks single-source or inferred, and
+    add the SBAS enable key, which neither reference carries.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
 - **TBS Lucid H7.** The first bench board died and has been replaced, and an ESC
