@@ -46,9 +46,10 @@ after a logged autonomous approximately `10-13 Hz` oscillation. Do not select
 it. Keep every I and D gain at zero until separate target evidence establishes
 clean controller state across disarm, RC loss, aborted arming, and rearm.
 The `2.5 / 2.5 / 2.0` baseline is supported by the 2026-07-27 confined-area
-flight session, but its transition is inferred from P-only `PID/error` because
-BB2 does not yet embed configuration. Capture `config-show` before the next
-flight and do not describe the tune as complete.
+flight session, but its transition is inferred from P-only `PID/error`
+because the flight record does not yet embed the configuration. Capture
+FerroConfigurator's `config export` before the next flight and do not
+describe the tune as complete.
 
 Do not fly the pre-pitch-fix image with SHA-256
 `E4BAE2A6229D1B340E4DF72BF0727D00506989FE9A1DCDE3B71935B4D6BC9758`.
