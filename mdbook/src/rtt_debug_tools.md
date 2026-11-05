@@ -142,14 +142,22 @@ export is refused, and its ULog keeps the records' millisecond timestamps.
 
 `tools/flight_report.py` writes a Markdown summary and plots of
 setpoint against measured rate, tracking error, PID output, motor output, and
-the worst tracking-error events, under `logs\terminal_embed\reports\`:
+the worst tracking-error events, under `logs\terminal_embed\reports\`. It
+reads the samples the analyzer writes with `--csv`, or an RTT capture carrying
+`BB1` or `BB2` frames:
 
 ```powershell
-python tools\flight_report.py --trim-start 3 --trim-end 3
+python tools\blackbox_analyzer.py logs\foxeer-latest.csv --csv logs\foxeer-latest-samples.csv
+python tools\flight_report.py logs\foxeer-latest-samples.csv --trim-start 3 --trim-end 3
 ```
 
-With no source it uses the newest log. It assumes a 400 Hz control rate, so on
-a faster loop pass the real rate with `--sample-rate`.
+With no source it uses the newest `.log` or `.csv` in `logs\terminal_embed\`.
+It times samples, and `--trim-start` and `--trim-end`, at the rate the log
+was recorded at, measured from the CSV's `timestamp_us` column as the analyzer
+measures the control rate, and the summary states the rate and where it came
+from. `BB` frames carry no time, so an RTT capture, or a CSV the analyzer
+wrote from one, needs `--sample-rate` in logged samples per second; without a
+measurable rate or that option the report is refused.
 
 ## Safety Notes
 
