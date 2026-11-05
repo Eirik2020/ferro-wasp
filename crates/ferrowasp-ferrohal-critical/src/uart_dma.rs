@@ -275,9 +275,15 @@ where
         tx: storage.tx_buffer,
         rx: memory.ring,
     };
-    let Ok((uart, irq)) = Uart::new(rcc, wiring, &config, buffers) else {
-        defmt::warn!("UART config refused; the port stays off");
-        return (None, UartTxPort::unbound());
+    let (uart, irq) = match Uart::new(rcc, wiring, &config, buffers) {
+        Ok((uart, irq)) => (uart, irq),
+        Err(refused) => {
+            defmt::warn!(
+                "UART config refused: {:?}; the port stays off",
+                refused.error()
+            );
+            return (None, UartTxPort::unbound());
+        }
     };
     let (tx, rx) = Uart::split(uart);
     let needs_tx = profile.protocol.needs_tx();
@@ -322,9 +328,15 @@ where
 {
     let profile = bindings.profile(logical)?;
     let config = config_for(profile.protocol).with_inverted_rx(invert_rx);
-    let Ok((rx, irq)) = UartRx::new(rcc, wiring, &config, memory.ring) else {
-        defmt::warn!("UART config refused; the port stays off");
-        return None;
+    let (rx, irq) = match UartRx::new(rcc, wiring, &config, memory.ring) {
+        Ok((rx, irq)) => (rx, irq),
+        Err(refused) => {
+            defmt::warn!(
+                "UART config refused: {:?}; the port stays off",
+                refused.error()
+            );
+            return None;
+        }
     };
     let parts = rx_side(
         memory.core,

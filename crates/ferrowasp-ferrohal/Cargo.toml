@@ -24,4 +24,4 @@ usbd-serial = "0.2.2"
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "=0.7.10", features = ["critical-section-single-core"] }
-ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "0914234e8c7f5eb5fc0618e620ea18de75de09c0", optional = true, features = ["rt", "defmt", "usb"] }
+ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "704e5781a70579c600296f3e87776c4b2c6eed10", optional = true, features = ["rt", "defmt", "usb"] }

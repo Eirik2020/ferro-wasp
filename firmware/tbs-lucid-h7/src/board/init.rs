@@ -166,7 +166,7 @@ pub fn init_spi1_imu(
     } = resources;
 
     cs_pin.set_high();
-    let mut spi = Spi::new(
+    let mut spi = match Spi::new(
         rcc,
         SpiWiring {
             spi,
@@ -181,8 +181,13 @@ pub fn init_spi1_imu(
             tx: memory.tx,
             rx: memory.rx,
         },
-    )
-    .ok()?;
+    ) {
+        Ok(spi) => spi,
+        Err(refused) => {
+            defmt::warn!("SPI1 IMU bus refused: {:?}", refused.error());
+            return None;
+        }
+    };
 
     embedded_hal::delay::DelayNs::delay_ms(delay, 10);
     let cs = &mut cs_pin;

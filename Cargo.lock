@@ -232,7 +232,7 @@ dependencies = [
 [[package]]
 name = "ferrohal-stm32"
 version = "0.1.0"
-source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=0914234e8c7f5eb5fc0618e620ea18de75de09c0#0914234e8c7f5eb5fc0618e620ea18de75de09c0"
+source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=704e5781a70579c600296f3e87776c4b2c6eed10#704e5781a70579c600296f3e87776c4b2c6eed10"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",

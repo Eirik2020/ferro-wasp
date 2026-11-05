@@ -121,7 +121,7 @@ pub fn init_spi2_flash(
 ) -> Option<super::aliases::Spi2Flash> {
     let mut cs = resources.cs_pin;
     cs.set_high();
-    let bus = BlockingSpi::new(
+    let bus = match BlockingSpi::new(
         rcc,
         BlockingWiring {
             spi: resources.spi,
@@ -130,8 +130,13 @@ pub fn init_spi2_flash(
             mosi: resources.mosi_pin,
         },
         &FLASH_SPI,
-    )
-    .ok()?;
+    ) {
+        Ok(bus) => bus,
+        Err(refused) => {
+            defmt::warn!("SPI2 flash bus refused: {:?}", refused.error());
+            return None;
+        }
+    };
     Some(ferrowasp_storage::spi_nor::SpiNor::new(bus, cs))
 }
 
@@ -193,7 +198,7 @@ pub fn init_spi1_imu(
     } = resources;
 
     cs_pin.set_high();
-    let mut spi = Spi::new(
+    let mut spi = match Spi::new(
         rcc,
         SpiWiring {
             spi,
@@ -208,8 +213,13 @@ pub fn init_spi1_imu(
             tx: memory.tx,
             rx: memory.rx,
         },
-    )
-    .ok()?;
+    ) {
+        Ok(spi) => spi,
+        Err(refused) => {
+            defmt::warn!("SPI1 IMU bus refused: {:?}", refused.error());
+            return None;
+        }
+    };
 
     embedded_hal::delay::DelayNs::delay_ms(delay, 10);
     let cs = &mut cs_pin;
