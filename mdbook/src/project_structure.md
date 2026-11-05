@@ -69,7 +69,7 @@ marking and pinning rules apply.
 
 | Crate | Owns |
 |---|---|
-| `crsf-wire` | The CRSF receiver protocol, safety-critical: the bounded streaming frame parser, the battery, GPS, vario, barometric altitude, attitude and flight-mode telemetry encoders, and a frame reader and telemetry writer over `embedded-io`. No firmware image links it; RC input decodes CRSF through `ferrowasp-crsf` |
+| `crsf-proto` | The CRSF receiver protocol, safety-critical: the bounded streaming frame parser, the battery, GPS, vario, barometric altitude, attitude and flight-mode telemetry encoders, and a frame reader and telemetry writer over `embedded-io`. No firmware image links it; RC input decodes CRSF through `ferrowasp-crsf` |
 
 ## Firmware Applications
 
