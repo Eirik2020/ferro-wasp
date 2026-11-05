@@ -2,8 +2,8 @@
 //! panic, bounded state, every frame returned checks, and valid frames buried
 //! in noise all come back.
 
-use ubx_wire::cfg::{Pending, ValGet};
-use ubx_wire::{Deframer, Event, NavPvt, checksum, encode};
+use ubx::cfg::{Pending, ValGet};
+use ubx::{Deframer, Event, NavPvt, checksum, encode};
 
 struct XorShift(u64);
 

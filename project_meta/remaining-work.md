@@ -173,7 +173,7 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   calibration and reboot glue as wiring. None of these has run on hardware
   since its extraction except the configuration save, maintenance and scratch
   test; a `bench_blackbox` run needs the BOOT button to leave.
-- **GNSS (u-blox M10).** Nothing uses the `ubx-wire` driver yet. In order:
+- **GNSS (u-blox M10).** Nothing uses the `ubx` driver yet. In order:
   - GNSS traits and adapters in `ferrowasp-sensors`, once it has landed:
     `NAV-PVT` into FerroWasp's types, freshness and timeouts.
   - Wire GPS into Foxeer first (W5): port, acknowledged configuration, task.

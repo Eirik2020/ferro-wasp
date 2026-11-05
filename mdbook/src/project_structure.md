@@ -70,7 +70,7 @@ marking and pinning rules apply.
 | Crate | Owns |
 |---|---|
 | `crsf-proto` | The CRSF receiver protocol, safety-critical: the bounded streaming frame parser, the battery, GPS, vario, barometric altitude, attitude and flight-mode telemetry encoders, and a frame reader and telemetry writer over `embedded-io`. No firmware image links it; RC input decodes CRSF through `ferrowasp-crsf` |
-| `ubx-wire` | The u-blox UBX protocol for an M10 GNSS receiver: framing with resynchronisation inside dropped frames, configuration through `CFG-VALSET` and `CFG-VALGET` with their acknowledgements, `NAV-PVT` decoding that exposes a position only for a valid 3D fix, and transports over `embedded-io` serial and `embedded-hal` I2C |
+| `ubx` | The u-blox UBX protocol for an M10 GNSS receiver: framing with resynchronisation inside dropped frames, configuration through `CFG-VALSET` and `CFG-VALGET` with their acknowledgements, `NAV-PVT` decoding that exposes a position only for a valid 3D fix, and transports over `embedded-io` serial and `embedded-hal` I2C |
 
 ## Firmware Applications
 

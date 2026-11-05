@@ -132,7 +132,6 @@ impl Key {
     /// `CFG-SIGNAL-GLO_ENA` (L): single-source, ublox
     /// `ubx_packets/cfg_val.rs:1435`.
     pub const SIGNAL_GLO_ENA: Self = Self(0x1031_0025);
-
     /// Every key this crate names, for tests and tables.
     pub const KNOWN: [Self; 19] = [
         Self::RATE_MEAS,

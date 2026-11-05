@@ -13,10 +13,10 @@ use ublox::packets::cfg_val::{
 };
 use ublox::proto27::{PacketRef, Proto27};
 use ublox::{ParserBuilder, UbxPacket};
-use ubx_wire::cfg::{
+use ubx::cfg::{
     DynamicModel, Key, Layers, PollLayer, Setting, Transaction, ValGet, valget_request, valset,
 };
-use ubx_wire::{Deframer, Event, NavPvt, encode, id};
+use ubx::{Deframer, Event, NavPvt, encode, id};
 
 /// Every frame our deframer finds in `bytes`, as (class, id, payload).
 fn deframe(bytes: &[u8]) -> Vec<(u8, u8, Vec<u8>)> {
@@ -557,11 +557,11 @@ fn a_no_fix_nav_pvt_is_no_position_here_and_no_fix_in_both_references() {
 
 #[test]
 fn acks_built_by_ublox_tests_match_their_requests_here() {
-    use ubx_wire::cfg::{Answer, Pending};
+    use ubx::cfg::{Answer, Pending};
     // ublox tests/parser_tests.rs:102: an ACK-ACK of CFG-MSG (06 01).
     let ack_cfg_msg = [0xB5, 0x62, 0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0x0F, 0x38];
     let frames = deframe(&ack_cfg_msg);
-    let frame = ubx_wire::Frame {
+    let frame = ubx::Frame {
         class: frames[0].0,
         id: frames[0].1,
         payload: &frames[0].2,
