@@ -107,10 +107,13 @@ fn key_ids_both_references_carry_agree_with_ours() {
         (Key::SIGNAL_QZSS_ENA, CfgKey::SignalQzssEna),
         (Key::SIGNAL_GLO_ENA, CfgKey::SignalGloEna),
     ];
-    assert_eq!(ublox.len(), Key::KNOWN.len());
+    // CFG-SIGNAL-SBAS_ENA is single-sourced from PX4's ubx.h and carried by
+    // neither reference crate, so it has no pair here; every other key does.
+    assert_eq!(ublox.len(), Key::KNOWN.len() - 1);
     for (ours, theirs) in ublox {
         assert_eq!(ours.raw(), theirs as u32, "{ours:?}");
     }
+    assert!(!ublox.iter().any(|(ours, _)| *ours == Key::SIGNAL_SBAS_ENA));
 }
 
 #[test]

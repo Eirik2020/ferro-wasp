@@ -132,8 +132,13 @@ impl Key {
     /// `CFG-SIGNAL-GLO_ENA` (L): single-source, ublox
     /// `ubx_packets/cfg_val.rs:1435`.
     pub const SIGNAL_GLO_ENA: Self = Self(0x1031_0025);
+    /// `CFG-SIGNAL-SBAS_ENA` (L): single-source, PX4 `src/ubx.h`
+    /// (`UBX_CFG_KEY_SIGNAL_SBAS_ENA 0x10310020`); neither reference crate
+    /// carries it.
+    pub const SIGNAL_SBAS_ENA: Self = Self(0x1031_0020);
+
     /// Every key this crate names, for tests and tables.
-    pub const KNOWN: [Self; 19] = [
+    pub const KNOWN: [Self; 20] = [
         Self::RATE_MEAS,
         Self::RATE_NAV,
         Self::RATE_TIMEREF,
@@ -153,6 +158,7 @@ impl Key {
         Self::SIGNAL_BDS_ENA,
         Self::SIGNAL_QZSS_ENA,
         Self::SIGNAL_GLO_ENA,
+        Self::SIGNAL_SBAS_ENA,
     ];
 
     /// A key from its 32-bit ID; refused when bits 28-30 name no size.
