@@ -28,4 +28,30 @@ configuration validation and rejects storage changes while armed.
 
 The [Foxeer F405 V2 guide](foxeer_f405_v2.md) provides complete commands and
 safety checks. Contributors building the tool or assembling packages should
+
+## Bluetooth
+
+Some boards carry a Bluetooth module that bridges their UART to Bluetooth
+Low Energy; the SpeedyBee F405 V5's is the one this support was built
+against. Where USB needs a cable, the CLI can talk through such a bridge
+instead:
+
+```text
+ferro-configurator device ble-scan
+ferro-configurator --ble F0:16:1D:C9:ED:56 device info
+ferro-configurator --ble "F405 V5" config show
+```
+
+An address-like target must match the device's address; anything else
+matches its advertised name. The connection speaks exactly the same
+request/response line protocol as USB, so every command works unchanged.
+`--ble` replaces `--port`; it cannot be combined with it.
+
+The bridge module authenticates nobody - no pairing, no PIN, no encryption -
+so anything the flight controller serves on that UART is reachable by anyone
+in radio range. The configurator's own rules travel with the link: it
+refuses configuration writes unless the controller reports itself disarmed,
+verifies every write by readback, and never gains the authority to arm or
+command motors. A build for such a board should serve only the command
+surface it is willing to expose wirelessly.
 use [Developer Setup](../developer_getting_started.md).

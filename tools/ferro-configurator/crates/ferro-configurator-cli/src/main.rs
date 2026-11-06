@@ -12,8 +12,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferro_configurator_core::{
     BoardProfile, BuildIdentity, CatalogEntry, CheckState, ConfigFallback, ConfigKey,
     ConversionSummary, DeviceSelector, DfuDetection, DownloadSummary, EscLane, FerroConfig,
-    FerroError, FlashInfo, FlashProgress, FlightSelector, PortInfo, PreparedImage, ProfileStore,
-    RESTART_TIMEOUT, SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, SyncedFlight,
+    FerroError, FlashInfo, FlashProgress, FlightSelector, LineTransport, PortInfo, PreparedImage,
+    ProfileStore, RESTART_TIMEOUT, SERIAL_FUNCTIONS, SerialBindings, StatusSnapshot, SyncedFlight,
     catalog_device,
     config::lpf_alpha_for_corner,
     convert_fwbb_to_csv, convert_fwbb_to_ulog, detect_dfu, discover_ports, download_flight,
@@ -42,6 +42,13 @@ struct Cli {
     /// Select a COM port explicitly, for example COM7.
     #[arg(long, global = true)]
     port: Option<String>,
+
+    /// Connect over Bluetooth Low Energy instead, to the bridge whose MAC
+    /// address or advertised name this selects, for example
+    /// F0:16:1D:C9:ED:56 or "F405 V5". The board's bridge module
+    /// authenticates nobody, so the same disarmed-only rules apply.
+    #[arg(long, global = true, conflicts_with = "port")]
+    ble: Option<String>,
 
     /// Per-command response timeout in milliseconds.
     #[arg(
@@ -333,6 +340,12 @@ enum DeviceCommand {
         #[arg(long)]
         all: bool,
     },
+    /// List nearby Bluetooth Low Energy devices, without connecting to any.
+    BleScan {
+        /// How many seconds to listen for advertisements.
+        #[arg(long, default_value_t = 3)]
+        seconds: u64,
+    },
     /// Show storage and live safety status.
     Info,
     /// Restart the controller; refused while armed or while storage is busy.
@@ -501,6 +514,19 @@ fn run(cli: &Cli) -> Result<(), FerroError> {
                             let product = port.product.as_deref().unwrap_or("serial device");
                             println!("{:<10} {:<9} {}", port.port, identity, product);
                         }
+                    }
+                })
+            }
+            DeviceCommand::BleScan { seconds } => {
+                let devices = ferro_configurator_ble::scan(Duration::from_secs(*seconds))?;
+                emit(cli.format, "device.ble-scan", &devices, || {
+                    if devices.is_empty() {
+                        println!("No Bluetooth Low Energy devices found.");
+                    } else {
+                        for device in &devices {
+                            println!("{:<20} {}", device.address, device.name);
+                        }
+                        println!("Connect over Bluetooth with --ble <address-or-name>.");
                     }
                 })
             }
@@ -1666,14 +1692,14 @@ fn board_of(port: &str) -> String {
 fn connect(
     cli: &Cli,
     timeout: Duration,
-) -> Result<
-    ferro_configurator_core::FerroClient<ferro_configurator_core::SerialTransport>,
-    FerroError,
-> {
+) -> Result<ferro_configurator_core::FerroClient<Box<dyn LineTransport>>, FerroError> {
+    if let Some(target) = cli.ble.as_deref() {
+        return ferro_configurator_ble::open(target, timeout);
+    }
     let selector = cli.port.as_ref().map_or(DeviceSelector::Auto, |port| {
         DeviceSelector::Port(port.clone())
     });
-    open_device(selector, timeout)
+    Ok(open_device(selector, timeout)?.into_boxed())
 }
 
 fn apply(cli: &Cli, timeout: Duration, config: &FerroConfig) -> Result<FerroConfig, FerroError> {

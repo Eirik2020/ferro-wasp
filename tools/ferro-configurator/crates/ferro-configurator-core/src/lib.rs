@@ -39,5 +39,5 @@ pub use firmware::{
 };
 pub use prearm::{CheckState, PrearmCheck, prearm_checks};
 pub use profiles::{ProfileInfo, ProfileStore};
-pub use transport::{LineTransport, MockTransport, SerialTransport};
+pub use transport::{LineReader, LineTransport, MockTransport, SerialTransport};
 pub use ulog::{ConversionSummary, convert_fwbb_to_ulog};

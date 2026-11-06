@@ -18,6 +18,9 @@ pub enum FerroError {
     #[error("could not open serial port {port}: {reason}")]
     OpenPort { port: String, reason: String },
 
+    #[error("could not open the Bluetooth device {target}: {reason}")]
+    OpenBluetooth { target: String, reason: String },
+
     #[error("transport error on {port}: {reason}")]
     Transport { port: String, reason: String },
 
