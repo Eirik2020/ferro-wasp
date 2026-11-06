@@ -14,5 +14,6 @@
 
 pub mod barometer;
 pub mod class;
+pub mod compass;
 pub mod gnss;
 pub mod imu;

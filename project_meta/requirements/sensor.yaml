@@ -282,3 +282,23 @@ requirements:
           environment: host
           method:
             test: ferrowasp_sensors::dps310::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample
+
+  - id: SENSOR-015
+    title: A compass sample outside its part's limits is refused
+    statement: >-
+      A compass implementation shall refuse a field sample any of whose
+      components lies outside the limits its part declares, or that was
+      built from a value it cannot hold.
+    rationale: >-
+      A field outside the part's measuring range is not a measurement to
+      believe; refusing it, rather than clamping it, keeps a faulty reading
+      from passing as a heading reference, and a value that cannot be held
+      cannot be checked at all.
+    derived_from: [SENSOR-003]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensor_traits::compass::tests::a_compass_sample_outside_its_limits_is_refused
+
