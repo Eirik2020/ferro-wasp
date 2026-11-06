@@ -19,7 +19,7 @@ bench = false
 
 [features]
 default = ["board-foxeer-f405-v2"]
-board-foxeer-f405-v2 = ["ferrowasp-ferrohal/stm32f405", "ferrowasp-ferrohal/dshot", "ferrowasp-stm32-app/stm32f405", "ferrowasp-stm32-app/dshot"]
+board-foxeer-f405-v2 = ["ferrowasp-stm32/stm32f405", "ferrowasp-stm32/dshot", "ferrowasp-stm32-app/stm32f405", "ferrowasp-stm32-app/dshot"]
 bench_actuator_validation = []
 bench_blackbox = ["ferrowasp-stm32-app/bench_blackbox"]
 bench_config_fault = ["ferrowasp-stm32-app/bench_config_fault"]
@@ -63,7 +63,6 @@ embedded-io-async = "0.7.0"
 ferrowasp-mspv1 = { path = "../../crates/ferrowasp-mspv1" }
 ferrowasp-mspv2 = { path = "../../crates/ferrowasp-mspv2" }
 ferrowasp-stm32 = { path = "../../crates/ferrowasp-stm32" }
-ferrowasp-ferrohal = { path = "../../crates/ferrowasp-ferrohal" }
 ferrowasp-stm32-app = { path = "../../crates/ferrowasp-stm32-app" }
 ferroforge = "0.4"
 heapless = "0.9.2"
@@ -71,7 +70,7 @@ nb = "1.1"
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 rtic = { version = "2.4.0", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.1.0", features = ["cortex-m-systick", "systick-64bit"] }
-ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "704e5781a70579c600296f3e87776c4b2c6eed10", features = ["stm32f405rg", "rt", "defmt", "usb"] }
+ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "b6d8e84a2a65ad4aae09666ea08b318dd5d9688e", features = ["stm32f405rg", "rt", "defmt", "usb"] }
 
 
 [profile.dev.package."*"]

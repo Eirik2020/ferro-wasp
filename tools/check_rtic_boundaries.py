@@ -217,7 +217,7 @@ def _validate_foxeer_required_usb(root: Path, errors: list[str]) -> None:
     if "stm32_usb::init_usb_cdc_serial(" not in main_text:
         errors.append(
             f"{_relative(main, root)}: Foxeer must initialize mandatory USB "
-            "through ferrowasp-ferrohal"
+            "through the STM32 backend"
         )
 
 
@@ -293,7 +293,7 @@ def _validate_flight_app_contracts(root: Path, errors: list[str]) -> None:
             manifest_text,
             re.MULTILINE | re.DOTALL,
         )
-        dshot_feature = contract.get("dshot_feature", "ferrowasp-ferrohal/dshot")
+        dshot_feature = contract.get("dshot_feature", "ferrowasp-stm32-app/dshot")
         if board_feature is None or dshot_feature not in board_feature.group(1):
             errors.append(
                 f"{_relative(manifest, root)}: the board feature must enable "

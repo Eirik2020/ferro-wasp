@@ -10,10 +10,32 @@
 
 pub mod adc;
 pub mod pwm_config;
+pub mod sd_storage;
 pub mod status_led;
 #[cfg(all(feature = "tasks", target_arch = "arm"))]
 pub mod tasks;
 pub mod usb_serial;
+
+// The FerroHAL backend, folded in: what `ferrowasp-ferrohal` presented, now
+// reached directly. Gated to a target with a chip feature.
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use ferrohal_stm32 as hal;
+#[cfg(all(
+    target_arch = "arm",
+    feature = "dshot",
+    any(feature = "stm32f405", feature = "stm32h743")
+))]
+pub use ferrowasp_stm32_critical::dshot;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use ferrowasp_stm32_critical::{chip_time, clocks, exti, spi_dma, system_bootloader, uart_dma};
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod hal_prelude {
+    pub use ferrohal_stm32::device as pac;
+}
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod signature {
+    pub use ferrohal_stm32::signature::device_uid;
+}
 
 pub use ferrowasp_stm32_critical::app_config;
 pub use ferrowasp_stm32_critical::app_storage;

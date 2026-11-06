@@ -18,9 +18,9 @@ path = "src/lib.rs"
 default = []
 # One chip family per firmware. The definitions are the same for each; only
 # the backend under them changes.
-stm32f405 = ["dep:ferrowasp-ferrohal", "ferrowasp-ferrohal/stm32f405"]
-stm32h743 = ["dep:ferrowasp-ferrohal", "ferrowasp-ferrohal/stm32h743"]
-dshot = ["ferrowasp-stm32/dshot", "ferrowasp-ferrohal?/dshot"]
+stm32f405 = ["ferrowasp-stm32/stm32f405"]
+stm32h743 = ["ferrowasp-stm32/stm32h743"]
+dshot = ["ferrowasp-stm32/dshot"]
 # Diagnostics a firmware opts into; forwarded from its own features of the
 # same name.
 imu_transport_rtt = ["ferrowasp-cli/imu_transport_rtt"]
@@ -75,7 +75,6 @@ ferrowasp-mspv2 = { path = "../ferrowasp-mspv2", optional = true }
 heapless = { workspace = true }
 ferrowasp-stm32 = { path = "../ferrowasp-stm32", features = ["tasks"] }
 ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical", features = ["tasks"] }
-ferrowasp-ferrohal = { path = "../ferrowasp-ferrohal", optional = true }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }

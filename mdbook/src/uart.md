@@ -6,7 +6,7 @@ flight image's legacy ESC telemetry.
 ## Current Implementation
 
 The UART mechanism lives in
-`crates/ferrowasp-ferrohal-critical/src/uart_dma.rs`, FerroHAL's driver under the family-neutral
+`crates/ferrowasp-stm32-critical/src/uart_dma.rs`, FerroHAL.s driver under the family-neutral
 transport in `ferrowasp-stm32-critical`. Each board's UART routes are data
 in its board crate (`board/src/serial.rs`); peripheral construction is in the
 app's `src/board/`.

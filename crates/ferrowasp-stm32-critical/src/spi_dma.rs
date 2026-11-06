@@ -11,10 +11,10 @@
 
 use core::cell::RefCell;
 
+pub use crate::spi_common::*;
 use critical_section::Mutex;
 use embedded_hal::digital::OutputPin;
 use ferrohal_stm32::spi::{self, Spi};
-pub use ferrowasp_stm32_critical::spi_common::*;
 
 pub struct SpiCore {
     spi: Spi,
@@ -121,8 +121,7 @@ impl SpiTxFrameDma for SpiPollerSide {
     }
 }
 
-pub type SpiDmaOwner<CsT> =
-    ferrowasp_stm32_critical::spi_common::SpiDmaOwner<SpiRxTransfer, SpiPollerSide, CsT>;
+pub type SpiDmaOwner<CsT> = crate::spi_common::SpiDmaOwner<SpiRxTransfer, SpiPollerSide, CsT>;
 
 pub struct SpiDmaParts {
     pub irq: SpiRxIrqSide<SpiRxTransfer>,

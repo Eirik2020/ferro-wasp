@@ -4,7 +4,7 @@
 /// The selected chip family's backend. Only what differs between families
 /// is named through it: the HAL's own interrupt and pin types, and the motor
 /// bank over the family's timers.
-pub use ferrowasp_ferrohal as backend;
+pub use ferrowasp_stm32 as backend;
 
 pub use crate::dt;
 pub use crate::flash_task;

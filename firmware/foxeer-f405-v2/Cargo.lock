@@ -232,7 +232,7 @@ dependencies = [
 [[package]]
 name = "ferrohal-stm32"
 version = "0.1.0"
-source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=704e5781a70579c600296f3e87776c4b2c6eed10#704e5781a70579c600296f3e87776c4b2c6eed10"
+source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=b6d8e84a2a65ad4aae09666ea08b318dd5d9688e#b6d8e84a2a65ad4aae09666ea08b318dd5d9688e"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -261,7 +261,6 @@ dependencies = [
  "ferrowasp-board-foxeer-f405-v2",
  "ferrowasp-cli",
  "ferrowasp-control",
- "ferrowasp-ferrohal",
  "ferrowasp-icm42688p",
  "ferrowasp-mpu6000",
  "ferrowasp-mpu6500",
@@ -391,35 +390,6 @@ version = "0.1.0"
 dependencies = [
  "ferrowasp-blheli-telemetry",
  "heapless 0.9.2",
-]
-
-[[package]]
-name = "ferrowasp-ferrohal"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "ferrohal-stm32",
- "ferrowasp-ferrohal-critical",
- "ferrowasp-stm32",
- "ferrowasp-storage",
- "usb-device",
- "usbd-serial",
-]
-
-[[package]]
-name = "ferrowasp-ferrohal-critical"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "critical-section",
- "defmt 1.2.0",
- "embedded-hal 1.0.0",
- "ferrohal-stm32",
- "ferrowasp-imu",
- "ferrowasp-io-contracts",
- "ferrowasp-output",
- "ferrowasp-serial",
- "ferrowasp-stm32-critical",
 ]
 
 [[package]]
@@ -567,14 +537,17 @@ dependencies = [
 name = "ferrowasp-stm32"
 version = "0.1.0"
 dependencies = [
+ "cortex-m",
  "defmt 1.2.0",
  "embedded-hal 1.0.0",
  "ferroforge",
+ "ferrohal-stm32",
  "ferrowasp-boundary-contracts",
  "ferrowasp-io-contracts",
  "ferrowasp-osd",
  "ferrowasp-safety",
  "ferrowasp-stm32-critical",
+ "ferrowasp-storage",
  "fugit",
  "heapless 0.9.2",
  "rc-pwm",
@@ -603,7 +576,6 @@ dependencies = [
  "ferrowasp-control",
  "ferrowasp-crsf",
  "ferrowasp-feedback",
- "ferrowasp-ferrohal",
  "ferrowasp-flight-control",
  "ferrowasp-icm42688p",
  "ferrowasp-imu",
@@ -630,11 +602,13 @@ dependencies = [
 name = "ferrowasp-stm32-critical"
 version = "0.1.0"
 dependencies = [
+ "cortex-m",
  "critical-section",
  "defmt 1.2.0",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "ferroforge",
+ "ferrohal-stm32",
  "ferrowasp-boundary-contracts",
  "ferrowasp-icm42688p",
  "ferrowasp-imu",

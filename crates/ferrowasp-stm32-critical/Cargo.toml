@@ -16,6 +16,20 @@ path = "src/lib.rs"
 default = []
 bench_spi_timeout_recovery = []
 dshot = ["dep:ferrowasp-output"]
+# Each chip feature selects FerroHAL's chip; without one the backend modules
+# do not build.
+stm32f405 = [
+    "dep:ferrohal-stm32",
+    "ferrohal-stm32/stm32f405rg",
+    "dep:cortex-m",
+    "dep:critical-section",
+]
+stm32h743 = [
+    "dep:ferrohal-stm32",
+    "ferrohal-stm32/stm32h743vi",
+    "dep:cortex-m",
+    "dep:critical-section",
+]
 # The hardware transports' RTIC task definitions, target-only (design §16).
 tasks = [
     "dep:critical-section",
@@ -46,7 +60,10 @@ ferrowasp-serial = { path = "../ferrowasp-serial" }
 heapless = { workspace = true }
 
 [target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "=0.7.10", features = ["critical-section-single-core"], optional = true }
+critical-section = { version = "=1.2.0", optional = true }
 ferroforge = { version = "=0.4.0", optional = true }
+ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "b6d8e84a2a65ad4aae09666ea08b318dd5d9688e", optional = true, features = ["rt", "defmt"] }
 fugit = { version = "=0.3.9", optional = true }
 rtic = { version = "=2.4.0", default-features = false, features = ["thumbv7-backend"], optional = true }
 rtic-monotonics = { version = "=2.1.0", default-features = false, optional = true }

@@ -94,12 +94,12 @@ jobs:
       - name: Check embedded workspace
         run: >
           cargo check --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-ferrohal/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
+          --features ferrowasp-stm32/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
 
       - name: Lint embedded workspace
         run: >
           cargo clippy --workspace --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-ferrohal/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
+          --features ferrowasp-stm32/stm32f405,ferrowasp-stm32-app/stm32f405,ferrowasp-stm32-app/dshot
           -- -D warnings
 
       - name: Check Foxeer F405 V2 firmware
@@ -134,14 +134,14 @@ jobs:
 
       - name: Check embedded workspace for STM32H743
         run: >
-          cargo check -p ferrowasp-ferrohal -p ferrowasp-stm32-app --locked
+          cargo check -p ferrowasp-stm32 -p ferrowasp-stm32-app --locked
           --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-ferrohal/stm32h743,ferrowasp-stm32-app/stm32h743,ferrowasp-stm32-app/dshot
+          --features ferrowasp-stm32/stm32h743,ferrowasp-stm32-app/stm32h743,ferrowasp-stm32-app/dshot
 
       - name: Lint the backend for STM32H743
         run: >
-          cargo clippy -p ferrowasp-ferrohal --locked --target ${{ env.FIRMWARE_TARGET }}
-          --features ferrowasp-ferrohal/stm32h743
+          cargo clippy -p ferrowasp-stm32 --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features ferrowasp-stm32/stm32h743
           -- -D warnings
 
       - name: Check TBS Lucid H7 firmware
@@ -247,8 +247,6 @@ jobs:
           for crate in \
             crates/ferrowasp-stm32/src/lib.rs \
             crates/ferrowasp-stm32-critical/src/lib.rs \
-            crates/ferrowasp-ferrohal/src/lib.rs \
-            crates/ferrowasp-ferrohal-critical/src/lib.rs \
             firmware/foxeer-f405-v2/src/main.rs \
             firmware/tbs-lucid-h7/src/main.rs \
             firmware/tbs-lucid-h7/src/lib.rs; do

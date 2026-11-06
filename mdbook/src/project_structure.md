@@ -36,15 +36,14 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `ferrowasp-osd` | The MSP OSD the DJI goggles show, encoded from the craft's published state, with a warning when it stops updating |
 | `ferrowasp-output` | Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding |
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
-| `ferrowasp-stm32-critical` | The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory |
-| `ferrowasp-stm32` | The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate |
-| `ferrowasp-ferrohal-critical` | The backend's safety-critical half over FerroHAL: DShot on its waveform generator, SPI and UART, timing and reset. The UART and SPI adapters exist only until the transports move to FerroHAL's own model |
-| `ferrowasp-ferrohal` | The backend's non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half |
+| `ferrowasp-stm32-critical` | The safety-critical STM32 mechanisms: the UART and SPI DMA state machines, the DShot motor bank on FerroHAL's waveform generator, timing, routing and board-description types, reset, and the DMA buffer memory — over FerroHAL, gated to a chip feature |
+| `ferrowasp-stm32` | The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, the SD card, USB serial, the device ID; and re-exports of the critical crate and of FerroHAL itself |
 | `ferrowasp-stm32-app` | What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks |
 
-Only the `ferrowasp-ferrohal` pair names a HAL: FerroHAL, one backend pair
-covering both chips. FerroWasp holds no unsafe code of its own — a chip's
-unsafe belongs to FerroHAL, and CI fails the audit on any appearing here.
+Only `ferrowasp-stm32` and its critical crate name a HAL: FerroHAL, one
+backend covering both chips. FerroWasp holds no unsafe code of its own — a
+chip's unsafe belongs to FerroHAL, and CI fails the audit on any appearing
+here.
 
 Task definitions live in their subsystem's crate, behind a target-only
 `tasks` feature, so the logic beside them stays host-tested: the safety
