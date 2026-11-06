@@ -63,10 +63,14 @@ response: $ X >  flags:u8  function:u16le  length:u16le  payload  crc:u8
   `flags` through the end of the payload. It is *not* the XOR checksum of
   MSPv1 — a frame with an XOR checksum is silently dropped.
 - Function numbers are the MSPv1 command codes: `1` API_VERSION, `3`
-  FC_VERSION, `100` STATUS, `119` UID, and so on.
+  FC_VERSION, `101` STATUS, `119` BOXIDS, `160` UID, and so on.
 - Captured test vector, the module's own poll (see below):
-  `24 58 3C 00 77 00 01 00 00 FD` — function 0x77, length 1, payload `00`,
-  CRC `FD`.
+  `24 58 3C 00 77 00 01 00 00 FD` — function 0x77 (`MSP_BOXIDS`), length 1,
+  payload `00`, CRC `FD`.
+- A command the firmware does not implement gets silence on the MSPv2
+  path and an empty `$M>` frame on the MSPv1 path; observed with
+  `MSP_IDENT` (100), which modern Betaflight dropped. Hosts should read
+  both as "unsupported", not as a link failure.
 
 Hosts should parse as a bounded byte stream: resynchronise on the `$X>`
 preamble, honour `length`, verify the CRC, and discard a corrupt frame rather
@@ -75,9 +79,11 @@ than partially accepting it.
 ## Module behaviour
 
 While **no** central is connected, the module's own firmware polls the flight
-controller with `MSP_UID` (function 0x77, one zero payload byte) about twice
-per second — its "a flight controller is attached" heartbeat. While a central
-*is* connected it stops polling and the pipe is quiet unless one side talks.
+controller with `MSP_BOXIDS` (function 0x77, one zero payload byte) about
+twice per second — its "a flight controller is attached" heartbeat. The
+answer is the build's permanent box-ID list, a fixed string of small
+integers, which makes it a cheap liveness probe. While a central *is*
+connected it stops polling and the pipe is quiet unless one side talks.
 The flight controller may ignore the poll; the module keeps polling either
 way, so a firmware that does not answer MSP on UART1 is unaffected.
 

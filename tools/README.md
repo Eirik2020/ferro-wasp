@@ -8,6 +8,7 @@ safety authority. Each is documented in one book chapter:
 | `terminal_embed.py` | Build, flash over SWD, decode and log RTT | [Bench and Analysis Tools](../mdbook/src/rtt_debug_tools.md) |
 | `imu_live_view.py`, `accel_live_plot.py` | Live plots of RTT output | same |
 | `blackbox_analyzer.py`, `imu_noise_analyzer.py` | Log and noise analysis | same |
+| `ble_console.py` | Talk to a flight controller over the SpeedyBee F405 V5's onboard Bluetooth bridge | [SpeedyBee F405 V5 Bluetooth Bridge](../project_meta/speedybee_f405v5_bluetooth.md) |
 | `flight_report.py` | Report and plots from a log | same |
 | `bench_rig.py`, `foxeer_bench_gates.py`, `usb_bench.py`, `reqtool_bridge.py` | Run bench gates and record them with reqtool; `usb_bench.py` needs no probe | `project_meta/testing/` procedures |
 | `reqtool/` | Requirements, gates and evidence: the pinned external tool | [its README](reqtool/README.md) |
