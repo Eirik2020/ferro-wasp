@@ -406,4 +406,107 @@ requirements:
           method:
             test: ferrowasp_sensors::spl06::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample
 
+  - id: SENSOR-021
+    title: The QMC5883L adapter never repeats a sample
+    statement: >-
+      The QMC5883L adapter shall return a compass sample only for a field
+      the part flagged new, and report no new sample otherwise.
+    rationale: >-
+      A value the part did not flag new would pass as a fresh measurement;
+      the adapter reads the part's ready flag and takes the field only
+      behind it.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::without_a_new_field_a_read_is_never_the_previous_sample
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::a_good_field_is_scaled_stamped_and_numbered
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::bring_up_resets_identifies_and_configures_the_part
+
+  - id: SENSOR-022
+    title: The QMC5883L adapter bounds bring-up, reads and field gaps
+    statement: >-
+      The QMC5883L adapter shall report a timeout when bring-up outlasts
+      its clock budget, when a read outlasts its budget, or when no new
+      field arrives within its stall limit.
+    rationale: >-
+      Unbounded work is a defect, and a sensor that stops measuring must be
+      told apart from the normal gap between fields.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::bring_up_that_never_completes_times_out
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::a_read_that_overruns_its_budget_is_a_timeout_and_its_result_discarded
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::without_a_new_field_a_read_is_never_the_previous_sample
+
+  - id: SENSOR-023
+    title: The QMC5883L adapter checks the part's identity twice
+    statement: >-
+      The QMC5883L adapter shall refuse a part whose ID register reads
+      other than 0xFF, or whose control register does not answer standby
+      after a reset, reporting the value it found.
+    rationale: >-
+      A stuck bus answers 0xFF as readily as a QMC5883L does, so the
+      reset part's standby state is the second witness; iNav's detection
+      checks the same pair.
+    derived_from: [SENSOR-009]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::a_wrong_id_or_unreset_part_is_refused
+
+  - id: SENSOR-024
+    title: The QMC5883L adapter refuses fields it cannot believe
+    statement: >-
+      The QMC5883L adapter shall refuse as out of range a field the part
+      flagged overflowed, and a field outside the configured measuring
+      range.
+    rationale: >-
+      A field that overflowed the part's range, or one outside the range
+      it was configured for, is not a measurement to scale into a heading
+      reference.
+    derived_from: [SENSOR-015]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::an_overflowed_or_out_of_range_field_is_refused
+
+  - id: SENSOR-025
+    title: A QMC5883L bus failure is a bus error
+    statement: >-
+      The QMC5883L adapter shall report a failed transfer at any step as a
+      bus error and return no sample from that call.
+    rationale: >-
+      A bus fault must be told apart from a missing or implausible result,
+      and must never let a partly read or earlier result through.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::qmc5883l::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample
+
+
 

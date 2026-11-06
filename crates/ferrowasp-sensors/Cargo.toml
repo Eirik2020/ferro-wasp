@@ -13,4 +13,5 @@ embedded-hal = { workspace = true }
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts" }
 ferrowasp-sensor-traits = { path = "../ferrowasp-sensor-traits" }
 spl06 = { path = "../../drivers/spl06" }
+qmc5883l = { path = "../../drivers/qmc5883l" }
 uf-dps3xx = { version = "=0.2.0", default-features = false }
