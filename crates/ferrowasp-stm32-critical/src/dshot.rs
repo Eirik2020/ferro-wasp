@@ -10,10 +10,10 @@
 
 use core::cell::RefCell;
 
+pub use crate::dshot_bank::channel;
+pub use crate::dshot_bank::*;
 use ferrohal_stm32::timer::{Awg, ChannelTimer, Error, Lanes};
 use ferrowasp_output::dshot::{DshotPacket, DshotTiming, encode_compare_sequence};
-pub use ferrowasp_stm32_critical::dshot_bank::channel;
-pub use ferrowasp_stm32_critical::dshot_bank::*;
 
 pub type DshotDmaBuffer = [u16; COMPARE_DMA_SLOTS];
 type DshotBuffer = &'static mut DshotDmaBuffer;

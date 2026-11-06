@@ -27,6 +27,11 @@ use ferrohal_stm32::{
     },
 };
 // FerroHAL keeps these under each IP version's own name.
+pub use crate::uart_common::*;
+use crate::uart_port::{
+    SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
+    place_endpoint, rx_port, tx_port,
+};
 #[cfg(feature = "stm32f405")]
 use ferrohal_stm32::usart_v2::{Instance, RxDma, RxPin, TxDma, TxPin};
 #[cfg(feature = "stm32h743")]
@@ -34,11 +39,6 @@ use ferrohal_stm32::usart_v4::{Instance, RxDma, RxPin, TxDma, TxPin};
 use ferrowasp_serial::{
     LogicalSerialPort, MSP_V1_MAX_FRAME_LEN, ResolvedBindings, SerialFunctionSlots,
     SerialProtocol as Mode,
-};
-pub use ferrowasp_stm32_critical::uart_common::*;
-use ferrowasp_stm32_critical::uart_port::{
-    SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
-    place_endpoint, rx_port, tx_port,
 };
 
 /// The frame each protocol runs on.

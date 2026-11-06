@@ -174,8 +174,8 @@ to `ferrowasp-protocol` and moved to `ferrowasp-config` (section 14).
 reader and writer, over 500 lines each, the SPI mailbox and async device), so
 neither was a contract crate as it stood.
 
-**Chip backends.** Each of `ferrowasp-stm32` (shared) and the backend,
-`ferrowasp-ferrohal`, mixes critical and non-critical hardware.
+**Chip backends.** `ferrowasp-stm32` mixes critical and non-critical
+hardware, all of it over FerroHAL.
 
 | Critical hardware | Non-critical hardware |
 |---|---|
@@ -213,7 +213,7 @@ Safety-critical (`critical = true`):
 | CRSF, SBUS, BLHeli-telemetry crates | standalone embedded-hal/io protocol crates | `drivers::crsf`, `drivers::blheli_telemetry`, `sbus-rs` (external) |
 | `ferrowasp-output` | DShot and PWM output groups, waveform encode, bidirectional decode | `waveform`, `stm32-tasks::dshot` |
 | `ferrowasp-serial` | UART transport group, RX reader, TX writer | `io-core::serial`, `stm32-tasks::uart_port` |
-| `ferrowasp-stm32-critical`, `ferrowasp-ferrohal-critical` | the critical backend modules: the HAL-neutral STM32 mechanisms and the FerroHAL adapters | the backends |
+|  `ferrowasp-stm32-critical` | the critical backend modules: the HAL-neutral STM32 mechanisms and the FerroHAL adapters | the backends |
 
 The serial TX writer is safety-critical because the OSD and telemetry write
 through the same transport that may carry RC; a port's function is chosen at
@@ -227,7 +227,7 @@ writer, blackbox storage, sync ledger, storage maintenance),
 `ferrowasp-cli` (command link, RPC, storage commands, USB debug),
 `ferrowasp-osd`, `ferrowasp-mspv1`, `ferrowasp-mspv2`, `rc-pwm`,
 `ferrowasp-sensors` (adapters from external sensor drivers to the sensor
-classes), and the non-critical `ferrowasp-stm32` and `ferrowasp-ferrohal`.
+classes), and the non-critical `ferrowasp-stm32`.
 
 Dissolved: `ferrowasp-core`, `ferrowasp-io-core`, `ferrowasp-flight`,
 `ferrowasp-drivers`, `ferrowasp-pid`, `ferrowasp-waveform`.

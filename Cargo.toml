@@ -31,8 +31,6 @@ members = [
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-critical",
     "crates/ferrowasp-stm32-app",
-    "crates/ferrowasp-ferrohal",
-    "crates/ferrowasp-ferrohal-critical",
     "crates/ferrowasp-storage",
     "crates/rc-pwm",
     "drivers/buzzer",

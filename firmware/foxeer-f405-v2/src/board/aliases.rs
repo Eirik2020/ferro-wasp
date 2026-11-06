@@ -1,23 +1,21 @@
 //! Requirements: BUILD-001
 
-use ferrowasp_ferrohal::hal::{
+use ferrowasp_stm32::hal::{
     chip::{TIM1, TIM8},
     gpio::{Output, Pin},
     spi::BlockingSpi,
     timer::CompareLane,
 };
-use ferrowasp_ferrohal::{adc, dshot, spi_dma, uart_dma};
+use ferrowasp_stm32::{adc, dshot, spi_dma, uart_dma};
 
 pub type Spi2FlashBus = BlockingSpi;
 pub type Spi2FlashCs = Pin<'B', 12, Output>;
 pub type Spi2Flash = ferrowasp_storage::spi_nor::SpiNor<Spi2FlashBus, Spi2FlashCs>;
-pub type Spi2FlashError = ferrowasp_storage::spi_nor::Error<
-    ferrowasp_ferrohal::hal::spi::Error,
-    core::convert::Infallible,
->;
+pub type Spi2FlashError =
+    ferrowasp_storage::spi_nor::Error<ferrowasp_stm32::hal::spi::Error, core::convert::Infallible>;
 
 /// The IMU data-ready line, PC4, as an interrupt input.
-pub type ImuDataReadyPin = ferrowasp_ferrohal::exti::ExtiInput;
+pub type ImuDataReadyPin = ferrowasp_stm32::exti::ExtiInput;
 
 pub type Spi1ImuCs = Pin<'A', 4, Output>;
 pub type Spi1ImuOwner = spi_dma::SpiDmaOwner<Spi1ImuCs>;
@@ -47,8 +45,7 @@ pub type DshotMotorBank = dshot::DshotMotorBank<
 /// Each motor's lane: motor 1 is PA8, 2 is PC9, 3 is PC8 and 4 is PB15.
 pub const MOTOR_LANES: [usize; 4] = [0, 2, 3, 1];
 
-pub type Adc1ObservationTransfer =
-    adc::Adc1ObservationTransfer<ferrowasp_ferrohal::hal::chip::ADC1>;
+pub type Adc1ObservationTransfer = adc::Adc1ObservationTransfer<ferrowasp_stm32::hal::chip::ADC1>;
 
-pub type ControlScheduler = ferrowasp_ferrohal::chip_time::PeriodicTimer;
-pub type IoWatchdog = ferrowasp_ferrohal::chip_time::PeriodicTimer;
+pub type ControlScheduler = ferrowasp_stm32::chip_time::PeriodicTimer;
+pub type IoWatchdog = ferrowasp_stm32::chip_time::PeriodicTimer;

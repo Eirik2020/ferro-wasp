@@ -3,9 +3,9 @@
 //! Requirements: REBOOT-002, REBOOT-005, REBOOT-003, REBOOT-006, REBOOT-007
 //! Safety-critical.
 
+use crate::system_reset::RebootTarget;
 use cortex_m::peripheral::SCB;
 use ferrohal_stm32::reset;
-use ferrowasp_stm32_critical::system_reset::RebootTarget;
 
 /// Reset the chip toward `target`. The caller has checked that the system is
 /// disarmed and storage is idle.

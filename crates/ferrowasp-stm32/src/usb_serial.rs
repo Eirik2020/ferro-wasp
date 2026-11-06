@@ -1,6 +1,6 @@
 pub use usb_device::UsbError;
 use usb_device::bus::UsbBus;
-use usb_device::device::{UsbDevice, UsbDeviceState};
+pub use usb_device::device::{UsbDevice, UsbDeviceState};
 use usbd_serial::SerialPort;
 
 pub const USB_ENDPOINT_MEMORY_WORDS: usize = 1024;
@@ -71,6 +71,65 @@ impl<B: UsbBus> UsbCdcPort for UsbCdc<B> {
         self.device.state() == UsbDeviceState::Configured
     }
 }
+
+/// The FerroHAL backend: USB CDC on FerroHAL's full-speed OTG port, on a
+/// target with a chip feature.
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod ferrohal {
+    use ferrohal_stm32::usb::{UsbBus, UsbFs};
+    use usb_device::{
+        bus::UsbBusAllocator,
+        device::{StringDescriptors, UsbDeviceBuilder, UsbVidPid},
+    };
+
+    use super::{
+        FERROWASP_USB_PID, FERROWASP_USB_VID, USB_CDC_RX_BUFFER_BYTES, USB_CDC_TX_BUFFER_BYTES,
+        USB_ENDPOINT_MEMORY_WORDS, UsbCdc, UsbCdcIdentity,
+    };
+
+    /// The board's USB CDC port, as the USB task's [`UsbCdcPort`] bound sees it.
+    pub type UsbCdcLink = UsbCdc<UsbBus>;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum UsbCdcInitError {
+        EndpointMemoryAlreadyTaken,
+        BusAllocatorAlreadyTaken,
+        InvalidStringDescriptors,
+    }
+
+    pub fn init_usb_cdc_serial(
+        usb: UsbFs,
+        identity: UsbCdcIdentity,
+    ) -> Result<UsbCdcLink, UsbCdcInitError> {
+        let endpoint_memory =
+            cortex_m::singleton!(: [u32; USB_ENDPOINT_MEMORY_WORDS] = [0; USB_ENDPOINT_MEMORY_WORDS])
+                .ok_or(UsbCdcInitError::EndpointMemoryAlreadyTaken)?;
+        let usb_bus = cortex_m::singleton!(
+            : Option<UsbBusAllocator<UsbBus>> = None
+        )
+        .ok_or(UsbCdcInitError::BusAllocatorAlreadyTaken)?
+        .insert(UsbBus::new(usb, endpoint_memory));
+
+        let serial = usbd_serial::SerialPort::new_with_store(
+            usb_bus,
+            [0; USB_CDC_RX_BUFFER_BYTES],
+            [0; USB_CDC_TX_BUFFER_BYTES],
+        );
+        let device =
+            UsbDeviceBuilder::new(usb_bus, UsbVidPid(FERROWASP_USB_VID, FERROWASP_USB_PID))
+                .strings(&[StringDescriptors::default()
+                    .manufacturer(identity.manufacturer)
+                    .product(identity.product)
+                    .serial_number(identity.serial_number)])
+                .map_err(|_| UsbCdcInitError::InvalidStringDescriptors)?
+                .device_class(usbd_serial::USB_CLASS_CDC)
+                .build();
+        Ok(UsbCdc::new(device, serial))
+    }
+}
+
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use ferrohal::{UsbCdcInitError, UsbCdcLink, init_usb_cdc_serial};
 
 #[cfg(test)]
 mod tests {

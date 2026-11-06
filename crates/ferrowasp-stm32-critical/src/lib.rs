@@ -32,3 +32,22 @@ pub mod timer_tick;
 pub mod uart_common;
 pub mod uart_port;
 pub mod watchdog;
+
+// The FerroHAL backend, folded in: the adapters' modules, gated to a target
+// with a chip feature, as they were in `ferrowasp-ferrohal-critical`.
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod chip_time;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod clocks;
+#[cfg(all(
+    target_arch = "arm",
+    feature = "dshot",
+    any(feature = "stm32f405", feature = "stm32h743")
+))]
+pub mod dshot;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod spi_dma;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod system_bootloader;
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub mod uart_dma;

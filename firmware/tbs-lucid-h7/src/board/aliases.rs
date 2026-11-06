@@ -1,16 +1,16 @@
 //! The concrete types this board's resources resolve to. Stream numbers here are
 //! the DMA plan in `routes.rs`.
 
-use ferrowasp_ferrohal::hal::{
+use ferrowasp_stm32::hal::{
     chip::{ADC1, TIM3, TIM5},
     gpio::{Output, Pin},
     timer::CompareLane,
 };
-use ferrowasp_ferrohal::{adc, dshot, sd_storage, spi_dma, uart_dma};
 use ferrowasp_stm32::uart_port;
+use ferrowasp_stm32::{adc, dshot, sd_storage, spi_dma, uart_dma};
 
 /// The IMU data-ready line, PB2, as an interrupt input.
-pub type ImuDataReadyPin = ferrowasp_ferrohal::exti::ExtiInput;
+pub type ImuDataReadyPin = ferrowasp_stm32::exti::ExtiInput;
 
 /// The IMU chip select, PC15.
 pub type Spi1ImuCs = Pin<'C', 15, Output>;
@@ -42,13 +42,13 @@ pub const MOTOR_LANES: [usize; 4] = [0, 1, 2, 3];
 /// Battery voltage on PC0 and current on PC1.
 pub type Adc1ObservationTransfer = adc::Adc1ObservationTransfer<ADC1>;
 
-pub type ControlScheduler = ferrowasp_ferrohal::chip_time::PeriodicTimer;
-pub type IoTimebase = ferrowasp_ferrohal::chip_time::MicrosecondTimebase;
-pub type IoWatchdog = ferrowasp_ferrohal::chip_time::PeriodicTimer;
+pub type ControlScheduler = ferrowasp_stm32::chip_time::PeriodicTimer;
+pub type IoTimebase = ferrowasp_stm32::chip_time::MicrosecondTimebase;
+pub type IoWatchdog = ferrowasp_stm32::chip_time::PeriodicTimer;
 
 /// The microSD card, presented to the flash manager as SPI NOR.
 pub type SdCardSlot = sd_storage::CardSlot<sd_storage::SdCardBlocks, sd_storage::SdCardInitError>;
 pub type SdFlash = sd_storage::SdNor<SdCardSlot>;
 pub type SdFlashError = sd_storage::Error<
-    sd_storage::CardSlotError<ferrowasp_ferrohal::hal::sdmmc::Error, sd_storage::SdCardInitError>,
+    sd_storage::CardSlotError<ferrowasp_stm32::hal::sdmmc::Error, sd_storage::SdCardInitError>,
 >;

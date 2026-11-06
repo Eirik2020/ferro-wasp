@@ -4,16 +4,16 @@
 //! Requirements: HW-TIME-001
 //! Safety-critical.
 
+pub use crate::scheduler::*;
+pub use crate::timebase::*;
+pub use crate::timer_tick::TimerTick;
+pub use crate::watchdog::*;
 use ferrohal_stm32::{
     rcc::Rcc,
     time::Hertz,
     timer::{ConfigError, Instance, Instance32, Tick, Timebase as HalTimebase},
 };
 use ferrowasp_io_contracts::time::{TimestampMicros, WrappingCounterExtender};
-pub use ferrowasp_stm32_critical::scheduler::*;
-pub use ferrowasp_stm32_critical::timebase::*;
-pub use ferrowasp_stm32_critical::timer_tick::TimerTick;
-pub use ferrowasp_stm32_critical::watchdog::*;
 
 /// A free-running 32-bit timer counting microseconds, extended past its wrap.
 pub struct MicrosecondTimebase {
@@ -24,7 +24,8 @@ pub struct MicrosecondTimebase {
 impl MicrosecondTimebase {
     pub fn new<T: Instance32>(rcc: &mut Rcc, timer: T) -> Result<Self, ConfigError> {
         Ok(Self {
-            counter: HalTimebase::new(rcc, timer, Hertz(MICROSECOND_TIMEBASE_HZ))?,
+            counter: HalTimebase::new(rcc, timer, Hertz(MICROSECOND_TIMEBASE_HZ))
+                .map_err(|refused| refused.error())?,
             extender: WrappingCounterExtender::new(MICROSECOND_TIMEBASE_PERIOD_TICKS),
         })
     }
@@ -45,7 +46,9 @@ pub struct PeriodicTimer(Tick);
 
 impl PeriodicTimer {
     pub fn new<T: Instance>(rcc: &mut Rcc, timer: T, rate: Hertz) -> Result<Self, ConfigError> {
-        Ok(Self(Tick::new(rcc, timer, rate)?))
+        Ok(Self(
+            Tick::new(rcc, timer, rate).map_err(|refused| refused.error())?,
+        ))
     }
 }
 

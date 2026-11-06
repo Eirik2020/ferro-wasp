@@ -5,9 +5,14 @@ use super::aliases::{Adc1ObservationTransfer, DshotMotorBank, SdFlash, Spi1ImuOw
 use super::manifest::Spi1ImuKind;
 use core::cell::RefCell;
 use critical_section::Mutex;
-use ferrowasp_ferrohal as backend;
-use ferrowasp_ferrohal::chip_time::CycleDelay;
-use ferrowasp_ferrohal::hal::{
+use ferrowasp_icm42688p as icm42688p;
+use ferrowasp_mpu6000 as mpu6000;
+use ferrowasp_mpu6500 as mpu6500;
+use ferrowasp_serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
+use ferrowasp_stm32 as backend;
+use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
+use ferrowasp_stm32::chip_time::CycleDelay;
+use ferrowasp_stm32::hal::{
     adc::{Adc, Config as AdcConfig},
     chip::{ADC1, SDMMC1, SPI1, TIM2, TIM3, TIM4, TIM5, TIM6, UART8, USART1, USART3, USART6},
     dma::Stream,
@@ -23,13 +28,8 @@ use ferrowasp_ferrohal::hal::{
     timer::{Awg, Pwm, Tick, Timebase},
     uart::{RxWiring, Wiring as UartWiring},
 };
-use ferrowasp_ferrohal::uart_dma::{self, PortMemory};
-use ferrowasp_icm42688p as icm42688p;
-use ferrowasp_mpu6000 as mpu6000;
-use ferrowasp_mpu6500 as mpu6500;
-use ferrowasp_serial::{LogicalSerialPort, ResolvedBindings, SerialFunctionSlots};
-use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::status_led::{LedPolarity, StatusLed};
+use ferrowasp_stm32::uart_dma::{self, PortMemory};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
