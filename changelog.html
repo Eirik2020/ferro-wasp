@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
+            window.path_to_searchindex_js = "searchindex-3183c455.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -180,6 +180,12 @@ artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
 <h3 id="added"><a class="header" href="#added">Added</a></h3>
 <ul>
+<li>The SpeedyBee F405 V5’s onboard Bluetooth bridge, as a bench link.
+<code>tools/ble_console.py</code> scans for bridges, frames MSPv2 and talks to a
+flight controller over one, and FerroConfigurator’s <code>--ble &lt;address-or-name&gt;</code> and <code>device ble-scan</code> speak its line protocol through
+the same pipe. The bridge authenticates nobody - no pairing, no PIN - so
+the disarmed-only, read-back-verified rules travel with the link, and a
+build for such a board chooses what its wireless surface may command.</li>
 <li><code>crsf-proto</code> under <code>drivers/</code>: the CRSF protocol as a standalone crate over
 <code>embedded-io</code> — the bounded streaming frame parser, channels, and the
 battery, GPS, vario, attitude and flight-mode telemetry encoders. No image

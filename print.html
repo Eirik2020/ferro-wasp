@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
+            window.path_to_searchindex_js = "searchindex-3183c455.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -598,7 +598,27 @@ running FerroWasp is restarted into the bootloader without the BOOT button.</li>
 <li>Connect to its USB CDC port to inspect configuration or retrieve logs.</li>
 </ol>
 <p>The <a href="#foxeer-f405-v2-usb-quick-start">Foxeer F405 V2 guide</a> provides complete commands and
-safety checks. Contributors building the tool or assembling packages should
+safety checks. Contributors building the tool or assembling packages should</p>
+<h2 id="bluetooth"><a class="header" href="#bluetooth">Bluetooth</a></h2>
+<p>Some boards carry a Bluetooth module that bridges their UART to Bluetooth
+Low Energy; the SpeedyBee F405 V5’s is the one this support was built
+against. Where USB needs a cable, the CLI can talk through such a bridge
+instead:</p>
+<pre><code class="language-text">ferro-configurator device ble-scan
+ferro-configurator --ble F0:16:1D:C9:ED:56 device info
+ferro-configurator --ble "F405 V5" config show
+</code></pre>
+<p>An address-like target must match the device’s address; anything else
+matches its advertised name. The connection speaks exactly the same
+request/response line protocol as USB, so every command works unchanged.
+<code>--ble</code> replaces <code>--port</code>; it cannot be combined with it.</p>
+<p>The bridge module authenticates nobody - no pairing, no PIN, no encryption -
+so anything the flight controller serves on that UART is reachable by anyone
+in radio range. The configurator’s own rules travel with the link: it
+refuses configuration writes unless the controller reports itself disarmed,
+verifies every write by readback, and never gains the authority to arm or
+command motors. A build for such a board should serve only the command
+surface it is willing to expose wirelessly.
 use <a href="#developer-getting-started">Developer Setup</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="developer-getting-started"><a class="header" href="#developer-getting-started">Developer Getting Started</a></h1>
@@ -2725,6 +2745,12 @@ artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
 <h3 id="added"><a class="header" href="#added">Added</a></h3>
 <ul>
+<li>The SpeedyBee F405 V5’s onboard Bluetooth bridge, as a bench link.
+<code>tools/ble_console.py</code> scans for bridges, frames MSPv2 and talks to a
+flight controller over one, and FerroConfigurator’s <code>--ble &lt;address-or-name&gt;</code> and <code>device ble-scan</code> speak its line protocol through
+the same pipe. The bridge authenticates nobody - no pairing, no PIN - so
+the disarmed-only, read-back-verified rules travel with the link, and a
+build for such a board chooses what its wireless surface may command.</li>
 <li><code>crsf-proto</code> under <code>drivers/</code>: the CRSF protocol as a standalone crate over
 <code>embedded-io</code> — the bounded streaming frame parser, channels, and the
 battery, GPS, vario, attitude and flight-mode telemetry encoders. No image
