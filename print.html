@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3183c455.js";
+            window.path_to_searchindex_js = "searchindex-257e5bf8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -1948,7 +1948,7 @@ row 8, col 2: WARN ...
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The UART mechanism lives in
-<code>crates/ferrowasp-ferrohal-critical/src/uart_dma.rs</code>, FerroHAL’s driver under the family-neutral
+<code>crates/ferrowasp-stm32-critical/src/uart_dma.rs</code>, FerroHAL.s driver under the family-neutral
 transport in <code>ferrowasp-stm32-critical</code>. Each board’s UART routes are data
 in its board crate (<code>board/src/serial.rs</code>); peripheral construction is in the
 app’s <code>src/board/</code>.</p>
@@ -2301,17 +2301,16 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-osd</code></td><td>The MSP OSD the DJI goggles show, encoded from the craft’s published state, with a warning when it stops updating</td></tr>
 <tr><td><code>ferrowasp-output</code></td><td>Motor output, safety-critical: DShot packet and waveform encoding, the command lease and special commands, and bidirectional reply decoding</td></tr>
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
-<tr><td><code>ferrowasp-stm32-critical</code></td><td>The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory</td></tr>
-<tr><td><code>ferrowasp-stm32</code></td><td>The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate</td></tr>
-<tr><td><code>ferrowasp-ferrohal-critical</code></td><td>The backend’s safety-critical half over FerroHAL: DShot on its waveform generator, SPI and UART, timing and reset. The UART and SPI adapters exist only until the transports move to FerroHAL’s own model</td></tr>
-<tr><td><code>ferrowasp-ferrohal</code></td><td>The backend’s non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half</td></tr>
+<tr><td><code>ferrowasp-stm32-critical</code></td><td>The safety-critical STM32 mechanisms: the UART and SPI DMA state machines, the DShot motor bank on FerroHAL’s waveform generator, timing, routing and board-description types, reset, and the DMA buffer memory — over FerroHAL, gated to a chip feature</td></tr>
+<tr><td><code>ferrowasp-stm32</code></td><td>The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, the SD card, USB serial, the device ID; and re-exports of the critical crate and of FerroHAL itself</td></tr>
 <tr><td><code>ferrowasp-stm32-app</code></td><td>What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks</td></tr>
 </tbody>
 </table>
 </div>
-<p>Only the <code>ferrowasp-ferrohal</code> pair names a HAL: FerroHAL, one backend pair
-covering both chips. FerroWasp holds no unsafe code of its own — a chip’s
-unsafe belongs to FerroHAL, and CI fails the audit on any appearing here.</p>
+<p>Only <code>ferrowasp-stm32</code> and its critical crate name a HAL: FerroHAL, one
+backend covering both chips. FerroWasp holds no unsafe code of its own — a
+chip’s unsafe belongs to FerroHAL, and CI fails the audit on any appearing
+here.</p>
 <p>Task definitions live in their subsystem’s crate, behind a target-only
 <code>tasks</code> feature, so the logic beside them stays host-tested: the safety
 master in <code>ferrowasp-safety</code>, the control loop in <code>ferrowasp-flight-control</code>,

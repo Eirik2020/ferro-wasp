@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3183c455.js";
+            window.path_to_searchindex_js = "searchindex-257e5bf8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -179,7 +179,7 @@
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
 <p>The UART mechanism lives in
-<code>crates/ferrowasp-ferrohal-critical/src/uart_dma.rs</code>, FerroHAL’s driver under the family-neutral
+<code>crates/ferrowasp-stm32-critical/src/uart_dma.rs</code>, FerroHAL.s driver under the family-neutral
 transport in <code>ferrowasp-stm32-critical</code>. Each board’s UART routes are data
 in its board crate (<code>board/src/serial.rs</code>); peripheral construction is in the
 app’s <code>src/board/</code>.</p>
