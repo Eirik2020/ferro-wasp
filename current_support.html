@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bb21bfbd.js";
+            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -223,7 +223,7 @@ The <a href="user/ferro_configurator.html">FerroConfigurator</a> uses USB CDC to
 storage while the aircraft is disarmed.</p>
 <h2 id="tbs-lucid-h7-bench-only"><a class="header" href="#tbs-lucid-h7-bench-only">TBS Lucid H7 (bench only)</a></h2>
 <p>The app lives in <code>firmware/tbs-lucid-h7</code> and carries the Foxeer feature set on
-the Lucid’s own peripherals, through the <code>ferrowasp-stm32h7</code> backend. Pins
+the Lucid’s own peripherals, through the same FerroHAL backend. Pins
 follow the upstream Betaflight <code>TBS_LUCID_H7</code> target. A later board revision,
 ArduPilot’s <code>TBS_LUCID_H7V3</code>, routes motors and receivers differently and is
 not supported. Boot,
@@ -264,11 +264,6 @@ bootloader.</li>
 <li>The Lucid’s second IMU, barometer, and extra UARTs and motor outputs are
 not used.</li>
 </ul>
-<h2 id="nucleo-f401re"><a class="header" href="#nucleo-f401re">NUCLEO-F401RE</a></h2>
-<p>The bring-up app lives in <code>firmware/stm32f401-bringup</code>. It owns a status LED,
-USART heartbeat, and RTIC scheduling resources. Its board contract declares no
-IMU or actuator outputs, so it is useful for non-actuating STM32F4 development
-without pretending to be a flight target.</p>
 <h2 id="shared-flight-behavior"><a class="header" href="#shared-flight-behavior">Shared Flight Behavior</a></h2>
 <p>The two flight apps use the same bounded behavior for the main control chain:</p>
 <pre><code class="language-text">SBUS or CRSF input

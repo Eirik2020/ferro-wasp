@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bb21bfbd.js";
+            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -233,6 +233,21 @@ lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>Both boards run on FerroHAL in place of the <code>stm32f4xx-hal</code> and <code>stm32h7xx-hal</code>
+backends. DShot frames play on FerroHAL’s waveform generator, and FerroWasp
+has no unsafe code of its own. On the Foxeer, the ADC clock now stays within
+the chip’s 36 MHz limit, and the battery reading no longer goes stale. On the
+Lucid, <code>reboot dfu</code> reaches the bootloader. Neither board has armed or flown
+on this backend.</p>
+</li>
+<li>
+<p>Foxeer’s <code>bench_bidirectional_dshot</code> image is gone until DShot replies run on
+the waveform generator’s input side.</p>
+</li>
+<li>
+<p><code>stm32f401-bringup</code> and the NUCLEO-F401RE board are retired.</p>
+</li>
 <li>
 <p>The USB status line gains <code>vbat_stale</code>, set when the battery reading has not
 updated for 500 ms, as after an ADC DMA error, and FerroConfigurator’s pre-arm

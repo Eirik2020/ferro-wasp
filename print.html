@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bb21bfbd.js";
+            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -757,7 +757,6 @@ are isolated because their STM32 peripheral-access configurations are not
 compatible in one Cargo dependency graph:</p>
 <pre><code class="language-text">firmware/foxeer-f405-v2    Foxeer F405 V2 golden flight app and behavioral reference
 firmware/tbs-lucid-h7      TBS Lucid H7 port of the Foxeer feature set, bench only
-firmware/stm32f401-bringup NUCLEO-F401RE non-actuator bring-up app
 </code></pre>
 <p>Run embedded commands from the selected application directory. Do not use one
 board’s image, pins, DMA routes, sensor orientation, or motor mapping on
@@ -889,7 +888,7 @@ The <a href="#ferroconfigurator">FerroConfigurator</a> uses USB CDC to manage th
 storage while the aircraft is disarmed.</p>
 <h2 id="tbs-lucid-h7-bench-only"><a class="header" href="#tbs-lucid-h7-bench-only">TBS Lucid H7 (bench only)</a></h2>
 <p>The app lives in <code>firmware/tbs-lucid-h7</code> and carries the Foxeer feature set on
-the Lucid’s own peripherals, through the <code>ferrowasp-stm32h7</code> backend. Pins
+the Lucid’s own peripherals, through the same FerroHAL backend. Pins
 follow the upstream Betaflight <code>TBS_LUCID_H7</code> target. A later board revision,
 ArduPilot’s <code>TBS_LUCID_H7V3</code>, routes motors and receivers differently and is
 not supported. Boot,
@@ -930,11 +929,6 @@ bootloader.</li>
 <li>The Lucid’s second IMU, barometer, and extra UARTs and motor outputs are
 not used.</li>
 </ul>
-<h2 id="nucleo-f401re"><a class="header" href="#nucleo-f401re">NUCLEO-F401RE</a></h2>
-<p>The bring-up app lives in <code>firmware/stm32f401-bringup</code>. It owns a status LED,
-USART heartbeat, and RTIC scheduling resources. Its board contract declares no
-IMU or actuator outputs, so it is useful for non-actuating STM32F4 development
-without pretending to be a flight target.</p>
 <h2 id="shared-flight-behavior"><a class="header" href="#shared-flight-behavior">Shared Flight Behavior</a></h2>
 <p>The two flight apps use the same bounded behavior for the main control chain:</p>
 <pre><code class="language-text">SBUS or CRSF input
@@ -1445,13 +1439,10 @@ stop frames.</p>
 </code></pre>
 <p>No control, RC, USB, OSD, configurator, or experimental task owns a motor
 timer, pin, or DShot DMA stream.</p>
-<p>Each app is <code>#![deny(unsafe_code)]</code>. The unsafe code under DShot is limited to
-the DMA endpoint declarations of each chip backend’s safety-critical half:
-<code>ferrowasp-stm32f4-critical::dshot</code> and <code>ferrowasp-stm32h7-critical::dma_endpoints</code>. Each proves that an endpoint addresses
-the compare register of a timer the bank owns exclusively, with the right
-transfer width and a valid stream mapping. HAL transfers own the active
-buffers; there is no project <code>static mut</code> and no aliasing of a buffer that DMA
-is using.</p>
+<p>FerroWasp has no unsafe code. Each frame is encoded as samples and played on
+FerroHAL’s waveform generator, and the DMA and timer boundaries are FerroHAL’s.
+FerroHAL’s generator holds each frame’s own copy, and the shared <code>DshotBank</code>
+holds its buffers, so no buffer DMA is using is aliased.</p>
 <h2 id="esc-telemetry"><a class="header" href="#esc-telemetry">ESC Telemetry</a></h2>
 <p>ESC telemetry is the BLHeli legacy UART protocol: one combined telemetry wire
 from all four ESCs, at 115,200 baud 8N1, on the UART bound to the
@@ -1519,11 +1510,6 @@ and actuator validation.</li>
 <li><code>bench_logical_motorN_only</code>, added to it, spins only logical motor N, to
 confirm the logical-to-physical map and each motor’s direction. Selecting
 two is a compile error.</li>
-<li><code>bench_bidirectional_dshot</code> (Foxeer) builds the bank bidirectional and adds
-each lane’s latest reply eRPM and its valid and invalid reply counts to the
-periodic DShot log, beside the legacy UART telemetry, which still qualifies
-arming. It needs the props-off gate and a capped motor feature, and prints
-<code>BENCH: bidirectional DShot active</code> at startup.</li>
 <li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
 1 at the qualification input only, to prove that a missing motor aborts
 arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
@@ -1944,8 +1930,8 @@ row 8, col 2: WARN ...
 <p>UART support uses bounded DMA-backed paths for RC input, OSD traffic, and the
 flight image’s legacy ESC telemetry.</p>
 <h2 id="current-implementation"><a class="header" href="#current-implementation">Current Implementation</a></h2>
-<p>The reusable STM32F4 UART DMA mechanism lives in
-<code>crates/ferrowasp-stm32f4-critical/src/uart_dma.rs</code>, over the family-neutral
+<p>The UART mechanism lives in
+<code>crates/ferrowasp-ferrohal-critical/src/uart_dma.rs</code>, FerroHAL’s driver under the family-neutral
 transport in <code>ferrowasp-stm32-critical</code>. Each board’s UART routes are data
 in its board crate (<code>board/src/serial.rs</code>); peripheral construction is in the
 app’s <code>src/board/</code>.</p>
@@ -2074,7 +2060,7 @@ with the motor that was asked is in <a href="#esc-telemetry">DShot</a>.</p>
 <li><strong>HAL layer</strong></li>
 <li><strong>Software layer</strong></li>
 </ul>
-<p>The <strong>HAL layer</strong> is implemented per hardware abstraction layer, such as <code>stm32f4xx-hal</code>.
+<p>The <strong>HAL layer</strong> is FerroHAL, reached through an adapter.
 The <strong>software layer</strong> is common across supported hardware platforms.</p>
 <hr>
 <h2 id="uart-rx-dma-data-flow"><a class="header" href="#uart-rx-dma-data-flow">UART Rx DMA Data Flow</a></h2>
@@ -2119,8 +2105,8 @@ The <strong>software layer</strong> is common across supported hardware platform
 <hr>
 <h2 id="buffer-queues"><a class="header" href="#buffer-queues">Buffer Queues</a></h2>
 <p>Two heapless queues are used to track buffer ownership:</p>
-<pre><code class="language-rust ignore">let mut free_queue: ferrowasp_stm32f4::uart_dma::FreeQueue = Queue::new();
-let mut filled_queue: ferrowasp_stm32f4::uart_dma::FilledQueue = Queue::new();</code></pre>
+<pre><code class="language-rust ignore">let mut free_queue: ferrowasp_ferrohal::uart_dma::FreeQueue = Queue::new();
+let mut filled_queue: ferrowasp_ferrohal::uart_dma::FilledQueue = Queue::new();</code></pre>
 <p>The queues have the following roles:</p>
 <ul>
 <li><strong>free queue</strong>: contains empty buffers that can be given to the DMA transfer</li>
@@ -2298,10 +2284,8 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>rc-pwm</code></td><td>RC pulse-width commands for servos and auxiliary outputs</td></tr>
 <tr><td><code>ferrowasp-stm32-critical</code></td><td>The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory</td></tr>
 <tr><td><code>ferrowasp-stm32</code></td><td>The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate</td></tr>
-<tr><td><code>ferrowasp-stm32f4-critical</code></td><td>The STM32F4 backend’s safety-critical half over <code>stm32f4xx-hal</code>: DShot, SPI and UART DMA, clocks and timing, routing, the ROM bootloader entry</td></tr>
-<tr><td><code>ferrowasp-stm32f4</code></td><td>The STM32F4 backend’s non-critical half: ADC, USB serial, the device ID; and re-exports of the critical half</td></tr>
-<tr><td><code>ferrowasp-stm32h7-critical</code></td><td>The STM32H743 backend’s safety-critical half over <code>stm32h7xx-hal</code>: DShot and its DMA endpoints, SPI and UART DMA, clocks and timers, the ROM bootloader entry</td></tr>
-<tr><td><code>ferrowasp-stm32h7</code></td><td>The STM32H743 backend’s non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half</td></tr>
+<tr><td><code>ferrowasp-ferrohal-critical</code></td><td>The backend’s safety-critical half over FerroHAL: DShot on its waveform generator, SPI and UART, timing and reset. The UART and SPI adapters exist only until the transports move to FerroHAL’s own model</td></tr>
+<tr><td><code>ferrowasp-ferrohal</code></td><td>The backend’s non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half</td></tr>
 <tr><td><code>ferrowasp-stm32-app</code></td><td>What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks</td></tr>
 </tbody>
 </table>
@@ -2328,7 +2312,6 @@ are pinned to one version.</p>
 <tbody>
 <tr><td><code>foxeer-f405-v2</code></td><td>Foxeer F405 V2, STM32F405; the golden flight app</td></tr>
 <tr><td><code>tbs-lucid-h7</code></td><td>TBS Lucid H7, STM32H743</td></tr>
-<tr><td><code>stm32f401-bringup</code></td><td>NUCLEO-F401RE; peripheral bring-up without actuators</td></tr>
 </tbody>
 </table>
 </div>
@@ -2778,6 +2761,21 @@ lease while sampling it.</li>
 </ul>
 <h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
 <ul>
+<li>
+<p>Both boards run on FerroHAL in place of the <code>stm32f4xx-hal</code> and <code>stm32h7xx-hal</code>
+backends. DShot frames play on FerroHAL’s waveform generator, and FerroWasp
+has no unsafe code of its own. On the Foxeer, the ADC clock now stays within
+the chip’s 36 MHz limit, and the battery reading no longer goes stale. On the
+Lucid, <code>reboot dfu</code> reaches the bootloader. Neither board has armed or flown
+on this backend.</p>
+</li>
+<li>
+<p>Foxeer’s <code>bench_bidirectional_dshot</code> image is gone until DShot replies run on
+the waveform generator’s input side.</p>
+</li>
+<li>
+<p><code>stm32f401-bringup</code> and the NUCLEO-F401RE board are retired.</p>
+</li>
 <li>
 <p>The USB status line gains <code>vbat_stale</code>, set when the battery reading has not
 updated for 500 ms, as after an ADC DMA error, and FerroConfigurator’s pre-arm

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bb21bfbd.js";
+            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -180,7 +180,7 @@
 <li><strong>HAL layer</strong></li>
 <li><strong>Software layer</strong></li>
 </ul>
-<p>The <strong>HAL layer</strong> is implemented per hardware abstraction layer, such as <code>stm32f4xx-hal</code>.
+<p>The <strong>HAL layer</strong> is FerroHAL, reached through an adapter.
 The <strong>software layer</strong> is common across supported hardware platforms.</p>
 <hr>
 <h2 id="uart-rx-dma-data-flow"><a class="header" href="#uart-rx-dma-data-flow">UART Rx DMA Data Flow</a></h2>
@@ -225,8 +225,8 @@ The <strong>software layer</strong> is common across supported hardware platform
 <hr>
 <h2 id="buffer-queues"><a class="header" href="#buffer-queues">Buffer Queues</a></h2>
 <p>Two heapless queues are used to track buffer ownership:</p>
-<pre><code class="language-rust ignore">let mut free_queue: ferrowasp_stm32f4::uart_dma::FreeQueue = Queue::new();
-let mut filled_queue: ferrowasp_stm32f4::uart_dma::FilledQueue = Queue::new();</code></pre>
+<pre><code class="language-rust ignore">let mut free_queue: ferrowasp_ferrohal::uart_dma::FreeQueue = Queue::new();
+let mut filled_queue: ferrowasp_ferrohal::uart_dma::FilledQueue = Queue::new();</code></pre>
 <p>The queues have the following roles:</p>
 <ul>
 <li><strong>free queue</strong>: contains empty buffers that can be given to the DMA transfer</li>

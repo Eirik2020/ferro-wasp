@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bb21bfbd.js";
+            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -261,13 +261,10 @@ stop frames.</p>
 </code></pre>
 <p>No control, RC, USB, OSD, configurator, or experimental task owns a motor
 timer, pin, or DShot DMA stream.</p>
-<p>Each app is <code>#![deny(unsafe_code)]</code>. The unsafe code under DShot is limited to
-the DMA endpoint declarations of each chip backend’s safety-critical half:
-<code>ferrowasp-stm32f4-critical::dshot</code> and <code>ferrowasp-stm32h7-critical::dma_endpoints</code>. Each proves that an endpoint addresses
-the compare register of a timer the bank owns exclusively, with the right
-transfer width and a valid stream mapping. HAL transfers own the active
-buffers; there is no project <code>static mut</code> and no aliasing of a buffer that DMA
-is using.</p>
+<p>FerroWasp has no unsafe code. Each frame is encoded as samples and played on
+FerroHAL’s waveform generator, and the DMA and timer boundaries are FerroHAL’s.
+FerroHAL’s generator holds each frame’s own copy, and the shared <code>DshotBank</code>
+holds its buffers, so no buffer DMA is using is aliased.</p>
 <h2 id="esc-telemetry"><a class="header" href="#esc-telemetry">ESC Telemetry</a></h2>
 <p>ESC telemetry is the BLHeli legacy UART protocol: one combined telemetry wire
 from all four ESCs, at 115,200 baud 8N1, on the UART bound to the
@@ -335,11 +332,6 @@ and actuator validation.</li>
 <li><code>bench_logical_motorN_only</code>, added to it, spins only logical motor N, to
 confirm the logical-to-physical map and each motor’s direction. Selecting
 two is a compile error.</li>
-<li><code>bench_bidirectional_dshot</code> (Foxeer) builds the bank bidirectional and adds
-each lane’s latest reply eRPM and its valid and invalid reply counts to the
-periodic DShot log, beside the legacy UART telemetry, which still qualifies
-arming. It needs the props-off gate and a capped motor feature, and prints
-<code>BENCH: bidirectional DShot active</code> at startup.</li>
 <li><code>bench_dshot_idle_output1_not_running</code> reports zero eRPM for physical output
 1 at the qualification input only, to prove that a missing motor aborts
 arming. It prints <code>FAULT INJECTION ACTIVE</code> at startup and must never be used
