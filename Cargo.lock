@@ -588,6 +588,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "ferrowasp-io-contracts",
  "ferrowasp-sensor-traits",
+ "spl06",
  "uf-dps3xx",
 ]
 

@@ -302,3 +302,108 @@ requirements:
           method:
             test: ferrowasp_sensor_traits::compass::tests::a_compass_sample_outside_its_limits_is_refused
 
+  - id: SENSOR-016
+    title: The SPL06 adapter never repeats a sample
+    statement: >-
+      The SPL06 adapter shall return a barometer sample only from a
+      pressure and temperature measurement it started and saw the part
+      flag ready, and report no new sample otherwise.
+    rationale: >-
+      The adapter drives the part in its command mode, so every sample
+      follows a measurement the adapter asked for; a value the part repeats
+      without a new command can never pass as a fresh measurement.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::without_a_new_result_a_read_is_never_the_previous_sample
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::a_good_sample_is_compensated_stamped_and_numbered
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::a_read_before_bring_up_is_refused
+
+  - id: SENSOR-017
+    title: The SPL06 adapter bounds bring-up, reads and measurement gaps
+    statement: >-
+      The SPL06 adapter shall report a timeout when bring-up outlasts its
+      clock budget, when a read outlasts its budget, or when no new result
+      arrives within its stall limit.
+    rationale: >-
+      Unbounded work is a defect, and a sensor that stops measuring must be
+      told apart from the normal gap between measurements.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::bring_up_that_never_completes_times_out
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::time_near_the_end_of_the_clock_fails_closed
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::a_read_that_overruns_its_budget_is_a_timeout_and_its_result_discarded
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::without_a_new_result_a_read_is_never_the_previous_sample
+
+  - id: SENSOR-018
+    title: The SPL06 adapter checks the chip ID
+    statement: >-
+      The SPL06 adapter shall refuse a part whose chip ID register reads
+      other than 0x10.
+    rationale: >-
+      The chip ID is the part's one identity byte; a different part, or no
+      part, answers with registers of another meaning, and reporting what
+      was found tells a wrongly populated board from a dead bus.
+    derived_from: [SENSOR-009]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::a_chip_id_other_than_the_spl06s_is_refused
+
+  - id: SENSOR-019
+    title: The SPL06 adapter refuses values outside the operating range
+    statement: >-
+      The SPL06 adapter shall refuse a pressure outside 300 to 1200 hPa or
+      a temperature outside -40 to 85 degrees Celsius as out of range.
+    rationale: >-
+      These are the part's operating range; outside it the part does not
+      claim a valid measurement.
+    derived_from: [SENSOR-003]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::a_value_outside_the_operating_range_is_refused
+
+  - id: SENSOR-020
+    title: An SPL06 bus failure is a bus error
+    statement: >-
+      The SPL06 adapter shall report a failed transfer at any step as a bus
+      error and return no sample from that call.
+    rationale: >-
+      A bus fault must be told apart from a missing or implausible result,
+      and must never let a partly read or earlier result through.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::spl06::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample
+
+

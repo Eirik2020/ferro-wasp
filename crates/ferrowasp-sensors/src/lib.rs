@@ -13,3 +13,4 @@
 extern crate std;
 
 pub mod dps310;
+pub mod spl06;
