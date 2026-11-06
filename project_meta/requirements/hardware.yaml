@@ -41,6 +41,14 @@ requirements:
           environment: host
           method:
             test: ferrowasp_stm32_critical::serial::irq_plan::tests::idle_partial_delivery_records_received_length
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:UART-007
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:UARTDMA-002
 
   - id: HW-UART-002
     title: A gap advances the stream generation
@@ -79,6 +87,14 @@ requirements:
           environment: host
           method:
             test: ferrowasp_stm32_critical::serial::irq_plan::tests::dma_error_advances_generation_and_reports_fault
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:UART-008
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:UART-009
 
   - id: HW-UART-003
     title: A UART transfer has one terminal completion
@@ -117,6 +133,14 @@ requirements:
           environment: host
           method:
             test: ferrowasp_stm32_critical::serial::tx_state::tests::transfer_error_preempts_completion
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:UART-010
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:UARTDMA-008
 
   - id: HW-UART-004
     title: The RC receiver runs over the UART on the board
@@ -157,6 +181,10 @@ requirements:
           environment: host
           method:
             test: ferrowasp_stm32_critical::spi::tests::transfer_complete_delivers_and_advances_transaction
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:SPI-002
 
   - id: HW-SPI-002
     title: An SPI DMA error is a fault
@@ -210,6 +238,10 @@ requirements:
             propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:EXTI-001
 
   - id: HW-DSHOT-001
     title: The DShot bank starts its lanes together
@@ -256,6 +288,26 @@ requirements:
           environment: host
           method:
             test: ferrowasp_stm32_critical::timer_dma::tests::dshot_feature_reports_the_four_motor_bench_state
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:AWG-002
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:AWG-004
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:AWG-005
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:PWM-004
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:PWM-005
 
   - id: HW-DSHOT-002
     title: A bidirectional frame set completes after its window
@@ -425,6 +477,10 @@ requirements:
             propellers: removed
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer Powered Props-Off Exact-Image Gate
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:AWG-003
 
   - id: HW-TIME-001
     title: The board's clocks and control tick run the loop at its rate
@@ -444,6 +500,22 @@ requirements:
           environment: product
           method:
             procedure: project_meta/testing/targets/common-boot-idle.md#Boot and Idle State
+        - level: unit
+          environment: host
+          method:
+            library: ferrohal-stm32:RCC-001
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:RCC-002
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:TIMER-001
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:TIMER-003
 
   - id: HW-ROUTE-001
     title: Each DMA route matches the board's manifest

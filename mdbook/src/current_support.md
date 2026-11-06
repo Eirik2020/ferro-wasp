@@ -50,7 +50,7 @@ storage while the aircraft is disarmed.
 ## TBS Lucid H7 (bench only)
 
 The app lives in `firmware/tbs-lucid-h7` and carries the Foxeer feature set on
-the Lucid's own peripherals, through the `ferrowasp-stm32h7` backend. Pins
+the Lucid's own peripherals, through the same FerroHAL backend. Pins
 follow the upstream Betaflight `TBS_LUCID_H7` target. A later board revision,
 ArduPilot's `TBS_LUCID_H7V3`, routes motors and receivers differently and is
 not supported. Boot,
@@ -85,13 +85,6 @@ Differences from the Foxeer that matter on the bench:
   bootloader.
 - The Lucid's second IMU, barometer, and extra UARTs and motor outputs are
   not used.
-
-## NUCLEO-F401RE
-
-The bring-up app lives in `firmware/stm32f401-bringup`. It owns a status LED,
-USART heartbeat, and RTIC scheduling resources. Its board contract declares no
-IMU or actuator outputs, so it is useful for non-actuating STM32F4 development
-without pretending to be a flight target.
 
 ## Shared Flight Behavior
 

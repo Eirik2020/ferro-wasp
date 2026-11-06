@@ -15,19 +15,20 @@ use panic_probe as _;
 
 pub mod board;
 
-pub use ferrowasp_stm32f4::adc as stm32_adc;
-pub use ferrowasp_stm32f4::clocks as stm32_clocks;
-pub use ferrowasp_stm32f4::hal_prelude::*;
-pub use ferrowasp_stm32f4::scheduler as stm32_scheduler;
+pub use ferrowasp_ferrohal::adc as stm32_adc;
+pub use ferrowasp_ferrohal::chip_time as stm32_scheduler;
+pub use ferrowasp_ferrohal::chip_time as stm32_timebase;
+pub use ferrowasp_ferrohal::chip_time as stm32_watchdog;
+pub use ferrowasp_ferrohal::clocks as stm32_clocks;
+pub use ferrowasp_ferrohal::hal;
+pub use ferrowasp_ferrohal::hal_prelude::*;
 #[cfg(feature = "mspv2_configurator")]
-pub use ferrowasp_stm32f4::signature::device_uid;
-pub use ferrowasp_stm32f4::spi_dma as stm32_spi;
-pub use ferrowasp_stm32f4::spi_dma::*;
-pub use ferrowasp_stm32f4::system_bootloader as stm32_bootloader;
-pub use ferrowasp_stm32f4::timebase as stm32_timebase;
-pub use ferrowasp_stm32f4::uart_dma as stm32_uart;
-pub use ferrowasp_stm32f4::usb_serial as stm32_usb;
-pub use ferrowasp_stm32f4::watchdog as stm32_watchdog;
+pub use ferrowasp_ferrohal::signature::device_uid;
+pub use ferrowasp_ferrohal::spi_dma as stm32_spi;
+pub use ferrowasp_ferrohal::spi_dma::*;
+pub use ferrowasp_ferrohal::system_bootloader as stm32_bootloader;
+pub use ferrowasp_ferrohal::uart_dma as stm32_uart;
+pub use ferrowasp_ferrohal::usb_serial as stm32_usb;
 pub use fugit::Rate;
 pub use rtic_monotonics::systick::prelude::*;
 pub use stm32_usb::UsbDeviceState;
@@ -35,7 +36,7 @@ pub use stm32_usb::UsbDeviceState;
 pub type DshotShared = board::aliases::DshotMotorBank;
 pub type AdcTransfer = board::aliases::Adc1ObservationTransfer;
 pub type ControlScheduler = board::aliases::ControlScheduler;
-pub type IoTimebase = stm32_timebase::MicrosecondTimebase<board::aliases::IoTimebaseTimer>;
+pub type IoTimebase = stm32_timebase::MicrosecondTimebase;
 pub type IoWatchdog = board::aliases::IoWatchdog;
 pub type FlashDevice = board::aliases::Spi2Flash;
 

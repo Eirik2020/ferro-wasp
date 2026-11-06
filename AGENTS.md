@@ -114,8 +114,6 @@ test chain is routing, not a pass.
   a sign change hidden in a sensor or mixer layer. The DShot/eRPM-qualified
   arming sequence is the motor path; diagnostic features never replace it
   silently. SWD pins stay reserved.
-- `stm32f401-bringup` validates peripherals without actuators; it is not a
-  behaviour reference.
 - Run `python tools/check_rtic_boundaries.py` after app or board changes. For a
   motor-capable image, record the commit, features, artifact hash, and propeller
   and actuator-power state.

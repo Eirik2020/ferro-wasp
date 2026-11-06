@@ -34,7 +34,7 @@ What the parse yields:
   `motor4` are four instances of `dshot_dma_complete` with different config.
   Requirements attach to the definition; the instance carries the board's
   binding;
-- tasks exist only under some features (`bench_bidirectional_dshot`; `flight`
+- tasks exist only under some features (`bench_config_fault`; `flight`
   itself under `dshot`), so the parse keeps `#[cfg]` information, or coverage
   would be reported against tasks a flight image does not contain;
 - every link and flag handle is a declared local resource (section 9), so the
@@ -68,11 +68,15 @@ existence.
   and `serde_norway` keeps `serde_yaml`'s C-translated `unsafe-libyaml`.
   Evidence records stay JSON, since only the tool writes them.
 - A method is `test: <crate-qualified path>` (a `#[test]` function, found by
-  parsing) or `procedure: <path>#<heading>` (a Markdown heading that must
-  exist). Each level fixes its environment: `analysis`, `unit` and `simulation`
+  parsing), `procedure: <path>#<heading>` (a Markdown heading that must
+  exist) or `library: <crate>:<ID>` (a requirement a pinned library crate
+  declares and verifies). Each level fixes its environment: `analysis`, `unit` and `simulation`
   run on the host, `target` and `system` on the product or a development board,
   and `field` on the product. `unit` takes a test; `target`, `system` and `field`
-  take a procedure. An entry with a hazard states its preconditions.
+  take a procedure. A `library:` entry takes the library requirement's status,
+  computed on the copy Cargo builds at the level claimed, and covers only the
+  library's part: the requirement's other entries still need this project's own
+  evidence. An entry with a hazard states its preconditions.
 
 **What requirement text holds.** A requirement says what must hold and why
 it matters, nothing else:

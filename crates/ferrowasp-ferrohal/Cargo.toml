@@ -1,0 +1,27 @@
+[package]
+name = "ferrowasp-ferrohal"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+bench_spi_timeout_recovery = ["ferrowasp-ferrohal-critical/bench_spi_timeout_recovery"]
+dshot = ["ferrowasp-ferrohal-critical/dshot"]
+stm32f405 = ["dep:ferrohal-stm32", "ferrohal-stm32/stm32f405rg", "ferrowasp-ferrohal-critical/stm32f405"]
+stm32h743 = ["dep:ferrohal-stm32", "ferrohal-stm32/stm32h743vi", "ferrowasp-ferrohal-critical/stm32h743"]
+
+[dependencies]
+ferrowasp-ferrohal-critical = { path = "../ferrowasp-ferrohal-critical" }
+ferrowasp-stm32 = { path = "../ferrowasp-stm32" }
+ferrowasp-storage = { path = "../ferrowasp-storage" }
+usb-device = "=0.3.2"
+usbd-serial = "0.2.2"
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { version = "=0.7.10", features = ["critical-section-single-core"] }
+ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "704e5781a70579c600296f3e87776c4b2c6eed10", optional = true, features = ["rt", "defmt", "usb"] }

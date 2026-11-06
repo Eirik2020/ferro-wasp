@@ -61,6 +61,18 @@ artifact is stable, airworthy, or production-ready.
 
 ### Changed
 
+- Both boards run on FerroHAL in place of the `stm32f4xx-hal` and `stm32h7xx-hal`
+  backends. DShot frames play on FerroHAL's waveform generator, and FerroWasp
+  has no unsafe code of its own. On the Foxeer, the ADC clock now stays within
+  the chip's 36 MHz limit, and the battery reading no longer goes stale. On the
+  Lucid, `reboot dfu` reaches the bootloader. Neither board has armed or flown
+  on this backend.
+
+- Foxeer's `bench_bidirectional_dshot` image is gone until DShot replies run on
+  the waveform generator's input side.
+
+- `stm32f401-bringup` and the NUCLEO-F401RE board are retired.
+
 - The USB status line gains `vbat_stale`, set when the battery reading has not
   updated for 500 ms, as after an ADC DMA error, and FerroConfigurator's pre-arm
   checklist shows it.

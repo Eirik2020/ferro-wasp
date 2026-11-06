@@ -7,9 +7,9 @@ publish = false
 
 # The STM32 mechanisms that do not depend on a chip family's HAL: UART and SPI
 # DMA state machines, serial port binding, the DShot bank, ADC sample
-# planning, and the shared memory and board-description types. Each family's
-# backend (ferrowasp-stm32f4, ferrowasp-stm32h7) puts its HAL under them, so
-# every board runs the same policy. Host-testable.
+# planning, and the shared memory and board-description types. The backend,
+# ferrowasp-ferrohal, puts FerroHAL under them, so every board runs the same
+# policy. Host-testable.
 
 [lib]
 path = "src/lib.rs"
@@ -46,6 +46,6 @@ usbd-serial = "0.2.2"
 [target.'cfg(target_arch = "arm")'.dependencies]
 ferroforge = { version = "0.4.0", optional = true }
 fugit = { version = "0.3.9", optional = true }
-rtic = { version = "2.2.0", default-features = false, features = ["thumbv7-backend"], optional = true }
+rtic = { version = "2.4.0", default-features = false, features = ["thumbv7-backend"], optional = true }
 rtic-monotonics = { version = "2.1.0", default-features = false, optional = true }
 

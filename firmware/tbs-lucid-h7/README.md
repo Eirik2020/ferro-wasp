@@ -2,7 +2,7 @@
 
 This isolated RTIC 2 application targets the TBS Lucid H7 (STM32H743). It
 carries the Foxeer F405 V2 feature set on the Lucid's own peripherals, through
-the `ferrowasp-stm32h7` backend, and owns its own Cargo graph, linker
+the `ferrowasp-ferrohal` backend, and owns its own Cargo graph, linker
 configuration, and binary.
 
 It has not run on hardware. Flight arming is disabled in `board/src/profiles.rs`

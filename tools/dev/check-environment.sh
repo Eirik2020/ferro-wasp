@@ -54,7 +54,6 @@ for manifest in \
     Cargo.toml \
     firmware/tbs-lucid-h7/Cargo.toml \
     firmware/foxeer-f405-v2/Cargo.toml \
-    firmware/stm32f401-bringup/Cargo.toml \
     tools/ferro-configurator/Cargo.toml \
     tools/rtic-app-builder/Cargo.toml; do
     manifest_dir="$(dirname "${manifest}")"

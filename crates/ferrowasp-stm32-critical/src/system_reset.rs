@@ -5,8 +5,7 @@
 //! zeroes, written just before a software reset. Startup trusts the word only
 //! after a software reset; after power-on the RAM holds anything, so the word
 //! is cleared without being read. Each chip backend owns the word, the reset,
-//! and the jump: `ferrowasp-stm32f4::system_bootloader` and
-//! `ferrowasp-stm32h7::system_bootloader`.
+//! and the jump: FerroHAL's `reset`, through `ferrowasp-ferrohal::system_bootloader`.
 //!
 //! Requirements: REBOOT-002, REBOOT-005
 //! Safety-critical.

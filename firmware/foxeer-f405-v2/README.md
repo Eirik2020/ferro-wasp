@@ -60,14 +60,6 @@ pin, peripheral, DMA, and board-profile selection visible in the app, but move
 reusable construction and service-state initialization into the narrowest
 shared crate without introducing custom macros.
 
-- [ ] Investigate and correct the ADC1 clock before further ADC calibration.
-  ADC1 is currently initialized before the final 168 MHz clock tree is frozen,
-  and the HAL default ADC prescaler is APB2 divided by two. With the resulting
-  84 MHz APB2 clock this appears to drive ADC1 at 42 MHz, above the STM32F405
-  36 MHz maximum at normal board voltage. Freeze clocks before ADC
-  initialization and select an explicit safe prescaler, preferably through
-  `ferrowasp-stm32f4::adc`. Treat this as a functional clock-spec risk, not
-  merely cleanup.
 - [ ] Add TIM5, used by the blocking initialization delay, to the board timer
   groups and active resource claims. No current TIM5 conflict or timer failure
   has been identified, but the omission prevents the manifest from detecting a
@@ -89,7 +81,7 @@ shared crate without introducing custom macros.
 - [ ] Replace the unused generic `tele_uart` and `gps_uart` routing
   placeholders with a fixed, typed Foxeer flight-UART routing result.
 - [ ] Move reusable SPI mode/frequency profiles and IMU/NOR construction out of
-  board support into `ferrowasp-stm32f4`; retain only Foxeer hardware facts and
+  board support into `ferrowasp-ferrohal`; retain only Foxeer hardware facts and
   resource selection locally.
 - [ ] Remove stale wording that describes standard Foxeer ESC telemetry as
   optional, including legacy subset-claim descriptions.

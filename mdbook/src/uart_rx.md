@@ -5,7 +5,7 @@ UART receive support is divided into two layers:
 - **HAL layer**
 - **Software layer**
 
-The **HAL layer** is implemented per hardware abstraction layer, such as `stm32f4xx-hal`.
+The **HAL layer** is FerroHAL, reached through an adapter.
 The **software layer** is common across supported hardware platforms.
 
 ---
@@ -72,8 +72,8 @@ A fourth buffer is added so the CPU usually has a free buffer available if the D
 Two heapless queues are used to track buffer ownership:
 
 ```rust,ignore
-let mut free_queue: ferrowasp_stm32f4::uart_dma::FreeQueue = Queue::new();
-let mut filled_queue: ferrowasp_stm32f4::uart_dma::FilledQueue = Queue::new();
+let mut free_queue: ferrowasp_ferrohal::uart_dma::FreeQueue = Queue::new();
+let mut filled_queue: ferrowasp_ferrohal::uart_dma::FilledQueue = Queue::new();
 ```
 
 The queues have the following roles:

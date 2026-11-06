@@ -79,11 +79,6 @@ def suites() -> list[Suite]:
             ],
         ),
         Suite(
-            "bringup",
-            "the STM32F401 bring-up app's board manifest, its own workspace",
-            [Step([*host_test, "--lib"], "firmware/stm32f401-bringup")],
-        ),
-        Suite(
             "configurator",
             "FerroConfigurator's core, bridge and CLI, its own workspace",
             [Step(["cargo", "test", "--locked", "--workspace"], "tools/ferro-configurator")],

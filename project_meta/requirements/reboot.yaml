@@ -50,6 +50,14 @@ requirements:
           environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:RESET-003
+        - level: target
+          environment: product
+          method:
+            library: ferrohal-stm32:RESET-004
 
   - id: REBOOT-005
     title: Any other reset clears the request word
@@ -65,6 +73,10 @@ requirements:
           environment: host
           method:
             test: ferrowasp_stm32_critical::system_reset::tests::only_a_software_reset_with_the_request_enters_the_bootloader
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:RESET-003
 
   - id: REBOOT-003
     title: Flashing through DFU needs no BOOT button
@@ -81,6 +93,14 @@ requirements:
           environment: product
           method:
             procedure: project_meta/testing/targets/foxeer-f405-v2.md#Foxeer USB Reboot And DFU Flash Gate
+        - level: target
+          environment: development
+          method:
+            library: ferrohal-stm32:RESET-002
+        - level: target
+          environment: product
+          method:
+            library: ferrohal-stm32:RESET-004
 
   - id: REBOOT-006
     title: Flashing writes exactly the image

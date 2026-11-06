@@ -1,0 +1,649 @@
+{
+  "schema_version": 5,
+  "run_id": "20261105T215904Z__421-methods__host__01",
+  "recorded_at_utc": "2026-11-05T21:59:04Z",
+  "board": null,
+  "revision": "ce6f603f84b47cd8ef58a1e5805e55bcb51a99c8",
+  "working_tree": "clean",
+  "modules": {
+    "crates/ferrowasp-blackbox/src/log_writer.rs": [
+      "crates/ferrowasp-blackbox/src/records.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-protocol/src/blackbox.rs",
+      "crates/ferrowasp-storage/src/layout.rs",
+      "crates/ferrowasp-storage/src/nor_storage.rs",
+      "crates/ferrowasp-storage/src/test_nor.rs"
+    ],
+    "crates/ferrowasp-blackbox/src/records.rs": [
+      "crates/ferrowasp-boundary-contracts/src/messages.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-protocol/src/blackbox.rs",
+      "crates/ferrowasp-protocol/src/rate_record.rs",
+      "crates/ferrowasp-storage/src/layout.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-blackbox/src/storage_maintenance.rs": [
+      "crates/ferrowasp-blackbox/src/records.rs",
+      "crates/ferrowasp-blackbox/src/sync_ledger.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-storage/src/layout.rs",
+      "crates/ferrowasp-storage/src/nor_storage.rs",
+      "crates/ferrowasp-storage/src/test_nor.rs"
+    ],
+    "crates/ferrowasp-blheli-telemetry/src/lib.rs": [],
+    "crates/ferrowasp-border/src/coordinator.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-boundary-contracts/src/requests.rs",
+      "crates/ferrowasp-config/src/boot.rs",
+      "crates/ferrowasp-config/src/owner.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-control/src/calibration/accel_level.rs",
+      "crates/ferrowasp-flight-control/src/drone_toolbox.rs",
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-safety/src/config_gate.rs",
+      "crates/ferrowasp-safety/src/host.rs",
+      "crates/ferrowasp-safety/src/lib.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-border/src/observer.rs": [
+      "crates/ferrowasp-border/src/coordinator.rs",
+      "crates/ferrowasp-boundary-contracts/src/messages.rs",
+      "crates/ferrowasp-boundary-contracts/src/requests.rs",
+      "crates/ferrowasp-boundary-contracts/src/topics.rs",
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-boundary-contracts/src/config_keys.rs": [],
+    "crates/ferrowasp-boundary-contracts/src/messages.rs": [],
+    "crates/ferrowasp-boundary-contracts/src/requests.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs"
+    ],
+    "crates/ferrowasp-boundary-contracts/src/topics.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-cli/src/command_link.rs": [
+      "crates/ferrowasp-cli/src/commands.rs",
+      "crates/ferrowasp-safety/src/lib.rs"
+    ],
+    "crates/ferrowasp-cli/src/commands.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-mspv2/src/rpc.rs",
+      "crates/ferrowasp-safety/src/lib.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-cli/src/log_sync.rs": [
+      "crates/ferrowasp-blackbox/src/records.rs",
+      "crates/ferrowasp-blackbox/src/sync_ledger.rs",
+      "crates/ferrowasp-cli/src/commands.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-protocol/src/blackbox.rs",
+      "crates/ferrowasp-storage/src/layout.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-cli/src/serial_reply.rs": [
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-cli/src/storage_commands.rs": [
+      "crates/ferrowasp-blackbox/src/log_writer.rs",
+      "crates/ferrowasp-blackbox/src/storage_maintenance.rs",
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-boundary-contracts/src/requests.rs",
+      "crates/ferrowasp-cli/src/command_link.rs",
+      "crates/ferrowasp-cli/src/commands.rs",
+      "crates/ferrowasp-cli/src/log_sync.rs",
+      "crates/ferrowasp-cli/src/serial_reply.rs",
+      "crates/ferrowasp-config/src/boot.rs",
+      "crates/ferrowasp-config/src/owner.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs",
+      "crates/ferrowasp-storage/src/config_save.rs",
+      "crates/ferrowasp-storage/src/layout.rs",
+      "crates/ferrowasp-storage/src/nor_storage.rs",
+      "crates/ferrowasp-storage/src/test_nor.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-cli/src/usb_debug.rs": [
+      "crates/ferrowasp-cli/src/commands.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-config/src/boot.rs": [
+      "crates/ferrowasp-config/src/owner.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-config/src/stored.rs"
+    ],
+    "crates/ferrowasp-config/src/owner.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-control/src/calibration/accel_level.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs"
+    ],
+    "crates/ferrowasp-config/src/page.rs": [],
+    "crates/ferrowasp-config/src/stored.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-control/src/calibration/accel_level.rs",
+      "crates/ferrowasp-control/src/filter.rs",
+      "crates/ferrowasp-flight-control/src/actuator.rs",
+      "crates/ferrowasp-flight-control/src/drone_toolbox.rs",
+      "crates/ferrowasp-input/src/channel_map.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs"
+    ],
+    "crates/ferrowasp-control/src/attitude.rs": [],
+    "crates/ferrowasp-control/src/calibration.rs": [],
+    "crates/ferrowasp-control/src/calibration/accel_level.rs": [
+      "extern:libm@0.2.16"
+    ],
+    "crates/ferrowasp-control/src/filter.rs": [
+      "extern:libm@0.2.16"
+    ],
+    "crates/ferrowasp-control/src/frames.rs": [],
+    "crates/ferrowasp-control/src/pid.rs": [],
+    "crates/ferrowasp-crsf/src/lib.rs": [],
+    "crates/ferrowasp-feedback/src/esc_manager.rs": [
+      "crates/ferrowasp-blheli-telemetry/src/lib.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-flight-control/src/actuator.rs": [],
+    "crates/ferrowasp-flight-control/src/drone_toolbox.rs": [
+      "crates/ferrowasp-control/src/attitude.rs",
+      "crates/ferrowasp-control/src/calibration.rs",
+      "crates/ferrowasp-control/src/calibration/accel_level.rs",
+      "crates/ferrowasp-control/src/filter.rs",
+      "crates/ferrowasp-control/src/frames.rs",
+      "crates/ferrowasp-control/src/pid.rs",
+      "crates/ferrowasp-flight-control/src/actuator.rs",
+      "crates/ferrowasp-input/src/channel_map.rs"
+    ],
+    "crates/ferrowasp-flight-control/src/dynamic_idle.rs": [],
+    "crates/ferrowasp-flight-control/src/rpm_filter.rs": [
+      "crates/ferrowasp-control/src/filter.rs",
+      "extern:libm@0.2.16"
+    ],
+    "crates/ferrowasp-icm42688p/src/lib.rs": [
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-imu/src/spi/async_device.rs": [
+      "crates/ferrowasp-imu/src/spi/fault.rs",
+      "crates/ferrowasp-imu/src/spi/job.rs",
+      "crates/ferrowasp-imu/src/spi/mailbox.rs",
+      "crates/ferrowasp-imu/src/spi/mod.rs",
+      "crates/ferrowasp-imu/src/spi/transaction.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "extern:critical-section@1.2.0",
+      "extern:embedded-hal-async@1.0.0",
+      "extern:embedded-hal@1.0.0",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-imu/src/spi/fault.rs": [],
+    "crates/ferrowasp-imu/src/spi/job.rs": [
+      "crates/ferrowasp-imu/src/spi/transaction_id.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-imu/src/spi/mailbox.rs": [
+      "crates/ferrowasp-imu/src/spi/fault.rs",
+      "crates/ferrowasp-imu/src/spi/job.rs",
+      "crates/ferrowasp-imu/src/spi/mod.rs",
+      "crates/ferrowasp-imu/src/spi/transaction.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-imu/src/spi/mod.rs": [
+      "crates/ferrowasp-imu/src/spi/async_device.rs",
+      "crates/ferrowasp-imu/src/spi/fault.rs",
+      "crates/ferrowasp-imu/src/spi/job.rs",
+      "crates/ferrowasp-imu/src/spi/mailbox.rs",
+      "crates/ferrowasp-imu/src/spi/transaction.rs",
+      "crates/ferrowasp-imu/src/spi/transaction_id.rs"
+    ],
+    "crates/ferrowasp-imu/src/spi/transaction.rs": [
+      "crates/ferrowasp-imu/src/spi/fault.rs",
+      "crates/ferrowasp-imu/src/spi/mod.rs",
+      "crates/ferrowasp-imu/src/spi/transaction_id.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-imu/src/spi/transaction_id.rs": [],
+    "crates/ferrowasp-input/src/channel_map.rs": [],
+    "crates/ferrowasp-input/src/rc_receiver.rs": [
+      "crates/ferrowasp-crsf/src/lib.rs",
+      "extern:heapless@0.9.2",
+      "extern:sbus-rs@0.1.3"
+    ],
+    "crates/ferrowasp-io-contracts/src/link.rs": [
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-io-contracts/src/serial/chunk.rs": [
+      "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs": [
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-io-contracts/src/serial/fault.rs": [
+      "extern:embedded-io@0.7.1"
+    ],
+    "crates/ferrowasp-io-contracts/src/serial/mod.rs": [
+      "crates/ferrowasp-io-contracts/src/serial/chunk.rs",
+      "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs",
+      "crates/ferrowasp-io-contracts/src/serial/fault.rs",
+      "crates/ferrowasp-io-contracts/src/serial/tx_chunk.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "extern:embedded-io@0.7.1"
+    ],
+    "crates/ferrowasp-io-contracts/src/serial/tx_chunk.rs": [],
+    "crates/ferrowasp-io-contracts/src/time.rs": [],
+    "crates/ferrowasp-mpu6000/src/lib.rs": [
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-mpu6500/src/lib.rs": [
+      "extern:defmt@1.2.0",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-mspv1/src/lib.rs": [
+      "crates/ferrowasp-mspv1/src/commands.rs",
+      "crates/ferrowasp-mspv1/src/packet.rs",
+      "crates/ferrowasp-mspv1/src/structs.rs"
+    ],
+    "crates/ferrowasp-mspv1/src/packet.rs": [],
+    "crates/ferrowasp-mspv1/src/structs.rs": [],
+    "crates/ferrowasp-osd/src/lib.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-boundary-contracts/src/messages.rs",
+      "crates/ferrowasp-boundary-contracts/src/topics.rs",
+      "crates/ferrowasp-flight-control/src/drone_toolbox.rs",
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-mspv1/src/lib.rs",
+      "crates/ferrowasp-mspv1/src/packet.rs",
+      "crates/ferrowasp-mspv1/src/structs.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-output/src/dshot.rs": [
+      "crates/ferrowasp-output/src/dshot_reply.rs"
+    ],
+    "crates/ferrowasp-output/src/dshot_reply.rs": [],
+    "crates/ferrowasp-protocol/src/blackbox.rs": [
+      "crates/ferrowasp-config/src/page.rs"
+    ],
+    "crates/ferrowasp-protocol/src/rate_record.rs": [
+      "crates/ferrowasp-flight-control/src/drone_toolbox.rs"
+    ],
+    "crates/ferrowasp-safety/src/actuator.rs": [
+      "crates/ferrowasp-safety/src/lib.rs"
+    ],
+    "crates/ferrowasp-safety/src/arming.rs": [],
+    "crates/ferrowasp-safety/src/config_gate.rs": [
+      "crates/ferrowasp-boundary-contracts/src/requests.rs",
+      "crates/ferrowasp-safety/src/lib.rs"
+    ],
+    "crates/ferrowasp-safety/src/host.rs": [],
+    "crates/ferrowasp-safety/src/lib.rs": [
+      "crates/ferrowasp-boundary-contracts/src/requests.rs",
+      "crates/ferrowasp-safety/src/config_gate.rs",
+      "crates/ferrowasp-safety/src/host.rs",
+      "crates/ferrowasp-safety/src/prearm.rs",
+      "extern:critical-section@1.2.0",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-safety/src/prearm.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-safety/src/lib.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-serial/src/binding.rs": [
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-serial/src/profile.rs": [],
+    "crates/ferrowasp-serial/src/reader.rs": [
+      "crates/ferrowasp-io-contracts/src/serial/chunk.rs",
+      "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs",
+      "crates/ferrowasp-io-contracts/src/serial/fault.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "extern:critical-section@1.2.0",
+      "extern:embedded-io-async@0.7.0",
+      "extern:embedded-io@0.7.1",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-serial/src/routing.rs": [
+      "crates/ferrowasp-serial/src/profile.rs"
+    ],
+    "crates/ferrowasp-serial/src/writer.rs": [
+      "crates/ferrowasp-io-contracts/src/serial/fault.rs",
+      "crates/ferrowasp-io-contracts/src/serial/tx_chunk.rs",
+      "extern:critical-section@1.2.0",
+      "extern:embedded-io-async@0.7.0",
+      "extern:embedded-io@0.7.1",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-stm32-critical/src/board_routes.rs": [],
+    "crates/ferrowasp-stm32-critical/src/dshot_bank.rs": [
+      "crates/ferrowasp-output/src/dshot.rs",
+      "crates/ferrowasp-output/src/dshot_reply.rs"
+    ],
+    "crates/ferrowasp-stm32-critical/src/dshot_lanes.rs": [
+      "crates/ferrowasp-output/src/dshot.rs",
+      "crates/ferrowasp-stm32-critical/src/dshot_bank.rs"
+    ],
+    "crates/ferrowasp-stm32-critical/src/memory.rs": [
+      "crates/ferrowasp-imu/src/spi/mailbox.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/reader.rs",
+      "crates/ferrowasp-serial/src/writer.rs"
+    ],
+    "crates/ferrowasp-stm32-critical/src/serial/irq_plan.rs": [
+      "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs",
+      "crates/ferrowasp-io-contracts/src/serial/fault.rs",
+      "crates/ferrowasp-stm32-critical/src/serial/rx_state.rs"
+    ],
+    "crates/ferrowasp-stm32-critical/src/serial/rx_state.rs": [
+      "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs"
+    ],
+    "crates/ferrowasp-stm32-critical/src/serial/tx_state.rs": [],
+    "crates/ferrowasp-stm32-critical/src/spi.rs": [
+      "crates/ferrowasp-imu/src/spi/fault.rs",
+      "crates/ferrowasp-imu/src/spi/transaction_id.rs"
+    ],
+    "crates/ferrowasp-stm32-critical/src/spi1_imu.rs": [],
+    "crates/ferrowasp-stm32-critical/src/system_reset.rs": [],
+    "crates/ferrowasp-stm32-critical/src/timer_dma.rs": [],
+    "crates/ferrowasp-storage/src/config_save.rs": [
+      "crates/ferrowasp-boundary-contracts/src/config_keys.rs",
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-storage/src/layout.rs",
+      "crates/ferrowasp-storage/src/nor_storage.rs",
+      "crates/ferrowasp-storage/src/test_nor.rs"
+    ],
+    "crates/ferrowasp-storage/src/layout.rs": [
+      "crates/ferrowasp-config/src/page.rs",
+      "crates/ferrowasp-config/src/stored.rs"
+    ],
+    "crates/ferrowasp-storage/src/nor_storage.rs": [
+      "crates/ferrowasp-storage/src/spi_nor.rs",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-storage/src/test_nor.rs": [
+      "crates/ferrowasp-storage/src/layout.rs",
+      "crates/ferrowasp-storage/src/nor_storage.rs"
+    ],
+    "firmware/foxeer-f405-v2/board/src/profiles.rs": [
+      "crates/ferrowasp-config/src/owner.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-control/src/calibration/accel_level.rs",
+      "crates/ferrowasp-control/src/frames.rs",
+      "crates/ferrowasp-flight-control/src/actuator.rs",
+      "crates/ferrowasp-flight-control/src/drone_toolbox.rs",
+      "crates/ferrowasp-input/src/channel_map.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-stm32-critical/src/spi1_imu.rs",
+      "firmware/foxeer-f405-v2/board/src/serial.rs"
+    ],
+    "firmware/foxeer-f405-v2/board/src/serial.rs": [
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs"
+    ],
+    "firmware/tbs-lucid-h7/board/src/profiles.rs": [
+      "crates/ferrowasp-config/src/owner.rs",
+      "crates/ferrowasp-config/src/stored.rs",
+      "crates/ferrowasp-control/src/calibration/accel_level.rs",
+      "crates/ferrowasp-control/src/frames.rs",
+      "crates/ferrowasp-flight-control/src/actuator.rs",
+      "crates/ferrowasp-flight-control/src/drone_toolbox.rs",
+      "crates/ferrowasp-input/src/channel_map.rs",
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-stm32-critical/src/spi1_imu.rs",
+      "firmware/tbs-lucid-h7/board/src/serial.rs"
+    ],
+    "firmware/tbs-lucid-h7/board/src/serial.rs": [
+      "crates/ferrowasp-serial/src/binding.rs",
+      "crates/ferrowasp-serial/src/profile.rs",
+      "crates/ferrowasp-serial/src/routing.rs"
+    ]
+  },
+  "identities": {
+    "crates/ferrowasp-blackbox/src/log_writer.rs": "19aea20244b02d081db07b68868544a735a05d7f8e87fe319e51431d69be8362",
+    "crates/ferrowasp-blackbox/src/records.rs": "89ecb31707924bf65c26cc7d568e89720c43dc863da86989f67a05b6f91903c2",
+    "crates/ferrowasp-blackbox/src/storage_maintenance.rs": "f846b2bab72b4b07f3da4d10d807c702f67a7fbe1eb5405f5bc651e88bef0312",
+    "crates/ferrowasp-blackbox/src/sync_ledger.rs": "d6242362fcdc4add3977f95ea77be30a006b94f2133365b2cf6fb1907faa46f1",
+    "crates/ferrowasp-blheli-telemetry/src/lib.rs": "82d029410d7904ce6cc9ac633d9271ed8f32640ac13e12ee513c72677cbf18a4",
+    "crates/ferrowasp-border/src/coordinator.rs": "841551b8b84273d25b7cf81b438106e3d15daa4d5b464e459ed570bd23f132ca",
+    "crates/ferrowasp-border/src/observer.rs": "5fafd7fac9a4349ff163497fe2cf0b3a8089eebf23961528a7ff71fe22e4818e",
+    "crates/ferrowasp-boundary-contracts/src/config_keys.rs": "4c0b51198fb8925cab83a89258adaa0dac6dc66d4f4a03e6025f566eda350337",
+    "crates/ferrowasp-boundary-contracts/src/messages.rs": "d4f660a4ecdb34509b5791ad15f6caae83193ae7c854cb9f2cb4b1cec78d3054",
+    "crates/ferrowasp-boundary-contracts/src/requests.rs": "321f015a4cfd689dc957cc1df22ccd55892ef805362bc3f2dda9027e792f343f",
+    "crates/ferrowasp-boundary-contracts/src/topics.rs": "30abaf9f25b4e29f83448912c803d4f51828c46fa53025bd1833bc762dcb744b",
+    "crates/ferrowasp-cli/src/command_link.rs": "289c1abb2717ad3cd4cac966b2a32a38fda424218b5a04c07563a58d657aecb7",
+    "crates/ferrowasp-cli/src/commands.rs": "5951ac3430fc561e8051c36ca69fa80c59a527fb4c6c175df0c6de504c18b4da",
+    "crates/ferrowasp-cli/src/log_sync.rs": "ba6dacf53ad79b60a6b4c4b96b036ce784c2f679ce38b14e5a9cbdee6c4b8bc5",
+    "crates/ferrowasp-cli/src/serial_reply.rs": "610f8c7c3c9fc1d04c0ca3f47004703b3a3901f0879af3dab4d6763392be31e0",
+    "crates/ferrowasp-cli/src/storage_commands.rs": "587c55c0c3db5eceb34f63142a390fcc4678912dc3f1b4186afd0626d169cbb3",
+    "crates/ferrowasp-cli/src/usb_debug.rs": "6bc9b0498bf500212d9dbe9ec630e3c492c79d1062ed92fa5508dd69204b6894",
+    "crates/ferrowasp-config/src/boot.rs": "8e4fe8215b7084eb926b1b977e411cb31e384603ae123af3a1303c95cbe6f2df",
+    "crates/ferrowasp-config/src/owner.rs": "f0db5985c07708466111037aafd47dd315f97889a8a50343aaaa2efb7595dfa4",
+    "crates/ferrowasp-config/src/page.rs": "15354d304fd4205c80fd17cc062466d33bd41763389522fd53e3157f3fee346b",
+    "crates/ferrowasp-config/src/stored.rs": "5d322a33eafdd8c4612f30c431521d00f14cfe345f45b6f339a093797f9046ce",
+    "crates/ferrowasp-control/src/attitude.rs": "2cf241d8ccd930793625e78b4ff8d8bba2e8506a26db4839d5af1e53120f9e47",
+    "crates/ferrowasp-control/src/calibration.rs": "078d3b9e1ed6d536eab1eb5b7cb03aaf30943a220c61e2405c0ac592685d3d36",
+    "crates/ferrowasp-control/src/calibration/accel_level.rs": "a1f48ab3d297e87931df925ec2506a28d7f7669a40c7e90f123030124468f655",
+    "crates/ferrowasp-control/src/filter.rs": "58ebccaad967c2a3ebd515f343a055682d49f0ca65152243f85bac22bee8b577",
+    "crates/ferrowasp-control/src/frames.rs": "a34c3d4aa580c2bc6164d9989fd284a7757f04a40df3b637f3baaf76fc637bbb",
+    "crates/ferrowasp-control/src/pid.rs": "adcf680ea04df36c1500ac62facea0083cfd0a69cf6ad38970906b75d61ac9b9",
+    "crates/ferrowasp-crsf/src/lib.rs": "5d5a0d94a1704582e1d798db8c33092c26decf860d87a02470c643ebb0628a44",
+    "crates/ferrowasp-feedback/src/esc_manager.rs": "93ce0dfab0ee2e361a7ddef8274e4ade6fd7db4f7b3952ed4120236a93ab458a",
+    "crates/ferrowasp-flight-control/src/actuator.rs": "f484b7214c7e5c759cda568b887d03b7a3d9f2198fdc83f0eab3348a0f945212",
+    "crates/ferrowasp-flight-control/src/drone_toolbox.rs": "c2f11d4762010809c7246808e2c4e830295b3a749f92c665ca323d308dd2dcc4",
+    "crates/ferrowasp-flight-control/src/dynamic_idle.rs": "2c8a5d854b965544e3342f8fdac7d09ab760233403c0b559982c8c99b31ee49e",
+    "crates/ferrowasp-flight-control/src/rpm_filter.rs": "e338324a280778f60778bdf9affa36288dc3fb8fc084becd6df234e60b63ad17",
+    "crates/ferrowasp-icm42688p/src/lib.rs": "18a22e60d568c9b59896509a08bdf1d79f54aa1f794675a067d375a6c81bc60a",
+    "crates/ferrowasp-imu/src/spi/async_device.rs": "6af5f09d530c0e3e5df15ec91469a3905e7f963a52a7e16212eeecba458faa59",
+    "crates/ferrowasp-imu/src/spi/fault.rs": "a0f8f125a07b6818bdf0fb626c9eba9767c50b76510c9149a6eeb00c3434b650",
+    "crates/ferrowasp-imu/src/spi/job.rs": "aac4cbf68b77f381ec344e063dadae21540146598b616149fb6a50d4bd83cebb",
+    "crates/ferrowasp-imu/src/spi/mailbox.rs": "071785aee762bd90d2e56f5c5e3f31dacb23933a4cf2004cef61fd6d8bd43be2",
+    "crates/ferrowasp-imu/src/spi/mod.rs": "763b8907588eecf75183464e7cc36ac6f9ac9ff1c3e8012cacc03e486cfdf21e",
+    "crates/ferrowasp-imu/src/spi/transaction.rs": "fb4bf0e188d0a4ae896b9d07d4ad333f957c0e72c510245db4bf7b122667d2cc",
+    "crates/ferrowasp-imu/src/spi/transaction_id.rs": "94c8d1e94b0030d2f587e2d1498a65a206626bff7d73f7ef9eeb0f36e9e18555",
+    "crates/ferrowasp-input/src/channel_map.rs": "7520040bb9950fed5a0b1c7f6443ec49ca353a24c394419046c4c2870a336479",
+    "crates/ferrowasp-input/src/rc_receiver.rs": "a49a9940fb613166dc61b241c810a1258573815c53ace4f347b94872befe98fe",
+    "crates/ferrowasp-io-contracts/src/link.rs": "f6d2abac89898ee2188440593866c562541bcd8d1553857087a6538005aa6cf1",
+    "crates/ferrowasp-io-contracts/src/serial/chunk.rs": "bc025902387dbe393b362becfa04075afeb2561eeeadfc1f2b558d154f758231",
+    "crates/ferrowasp-io-contracts/src/serial/discontinuity.rs": "7c99c079deed901444654be85053cc8146c2bc98e27af9b6443e18c32136399d",
+    "crates/ferrowasp-io-contracts/src/serial/fault.rs": "fdd3925b1735b457b1fae7e8d8e82c8412712a06c199ea244fb90f6a3b6a55a0",
+    "crates/ferrowasp-io-contracts/src/serial/mod.rs": "6ac969efa64de91a0cf64bd720d7396b3e78e2fcb6a58d89471fe84f08fff1a5",
+    "crates/ferrowasp-io-contracts/src/serial/tx_chunk.rs": "2a525c4f022407120634f65c1d980deee0a5e5880de29532aa6dd42b014c34e8",
+    "crates/ferrowasp-io-contracts/src/time.rs": "4972f57cc15fdf9d5267a1c6f85d4c8823ce862b8f471865a8dbfb8f1480b0ff",
+    "crates/ferrowasp-mpu6000/src/lib.rs": "c21d04748b1e08339d42e879017033723629e668a3b018a96dce40012f3b697e",
+    "crates/ferrowasp-mpu6500/src/lib.rs": "16fbe615efdfe7da6ad0d7b70e556b9097c5a1e57157c4581b1fee6e1f8ebc0f",
+    "crates/ferrowasp-mspv1/src/commands.rs": "ce10d4c9dc63d5a83e6dd1962c6e899aaeecb62633b56fab4733a9117730ea75",
+    "crates/ferrowasp-mspv1/src/lib.rs": "dfaf9758474a9679e1a13f345a296af403bc7dd49354459bf6b04007eab98d28",
+    "crates/ferrowasp-mspv1/src/packet.rs": "9b6629fb611e45537f0b9be93c353f45b7a063f1ba525b2b3d408f07c876ff24",
+    "crates/ferrowasp-mspv1/src/structs.rs": "532e8eee6993eb55ddb67ceadedfcc6bcfff38c8a72e1d17f6c54588f2c55c47",
+    "crates/ferrowasp-mspv2/src/rpc.rs": "0affa45c2d581ce67248cde46935ba783f84397bd196e6146c520c6297c170ba",
+    "crates/ferrowasp-osd/src/lib.rs": "eb7281aee2730e0fdfa423a6f77fe4bb23c201e2a70ca41a88ff68b81f7387c6",
+    "crates/ferrowasp-output/src/dshot.rs": "1beca05e41cb4a7ac74b61b3f5db434c3ba199bd98fa272a905cd82a70b682f0",
+    "crates/ferrowasp-output/src/dshot_reply.rs": "c9439b173011ae6360a5bef0da617d3433d212a1a7942d8f33e3b1090bf902ec",
+    "crates/ferrowasp-protocol/src/blackbox.rs": "ddd646dafa711197d35d47efe09101a31536b5b375e257fd16f444371f9b97c2",
+    "crates/ferrowasp-protocol/src/rate_record.rs": "0fd4a5c71e5724d121743ec05cd4412d47a2a9061309e7715dbb73afa4dfa33b",
+    "crates/ferrowasp-safety/src/actuator.rs": "140f50eaa9702950048b296843314ec59c36ff738f3a9f3b2024b12a281fd31a",
+    "crates/ferrowasp-safety/src/arming.rs": "c1f62a432d639a5ed7d89bd530e44e3df9552f90cc227207c00b02a152855f6f",
+    "crates/ferrowasp-safety/src/config_gate.rs": "9a2a1529f782b662036f4b6cd99703713ad4546b8fba19c580bad318a4e69514",
+    "crates/ferrowasp-safety/src/host.rs": "d271198e3b845f3c316a9fac640491eb474a66288e06dfef400b67686da7bfc1",
+    "crates/ferrowasp-safety/src/lib.rs": "529b3983df687a0b1424edf407dff029082ed10bc5bc67a753175003efaad46f",
+    "crates/ferrowasp-safety/src/prearm.rs": "0682208ee70992ecff4eafc375c6569b26ceff001c22cba38b548a334cfd0d22",
+    "crates/ferrowasp-serial/src/binding.rs": "e3f26d8249dbfdae5007ce6a0da266ebb19d1bc4c35c51a31fde78138df9f92a",
+    "crates/ferrowasp-serial/src/profile.rs": "0d1ccf05e3d7531139de23a20192ad8ce7a329da90ff5e8a8763bb3ca79b4b54",
+    "crates/ferrowasp-serial/src/reader.rs": "942203a862c10eba88740f275e9d7d3493f37b89b2876b44313dc59dd7a2f007",
+    "crates/ferrowasp-serial/src/routing.rs": "65d4cb94f51d09d345a665d39cc2c9860918d5ad999a03c5eba6534c76822ea7",
+    "crates/ferrowasp-serial/src/writer.rs": "058a10055976e4a452285b106c09a6ec9d3f3ab34fcf311e17ac458ff39accbb",
+    "crates/ferrowasp-stm32-critical/src/board_routes.rs": "7f7eabfb5309eea81cd5f3dd18771cad1127d0d560572103079985eb03da65aa",
+    "crates/ferrowasp-stm32-critical/src/dshot_bank.rs": "f75e28df7fbd1b1b8ffa770f3fc4658955774c2be0568abea407861aedb9f875",
+    "crates/ferrowasp-stm32-critical/src/dshot_lanes.rs": "bfd6b36b2fa071cd5d30dd82127c867640278e1d0f09262f804a164d9e76bfaa",
+    "crates/ferrowasp-stm32-critical/src/memory.rs": "bae6426df7f1eb1f35eeeabf18b6a7482162c65c3afca7f11045121126b5f3bb",
+    "crates/ferrowasp-stm32-critical/src/serial/irq_plan.rs": "b4342886e340b11b3fdaf93f80aa39f2eeb8654f64a64cc100d4d8681a2b2dfc",
+    "crates/ferrowasp-stm32-critical/src/serial/rx_state.rs": "dbb445fdeec4d58f9b736a801c1885270cfeab1cc26330d05af8a26a50bf5696",
+    "crates/ferrowasp-stm32-critical/src/serial/tx_state.rs": "71c9ebe48f57c76f45d4b8b2f41ab5eaf267717883ef7582f0e741f368e6c1e5",
+    "crates/ferrowasp-stm32-critical/src/spi.rs": "627fadc8de12bcbc7caa66303e5737de600b45888bd585c33f837154de7c6d0c",
+    "crates/ferrowasp-stm32-critical/src/spi1_imu.rs": "303d35dd117098452a56c77fc78d5734b59bc51460925c56a81058f325f8278a",
+    "crates/ferrowasp-stm32-critical/src/system_reset.rs": "c2940798727c6bc04f4c4267e92f77619b0deebbd61207990c1af4fc16d4c4da",
+    "crates/ferrowasp-stm32-critical/src/timer_dma.rs": "995fa319e0c47222c78d2c4bb9f322de8485d6e7cba31930efed5c9f113c9bcc",
+    "crates/ferrowasp-storage/src/config_save.rs": "2d309a01a00171b70a208e2d8a28bb3245544f7aab9de3996fc418824917d2dd",
+    "crates/ferrowasp-storage/src/layout.rs": "801bf610ad805d4f7ce541b8888e2e7c9ed297d18ac75ad350a268cee1c1904a",
+    "crates/ferrowasp-storage/src/nor_storage.rs": "40439076d3476ae99e95cb4e189e173bdddcacd02e5d928c7afe9690422a3f00",
+    "crates/ferrowasp-storage/src/spi_nor.rs": "5fc8b4872abb39f01931c506bdf6f4216b8ea85337a893153f021214207cf978",
+    "crates/ferrowasp-storage/src/test_nor.rs": "ac56d16072e4d56ef2fbade606d269a3b642f0a9da0ef4100aa14b2e80003570",
+    "extern:critical-section@1.2.0": "1.2.0",
+    "extern:defmt@1.2.0": "1.2.0",
+    "extern:embedded-hal-async@1.0.0": "1.0.0",
+    "extern:embedded-hal@1.0.0": "1.0.0",
+    "extern:embedded-io-async@0.7.0": "0.7.0",
+    "extern:embedded-io@0.7.1": "0.7.1",
+    "extern:heapless@0.9.2": "0.9.2",
+    "extern:libm@0.2.16": "0.2.16",
+    "extern:sbus-rs@0.1.3": "0.1.3",
+    "firmware/foxeer-f405-v2/board/src/profiles.rs": "6061aa842e90de8630b480946b10c693b3b4b8d4af351a738c28757023bd3249",
+    "firmware/foxeer-f405-v2/board/src/serial.rs": "da4980c2412f41b8a3a2f176f2e5f8e92492f721034afa424bf6ea6c49d36fa0",
+    "firmware/tbs-lucid-h7/board/src/profiles.rs": "e3cb690e2275526b669f67ecfa70383770a25d1a39cdd796a038e15539340672",
+    "firmware/tbs-lucid-h7/board/src/serial.rs": "8aa5067046b0514ec69348aeed4308d61e4387aa0adc6d146b884e350c58e02d"
+  },
+  "results": [
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::bit_helpers_only_modify_requested_mask"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "7df33798479d276bc3369625f280cd5693c417b40d74270f62fe8272dc529e1d",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::decode_accel_temp_gyro_burst_decodes_big_endian_axes"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "10f64f9d23b5ec635be56925febe47891a4e8acd9d2e21258d3f4666297c3c7c",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::decode_accel_temp_gyro_burst_rejects_short_or_implausible_frames"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "78b986fa878d48151d5311cf9fda8720eb6d012ca7c248c9cbdc4f8a56b5a42e",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::decode_gyro_burst_allows_zero_rate_but_rejects_bad_frames"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "fac0378c40dc75fea22ab746630c6c7cfff2cacd69d908def8b9fc941b9c9e17",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::gyro_sample_rate_writes_expected_divider_for_dlpf_rate"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "ca0a2bd3165147dd872cf5984afee7f0958d8bf3f58b4c0aaf0f243d0de314c0",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::read_gyro_raw_decodes_big_endian_signed_axes"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "087874943a78b65dd501fd797eeeba54778eec76fda79968bcbb7d982afb8cb3",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::read_reg_sets_read_bit_and_toggles_chip_select"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "67f8a1f12544fc532ecb81b46db31d9e5905e2ad3b593d00d78db97a5748d9c6",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "IMU-002",
+      "method": {
+        "test": "ferrowasp_mpu6500::tests::sample_freshness_only_depends_on_sequence_change"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "cd7753fa51c2d048980fe5d04317d9da93bbe25438a0d5ce4743262544c60473",
+      "exercised": [
+        "crates/ferrowasp-mpu6500/src/lib.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

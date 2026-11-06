@@ -13,17 +13,19 @@ use panic_probe as _;
 
 pub mod board;
 
-pub use ferrowasp_stm32::status_led::StatusLed;
-pub use ferrowasp_stm32h7::adc as stm32_adc;
-pub use ferrowasp_stm32h7::clocks as stm32_clocks;
-pub use ferrowasp_stm32h7::hal_prelude::*;
+pub use ferrowasp_ferrohal::adc as stm32_adc;
+pub use ferrowasp_ferrohal::chip_time as stm32_timebase;
+pub use ferrowasp_ferrohal::clocks as stm32_clocks;
+pub use ferrowasp_ferrohal::hal;
+pub use ferrowasp_ferrohal::hal_prelude::*;
 #[cfg(feature = "mspv2_configurator")]
-pub use ferrowasp_stm32h7::signature::device_uid;
-pub use ferrowasp_stm32h7::spi_dma as stm32_spi;
-pub use ferrowasp_stm32h7::spi_dma::*;
-pub use ferrowasp_stm32h7::system_bootloader as stm32_bootloader;
-pub use ferrowasp_stm32h7::uart_dma as stm32_uart;
-pub use ferrowasp_stm32h7::usb_serial as stm32_usb;
+pub use ferrowasp_ferrohal::signature::device_uid;
+pub use ferrowasp_ferrohal::spi_dma as stm32_spi;
+pub use ferrowasp_ferrohal::spi_dma::*;
+pub use ferrowasp_ferrohal::system_bootloader as stm32_bootloader;
+pub use ferrowasp_ferrohal::uart_dma as stm32_uart;
+pub use ferrowasp_ferrohal::usb_serial as stm32_usb;
+pub use ferrowasp_stm32::status_led::StatusLed;
 pub use fugit::Rate;
 pub use rtic_monotonics::systick::prelude::*;
 pub use stm32_usb::UsbDeviceState;

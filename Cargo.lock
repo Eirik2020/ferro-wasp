@@ -3,15 +3,6 @@
 version = 4
 
 [[package]]
-name = "atomic-polyfill"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
-dependencies = [
- "critical-section",
-]
-
-[[package]]
 name = "bare-metal"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19,12 +10,6 @@ checksum = "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3"
 dependencies = [
  "rustc_version",
 ]
-
-[[package]]
-name = "bare-metal"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8fe8f5a8a398345e52358e18ff07cc17a568fbca5c6f73873d3a62056309603"
 
 [[package]]
 name = "bitfield"
@@ -45,12 +30,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
-name = "cast"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -67,35 +46,48 @@ dependencies = [
 
 [[package]]
 name = "cortex-m"
-version = "0.7.7"
+version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ec610d8f49840a5b376c69663b6369e71f4b34484b9b2eb29fb918d92516cb9"
+checksum = "408ca8c6d703a196b73219fdb68fd8914d4fda90c34e2bd6859d4842f761bd5f"
 dependencies = [
- "bare-metal 0.2.5",
+ "bare-metal",
  "bitfield",
+ "cortex-m-macros",
  "critical-section",
  "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
  "volatile-register",
 ]
 
 [[package]]
-name = "cortex-m-rt"
-version = "0.7.5"
+name = "cortex-m-macros"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "801d4dec46b34c299ccf6b036717ae0fce602faa4f4fe816d9013b9a7c9f5ba6"
+checksum = "6d1922be58519ad40368fc4ca595a2cefa51a7abf947be3b0c90586dc7dbd0e2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
+]
+
+[[package]]
+name = "cortex-m-rt"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1f0f27b7ecbb9fad6702c8764d11d0b7245437de1575e34e39b2af95382f096"
 dependencies = [
  "cortex-m-rt-macros",
 ]
 
 [[package]]
 name = "cortex-m-rt-macros"
-version = "0.7.5"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e37549a379a9e0e6e576fd208ee60394ccb8be963889eebba3ffe0980364f472"
+checksum = "05cf9e0f899304705b85fda7b178fc383f2529ec2479693248b600e530d2327a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -110,14 +102,14 @@ version = "0.3.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0963443817029b2024136fc4dd07a5107eb8f977eaf18fcd1fdeb11306b64ad"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 1.2.0",
 ]
 
 [[package]]
 name = "defmt"
-version = "1.0.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "548d977b6da32fa1d1fda2876453da1e7df63ad0304c8b3dae4dbe7b96f39b78"
+checksum = "e4a0795ac740cb54d7b3775c9c17345f6aaecf884c01733b39d6017738e0e3e1"
 dependencies = [
  "bitflags",
  "defmt-macros",
@@ -125,22 +117,21 @@ dependencies = [
 
 [[package]]
 name = "defmt-macros"
-version = "1.0.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d4fc12a85bcf441cfe44344c4b72d58493178ce635338a3f3b78943aceb258e"
+checksum = "840bb056bd99c495c9188198a258ab787c79f306d864db3e6e8451442d6d8366"
 dependencies = [
  "defmt-parser",
- "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 2.0.118",
+ "syn 3.0.3",
 ]
 
 [[package]]
 name = "defmt-parser"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10d60334b3b2e7c9d91ef8150abfb6fa4c1c39ebbcf4a81c2e346aad939fee3e"
+checksum = "71958f69fb2de856c5dd51ac9377e986ca1aa5919f931bf5395a807277f889a0"
 dependencies = [
  "thiserror",
 ]
@@ -152,31 +143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0f73a4a4a91609e977ae3b7bd831ffa292edfd42ad140a3244a61d805b0e05e"
 dependencies = [
  "critical-section",
- "defmt 1.0.1",
-]
-
-[[package]]
-name = "deranged"
-version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
-
-[[package]]
-name = "document-features"
-version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
-dependencies = [
- "litrs",
-]
-
-[[package]]
-name = "embedded-dma"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "994f7e5b5cb23521c22304927195f236813053eb9c065dd2226a32ba64695446"
-dependencies = [
- "stable_deref_trait",
+ "defmt 1.2.0",
 ]
 
 [[package]]
@@ -205,16 +172,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embedded-hal-nb"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fba4268c14288c828995299e59b12babdbe170f6c6d73731af1b4648142e8605"
-dependencies = [
- "embedded-hal 1.0.0",
- "nb 1.1.0",
-]
-
-[[package]]
 name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -233,32 +190,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0"
 dependencies = [
  "embedded-io 0.7.1",
-]
-
-[[package]]
-name = "embedded-storage"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21dea9854beb860f3062d10228ce9b976da520a73474aed3171ec276bc0c032"
-
-[[package]]
-name = "enumflags2"
-version = "0.7.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1027f7680c853e056ebcec683615fb6fbbc07dbaa13b4d5d9442b146ded4ecef"
-dependencies = [
- "enumflags2_derive",
-]
-
-[[package]]
-name = "enumflags2_derive"
-version = "0.7.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67c78a4d8fdf9953a5c9d458f9efe940fd97a0cab0941c075a813ac594733827"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.118",
 ]
 
 [[package]]
@@ -296,6 +227,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "ferrohal-stm32"
+version = "0.1.0"
+source = "git+https://github.com/Eirik2020/ferrohal-stm32?rev=704e5781a70579c600296f3e87776c4b2c6eed10#704e5781a70579c600296f3e87776c4b2c6eed10"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "defmt 1.2.0",
+ "embedded-hal 1.0.0",
+ "embedded-io 0.7.1",
+ "stm32-metapac",
+ "synopsys-usb-otg",
+ "usb-device",
 ]
 
 [[package]]
@@ -369,7 +315,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "critical-section",
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "embedded-io-async",
  "ferroforge",
  "ferrowasp-blackbox",
@@ -425,10 +371,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-ferrohal"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "ferrohal-stm32",
+ "ferrowasp-ferrohal-critical",
+ "ferrowasp-stm32",
+ "ferrowasp-storage",
+ "usb-device",
+ "usbd-serial",
+]
+
+[[package]]
+name = "ferrowasp-ferrohal-critical"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "critical-section",
+ "defmt 1.2.0",
+ "embedded-hal 1.0.0",
+ "ferrohal-stm32",
+ "ferrowasp-imu",
+ "ferrowasp-io-contracts",
+ "ferrowasp-output",
+ "ferrowasp-serial",
+ "ferrowasp-stm32-critical",
+]
+
+[[package]]
 name = "ferrowasp-flight-control"
 version = "0.1.0"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "ferroforge",
  "ferrowasp-boundary-contracts",
  "ferrowasp-control",
@@ -489,7 +464,7 @@ dependencies = [
 name = "ferrowasp-mpu6500"
 version = "0.1.0"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "embedded-hal 1.0.0",
 ]
 
@@ -510,7 +485,7 @@ dependencies = [
 name = "ferrowasp-osd"
 version = "0.1.0"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "embedded-io-async",
  "ferroforge",
  "ferrowasp-border",
@@ -545,7 +520,7 @@ name = "ferrowasp-safety"
 version = "0.1.0"
 dependencies = [
  "critical-section",
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "ferroforge",
  "ferrowasp-boundary-contracts",
  "ferrowasp-io-contracts",
@@ -570,7 +545,7 @@ dependencies = [
 name = "ferrowasp-stm32"
 version = "0.1.0"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "embedded-hal 1.0.0",
  "ferroforge",
  "ferrowasp-boundary-contracts",
@@ -593,7 +568,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "critical-section",
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-io-async",
@@ -606,6 +581,7 @@ dependencies = [
  "ferrowasp-control",
  "ferrowasp-crsf",
  "ferrowasp-feedback",
+ "ferrowasp-ferrohal",
  "ferrowasp-flight-control",
  "ferrowasp-icm42688p",
  "ferrowasp-imu",
@@ -621,8 +597,6 @@ dependencies = [
  "ferrowasp-serial",
  "ferrowasp-stm32",
  "ferrowasp-stm32-critical",
- "ferrowasp-stm32f4",
- "ferrowasp-stm32h7",
  "ferrowasp-storage",
  "fugit",
  "heapless 0.9.2",
@@ -635,7 +609,7 @@ name = "ferrowasp-stm32-critical"
 version = "0.1.0"
 dependencies = [
  "critical-section",
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "ferroforge",
@@ -651,71 +625,6 @@ dependencies = [
  "heapless 0.9.2",
  "rtic",
  "rtic-monotonics",
-]
-
-[[package]]
-name = "ferrowasp-stm32f4"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "defmt 1.0.1",
- "ferrowasp-stm32",
- "ferrowasp-stm32f4-critical",
- "rc-pwm",
- "stm32f4xx-hal",
- "usb-device",
- "usbd-serial",
-]
-
-[[package]]
-name = "ferrowasp-stm32f4-critical"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "defmt 1.0.1",
- "ferrowasp-imu",
- "ferrowasp-io-contracts",
- "ferrowasp-output",
- "ferrowasp-serial",
- "ferrowasp-stm32-critical",
- "stm32f4xx-hal",
-]
-
-[[package]]
-name = "ferrowasp-stm32h7"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "defmt 1.0.1",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "ferrowasp-stm32",
- "ferrowasp-stm32h7-critical",
- "ferrowasp-storage",
- "heapless 0.9.2",
- "nb 1.1.0",
- "sdio-host",
- "stm32h7xx-hal",
- "usb-device",
- "usbd-serial",
-]
-
-[[package]]
-name = "ferrowasp-stm32h7-critical"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "defmt 1.0.1",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "ferrowasp-imu",
- "ferrowasp-io-contracts",
- "ferrowasp-output",
- "ferrowasp-serial",
- "ferrowasp-stm32-critical",
- "heapless 0.9.2",
- "nb 1.1.0",
- "stm32h7xx-hal",
 ]
 
 [[package]]
@@ -733,18 +642,7 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e639847d312d9a82d2e75b0edcc1e934efcc64e6cb7aa94f0b1fbec0bc231d6"
 dependencies = [
- "defmt 0.3.100",
  "gcd",
-]
-
-[[package]]
-name = "fugit-timer"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9607bfc4c388f9d629704f56ede4a007546cad417b3bcd6fc7c87dc7edce04a"
-dependencies = [
- "fugit",
- "nb 1.1.0",
 ]
 
 [[package]]
@@ -829,12 +727,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
-name = "litrs"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
-
-[[package]]
 name = "nb"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -848,21 +740,6 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
-dependencies = [
- "defmt 0.3.100",
-]
-
-[[package]]
-name = "num-conv"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
-
-[[package]]
-name = "paste"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pin-project-lite"
@@ -887,34 +764,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "powerfmt"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
-
-[[package]]
-name = "proc-macro-error-attr2"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "proc-macro-error2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
-dependencies = [
- "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn 2.0.118",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -933,16 +782,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_core"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
-
-[[package]]
 name = "rc-pwm"
 version = "0.1.0"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 1.2.0",
  "defmt-rtt",
  "embedded-hal 1.0.0",
  "nb 1.1.0",
@@ -950,11 +793,10 @@ dependencies = [
 
 [[package]]
 name = "rtic"
-version = "2.2.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bc68b1fa2eefbb7ad6747b299b79c8fca92163dfa46f0e279f39109cf272186"
+checksum = "373a07d594255d32df5bf7d140c51cf215082aacf29665d7b6a0e318c321853d"
 dependencies = [
- "bare-metal 1.0.0",
  "cortex-m",
  "critical-section",
  "portable-atomic",
@@ -980,12 +822,11 @@ checksum = "d9369355b04d06a3780ec0f51ea2d225624db777acbc60abd8ca4832da5c1a42"
 
 [[package]]
 name = "rtic-macros"
-version = "2.2.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f387b12bd6c01d2c9d4776dddeefaf0ae51b9497c83c0186b1693f6821ff3c4a"
+checksum = "60ff622649d3c9ffb692a9aa13d1d54fb88923ea43dcf12c09af3371b054f92b"
 dependencies = [
  "indexmap",
- "proc-macro-error2",
  "proc-macro2",
  "quote",
  "syn 2.0.118",
@@ -1034,12 +875,6 @@ checksum = "ccd3b7649c8d95ad62e9dae45abfd3ae842a74492cddb8f0dd8b8eb7a2075e7a"
 dependencies = [
  "embedded-io 0.6.1",
 ]
-
-[[package]]
-name = "sdio-host"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b328e2cb950eeccd55b7f55c3a963691455dcd044cfb5354f0c5e68d2c2d6ee2"
 
 [[package]]
 name = "semver"
@@ -1093,81 +928,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
-name = "stm32f4"
-version = "0.16.0"
+name = "stm32-metapac"
+version = "21.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c41bd8922df364cb7054cae71a95dcbb32cffd25b5c0f9c00272ef8c82279a65"
+checksum = "e74b78632cea498cfb28386a29f8bfae7476d6570a78733eb5fecbee66c2f4ce"
 dependencies = [
- "cortex-m",
- "cortex-m-rt",
- "critical-section",
- "defmt 1.0.1",
- "portable-atomic",
- "vcell",
-]
-
-[[package]]
-name = "stm32f4xx-hal"
-version = "0.22.1"
-source = "git+https://github.com/stm32-rs/stm32f4xx-hal.git?rev=78d79609137d5c380320f7bf1a9120967babc61d#78d79609137d5c380320f7bf1a9120967babc61d"
-dependencies = [
- "atomic-polyfill",
- "bare-metal 1.0.0",
  "cortex-m",
  "cortex-m-rt",
  "defmt 0.3.100",
- "document-features",
- "embedded-dma",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-hal-nb",
- "embedded-io 0.6.1",
- "embedded-storage",
- "enumflags2",
- "fugit",
- "fugit-timer",
- "nb 1.1.0",
- "rand_core",
- "rtic",
- "rtic-time",
- "stm32f4",
- "synopsys-usb-otg",
- "time",
- "void",
-]
-
-[[package]]
-name = "stm32h7"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "362f288cd8341e9209587b889c385f323e82fc237b60c272868965bb879bb9b1"
-dependencies = [
- "bare-metal 1.0.0",
- "cortex-m",
- "cortex-m-rt",
- "vcell",
-]
-
-[[package]]
-name = "stm32h7xx-hal"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bd869329be25440b24e2b3583a1c016151b4a54bc36d96d82af7fcd9d010b98"
-dependencies = [
- "bare-metal 1.0.0",
- "cast",
- "cortex-m",
- "embedded-dma",
- "embedded-hal 0.2.7",
- "embedded-storage",
- "fugit",
- "nb 1.1.0",
- "paste",
- "sdio-host",
- "stm32h7",
- "synopsys-usb-otg",
- "void",
 ]
 
 [[package]]
@@ -1223,24 +991,6 @@ dependencies = [
  "quote",
  "syn 2.0.118",
 ]
-
-[[package]]
-name = "time"
-version = "0.3.53"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18dfaaeddcb932337b5e7866ee7d0ce9b76d2fd092997146f187ec09b4558a50"
-dependencies = [
- "deranged",
- "num-conv",
- "powerfmt",
- "time-core",
-]
-
-[[package]]
-name = "time-core"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
 
 [[package]]
 name = "unicode-ident"

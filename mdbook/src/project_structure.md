@@ -36,10 +36,8 @@ Under `crates/`, all members of the root workspace and host-tested there:
 | `rc-pwm` | RC pulse-width commands for servos and auxiliary outputs |
 | `ferrowasp-stm32-critical` | The safety-critical STM32 mechanisms that need no chip-family HAL: the UART and SPI DMA state machines, the DShot motor bank, timing, routing and board-description types, reset, and the DMA buffer memory |
 | `ferrowasp-stm32` | The non-critical STM32 mechanisms: ADC sampling, servo PWM, the status LED, USB serial; and re-exports of the critical crate |
-| `ferrowasp-stm32f4-critical` | The STM32F4 backend's safety-critical half over `stm32f4xx-hal`: DShot, SPI and UART DMA, clocks and timing, routing, the ROM bootloader entry |
-| `ferrowasp-stm32f4` | The STM32F4 backend's non-critical half: ADC, USB serial, the device ID; and re-exports of the critical half |
-| `ferrowasp-stm32h7-critical` | The STM32H743 backend's safety-critical half over `stm32h7xx-hal`: DShot and its DMA endpoints, SPI and UART DMA, clocks and timers, the ROM bootloader entry |
-| `ferrowasp-stm32h7` | The STM32H743 backend's non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half |
+| `ferrowasp-ferrohal-critical` | The backend's safety-critical half over FerroHAL: DShot on its waveform generator, SPI and UART, timing and reset. The UART and SPI adapters exist only until the transports move to FerroHAL's own model |
+| `ferrowasp-ferrohal` | The backend's non-critical half: ADC, the SD card, USB serial, the device ID; and re-exports of the critical half |
 | `ferrowasp-stm32-app` | What every STM32 flight application shares above its board: the application facade, the task groups and the queues between tasks; and, until the hardware message contracts, the actuator output, DShot service, ESC telemetry and RC input tasks |
 
 Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
@@ -66,7 +64,6 @@ Under `firmware/`, each its own Cargo workspace:
 |---|---|
 | `foxeer-f405-v2` | Foxeer F405 V2, STM32F405; the golden flight app |
 | `tbs-lucid-h7` | TBS Lucid H7, STM32H743 |
-| `stm32f401-bringup` | NUCLEO-F401RE; peripheral bring-up without actuators |
 
 A flight application has three parts:
 

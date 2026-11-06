@@ -178,7 +178,7 @@ control loop to stop, and the arm-state cross-check reads a flag a hung
 safety master leaves at "armed". A reset, which stops the motors, is the only
 way out; losing disarm authority is worse than a drop.
 
-No independent watchdog exists: `ferrowasp-stm32f4::watchdog` is a
+No independent watchdog exists: the `io_watchdog` timer is a
 timer-driven I/O watchdog whose task (`io_watchdog`) expires overdue SPI1
 transactions. The design first assumed a hardware watchdog backed the core;
 checking the code showed none, so the independent watchdog below adds the IWDG. The user delegated
