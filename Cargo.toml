@@ -35,6 +35,7 @@ members = [
     "crates/ferrowasp-ferrohal-critical",
     "crates/ferrowasp-storage",
     "crates/rc-pwm",
+    "drivers/buzzer",
     "drivers/crsf-proto",
     "drivers/qmc5883l",
     "drivers/spl06",
