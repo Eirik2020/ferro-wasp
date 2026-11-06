@@ -1,0 +1,43 @@
+{
+  "schema_version": 5,
+  "run_id": "20261106T153246Z__a-compass-sample-outside-its-limits-is-refused__host__01",
+  "recorded_at_utc": "2026-11-06T15:32:46Z",
+  "board": null,
+  "revision": "e654ac2363e99e1489eefa1a3b05612c5e8e622d",
+  "working_tree": "dirty",
+  "modules": {
+    "crates/ferrowasp-sensor-traits/src/class.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-sensor-traits/src/compass.rs": [
+      "crates/ferrowasp-sensor-traits/src/class.rs"
+    ]
+  },
+  "identities": {
+    "crates/ferrowasp-io-contracts/src/link.rs": "f6d2abac89898ee2188440593866c562541bcd8d1553857087a6538005aa6cf1",
+    "crates/ferrowasp-io-contracts/src/time.rs": "4972f57cc15fdf9d5267a1c6f85d4c8823ce862b8f471865a8dbfb8f1480b0ff",
+    "crates/ferrowasp-sensor-traits/src/class.rs": "78cc482999b8a0042888fee5f8f75dfa1fe1de90369457c47e71be078e8879f9",
+    "crates/ferrowasp-sensor-traits/src/compass.rs": "e6df27e3059cef5c3e1a299ab77a667d121004bd1834e43867f46d9fe5f41b12"
+  },
+  "results": [
+    {
+      "requirement": "SENSOR-015",
+      "method": {
+        "test": "ferrowasp_sensor_traits::compass::tests::a_compass_sample_outside_its_limits_is_refused"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c0d282ab027b838479bd3a8d22cbc61589222c2725d59b6e5d8ee06dd3cd06be",
+      "exercised": [
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

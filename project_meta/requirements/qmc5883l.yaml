@@ -1,0 +1,70 @@
+schema_version: 2
+requirements:
+  - id: QMC-001
+    title: Every QMC5883L call is one bounded transfer
+    statement: >-
+      Each of the QMC5883L driver's calls shall make at most one write and
+      one read on the bus, reading at most the six data bytes.
+    rationale: >-
+      The driver runs in a low-priority task beside real-time ones, so its
+      bus work must be bounded and predictable whatever the caller asks.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: qmc5883l::tests::every_call_makes_one_bounded_transfer
+
+  - id: QMC-002
+    title: Configuration writes the registers the part defines
+    statement: >-
+      The driver's configuration calls shall write the part's set/reset
+      period, soft reset, and control registers with the fields the part
+      defines.
+    rationale: >-
+      A wrong field value changes what the part measures and how its raw
+      values must be scaled; the reference drivers' defines are the
+      second source, including where their own hex literals overflow.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: qmc5883l::tests::configuration_writes_the_part_registers
+
+  - id: QMC-003
+    title: Status decodes bit for bit
+    statement: >-
+      The status register shall decode as its three defined bits: data
+      ready, overflow, and data skipped.
+    rationale: >-
+      ArduPilot gates its read on the bit the part defines as data
+      skipped, not data ready, so the bits are named and checked one for
+      one; an overflowed field is not a measurement to scale.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: qmc5883l::tests::status_decodes_bit_for_bit
+
+  - id: QMC-004
+    title: A field reads back little endian, signed, and scaled
+    statement: >-
+      A data read shall decode the part's six bytes as three signed
+      little-endian components and scale them to microtesla by the
+      range's counts per gauss.
+    rationale: >-
+      A component read at the wrong endianness or scale misdirects the
+      heading; the 8-gauss scale is ArduPilot's measured one and the
+      2-gauss scale is the same span at four times the resolution.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: qmc5883l::tests::a_field_reads_back_little_endian_signed_and_scaled

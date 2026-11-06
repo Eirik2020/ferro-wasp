@@ -135,7 +135,7 @@ Current examples:
 | Armed state | `ARMED` / `DISARMED` | Safety arm reader |
 | Stale data | `DATA STALE`, blinking | The published state has stopped updating |
 | Battery voltage | `VBAT 16.4` | ADC-derived pack voltage from `ADC_VBAT` on PC0 |
-| Cell voltage | `CELL 4.10` | Pack voltage divided by the configured battery cell count |
+| Cell voltage | `CELL 4.10` | Pack voltage divided by the detected battery cell count |
 | Current | `CUR 12.3A` | ADC-derived current sensor voltage from `ADC_CURR` on PC1 using the Foxeer/Betaflight scale value |
 | Throttle | `THR 0` | Internal FerroWasp throttle command, `0` to `2000` |
 
@@ -187,7 +187,6 @@ Do not leave old values on the OSD after sensor loss, RC loss, estimator invalid
 The OSD currently has enough placeholder/live data to prove the UART/MSPv1/display path. Add these sensor readings before treating the overlay as useful flight telemetry:
 
 - Validate battery voltage ADC scaling on hardware. The `75k` / `10k` divider means the ADC node sees about `1 / 8.5` of pack voltage, so firmware multiplies the measured ADC voltage by `8.5`.
-- Move the hard-coded 6S battery cell count into board/profile configuration when configuration support exists.
 - Validate current-sense scaling on hardware. The Foxeer Reaper 55A ESC lists Betaflight current scale `70`; the prototype conversion currently treats the ADC reading as `ADC_mV / 70` amps after bench observation showed the first pass was 10x high.
 - Accumulated mAh from current integration.
 - Low-battery warning driven by the safety master, using validated cell voltage thresholds and freshness checks.

@@ -148,4 +148,4 @@ keeps its own hardware list and never ingests imported targets.
   shortening content. The design is split into chapters. Budgets were raised where a document only grows: the
   internal book's summary (8 KB), the document registry (24 KB), and
   `AGENTS.md` (13,312 bytes; its rules stay in the one file every agent
-  reads). The always-loaded files are at 296 of 300 lines.
+  reads). The always-loaded files are at 298 of 400 lines.

@@ -7,8 +7,7 @@ scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.
 
 The Foxeer F405 V2 is the golden flight target. The TBS Lucid H7 carries the
-same feature set on an STM32H743, so far on the bench only, and NUCLEO-F401RE is
-a non-actuating STM32F4 development target. See
+same feature set on an STM32H743, so far on the bench only. See
 [Current Support](current_support.md) for the board and feature matrix.
 
 ## Where to Begin

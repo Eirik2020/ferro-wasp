@@ -7,6 +7,18 @@ artifact is stable, airworthy, or production-ready.
 
 ### Added
 
+- `crsf-proto` under `drivers/`: the CRSF protocol as a standalone crate over
+  `embedded-io` — the bounded streaming frame parser, channels, and the
+  battery, GPS, vario, attitude and flight-mode telemetry encoders. No image
+  links it yet; RC input decodes CRSF through `ferrowasp-crsf` as before.
+- The sensor classes in `ferrowasp-sensor-traits` — one trait each for the
+  IMU, barometer and GNSS, with shared samples, envelopes and freshness — and
+  the DPS310 barometer adapter in `ferrowasp-sensors` over `uf-dps3xx`.
+- `ubx` under `drivers/`: the u-blox M10 protocol — framing that
+  resynchronises inside dropped frames, acknowledged configuration through
+  `CFG-VALSET` and `CFG-VALGET` including the SBAS enable key, `NAV-PVT`
+  decoding that exposes a position only for a valid 3D fix, and I2C and
+  serial transports. No image links it yet.
 - Log sync. The firmware lists the flights no host has stored, a host
   acknowledges each one after downloading it, and `logs erase-synced` erases
   only when every flight is acknowledged. A sync ledger in the flash's last

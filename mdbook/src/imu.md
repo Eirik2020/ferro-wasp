@@ -9,7 +9,6 @@ SPI1.
 |---|---|
 | Foxeer F405 V2 | Mode-3 probe selects MPU6500 `0x70`, ICM42688-P `0x47` or MPU-6000 `0x68` |
 | TBS Lucid H7 (bench only) | Same probe on SPI1 only; the second IMU on SPI4 is not used |
-| NUCLEO-F401RE | No attached IMU in the board contract |
 
 An unsupported identity, failed probe, failed reset, or configuration
 read-back failure leaves sampling disabled. The heartbeat and unrelated

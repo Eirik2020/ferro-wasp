@@ -1,0 +1,997 @@
+{
+  "schema_version": 5,
+  "run_id": "20261106T172055Z__64-methods__host__01",
+  "recorded_at_utc": "2026-11-06T17:20:55Z",
+  "board": null,
+  "revision": "27348ef740463677f8127aa0d8b89048c28b7a35",
+  "working_tree": "clean",
+  "modules": {
+    "crates/ferrowasp-crsf/src/lib.rs": [],
+    "crates/ferrowasp-input/src/rc_receiver.rs": [
+      "crates/ferrowasp-crsf/src/lib.rs",
+      "extern:heapless@0.9.2",
+      "extern:sbus-rs@0.1.3"
+    ],
+    "drivers/crsf-proto/src/channels.rs": [],
+    "drivers/crsf-proto/src/cross_check.rs": [
+      "drivers/crsf-proto/src/channels.rs",
+      "drivers/crsf-proto/src/frame.rs",
+      "drivers/crsf-proto/src/parser.rs",
+      "drivers/crsf-proto/src/telemetry.rs",
+      "extern:uf-crsf@0.7.0"
+    ],
+    "drivers/crsf-proto/src/frame.rs": [],
+    "drivers/crsf-proto/src/io.rs": [
+      "drivers/crsf-proto/src/channels.rs",
+      "drivers/crsf-proto/src/frame.rs",
+      "drivers/crsf-proto/src/parser.rs",
+      "drivers/crsf-proto/src/telemetry.rs",
+      "extern:embedded-io@0.7.1"
+    ],
+    "drivers/crsf-proto/src/parser.rs": [
+      "drivers/crsf-proto/src/channels.rs",
+      "drivers/crsf-proto/src/frame.rs"
+    ],
+    "drivers/crsf-proto/src/telemetry.rs": [
+      "drivers/crsf-proto/src/frame.rs",
+      "drivers/crsf-proto/src/parser.rs"
+    ]
+  },
+  "identities": {
+    "crates/ferrowasp-crsf/src/lib.rs": "5d5a0d94a1704582e1d798db8c33092c26decf860d87a02470c643ebb0628a44",
+    "crates/ferrowasp-input/src/rc_receiver.rs": "a49a9940fb613166dc61b241c810a1258573815c53ace4f347b94872befe98fe",
+    "drivers/crsf-proto/src/channels.rs": "42101b3b277d8bb51a9edfb4790a53d484a3f84c1dca704d82d5e9d05eef27b5",
+    "drivers/crsf-proto/src/cross_check.rs": "8087ecbe65005d6390e36bbac35185da9cd609c299ee57c7952e9a2fbc0d9199",
+    "drivers/crsf-proto/src/frame.rs": "8516c483013405720f1d05014e3a8e9f753fc362b765472ca44f5120317bcac0",
+    "drivers/crsf-proto/src/io.rs": "1f4b2a1e2144605623472b344b4fe301222e5d5dfad5f4eca4178a34992c5a6d",
+    "drivers/crsf-proto/src/parser.rs": "5db7f2e9f3672b318b63e36018801d7cc10415e2cb0c47c2399fbbaa5a471f24",
+    "drivers/crsf-proto/src/telemetry.rs": "65474451a0295c4046948afaf78e956ff14ad3ab253ef071013a7537401a63e9",
+    "extern:embedded-io@0.7.1": "0.7.1",
+    "extern:heapless@0.9.2": "0.9.2",
+    "extern:sbus-rs@0.1.3": "0.1.3",
+    "extern:uf-crsf@0.7.0": "0.7.0"
+  },
+  "results": [
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::channels::tests::bits_above_eleven_are_dropped_when_packing"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "1ed8d421ee236560af22506e781d7ac3f568f89d376de437aad12fdb6e34a556",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::channels::tests::channels_round_trip_through_the_packed_payload"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "e026177b5ceae3001536f6878dcdecc653bc846edf23fa33dd6d118f5cac9092",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::channels::tests::first_channel_occupies_the_low_bits_of_the_first_byte"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "3d2dc937e0e3075106cc497fe95541e703a367c2c9fe114370377e3613fba9f3",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::channels::tests::the_last_channel_occupies_the_high_bits_of_the_last_byte"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "04a62f75f9bce5a669068cd96ee0969137b98c816cdad22ed6c4fe030da4a6c5",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::cross_check::a_stream_of_valid_frames_gives_the_same_frames_to_both_parsers"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "64f93602f94b54664fdf750d552f62712a6a5a108f200637d9e01f5ac8d958af",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::attitude_frames_parse_in_uf_crsf_with_the_same_angles"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "7fd26cfc2cdb724494d9b71c16a8596a0bfdcabc9cabba8840129608116225ba",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::baro_altitude_frames_parse_in_uf_crsf_and_pack_as_it_packs"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "d7cca7e703a5bad15aca4c2a9993f467efe5eda5e4cc7901099a42da8c37b980",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::battery_frames_parse_in_uf_crsf_with_the_same_fields"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "19bcc1df5e3fd2efdc6e267d6d125a397977300b1f2b6ec3d075808a8d35858b",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::flight_mode_frames_parse_in_uf_crsf_with_the_same_name"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "178c04d2234fcf0b22e7632ad895d6f38f18e186287c04bf29e59ae6f6bcd30c",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-001",
+      "method": {
+        "test": "crsf_proto::cross_check::frames_at_other_addresses_are_ignored_here_and_accepted_by_uf_crsf"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "25a95763f63a487bf6a8078f31a0db947391067eeef3e72ff922be4bce9c3550",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::gps_frames_parse_in_uf_crsf_with_the_same_fields"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "cd7f62d67c3362cba672f4c441ab42b4b094a67c3d2f0e4d335388d7ca464cfb",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::cross_check::link_statistics_from_uf_crsf_decode_to_the_same_fields"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "3f072c9c31a3145909b6bf16e6ef0e8894df0287f3c9e95ff44a472056607ac1",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::cross_check::rc_channel_frames_from_uf_crsf_decode_to_the_same_channels"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "8ccd8123c263d5df7ce986618c391d054f6abe7fce4b010fa8501c96362294e5",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::cross_check::telemetry_frames_from_uf_crsf_pass_through_as_other"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "facc96700fa7512a814f35caf31ce75f1b279fa40d0920431fc3b905e454fd63",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::vario_frames_parse_in_uf_crsf_with_the_same_speed"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c388d4975dc9b1ab7dd45bbbc242c4cced969bffa99df39474a90b789563c513",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::cross_check::vertical_speed_packing_agrees_with_uf_crsf"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "4059bc4d9fd80e6342634411d1a6a8b05c8e3893f1a7979eb567a76ff6e3c7bf",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/cross_check.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::frame::tests::a_sealed_frame_is_well_formed_and_any_corruption_is_not"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "03cb88dd3c5d7071ff35b46c428b48f3b72e7cee0b4cc78f6113e01a4b4df4fe",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-010",
+      "method": {
+        "test": "crsf_proto::frame::tests::a_sealed_frame_is_well_formed_and_any_corruption_is_not"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "5e4ba4a162faa6ac1a12e0e290705b07604381e2ea43edcc4a33b415535c4082",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-002",
+      "method": {
+        "test": "crsf_proto::frame::tests::crc_matches_the_dvb_s2_check_value"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c39255836299bba811f7814823f06f09ee5d932d1cd28c799f8c295cccc9f7ab",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-001",
+      "method": {
+        "test": "crsf_proto::frame::tests::only_the_three_link_addresses_start_a_frame"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "a52a73f4699ae099939d94a62e04524052f9a5f4a2d648e5292a954219ffa02c",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-010",
+      "method": {
+        "test": "crsf_proto::io::tests::a_malformed_frame_never_reaches_the_sink"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "8cf0a76a36019518144ac01234a84099fff818c9ed5ce2e2adbcd619f2f9a88f",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-008",
+      "method": {
+        "test": "crsf_proto::io::tests::a_source_claiming_more_than_the_buffer_is_held_to_the_buffer"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "2dff24c535301278397ecf9a511bcd75804bdf06f69bedbd2aa08c225593a101",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-009",
+      "method": {
+        "test": "crsf_proto::io::tests::a_source_error_or_end_of_stream_is_an_error_and_resets_the_parser"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "46f0c837d1d4575236f12b902a1d08ff31298ecdb3c24200805367472078eb9e",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-010",
+      "method": {
+        "test": "crsf_proto::io::tests::a_stalled_or_failing_sink_is_an_error_not_a_sent_frame"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c2e3e9941bef51eb8c086a0741b41c717c94639e51c01a3f1faccc4532576e04",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-008",
+      "method": {
+        "test": "crsf_proto::io::tests::bytes_after_a_frame_stay_buffered_for_the_next_call"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "4ada54ef279ce9cd0b763f0fd29fc2d4b5e10244720510006f07df352597d513",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-008",
+      "method": {
+        "test": "crsf_proto::io::tests::poll_ready_does_not_read_a_source_that_is_not_ready"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "dd97f3b7cd3e0b909f83188e87eafcb00e3bf56256a837e7101b542f42fff034",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-008",
+      "method": {
+        "test": "crsf_proto::io::tests::the_reader_delivers_every_frame_in_order_whatever_the_chunking"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "265122ce7a5267e8b608ac405ea9778e58f902596506fe06dcf9a5f70294bb7b",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-008",
+      "method": {
+        "test": "crsf_proto::io::tests::the_reader_reports_corrupt_frames_as_the_parser_does"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "653f227eda60610d9d126f967c0f95a6b30778030d4bf975f917b8f689159d42",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-010",
+      "method": {
+        "test": "crsf_proto::io::tests::the_writer_sends_a_frame_whole_across_short_writes"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "bc082ef61026f7b085c25f45cfe67a7a05e056b6628bee6889c2dcc92ce4025d",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/io.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-003",
+      "method": {
+        "test": "crsf_proto::parser::tests::a_reset_drops_the_partial_frame"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "47663f6580540a806988f45e21a2b815f7f7ec71d340330e1212c1c8be8dd4be",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-002",
+      "method": {
+        "test": "crsf_proto::parser::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "4c70d6fd2302fbea68fa4fbbff459b3b3c53d928c2bfd26b04207886ad4f1232",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-003",
+      "method": {
+        "test": "crsf_proto::parser::tests::corrupt_crc_is_reported_and_the_next_frame_still_decodes"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "36133dc10b0680d54f94327e6435242392246dd5e19dcb02a7884ee49efb87b9",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-002",
+      "method": {
+        "test": "crsf_proto::parser::tests::impossible_length_is_rejected_without_buffering"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "a5e24abdd076d56125b25657ae7f9af0a02f0055af4d2f9da933087b04810420",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-003",
+      "method": {
+        "test": "crsf_proto::parser::tests::impossible_length_is_rejected_without_buffering"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "cddd5c11524f427e9e97091b07a64e7a766eeac96662e220ced850f7aae2bce3",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::parser::tests::link_statistics_expose_every_field"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "109a87216941c8ff30c11b761a875115ed351de2dd14ab061fa3446a64e82e65",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-004",
+      "method": {
+        "test": "crsf_proto::parser::tests::noise_dense_with_address_bytes_never_panics"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "898fed5d220117861aa20b8ef268b325e9dc4551fc1c3c136572bad9459c4bb3",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-001",
+      "method": {
+        "test": "crsf_proto::parser::tests::only_the_three_link_addresses_start_a_frame"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "5577d0e7c31425968254465e4d102db7b7c880938c2c96085a74a8faf430876b",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-004",
+      "method": {
+        "test": "crsf_proto::parser::tests::random_bytes_never_panic_and_the_state_stays_bounded"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "02bd523c70590488670623fd4ed2a5c1d8df4a98cdb62af213de3637e315c3ce",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-001",
+      "method": {
+        "test": "crsf_proto::parser::tests::rc_frame_decodes_after_leading_noise"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "50a73ef99f389b81bde31a1989aee08ce9eaf8283ff9d39db1e456e3e7e43aa4",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-002",
+      "method": {
+        "test": "crsf_proto::parser::tests::short_rc_payload_is_an_error_not_a_frame"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "f538396bdb4c2845418f8a8925ec74f92bb19720dd93dd0a94f32e31e6ad6616",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-004",
+      "method": {
+        "test": "crsf_proto::parser::tests::the_longest_and_shortest_frames_decode"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "5a4a3da47ebea1c83b5101cf3d5171034ec08435fff6ee2885e231b15610883f",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-005",
+      "method": {
+        "test": "crsf_proto::parser::tests::unknown_types_pass_through_as_other"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "6174518b2a2f11f57d1df11c155d8321397e7373ec9f3edd22834340ae8d51b8",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-003",
+      "method": {
+        "test": "crsf_proto::parser::tests::valid_frames_after_noise_and_a_reset_always_decode"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "0ed36c81524418e6b185a3e3966552d3e6ac37aa79479f07ed035b715e0aa8ad",
+      "exercised": [
+        "drivers/crsf-proto/src/channels.rs",
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::a_battery_frame_is_big_endian_and_round_trips_through_the_parser"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "52ef407fcb24338550aa861de05819a73a61c7c79f66389d708ef87ee5c5431a",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::a_flight_mode_frame_is_its_name_and_a_terminator"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "24af924d57b6ea24f5cf237d6dfcf021dfc8c16052ee98022cae3f29e543ea13",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::a_flight_mode_name_a_frame_cannot_carry_is_refused"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c15e24a1a3916173f48bc86313ead950b9d442e5afb93a443548285bbda0159b",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::a_gps_frame_carries_each_field_big_endian_in_its_unit"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "da3a8a3921182b8baee5d8624da299821e8ec9dfca9e039ec1ade5add365e572",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::a_vario_frame_carries_signed_centimetres_per_second"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "95c68df9c792e0e2ddbf9ae78a74ed0c949607a4221fafb6d6e7ad3174d09ed7",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::a_vario_frame_carries_signed_centimetres_per_second"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "58536919ecad0c1adb6cbe7b28502f0ba71deb3183b1ce233d13954452049e3e",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::attitude_angles_wrap_into_one_turn"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "76683db7fd0c0ef201c7260778b7fae18b5cb41f09e5ff3bfe00edc42d066af3",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::attitude_angles_wrap_into_one_turn"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "134866f8716c31d69147c42114ac7396282bea82868c9414c9639e83faf2d9dc",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::baro_altitude_packs_decimetres_then_metres_and_saturates"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "d316ba0db9af00c63f2ec785e52bc9aa714629091c59544855f108adf138b7a2",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::baro_altitude_packs_decimetres_then_metres_and_saturates"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "36316ecdc3e5989a7d866291317c98be1d4fd54e6bb2e78bcdcb4339c8b2f24d",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::battery_fields_saturate_at_what_crsf_carries"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "29307b40d9c6e1534408609ecc0d7643808ea4842a2394d0b05577d713dac55c",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::gps_fields_saturate_or_wrap_and_a_position_past_a_pole_is_refused"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "4b456c044c5d620ae72d20e565e43eae849c14a32431c05dba38a811c68e68a4",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-006",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::vertical_speed_packing_matches_the_specification_formula_everywhere"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "28087592821152e32d034fbcec30fa35cf0a0e2afb9c187b584e1b3398c56249",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "CRSF-007",
+      "method": {
+        "test": "crsf_proto::telemetry::tests::vertical_speed_packing_matches_the_specification_formula_everywhere"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "b6a9eb7ebc1b91a042b228b082efae21582c23c860b64e7245e75953d6b1fc5c",
+      "exercised": [
+        "drivers/crsf-proto/src/frame.rs",
+        "drivers/crsf-proto/src/parser.rs",
+        "drivers/crsf-proto/src/telemetry.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

@@ -45,6 +45,12 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   quiet window. Cycling only ESC power while USB powers the board is untested
   with it; until a props-off run shows the first arm fails closed and a later
   arm qualifies on fresh eRPM from every ESC, do not do it.
+- **CRSF through `crsf-proto`.** Switch RC input in `ferrowasp-input` and the RC
+  telemetry in `ferrowasp-osd` to the `crsf-proto` driver, with the adapter to
+  FerroWasp's RC protocol trait in `ferrowasp-input`; move the `ferrowasp-crsf`
+  entries of INPUT-005, INPUT-011 and INPUT-016 onto CRSF-001 to CRSF-010; then
+  retire `crates/ferrowasp-crsf`. The switch re-owes the RC path's evidence on
+  hardware, Foxeer first.
 - **I-term.** Foxeer stays P-only (2.5/2.5/2.0) and I stays zero until target
   evidence shows every disarm, RC loss, aborted arm, and rearm starts with clean
   controller state. Roll P 3.0 stays withdrawn after a 10-13 Hz oscillation.
@@ -69,15 +75,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 ## Requirements and Architecture
 
 - **Safety-critical architecture** (sections 8 to 19 of the
-  [requirements design](requirements/design.md)): critical and
-  non-critical crates, SPSC links, the border roles in `ferrowasp-border` (the
-  coordinator, the observer and its ledger, the Health Manager) with their
-  heartbeats, the fault classes and the hard-fault latch, the Betaflight-style
-  failsafe, the independent watchdog, Actuator Output's arming confirmation
-  and arm-state cross-check, the OSD and telemetry warning on a stalled
-  ledger, message contracts, the gyro-synced loop, `ferrowasp-config` and the
-  new crate map. The redesign comes before the next hardware gate run, one
-  change at a time against `main`, one mechanism at a time:
+  [requirements design](requirements/design.md)): the redesign comes before
+  the next hardware gate run, one change at a time against `main`, one
+  mechanism at a time:
   1. the radio's stalled-topic warning over CRSF telemetry (the OSD has its
      own);
   2. the remaining SPSC links and typed flags; the loop-rate
@@ -97,15 +97,11 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
   a configuration's scheduling table leaves task names out, and the other
   analysis-level checks can run.
 - **Tracing per source file** ([section 20](requirements/tracing.md#20-tracing-per-source-file)):
-  library catalogs, named by crate (`ferrohal-stm32:UART-012`): requirements
-  and evidence shipped with a crate's version, a project's requirements mapped
-  onto them and inheriting that evidence; recording a dependency's reviewed diff
-  analysis; `reqtool report` for
-  each board's configuration in release CI, reporting and not blocking;
-  tests for TRACE-001 to TRACE-007 named as their methods; reviewing the
-  requirements that existed only for mandatory linking; and folding crates
-  that exist only to keep evidence apart into modules where that reads
-  better.
+  `reqtool report` for each board's configuration in release CI, reporting and
+  not blocking; tests for TRACE-001 to TRACE-007 named as their methods;
+  reviewing the requirements that existed only for mandatory linking; and
+  folding crates that exist only to keep evidence apart into modules where
+  that reads better.
 - **`reqtool`**: the analysis-level checks, and running tests behind opt-in
   features, so they can be evidence.
 
@@ -142,22 +138,34 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 - **Foxeer status LEDs.** The shared `status_leds` task (green heartbeat, blue
   armed) runs on the TBS Lucid H7 only; wire it on Foxeer to bring the golden
   app level.
-- **Chip-family backends.** Board assembly has left both backends, and DShot
-  lanes are named by each board. What remains is added when a board needs it:
-  F4 DShot covers only the advanced timers (TIM1, TIM8) and the Foxeer's four
-  DMA routes; the H7 covers TIM2-TIM5. A board whose motors use both of the
-  H743's 32-bit timers (the Lucid V3: TIM2 and TIM5) needs the microsecond
-  timebase moved to a 16-bit timer with wrap extension.
+- **Sensor classes on Foxeer**, Foxeer first:
+  - wire the barometer into Foxeer: a low-priority task owning the
+    `ferrowasp-sensors` DPS310 adapter over an `embedded-hal-bus` I2C device
+    whose bus bounds each transfer, publishing through the observer;
+  - move the IMU drivers onto `ferrowasp-sensor-traits::imu::Imu`: each
+    driver implements it and calls `check_refuses_malformed_bursts` in its
+    tests, and the SPI1 parser decodes through it.
+- **Chip-family DShot coverage.** What remains is added when a board needs
+  it: FerroHAL's F4 backend covers only the advanced timers (TIM1, TIM8) and
+  the Foxeer's four DMA routes; the H7 covers TIM2-TIM5. A board whose motors
+  use both of the H743's 32-bit timers (the Lucid V3: TIM2 and TIM5) needs
+  the microsecond timebase moved to a 16-bit timer with wrap extension.
 - **Board data from existing targets.** Generate a board's data crate from its
   ArduPilot or Betaflight target definition.
-- **Host-testable flash manager.** The configuration save
-  (`ferrowasp-storage::config_save`), the log erase, sync-ledger mark and
-  scratch test (`storage_maintenance`), the flight log writer (`log_writer`),
-  the storage command line (`storage_commands`) and the MSPv2 handler
-  (`rpc_commands`) are host-tested; the task keeps startup recovery and the
-  calibration and reboot glue as wiring. None of these has run on hardware
-  since its extraction except the configuration save, maintenance and scratch
-  test; a `bench_blackbox` run needs the BOOT button to leave.
+- **Host-testable flash manager.** The configuration save, the log erase,
+  sync-ledger mark and scratch test, the flight log writer, the storage
+  command line and the MSPv2 handler are host-tested; the task keeps startup
+  recovery and the calibration and reboot glue as wiring. Only the
+  configuration save, maintenance and scratch test have run on hardware
+  since; a `bench_blackbox` run needs the BOOT button to leave.
+- **GNSS (u-blox M10).** Nothing uses the `ubx` driver yet. In order:
+  - the adapter in `ferrowasp-sensors`, onto
+    `ferrowasp-sensor-traits::gnss::Gnss`: `NAV-PVT` into FerroWasp's types,
+    freshness and timeouts;
+  - wire GPS into Foxeer first (W5): port, acknowledged configuration, task;
+  - decide whether the GNSS path is safety-critical, with requirements,
+    before a flight mode depends on it;
+  - check on a receiver what the crate marks single-source or inferred.
 - **SITL**, deferred by the user: a `ferrowasp-sitl` crate, with RTIC task bodies
   moved into pure step functions.
 - **TBS Lucid H7.** The first bench board died and has been replaced, and an ESC

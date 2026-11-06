@@ -1,0 +1,23 @@
+[package]
+name = "ubx"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "A bounded, allocation-free u-blox UBX deframer, M10 configuration encoder and NAV-PVT decoder for no_std flight controllers"
+keywords = ["ublox", "ubx", "gnss", "no-std", "embedded"]
+categories = ["embedded", "no-std", "parser-implementations"]
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+embedded-hal = { workspace = true }
+embedded-io = { workspace = true }
+
+# Oracles only: frames they build must parse identically here, and frames
+# built here must parse in them. Neither enters a firmware image.
+[dev-dependencies]
+kinavis-ubx = "=0.1.1"
+# Protocol 27 is the oldest of its layouts that decodes CFG-VALGET responses.
+ublox = { version = "=0.10.0", default-features = false, features = ["std", "ubx_proto27"] }

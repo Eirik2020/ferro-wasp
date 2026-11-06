@@ -1,0 +1,90 @@
+schema_version: 2
+requirements:
+  - id: BUZZER-001
+    title: One update drives at most one pattern's worth of boundaries
+    statement: >-
+      One update call shall process at most every segment boundary of the
+      playing pattern and then end with the pin low, so its work is
+      bounded.
+    rationale: >-
+      The driver runs beside real-time tasks, so a caller that arrives
+      late must not make it spin: it catches up once, bounded by the
+      pattern's whole length, and leaves the pin low.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::a_late_update_processes_every_boundary_and_is_bounded
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::a_pattern_drives_the_pin_at_its_boundaries
+
+  - id: BUZZER-002
+    title: A pattern plays its segments in order, its repeats through
+    statement: >-
+      The buzzer shall drive the pin high for each segment's on-time and
+      low for its off-time, through the segments in order, the given
+      number of times through.
+    rationale: >-
+      A pattern the caller can name is the whole point of a beeper: its
+      boundaries are what it signals, in order and as often as asked.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::a_pattern_drives_the_pin_at_its_boundaries
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::two_repeats_play_through_twice
+
+  - id: BUZZER-003
+    title: Stop and a new pattern each end the playing one
+    statement: >-
+      The buzzer shall end a playing pattern with the pin low on stop,
+      where a pattern played over a playing one replaces it from its
+      first segment.
+    rationale: >-
+      An old pattern must never sound past its dismissal, and the pin must
+      never be left driven when nothing is playing.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::stop_ends_the_pattern_with_the_pin_low
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::a_new_pattern_replaces_the_playing_one
+
+  - id: BUZZER-004
+    title: A degenerate pattern or failed pin is reported, never a panic
+    statement: >-
+      The buzzer shall end immediately and leave the pin low for a pattern
+      of no segments or no repeats, skip a zero-length half-segment
+      without waiting for it, and report a failed pin as an error.
+    rationale: >-
+      A degenerate pattern or a dead pin is a condition to report, not a
+      reason to hang or crash the caller.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::an_empty_pattern_ends_immediately_and_drives_nothing
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::a_zero_length_segment_is_skipped_without_waiting
+        - level: unit
+          environment: host
+          method:
+            test: buzzer::tests::a_failing_pin_fails_the_call

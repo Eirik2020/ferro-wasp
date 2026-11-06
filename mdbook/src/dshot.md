@@ -142,19 +142,19 @@ inverted, idling high, and its checksum is inverted, which is what tells
 the ESC to answer. About 30 us after a frame ends the ESC sends a 21-bit
 GCR reply at 750 kbit/s.
 
-Once all four lanes have transmitted, each lane's DMA stream is rebuilt to
-read its pin's GPIO input register, paced by its own timer channel at three
-samples per reply bit. The timer outputs are released for the window, about
-71 us, so each pad's pull-up holds its line, and then driven again, parked
-high. The DShot service decodes the samples before the next frame: GCR
-symbols, checksum, and the eRPM period. A missing or bad reply is counted,
+The reply window, about 71 us, releases the timer outputs so each pad's
+pull-up holds its line, and then drives them again, parked high; the reply is
+read from each lane's pin at three samples per reply bit, and the DShot
+service decodes the samples before the next frame: GCR symbols, checksum, and
+the eRPM period. On the Foxeer that includes motor 4 on TIM1's complementary
+output, which a timer cannot input-capture. A missing or bad reply is counted,
 never a fault; a lane that cannot turn around faults the bank as any DMA
 fault does. Decoding is host-tested in `ferrowasp-output::dshot_reply`.
 
-On the Foxeer every lane samples its pin, including motor 4 on TIM1's
-complementary output, which a timer cannot input-capture. Bidirectional mode
-is fixed when the bank is built, and for now only the props-off bench feature
-below selects it. The TBS Lucid H7 sends plain DShot only.
+Bidirectional mode is fixed when the bank is built, and no image selects it:
+the props-off bench image that did was retired with the old backend, and the
+mode returns when DShot replies run on the waveform generator's input side.
+The TBS Lucid H7 sends plain DShot only.
 
 On the STM32F405, receiving reads GPIO through DMA2 while SPI1, ADC1 and
 USART1 may use DMA2 too, and the window is not ordered against the IMU

@@ -13,9 +13,9 @@ python tools/run_tests.py
 ```
 
 It runs the root workspace, the tests a workspace-wide run compiles out through
-feature unification, the bring-up app's board manifest, FerroConfigurator, its
-GUI (TypeScript types, page build, and the Tauri shell), the Python tools, and
-the RTIC app builder. `--list` shows each suite's commands; naming suites, as
+feature unification, FerroConfigurator, its GUI (TypeScript types, page build,
+and the Tauri shell), the pinned reqtool (every requirement file and the FAQ),
+the Python tools, and the RTIC app builder. `--list` shows each suite's commands; naming suites, as
 in `python tools/run_tests.py rust python`, runs only those. The summary counts
 the tests each suite ran, so a suite that quietly runs fewer reads as a smaller
 number, not as a pass.

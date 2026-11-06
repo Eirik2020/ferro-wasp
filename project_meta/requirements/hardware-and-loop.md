@@ -85,7 +85,7 @@ eRPM qualifies arming):
 | transport | a separate wire | the DShot wire, reversed after each frame |
 | rate | round robin, one motor per request over the telemetry bit | every frame, every motor |
 | delivers | eRPM, temperature, voltage, current, consumption | eRPM; temperature, voltage, current only with EDT, interleaved |
-| decoder | `drivers::blheli_telemetry` | `waveform::dshot_reply` (GCR) |
+| decoder | `ferrowasp-blheli-telemetry` | `ferrowasp-output::dshot_reply` (GCR) |
 
 No trait: bidirectional decode must live in the DShot output group, which
 owns the pin and turns it around; BLHeli decode lives in an ESC-telemetry
@@ -131,7 +131,7 @@ discontinuity.
 
 - The RC protocol is chosen at boot (`rc_protocol`), unlike the board-fixed
   IMU, so the group needs runtime dispatch without allocation. The existing
-  `RcReceiver` enum (`ferrowasp-flight/src/rc_receiver.rs`:
+  `RcReceiver` enum (`ferrowasp-input/src/rc_receiver.rs`:
   `Sbus(sbus_rs::StreamingParser)` or `Crsf { parser, .. }`, producing a
   common `RcFrame` of 16 channels and the failsafe and frame-lost flags) is
   that dispatch type.

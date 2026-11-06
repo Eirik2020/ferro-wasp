@@ -1,0 +1,92 @@
+{
+  "schema_version": 5,
+  "run_id": "20261106T154616Z__5-methods__host__01",
+  "recorded_at_utc": "2026-11-06T15:46:16Z",
+  "board": null,
+  "revision": "f171a77fec661f259076fde8982427a061cc77f6",
+  "working_tree": "dirty",
+  "modules": {
+    "drivers/spl06/src/lib.rs": [
+      "extern:embedded-hal@1.0.0"
+    ]
+  },
+  "identities": {
+    "drivers/spl06/src/lib.rs": "be761ac32302e580bf2dae1177baa724ed3bed62a08a87a1a23e13f1153bdd97",
+    "extern:embedded-hal@1.0.0": "1.0.0"
+  },
+  "results": [
+    {
+      "requirement": "SPL06-002",
+      "method": {
+        "test": "spl06::tests::coefficient_page_decodes_as_the_part_packs_it"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "5be37adce03896914104e99114889803c648602dbc53eb86e4f854d1f45c6f28",
+      "exercised": [
+        "drivers/spl06/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SPL06-003",
+      "method": {
+        "test": "spl06::tests::compensation_matches_both_reference_implementations"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "bc70cc90312d251f2f54a4726b234951437c4cfa05289fe5be4f3399c43e0cbf",
+      "exercised": [
+        "drivers/spl06/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SPL06-005",
+      "method": {
+        "test": "spl06::tests::configuration_writes_the_part_registers"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c59f8516fa4512cb0dcfe8e3ccd44d11aa94da101d144ea9bf14cb15297e9906",
+      "exercised": [
+        "drivers/spl06/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SPL06-001",
+      "method": {
+        "test": "spl06::tests::every_call_makes_one_bounded_transfer"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "2487b63a011c899be87cb2e3ff1e493b6d6ec9b31aba6086c3d5c2d0846a09d8",
+      "exercised": [
+        "drivers/spl06/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SPL06-004",
+      "method": {
+        "test": "spl06::tests::raw_values_read_back_signed_24_bit"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "4100e216caf426afed8b32bdd0572bd55ab9d0c16a949262c4875d30c8b8c722",
+      "exercised": [
+        "drivers/spl06/src/lib.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

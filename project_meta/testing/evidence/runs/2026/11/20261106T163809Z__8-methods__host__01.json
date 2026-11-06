@@ -1,0 +1,341 @@
+{
+  "schema_version": 5,
+  "run_id": "20261106T163809Z__8-methods__host__01",
+  "recorded_at_utc": "2026-11-06T16:38:09Z",
+  "board": null,
+  "revision": "c34f7af8c41b836fe47f9316d352fd5e0d703a55",
+  "working_tree": "dirty",
+  "modules": {
+    "crates/ferrowasp-io-contracts/src/link.rs": [
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "extern:heapless@0.9.2"
+    ],
+    "crates/ferrowasp-io-contracts/src/time.rs": [],
+    "crates/ferrowasp-sensor-traits/src/class.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs"
+    ],
+    "crates/ferrowasp-sensor-traits/src/compass.rs": [
+      "crates/ferrowasp-sensor-traits/src/class.rs"
+    ],
+    "crates/ferrowasp-sensors/src/dps310.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-sensor-traits/src/barometer.rs",
+      "crates/ferrowasp-sensor-traits/src/class.rs",
+      "crates/ferrowasp-sensors/src/dps310/tests.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+      "crates/ferrowasp-sensors/src/spl06.rs",
+      "crates/ferrowasp-sensors/src/spl06/tests.rs",
+      "extern:embedded-hal@1.0.0",
+      "extern:uf-dps3xx@0.2.0"
+    ],
+    "crates/ferrowasp-sensors/src/dps310/tests.rs": [
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-sensor-traits/src/barometer.rs",
+      "crates/ferrowasp-sensor-traits/src/class.rs",
+      "crates/ferrowasp-sensors/src/dps310.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+      "crates/ferrowasp-sensors/src/spl06.rs",
+      "crates/ferrowasp-sensors/src/spl06/tests.rs",
+      "extern:embedded-hal@1.0.0",
+      "extern:uf-dps3xx@0.2.0"
+    ],
+    "crates/ferrowasp-sensors/src/qmc5883l.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-sensor-traits/src/class.rs",
+      "crates/ferrowasp-sensor-traits/src/compass.rs",
+      "crates/ferrowasp-sensors/src/dps310.rs",
+      "crates/ferrowasp-sensors/src/dps310/tests.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+      "crates/ferrowasp-sensors/src/spl06.rs",
+      "crates/ferrowasp-sensors/src/spl06/tests.rs",
+      "drivers/qmc5883l/src/lib.rs",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-sensors/src/qmc5883l/tests.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-sensor-traits/src/class.rs",
+      "crates/ferrowasp-sensor-traits/src/compass.rs",
+      "crates/ferrowasp-sensors/src/dps310.rs",
+      "crates/ferrowasp-sensors/src/dps310/tests.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l.rs",
+      "crates/ferrowasp-sensors/src/spl06.rs",
+      "crates/ferrowasp-sensors/src/spl06/tests.rs",
+      "drivers/qmc5883l/src/lib.rs",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-sensors/src/spl06.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-sensor-traits/src/barometer.rs",
+      "crates/ferrowasp-sensor-traits/src/class.rs",
+      "crates/ferrowasp-sensors/src/dps310.rs",
+      "crates/ferrowasp-sensors/src/dps310/tests.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+      "crates/ferrowasp-sensors/src/spl06/tests.rs",
+      "drivers/spl06/src/lib.rs",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "crates/ferrowasp-sensors/src/spl06/tests.rs": [
+      "crates/ferrowasp-io-contracts/src/link.rs",
+      "crates/ferrowasp-io-contracts/src/time.rs",
+      "crates/ferrowasp-sensor-traits/src/barometer.rs",
+      "crates/ferrowasp-sensor-traits/src/class.rs",
+      "crates/ferrowasp-sensors/src/dps310.rs",
+      "crates/ferrowasp-sensors/src/dps310/tests.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l.rs",
+      "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+      "crates/ferrowasp-sensors/src/spl06.rs",
+      "drivers/spl06/src/lib.rs",
+      "extern:embedded-hal@1.0.0"
+    ],
+    "drivers/qmc5883l/src/lib.rs": [
+      "extern:embedded-hal@1.0.0"
+    ]
+  },
+  "identities": {
+    "crates/ferrowasp-io-contracts/src/link.rs": "f6d2abac89898ee2188440593866c562541bcd8d1553857087a6538005aa6cf1",
+    "crates/ferrowasp-io-contracts/src/time.rs": "4972f57cc15fdf9d5267a1c6f85d4c8823ce862b8f471865a8dbfb8f1480b0ff",
+    "crates/ferrowasp-sensor-traits/src/barometer.rs": "2bbc9e0814a3f535476ec46654cb488c7751ea4accf6bb863f1e51fc44c3e92e",
+    "crates/ferrowasp-sensor-traits/src/class.rs": "78cc482999b8a0042888fee5f8f75dfa1fe1de90369457c47e71be078e8879f9",
+    "crates/ferrowasp-sensor-traits/src/compass.rs": "e6df27e3059cef5c3e1a299ab77a667d121004bd1834e43867f46d9fe5f41b12",
+    "crates/ferrowasp-sensors/src/dps310.rs": "975da3499be463b1f91088f7247543ab2d4c76e8bff8c74082df69103bad8e89",
+    "crates/ferrowasp-sensors/src/dps310/tests.rs": "86af1fccfbbf1e5e41544cf1858dc59e69d370f94fbdbe4cd6a4a837ab4072bc",
+    "crates/ferrowasp-sensors/src/qmc5883l.rs": "5159515970d00e161f6b6e1dc63d41246606fa2919b6bbd6b4176b4d0fb3bf4f",
+    "crates/ferrowasp-sensors/src/qmc5883l/tests.rs": "8ee756af3b777d887abaa17aef08b184cdc9bd03961ce35e017ec53698d5c40c",
+    "crates/ferrowasp-sensors/src/spl06.rs": "1fbc89f99cb74d1a8954228023a169ec0ee7c53f44f6dae1b1847c7ca51d50f2",
+    "crates/ferrowasp-sensors/src/spl06/tests.rs": "f9c0f7cc40833958687be91f4aceac8f104b556489b10f7828ec9fcf6009da6c",
+    "drivers/qmc5883l/src/lib.rs": "dc48c200247316f2debb127dadda8199582b03a52efb25297e3078611ed99d27",
+    "drivers/spl06/src/lib.rs": "be761ac32302e580bf2dae1177baa724ed3bed62a08a87a1a23e13f1153bdd97",
+    "extern:embedded-hal@1.0.0": "1.0.0",
+    "extern:heapless@0.9.2": "0.9.2",
+    "extern:uf-dps3xx@0.2.0": "0.2.0"
+  },
+  "results": [
+    {
+      "requirement": "SENSOR-025",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "4163372eebc039b3d20b22ac038553d43109d4718179769bd995d0ebc414a290",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-021",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::a_good_field_is_scaled_stamped_and_numbered"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "fc69477070fe933ca56002026b99fc61d46caaa1bc79ad4faca6c2cc41bd15f4",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-022",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::a_read_that_overruns_its_budget_is_a_timeout_and_its_result_discarded"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "1647af205ccf64200da51de0351960d37a8589b3e8b80151ada50cb37800eab9",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-023",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::a_wrong_id_or_unreset_part_is_refused"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "2ddd6aaa9b6acfab80c5e290844b9ebf8eb208161cff7661c5b8905ef46c036a",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-024",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::an_overflowed_or_out_of_range_field_is_refused"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "c16070d84c6720ed3caa03fb5cc4f3aa06bfe96d21a01b4683bc2e33db331629",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-021",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::bring_up_resets_identifies_and_configures_the_part"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "a614e65bd3208bc0d5233cde2a73f4c23560b4d39f106ee13bc0006631103691",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-022",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::bring_up_that_never_completes_times_out"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "d3850e9c373d1013c04d466bdc2c11b173234c52b81870f4bb3e07bdb885f068",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-021",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::without_a_new_field_a_read_is_never_the_previous_sample"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "07e2d0800b719f5a7d03ba59f27d6d743b604962ccf982ebb97802dd2eba0889",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "SENSOR-022",
+      "method": {
+        "test": "ferrowasp_sensors::qmc5883l::tests::without_a_new_field_a_read_is_never_the_previous_sample"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "cb91926db63912a567ea1110d2432539afbbbf4700aed5749ebcc8e7ab3800b3",
+      "exercised": [
+        "crates/ferrowasp-io-contracts/src/link.rs",
+        "crates/ferrowasp-io-contracts/src/time.rs",
+        "crates/ferrowasp-sensor-traits/src/class.rs",
+        "crates/ferrowasp-sensor-traits/src/compass.rs",
+        "crates/ferrowasp-sensors/src/dps310.rs",
+        "crates/ferrowasp-sensors/src/dps310/tests.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l.rs",
+        "crates/ferrowasp-sensors/src/qmc5883l/tests.rs",
+        "crates/ferrowasp-sensors/src/spl06.rs",
+        "crates/ferrowasp-sensors/src/spl06/tests.rs",
+        "drivers/qmc5883l/src/lib.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

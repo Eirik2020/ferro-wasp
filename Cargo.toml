@@ -25,6 +25,8 @@ members = [
     "crates/ferrowasp-output",
     "crates/ferrowasp-protocol",
     "crates/ferrowasp-safety",
+    "crates/ferrowasp-sensor-traits",
+    "crates/ferrowasp-sensors",
     "crates/ferrowasp-serial",
     "crates/ferrowasp-stm32",
     "crates/ferrowasp-stm32-critical",
@@ -33,6 +35,11 @@ members = [
     "crates/ferrowasp-ferrohal-critical",
     "crates/ferrowasp-storage",
     "crates/rc-pwm",
+    "drivers/buzzer",
+    "drivers/crsf-proto",
+    "drivers/qmc5883l",
+    "drivers/spl06",
+    "drivers/ubx",
 ]
 exclude = [
     "firmware/foxeer-f405-v2",

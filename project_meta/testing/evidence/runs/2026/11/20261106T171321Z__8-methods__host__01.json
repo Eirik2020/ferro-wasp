@@ -1,0 +1,50 @@
+{
+  "schema_version": 5,
+  "run_id": "20261106T171321Z__8-methods__host__01",
+  "recorded_at_utc": "2026-11-06T17:13:21Z",
+  "board": null,
+  "revision": "b494e406f43beaf70483b5b189694c67ad86a8de",
+  "working_tree": "dirty",
+  "modules": {
+    "drivers/buzzer/src/lib.rs": [
+      "extern:embedded-hal@1.0.0"
+    ]
+  },
+  "identities": {
+    "drivers/buzzer/src/lib.rs": "6b684da3f1954a7670a8c39da7b1a3556be4e87b78cf98b3e3746fd52aa0a6b2",
+    "extern:embedded-hal@1.0.0": "1.0.0"
+  },
+  "results": [
+    {
+      "requirement": "BUZZER-003",
+      "method": {
+        "test": "buzzer::tests::a_new_pattern_replaces_the_playing_one"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "9fe54f06dc33ad8fbaf2338e176c1528246cf88eea1d777f030ff8993efaef33",
+      "exercised": [
+        "drivers/buzzer/src/lib.rs"
+      ],
+      "result": "pass"
+    },
+    {
+      "requirement": "BUZZER-003",
+      "method": {
+        "test": "buzzer::tests::stop_ends_the_pattern_with_the_pin_low"
+      },
+      "level": "unit",
+      "environment": "host",
+      "hazard": "none",
+      "claim": "2702d3f619e404ee6424a0aa5fc6b5bf543c7e559d7c2a3a0115611f42fea8dc",
+      "exercised": [
+        "drivers/buzzer/src/lib.rs"
+      ],
+      "result": "pass"
+    }
+  ],
+  "note": null,
+  "supersedes": [],
+  "ruling": null
+}

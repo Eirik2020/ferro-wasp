@@ -5,9 +5,9 @@ to its chapter.
 
 ## 20. Tracing per source file
 
-`reqtool` implements this section, except library catalogs, the scheduling
-table without task names, and running the maturity report in release CI;
-[remaining work](../remaining-work.md) carries those. It replaces section 4's
+`reqtool` implements this section, except the scheduling table without task
+names and running the maturity report in release CI; [remaining
+work](../remaining-work.md) carries those. It replaces section 4's
 crate-closure fingerprints, the crate as the boundary of evidence,
 `allocated_to`, mandatory linking of `pub` items, and the verification modes
 of [section 5](evidence.md#5-verification-modes-and-timing).
