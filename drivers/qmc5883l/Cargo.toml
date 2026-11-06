@@ -1,0 +1,15 @@
+[package]
+name = "qmc5883l"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "A bounded, allocation-free QMC5883L compass driver for no_std flight controllers over embedded-hal I2C"
+keywords = ["qmc5883l", "compass", "magnetometer", "i2c", "no-std"]
+categories = ["embedded", "no-std", "hardware-support"]
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+embedded-hal = { workspace = true }

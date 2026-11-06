@@ -880,6 +880,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "qmc5883l"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
