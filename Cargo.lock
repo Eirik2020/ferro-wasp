@@ -586,10 +586,12 @@ name = "ferrowasp-sensors"
 version = "0.1.0"
 dependencies = [
  "embedded-hal 1.0.0",
+ "embedded-io 0.7.1",
  "ferrowasp-io-contracts",
  "ferrowasp-sensor-traits",
  "qmc5883l",
  "spl06",
+ "ubx",
  "uf-dps3xx",
 ]
 

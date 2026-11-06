@@ -508,5 +508,74 @@ requirements:
           method:
             test: ferrowasp_sensors::qmc5883l::tests::a_bus_error_at_any_step_is_a_bus_error_and_never_a_sample
 
+  - id: SENSOR-026
+    title: The UBX adapter carries only what the receiver vouches for
+    statement: >-
+      The UBX adapter shall turn a NAV-PVT into a solution only through the
+      GNSS class's own fix and value checks, so a solution the receiver did
+      not mark valid carries no position, and a value outside its physical
+      range is refused.
+    rationale: >-
+      The receiver's own flags are the first witness of a solution's
+      validity and the class's constructors are the second; neither is
+      bypassed, so an unusable fix has no position to misread.
+    derived_from: [SENSOR-006, SENSOR-007]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::a_good_solution_is_converted_stamped_and_numbered
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::a_solution_without_a_valid_fix_carries_no_position
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::a_solution_outside_the_physical_range_is_refused
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::frames_of_other_messages_are_skipped_until_a_solution
+
+  - id: SENSOR-027
+    title: The UBX adapter bounds reads and solution gaps
+    statement: >-
+      The UBX adapter shall report a timeout when a read outlasts its
+      budget or when no new solution arrives within its stall limit.
+    rationale: >-
+      A burst larger than one read's budget is abandoned rather than
+      chased, and a receiver that stops sending must be told apart from
+      the normal gap between solutions.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::a_read_that_overruns_its_budget_is_a_timeout_and_its_result_discarded
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::without_a_new_solution_a_read_is_never_the_previous_sample
+
+  - id: SENSOR-028
+    title: A UBX port failure is a bus error
+    statement: >-
+      The UBX adapter shall report a failed port at any step as a bus
+      error and return no solution from that call.
+    rationale: >-
+      A port fault must be told apart from a missing or implausible
+      solution, and must never let a partly read or earlier one through.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: ferrowasp_sensors::ubx::tests::a_port_error_is_a_bus_error_and_never_a_sample
+
+
 
 
