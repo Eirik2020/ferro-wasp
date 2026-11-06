@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
+            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -180,6 +180,18 @@ artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
 <h3 id="added"><a class="header" href="#added">Added</a></h3>
 <ul>
+<li><code>crsf-proto</code> under <code>drivers/</code>: the CRSF protocol as a standalone crate over
+<code>embedded-io</code> — the bounded streaming frame parser, channels, and the
+battery, GPS, vario, attitude and flight-mode telemetry encoders. No image
+links it yet; RC input decodes CRSF through <code>ferrowasp-crsf</code> as before.</li>
+<li>The sensor classes in <code>ferrowasp-sensor-traits</code> — one trait each for the
+IMU, barometer and GNSS, with shared samples, envelopes and freshness — and
+the DPS310 barometer adapter in <code>ferrowasp-sensors</code> over <code>uf-dps3xx</code>.</li>
+<li><code>ubx</code> under <code>drivers/</code>: the u-blox M10 protocol — framing that
+resynchronises inside dropped frames, acknowledged configuration through
+<code>CFG-VALSET</code> and <code>CFG-VALGET</code> including the SBAS enable key, <code>NAV-PVT</code>
+decoding that exposes a position only for a valid 3D fix, and I2C and
+serial transports. No image links it yet.</li>
 <li>Log sync. The firmware lists the flights no host has stored, a host
 acknowledges each one after downloading it, and <code>logs erase-synced</code> erases
 only when every flight is acknowledged. A sync ledger in the flash’s last

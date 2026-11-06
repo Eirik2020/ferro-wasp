@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
+            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -293,7 +293,7 @@ text bytes
 <tr><td>Armed state</td><td><code>ARMED</code> / <code>DISARMED</code></td><td>Safety arm reader</td></tr>
 <tr><td>Stale data</td><td><code>DATA STALE</code>, blinking</td><td>The published state has stopped updating</td></tr>
 <tr><td>Battery voltage</td><td><code>VBAT 16.4</code></td><td>ADC-derived pack voltage from <code>ADC_VBAT</code> on PC0</td></tr>
-<tr><td>Cell voltage</td><td><code>CELL 4.10</code></td><td>Pack voltage divided by the configured battery cell count</td></tr>
+<tr><td>Cell voltage</td><td><code>CELL 4.10</code></td><td>Pack voltage divided by the detected battery cell count</td></tr>
 <tr><td>Current</td><td><code>CUR 12.3A</code></td><td>ADC-derived current sensor voltage from <code>ADC_CURR</code> on PC1 using the Foxeer/Betaflight scale value</td></tr>
 <tr><td>Throttle</td><td><code>THR 0</code></td><td>Internal FerroWasp throttle command, <code>0</code> to <code>2000</code></td></tr>
 </tbody>
@@ -336,7 +336,6 @@ row 8, col 2: WARN ...
 <p>The OSD currently has enough placeholder/live data to prove the UART/MSPv1/display path. Add these sensor readings before treating the overlay as useful flight telemetry:</p>
 <ul>
 <li>Validate battery voltage ADC scaling on hardware. The <code>75k</code> / <code>10k</code> divider means the ADC node sees about <code>1 / 8.5</code> of pack voltage, so firmware multiplies the measured ADC voltage by <code>8.5</code>.</li>
-<li>Move the hard-coded 6S battery cell count into board/profile configuration when configuration support exists.</li>
 <li>Validate current-sense scaling on hardware. The Foxeer Reaper 55A ESC lists Betaflight current scale <code>70</code>; the prototype conversion currently treats the ADC reading as <code>ADC_mV / 70</code> amps after bench observation showed the first pass was 10x high.</li>
 <li>Accumulated mAh from current integration.</li>
 <li>Low-battery warning driven by the safety master, using validated cell voltage thresholds and freshness checks.</li>

@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
+            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -182,8 +182,7 @@ framework. It favors explicit resource ownership, deterministic
 scheduling, bounded interfaces, and a small codebase that can be inspected as
 a whole.</p>
 <p>The Foxeer F405 V2 is the golden flight target. The TBS Lucid H7 carries the
-same feature set on an STM32H743, so far on the bench only, and NUCLEO-F401RE is
-a non-actuating STM32F4 development target. See
+same feature set on an STM32H743, so far on the bench only. See
 <a href="#current-support">Current Support</a> for the board and feature matrix.</p>
 <h2 id="where-to-begin"><a class="header" href="#where-to-begin">Where to Begin</a></h2>
 <ul>
@@ -842,30 +841,29 @@ requires passing checks. Work on a branch and open a pull request; the
 <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. TBS Lucid H7 carries the Foxeer feature set on the
-STM32H743; it has passed bench checks but has never driven motors or flown.
-NUCLEO-F401RE is a non-actuating development target.</p>
+STM32H743; it has passed bench checks but has never driven motors or flown.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Capability</th><th>Foxeer F405 V2</th><th>NUCLEO-F401RE</th></tr>
+<tr><th>Capability</th><th>Foxeer F405 V2</th></tr>
 </thead>
 <tbody>
-<tr><td>Role</td><td>Golden flight target</td><td>Non-actuating bring-up target</td></tr>
-<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
-<tr><td>RC input</td><td>SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config</td><td>None</td></tr>
-<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>None</td></tr>
-<tr><td>Control</td><td>2 kHz rate controller and Quad X mixer</td><td>None</td></tr>
-<tr><td>ESC output</td><td>Four-lane DShot600</td><td>None</td></tr>
-<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
-<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
-<tr><td>USB</td><td>Standard USB CDC</td><td>None</td></tr>
-<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td><td>None</td></tr>
-<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td><td>None</td></tr>
-<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td><td>None</td></tr>
-<tr><td>ADC</td><td>Battery voltage and current inputs</td><td>None</td></tr>
-<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td><td>Build and target smoke checks</td></tr>
+<tr><td>Role</td><td>Golden flight target</td></tr>
+<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td></tr>
+<tr><td>RC input</td><td>SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config</td></tr>
+<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td></tr>
+<tr><td>Control</td><td>2 kHz rate controller and Quad X mixer</td></tr>
+<tr><td>ESC output</td><td>Four-lane DShot600</td></tr>
+<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td></tr>
+<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td></tr>
+<tr><td>USB</td><td>Standard USB CDC</td></tr>
+<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td></tr>
+<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td></tr>
+<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td></tr>
+<tr><td>ADC</td><td>Battery voltage and current inputs</td></tr>
+<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td></tr>
 </tbody>
 </table>
 </div>
@@ -994,7 +992,6 @@ SPI1.</p>
 <tbody>
 <tr><td>Foxeer F405 V2</td><td>Mode-3 probe selects MPU6500 <code>0x70</code>, ICM42688-P <code>0x47</code> or MPU-6000 <code>0x68</code></td></tr>
 <tr><td>TBS Lucid H7 (bench only)</td><td>Same probe on SPI1 only; the second IMU on SPI4 is not used</td></tr>
-<tr><td>NUCLEO-F401RE</td><td>No attached IMU in the board contract</td></tr>
 </tbody>
 </table>
 </div>
@@ -1478,18 +1475,18 @@ which gives per-motor eRPM at the frame rate. The command waveform is
 inverted, idling high, and its checksum is inverted, which is what tells
 the ESC to answer. About 30 us after a frame ends the ESC sends a 21-bit
 GCR reply at 750 kbit/s.</p>
-<p>Once all four lanes have transmitted, each lane’s DMA stream is rebuilt to
-read its pin’s GPIO input register, paced by its own timer channel at three
-samples per reply bit. The timer outputs are released for the window, about
-71 us, so each pad’s pull-up holds its line, and then driven again, parked
-high. The DShot service decodes the samples before the next frame: GCR
-symbols, checksum, and the eRPM period. A missing or bad reply is counted,
+<p>The reply window, about 71 us, releases the timer outputs so each pad’s
+pull-up holds its line, and then drives them again, parked high; the reply is
+read from each lane’s pin at three samples per reply bit, and the DShot
+service decodes the samples before the next frame: GCR symbols, checksum, and
+the eRPM period. On the Foxeer that includes motor 4 on TIM1’s complementary
+output, which a timer cannot input-capture. A missing or bad reply is counted,
 never a fault; a lane that cannot turn around faults the bank as any DMA
 fault does. Decoding is host-tested in <code>ferrowasp-output::dshot_reply</code>.</p>
-<p>On the Foxeer every lane samples its pin, including motor 4 on TIM1’s
-complementary output, which a timer cannot input-capture. Bidirectional mode
-is fixed when the bank is built, and for now only the props-off bench feature
-below selects it. The TBS Lucid H7 sends plain DShot only.</p>
+<p>Bidirectional mode is fixed when the bank is built, and no image selects it:
+the props-off bench image that did was retired with the old backend, and the
+mode returns when DShot replies run on the waveform generator’s input side.
+The TBS Lucid H7 sends plain DShot only.</p>
 <p>On the STM32F405, receiving reads GPIO through DMA2 while SPI1, ADC1 and
 USART1 may use DMA2 too, and the window is not ordered against the IMU
 transfer. Erratum 2.2.19 (ES0182 Rev 19; 2.1.10 in older sheets), DMA2 data
@@ -1573,8 +1570,8 @@ can delay flight work.</p>
 <p>FerroWasp uses bounded interfaces for pilot input, display, telemetry,
 configuration, and debugging.</p>
 <ul>
-<li><a href="#communication-protocols">Communication Protocols</a> introduces SBUS and
-MSP.</li>
+<li><a href="#communication-protocols">Communication Protocols</a> introduces SBUS, CRSF
+and MSP.</li>
 <li><a href="#uart">UART</a> and <a href="#uart-rx">UART RX</a> describe the portable serial
 contracts and STM32F4 transport.</li>
 <li><a href="#ferroconfigurator">FerroConfigurator</a> describes the standard
@@ -1701,7 +1698,8 @@ in <a href="#esc-telemetry">DShot</a>.</p>
 <h1 id="sbus"><a class="header" href="#sbus">SBUS</a></h1>
 <p>SBUS is the active FerroWasp RC input path. Foxeer binds it to UART2 by
 default, receiving on PA3; PA2 is the corresponding TX pin but is not required
-for receive-only SBUS. The TBS Lucid H7 binds it to UART6 by default.</p>
+for receive-only SBUS. The TBS Lucid H7 binds it to UART1 by default, the
+digital VTX connector’s SBUS pin, inverted in the UART.</p>
 <h2 id="uart-configuration"><a class="header" href="#uart-configuration">UART Configuration</a></h2>
 <ul>
 <li>Baud rate: 100 000 bps</li>
@@ -1868,7 +1866,7 @@ text bytes
 <tr><td>Armed state</td><td><code>ARMED</code> / <code>DISARMED</code></td><td>Safety arm reader</td></tr>
 <tr><td>Stale data</td><td><code>DATA STALE</code>, blinking</td><td>The published state has stopped updating</td></tr>
 <tr><td>Battery voltage</td><td><code>VBAT 16.4</code></td><td>ADC-derived pack voltage from <code>ADC_VBAT</code> on PC0</td></tr>
-<tr><td>Cell voltage</td><td><code>CELL 4.10</code></td><td>Pack voltage divided by the configured battery cell count</td></tr>
+<tr><td>Cell voltage</td><td><code>CELL 4.10</code></td><td>Pack voltage divided by the detected battery cell count</td></tr>
 <tr><td>Current</td><td><code>CUR 12.3A</code></td><td>ADC-derived current sensor voltage from <code>ADC_CURR</code> on PC1 using the Foxeer/Betaflight scale value</td></tr>
 <tr><td>Throttle</td><td><code>THR 0</code></td><td>Internal FerroWasp throttle command, <code>0</code> to <code>2000</code></td></tr>
 </tbody>
@@ -1911,7 +1909,6 @@ row 8, col 2: WARN ...
 <p>The OSD currently has enough placeholder/live data to prove the UART/MSPv1/display path. Add these sensor readings before treating the overlay as useful flight telemetry:</p>
 <ul>
 <li>Validate battery voltage ADC scaling on hardware. The <code>75k</code> / <code>10k</code> divider means the ADC node sees about <code>1 / 8.5</code> of pack voltage, so firmware multiplies the measured ADC voltage by <code>8.5</code>.</li>
-<li>Move the hard-coded 6S battery cell count into board/profile configuration when configuration support exists.</li>
 <li>Validate current-sense scaling on hardware. The Foxeer Reaper 55A ESC lists Betaflight current scale <code>70</code>; the prototype conversion currently treats the ADC reading as <code>ADC_mV / 70</code> amps after bench observation showed the first pass was 10x high.</li>
 <li>Accumulated mAh from current integration.</li>
 <li>Low-battery warning driven by the safety master, using validated cell voltage thresholds and freshness checks.</li>
@@ -2266,6 +2263,8 @@ chips’ features in one build. Firmware is composed with
 <tr><td><code>ferrowasp-control</code></td><td>General control maths, safety-critical: the PID, the gyro low-pass and notch, reference frames and rotations, the attitude estimator, gyro-bias and accelerometer-level calibration</td></tr>
 <tr><td><code>ferrowasp-crsf</code>, <code>ferrowasp-blheli-telemetry</code></td><td>The CRSF receiver protocol and BLHeli ESC telemetry decoding, safety-critical, one crate each</td></tr>
 <tr><td><code>ferrowasp-icm42688p</code>, <code>ferrowasp-mpu6000</code>, <code>ferrowasp-mpu6500</code></td><td>The IMU drivers over <code>embedded-hal</code>, safety-critical, one crate per sensor</td></tr>
+<tr><td><code>ferrowasp-sensor-traits</code></td><td>The sensor classes, safety-critical: one trait each for the IMU, the barometer and GNSS, their samples in integer units, the stamped envelope and sequence every class shares, the common error kinds, and the freshness judgement</td></tr>
+<tr><td><code>ferrowasp-sensors</code></td><td>Adapters from self-contained <code>embedded-hal</code> sensor drivers to the sensor classes, owning their units, plausibility limits, deadlines and freshness: the DPS310 barometer, over <code>uf-dps3xx</code></td></tr>
 <tr><td><code>ferrowasp-storage</code></td><td>The SPI NOR flash driver and the <code>NorStorage</code> trait, the storage layout and boot slot selection, and configuration saving</td></tr>
 <tr><td><code>ferrowasp-blackbox</code></td><td>The onboard flight log: records from the observer’s stream of logged control ticks, page assembly, the log writer, the sync ledger, and log maintenance</td></tr>
 <tr><td><code>ferrowasp-cli</code></td><td>The command line USB and the UART carry: its commands and link, the storage, log-sync and debug commands, and the opt-in MSPv2 configurator RPC</td></tr>
@@ -2290,9 +2289,9 @@ chips’ features in one build. Firmware is composed with
 </tbody>
 </table>
 </div>
-<p>Only the STM32F4 and STM32H7 backend crates name a chip HAL, and only their
-safety-critical halves hold unsafe code: their DMA endpoint declarations and
-their jump into the chip’s ROM bootloader.</p>
+<p>Only the <code>ferrowasp-ferrohal</code> pair names a HAL: FerroHAL, one backend pair
+covering both chips. FerroWasp holds no unsafe code of its own — a chip’s
+unsafe belongs to FerroHAL, and CI fails the audit on any appearing here.</p>
 <p>Task definitions live in their subsystem’s crate, behind a target-only
 <code>tasks</code> feature, so the logic beside them stays host-tested: the safety
 master in <code>ferrowasp-safety</code>, the control loop in <code>ferrowasp-flight-control</code>,
@@ -2302,6 +2301,24 @@ and RC telemetry in <code>ferrowasp-osd</code>, and the ADC and status LEDs in
 <code>ferrowasp-stm32</code>.</p>
 <p>A safety-critical crate declares <code>[package.metadata.ferrowasp] critical = true</code> and never depends on a crate that does not; its external dependencies
 are pinned to one version.</p>
+<h2 id="device-drivers"><a class="header" href="#device-drivers">Device Drivers</a></h2>
+<p>Under <code>drivers/</code>, also members of the root workspace and host-tested there.
+A device driver is a standalone crate over <code>embedded-hal</code>, <code>embedded-io</code> or
+<code>embedded-hal-bus</code> that depends on no FerroWasp crate and carries no project
+name, so it is usable outside FerroWasp. FerroWasp implements its own traits
+for a driver in the subsystem crate that uses it. The same safety-critical
+marking and pinning rules apply.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Crate</th><th>Owns</th></tr>
+</thead>
+<tbody>
+<tr><td><code>crsf-proto</code></td><td>The CRSF receiver protocol, safety-critical: the bounded streaming frame parser, the battery, GPS, vario, barometric altitude, attitude and flight-mode telemetry encoders, and a frame reader and telemetry writer over <code>embedded-io</code>. No firmware image links it; RC input decodes CRSF through <code>ferrowasp-crsf</code></td></tr>
+<tr><td><code>ubx</code></td><td>The u-blox UBX protocol for an M10 GNSS receiver: framing with resynchronisation inside dropped frames, configuration through <code>CFG-VALSET</code> and <code>CFG-VALGET</code> with their acknowledgements, <code>NAV-PVT</code> decoding that exposes a position only for a valid 3D fix, and transports over <code>embedded-io</code> serial and <code>embedded-hal</code> I2C</td></tr>
+</tbody>
+</table>
+</div>
 <h2 id="firmware-applications"><a class="header" href="#firmware-applications">Firmware Applications</a></h2>
 <p>Under <code>firmware/</code>, each its own Cargo workspace:</p>
 <div class="table-wrapper">
@@ -2397,9 +2414,9 @@ CI runs:</p>
 <pre><code class="language-text">python tools/run_tests.py
 </code></pre>
 <p>It runs the root workspace, the tests a workspace-wide run compiles out through
-feature unification, the bring-up app’s board manifest, FerroConfigurator, its
-GUI (TypeScript types, page build, and the Tauri shell), the Python tools, and
-the RTIC app builder. <code>--list</code> shows each suite’s commands; naming suites, as
+feature unification, FerroConfigurator, its GUI (TypeScript types, page build,
+and the Tauri shell), the pinned reqtool (every requirement file and the FAQ),
+the Python tools, and the RTIC app builder. <code>--list</code> shows each suite’s commands; naming suites, as
 in <code>python tools/run_tests.py rust python</code>, runs only those. The summary counts
 the tests each suite ran, so a suite that quietly runs fewer reads as a smaller
 number, not as a pass.</p>
@@ -2708,6 +2725,18 @@ artifact is stable, airworthy, or production-ready.</p>
 <h2 id="unreleased"><a class="header" href="#unreleased">Unreleased</a></h2>
 <h3 id="added"><a class="header" href="#added">Added</a></h3>
 <ul>
+<li><code>crsf-proto</code> under <code>drivers/</code>: the CRSF protocol as a standalone crate over
+<code>embedded-io</code> — the bounded streaming frame parser, channels, and the
+battery, GPS, vario, attitude and flight-mode telemetry encoders. No image
+links it yet; RC input decodes CRSF through <code>ferrowasp-crsf</code> as before.</li>
+<li>The sensor classes in <code>ferrowasp-sensor-traits</code> — one trait each for the
+IMU, barometer and GNSS, with shared samples, envelopes and freshness — and
+the DPS310 barometer adapter in <code>ferrowasp-sensors</code> over <code>uf-dps3xx</code>.</li>
+<li><code>ubx</code> under <code>drivers/</code>: the u-blox M10 protocol — framing that
+resynchronises inside dropped frames, acknowledged configuration through
+<code>CFG-VALSET</code> and <code>CFG-VALGET</code> including the SBAS enable key, <code>NAV-PVT</code>
+decoding that exposes a position only for a valid 3D fix, and I2C and
+serial transports. No image links it yet.</li>
 <li>Log sync. The firmware lists the flights no host has stored, a host
 acknowledges each one after downloading it, and <code>logs erase-synced</code> erases
 only when every flight is acknowledged. A sync ledger in the flash’s last

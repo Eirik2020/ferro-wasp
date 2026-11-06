@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
+            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -183,9 +183,9 @@ CI runs:</p>
 <pre><code class="language-text">python tools/run_tests.py
 </code></pre>
 <p>It runs the root workspace, the tests a workspace-wide run compiles out through
-feature unification, the bring-up app’s board manifest, FerroConfigurator, its
-GUI (TypeScript types, page build, and the Tauri shell), the Python tools, and
-the RTIC app builder. <code>--list</code> shows each suite’s commands; naming suites, as
+feature unification, FerroConfigurator, its GUI (TypeScript types, page build,
+and the Tauri shell), the pinned reqtool (every requirement file and the FAQ),
+the Python tools, and the RTIC app builder. <code>--list</code> shows each suite’s commands; naming suites, as
 in <code>python tools/run_tests.py rust python</code>, runs only those. The summary counts
 the tests each suite ran, so a suite that quietly runs fewer reads as a smaller
 number, not as a pass.</p>

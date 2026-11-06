@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8801cbbf.js";
+            window.path_to_searchindex_js = "searchindex-aa5adc04.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-5109988b.js"></script>
@@ -177,30 +177,29 @@
                         <h1 id="current-support"><a class="header" href="#current-support">Current Support</a></h1>
 <p>Foxeer F405 V2 is the golden flight target and the behavioral reference for
 new flight-board work. TBS Lucid H7 carries the Foxeer feature set on the
-STM32H743; it has passed bench checks but has never driven motors or flown.
-NUCLEO-F401RE is a non-actuating development target.</p>
+STM32H743; it has passed bench checks but has never driven motors or flown.</p>
 <p>The matrix records the important supported capabilities without attempting to
 list every peripheral or diagnostic feature.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Capability</th><th>Foxeer F405 V2</th><th>NUCLEO-F401RE</th></tr>
+<tr><th>Capability</th><th>Foxeer F405 V2</th></tr>
 </thead>
 <tbody>
-<tr><td>Role</td><td>Golden flight target</td><td>Non-actuating bring-up target</td></tr>
-<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td><td>STM32F401, RTIC 2</td></tr>
-<tr><td>RC input</td><td>SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config</td><td>None</td></tr>
-<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td><td>None</td></tr>
-<tr><td>Control</td><td>2 kHz rate controller and Quad X mixer</td><td>None</td></tr>
-<tr><td>ESC output</td><td>Four-lane DShot600</td><td>None</td></tr>
-<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td><td>None</td></tr>
-<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td><td>Not applicable</td></tr>
-<tr><td>USB</td><td>Standard USB CDC</td><td>None</td></tr>
-<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td><td>None</td></tr>
-<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td><td>None</td></tr>
-<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td><td>None</td></tr>
-<tr><td>ADC</td><td>Battery voltage and current inputs</td><td>None</td></tr>
-<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td><td>Build and target smoke checks</td></tr>
+<tr><td>Role</td><td>Golden flight target</td></tr>
+<tr><td>MCU / runtime</td><td>STM32F405, RTIC 2</td></tr>
+<tr><td>RC input</td><td>SBUS on UART2 by default, or CRSF with battery telemetry; ports and protocol chosen at boot from saved config</td></tr>
+<tr><td>IMU</td><td>Runtime-selected MPU6500, ICM42688-P or MPU-6000; EXTI data-ready sampling</td></tr>
+<tr><td>Control</td><td>2 kHz rate controller and Quad X mixer</td></tr>
+<tr><td>ESC output</td><td>Four-lane DShot600</td></tr>
+<tr><td>ESC telemetry</td><td>Standard BLHeli legacy UART eRPM path</td></tr>
+<tr><td>Arming qualification</td><td>Fresh idle eRPM from all four motors</td></tr>
+<tr><td>USB</td><td>Standard USB CDC</td></tr>
+<tr><td>Configuration</td><td>Persistent onboard configuration through FerroConfigurator</td></tr>
+<tr><td>Blackbox</td><td>Standard onboard SPI-NOR FWBB logging and download</td></tr>
+<tr><td>Pilot display</td><td>DJI O4 MSP DisplayPort OSD</td></tr>
+<tr><td>ADC</td><td>Battery voltage and current inputs</td></tr>
+<tr><td>Current evidence</td><td>Boot, USB, IMU, RC, DShot, eRPM-qualified arming, blackbox, controlled hops, and confined-area flight</td></tr>
 </tbody>
 </table>
 </div>
