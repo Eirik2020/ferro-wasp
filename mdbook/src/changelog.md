@@ -7,6 +7,13 @@ artifact is stable, airworthy, or production-ready.
 
 ### Added
 
+- The SpeedyBee F405 V5's onboard Bluetooth bridge, as a bench link.
+  `tools/ble_console.py` scans for bridges, frames MSPv2 and talks to a
+  flight controller over one, and FerroConfigurator's `--ble
+  <address-or-name>` and `device ble-scan` speak its line protocol through
+  the same pipe. The bridge authenticates nobody - no pairing, no PIN - so
+  the disarmed-only, read-back-verified rules travel with the link, and a
+  build for such a board chooses what its wireless surface may command.
 - `crsf-proto` under `drivers/`: the CRSF protocol as a standalone crate over
   `embedded-io` — the bounded streaming frame parser, channels, and the
   battery, GPS, vario, attitude and flight-mode telemetry encoders. No image

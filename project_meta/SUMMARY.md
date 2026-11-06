@@ -22,4 +22,5 @@
   - [Fault Handling and the Border Roles](requirements/fault-handling.md)
   - [Tracing per Source File](requirements/tracing.md)
 - [Repository Tooling](tooling.md)
+- [SpeedyBee F405 V5 Bluetooth Bridge](speedybee_f405v5_bluetooth.md)
 - [Development Container Internals](dev-environment.md)

@@ -392,6 +392,13 @@
       "max_bytes": 6144
     },
     {
+      "path": "project_meta/speedybee_f405v5_bluetooth.md",
+      "role": "hardware-interface-reference",
+      "lifecycle": "live",
+      "context": "targeted",
+      "max_bytes": 12288
+    },
+    {
       "path": "project_meta/requirements/design.md",
       "role": "requirements-design",
       "lifecycle": "durable",

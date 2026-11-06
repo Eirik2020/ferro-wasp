@@ -162,6 +162,14 @@ stale unnoticed.
 
 See: HW-ROUTE-001
 
+### Why not flash over the SpeedyBee Bluetooth bridge?
+
+The STM32 ROM bootloader is reachable through the bridge, but a Bluetooth
+round trip per 256-byte write would stretch a full image to many minutes, so
+the cable stays the flashing path and the bridge stays a configuration link.
+
+See: [the SpeedyBee Bluetooth bridge](speedybee_f405v5_bluetooth.md#board-support-implications)
+
 ## Crates and tasks
 
 ### Why not give each subsystem crate its chip family's backend?

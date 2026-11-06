@@ -200,6 +200,26 @@ impl<T: LineTransport> FerroClient<T> {
         self.transport
     }
 
+    /// The same client over a type-erased transport, so a front-end can hold
+    /// one client type across transports chosen at run time - USB today, a
+    /// Bluetooth bridge where a board has one - without going generic
+    /// everywhere.
+    pub fn into_boxed(self) -> FerroClient<Box<dyn LineTransport>>
+    where
+        T: 'static,
+    {
+        let Self {
+            transport,
+            timeout,
+            last_status,
+        } = self;
+        FerroClient {
+            transport: Box::new(transport),
+            timeout,
+            last_status,
+        }
+    }
+
     /// Clears whatever another program left half-sent in the controller's
     /// command buffer, so the first real command is not refused.
     ///

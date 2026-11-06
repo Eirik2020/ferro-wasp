@@ -135,6 +135,9 @@ must carry is owned by [the logging format](LOGGING_FORMAT.md).
 
 ## Boards and Platform
 
+- **SpeedyBee F405 V5.** The Bluetooth bridge is documented and the bench
+  link works (`tools/ble_console.py`, FerroConfigurator's `--ble`), but no
+  board support exists, and the GUI still offers USB only.
 - **Foxeer status LEDs.** The shared `status_leds` task (green heartbeat, blue
   armed) runs on the TBS Lucid H7 only; wire it on Foxeer to bring the golden
   app level.

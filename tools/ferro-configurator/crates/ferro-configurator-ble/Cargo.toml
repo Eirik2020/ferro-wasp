@@ -1,0 +1,16 @@
+[package]
+name = "ferro-configurator-ble"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Bluetooth Low Energy transports for FerroConfigurator"
+
+[dependencies]
+btleplug.workspace = true
+ferro-configurator-core = { path = "../ferro-configurator-core" }
+futures.workspace = true
+serde.workspace = true
+tokio.workspace = true
+uuid.workspace = true
