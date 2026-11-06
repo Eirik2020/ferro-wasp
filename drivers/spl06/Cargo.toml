@@ -1,0 +1,15 @@
+[package]
+name = "spl06"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "A bounded, allocation-free SPL06-007 barometer driver for no_std flight controllers over embedded-hal I2C"
+keywords = ["spl06", "barometer", "i2c", "no-std", "embedded"]
+categories = ["embedded", "no-std", "hardware-support"]
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+embedded-hal = { workspace = true }

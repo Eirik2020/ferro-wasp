@@ -1,0 +1,87 @@
+schema_version: 2
+requirements:
+  - id: SPL06-001
+    title: Every SPL06 call is one bounded transfer
+    statement: >-
+      Each of the SPL06 driver's calls shall make at most one write and one
+      read on the bus, reading at most the 18-byte calibration page.
+    rationale: >-
+      The driver runs in a low-priority task beside real-time ones, so its
+      bus work must be bounded and predictable whatever the caller asks.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: spl06::tests::every_call_makes_one_bounded_transfer
+
+  - id: SPL06-002
+    title: The calibration page decodes as the part packs it
+    statement: >-
+      The driver shall decode the calibration page as the part packs it:
+      c0 and c1 12-bit, c00 and c10 20-bit, the rest 16-bit, all two's
+      complement, most significant byte first.
+    rationale: >-
+      A coefficient read at the wrong width or sign scales every
+      measurement the part ever gives, so the packing is checked field by
+      field against the page layout both reference implementations read.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: spl06::tests::coefficient_page_decodes_as_the_part_packs_it
+
+  - id: SPL06-003
+    title: Compensation follows the part's formulas
+    statement: >-
+      Compensation shall follow the part's formulas: temperature as c0/2
+      plus the scaled raw temperature times c1, and pressure as c00 plus
+      the scaled pressure's cubic terms plus the scaled temperature's
+      cross terms.
+    rationale: >-
+      ArduPilot and iNav carry the same formulas; an f64 evaluation of
+      them is the oracle here, so a wrong scale factor or term cannot pass
+      as compensated.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: spl06::tests::compensation_matches_both_reference_implementations
+
+  - id: SPL06-004
+    title: A raw value reads back as 24-bit two's complement
+    statement: >-
+      A data read shall widen the part's 24-bit two's-complement value,
+      most significant byte first, to a signed integer.
+    rationale: >-
+      Both references assemble and sign-extend the raw words exactly this
+      way; a lost sign bit turns a falling pressure into a rising one.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: spl06::tests::raw_values_read_back_signed_24_bit
+
+  - id: SPL06-005
+    title: Configuration writes the part's registers
+    statement: >-
+      A configuration shall write both oversampling fields with the values
+      the part defines and the external temperature sensor bit set.
+    rationale: >-
+      Both reference drivers configure the same fields and both set the
+      external sensor bit; a wrong field value changes what the part
+      measures and how it must be compensated.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: spl06::tests::configuration_writes_the_part_registers
