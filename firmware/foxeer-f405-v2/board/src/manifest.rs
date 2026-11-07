@@ -17,6 +17,7 @@ pub struct BoardCapabilities {
     pub sbus_receiver: bool,
     pub uart4_msp_displayport: bool,
     pub battery_current_adc: bool,
+    pub baro_i2c1: bool,
     pub usb_cdc_debug: bool,
     pub dshot_motor_count: u8,
     pub onboard_debug_leds_usable_with_swd: bool,
@@ -30,6 +31,7 @@ pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     sbus_receiver: true,
     uart4_msp_displayport: true,
     battery_current_adc: true,
+    baro_i2c1: true,
     usb_cdc_debug: true,
     dshot_motor_count: 4,
     onboard_debug_leds_usable_with_swd: false,
@@ -42,6 +44,10 @@ pub const SWD_PINS: &[&str] = &["PA13", "PA14"];
 pub const USB_FS_PINS: &[&str] = &["PA11", "PA12"];
 pub const IMU_DATA_READY_PIN: &str = "PC4";
 pub const CONTROL_SCHEDULER_TIMER: &str = "TIM4";
+/// The internal barometer's seven-bit address on I2C1: ArduPilot's
+/// `FoxeerF405v2` hwdef probes `BARO DPS310`, `BARO BMP280` and
+/// `BARO SPL06` there, one part populated per build.
+pub const BARO_I2C_ADDRESS: u8 = 0x76;
 pub const IO_TIMEBASE_TIMER: &str = "TIM2";
 pub const IO_WATCHDOG_TIMER: &str = "TIM6";
 
@@ -157,6 +163,16 @@ pub const PIN_MAP: &[PinAssignment] = &[
         signal: "SPI2_FLASH_MOSI",
         pin: "PC3",
         alternate: Some(5),
+    },
+    PinAssignment {
+        signal: "I2C1_SCL_BARO",
+        pin: "PB8",
+        alternate: Some(4),
+    },
+    PinAssignment {
+        signal: "I2C1_SDA_BARO",
+        pin: "PB9",
+        alternate: Some(4),
     },
 ];
 
@@ -362,6 +378,13 @@ pub const CLAIMS: &[ResourceClaim] = &[
     ResourceClaim::new(ResourceKind::Pin, "PA11", "USB FS D-"),
     ResourceClaim::new(ResourceKind::Pin, "PA12", "USB FS D+"),
     ResourceClaim::new(ResourceKind::Irq, "OTG_FS", "USB CDC service"),
+    ResourceClaim::new(
+        ResourceKind::Peripheral,
+        "I2C1",
+        "Internal barometer bus probe",
+    ),
+    ResourceClaim::new(ResourceKind::Pin, "PB8", "I2C1 SCL barometer"),
+    ResourceClaim::new(ResourceKind::Pin, "PB9", "I2C1 SDA barometer"),
     ResourceClaim::new(ResourceKind::Irq, "CAN1_TX", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "CAN2_TX", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "CAN1_RX0", "RTIC software dispatcher"),
@@ -463,14 +486,29 @@ mod tests {
             BOARD_CAPABILITIES.sbus_receiver,
             BOARD_CAPABILITIES.uart4_msp_displayport,
             BOARD_CAPABILITIES.battery_current_adc,
+            BOARD_CAPABILITIES.baro_i2c1,
             BOARD_CAPABILITIES.usb_cdc_debug,
             BOARD_CAPABILITIES.timer_dma_motor_output,
         ];
         let disabled = [BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd];
 
-        assert_eq!(enabled, [true; 8]);
+        assert_eq!(enabled, [true; 9]);
         assert_eq!(disabled, [false; 1]);
         assert_eq!(BOARD_CAPABILITIES.dshot_motor_count, 4);
+    }
+
+    #[test]
+    fn the_baro_bus_carries_its_board_facts() {
+        assert_eq!(BARO_I2C_ADDRESS, 0x76);
+        assert!(PIN_MAP.iter().any(|assignment| {
+            assignment.signal == "I2C1_SCL_BARO" && assignment.pin == "PB8"
+        }));
+        assert!(PIN_MAP.iter().any(|assignment| {
+            assignment.signal == "I2C1_SDA_BARO" && assignment.pin == "PB9"
+        }));
+        assert!(CLAIMS.iter().any(|claim| {
+            claim.kind == ResourceKind::Peripheral && claim.resource == "I2C1"
+        }));
     }
 
     #[test]
@@ -572,7 +610,7 @@ mod tests {
     fn active_claim_counts_match_the_standard_runtime_contract() {
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 14);
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::TimerChannel), 4);
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 13);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 14);
     }
 
     #[test]

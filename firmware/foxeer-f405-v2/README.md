@@ -343,8 +343,15 @@ Replace the COM port and flight ID with the values observed on the target.
 The standard DShot implementation uses board-declared TIM1/TIM8 timer and DMA
 routes, including the complementary `TIM1_CH3N` output for M4. Motor actuation
 remains safety-owned; only the capped bench selectors are commissioning-gated.
-M5-M8, analog OSD, I2C barometer, buzzer, camera
+M5-M8, analog OSD, buzzer, camera
 control, LED strip, and additional UARTs are not part of this application.
+
+The I2C1 barometer bus on PB8/PB9 is wired: upstream (ArduPilot's
+`FoxeerF405v2` hwdef and iNav's `FOXEERF405V2` target) carries a DPS310,
+BMP280 or SPL06 there at 0x76, one part per build. The app probes the
+board address and, when no barometer answers, keeps probing both SPL06
+strappings while sweeping the bus; this bench unit's bus is silent, so
+the FWDBG1 line carries the no-answer verdict.
 
 ## Build
 
@@ -404,7 +411,7 @@ The board-mandatory USB FS route exposes a CDC ACM device named
 ASCII status line with each roughly two-second firmware heartbeat:
 
 ```text
-FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,988,988,988,988,988,988,988,988,988,988,988,988
+FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,988,988,988,988,988,988,988,988,988,988,988,988 baro=0 baro_addr=0 baro_ready=0 baro_press_pa=0 baro_temp_dc=0 baro_probe=2 baro_scan=0
 ```
 
 The fields report uptime, selected IMU and transport state, raw gyro and IMU

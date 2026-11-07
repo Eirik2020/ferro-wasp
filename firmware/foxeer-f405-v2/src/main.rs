@@ -210,8 +210,11 @@ ferroforge::app! {
         output_status_link: ObserverLink<observed::OutputStatus>,
         esc_status_link: ObserverLink<observed::EscStatus>,
         battery_status_link: ObserverLink<observed::BatteryStatus>,
-        // No barometer on this board; its link stays unused.
         baro_status_link: ObserverLink<observed::BaroStatus>,
+        /// The internal barometer as the board hands it over: the probe
+        /// when the part answers the SPL06 identity, the open I2C1 bus
+        /// when it does not, so the task keeps probing and sweeping.
+        baro: flight_tasks::BaroHandover,
         storage_status_link: ObserverLink<observed::StorageStatus>,
 
         // USB CDC serial
@@ -284,6 +287,19 @@ ferroforge::app! {
         let mut gpioa = dp.GPIOA.split(&mut rcc);
         let mut gpiob = dp.GPIOB.split(&mut rcc);
         let mut gpioc = dp.GPIOC.split(&mut rcc);
+
+        // The internal barometer's I2C1 bus: upstream carries a DPS310, a
+        // BMP280 or an SPL06 at 0x76, one populated per build, and the
+        // shared task measures the SPL06 and reports what the others
+        // answer.
+        let baro = board::init::init_i2c1_baro(
+            board::init::I2c1BaroResources {
+                scl_pin: gpiob.p8.into_alternate::<4>(&mut gpiob.ctrl),
+                sda_pin: gpiob.p9.into_alternate::<4>(&mut gpiob.ctrl),
+                i2c: dp.I2C1,
+            },
+            &mut rcc,
+        );
 
         // 1 kHz scheduler and 1 kHz PID/motor cadence, matching the IMU's ODR.
         // IMU sampling itself is independently triggered by PC4/EXTI4.
@@ -765,6 +781,7 @@ ferroforge::app! {
         flight::coordinator_task::spawn().unwrap();
         flight::usb_keepalive::spawn().unwrap();
         flight::adc1_polling::spawn().ok();
+        flight::baro_polling::spawn().ok();
         uart2_tx_worker::spawn().unwrap();
         uart3_tx_worker::spawn().unwrap();
         uart4_tx_worker::spawn().unwrap();
@@ -957,6 +974,7 @@ ferroforge::app! {
                 esc_status_link,
                 battery_status_link,
                 baro_status_link,
+                baro,
                 storage_status_link,
 
                 // USB CDC serial
@@ -1030,10 +1048,8 @@ ferroforge::app! {
             osd_safety_arm_reader, osd_request_link, osd_tuning,
             // dma_adc1
             adc1_buffer, battery_status_link,
-            // baro_polling: no barometer on this board, so the handover
-            // is absent and the task reports absence without touching a bus.
-            baro: flight_tasks::BaroHandover = flight_tasks::BaroHandover::Absent,
-            baro_status_link,
+            // baro_polling
+            baro, baro_status_link,
             battery_cell_detector: osd::BatteryCellDetector = osd::BatteryCellDetector::new(
                 BATTERY_MAX_CELL_MV,
                 BATTERY_DETECT_CELL_MV,
@@ -1141,8 +1157,6 @@ ferroforge::app! {
         fn dma_adc1;
         #[task(priority = 1)]
         async fn adc1_polling;
-        // No barometer on this board: the probe is `None`, and the task
-        // returns as soon as it runs.
         #[task(priority = 1)]
         async fn baro_polling;
     }
