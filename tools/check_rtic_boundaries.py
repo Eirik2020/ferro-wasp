@@ -241,6 +241,27 @@ FLIGHT_APP_CONTRACTS = {
             "init_spi2_flash(",
         ),
     },
+    # The SpeedyBee F405 V5's port set: UART1 configurator, UART6 SBUS on the
+    # O4 connector's RC line, UART5 ESC telemetry, and SPI3 NOR flash. Same
+    # board-standard features as the Foxeer.
+    "speedybee-f405-v5": {
+        "board_feature": "board-speedybee-f405-v5",
+        "mandatory_features": (
+            "dshot",
+            "pwm_cal",
+            "usb_serial",
+            "esc_telemetry",
+            "flash_storage",
+            "flash_writes",
+            "flash_blackbox",
+        ),
+        "required_calls": (
+            "init_dshot_motor_bank(",
+            "init_usb_cdc_serial(",
+            "init_uart_ports(",
+            "init_spi3_flash(",
+        ),
+    },
     # The Foxeer's feature set on the STM32H743: UART ports bound at boot
     # (by default SBUS on USART1, MSP on USART3, ESC telemetry on UART8), and
     # blackbox storage on the microSD card.

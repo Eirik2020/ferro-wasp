@@ -42,6 +42,7 @@ members = [
 ]
 exclude = [
     "firmware/foxeer-f405-v2",
+    "firmware/speedybee-f405-v5",
     "firmware/tbs-lucid-h7",
     "tools/ferro-configurator",
 ]

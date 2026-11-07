@@ -87,6 +87,10 @@ jobs:
         working-directory: firmware/foxeer-f405-v2
         run: cargo fmt --manifest-path Cargo.toml --check
 
+      - name: Check SpeedyBee F405 V5 formatting
+        working-directory: firmware/speedybee-f405-v5
+        run: cargo fmt --manifest-path Cargo.toml --check
+
       - name: Check TBS Lucid H7 formatting
         working-directory: firmware/tbs-lucid-h7
         run: cargo fmt --manifest-path Cargo.toml --check
@@ -132,6 +136,36 @@ jobs:
         working-directory: firmware/foxeer-f405-v2
         run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
 
+      - name: Check SpeedyBee F405 V5 firmware
+        working-directory: firmware/speedybee-f405-v5
+        run: cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+
+      - name: Lint SpeedyBee F405 V5 firmware
+        working-directory: firmware/speedybee-f405-v5
+        run: cargo clippy --locked --target ${{ env.FIRMWARE_TARGET }} -- -D warnings
+
+      - name: Check SpeedyBee diagnostic features
+        working-directory: firmware/speedybee-f405-v5
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_spi_timeout_recovery"
+
+      - name: Check SpeedyBee config-fault bench image
+        working-directory: firmware/speedybee-f405-v5
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_config_fault"
+
+      - name: Check SpeedyBee equal-motor bench path
+        working-directory: firmware/speedybee-f405-v5
+        run: >
+          cargo check --locked --target ${{ env.FIRMWARE_TARGET }}
+          --features "bench_actuator_validation bench_equal_motors"
+
+      - name: Build SpeedyBee F405 V5 release firmware
+        working-directory: firmware/speedybee-f405-v5
+        run: cargo build --release --locked --target ${{ env.FIRMWARE_TARGET }}
+
       - name: Check embedded workspace for STM32H743
         run: >
           cargo check -p ferrowasp-stm32 -p ferrowasp-stm32-app --locked
@@ -168,6 +202,14 @@ jobs:
         with:
           name: ferrowasp-foxeer-f405-v2-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
           path: firmware/foxeer-f405-v2/target/${{ env.FIRMWARE_TARGET }}/release/FerroWaspFoxeerF405V2
+          if-no-files-found: error
+
+      - name: Upload SpeedyBee F405 V5 firmware ELF
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrowasp-speedybee-f405-v5-${{ github.sha }}-${{ env.FIRMWARE_TARGET }}
+          path: firmware/speedybee-f405-v5/target/${{ env.FIRMWARE_TARGET }}/release/FerroWaspSpeedyBeeF405V5
           if-no-files-found: error
 
   host-tests:
@@ -248,6 +290,7 @@ jobs:
             crates/ferrowasp-stm32/src/lib.rs \
             crates/ferrowasp-stm32-critical/src/lib.rs \
             firmware/foxeer-f405-v2/src/main.rs \
+            firmware/speedybee-f405-v5/src/main.rs \
             firmware/tbs-lucid-h7/src/main.rs \
             firmware/tbs-lucid-h7/src/lib.rs; do
             rg --quiet '^#!\[deny\(unsafe_code\)\]$' "$crate"
