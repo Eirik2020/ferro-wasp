@@ -5,6 +5,7 @@ members = [
     "crates/ferrowasp-control",
     "firmware/foxeer-f405-v2/board",
     "firmware/tbs-lucid-h7/board",
+    "firmware/speedybee-f405-v5/board",
     "crates/ferrowasp-blackbox",
     "crates/ferrowasp-blheli-telemetry",
     "crates/ferrowasp-border",

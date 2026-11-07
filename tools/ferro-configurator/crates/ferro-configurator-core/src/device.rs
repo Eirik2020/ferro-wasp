@@ -16,6 +16,7 @@ pub const FERROWASP_USB_PID: u16 = 0x27dd;
 const KNOWN_BOARDS: &[(&str, &str)] = &[
     ("FW-FOX-F405V2", "Foxeer F405 V2"),
     ("FW-TBS-LUCID-H7", "TBS Lucid H7"),
+    ("FW-SBEE-F405V5", "SpeedyBee F405 V5"),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,6 +140,10 @@ mod tests {
         assert_eq!(
             port(Some("FW-TBS-LUCID-H7")).board_name(),
             Some("TBS Lucid H7")
+        );
+        assert_eq!(
+            port(Some("FW-SBEE-F405V5")).board_name(),
+            Some("SpeedyBee F405 V5")
         );
         assert_eq!(port(Some("FW-SOMETHING-NEW")).board_name(), None);
         assert_eq!(port(None).board_name(), None);
