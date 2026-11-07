@@ -228,7 +228,7 @@ pub fn init_i2c1_baro(
             return backend::tasks::baro::BaroHandover::Absent;
         }
     };
-    match backend::tasks::baro::probe_spl06(spl06::Spl06::new(i2c, spl06::ADDRESS)) {
+    match backend::tasks::baro::probe_spl06(i2c, spl06::ADDRESS) {
         Ok(probe) => backend::tasks::baro::BaroHandover::Probe(probe),
         Err(failed) => {
             defmt::warn!(
@@ -236,7 +236,10 @@ pub fn init_i2c1_baro(
                 failed.stage(),
                 failed.chip_id()
             );
-            backend::tasks::baro::BaroHandover::Open(failed.release())
+            backend::tasks::baro::BaroHandover::Open {
+                bus: failed.release(),
+                kind: backend::tasks::baro::PartKind::Spl06,
+            }
         }
     }
 }

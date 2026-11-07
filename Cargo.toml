@@ -36,6 +36,7 @@ members = [
     "crates/rc-pwm",
     "drivers/buzzer",
     "drivers/crsf-proto",
+    "drivers/dps310",
     "drivers/qmc5883l",
     "drivers/spl06",
     "drivers/ubx",

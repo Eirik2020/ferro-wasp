@@ -411,7 +411,7 @@ The board-mandatory USB FS route exposes a CDC ACM device named
 ASCII status line with each roughly two-second firmware heartbeat:
 
 ```text
-FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,988,988,988,988,988,988,988,988,988,988,988,988 baro=0 baro_addr=0 baro_ready=0 baro_press_pa=0 baro_temp_dc=0 baro_probe=2 baro_scan=0
+FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,988,988,988,988,988,988,988,988,988,988,988,988 baro=0 baro_part=0 baro_addr=0 baro_ready=0 baro_press_pa=0 baro_temp_dc=0 baro_probe=2 baro_scan=0
 ```
 
 The fields report uptime, selected IMU and transport state, raw gyro and IMU

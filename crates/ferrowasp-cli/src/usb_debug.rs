@@ -58,10 +58,15 @@ pub struct StatusSnapshot {
     pub adc_current_mv: u32,
     /// The last accepted receiver frame's channels, in microseconds.
     pub rc_channels_us: [u16; 16],
-    /// The barometer's chip ID, `0x10` for the SPL06-007; 0 when no
-    /// barometer answered, so the probe stage beside it says why.
+    /// The barometer's chip ID, `0x10` for the SPL06-007 and the
+    /// DPS310/DPS368 family alike; 0 when no barometer answered, so
+    /// the probe stage beside it says why.
     pub baro_chip_id: u8,
-    /// The address the barometer was probed at: the SPL06-007 straps to
+    /// Which driver measured the barometer, the `BaroStatus` `PART_`
+    /// codes: the parts answer the same chip ID, so the kind says
+    /// which driver claimed it.
+    pub baro_part: u8,
+    /// The address the barometer was probed at: the parts strap to
     /// 0x76 or 0x77; 0 while no barometer answers.
     pub baro_address: u8,
     /// The barometer's last measurement completed and is fresh beside it.
@@ -121,8 +126,9 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
     }
     write!(
         line,
-        " baro={} baro_addr={} baro_ready={} baro_press_pa={} baro_temp_dc={} baro_probe={} baro_scan={}",
+        " baro={} baro_part={} baro_addr={} baro_ready={} baro_press_pa={} baro_temp_dc={} baro_probe={} baro_scan={}",
         snapshot.baro_chip_id,
+        snapshot.baro_part,
         snapshot.baro_address,
         u8::from(snapshot.baro_ready),
         snapshot.baro_pressure_pa,
@@ -310,6 +316,7 @@ mod tests {
                 1500, 1500, 988, 1500, 2012, 988, 988, 988, 988, 988, 988, 988, 988, 988, 988, 988,
             ],
             baro_chip_id: 0x10,
+            baro_part: 1, // BaroStatus::PART_SPL06
             baro_address: 0x76,
             baro_ready: true,
             baro_pressure_pa: 101_325,
@@ -339,7 +346,7 @@ mod tests {
 
         assert_eq!(
             line.as_str(),
-            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 vbat_stale=0 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988 baro=16 baro_addr=118 baro_ready=1 baro_press_pa=101325 baro_temp_dc=224 baro_probe=1 baro_scan=0\r\n"
+            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 vbat_stale=0 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988 baro=16 baro_part=1 baro_addr=118 baro_ready=1 baro_press_pa=101325 baro_temp_dc=224 baro_probe=1 baro_scan=0\r\n"
         );
         assert!(line.is_ascii());
     }
@@ -382,6 +389,7 @@ mod tests {
             adc_current_mv: u32::MAX,
             rc_channels_us: [u16::MAX; 16],
             baro_chip_id: u8::MAX,
+            baro_part: u8::MAX,
             baro_address: u8::MAX,
             baro_ready: true,
             baro_pressure_pa: u32::MAX,

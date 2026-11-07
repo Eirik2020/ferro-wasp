@@ -386,6 +386,7 @@ mod tests {
         producers.baro.push(
             TimestampMicros(50),
             BaroStatus {
+                part: BaroStatus::PART_SPL06,
                 chip_id: 0x10,
                 address: 0x76,
                 probe: BaroStatus::PROBE_MEASURING,
@@ -414,6 +415,7 @@ mod tests {
                 seq: 1,
                 at: TimestampMicros(50),
                 value: BaroStatus {
+                    part: BaroStatus::PART_SPL06,
                     chip_id: 0x10,
                     address: 0x76,
                     probe: BaroStatus::PROBE_MEASURING,

@@ -34,7 +34,9 @@ on-board microSD-less blackbox path through the SPI3 flash. The SPL06
 barometer on I2C1 PB6/PB7 is wired: its app probes the part at 0x76 and,
 when no barometer answers, keeps probing the part's two strappings while
 sweeping the bus, with the FWDBG1 line carrying `baro` (the chip ID it
-answered with), `baro_addr` (the address it was probed at), `baro_probe`
+answered with), `baro_part` (which driver measured it: 0 none, 1 the
+SPL06-007's, 2 the DPS310 family's), `baro_addr` (the address it was
+probed at), `baro_probe`
 (how far the probe reached: 0 no bus, 1 measuring, 2 nothing at the
 address, 3 the lines misbehaved, 4 a wrong chip ID, 5 coefficients, 6
 oversampling configure) and `baro_scan` (how many addresses the sweep saw

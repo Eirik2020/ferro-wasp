@@ -27,10 +27,11 @@ pub struct BoardCapabilities {
 /// The Foxeer F405 V2 feature set on the Lucid's own peripherals. The
 /// Lucid's second IMU (SPI4), MAX7456, motors 5-8, and extra UARTs are
 /// not used. The internal barometer's I2C2 bus is probed by the shared
-/// barometer task, which reports what answers: the part is a DPS368 or a
-/// BMP390 at 0x76, not the SPL06-007 the task measures with, so the
-/// probe reports its answer instead of measurements until a driver for
-/// it lands.
+/// barometer task with its DPS310-family driver: the part is a DPS368
+/// or a DPS310 at 0x76 - ArduPilot's hwdef runs the DPS310 driver for
+/// both - so the task measures it and names the kind beside the chip ID
+/// it answered with. The BMP390 alternative the hwdef also probes is
+/// not yet driven; its driver would answer the same way.
 pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     spi1_imu: true,
     sd_card_storage: true,
@@ -58,6 +59,12 @@ pub const IO_WATCHDOG_TIMER: &str = "TIM6";
 /// `BARO BMP388 I2C:0:0x76` there, with its note that the footprints take
 /// either part and one is populated per build.
 pub const BARO_I2C_ADDRESS: u8 = 0x76;
+/// The barometer driver the board's probe runs: the DPS310 family,
+/// which ArduPilot's `TBS_LUCID_H7` hwdef carries for the DPS368
+/// footprint ("DPS368 (DPS310 driver)") and the DPS310 alike - the
+/// parts share the interface, and the status line reports the family
+/// as its kind.
+pub const BARO_PART_KIND: &str = "dps310";
 
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 
@@ -530,15 +537,18 @@ mod tests {
     #[test]
     fn the_baro_bus_carries_its_board_facts() {
         assert_eq!(BARO_I2C_ADDRESS, 0x76);
+        assert_eq!(BARO_PART_KIND, "dps310");
         assert!(PIN_MAP.iter().any(|assignment| {
             assignment.signal == "I2C2_SCL_BARO" && assignment.pin == "PB10"
         }));
         assert!(PIN_MAP.iter().any(|assignment| {
             assignment.signal == "I2C2_SDA_BARO" && assignment.pin == "PB11"
         }));
-        assert!(CLAIMS.iter().any(|claim| {
-            claim.kind == ResourceKind::Peripheral && claim.resource == "I2C2"
-        }));
+        assert!(
+            CLAIMS.iter().any(|claim| {
+                claim.kind == ResourceKind::Peripheral && claim.resource == "I2C2"
+            })
+        );
     }
 
     #[test]

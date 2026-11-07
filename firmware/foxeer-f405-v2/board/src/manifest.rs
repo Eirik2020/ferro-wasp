@@ -500,15 +500,21 @@ mod tests {
     #[test]
     fn the_baro_bus_carries_its_board_facts() {
         assert_eq!(BARO_I2C_ADDRESS, 0x76);
-        assert!(PIN_MAP.iter().any(|assignment| {
-            assignment.signal == "I2C1_SCL_BARO" && assignment.pin == "PB8"
-        }));
-        assert!(PIN_MAP.iter().any(|assignment| {
-            assignment.signal == "I2C1_SDA_BARO" && assignment.pin == "PB9"
-        }));
-        assert!(CLAIMS.iter().any(|claim| {
-            claim.kind == ResourceKind::Peripheral && claim.resource == "I2C1"
-        }));
+        assert!(
+            PIN_MAP.iter().any(|assignment| {
+                assignment.signal == "I2C1_SCL_BARO" && assignment.pin == "PB8"
+            })
+        );
+        assert!(
+            PIN_MAP.iter().any(|assignment| {
+                assignment.signal == "I2C1_SDA_BARO" && assignment.pin == "PB9"
+            })
+        );
+        assert!(
+            CLAIMS.iter().any(|claim| {
+                claim.kind == ResourceKind::Peripheral && claim.resource == "I2C1"
+            })
+        );
     }
 
     #[test]

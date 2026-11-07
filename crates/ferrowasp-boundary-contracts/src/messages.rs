@@ -124,11 +124,15 @@ pub struct BatteryStatus {
 /// The onboard barometer as its driver measures it. Non-critical source.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct BaroStatus {
-    /// The chip ID the last probe read at the barometer's address, `0x10`
-    /// for the SPL06-007; 0 when nothing answered, so the stage beside it
-    /// says why.
+    /// Which driver measured the barometer, one of the `PART_` codes
+    /// below: the SPL06-007 and the DPS310/DPS368 family answer the
+    /// same chip ID, so the kind says which driver claimed the part.
+    pub part: u8,
+    /// The chip ID the last probe read at the barometer's address,
+    /// `0x10` for the SPL06-007 and the DPS310 family alike; 0 when
+    /// nothing answered, so the stage beside it says why.
     pub chip_id: u8,
-    /// The address the barometer was probed at: the SPL06-007 straps to
+    /// The address the barometer was probed at: the parts strap to
     /// `0x76` or `0x77`; 0 while no barometer answers.
     pub address: u8,
     /// How far the last probe reached, one of the `PROBE_` stages below.
@@ -145,6 +149,14 @@ pub struct BaroStatus {
 }
 
 impl BaroStatus {
+    /// `part` code: no barometer is being measured.
+    pub const PART_NONE: u8 = 0;
+    /// `part` code: the Goertek SPL06-007, its driver's own name.
+    pub const PART_SPL06: u8 = 1;
+    /// `part` code: the Infineon DPS310, and the DPS368 that shares its
+    /// interface - ArduPilot's `TBS_LUCID_H7` hwdef runs the DPS310
+    /// driver for both parts' footprint.
+    pub const PART_DPS310: u8 = 2;
     /// `probe` stage: the board has no barometer bus at all - none is
     /// fitted, or its open was refused.
     pub const PROBE_ABSENT: u8 = 0;

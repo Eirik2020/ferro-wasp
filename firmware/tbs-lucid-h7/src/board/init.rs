@@ -34,7 +34,7 @@ use ferrowasp_stm32::uart_dma::{self, PortMemory};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
-use spl06;
+use dps310;
 
 /// The board's 8 MHz crystal to a 400 MHz core: 200 MHz AXI and AHB, every APB at
 /// 100 MHz, 100 MHz on PLL1Q for SPI1 to SPI3. USB runs from HSI48. Checked against
@@ -165,11 +165,15 @@ pub struct I2c2BaroResources {
     pub i2c: I2C2,
 }
 
-/// Open I2C2 and probe its barometer at the board's address: the shared
-/// task measures an SPL06-007, and this board's part is a DPS368 or a
-/// BMP390, so the probe reports what answers instead. When no barometer
-/// answers the bus is handed over open, so the task keeps probing and
-/// sweeps the bus; only a bus that refuses to open reports absence.
+/// Open I2C2 and probe its barometer at the board's address with the
+/// DPS310-family driver: the board's footprint carries a DPS368 or a
+/// DPS310 - ArduPilot's hwdef runs its DPS310 driver for both - so the
+/// probe measures the part and the status line names the kind beside
+/// the chip ID. The BMP390 alternative the hwdef also probes is not yet
+/// driven; its driver would answer the same way. When no barometer
+/// answers the bus is handed over open with the board's kind, so the
+/// task keeps probing and sweeps the bus; only a bus that refuses to
+/// open reports absence.
 pub fn init_i2c2_baro(
     resources: I2c2BaroResources,
     rcc: &mut Rcc,
@@ -189,10 +193,7 @@ pub fn init_i2c2_baro(
             return backend::tasks::baro::BaroHandover::Absent;
         }
     };
-    match backend::tasks::baro::probe_spl06(spl06::Spl06::new(
-        i2c,
-        super::manifest::BARO_I2C_ADDRESS,
-    )) {
+    match backend::tasks::baro::probe_dps310(i2c, super::manifest::BARO_I2C_ADDRESS) {
         Ok(probe) => backend::tasks::baro::BaroHandover::Probe(probe),
         Err(failed) => {
             defmt::warn!(
@@ -200,7 +201,10 @@ pub fn init_i2c2_baro(
                 failed.stage(),
                 failed.chip_id()
             );
-            backend::tasks::baro::BaroHandover::Open(failed.release())
+            backend::tasks::baro::BaroHandover::Open {
+                bus: failed.release(),
+                kind: backend::tasks::baro::PartKind::Dps310,
+            }
         }
     }
 }
