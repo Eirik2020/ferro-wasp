@@ -296,6 +296,11 @@ impl<I2C> Spl06<I2C> {
     pub fn into_inner(self) -> I2C {
         self.i2c
     }
+
+    /// The part's seven-bit address this driver talks to.
+    pub const fn address(&self) -> u8 {
+        self.address
+    }
 }
 
 impl<I2C: I2c> Spl06<I2C> {
@@ -664,6 +669,16 @@ mod tests {
             })
         );
         assert_eq!(part.read_chip_id(), Ok(CHIP_ID));
+    }
+
+    #[test]
+    fn the_driver_carries_its_address_and_hands_its_bus_back() {
+        let part = part(&PAGE);
+        assert_eq!(part.address(), ADDRESS);
+        let device = part.into_inner();
+        let other = Spl06::new(device, ADDRESS | 0x01);
+        assert_eq!(other.address(), 0x77);
+        let _ = other.into_inner();
     }
 
     #[test]

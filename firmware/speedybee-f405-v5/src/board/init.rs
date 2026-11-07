@@ -13,10 +13,11 @@ use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::chip_time::CycleDelay;
 use ferrowasp_stm32::hal::{
     adc::{Adc, Config as AdcConfig},
-    chip::{ADC1, SPI1, SPI3, TIM2, TIM3, TIM4, TIM5, TIM6, UART5, USART1, USART6},
+    chip::{ADC1, I2C1, SPI1, SPI3, TIM2, TIM3, TIM4, TIM5, TIM6, UART5, USART1, USART6},
     dma::Stream,
     exti::{self, Edge},
     gpio::{Alternate, Analog, Input, Pin},
+    i2c::{Config as I2cConfig, I2c, Wiring as I2cWiring},
     rcc::{
         AhbPrescaler, ApbPrescaler, Clocks, Config as ClockConfig, Hse, HseMode, Pll, PllP,
         PllSource, Rcc, Supply, Sysclk,
@@ -30,6 +31,7 @@ use ferrowasp_stm32::uart_dma::{self, PortMemory};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
+use spl06;
 
 /// The board's 8 MHz crystal to 168 MHz, with 48 MHz on PLLQ for USB. The same
 /// tree the old HAL worked out, stated, and checked against the F405's limits
@@ -181,6 +183,62 @@ pub struct Adc1BatteryResourcesSpeedybee {
     pub voltage_pin: Pin<'C', 1, Analog>,
     pub current_pin: Pin<'C', 5, Analog>,
     pub dma: Stream<2, 4>,
+}
+
+/// The barometer bus, at 100 kHz for bench bring-up. The SPL06-007 carries
+/// up to 400 kHz, but the bench asked at 400, 100 and 50 kHz - the last the
+/// speed the F401 bench proved the master with only internal pull-ups -
+/// and every ask read a clean NACK with nothing on the bus answering a
+/// full-address sweep, so the rate reopens with a part that answers; 100
+/// kHz is generous for any pull-ups until then. I2C1 times it from the
+/// 42 MHz APB1 clock.
+const BARO_I2C: I2cConfig = I2cConfig::new(Hertz::khz(100));
+const _: () = if BARO_I2C.check(Hertz(CLOCKS.pclk1.0)).is_err() {
+    panic!("I2C1 cannot time the barometer bus from the APB1 clock")
+};
+
+/// I2C1 for the onboard SPL06-007 barometer, on PB6/PB7.
+pub struct I2c1BaroResources {
+    pub scl_pin: Pin<'B', 6, Alternate<4>>,
+    pub sda_pin: Pin<'B', 7, Alternate<4>>,
+    pub i2c: I2C1,
+}
+
+/// Open I2C1 and probe the SPL06-007 at 0x76: its chip ID, its calibration
+/// page and its oversampling, gathered into the probe the polling task
+/// measures with. When no barometer answers the bus is handed over open,
+/// so the task keeps probing and sweeps the bus; only a bus that refuses
+/// to open reports absence.
+pub fn init_i2c1_baro(
+    resources: I2c1BaroResources,
+    rcc: &mut Rcc,
+) -> backend::tasks::baro::BaroHandover {
+    let i2c = match I2c::new(
+        rcc,
+        I2cWiring {
+            i2c: resources.i2c,
+            scl: resources.scl_pin,
+            sda: resources.sda_pin,
+        },
+        &BARO_I2C,
+    ) {
+        Ok(i2c) => i2c,
+        Err(refused) => {
+            defmt::warn!("I2C1 barometer bus refused: {:?}", refused.error());
+            return backend::tasks::baro::BaroHandover::Absent;
+        }
+    };
+    match backend::tasks::baro::probe_spl06(spl06::Spl06::new(i2c, spl06::ADDRESS)) {
+        Ok(probe) => backend::tasks::baro::BaroHandover::Probe(probe),
+        Err(failed) => {
+            defmt::warn!(
+                "I2C1 barometer probe stopped at stage {} (chip ID {:#x})",
+                failed.stage(),
+                failed.chip_id()
+            );
+            backend::tasks::baro::BaroHandover::Open(failed.release())
+        }
+    }
 }
 
 pub fn init_spi1_imu(

@@ -28,10 +28,17 @@ Implemented board subset:
 - SPI3 NOR flash on PB3/PB4/PB5 with CS on PC12;
 - SWD/RTT diagnostics with PA13/PA14 left untouched.
 
-The board's other pads are not wired yet: the SPL06 barometer on I2C1
-PB6/PB7, the inverted buzzer on PB9, and the gyro CLKIN PWM on PB15
-(`TIM12_CH2`) await bench bring-up, as does the on-board microSD-less
-blackbox path through the SPI3 flash.
+The board's other pads are not wired yet: the inverted buzzer on PB9 and
+the gyro CLKIN PWM on PB15 (`TIM12_CH2`) await bench bring-up, as does the
+on-board microSD-less blackbox path through the SPI3 flash. The SPL06
+barometer on I2C1 PB6/PB7 is wired: its app probes the part at 0x76 and,
+when no barometer answers, keeps probing the part's two strappings while
+sweeping the bus, with the FWDBG1 line carrying `baro` (the chip ID it
+answered with), `baro_addr` (the address it was probed at), `baro_probe`
+(how far the probe reached: 0 no bus, 1 measuring, 2 nothing at the
+address, 3 the lines misbehaved, 4 a wrong chip ID, 5 coefficients, 6
+oversampling configure) and `baro_scan` (how many addresses the sweep saw
+answer, so a dead bus is told from a quiet one).
 
 ## Bench bring-up status
 

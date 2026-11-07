@@ -202,6 +202,11 @@ ferroforge::app! {
         output_status_link: ObserverLink<observed::OutputStatus>,
         esc_status_link: ObserverLink<observed::EscStatus>,
         battery_status_link: ObserverLink<observed::BatteryStatus>,
+        baro_status_link: ObserverLink<observed::BaroStatus>,
+        /// The barometer as the board hands it over: the probe when its
+        /// I2C1 probe found the part, the open bus when it did not, and
+        /// `Absent` when the bus has no barometer at all.
+        baro: flight_tasks::BaroHandover,
         storage_status_link: ObserverLink<observed::StorageStatus>,
 
         // USB CDC serial
@@ -286,6 +291,17 @@ ferroforge::app! {
             },
         )
         .unwrap();
+
+        // The onboard SPL06-007 barometer on I2C1. A board whose barometer
+        // does not answer reports absence on the status line instead.
+        let baro = board::init::init_i2c1_baro(
+            board::init::I2c1BaroResources {
+                scl_pin: gpiob.p6.into_alternate::<4>(&mut gpiob.ctrl),
+                sda_pin: gpiob.p7.into_alternate::<4>(&mut gpiob.ctrl),
+                i2c: dp.I2C1,
+            },
+            &mut rcc,
+        );
 
         Mono::start(cx.core.SYST, stm32_clocks::SYSTEM_CLOCK_HZ);
         let mut delay = stm32_timebase::CycleDelay::new(stm32_clocks::SYSTEM_CLOCK_HZ);
@@ -473,6 +489,7 @@ ferroforge::app! {
             output_status_link,
             esc_status_link,
             battery_status_link,
+            baro_status_link,
             storage_status_link,
             blackbox_stream,
         } = flight_tasks::observer_channels(
@@ -706,6 +723,7 @@ ferroforge::app! {
         flight::coordinator_task::spawn().unwrap();
         flight::usb_keepalive::spawn().unwrap();
         flight::adc1_polling::spawn().ok();
+        flight::baro_polling::spawn().ok();
         uart1_tx_worker::spawn().unwrap();
         flight::rc_input::spawn().unwrap();
         flight::rc_telemetry::spawn().unwrap();
@@ -773,6 +791,9 @@ ferroforge::app! {
 
                 // ADC
                 adc1_buffer: Some(adc1_spare),
+
+                // Barometer
+                baro,
 
                 // Control Loop
                 control_loop_cnt: 0,
@@ -888,6 +909,7 @@ ferroforge::app! {
                 output_status_link,
                 esc_status_link,
                 battery_status_link,
+                baro_status_link,
                 storage_status_link,
 
                 // USB CDC serial
@@ -966,6 +988,8 @@ ferroforge::app! {
                 BATTERY_DETECT_CELL_MV,
                 BATTERY_MAX_CELLS,
             ),
+            // baro_polling
+            baro, baro_status_link,
             // observer_task
             observer,
             // coordinator_task
@@ -1068,6 +1092,8 @@ ferroforge::app! {
         fn dma_adc1;
         #[task(priority = 1)]
         async fn adc1_polling;
+        #[task(priority = 1)]
+        async fn baro_polling;
     }
 
     #[task(

@@ -41,4 +41,6 @@ pub mod flight {
     pub use ferrowasp_safety::tasks::safety_master;
     pub use ferrowasp_stm32::tasks::adc::adc1_polling;
     pub use ferrowasp_stm32::tasks::adc::dma_adc1;
+    #[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+    pub use ferrowasp_stm32::tasks::baro::baro_polling;
 }

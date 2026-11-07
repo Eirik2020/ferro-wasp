@@ -204,6 +204,8 @@ ferroforge::app! {
         output_status_link: ObserverLink<observed::OutputStatus>,
         esc_status_link: ObserverLink<observed::EscStatus>,
         battery_status_link: ObserverLink<observed::BatteryStatus>,
+        // No barometer on this board; its link stays unused.
+        baro_status_link: ObserverLink<observed::BaroStatus>,
         storage_status_link: ObserverLink<observed::StorageStatus>,
 
         // USB CDC serial
@@ -500,6 +502,7 @@ ferroforge::app! {
             output_status_link,
             esc_status_link,
             battery_status_link,
+            baro_status_link,
             storage_status_link,
             blackbox_stream,
         } = flight_tasks::observer_channels(
@@ -921,6 +924,7 @@ ferroforge::app! {
                 output_status_link,
                 esc_status_link,
                 battery_status_link,
+                baro_status_link,
                 storage_status_link,
 
                 // USB CDC serial
@@ -993,6 +997,10 @@ ferroforge::app! {
             osd_safety_arm_reader, osd_request_link, osd_tuning,
             // dma_adc1
             adc1_buffer, battery_status_link,
+            // baro_polling: no barometer on this board, so the handover
+            // is absent and the task reports absence without touching a bus.
+            baro: flight_tasks::BaroHandover = flight_tasks::BaroHandover::Absent,
+            baro_status_link,
             battery_cell_detector: osd::BatteryCellDetector = osd::BatteryCellDetector::new(
                 BATTERY_MAX_CELL_MV,
                 BATTERY_DETECT_CELL_MV,
@@ -1100,6 +1108,10 @@ ferroforge::app! {
         fn dma_adc1;
         #[task(priority = 1)]
         async fn adc1_polling;
+        // No barometer on this board: the probe is `None`, and the task
+        // returns as soon as it runs.
+        #[task(priority = 1)]
+        async fn baro_polling;
     }
 
     // Lowest priority, so a lit-and-blinking heartbeat shows that every

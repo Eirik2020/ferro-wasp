@@ -51,6 +51,7 @@ ferrowasp-cli = { path = "../../crates/ferrowasp-cli" }
 ferrowasp-control = { path = "../../crates/ferrowasp-control" }
 ferrowasp-protocol = { path = "../../crates/ferrowasp-protocol" }
 ferrowasp-safety = { path = "../../crates/ferrowasp-safety" }
+spl06 = { path = "../../drivers/spl06" }
 ferrowasp-board-speedybee-f405-v5 = { path = "board" }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
