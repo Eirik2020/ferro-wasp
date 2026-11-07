@@ -277,6 +277,7 @@ dependencies = [
  "panic-probe",
  "rtic",
  "rtic-monotonics",
+ "spl06",
 ]
 
 [[package]]

@@ -43,6 +43,7 @@ mspv2_configurator = ["ferrowasp-cli/mspv2_configurator", "ferrowasp-stm32-app/m
 [dependencies]
 ferrohal-stm32 = { git = "https://github.com/Eirik2020/ferrohal-stm32", rev = "b6d8e84a2a65ad4aae09666ea08b318dd5d9688e", features = ["stm32h743vi", "rt", "defmt", "usb"] }
 ferrowasp-icm42688p = { path = "../../crates/ferrowasp-icm42688p" }
+spl06 = { path = "../../drivers/spl06" }
 ferrowasp-mpu6000 = { path = "../../crates/ferrowasp-mpu6000" }
 ferrowasp-mpu6500 = { path = "../../crates/ferrowasp-mpu6500" }
 ferrowasp-serial = { path = "../../crates/ferrowasp-serial" }

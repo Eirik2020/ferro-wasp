@@ -30,8 +30,10 @@ extern crate std;
 use embedded_hal::i2c::I2c;
 
 /// The part's seven-bit address: iNav `barometer_spl06.c` ("SPL06, address
-/// 0x76"); ArduPilot's `speedybeef4v5` and `TBS_LUCID_H7` hwdefs probe
-/// `BARO SPL06 I2C:0:0x76`.
+/// 0x76"); ArduPilot's `speedybeef4v5` hwdef probes `BARO SPL06 I2C:0:0x76`.
+/// The address alone does not name the part - ArduPilot's `TBS_LUCID_H7`
+/// hwdef probes a DPS368 and a BMP390 at the same 0x76 - so a probe reads
+/// the chip ID before it believes an answer.
 pub const ADDRESS: u8 = 0x76;
 
 /// The chip ID register reads 0x10: ArduPilot `SPL06_CHIP_ID 0x10` against
