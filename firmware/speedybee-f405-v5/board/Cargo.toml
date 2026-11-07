@@ -1,0 +1,24 @@
+[package]
+name = "ferrowasp-board-speedybee-f405-v5"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+# A member of the repository's root workspace, so `cargo test --workspace`
+# runs these board tests; the app's own workspace excludes this directory.
+workspace = "../../.."
+
+# The SpeedyBee F405 V5's hardware data: pins, DMA and serial routes, resource
+# claims, profiles and USB identity. Plain data over the shared crates, with no
+# chip HAL, so it builds and tests on the host. The app's src/board/ keeps only
+# the HAL glue that turns this data into peripherals.
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ferrowasp-config = { path = "../../../crates/ferrowasp-config" }
+ferrowasp-control = { path = "../../../crates/ferrowasp-control" }
+ferrowasp-flight-control = { path = "../../../crates/ferrowasp-flight-control" }
+ferrowasp-serial = { path = "../../../crates/ferrowasp-serial" }
+ferrowasp-stm32 = { path = "../../../crates/ferrowasp-stm32" }

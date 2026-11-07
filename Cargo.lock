@@ -323,6 +323,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrowasp-board-speedybee-f405-v5"
+version = "0.1.0"
+dependencies = [
+ "ferrowasp-config",
+ "ferrowasp-control",
+ "ferrowasp-flight-control",
+ "ferrowasp-serial",
+ "ferrowasp-stm32",
+]
+
+[[package]]
 name = "ferrowasp-board-tbs-lucid-h7"
 version = "0.1.0"
 dependencies = [
