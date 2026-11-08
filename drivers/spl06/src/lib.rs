@@ -30,8 +30,10 @@ extern crate std;
 use embedded_hal::i2c::I2c;
 
 /// The part's seven-bit address: iNav `barometer_spl06.c` ("SPL06, address
-/// 0x76"); ArduPilot's `speedybeef4v5` and `TBS_LUCID_H7` hwdefs probe
-/// `BARO SPL06 I2C:0:0x76`.
+/// 0x76"); ArduPilot's `speedybeef4v5` hwdef probes `BARO SPL06 I2C:0:0x76`.
+/// The address alone does not name the part - ArduPilot's `TBS_LUCID_H7`
+/// hwdef probes a DPS368 and a BMP390 at the same 0x76 - so a probe reads
+/// the chip ID before it believes an answer.
 pub const ADDRESS: u8 = 0x76;
 
 /// The chip ID register reads 0x10: ArduPilot `SPL06_CHIP_ID 0x10` against
@@ -295,6 +297,11 @@ impl<I2C> Spl06<I2C> {
 
     pub fn into_inner(self) -> I2C {
         self.i2c
+    }
+
+    /// The part's seven-bit address this driver talks to.
+    pub const fn address(&self) -> u8 {
+        self.address
     }
 }
 
@@ -664,6 +671,16 @@ mod tests {
             })
         );
         assert_eq!(part.read_chip_id(), Ok(CHIP_ID));
+    }
+
+    #[test]
+    fn the_driver_carries_its_address_and_hands_its_bus_back() {
+        let part = part(&PAGE);
+        assert_eq!(part.address(), ADDRESS);
+        let device = part.into_inner();
+        let other = Spl06::new(device, ADDRESS | 0x01);
+        assert_eq!(other.address(), 0x77);
+        let _ = other.into_inner();
     }
 
     #[test]

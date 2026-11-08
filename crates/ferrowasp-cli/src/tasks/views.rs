@@ -105,5 +105,13 @@ pub fn status(
         adc_voltage_mv: battery.voltage_pin_mv,
         adc_current_mv: battery.current_pin_mv,
         rc_channels_us: rc.channels_us,
+        baro_chip_id: ledger.baro().value.chip_id,
+        baro_part: ledger.baro().value.part,
+        baro_address: ledger.baro().value.address,
+        baro_ready: ledger.baro().value.ready,
+        baro_pressure_pa: ledger.baro().value.pressure_pa,
+        baro_temperature_dc: ledger.baro().value.temperature_dc,
+        baro_probe: ledger.baro().value.probe,
+        baro_scan_acks: ledger.baro().value.scan_acks,
     }
 }

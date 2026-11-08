@@ -230,6 +230,7 @@ pub struct ObserverChannels {
     pub output_status_link: LinkProducer<'static, observed::OutputStatus>,
     pub esc_status_link: LinkProducer<'static, observed::EscStatus>,
     pub battery_status_link: LinkProducer<'static, observed::BatteryStatus>,
+    pub baro_status_link: LinkProducer<'static, observed::BaroStatus>,
     pub storage_status_link: LinkProducer<'static, observed::StorageStatus>,
     pub blackbox_stream: LinkConsumer<'static, observed::ControlTick>,
 }
@@ -268,6 +269,7 @@ pub fn observer_channels<const N: usize>(
     let (output_status_link, output) = state_link!(observed::OutputStatus);
     let (esc_status_link, esc) = state_link!(observed::EscStatus);
     let (battery_status_link, battery) = state_link!(observed::BatteryStatus);
+    let (baro_status_link, baro) = state_link!(observed::BaroStatus);
     let (storage_status_link, storage) = state_link!(observed::StorageStatus);
     let (stream_producer, blackbox_stream) = link(stream);
     ObserverChannels {
@@ -281,6 +283,7 @@ pub fn observer_channels<const N: usize>(
                 output,
                 esc,
                 battery,
+                baro,
                 storage,
                 config,
                 results,
@@ -295,6 +298,7 @@ pub fn observer_channels<const N: usize>(
         output_status_link,
         esc_status_link,
         battery_status_link,
+        baro_status_link,
         storage_status_link,
         blackbox_stream,
     }

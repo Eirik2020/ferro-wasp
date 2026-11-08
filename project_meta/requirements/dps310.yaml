@@ -1,0 +1,117 @@
+schema_version: 2
+requirements:
+  - id: DPS310-001
+    title: Every DPS310 call is one bounded transfer
+    statement: >-
+      Each of the DPS310 driver's calls shall make at most one write, or one
+      write and one read of at most the 18-byte calibration page, on the bus.
+    rationale: >-
+      The driver runs in a low-priority task beside real-time ones, so its
+      bus work must be bounded and predictable whatever the caller asks; the
+      mock bus rejects any other shape, and the test asserts the whole
+      transaction sequence, lengths included.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::the_driver_speaks_the_part_registers
+
+  - id: DPS310-002
+    title: The calibration page decodes as the part packs it
+    statement: >-
+      The driver shall decode the calibration page as the part packs it: c0
+      and c1 12-bit, c00 and c10 20-bit, the rest 16-bit, all two's
+      complement, most significant byte first.
+    rationale: >-
+      A coefficient read at the wrong width or sign scales every measurement
+      the part ever gives; the page is packed by hand in the test the way
+      iNav's register comments quote the layout, negative fields included.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::the_page_decodes_the_packed_fields
+
+  - id: DPS310-003
+    title: Compensation follows the part's formulas
+    statement: >-
+      Compensation shall follow the part's formulas: temperature as c0/2 plus
+      the scaled raw temperature times c1, and pressure as c00 plus the
+      scaled pressure's cubic terms plus the scaled temperature's cross terms,
+      with the scale-factor table both reference implementations share.
+    rationale: >-
+      The parts' two register-compatible decodes agree term for term; an f64
+      evaluation of the formulas is the oracle here, and the scale factors
+      are checked separately against the shared table, so a wrong constant
+      cannot pass as compensated.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::compensation_matches_the_parts_formulas
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::the_scale_factors_match_the_shared_table
+
+  - id: DPS310-004
+    title: Registers, status and the configure sequence match the part
+    statement: >-
+      The driver shall speak the part's registers: the chip ID at 0x0D, the
+      MEAS_CFG status bits after boot and after each measurement command, the
+      oversampling fields, and the external temperature bit taken from the
+      coefficient-source register when configuration asks for it.
+    rationale: >-
+      A wrong register or bit silently changes what the part measures - the
+      bootstrap commands and the fuse-bit workaround especially, which are
+      quoted register by register from the reference driver.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::the_status_bits_map_the_meas_cfg_byte
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::configuration_writes_the_external_bit_from_the_source
+
+  - id: DPS310-005
+    title: A bus failure reaches the caller
+    statement: >-
+      Every driver call shall surface a bus error to its caller rather than
+      swallow it.
+    rationale: >-
+      The barometer probe decides presence from these results; a swallowed
+      error reports a part that never answered.
+    derived_from: [W2]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::a_bus_failure_is_reported
+
+  - id: DPS310-006
+    title: The driver hands its bus back with its address
+    statement: >-
+      The driver shall report the address it was given and hand its bus back
+      on request, so the next probe or bus user starts from the same pins.
+    rationale: >-
+      The probe tries more than one strapping of the address and the board's
+      init threads the bus between the barometer hand-over and later owners;
+      a lost or altered address would point the next owner at the wrong part.
+    derived_from: [W2, W4]
+    verification:
+      entries:
+        - level: unit
+          environment: host
+          method:
+            test: dps310::tests::the_driver_carries_its_address_and_hands_its_bus_back

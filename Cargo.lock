@@ -198,6 +198,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dps310"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "embedded-hal"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -212,6 +219,9 @@ name = "embedded-hal"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
+dependencies = [
+ "defmt 0.3.100",
+]
 
 [[package]]
 name = "embedded-hal-async"
@@ -601,6 +611,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "defmt 1.2.0",
+ "dps310",
  "embedded-hal 1.0.0",
  "ferroforge",
  "ferrohal-stm32",
@@ -615,6 +626,7 @@ dependencies = [
  "rc-pwm",
  "rtic",
  "rtic-monotonics",
+ "spl06",
  "usb-device",
  "usbd-serial",
 ]

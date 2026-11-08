@@ -274,6 +274,14 @@ TOPIC_ROUTES = {
             PurePosixPath("crates/ferrowasp-osd/src/lib.rs"),
         ),
     ),
+    "baro": TopicRoute(
+        summary="The onboard barometer's I2C probe and slow status polling.",
+        common_symbols=("baro_polling",),
+        companions=(
+            PurePosixPath("crates/ferrowasp-stm32/src/tasks/baro.rs"),
+            PurePosixPath("drivers/spl06/src/lib.rs"),
+        ),
+    ),
     "usb": TopicRoute(
         summary="USB task, the Foxeer UART configurator link, and debug/configurator request handling.",
         common_symbols=("usb_fs", "usb_keepalive"),

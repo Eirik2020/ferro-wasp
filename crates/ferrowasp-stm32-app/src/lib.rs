@@ -111,6 +111,8 @@ pub use ferrowasp_safety::tasks::{actuator_idle_notify, safety_master, warn_armi
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_stm32::tasks::adc::{adc1_polling, dma_adc1};
+#[cfg(all(target_arch = "arm", any(feature = "stm32f405", feature = "stm32h743")))]
+pub use ferrowasp_stm32::tasks::baro::{BaroHandover, BaroProbe, PartKind, baro_polling};
 #[cfg(target_arch = "arm")]
 pub use ferrowasp_stm32::tasks::leds::status_leds;
 #[cfg(target_arch = "arm")]

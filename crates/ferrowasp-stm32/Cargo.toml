@@ -36,6 +36,8 @@ tasks = [
     "dep:ferrowasp-io-contracts",
     "dep:ferrowasp-osd",
     "dep:ferrowasp-safety",
+    "dep:dps310",
+    "dep:spl06",
     "dep:ferroforge",
     "dep:fugit",
     "dep:rtic",
@@ -49,6 +51,8 @@ ferrowasp-boundary-contracts = { path = "../ferrowasp-boundary-contracts", optio
 ferrowasp-io-contracts = { path = "../ferrowasp-io-contracts", optional = true }
 ferrowasp-osd = { path = "../ferrowasp-osd", optional = true }
 ferrowasp-safety = { path = "../ferrowasp-safety", optional = true }
+spl06 = { path = "../../drivers/spl06", optional = true }
+dps310 = { path = "../../drivers/dps310", optional = true }
 ferrowasp-stm32-critical = { path = "../ferrowasp-stm32-critical" }
 ferrowasp-storage = { path = "../ferrowasp-storage" }
 heapless = { workspace = true }

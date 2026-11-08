@@ -13,8 +13,8 @@
 
 use crate::coordinator::ConfigTopic;
 use ferrowasp_boundary_contracts::messages::{
-    BatteryStatus, ControlTick, DrdyStatus, EscStatus, ImuStatus, OutputStatus, RcStatus,
-    SafetyStatus, StorageStatus,
+    BaroStatus, BatteryStatus, ControlTick, DrdyStatus, EscStatus, ImuStatus, OutputStatus,
+    RcStatus, SafetyStatus, StorageStatus,
 };
 use ferrowasp_boundary_contracts::requests::{RequestResult, Requester, RequesterResult};
 use ferrowasp_boundary_contracts::topics::{Identity, ObserverStatus};
@@ -35,6 +35,7 @@ pub struct Ledger {
     output: Stamped<OutputStatus>,
     esc: Stamped<EscStatus>,
     battery: Stamped<BatteryStatus>,
+    baro: Stamped<BaroStatus>,
     storage: Stamped<StorageStatus>,
     config: Stamped<ConfigTopic>,
     results: [Stamped<RequestResult>; Requester::COUNT],
@@ -55,6 +56,7 @@ impl Ledger {
             output: Stamped::default(),
             esc: Stamped::default(),
             battery: Stamped::default(),
+            baro: Stamped::default(),
             storage: Stamped::default(),
             config: Stamped {
                 value: config,
@@ -104,6 +106,10 @@ impl Ledger {
         self.battery
     }
 
+    pub fn baro(&self) -> Stamped<BaroStatus> {
+        self.baro
+    }
+
     pub fn storage(&self) -> Stamped<StorageStatus> {
         self.storage
     }
@@ -129,6 +135,7 @@ pub struct ObserverLinks<'a> {
     pub output: LinkConsumer<'a, OutputStatus>,
     pub esc: LinkConsumer<'a, EscStatus>,
     pub battery: LinkConsumer<'a, BatteryStatus>,
+    pub baro: LinkConsumer<'a, BaroStatus>,
     pub storage: LinkConsumer<'a, StorageStatus>,
     pub config: LinkConsumer<'a, ConfigTopic>,
     pub results: LinkConsumer<'a, RequesterResult>,
@@ -201,6 +208,7 @@ impl<'a> Observer<'a> {
         publish_newest(&mut links.output, &mut ledger.output);
         publish_newest(&mut links.esc, &mut ledger.esc);
         publish_newest(&mut links.battery, &mut ledger.battery);
+        publish_newest(&mut links.baro, &mut ledger.baro);
         publish_newest(&mut links.storage, &mut ledger.storage);
 
         self.runs = next_run(self.runs);
@@ -252,6 +260,7 @@ mod tests {
         output: Queue<Stamped<OutputStatus>, 4>,
         esc: Queue<Stamped<EscStatus>, 4>,
         battery: Queue<Stamped<BatteryStatus>, 4>,
+        baro: Queue<Stamped<BaroStatus>, 4>,
         storage: Queue<Stamped<StorageStatus>, 4>,
         config: Queue<Stamped<ConfigTopic>, 3>,
         results: Queue<Stamped<RequesterResult>, 4>,
@@ -269,6 +278,7 @@ mod tests {
                 output: Queue::new(),
                 esc: Queue::new(),
                 battery: Queue::new(),
+                baro: Queue::new(),
                 storage: Queue::new(),
                 config: Queue::new(),
                 results: Queue::new(),
@@ -283,6 +293,7 @@ mod tests {
         rc: LinkProducer<'a, RcStatus>,
         safety: LinkProducer<'a, SafetyStatus>,
         battery: LinkProducer<'a, BatteryStatus>,
+        baro: LinkProducer<'a, BaroStatus>,
         config: LinkProducer<'a, ConfigTopic>,
         results: LinkProducer<'a, RequesterResult>,
     }
@@ -296,6 +307,7 @@ mod tests {
         let (_, output_rx) = link(&mut queues.output);
         let (_, esc_rx) = link(&mut queues.esc);
         let (battery, battery_rx) = link(&mut queues.battery);
+        let (baro, baro_rx) = link(&mut queues.baro);
         let (_, storage_rx) = link(&mut queues.storage);
         let (config, config_rx) = link(&mut queues.config);
         let (results, results_rx) = link(&mut queues.results);
@@ -310,6 +322,7 @@ mod tests {
                 output: output_rx,
                 esc: esc_rx,
                 battery: battery_rx,
+                baro: baro_rx,
                 storage: storage_rx,
                 config: config_rx,
                 results: results_rx,
@@ -323,6 +336,7 @@ mod tests {
                 rc,
                 safety,
                 battery,
+                baro,
                 config,
                 results,
             },
@@ -369,6 +383,19 @@ mod tests {
                 ..BatteryStatus::default()
             },
         );
+        producers.baro.push(
+            TimestampMicros(50),
+            BaroStatus {
+                part: BaroStatus::PART_SPL06,
+                chip_id: 0x10,
+                address: 0x76,
+                probe: BaroStatus::PROBE_MEASURING,
+                scan_acks: 0,
+                ready: true,
+                pressure_pa: 101_325,
+                temperature_dc: 224,
+            },
+        );
         observer.run_once(TimestampMicros(100), &mut ledger);
 
         assert_eq!(
@@ -382,6 +409,23 @@ mod tests {
         assert!(ledger.rc().value.valid);
         assert_eq!(ledger.rc().value.channels_us, [1500; 16]);
         assert_eq!(ledger.battery().value.voltage_dv, 168);
+        assert_eq!(
+            ledger.baro(),
+            Stamped {
+                seq: 1,
+                at: TimestampMicros(50),
+                value: BaroStatus {
+                    part: BaroStatus::PART_SPL06,
+                    chip_id: 0x10,
+                    address: 0x76,
+                    probe: BaroStatus::PROBE_MEASURING,
+                    scan_acks: 0,
+                    ready: true,
+                    pressure_pa: 101_325,
+                    temperature_dc: 224,
+                }
+            }
+        );
         assert_eq!(ledger.safety().seq, 0);
     }
 

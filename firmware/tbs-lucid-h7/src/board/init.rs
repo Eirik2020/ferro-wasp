@@ -14,10 +14,11 @@ use ferrowasp_stm32::app_storage::{AdcStorageResources, SpiDmaStorageResources};
 use ferrowasp_stm32::chip_time::CycleDelay;
 use ferrowasp_stm32::hal::{
     adc::{Adc, Config as AdcConfig},
-    chip::{ADC1, SDMMC1, SPI1, TIM2, TIM3, TIM4, TIM5, TIM6, UART8, USART1, USART3, USART6},
+    chip::{ADC1, I2C2, SDMMC1, SPI1, TIM2, TIM3, TIM4, TIM5, TIM6, UART8, USART1, USART3, USART6},
     dma::Stream,
     exti::{self, Edge},
     gpio::{Alternate, Analog, Input, Output, Pin},
+    i2c::{Config as I2cConfig, I2c, Wiring as I2cWiring},
     rcc::{
         AhbPrescaler, ApbPrescaler, Clocks, Config as ClockConfig, Hse, HseMode, Pll, PllSource,
         Rcc, Supply, Sysclk, VoltageScale,
@@ -148,6 +149,65 @@ impl Spi1ImuBringupStatus {
 }
 
 /// Probe and configure the IMU on a 1 MHz mode-3 bus, then hand SPI1 to the owner.
+/// The internal barometer's bus, at 100 kHz: ArduPilot's `TBS_LUCID_H7`
+/// hwdef carries the part's pull-ups, and 100 kHz is generous for them.
+/// I2C2 times it from the 100 MHz APB1 clock.
+const BARO_I2C: I2cConfig = I2cConfig::new(Hertz::khz(100));
+const _: () = if BARO_I2C.check(Hertz(CLOCKS.pclk1.0)).is_err() {
+    panic!("I2C2 cannot time the barometer bus from the APB1 clock")
+};
+
+/// I2C2 for the internal barometer, on PB10/PB11.
+pub struct I2c2BaroResources {
+    pub scl_pin: Pin<'B', 10, Alternate<4>>,
+    pub sda_pin: Pin<'B', 11, Alternate<4>>,
+    pub i2c: I2C2,
+}
+
+/// Open I2C2 and probe its barometer at the board's address with the
+/// DPS310-family driver: the board's footprint carries a DPS368 or a
+/// DPS310 - ArduPilot's hwdef runs its DPS310 driver for both - so the
+/// probe measures the part and the status line names the kind beside
+/// the chip ID. The BMP390 alternative the hwdef also probes is not yet
+/// driven; its driver would answer the same way. When no barometer
+/// answers the bus is handed over open with the board's kind, so the
+/// task keeps probing and sweeps the bus; only a bus that refuses to
+/// open reports absence.
+pub fn init_i2c2_baro(
+    resources: I2c2BaroResources,
+    rcc: &mut Rcc,
+) -> backend::tasks::baro::BaroHandover {
+    let i2c = match I2c::new(
+        rcc,
+        I2cWiring {
+            i2c: resources.i2c,
+            scl: resources.scl_pin,
+            sda: resources.sda_pin,
+        },
+        &BARO_I2C,
+    ) {
+        Ok(i2c) => i2c,
+        Err(refused) => {
+            defmt::warn!("I2C2 barometer bus refused: {:?}", refused.error());
+            return backend::tasks::baro::BaroHandover::Absent;
+        }
+    };
+    match backend::tasks::baro::probe_dps310(i2c, super::manifest::BARO_I2C_ADDRESS) {
+        Ok(probe) => backend::tasks::baro::BaroHandover::Probe(probe),
+        Err(failed) => {
+            defmt::warn!(
+                "I2C2 barometer probe stopped at stage {} (chip ID {:#x})",
+                failed.stage(),
+                failed.chip_id()
+            );
+            backend::tasks::baro::BaroHandover::Open {
+                bus: failed.release(),
+                kind: backend::tasks::baro::PartKind::Dps310,
+            }
+        }
+    }
+}
+
 pub fn init_spi1_imu(
     resources: Spi1ImuResources,
     rcc: &mut Rcc,

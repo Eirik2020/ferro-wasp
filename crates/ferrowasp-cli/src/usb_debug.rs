@@ -4,10 +4,10 @@ use heapless::String;
 
 /// Bounds one status frame.
 ///
-/// The worst case - every numeric field at its extreme - is 283 bytes with the
-/// terminator, which the test below pins. Only this crate's stack buffer is
-/// sized from it, so the headroom is cheap.
-pub const STATUS_LINE_CAPACITY: usize = 400;
+/// The worst case - every numeric field at its extreme - is 492 bytes with the
+/// terminator, which the test below pins. The bound is the USB CDC transmit
+/// buffer's own 512 bytes, which the app-level assert matches against this.
+pub const STATUS_LINE_CAPACITY: usize = 512;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ImuKind {
@@ -58,6 +58,29 @@ pub struct StatusSnapshot {
     pub adc_current_mv: u32,
     /// The last accepted receiver frame's channels, in microseconds.
     pub rc_channels_us: [u16; 16],
+    /// The barometer's chip ID, `0x10` for the SPL06-007 and the
+    /// DPS310/DPS368 family alike; 0 when no barometer answered, so
+    /// the probe stage beside it says why.
+    pub baro_chip_id: u8,
+    /// Which driver measured the barometer, the `BaroStatus` `PART_`
+    /// codes: the parts answer the same chip ID, so the kind says
+    /// which driver claimed it.
+    pub baro_part: u8,
+    /// The address the barometer was probed at: the parts strap to
+    /// 0x76 or 0x77; 0 while no barometer answers.
+    pub baro_address: u8,
+    /// The barometer's last measurement completed and is fresh beside it.
+    pub baro_ready: bool,
+    /// The barometer's compensated pressure, pascals.
+    pub baro_pressure_pa: u32,
+    /// The barometer's compensated temperature, centidegrees Celsius.
+    pub baro_temperature_dc: i16,
+    /// How far the barometer's probe reached, the `BaroStatus` `PROBE_`
+    /// stages.
+    pub baro_probe: u8,
+    /// How many addresses the barometer's bus sweep saw answer, so a dead
+    /// bus is told from a quiet one.
+    pub baro_scan_acks: u8,
 }
 
 /// How long the battery's topic may hold still before the status line calls
@@ -101,6 +124,18 @@ pub fn format_status(snapshot: StatusSnapshot) -> Result<String<STATUS_LINE_CAPA
         let separator = if index == 0 { "" } else { "," };
         write!(line, "{separator}{channel}")?;
     }
+    write!(
+        line,
+        " baro={} baro_part={} baro_addr={} baro_ready={} baro_press_pa={} baro_temp_dc={} baro_probe={} baro_scan={}",
+        snapshot.baro_chip_id,
+        snapshot.baro_part,
+        snapshot.baro_address,
+        u8::from(snapshot.baro_ready),
+        snapshot.baro_pressure_pa,
+        snapshot.baro_temperature_dc,
+        snapshot.baro_probe,
+        snapshot.baro_scan_acks,
+    )?;
     line.push_str("\r\n").map_err(|_| fmt::Error)?;
     Ok(line)
 }
@@ -280,6 +315,14 @@ mod tests {
             rc_channels_us: [
                 1500, 1500, 988, 1500, 2012, 988, 988, 988, 988, 988, 988, 988, 988, 988, 988, 988,
             ],
+            baro_chip_id: 0x10,
+            baro_part: 1, // BaroStatus::PART_SPL06
+            baro_address: 0x76,
+            baro_ready: true,
+            baro_pressure_pa: 101_325,
+            baro_temperature_dc: 224,
+            baro_probe: 1, // BaroStatus::PROBE_MEASURING
+            baro_scan_acks: 0,
         }
     }
 
@@ -303,7 +346,7 @@ mod tests {
 
         assert_eq!(
             line.as_str(),
-            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 vbat_stale=0 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988\r\n"
+            "FWDBG1 ms=12345 imu=icm42688p ready=1 seq=9876 gyro=-17,4,-70 stale=0 ctl=4938 ctl_hz=1000 rc=1 armable=1 thr=1000 arm_sw=0 armed=0 vbat_dV=230 vbat_stale=0 current_cA=-12 adc_v_mV=2091 adc_i_mV=1234 ch=1500,1500,988,1500,2012,988,988,988,988,988,988,988,988,988,988,988 baro=16 baro_part=1 baro_addr=118 baro_ready=1 baro_press_pa=101325 baro_temp_dc=224 baro_probe=1 baro_scan=0\r\n"
         );
         assert!(line.is_ascii());
     }
@@ -345,6 +388,14 @@ mod tests {
             adc_voltage_mv: u32::MAX,
             adc_current_mv: u32::MAX,
             rc_channels_us: [u16::MAX; 16],
+            baro_chip_id: u8::MAX,
+            baro_part: u8::MAX,
+            baro_address: u8::MAX,
+            baro_ready: true,
+            baro_pressure_pa: u32::MAX,
+            baro_temperature_dc: i16::MIN,
+            baro_probe: u8::MAX,
+            baro_scan_acks: u8::MAX,
         })
         .unwrap();
 

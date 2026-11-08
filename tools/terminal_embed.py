@@ -99,6 +99,11 @@ FIRMWARE_TARGETS = {
         binary_name="FerroWaspFoxeerF405V2",
         chip="STM32F405RG",
     ),
+    "speedybee-f405-v5": FirmwareTarget(
+        app_root=REPO_ROOT / "firmware/speedybee-f405-v5",
+        binary_name="FerroWaspSpeedyBeeF405V5",
+        chip="STM32F405RG",
+    ),
 }
 
 

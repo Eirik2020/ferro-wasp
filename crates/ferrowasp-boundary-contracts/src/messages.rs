@@ -121,6 +121,64 @@ pub struct BatteryStatus {
     pub current_pin_mv: u32,
 }
 
+/// The onboard barometer as its driver measures it. Non-critical source.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct BaroStatus {
+    /// Which driver measured the barometer, one of the `PART_` codes
+    /// below: the SPL06-007 and the DPS310/DPS368 family answer the
+    /// same chip ID, so the kind says which driver claimed the part.
+    pub part: u8,
+    /// The chip ID the last probe read at the barometer's address,
+    /// `0x10` for the SPL06-007 and the DPS310 family alike; 0 when
+    /// nothing answered, so the stage beside it says why.
+    pub chip_id: u8,
+    /// The address the barometer was probed at: the parts strap to
+    /// `0x76` or `0x77`; 0 while no barometer answers.
+    pub address: u8,
+    /// How far the last probe reached, one of the `PROBE_` stages below.
+    pub probe: u8,
+    /// How many addresses the bus sweep has seen answer this round, so a
+    /// dead bus is told from a quiet one.
+    pub scan_acks: u8,
+    /// The last measurement pair completed and is fresh beside it.
+    pub ready: bool,
+    /// Compensated pressure, pascals.
+    pub pressure_pa: u32,
+    /// Compensated temperature, centidegrees Celsius.
+    pub temperature_dc: i16,
+}
+
+impl BaroStatus {
+    /// `part` code: no barometer is being measured.
+    pub const PART_NONE: u8 = 0;
+    /// `part` code: the Goertek SPL06-007, its driver's own name.
+    pub const PART_SPL06: u8 = 1;
+    /// `part` code: the Infineon DPS310, and the DPS368 that shares its
+    /// interface - ArduPilot's `TBS_LUCID_H7` hwdef runs the DPS310
+    /// driver for both parts' footprint.
+    pub const PART_DPS310: u8 = 2;
+    /// `probe` stage: the board has no barometer bus at all - none is
+    /// fitted, or its open was refused.
+    pub const PROBE_ABSENT: u8 = 0;
+    /// `probe` stage: the barometer answered and is being measured.
+    pub const PROBE_MEASURING: u8 = 1;
+    /// `probe` stage: the bus is open but the address was not acknowledged -
+    /// no part is there.
+    pub const PROBE_NO_ANSWER: u8 = 2;
+    /// `probe` stage: the bus is open but its lines misbehaved - a stuck
+    /// line, or a transfer that never saw its stop.
+    pub const PROBE_LINES: u8 = 3;
+    /// `probe` stage: something answered, but its chip ID is not the
+    /// SPL06-007's; `chip_id` carries the answer.
+    pub const PROBE_WRONG_CHIP_ID: u8 = 4;
+    /// `probe` stage: the barometer answered but its calibration page
+    /// could not be read.
+    pub const PROBE_COEFFICIENTS: u8 = 5;
+    /// `probe` stage: the barometer answered but its oversampling could not
+    /// be configured.
+    pub const PROBE_CONFIGURE: u8 = 6;
+}
+
 /// The onboard log's storage. Non-critical source.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct StorageStatus {

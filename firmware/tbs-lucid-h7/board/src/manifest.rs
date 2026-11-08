@@ -17,6 +17,7 @@ pub struct BoardCapabilities {
     pub sbus_receiver: bool,
     pub uart3_msp_displayport: bool,
     pub battery_current_adc: bool,
+    pub baro_i2c2: bool,
     pub usb_cdc_debug: bool,
     pub dshot_motor_count: u8,
     pub onboard_debug_leds_usable_with_swd: bool,
@@ -24,8 +25,13 @@ pub struct BoardCapabilities {
 }
 
 /// The Foxeer F405 V2 feature set on the Lucid's own peripherals. The
-/// Lucid's second IMU (SPI4), barometer, MAX7456, motors 5-8, and extra
-/// UARTs are not used.
+/// Lucid's second IMU (SPI4), MAX7456, motors 5-8, and extra UARTs are
+/// not used. The internal barometer's I2C2 bus is probed by the shared
+/// barometer task with its DPS310-family driver: the part is a DPS368
+/// or a DPS310 at 0x76 - ArduPilot's hwdef runs the DPS310 driver for
+/// both - so the task measures it and names the kind beside the chip ID
+/// it answered with. The BMP390 alternative the hwdef also probes is
+/// not yet driven; its driver would answer the same way.
 pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     spi1_imu: true,
     sd_card_storage: true,
@@ -33,6 +39,7 @@ pub const BOARD_CAPABILITIES: BoardCapabilities = BoardCapabilities {
     sbus_receiver: true,
     uart3_msp_displayport: true,
     battery_current_adc: true,
+    baro_i2c2: true,
     usb_cdc_debug: true,
     dshot_motor_count: 4,
     onboard_debug_leds_usable_with_swd: true,
@@ -47,6 +54,17 @@ pub const IMU_DATA_READY_PIN: &str = "PB2";
 pub const CONTROL_SCHEDULER_TIMER: &str = "TIM4";
 pub const IO_TIMEBASE_TIMER: &str = "TIM2";
 pub const IO_WATCHDOG_TIMER: &str = "TIM6";
+/// The internal barometer's seven-bit address on I2C2: ArduPilot's
+/// `TBS_LUCID_H7` hwdef probes `BARO DPS310 I2C:0:0x76` and
+/// `BARO BMP388 I2C:0:0x76` there, with its note that the footprints take
+/// either part and one is populated per build.
+pub const BARO_I2C_ADDRESS: u8 = 0x76;
+/// The barometer driver the board's probe runs: the DPS310 family,
+/// which ArduPilot's `TBS_LUCID_H7` hwdef carries for the DPS368
+/// footprint ("DPS368 (DPS310 driver)") and the DPS310 alike - the
+/// parts share the interface, and the status line reports the family
+/// as its kind.
+pub const BARO_PART_KIND: &str = "dps310";
 
 pub use ferrowasp_stm32::spi1_imu::Spi1ImuKind;
 
@@ -175,6 +193,16 @@ pub const PIN_MAP: &[PinAssignment] = &[
         signal: "UART8_RX_ESC_TELEMETRY",
         pin: "PE0",
         alternate: Some(8),
+    },
+    PinAssignment {
+        signal: "I2C2_SCL_BARO",
+        pin: "PB10",
+        alternate: Some(4),
+    },
+    PinAssignment {
+        signal: "I2C2_SDA_BARO",
+        pin: "PB11",
+        alternate: Some(4),
     },
     PinAssignment {
         signal: "LED_ARMED_BLUE",
@@ -421,6 +449,13 @@ pub const CLAIMS: &[ResourceClaim] = &[
     ResourceClaim::new(ResourceKind::Irq, "FDCAN_CAL", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "SAI1", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "SAI2", "RTIC software dispatcher"),
+    ResourceClaim::new(
+        ResourceKind::Peripheral,
+        "I2C2",
+        "Internal barometer bus probe",
+    ),
+    ResourceClaim::new(ResourceKind::Pin, "PB10", "I2C2 SCL barometer"),
+    ResourceClaim::new(ResourceKind::Pin, "PB11", "I2C2 SDA barometer"),
     ResourceClaim::new(ResourceKind::Irq, "LTDC", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "DMA2D", "RTIC software dispatcher"),
     ResourceClaim::new(ResourceKind::Irq, "CEC", "RTIC software dispatcher"),
@@ -489,13 +524,31 @@ mod tests {
             BOARD_CAPABILITIES.sbus_receiver,
             BOARD_CAPABILITIES.uart3_msp_displayport,
             BOARD_CAPABILITIES.battery_current_adc,
+            BOARD_CAPABILITIES.baro_i2c2,
             BOARD_CAPABILITIES.usb_cdc_debug,
             BOARD_CAPABILITIES.timer_dma_motor_output,
         ];
 
-        assert_eq!(enabled, [true; 8]);
+        assert_eq!(enabled, [true; 9]);
         const { assert!(BOARD_CAPABILITIES.onboard_debug_leds_usable_with_swd) };
         assert_eq!(BOARD_CAPABILITIES.dshot_motor_count, 4);
+    }
+
+    #[test]
+    fn the_baro_bus_carries_its_board_facts() {
+        assert_eq!(BARO_I2C_ADDRESS, 0x76);
+        assert_eq!(BARO_PART_KIND, "dps310");
+        assert!(PIN_MAP.iter().any(|assignment| {
+            assignment.signal == "I2C2_SCL_BARO" && assignment.pin == "PB10"
+        }));
+        assert!(PIN_MAP.iter().any(|assignment| {
+            assignment.signal == "I2C2_SDA_BARO" && assignment.pin == "PB11"
+        }));
+        assert!(
+            CLAIMS.iter().any(|claim| {
+                claim.kind == ResourceKind::Peripheral && claim.resource == "I2C2"
+            })
+        );
     }
 
     #[test]
@@ -550,7 +603,7 @@ mod tests {
     fn active_claim_counts_match_the_runtime_contract() {
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::DmaStream), 12);
         assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::TimerChannel), 4);
-        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 13);
+        assert_eq!(count_claims_by_kind(CLAIMS, ResourceKind::Peripheral), 14);
     }
 
     #[test]
