@@ -294,8 +294,8 @@ ferroforge::app! {
         // answer.
         let baro = board::init::init_i2c1_baro(
             board::init::I2c1BaroResources {
-                scl_pin: gpiob.p8.into_alternate::<4>(&mut gpiob.ctrl),
-                sda_pin: gpiob.p9.into_alternate::<4>(&mut gpiob.ctrl),
+                scl_pin: gpiob.p8.into_alternate_open_drain::<4>(&mut gpiob.ctrl),
+                sda_pin: gpiob.p9.into_alternate_open_drain::<4>(&mut gpiob.ctrl),
                 i2c: dp.I2C1,
             },
             &mut rcc,

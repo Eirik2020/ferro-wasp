@@ -294,8 +294,8 @@ ferroforge::app! {
         // so the task reports what answers on the status line.
         let baro = board::init::init_i2c2_baro(
             board::init::I2c2BaroResources {
-                scl_pin: gpiob.p10.into_alternate::<4>(&mut gpiob.ctrl),
-                sda_pin: gpiob.p11.into_alternate::<4>(&mut gpiob.ctrl),
+                scl_pin: gpiob.p10.into_alternate_open_drain::<4>(&mut gpiob.ctrl),
+                sda_pin: gpiob.p11.into_alternate_open_drain::<4>(&mut gpiob.ctrl),
                 i2c: dp.I2C2,
             },
             &mut rcc,

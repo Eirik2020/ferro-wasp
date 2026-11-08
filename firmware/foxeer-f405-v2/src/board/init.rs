@@ -31,7 +31,6 @@ use ferrowasp_stm32::uart_dma::{self, PortMemory};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPort, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
-use spl06;
 
 /// The board's 8 MHz crystal to 168 MHz, with 48 MHz on PLLQ for USB. The same tree
 /// the old HAL worked out, stated, and checked against the F405's limits as it builds.
@@ -157,10 +156,7 @@ pub fn init_i2c1_baro(
             return backend::tasks::baro::BaroHandover::Absent;
         }
     };
-    match backend::tasks::baro::probe_spl06(
-        i2c,
-        super::manifest::BARO_I2C_ADDRESS,
-    ) {
+    match backend::tasks::baro::probe_spl06(i2c, super::manifest::BARO_I2C_ADDRESS) {
         Ok(probe) => backend::tasks::baro::BaroHandover::Probe(probe),
         Err(failed) => {
             defmt::warn!(

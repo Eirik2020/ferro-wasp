@@ -34,7 +34,6 @@ use ferrowasp_stm32::uart_dma::{self, PortMemory};
 use ferrowasp_stm32::uart_port::{
     SerialPortEndpoint, UartRxPortStorage, UartRxTxPortStorage, UartTxPort,
 };
-use dps310;
 
 /// The board's 8 MHz crystal to a 400 MHz core: 200 MHz AXI and AHB, every APB at
 /// 100 MHz, 100 MHz on PLL1Q for SPI1 to SPI3. USB runs from HSI48. Checked against
