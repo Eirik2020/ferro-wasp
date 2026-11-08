@@ -43,7 +43,7 @@
 //! unsafe code.
 //!
 //! Requirements: DPS310-001, DPS310-002, DPS310-003, DPS310-004,
-//! DPS310-005
+//! DPS310-005, DPS310-006
 
 #![no_std]
 #![forbid(unsafe_code)]
