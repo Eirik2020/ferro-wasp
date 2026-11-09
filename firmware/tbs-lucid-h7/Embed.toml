@@ -19,7 +19,7 @@ enabled = true
 
 
 [default.general]
-chip = "STM32H743VITx"
+chip = "STM32H743VIHx"
 
 [default.rtt]
 enabled = true

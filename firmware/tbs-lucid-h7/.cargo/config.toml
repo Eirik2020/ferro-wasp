@@ -5,7 +5,7 @@ rustflags = [
 ]
 runner = [
   "probe-rs", "run",
-  "--chip", "STM32H743VITx",
+  "--chip", "STM32H743VIHx",
   "--protocol", "swd",
   # Logs read as a running commentary; drop the file and line from each line.
   "--no-location",
