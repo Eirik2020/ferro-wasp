@@ -5,8 +5,8 @@ use ferrowasp_stm32::board_manifest::{
 pub const BOARD_IDENTITY: BoardIdentity = BoardIdentity {
     target_id: "tbs_lucid_h7",
     name: "TBS Lucid H7",
-    mcu: "STM32H743VIT6",
-    package: "LQFP100",
+    mcu: "STM32H743VIH6",
+    package: "TFBGA100",
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -510,7 +510,7 @@ mod tests {
     fn identity_names_the_tbs_lucid_h7() {
         assert_eq!(BOARD_IDENTITY.target_id, "tbs_lucid_h7");
         assert_eq!(BOARD_IDENTITY.name, "TBS Lucid H7");
-        assert_eq!(BOARD_IDENTITY.mcu, "STM32H743VIT6");
+        assert_eq!(BOARD_IDENTITY.mcu, "STM32H743VIH6");
         assert_eq!(HSE_FREQUENCY_HZ, 8_000_000);
         assert_eq!(SYSTEM_CLOCK_HZ, 400_000_000);
     }
