@@ -7,6 +7,7 @@
 /local_archive/
 /python_sandbox/
 /captures/
+/local/
 
 # Local presentation/session notes, not part of the public source snapshot.
 /CHATGPT_REPO_OVERVIEW.md
